@@ -132,6 +132,7 @@ const Map<String, String> stringsBn = {
   'catEmailImapSmtp': 'ইমেইল (IMAP/SMTP)',
   'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
+  'catSandbox': 'স্যান্ডবক্স / কোড',
   'catSearchWebDesc':
       'ওয়েবে সার্চ করুন, পেজ ফেচ করুন, ছবি তৈরি করুন এবং ডেটা খুঁজুন',
   'catUtilitiesDesc':
@@ -152,6 +153,8 @@ const Map<String, String> stringsBn = {
       'WHOOP থেকে রিকভারি, স্ট্রেইন, ঘুম এবং ওয়ার্কআউট ডেটা দেখুন',
   'catNextcloudDesc':
       'Nextcloud-এ ফাইল, ক্যালেন্ডার এবং পরিচিতি ব্রাউজ করুন',
+  'catSandboxDesc':
+      'একটি বিচ্ছিন্ন স্যান্ডবক্সে Python বা shell কোড চালান এবং ফাইল পড়ুন/লিখুন',
   'connect': 'সংযুক্ত করুন',
   'disconnect': 'সংযোগ বিচ্ছিন্ন করুন',
   'disconnectCategory': '{label} সংযোগ বিচ্ছিন্ন করবেন?',

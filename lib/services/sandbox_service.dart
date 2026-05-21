@@ -411,3 +411,91 @@ int? _asInt(dynamic value) {
   if (value is String) return int.tryParse(value);
   return null;
 }
+
+/// Per-chat sandbox session bookkeeping.
+///
+/// A chat keeps the same upstream session id across tool calls so state
+/// (files, installed packages, variables) persists. The cache lives next
+/// to the HTTP client it gates so callers — tool handlers, sign-out
+/// hooks — depend only on the service layer instead of importing
+/// individual tool-handler files.
+class SandboxSessionCache {
+  SandboxSessionCache._();
+
+  static final Map<String, String> _sessionByChat = {};
+  static final Map<String, Future<String>> _inflightEnsure = {};
+
+  /// Hard ceiling on a single ensure attempt. Both SandboxService.get_ and
+  /// SandboxService.create have their own 30s control-plane timeouts, so
+  /// a well-behaved upstream finishes well under this. The wrapper exists
+  /// as belt-and-braces against TLS-handshake stalls or platform-level
+  /// socket hangs that bypass the HTTP-layer timeout — without it a hung
+  /// ensure would block every subsequent ensure for that chat forever.
+  static const Duration _ensureTimeout = Duration(seconds: 75);
+
+  /// Return the session id for `chatId`, creating + caching one if
+  /// needed. Concurrent calls for the same chat share one in-flight
+  /// future so two parallel tool calls never both call create().
+  static Future<String> ensureSession({
+    required String accessToken,
+    required String chatId,
+  }) {
+    final inflight = _inflightEnsure[chatId];
+    if (inflight != null) return inflight;
+
+    final future = _ensureImpl(accessToken, chatId).timeout(_ensureTimeout);
+    _inflightEnsure[chatId] = future;
+    future.whenComplete(() => _inflightEnsure.remove(chatId));
+    return future;
+  }
+
+  static Future<String> _ensureImpl(String accessToken, String chatId) async {
+    final cached = _sessionByChat[chatId];
+    if (cached != null) {
+      try {
+        final info = await SandboxService.get_(
+          accessToken: accessToken,
+          sessionId: cached,
+        );
+        if (info != null) {
+          return cached;
+        }
+        _sessionByChat.remove(chatId);
+      } on SandboxServiceException catch (e) {
+        // Only 404 means "session is genuinely gone". Transient 5xx /
+        // timeout propagates so the caller can decide whether to retry,
+        // and the cached id stays so we don't churn sandboxes on blips.
+        if (e.statusCode == 404) {
+          _sessionByChat.remove(chatId);
+        } else {
+          rethrow;
+        }
+      }
+    }
+
+    final info = await SandboxService.create(
+      accessToken: accessToken,
+      chatId: chatId,
+    );
+    _sessionByChat[chatId] = info.sessionId;
+    return info.sessionId;
+  }
+
+  /// Forget the cached session id (and any racing in-flight ensure) for
+  /// `chatId`. Returns the previously cached session id when one was
+  /// present so the caller can destroy it upstream.
+  static String? forgetChat(String chatId) {
+    final sessionId = _sessionByChat.remove(chatId);
+    _inflightEnsure.remove(chatId);
+    return sessionId;
+  }
+
+  /// Wipe everything. Called from `AuthService.signOut()` so the next
+  /// signed-in user doesn't observe the previous user's session ids
+  /// (the server would reject them on the owner-tag check anyway, but
+  /// clearing here saves a round-trip).
+  static void clearAll() {
+    _sessionByChat.clear();
+    _inflightEnsure.clear();
+  }
+}

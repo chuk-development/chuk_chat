@@ -4,87 +4,14 @@ import 'dart:typed_data';
 
 import 'package:chuk_chat/services/sandbox_service.dart';
 
-// Per-chat sandbox cache. A chat keeps the same session_id across tool
-// calls so state (files, installed packages, variables) persists.
-final Map<String, String> _sessionByChat = {};
-
-// Coalesces concurrent _ensureSession calls for the same chat — both the
-// "validate cached id" path AND the "create new sandbox" path. Without a
-// single in-flight future covering both phases, two simultaneous tool
-// calls can both look up a stale cache entry, both fail validation, and
-// both create a sandbox.
-final Map<String, Future<String>> _inflightEnsure = {};
+// Session cache + ensure logic lives in `SandboxSessionCache` so that
+// sign-out hooks and other services don't have to import a tool handler
+// just to clear the cache.
 
 const int _stdStreamCap = 8000;
 const int _textFileCap = 16000;
 const int _textInlineByteLimit = 64 * 1024;
 const int _maxTimeoutSeconds = 300;
-
-// Hard ceiling on a single ensure attempt. Both SandboxService.get_ and
-// SandboxService.create have their own 30s control-plane timeouts, so a
-// well-behaved upstream finishes well under this. The wrapper exists as
-// belt-and-braces against TLS-handshake stalls or platform-level socket
-// hangs that bypass the HTTP-layer timeout — without it a hung ensure
-// would block every subsequent code_run for that chat indefinitely.
-const Duration _ensureTimeout = Duration(seconds: 75);
-
-Future<String> _ensureSession(String accessToken, String chatId) {
-  final inflight = _inflightEnsure[chatId];
-  if (inflight != null) return inflight;
-
-  final future = _ensureSessionImpl(accessToken, chatId)
-      .timeout(_ensureTimeout);
-  _inflightEnsure[chatId] = future;
-  // Always clear the in-flight slot regardless of success/error. Using
-  // whenComplete keeps the original future's value or error intact for
-  // any other awaiters that have already taken a reference to it.
-  future.whenComplete(() => _inflightEnsure.remove(chatId));
-  return future;
-}
-
-Future<String> _ensureSessionImpl(String accessToken, String chatId) async {
-  final cached = _sessionByChat[chatId];
-  if (cached != null) {
-    try {
-      final info = await SandboxService.get_(
-        accessToken: accessToken,
-        sessionId: cached,
-      );
-      if (info != null) {
-        return cached;
-      }
-      // Server says it's gone — drop the cache entry and fall through
-      // to recreate.
-      _sessionByChat.remove(chatId);
-    } on SandboxServiceException catch (e) {
-      // Only treat 404 as "session is genuinely gone". A 502/timeout
-      // is transient — propagating it lets the caller decide whether
-      // to retry, and keeps the cached id around so we don't churn
-      // sandboxes on every blip.
-      if (e.statusCode == 404) {
-        _sessionByChat.remove(chatId);
-      } else {
-        rethrow;
-      }
-    }
-  }
-
-  final info = await SandboxService.create(
-    accessToken: accessToken,
-    chatId: chatId,
-  );
-  _sessionByChat[chatId] = info.sessionId;
-  return info.sessionId;
-}
-
-/// Wipe all per-chat sandbox session bookkeeping. Call on sign-out so
-/// the next signed-in user doesn't reuse the previous user's cached
-/// session id (which would 404 on the server anyway because the owner
-/// tag wouldn't match, but the eviction saves a round-trip).
-void clearSandboxCache() {
-  _sessionByChat.clear();
-  _inflightEnsure.clear();
-}
 
 String _capStream(String s) {
   if (s.length <= _stdStreamCap) return s;
@@ -184,7 +111,7 @@ Future<String> executeCodeRun({
   }
 
   try {
-    final sessionId = await _ensureSession(accessToken, chatId);
+    final sessionId = await SandboxSessionCache.ensureSession(accessToken: accessToken, chatId: chatId);
     final result = await SandboxService.execute(
       accessToken: accessToken,
       sessionId: sessionId,
@@ -231,7 +158,7 @@ Future<String> executeSandboxListFiles({
   }
 
   try {
-    final sessionId = await _ensureSession(accessToken, chatId);
+    final sessionId = await SandboxSessionCache.ensureSession(accessToken: accessToken, chatId: chatId);
     final entries = await SandboxService.listFiles(
       accessToken: accessToken,
       sessionId: sessionId,
@@ -276,7 +203,7 @@ Future<String> executeSandboxReadFile({
   }
 
   try {
-    final sessionId = await _ensureSession(accessToken, chatId);
+    final sessionId = await SandboxSessionCache.ensureSession(accessToken: accessToken, chatId: chatId);
     final result = await SandboxService.downloadFile(
       accessToken: accessToken,
       sessionId: sessionId,
@@ -292,10 +219,18 @@ Future<String> executeSandboxReadFile({
       return '${text.substring(0, _textFileCap)}\n'
           '(truncated, $omitted chars omitted)';
     }
-    return 'Binary file (${bytes.length} bytes, type=${result.contentType}). '
-        'Have code_run base64-encode it (e.g. `import base64; '
-        "print(base64.b64encode(open('$path','rb').read()).decode())`) "
-        'to read it inline.';
+    // Either too large for an inline text view (>64 KB) or genuinely
+    // binary (NUL byte / not valid UTF-8). Tell the model exactly which
+    // so it doesn't try to "fix" a 64 KB+ text file as binary.
+    final reason = bytes.length > _textInlineByteLimit
+        ? 'too large for inline view (>${_textInlineByteLimit ~/ 1024}KB)'
+        : 'binary content';
+    return 'File at $path: ${bytes.length} bytes, '
+        'type=${result.contentType}, $reason. '
+        'Read it via code_run instead, e.g. for text: '
+        "`print(open('$path').read())` (after slicing if huge), or for "
+        'binary: '
+        "`import base64; print(base64.b64encode(open('$path','rb').read()).decode())`.";
   } on SandboxServiceException catch (e) {
     return _formatError(e);
   } catch (e) {
@@ -354,7 +289,7 @@ Future<String> executeSandboxWriteFile({
   }
 
   try {
-    final sessionId = await _ensureSession(accessToken, chatId);
+    final sessionId = await SandboxSessionCache.ensureSession(accessToken: accessToken, chatId: chatId);
     await SandboxService.uploadFile(
       accessToken: accessToken,
       sessionId: sessionId,
@@ -383,10 +318,9 @@ Future<String> executeSandboxReset({
   }
 
   // Clear both the cache and any in-flight ensure — if an ensure is
-  // racing the reset, we don't want it to repopulate _sessionByChat
-  // with a session id that's already been (or is about to be) destroyed.
-  final sessionId = _sessionByChat.remove(chatId);
-  _inflightEnsure.remove(chatId);
+  // racing the reset, we don't want it to repopulate the cache with a
+  // session id that's already been (or is about to be) destroyed.
+  final sessionId = SandboxSessionCache.forgetChat(chatId);
   if (sessionId == null) {
     return 'Sandbox destroyed for this chat. Next code_run call will '
         'create a fresh one.';

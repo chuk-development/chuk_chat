@@ -134,6 +134,7 @@ const Map<String, String> stringsRu = {
   'catEmailImapSmtp': 'Электронная почта (IMAP/SMTP)',
   'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
+  'catSandbox': 'Песочница / Код',
   'catSearchWebDesc':
       'Поиск в интернете, загрузка страниц, генерация изображений и получение данных',
   'catUtilitiesDesc':
@@ -157,6 +158,8 @@ const Map<String, String> stringsRu = {
       'Просмотр данных восстановления, нагрузки, сна и тренировок из WHOOP',
   'catNextcloudDesc':
       'Просмотр файлов, календаря и контактов в Nextcloud',
+  'catSandboxDesc':
+      'Запуск Python- или shell-кода в изолированной песочнице и чтение/запись файлов',
   'connect': 'Подключить',
   'disconnect': 'Отключить',
   'disconnectCategory': 'Отключить {label}?',

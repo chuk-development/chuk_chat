@@ -132,6 +132,7 @@ const Map<String, String> stringsEs = {
   'catEmailImapSmtp': 'Correo electrónico (IMAP/SMTP)',
   'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
+  'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
       'Buscar en la web, obtener páginas, generar imágenes y consultar datos',
   'catUtilitiesDesc':
@@ -152,6 +153,8 @@ const Map<String, String> stringsEs = {
       'Ver datos de recuperación, esfuerzo, sueño y entrenamientos de WHOOP',
   'catNextcloudDesc':
       'Explorar archivos, calendario y contactos en Nextcloud',
+  'catSandboxDesc':
+      'Ejecutar código Python o shell en un sandbox aislado y leer/escribir archivos',
   'connect': 'Conectar',
   'disconnect': 'Desconectar',
   'disconnectCategory': '¿Desconectar {label}?',
