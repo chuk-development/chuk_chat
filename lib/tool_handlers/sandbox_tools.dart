@@ -88,8 +88,11 @@ Future<String> executeCodeRun({
   final rawLanguage = args['language'];
   var language = rawLanguage is String ? rawLanguage.trim() : 'python';
   if (language.isEmpty) language = 'python';
-  if (language != 'python' && language != 'shell') {
-    return 'Error: "language" must be "python" or "shell".';
+  // Accept "shell" as a legacy alias for "bash" so older chats that
+  // already learned the previous tool description keep working.
+  if (language == 'shell') language = 'bash';
+  if (language != 'python' && language != 'bash') {
+    return 'Error: "language" must be "python" or "bash".';
   }
 
   int? timeout;
