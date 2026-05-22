@@ -71,7 +71,9 @@ class MessageRenderData {
   final String? replyPreviewLabel;
   final bool isStreamingMessage;
 
-  /// Local-only offline delivery status for user messages. `null` = sent.
+  /// Local-only delivery status. `pending` / `failed` apply to user
+  /// messages (offline queue); `interrupted` applies to assistant
+  /// messages whose stream was torn down mid-emission. `null` = sent.
   final ChatMessageStatus? status;
 
   /// Offline queue id linking this user message to its pending entry.
@@ -852,6 +854,9 @@ class ChatUiHelpers {
           break;
         case 'sent':
           status = ChatMessageStatus.sent;
+          break;
+        case 'interrupted':
+          status = ChatMessageStatus.interrupted;
           break;
       }
     }

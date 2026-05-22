@@ -6,7 +6,10 @@
 ///   and the only state visible until offline support landed.
 /// - [pending]: in the persistent offline queue, awaiting connectivity.
 /// - [failed]: retried and gave up (non-retryable error or max attempts).
-enum ChatMessageStatus { sent, pending, failed }
+/// - [interrupted]: assistant stream was disposed/cancelled before its final
+///   `done` event fired — the persisted body is partial and the UI offers a
+///   "Continue generation" affordance.
+enum ChatMessageStatus { sent, pending, failed, interrupted }
 
 ChatMessageStatus? _statusFromString(String? raw) {
   if (raw == null || raw.isEmpty) return null;
@@ -17,6 +20,8 @@ ChatMessageStatus? _statusFromString(String? raw) {
       return ChatMessageStatus.failed;
     case 'sent':
       return ChatMessageStatus.sent;
+    case 'interrupted':
+      return ChatMessageStatus.interrupted;
   }
   return null;
 }
@@ -30,6 +35,8 @@ String? _statusToString(ChatMessageStatus? status) {
       return 'pending';
     case ChatMessageStatus.failed:
       return 'failed';
+    case ChatMessageStatus.interrupted:
+      return 'interrupted';
   }
 }
 

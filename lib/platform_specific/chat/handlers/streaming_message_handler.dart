@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/artifact_tag_processor.dart';
@@ -20,6 +21,13 @@ import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
 class StreamingMessageHandler {
+  StreamingMessageHandler() {
+    // Hook app lifecycle so we can flush the in-progress snapshot to disk
+    // before the OS suspends us. Without this the last few hundred ms of
+    // streamed text get dropped when the user backgrounds the app mid-stream.
+    AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
+  }
+
   final StreamingManager _streamingManager = StreamingManager();
   final ToolCallHandler _toolCallHandler = ToolCallHandler();
 
@@ -61,6 +69,34 @@ class StreamingMessageHandler {
 
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
+
+  /// Called when the active stream is torn down (dispose / cancel /
+  /// untrapped error) before [onMessageFinalize] had a chance to run.
+  /// Hosts use this to flag the persisted assistant message with
+  /// `ChatMessageStatus.interrupted` so the UI can offer "Continue
+  /// generation" on next render.
+  Function(String chatId, int index)? onStreamInterrupted;
+
+  /// Fires on a periodic timer (and immediately on lifecycle pause /
+  /// dispose) while a stream is active. Carries the most recent
+  /// snapshot of the in-progress assistant message so the host can
+  /// persist it to disk — even when the chat is foregrounded and
+  /// [onBackgroundUpdate] would be a no-op. Hosts should write
+  /// [content] + [reasoning] (+ [contentBlocksJson] when present)
+  /// onto the message row at [index] in chat [chatId] without
+  /// triggering a full chat re-encode each tick. [forceImmediate]
+  /// is true when the flush is triggered by lifecycle-pause or
+  /// dispose — the host should bypass any debounce in that case.
+  Function(
+    String chatId,
+    int index,
+    String content,
+    String reasoning,
+    String? contentBlocksJson,
+    bool forceImmediate,
+  )?
+  onStreamTick;
+
   Function()? onPaymentRequired;
 
   bool _isStreaming = false;
@@ -68,6 +104,19 @@ class StreamingMessageHandler {
   bool _isDisposed = false;
   bool _hasForegroundKeepAliveLock = false;
   Future<void>? _activeToolLoopFuture;
+
+  // --- Periodic streaming snapshot persistence ---
+  //
+  // The streaming callbacks emit interim text into the active chat UI on
+  // every token, but the chat is only written to disk on round boundaries
+  // (and via the debounced background path). When the app is suspended
+  // mid-token the trailing text is lost.  We mirror the most recent
+  // (content, reasoning) into [_currentSnapshot] and flush it every
+  // [_snapshotInterval] (or immediately on lifecycle pause / dispose).
+  static const Duration _snapshotInterval = Duration(milliseconds: 500);
+  Timer? _snapshotTimer;
+  _StreamingSnapshot? _currentSnapshot;
+  bool _streamFinalized = false;
 
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
@@ -99,6 +148,8 @@ class StreamingMessageHandler {
     bool toolDiscoveryMode = true,
     bool allowMarkdownToolCalls = true,
     String? reasoningEffort,
+    String? continuePriorText,
+    String? continuePriorContentBlocksJson,
   }) async {
     if (_isDisposed) return;
 
@@ -193,6 +244,8 @@ class StreamingMessageHandler {
 
     _isSending = true;
     _isStreaming = true;
+    _streamFinalized = false;
+    _clearSnapshot();
     onUpdateUI?.call();
     await _acquireForegroundKeepAlive();
 
@@ -224,6 +277,7 @@ class StreamingMessageHandler {
         onMessageFinalize!(placeholderIndex, failureMessage, '', chatId, null);
       }
       onShowSnackBar?.call(failureMessage);
+      _markStreamFinalized();
       _isStreaming = false;
       _isSending = false;
       onUpdateUI?.call();
@@ -247,6 +301,31 @@ class StreamingMessageHandler {
     // Each completed pass adds its text + tool_calls blocks here.
     final contentBlocks = <ContentBlock>[];
     int previousToolCallCount = 0;
+
+    // "Continue generation" mode: seed the accumulator with the prior
+    // partial body so newly streamed tokens append to what was already
+    // captured before the interruption. Without this seed the new stream
+    // would overwrite the previously persisted text on the very first
+    // token.
+    if (continuePriorText != null && continuePriorText.trim().isNotEmpty) {
+      accumulatedText.write(continuePriorText.trimRight());
+      accumulatedText.write('\n\n');
+    }
+    if (continuePriorContentBlocksJson != null &&
+        continuePriorContentBlocksJson.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(continuePriorContentBlocksJson);
+        if (decoded is List) {
+          for (final raw in decoded) {
+            if (raw is Map<String, dynamic>) {
+              try {
+                contentBlocks.add(ContentBlock.fromJson(raw));
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     /// Encode current content blocks to JSON.
     String encodeBlocks() =>
@@ -388,6 +467,7 @@ class StreamingMessageHandler {
         if (onBackgroundUpdate != null) {
           onBackgroundUpdate!(chatId, placeholderIndex, stopMessage, '');
         }
+        _markStreamFinalized();
         _isStreaming = false;
         _isSending = false;
         onUpdateUI?.call();
@@ -459,6 +539,15 @@ class StreamingMessageHandler {
               reasoning,
             );
           }
+          // Mirror the latest streamed snapshot so the periodic flusher
+          // can persist it even if no further tokens arrive (e.g. the OS
+          // suspends us between rounds).
+          _recordSnapshot(
+            chatId: chatId,
+            index: placeholderIndex,
+            content: fullDisplay,
+            reasoning: reasoning,
+          );
         },
         onComplete: (finalContent, finalReasoning, tps) {
           if (_isDisposed) return;
@@ -559,6 +648,16 @@ class StreamingMessageHandler {
                     placeholderIndex,
                     encodeBlocks(),
                     chatId,
+                  );
+                  // Refresh the snapshot's contentBlocks payload so the
+                  // periodic flusher persists the new blocks alongside the
+                  // text mid-stream.
+                  _recordSnapshot(
+                    chatId: chatId,
+                    index: placeholderIndex,
+                    content: _currentSnapshot?.content ?? accumulatedText.toString(),
+                    reasoning: _currentSnapshot?.reasoning ?? '',
+                    contentBlocksJson: encodeBlocks(),
                   );
                 }
 
@@ -782,6 +881,7 @@ class StreamingMessageHandler {
                 content: effectiveContent,
               );
 
+              _markStreamFinalized();
               _isStreaming = false;
               _isSending = false;
               onUpdateUI?.call();
@@ -806,6 +906,7 @@ class StreamingMessageHandler {
               onShowSnackBar?.call(
                 'An unexpected error occurred. Please try again.',
               );
+              _markStreamFinalized();
               _isStreaming = false;
               _isSending = false;
               onUpdateUI?.call();
@@ -867,6 +968,7 @@ class StreamingMessageHandler {
             if (onBackgroundUpdate != null) {
               onBackgroundUpdate!(chatId, placeholderIndex, paymentMessage, '');
             }
+            _markStreamFinalized();
             _isStreaming = false;
             _isSending = false;
             onUpdateUI?.call();
@@ -886,6 +988,7 @@ class StreamingMessageHandler {
           }
           onShowSnackBar?.call(errorMessage);
 
+          _markStreamFinalized();
           _isStreaming = false;
           _isSending = false;
           onUpdateUI?.call();
@@ -913,6 +1016,7 @@ class StreamingMessageHandler {
       onShowSnackBar?.call(failureMessage);
 
       finalizeStaleToolState();
+      _markStreamFinalized();
       _isStreaming = false;
       _isSending = false;
       onUpdateUI?.call();
@@ -927,6 +1031,13 @@ class StreamingMessageHandler {
         debugPrint('Cancelling stream for chat $chatId...');
       }
       await _streamingManager.cancelStream(chatId);
+
+      // Mark the placeholder message as interrupted so the UI surfaces the
+      // "Continue generation" affordance. Flush the pending snapshot first
+      // so the partial body is on disk before we hand off.
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+      _markStreamFinalized();
 
       _isStreaming = false;
       _isSending = false;
@@ -1036,6 +1147,13 @@ class StreamingMessageHandler {
 
   /// Reset state (use when stuck in invalid state)
   void resetState() {
+    // If we're forcibly resetting while a stream is active, treat it as an
+    // interruption — the assistant body on disk is partial.
+    if (_isStreaming && !_streamFinalized) {
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+      _markStreamFinalized();
+    }
     _isStreaming = false;
     _isSending = false;
     onUpdateUI?.call();
@@ -1273,11 +1391,137 @@ class StreamingMessageHandler {
     }
   }
 
+  /// Mark the active stream as cleanly finished (a final-answer event ran).
+  /// Tears down the periodic snapshot timer and stops any later cancel/
+  /// dispose paths from raising a spurious "interrupted" flag.
+  void _markStreamFinalized() {
+    _streamFinalized = true;
+    _clearSnapshot();
+  }
+
+  // --- Periodic snapshot persistence ----------------------------------------
+  //
+  // Streaming tokens are accumulated in [_currentSnapshot]. Every
+  // [_snapshotInterval] (or immediately on lifecycle-pause / dispose) we
+  // re-emit the snapshot through [onBackgroundUpdate] so the chat row on
+  // disk always carries the most recent partial text. Without this the
+  // assistant body persisted to SQLite trails the in-memory state by up to
+  // a full streaming pass — long enough to lose minutes of streamed text if
+  // the OS suspends the app between rounds.
+  void _recordSnapshot({
+    required String chatId,
+    required int index,
+    required String content,
+    required String reasoning,
+    String? contentBlocksJson,
+  }) {
+    if (_isDisposed || _streamFinalized) return;
+    _currentSnapshot = _StreamingSnapshot(
+      chatId: chatId,
+      index: index,
+      content: content,
+      reasoning: reasoning,
+      contentBlocksJson: contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
+    );
+    _snapshotTimer ??= Timer.periodic(_snapshotInterval, (_) {
+      _flushSnapshot();
+    });
+  }
+
+  void _flushSnapshot({bool forceImmediate = false}) {
+    final snap = _currentSnapshot;
+    if (snap == null) return;
+    if (_streamFinalized) {
+      _clearSnapshot();
+      return;
+    }
+    try {
+      // Primary path: a dedicated tick callback the host wires directly to
+      // the persistence layer so it fires regardless of whether the chat is
+      // foregrounded. Without this the foreground chat would only persist
+      // on round boundaries and lose the trailing tokens on suspend.
+      onStreamTick?.call(
+        snap.chatId,
+        snap.index,
+        snap.content,
+        snap.reasoning,
+        snap.contentBlocksJson,
+        forceImmediate,
+      );
+      // Background path still fires so the existing background-debounce
+      // logic can coalesce snapshot writes for chats the user isn't on.
+      onBackgroundUpdate?.call(
+        snap.chatId,
+        snap.index,
+        snap.content,
+        snap.reasoning,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[StreamingHandler] snapshot flush failed: $error');
+      }
+    }
+  }
+
+  void _clearSnapshot() {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = null;
+    _currentSnapshot = null;
+  }
+
+  /// Called by the lifecycle service when the app moves to background.
+  /// Forces the most recent streamed snapshot to disk before the OS gets
+  /// a chance to suspend us — otherwise the trailing tokens would be lost.
+  void _handleAppPaused() {
+    if (_isDisposed) return;
+    if (!_isStreaming) return;
+    _flushSnapshot(forceImmediate: true);
+  }
+
+  void _markInterruptedIfStreaming() {
+    if (_streamFinalized) return;
+    final snap = _currentSnapshot;
+    if (snap == null) return;
+    try {
+      onStreamInterrupted?.call(snap.chatId, snap.index);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[StreamingHandler] onStreamInterrupted callback failed: $error',
+        );
+      }
+    }
+  }
+
   /// Dispose resources
   void dispose() {
     _isDisposed = true;
+    // Best-effort: flush in-flight snapshot before tearing down so we don't
+    // lose the tail of an actively streaming response.
+    if (_isStreaming && !_streamFinalized) {
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+    }
+    _clearSnapshot();
+    AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     _activeToolLoopFuture = null;
     unawaited(_releaseForegroundKeepAlive());
     // StreamingManager is global, don't dispose it
   }
+}
+
+class _StreamingSnapshot {
+  _StreamingSnapshot({
+    required this.chatId,
+    required this.index,
+    required this.content,
+    required this.reasoning,
+    this.contentBlocksJson,
+  });
+
+  final String chatId;
+  final int index;
+  final String content;
+  final String reasoning;
+  final String? contentBlocksJson;
 }
