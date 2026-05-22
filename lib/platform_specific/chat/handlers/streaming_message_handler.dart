@@ -132,7 +132,6 @@ class StreamingMessageHandler {
   Future<void> sendMessage({
     required String userInput,
     required List<AttachedFile> attachedFiles,
-    String? replyContextJson,
     required String selectedModelId,
     required String? selectedProviderSlug,
     required List<Map<String, String>> messages,
@@ -210,7 +209,6 @@ class StreamingMessageHandler {
       attachedFiles: attachedFiles,
       selectedModelId: selectedModelId,
       apiHistory: apiHistory,
-      replyContextJson: replyContextJson,
       systemPrompt: systemPrompt,
       getProviderSlug: getProviderSlug,
     );
