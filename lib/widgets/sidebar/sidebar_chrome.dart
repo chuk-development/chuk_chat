@@ -56,9 +56,9 @@ class SbBrand extends StatelessWidget {
     super.key,
     this.trailing,
     this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12),
-    this.label = 'chuk chat',
+    this.label = 'Chuk Chat',
     this.showLogo = false,
-    this.fontSize = 17,
+    this.fontSize = 20,
     this.fontWeight = FontWeight.w700,
   });
 
@@ -90,7 +90,6 @@ class SbBrand extends StatelessWidget {
               style: TextStyle(
                 fontSize: fontSize,
                 fontWeight: fontWeight,
-                letterSpacing: -0.4,
                 color: t.iconFg,
               )),
           const Spacer(),

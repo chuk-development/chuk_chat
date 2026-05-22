@@ -253,6 +253,19 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
         elevation: 0,
         scrolledUnderElevation: 0,
         actions: [
+          // Fix D: previously the only way to edit the workspace on mobile
+          // was hidden under the 3-dot menu, and instructions had no entry
+          // at all — users reported they couldn't edit workspaces on
+          // mobile. Surface "Edit Project" (name + description) as a
+          // visible AppBar icon alongside the existing menu, and add an
+          // explicit "Edit instructions" item to the menu so all three
+          // fields the desktop Settings tab edits (name, description,
+          // instructions) are reachable from the AppBar.
+          IconButton(
+            tooltip: l.projectEditProject,
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: _editNameDescription,
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () async {
@@ -274,6 +287,11 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
                         onTap: () => Navigator.pop(ctx, 'edit'),
                       ),
                       ListTile(
+                        leading: const Icon(Icons.notes_outlined),
+                        title: Text(l.projectInstructions),
+                        onTap: () => Navigator.pop(ctx, 'instructions'),
+                      ),
+                      ListTile(
                         leading: const Icon(
                           Icons.delete_outline,
                           color: Colors.red,
@@ -291,6 +309,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
               );
               if (!mounted) return;
               if (choice == 'edit') _editNameDescription();
+              if (choice == 'instructions') _openInstructions();
               if (choice == 'delete') _confirmDelete();
             },
           ),

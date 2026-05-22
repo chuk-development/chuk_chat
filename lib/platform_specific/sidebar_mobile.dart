@@ -1,5 +1,6 @@
 // lib/platform_specific/sidebar_mobile.dart
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -615,7 +616,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
           SizedBox(height: topStatusBarSpacing),
 
           SbBrand(
-            label: 'chuk chat',
+            label: 'Chuk Chat',
             padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
             trailing: SbNewChatPill(onTap: widget.onNewChatTapped),
           ),
@@ -909,12 +910,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final List<Widget> slivers = [];
     _sectionMarkers.clear();
 
-    slivers.add(const SliverToBoxAdapter(
-      child: SizedBox(height: _kStickyHeaderHeight + 4),
-    ));
-
     if (rest.isEmpty) {
       _currentBucket = '';
+      // Buffer so the empty-state text isn't hidden by the (now empty)
+      // overlay region.
+      slivers.add(const SliverToBoxAdapter(
+        child: SizedBox(height: _kStickyHeaderHeight),
+      ));
       final String msg = _searchQuery.isEmpty
           ? 'No recent chats yet.'
           : 'No chats found for "$_searchQuery".';
@@ -959,8 +961,22 @@ class _SidebarMobileState extends State<SidebarMobile> {
     double cursor = 0;
     void addBucket(String label, List<StoredChat> chats) {
       if (chats.isEmpty) return;
-      _sectionMarkers.add(_BucketBound(label, cursor));
-      cursor += chats.length * _kEstimatedRowHeight;
+      // Marker is the scroll position at which this bucket's inline label
+      // arrives at viewport y = overlay height — clamped to 0 for the
+      // first bucket so it's the default. Mirrors the desktop layout so
+      // mobile and desktop swap the sticky header at the same boundary.
+      _sectionMarkers.add(_BucketBound(
+        label,
+        math.max(0.0, cursor - _kStickyHeaderHeight),
+      ));
+      slivers.add(SliverToBoxAdapter(
+        child: SbSectionLabel(
+          label: label,
+          color: accent,
+          padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+        ),
+      ));
+      cursor += _kStickyHeaderHeight;
       slivers.add(SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) => _buildRecentItem(
@@ -974,6 +990,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
           childCount: chats.length,
         ),
       ));
+      cursor += chats.length * _kEstimatedRowHeight;
     }
 
     addBucket('Today', today);
