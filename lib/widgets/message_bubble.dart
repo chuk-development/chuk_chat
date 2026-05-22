@@ -31,6 +31,37 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
+// ─── Vertical rhythm ─────────────────────────────────────────────────────
+// Block widgets (the things the message body stacks vertically — text
+// paragraphs, tool-call bars, reasoning cards, artifact cards, sandbox
+// artifacts, info status bars, image grids, attachment chips, ask-user
+// cards, etc.) MUST render with NO external margin. Callers (the layout
+// methods _buildClassicLayout / _buildContentBlocksLayout) own every gap
+// between sibling blocks via explicit SizedBox using one of the constants
+// below.
+//
+// This is the single source of truth for vertical spacing. Picking a
+// constant by what the gap MEANS, not by pixel value, keeps the layout
+// readable and prevents the "hidden margin under one widget that
+// silently adds to a caller-side SizedBox" bug class (see
+// b8e4414 + ce91f6b).
+
+/// Gap between two sibling "block" rounds inside the same assistant
+/// message — e.g. between a text paragraph and the next tool-call bar,
+/// or between two consecutive tool-call bars across rounds.
+const double _kBlockGap = 8;
+
+/// Gap between a tool-call bar and its attached artifact cards, and
+/// between consecutive artifact cards in the same stack. Smaller than
+/// _kBlockGap because artifacts visually belong to the bar above them.
+const double _kArtifactGap = 6;
+
+/// Gap between sibling expandable cards stacked inside the expanded
+/// section of a tool-call bar / info status bar. Same value as the
+/// artifact gap by coincidence — they're conceptually different (this
+/// is intra-bar list spacing, not block-to-block spacing).
+const double _kCardStackGap = 6;
+
 /// Per-image metadata describing how an image arrived in the chat and
 /// an optional caption the AI attached to it.
 class ImageMeta {
@@ -884,10 +915,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                 children: [
                   _buildToolCallsBar(widget.toolCalls!),
                   if (cards.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    ...cards,
+                    const SizedBox(height: _kArtifactGap),
+                    ..._stackArtifactCards(cards),
                   ],
-                  const SizedBox(height: 8),
+                  const SizedBox(height: _kBlockGap),
                 ],
               );
             },
@@ -900,11 +931,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
 
     return [
-      if (hasInfoStatusBar)
+      if (hasInfoStatusBar) ...[
         SizedBox(
           width: double.infinity,
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
+        // Match the legacy 6-px gap that used to live inside the
+        // info status bar's bottom margin. Caller owns the gap now.
+        const SizedBox(height: _kCardStackGap),
+      ],
       if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         if (_hasGeneratedImage)
@@ -914,11 +949,11 @@ class _MessageBubbleState extends State<MessageBubble> {
             widget.imageCostEur,
             widget.imageGeneratedAt,
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: _kBlockGap),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
         _buildAttachmentsChips(widget.attachments!),
-        const SizedBox(height: 8),
+        const SizedBox(height: _kBlockGap),
       ],
       if (streamingTextBeforeTools) messageBody,
       if (hasVisibleToolCalls) toolBarSection,
@@ -931,7 +966,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             widget.imageCostEur,
             widget.imageGeneratedAt,
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: _kBlockGap),
       ],
       if (!streamingTextBeforeTools) messageBody,
       ..._buildAskUserOptions(),
@@ -964,7 +999,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Document attachments
     if (widget.attachments != null && widget.attachments!.isNotEmpty) {
       children.add(_buildAttachmentsChips(widget.attachments!));
-      children.add(const SizedBox(height: 8));
+      children.add(const SizedBox(height: _kBlockGap));
     }
 
     // Collect tool call IDs already inside content blocks so we can detect
@@ -1068,11 +1103,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     void renderRound(_RenderSegment seg) {
       if (!seg.hasContent) return;
       // Reasoning-only round: standalone collapsible reasoning card.
+      // _buildBlockReasoning has no margin, so the trailing gap below
+      // the card lives here. `_kCardStackGap` matches the legacy baked-
+      // in 6 px tail.
       if (seg.toolCalls.isEmpty) {
         if (seg.reasonings.isEmpty) return;
         children.add(
           _buildBlockReasoning(seg.reasonings.join('\n\n'), accentColor),
         );
+        children.add(const SizedBox(height: _kCardStackGap));
         hasRenderedMainContent = true;
         return;
       }
@@ -1082,6 +1121,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           children.add(
             _buildBlockReasoning(seg.reasonings.join('\n\n'), accentColor),
           );
+          children.add(const SizedBox(height: _kCardStackGap));
           hasRenderedMainContent = true;
         }
         return;
@@ -1096,7 +1136,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         timeline.add(_ToolTimelineEntry.tool(tc));
       }
       if (hasRenderedMainContent) {
-        children.add(const SizedBox(height: 8));
+        children.add(const SizedBox(height: _kBlockGap));
       }
       children.add(
         _buildToolCallsBar(
@@ -1105,17 +1145,19 @@ class _MessageBubbleState extends State<MessageBubble> {
           contentBlockTimeline: timeline,
         ),
       );
-      // Match the gap above the bar (8) — previously a 6-px spacer always
-      // sat between the bar and the artifact slot AND an 8-px spacer sat
-      // after artifacts. When there were no artifacts (the common case)
-      // those two stacked into 14 px below while the gap above stayed at
-      // 8, so the bar visually drifted toward the preceding text.
+      // Match the gap above the bar (`_kBlockGap`) — only insert the
+      // `_kArtifactGap` bar→artifacts spacer when there ARE artifacts,
+      // so the gap below the bar stays symmetric with the gap above
+      // when no artifacts are attached. (Previously a 6-px spacer always
+      // sat between the bar and the artifact slot AND an 8-px spacer
+      // sat after, stacking to 14 px below while the gap above stayed
+      // at 8 — see commits ce91f6b + b8e4414.)
       final artifactCards = _buildArtifactCards(seg.toolCalls);
       if (artifactCards.isNotEmpty) {
-        children.add(const SizedBox(height: 6));
-        children.addAll(artifactCards);
+        children.add(const SizedBox(height: _kArtifactGap));
+        children.addAll(_stackArtifactCards(artifactCards));
       }
-      children.add(const SizedBox(height: 8));
+      children.add(const SizedBox(height: _kBlockGap));
       hasRenderedMainContent = true;
       // Image insertion right after the round that produced it.
       if (hasImages && !insertedImage) {
@@ -1136,7 +1178,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             );
           }
-          children.add(const SizedBox(height: 8));
+          children.add(const SizedBox(height: _kBlockGap));
           insertedImage = true;
         }
       }
@@ -1154,10 +1196,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         hasRenderedMainContent = true;
       } else if (seg.isSandboxArtifact) {
         if (hasRenderedMainContent) {
-          children.add(const SizedBox(height: 6));
+          children.add(const SizedBox(height: _kArtifactGap));
         }
         children.add(SandboxArtifactBlock(payload: seg.sandboxArtifact!));
-        children.add(const SizedBox(height: 6));
+        children.add(const SizedBox(height: _kArtifactGap));
         hasRenderedMainContent = true;
       } else {
         renderRound(seg);
@@ -1174,7 +1216,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           widget.imageGeneratedAt,
         ),
       );
-      children.add(const SizedBox(height: 8));
+      children.add(const SizedBox(height: _kBlockGap));
     }
 
     // ask_user interactive options.
@@ -1214,6 +1256,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     return jsonDecode(raw.trim());
   }
 
+  /// Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
+  /// / `<weather>` / `<news>` / `<image>` blocks. Returns ONE Column —
+  /// no external margin. The `Padding(symmetric(vertical: 4))` on each
+  /// inner MarkdownMessage is internal breathing room, not a layout
+  /// gap (see `_buildBlockText`). Callers control gaps to neighbouring
+  /// blocks via `_kBlockGap`.
   Widget _buildVisualContent({
     required String content,
     required Color textColor,
@@ -1633,6 +1681,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   /// Renders a text content block as a MarkdownMessage.
+  ///
+  /// The `Padding(symmetric(vertical: 4))` is intentional internal
+  /// padding around the markdown — it gives text blocks breathing room
+  /// against the bubble background and acts as part of the block's own
+  /// presentation, NOT as a between-blocks layout gap. Callers still
+  /// add `_kBlockGap` between text and other blocks.
   Widget _buildBlockText(String text, Color textColor, Color bgColor) {
     // Check for embedded visual blocks (<chart>/<map>/<email>/<weather>/<news>/<image>)
     if (_hasVisualBlocks(text)) {
@@ -1679,7 +1733,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     return <Widget>[_buildBlockText(trimmed, textColor, bgColor)];
   }
 
-  /// Renders a reasoning content block as an expandable card.
+  /// Renders a reasoning content block as an expandable card. Renders
+  /// NO external margin — callers control the gap below the card via
+  /// SizedBox (typically `_kCardStackGap` or `_kBlockGap`).
   Widget _buildBlockReasoning(String text, Color accentColor) {
     return _buildExpandableCard(
       key: 'block_reasoning_${text.hashCode}',
@@ -1693,6 +1749,9 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   /// Unified status bar for reasoning and model info, matching function_calling
   /// client design: expandable cards with accent-tinted backgrounds.
+  ///
+  /// Renders NO external margin — callers control the gap below the bar
+  /// via SizedBox using the `_kBlockGap` constant.
   Widget _buildInfoStatusBar(Color iconFgColor, Color accentColor) {
     final bool isExpanded = _isReasoningExpanded;
     final bool isStreaming = widget.isReasoningStreaming;
@@ -1714,7 +1773,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return SelectionContainer.disabled(
       child: Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
           color: barAccent.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
@@ -1806,6 +1864,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                         accentColor: barAccent,
                         isRunning: isStreaming,
                       ),
+                    if (_hasReasoning && _hasModelInfo)
+                      const SizedBox(height: _kCardStackGap),
                     if (_hasModelInfo)
                       _buildExpandableCard(
                         key: 'model_info',
@@ -1824,7 +1884,31 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  /// Stack expandable cards inside an expanded section, inserting
+  /// `_kCardStackGap` after every card. Used to be implicit via a baked
+  /// `margin: only(bottom: 6)` on each card; the explicit helper makes
+  /// the spacing live at the layout layer where it belongs and matches
+  /// the visual behavior of master HEAD (every card has a 6 px tail).
+  List<Widget> _stackCards(List<Widget> cards) {
+    if (cards.isEmpty) return cards;
+    final out = <Widget>[];
+    for (final card in cards) {
+      out.add(card);
+      out.add(const SizedBox(height: _kCardStackGap));
+    }
+    return out;
+  }
+
   /// Reusable expandable card matching function_calling client design.
+  ///
+  /// Renders NO external margin. When stacking multiple cards in a
+  /// column the caller must insert `SizedBox(height: _kCardStackGap)`
+  /// between siblings (or pass them through `_stackCards`); when using
+  /// a card as a standalone message-body block the caller must provide
+  /// a `_kBlockGap` spacer relative to neighbouring blocks. Previously
+  /// this widget baked a `margin: only(bottom: 6)` which silently
+  /// stacked with any caller-side spacer, producing asymmetric gaps
+  /// that were very hard to trace (see commit b8e4414).
   Widget _buildExpandableCard({
     required String key,
     required IconData icon,
@@ -1840,7 +1924,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return SelectionContainer.disabled(
       child: Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
           color: accentColor.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
@@ -1960,6 +2043,13 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   /// Renders inline artifact cards for artifact_manager tool calls, so users
   /// can re-open the artifact panel after closing it (Claude.ai style).
+  ///
+  /// Cards render NO external padding — callers must stack them through
+  /// `_stackArtifactCards` (or insert `_kArtifactGap` spacers manually)
+  /// so the artifact-to-artifact spacing lives in the layout, not in
+  /// this builder. Previously every card was wrapped in
+  /// `Padding(bottom: 6)`, which silently added a 6 px tail after the
+  /// last card on top of whatever spacer the caller appended.
   List<Widget> _buildArtifactCards(List<ToolCall> toolCalls) {
     if (!kFeatureArtifacts) return const [];
     final cards = <Widget>[];
@@ -1970,12 +2060,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       if (tc.status == ToolCallStatus.error &&
           (tc.name == 'artifact_manager' || tc.name == 'typst_compile')) {
         final result = tc.result ?? 'Unknown error';
-        cards.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: _ArtifactErrorCard(toolName: tc.name, message: result),
-          ),
-        );
+        cards.add(_ArtifactErrorCard(toolName: tc.name, message: result));
         continue;
       }
       if (tc.status != ToolCallStatus.completed) continue;
@@ -2017,20 +2102,40 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
 
       cards.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: _ArtifactInlineCard(
-            artifactId: artifactId,
-            title: title,
-            type: type,
-            version: version,
-          ),
+        _ArtifactInlineCard(
+          artifactId: artifactId,
+          title: title,
+          type: type,
+          version: version,
         ),
       );
     }
     return cards;
   }
 
+  /// Wrap a list of artifact cards into one cohesive "artifact stack":
+  /// a `_kArtifactGap` after every card, including the last one, so the
+  /// stack reads as a single visual unit attached to the tool-call bar
+  /// above it. Callers add a separate `_kBlockGap` AFTER the stack to
+  /// separate it from the next block in the message body. Matches the
+  /// legacy baked-in `Padding(bottom: 6)` per-card behaviour for visual
+  /// parity with master HEAD.
+  List<Widget> _stackArtifactCards(List<Widget> cards) {
+    if (cards.isEmpty) return cards;
+    final out = <Widget>[];
+    for (final card in cards) {
+      out.add(card);
+      out.add(const SizedBox(height: _kArtifactGap));
+    }
+    return out;
+  }
+
+  /// Returns a self-contained tool-calls bar (the pill with the
+  /// "Tools…" header + the expandable list of call cards). Renders NO
+  /// external margin — callers must wrap with `SizedBox(height:
+  /// _kBlockGap)` (and `_kArtifactGap` for any attached artifact stack)
+  /// for spacing relative to sibling blocks. Re-adding a hidden margin
+  /// here was the bug fixed in commit b8e4414.
   Widget _buildToolCallsBar(
     List<ToolCall> toolCalls, {
     bool isContentBlock = false,
@@ -2122,12 +2227,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     return SelectionContainer.disabled(
       child: Container(
         width: double.infinity,
-        // No baked-in bottom margin — callers control the gap below the
-        // bar via SizedBox so the spacing above and below the bar can
-        // stay symmetric. (Previously the bar carried `margin: only
-        // (bottom: 6)` which silently added 6 px under every pill on top
-        // of whatever spacer the caller added, making bar→text always
-        // taller than text→bar.)
+        // No baked-in margin — see the doc comment on
+        // `_buildToolCallsBar`. Callers own the gap below the bar.
         decoration: BoxDecoration(
           color: accentColor.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
@@ -2182,7 +2283,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                 padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  // Each card carries no margin (see _buildExpandableCard);
+                  // _stackCards inserts a `_kCardStackGap` spacer after every
+                  // card, preserving the trailing 6 px below the last card
+                  // that the old per-card margin used to add (kept for
+                  // visual parity with master HEAD).
+                  children: _stackCards([
                     if (isContentBlock && effectiveTimeline.isNotEmpty)
                       for (int ti = 0; ti < effectiveTimeline.length; ti++) ...[
                         if (effectiveTimeline[ti].isReasoning)
@@ -2276,7 +2382,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         expandedContent: _buildModelDetails(),
                         accentColor: Colors.green,
                       ),
-                  ],
+                  ]),
                 ),
               ),
           ],
@@ -2794,7 +2900,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     return found;
   }
 
-  /// Build ask_user interactive option buttons if applicable.
+  /// Build ask_user interactive option buttons if applicable. Returns
+  /// a list of widgets with NO external margin between them or after
+  /// them — callers control the gap to neighbouring blocks (typically
+  /// the ask_user card is the last block in the bubble).
   List<Widget> _buildAskUserOptions() {
     if (widget.onAskUserAnswer == null) {
       return const [];
@@ -2856,6 +2965,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     return metas.any((m) => m.isGenerated);
   }
 
+  /// Renders the image grid (1, 2+1, or N-col Wrap) for the message.
+  /// Renders NO external margin — callers add `_kBlockGap` after the
+  /// grid to separate it from the next block.
   Widget _buildImagesGrid(List<String> images) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3016,6 +3128,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  /// Renders document attachment chips as a Wrap. Renders NO external
+  /// margin — callers add `_kBlockGap` between the chip row and the
+  /// next block.
   Widget _buildAttachmentsChips(List<DocumentAttachment> attachments) {
     final iconColor = Theme.of(context).colorScheme.onSurface;
     final accentColor = Theme.of(context).colorScheme.primary;
@@ -3164,6 +3279,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  /// Renders the small "..." popup button below the image grid.
+  /// The widget owns a `Padding(top: 4, right: 6)` for its alignment
+  /// against the image grid above — that is intentional INTERNAL
+  /// padding (positions the pill relative to the grid's bottom-right
+  /// corner), not a layout gap. Callers still add `_kBlockGap` between
+  /// the meta menu and the next block.
   Widget _buildImageMetaMenu(
     Color iconFgColor,
     bool alignRight,
