@@ -737,34 +737,29 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Hamburger menu — stays anchored at the top-left, never moves.
-          // Uses the same Material+InkWell + BorderRadius.circular(10)
-          // hover affordance as the SbRailRow items below (New chat,
-          // Workspaces, Media) so the rounded-rectangle hover shape is
-          // consistent down the left rail instead of the default circular
-          // IconButton splash.
+          // Uses an IconButton sized 48×40 so its elliptical splash matches
+          // the mini-rail icons below (which are also 48-wide IconButtons
+          // sized to kButtonVisualHeight). Without the 48×40 box the
+          // splash would render as a perfect circle instead of the egg-
+          // shaped ellipse the rail icons have, and the two wouldn't
+          // match visually when the sidebar is collapsed.
           Positioned(
-            top: kTopInitialSpacing,
+            top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
             left: kFixedLeftPadding,
             child: KeyedSubtree(
               key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
               child: SizedBox(
                 width: kMenuButtonHeight,
-                height: kMenuButtonHeight,
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: _toggleSidebar,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Center(
-                      child: Icon(
-                        Icons.menu_rounded,
-                        color: iconFg,
-                        size: 24,
-                      ),
-                    ),
+                height: kButtonVisualHeight,
+                child: IconButton(
+                  icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.standard,
+                  constraints: const BoxConstraints.tightFor(
+                    width: kMenuButtonHeight,
+                    height: kButtonVisualHeight,
                   ),
+                  onPressed: _toggleSidebar,
                 ),
               ),
             ),
