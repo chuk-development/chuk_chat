@@ -63,11 +63,18 @@ class WebSocketChatService {
     double temperature = 0.7,
     List<String>? images,
     String? reasoningEffort,
+    String? chatId,
   }) async* {
     // Prefer the multiplexed /v2/ws connection when a chat session is
     // open. Falls through to the legacy per-request WS path when no
-    // session is bound — preserves behaviour for offline retry workers,
-    // title generation, etc.
+    // session is bound — preserves behaviour for offline retry workers
+    // and similar side paths.
+    //
+    // When [chatId] is supplied, the multiplex routes through
+    // [MultiplexSession.chatForChat] which enforces a single in-flight
+    // chat stream per chat id. Callers without a chat id (offline
+    // executor, anonymous side paths) still get the legacy un-tracked
+    // [MultiplexConnection.chat] behaviour.
     final mux = MultiplexSession.current;
     if (mux != null) {
       yield* _sendViaMultiplex(
@@ -81,6 +88,7 @@ class WebSocketChatService {
         temperature: temperature,
         images: images,
         reasoningEffort: reasoningEffort,
+        chatId: chatId,
       );
       return;
     }
@@ -363,6 +371,7 @@ class WebSocketChatService {
     double temperature = 0.7,
     List<String>? images,
     String? reasoningEffort,
+    String? chatId,
   }) async* {
     if (kDebugMode) {
       debugPrint('📤 [Multiplex] chat -> $modelId via $providerSlug');
@@ -397,7 +406,13 @@ class WebSocketChatService {
       }
     }
 
-    yield* connection.chat(payload: payload);
+    // Route through the per-chatId tracker so two concurrent chat
+    // streams for the same chat (e.g. title generation racing the
+    // main response) can never interleave into the same UI buffer.
+    yield* MultiplexSession.chatForChat(
+      chatId: chatId,
+      payload: payload,
+    );
   }
 
   /// Convert image storage paths or existing Base64 URLs to Base64 data URLs.

@@ -434,6 +434,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           temperature: 0.7,
           images: passImages,
           reasoningEffort: _reasoningEnabled ? null : 'none',
+          // Pin the chat id so MultiplexSession enforces single-stream-
+          // per-chat and cancels any racing concurrent send (e.g. an
+          // overlapping title generation call) before this pass starts.
+          chatId: chatIdForStream,
         );
 
         await _streamingManager.startStream(
@@ -1535,6 +1539,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           maxTokens: maxResponseTokens,
           images: passImages,
           reasoningEffort: _reasoningEnabled ? null : 'none',
+          // Pin the chat id so MultiplexSession enforces single-stream-
+          // per-chat and cancels any racing concurrent send (e.g. an
+          // overlapping title generation call) before this pass starts.
+          chatId: chatIdForStream,
         );
 
         await _streamingManager.startStream(

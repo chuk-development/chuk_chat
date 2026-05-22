@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -312,7 +313,21 @@ Rules:
 
   /// Generate a title for a chat based on the first user message.
   /// Returns null if generation fails or feature is disabled.
-  static Future<String?> generateTitle(String firstMessage) async {
+  ///
+  /// [chatId] is used purely to wait until the main chat response has
+  /// finished streaming. The actual title chat call goes through the
+  /// multiplex with a null chat id — that way it can never claim the
+  /// per-chatId in-flight slot guarded by
+  /// [MultiplexSession.chatForChat] and cannot accidentally cancel
+  /// (or be cancelled by) the main response. Even if the main
+  /// response somehow restarts mid-title-gen, the two would be
+  /// distinct multiplex requests with distinct req_ids and distinct
+  /// in-memory buffers — never interleaving into the same UI
+  /// message.
+  static Future<String?> generateTitle(
+    String firstMessage, {
+    String? chatId,
+  }) async {
     // Check if feature is enabled
     if (!await isEnabled()) {
       if (kDebugMode) {
@@ -357,6 +372,12 @@ Rules:
         maxTokens: 32, // Very short for titles
         temperature: 0.3, // Lower temperature for more focused output
         reasoningEffort: 'none', // No reasoning for title generation
+        // Explicitly do NOT pin a chat id — title generation must
+        // never share the per-chatId in-flight slot with the main
+        // response. The serialization happens in
+        // [generateAndApplyTitle] via
+        // [MultiplexSession.waitForChatStreamIdle].
+        chatId: null,
       )) {
         switch (event) {
           case ContentEvent(:final text):
@@ -463,7 +484,38 @@ Rules:
         return;
       }
 
-      final title = await generateTitle(firstMessage);
+      // Wait for the main response stream for this chat id to finish
+      // BEFORE issuing the title chat call. Without this the title
+      // chat would have raced the main response on the same /v2/ws
+      // connection — both with distinct req_ids and distinct
+      // multiplex controllers, but the v1.0.96 export evidence
+      // showed character-by-character interleaving into the
+      // assistant message buffer. Serializing closes that race for
+      // good and keeps the per-chatId in-flight slot single-tenant.
+      final idle = await MultiplexSession.waitForChatStreamIdle(chatId);
+      if (!idle && kDebugMode) {
+        debugPrint(
+          '📝 [TitleGen] timed out waiting for main response to '
+          'finish — proceeding anyway with a separate (un-tracked) '
+          'title request',
+        );
+      }
+
+      // Re-check the chat name after waiting — the user might have
+      // renamed it manually during the main response, in which case
+      // we should not stomp on their title.
+      final readyChat = ChatStorageService.getChatById(chatId);
+      if (_hasCustomName(readyChat?.customName)) {
+        if (kDebugMode) {
+          debugPrint(
+            '📝 [TitleGen] Chat got a custom title while waiting, '
+            'skipping',
+          );
+        }
+        return;
+      }
+
+      final title = await generateTitle(firstMessage, chatId: chatId);
       if (title == null || title.isEmpty) {
         if (kDebugMode) {
           debugPrint('📝 [TitleGen] Title was null or empty, not applying');

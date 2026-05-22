@@ -514,6 +514,10 @@ class StreamingMessageHandler {
         maxTokens: maxResponseTokens,
         images: passImages,
         reasoningEffort: reasoningEffort,
+        // Pin the chat id so MultiplexSession enforces single-stream-
+        // per-chat and cancels any racing concurrent send (e.g. an
+        // overlapping title generation call) before this pass starts.
+        chatId: chatId,
       );
 
       await _streamingManager.startStream(

@@ -99,6 +99,10 @@ class StreamingManager {
     // Start idle timer — if no events arrive within _idleTimeout,
     // treat the stream as dead and clean up.
     activeStream.idleTimer = Timer(_idleTimeout, () {
+      // Guard against firing after the stream already completed —
+      // see the matching guard in _handleStreamEvent / onError.
+      if (!activeStream.isActive) return;
+      activeStream.isActive = false;
       if (kDebugMode) {
         debugPrint(
           '[StreamingManager] Idle timeout for chat $chatId — no data received for ${_idleTimeout.inSeconds}s',
@@ -244,6 +248,9 @@ class StreamingManager {
     // Reset idle timer on every event — connection is still alive
     activeStream.cancelIdleTimer();
     activeStream.idleTimer = Timer(_idleTimeout, () {
+      // Guard against firing after the stream already completed.
+      if (!activeStream.isActive) return;
+      activeStream.isActive = false;
       if (kDebugMode) {
         debugPrint(
           '[StreamingManager] Idle timeout for chat $chatId — no data for ${_idleTimeout.inSeconds}s',
@@ -291,6 +298,7 @@ class StreamingManager {
       // setState() inside onError rebuilds while isStreaming() still
       // returns true, which leaves the UI stuck on the streaming spinner
       // even after the error message is shown.
+      activeStream.isActive = false;
       _cleanupStream(chatId);
       onError(event.message);
     } else if (event is DoneEvent) {
@@ -301,6 +309,18 @@ class StreamingManager {
       final finalContent = activeStream.contentBuffer.toString();
       final finalReasoning = activeStream.reasoningBuffer.toString();
       final tps = activeStream.tps;
+
+      // Mark inactive BEFORE awaiting so a concurrently-scheduled
+      // `_handleStreamClose` (fired by the listener's onDone right
+      // after this event in the multiplex path) early-returns and
+      // does not double-fire onComplete. Two onCompletes would each
+      // recursively launch the next tool-loop pass, and both passes
+      // would write into the same UI message buffer — that is the
+      // root cause of the v1.0.96 character-by-character interleave
+      // exposed by the /v2/ws multiplex landing (DoneEvent + onDone
+      // arrive synchronously in the multiplex demuxer).
+      activeStream.isActive = false;
+      activeStream.cancelIdleTimer();
 
       // Show completion notification if app is in background
       // IMPORTANT: Await this before cleanup so foreground service stops AFTER
@@ -314,7 +334,7 @@ class StreamingManager {
 
       onComplete(finalContent, finalReasoning, tps);
       // Keep completed stream data available for chat reload —
-      // don't remove from map, just mark inactive.
+      // don't remove from map, just record the completion timestamp.
       _completeStream(chatId);
     }
     // UsageEvent and MetaEvent are ignored (just logging)
@@ -335,6 +355,12 @@ class StreamingManager {
     final finalContent = activeStream.contentBuffer.toString();
     final finalReasoning = activeStream.reasoningBuffer.toString();
     final tps = activeStream.tps;
+
+    // Mark inactive BEFORE awaiting so we cannot race a concurrent
+    // DoneEvent handler into firing onComplete twice (see the
+    // matching note in _handleStreamEvent above).
+    activeStream.isActive = false;
+    activeStream.cancelIdleTimer();
 
     // Show completion notification if app is in background
     // IMPORTANT: Await this before cleanup so foreground service stops AFTER
