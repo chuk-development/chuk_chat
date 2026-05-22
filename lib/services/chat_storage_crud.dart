@@ -878,6 +878,29 @@ class ChatStorageCrud {
           ? stripToolCallBlocksForDisplay(rawText)
           : rawText;
 
+      // Preserve local-only delivery status (pending/failed/interrupted) so
+      // it survives the round-trip through the chat cache. Without this the
+      // `interrupted` flag set during a backgrounded stream would be lost on
+      // the next chat reload, defeating the "Continue generation" affordance.
+      ChatMessageStatus? status;
+      final statusRaw = m['status'];
+      if (statusRaw is String && statusRaw.isNotEmpty) {
+        switch (statusRaw) {
+          case 'pending':
+            status = ChatMessageStatus.pending;
+            break;
+          case 'failed':
+            status = ChatMessageStatus.failed;
+            break;
+          case 'sent':
+            status = ChatMessageStatus.sent;
+            break;
+          case 'interrupted':
+            status = ChatMessageStatus.interrupted;
+            break;
+        }
+      }
+
       return ChatMessage(
         role: role,
         text: text,
@@ -892,6 +915,8 @@ class ChatStorageCrud {
         contentBlocks: m['contentBlocks'] as String?,
         modelId: m['modelId'] as String?,
         provider: m['provider'] as String?,
+        status: status,
+        queueId: m['queueId'] as String?,
       );
     }).toList();
   }

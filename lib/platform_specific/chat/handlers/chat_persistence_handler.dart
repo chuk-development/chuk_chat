@@ -205,6 +205,7 @@ class ChatPersistenceHandler {
     String? imageCostEur,
     String? imageGeneratedAt,
     String? tps,
+    String? status,
     bool immediate = false,
   }) async {
     final key = '$chatId:$messageIndex';
@@ -221,7 +222,8 @@ class ChatPersistenceHandler {
       ..imageMetas = imageMetas ?? existing.imageMetas
       ..imageCostEur = imageCostEur ?? existing.imageCostEur
       ..imageGeneratedAt = imageGeneratedAt ?? existing.imageGeneratedAt
-      ..tps = tps ?? existing.tps;
+      ..tps = tps ?? existing.tps
+      ..status = status ?? existing.status;
 
     _pendingBackgroundUpdates[key] = existing;
 
@@ -309,6 +311,9 @@ class ChatPersistenceHandler {
       if (pending.tps != null) {
         messages[pending.messageIndex]['tps'] = pending.tps;
       }
+      if (pending.status != null) {
+        messages[pending.messageIndex]['status'] = pending.status;
+      }
 
       await ChatStorageService.updateChat(pending.chatId, messages);
     } catch (e) {
@@ -333,4 +338,5 @@ class _PendingBackgroundUpdate {
   String? imageCostEur;
   String? imageGeneratedAt;
   String? tps;
+  String? status;
 }

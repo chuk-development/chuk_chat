@@ -97,6 +97,25 @@ class ChukChatUIMobile extends StatefulWidget {
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
 }
 
+/// Serialize a [ChatMessageStatus] into the wire-format string used inside
+/// the chat message map (kept in sync with the values consumed by the
+/// inline parser further down). `null` returns `null` so historic
+/// messages stay status-less on disk.
+String? _statusToRawString(ChatMessageStatus? status) {
+  switch (status) {
+    case null:
+      return null;
+    case ChatMessageStatus.sent:
+      return 'sent';
+    case ChatMessageStatus.pending:
+      return 'pending';
+    case ChatMessageStatus.failed:
+      return 'failed';
+    case ChatMessageStatus.interrupted:
+      return 'interrupted';
+  }
+}
+
 class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Controllers and basic state
   final TextEditingController _controller = TextEditingController();
@@ -245,7 +264,83 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           );
         }
       }
+      ..onStreamInterrupted = _markAssistantMessageInterrupted
+      ..onStreamTick = _persistStreamTick
       ..onPaymentRequired = _showPaymentRequiredDialog;
+  }
+
+  /// Periodic snapshot persistence — writes the current streamed body of
+  /// the assistant message directly to storage every ~500ms (and on
+  /// lifecycle pause). Used to defend against the OS suspending the app
+  /// mid-stream and losing the tail of a response.
+  ///
+  /// We pipe through [_persistenceHandler.updateBackgroundChatMessage]
+  /// regardless of whether the chat is foregrounded — the handler
+  /// debounces writes per (chatId, messageIndex) so per-tick overhead
+  /// stays low.
+  void _persistStreamTick(
+    String chatId,
+    int index,
+    String content,
+    String reasoning,
+    String? contentBlocksJson,
+    bool forceImmediate,
+  ) {
+    if (index < 0) return;
+    unawaited(
+      _persistenceHandler
+          .updateBackgroundChatMessage(
+            chatId: chatId,
+            messageIndex: index,
+            content: content,
+            reasoning: reasoning,
+            contentBlocksJson: contentBlocksJson,
+            // Force-write on app-background OR when the handler explicitly
+            // asked for an immediate flush (lifecycle pause / dispose /
+            // cancel). Otherwise let the debounce coalesce per-token churn.
+            immediate: forceImmediate || _isAppInBackground,
+          )
+          .catchError((error) {
+            if (kDebugMode) {
+              debugPrint('persistStreamTick failed: $error');
+            }
+          }),
+    );
+  }
+
+  /// Tag an assistant message with `interrupted` status when its stream was
+  /// torn down before the final-answer event ran (app suspended, widget
+  /// disposed mid-stream, user-cancel, etc). The UI uses this flag to show
+  /// the "Continue generation" button.
+  void _markAssistantMessageInterrupted(String chatId, int index) {
+    if (index < 0) return;
+    if (_activeChatId == chatId && mounted && index < _messages.length) {
+      setState(() {
+        final message = Map<String, String>.from(_messages[index]);
+        message['status'] = 'interrupted';
+        _messages[index] = message;
+      });
+    }
+    // Always pipe through the debounced background persistence path so the
+    // status hits storage even during widget dispose (where setState +
+    // _persistChat may race the tear-down). The persistence handler also
+    // coalesces with any concurrent snapshot tick into a single write.
+    unawaited(
+      _persistenceHandler
+          .updateBackgroundChatMessage(
+            chatId: chatId,
+            messageIndex: index,
+            status: 'interrupted',
+            immediate: true,
+          )
+          .catchError((error) {
+            if (kDebugMode) {
+              debugPrint(
+                'updateBackgroundChatMessage (markInterrupted) failed: $error',
+              );
+            }
+          }),
+    );
   }
 
   void _handleAppResumed() {
@@ -579,6 +674,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_activeChatId != null) {
       _streamingHandler.cancelStream(_activeChatId);
     }
+    // Tear down the streaming handler so its lifecycle observer
+    // unregisters and the periodic snapshot timer is cancelled. Without
+    // this each rebuild of the chat State leaks a registered pause
+    // callback — and `dispose()` is also our last chance to flush the
+    // in-flight snapshot to disk.
+    _streamingHandler.dispose();
     _persistenceHandler.dispose();
     _audioVisualizerTimer?.cancel();
     _providerRefreshSubscription?.cancel();
@@ -753,6 +854,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 if (message.replyContext != null &&
                     message.replyContext!.isNotEmpty) {
                   map['replyContext'] = message.replyContext!;
+                }
+                // Preserve local delivery status (pending/failed/interrupted).
+                // Without this an assistant message that was cut off mid-stream
+                // loses its "Continue generation" affordance on reload.
+                final statusStr = _statusToRawString(message.status);
+                if (statusStr != null) {
+                  map['status'] = statusStr;
+                }
+                if (message.queueId != null && message.queueId!.isNotEmpty) {
+                  map['queueId'] = message.queueId!;
                 }
                 return map;
               }),
@@ -1567,6 +1678,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         message['text'] = content;
         message['reasoning'] = reasoning;
         if (tps != null) message['tps'] = tps.toString();
+        // Clear any prior `interrupted` flag — a clean finalize means the
+        // assistant body is complete now, so we drop the Continue button.
+        if (message['status'] == 'interrupted') {
+          message.remove('status');
+        }
         _messages[index] = message;
       });
 
@@ -1581,6 +1697,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 content: content,
                 reasoning: reasoning,
                 tps: tps?.toString(),
+                status: 'sent',
                 immediate: true,
               )
               .catchError((error) {
@@ -1606,6 +1723,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               messageIndex: index,
               content: content,
               reasoning: reasoning,
+              status: 'sent',
               immediate: true,
             )
             .catchError((error) {
@@ -2532,6 +2650,100 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
+  /// Continue an interrupted assistant message — appends new tokens onto the
+  /// existing message instead of creating a fresh placeholder.
+  ///
+  /// Triggered by the "Continue generation" affordance the bubble renders on
+  /// any AI message whose persisted status is [ChatMessageStatus.interrupted].
+  Future<void> _continueGenerationAt(int aiIndex) async {
+    if (aiIndex < 0 || aiIndex >= _messages.length) return;
+    if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
+      _showSnackBar('Please wait');
+      return;
+    }
+    if (_messages[aiIndex]['sender'] != 'ai') return;
+
+    final String priorText = (_messages[aiIndex]['text'] ?? '').trim();
+    final String? priorContentBlocks = _messages[aiIndex]['contentBlocks'];
+    if (priorText.isEmpty && (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+      _showSnackBar('Nothing to continue from');
+      return;
+    }
+
+    // Persist the active chat id even if widget.selectedChatId is null
+    // during this async flow — same protection as resend.
+    _activeChatId ??= _uuid.v4();
+    final String chatId = _activeChatId!;
+    ChatStorageService.activeMessageChatId = chatId;
+    ChatStorageService.selectedChatId ??= chatId;
+
+    // Build the API history so the model sees the full prior turn AND its
+    // own partial reply. We include messages up to and including the
+    // interrupted assistant message — the streaming handler treats this
+    // list as "everything that came before the new user turn" and our
+    // synthetic [continuePrompt] is appended as the new user message.
+    // Anything after [aiIndex] is dropped (sandbox artifacts, etc. would
+    // confuse the model and aren't relevant to the continuation).
+    final List<Map<String, String>> historyMessages = _messages
+        .sublist(0, aiIndex + 1)
+        .map((m) => Map<String, String>.from(m))
+        .toList();
+
+    setState(() {
+      // Flip the status off immediately so the Continue button doesn't
+      // double-trigger while the new stream is running.
+      final m = Map<String, String>.from(_messages[aiIndex]);
+      m.remove('status');
+      _messages[aiIndex] = m;
+    });
+
+    final String modelIdToUse =
+        _messages[aiIndex]['modelId']?.trim().isNotEmpty == true
+            ? _messages[aiIndex]['modelId']!
+            : _selectedModelId;
+    final String? providerToUse =
+        _messages[aiIndex]['provider']?.trim().isNotEmpty == true
+            ? _messages[aiIndex]['provider']
+            : _selectedProviderSlug;
+
+    final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+
+    const String continuePrompt =
+        'Continue your previous response. Do not repeat what you already '
+        'wrote. Pick up exactly where you left off.';
+
+    await _streamingHandler.sendMessage(
+      userInput: continuePrompt,
+      attachedFiles: const <AttachedFile>[],
+      selectedModelId: modelIdToUse,
+      selectedProviderSlug: providerToUse,
+      messages: historyMessages,
+      systemPrompt: resolvedSystemPrompt,
+      activeChatId: chatId,
+      // Stream into the EXISTING assistant message instead of creating a
+      // new one — the prior text is seeded into the accumulator below.
+      placeholderIndex: aiIndex,
+      getProviderSlug: () async => providerToUse,
+      isOffline: _isOffline,
+      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.includeReasoningInHistory,
+      toolCallingEnabled: widget.toolCallingEnabled,
+      toolDiscoveryMode: widget.toolDiscoveryMode,
+      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+      reasoningEffort: _reasoningEnabled ? null : 'none',
+      continuePriorText: priorText,
+      continuePriorContentBlocksJson: priorContentBlocks,
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '🔁 [Continue] resumed AI message $aiIndex '
+        '(priorText chars=${priorText.length})',
+      );
+    }
+  }
+
   // --- FULLSCREEN EDITOR ---
 
   Future<void> _openFullscreenEditor() async {
@@ -3045,6 +3257,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                     status = ChatMessageStatus.failed;
                                   } else if (statusRaw == 'sent') {
                                     status = ChatMessageStatus.sent;
+                                  } else if (statusRaw == 'interrupted') {
+                                    status = ChatMessageStatus.interrupted;
                                   }
                                   final lastError = raw['lastError'];
 
@@ -3131,6 +3345,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           ? () => OfflineRetryManager
                                               .instance
                                               .retryNow()
+                                          : null,
+                                      onContinueGeneration: !isUser &&
+                                              status ==
+                                                  ChatMessageStatus
+                                                      .interrupted &&
+                                              !_isCurrentChatStreaming
+                                          ? () => _continueGenerationAt(i)
                                           : null,
                                     ),
                                   );

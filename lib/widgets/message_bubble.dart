@@ -175,6 +175,7 @@ class MessageBubble extends StatefulWidget {
     this.status,
     this.lastError,
     this.onRetryPending,
+    this.onContinueGeneration,
   });
 
   final String message;
@@ -245,6 +246,11 @@ class MessageBubble extends StatefulWidget {
 
   /// Called when the user taps the inline retry button on a failed message.
   final VoidCallback? onRetryPending;
+
+  /// Called when the user taps the inline "Continue generation" button on
+  /// an assistant message that was cut off mid-stream (status =
+  /// [ChatMessageStatus.interrupted]). When null no button is rendered.
+  final VoidCallback? onContinueGeneration;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -812,6 +818,11 @@ class _MessageBubbleState extends State<MessageBubble> {
       ),
     );
 
+    final bool showContinueButton = !widget.isUser &&
+        !widget.isStreamingMessage &&
+        widget.status == ChatMessageStatus.interrupted &&
+        widget.onContinueGeneration != null;
+
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
@@ -819,7 +830,58 @@ class _MessageBubbleState extends State<MessageBubble> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [bubbleContent, _buildBottomBar(iconFgColor, hasActions)],
+          children: [
+            bubbleContent,
+            if (showContinueButton) _buildContinueButton(context, accentColor),
+            _buildBottomBar(iconFgColor, hasActions),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueButton(BuildContext context, Color accentColor) {
+    final t = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Tooltip(
+        message:
+            'This response was cut off. Tap to ask the model to keep going.',
+        child: Material(
+          color: accentColor.withValues(alpha: .10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: accentColor.withValues(alpha: .35)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: widget.onContinueGeneration,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.play_arrow_outlined,
+                    size: 16,
+                    color: accentColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Continue generation',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: t.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
