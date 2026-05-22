@@ -545,6 +545,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }));
     }
 
+    _clearMessageDecodeCaches();
+
+    // Synchronous fast path: if the requested chat is already fully cached,
+    // populate inline without entering async / showing the spinner. This
+    // eliminates the one-frame loading flash when switching between cached
+    // chats. We still toggle the global isLoadingChat flag so sidebar
+    // rate-limiting sees the transition, but the false-flip happens
+    // synchronously inside _applyLoadedChat.
+    if (chatId != null) {
+      final StoredChat? cached = ChatStorageService.getChatById(chatId);
+      if (cached != null && cached.isFullyLoaded) {
+        if (kDebugMode) {
+          debugPrint(
+            '│ ⚡ [LOAD-CHAT-DESKTOP] Sync fast path for $chatId (${cached.messages.length} msgs)',
+          );
+        }
+        ChatStorageService.isLoadingChat = true;
+        _applyLoadedChat(cached, chatId);
+        return;
+      }
+    }
+
     // CRITICAL: Set global loading lock to prevent rapid chat switching
     // Sidebar checks this flag before allowing chat selection
     ChatStorageService.isLoadingChat = true;
@@ -553,10 +575,91 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _isLoadingChat = true;
     });
-    _clearMessageDecodeCaches();
 
     // Use async function to handle lazy loading
     _loadChatByIdAsync(chatId);
+  }
+
+  /// Apply a fully-loaded [StoredChat] to UI state synchronously. Rebuilds
+  /// `_messages`, runs stale-tool-call recovery, splices in any buffered
+  /// streaming content, and flips both the local and global loading flags
+  /// off in a single `setState`.
+  ///
+  /// Assumes `_activeChatId` has already been set to [chatId] by the caller
+  /// and `MultiplexSession.openForChat` has been triggered.
+  void _applyLoadedChat(StoredChat storedChat, String chatId) {
+    if (!mounted) return;
+
+    // Build the new message list synchronously. We deliberately do not yield
+    // mid-loop here (unlike the async _populateMessagesFromStoredChat path)
+    // because this fast path is only reached when the chat is already
+    // resident in cache — mapping is cheap and a sync apply avoids the
+    // loading flash.
+    final List<Map<String, String>> mappedMessages = storedChat.messages
+        .map(_messageToRawMap)
+        .toList();
+
+    // Stale-tool-call recovery (skip while a stream is in flight or just
+    // completed — the streaming flow handles its own finalization).
+    var recoveredStaleCalls = false;
+    if (!_streamingManager.isStreaming(chatId) &&
+        !_streamingManager.hasCompletedStream(chatId)) {
+      for (final message in mappedMessages) {
+        if (ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message)) {
+          recoveredStaleCalls = true;
+        }
+      }
+    }
+
+    // Splice buffered streaming content (if any) into the freshly-built list
+    // before it lands in _messages.
+    final bool desktopChatIsStreaming = _streamingManager.isStreaming(chatId);
+    final bool desktopChatHasCompleted = _streamingManager.hasCompletedStream(
+      chatId,
+    );
+    if (desktopChatIsStreaming || desktopChatHasCompleted) {
+      final bufferedContent = _streamingManager.getBufferedContent(chatId);
+      final bufferedReasoning = _streamingManager.getBufferedReasoning(chatId);
+      final streamingIndex = _streamingManager.getStreamingMessageIndex(
+        chatId,
+      );
+
+      if (streamingIndex != null && streamingIndex < mappedMessages.length) {
+        mappedMessages[streamingIndex]['text'] =
+            bufferedContent ?? 'Thinking...';
+        mappedMessages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+        if (desktopChatHasCompleted) {
+          _streamingManager.consumeCompletedStream(chatId);
+        }
+      }
+    }
+
+    // Clear global loading lock — chat is fully ready.
+    ChatStorageService.isLoadingChat = false;
+
+    // Stop any active recording when switching chats.
+    if (_audioHandler.isMicActive) {
+      unawaited(_audioHandler.stopRecording());
+    }
+
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(mappedMessages);
+      _isLoadingChat = false;
+      _isSending = _isStreaming; // Reset sending state based on current chat
+      _showScrollToBottom = false;
+    });
+
+    // Instant visibility — no fade-in for cached chats.
+    _animCtrl.value = 1.0;
+
+    if (recoveredStaleCalls) {
+      _persistChatWithId(chatId);
+    }
+
+    _scrollChatToBottom(animate: false, force: true);
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
