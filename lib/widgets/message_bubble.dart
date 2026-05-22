@@ -160,8 +160,6 @@ class MessageBubble extends StatefulWidget {
     this.toolCalls,
     this.showToolCalls = true,
     this.contentBlocks,
-    this.replyPreviewText,
-    this.replyPreviewLabel,
     this.isStreamingMessage = false,
     this.images,
     this.imageMetas,
@@ -169,7 +167,6 @@ class MessageBubble extends StatefulWidget {
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
-    this.onReplyToAiBlock,
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
@@ -205,8 +202,6 @@ class MessageBubble extends StatefulWidget {
   /// When present and non-empty, the bubble renders these in sequence
   /// instead of the flat text + single-tool-calls-bar layout.
   final List<ContentBlock>? contentBlocks;
-  final String? replyPreviewText;
-  final String? replyPreviewLabel;
 
   /// Whether this message is currently being streamed. Used with
   /// [contentBlocks] to show trailing text from the active streaming pass.
@@ -225,11 +220,6 @@ class MessageBubble extends StatefulWidget {
   /// When non-null, the bubble renders interactive option buttons extracted
   /// from the most recent ask_user tool call in this message.
   final ValueChanged<String>? onAskUserAnswer;
-
-  /// Called when the user swipes right on an AI response block to reply to it.
-  /// Callback args: block text, block type, and block index within the message.
-  final void Function(String blockText, String blockType, int blockIndex)?
-  onReplyToAiBlock;
 
   /// Actions shown in a popup menu on long-press for user messages.
   /// These are hidden by default and only appear on long-press, matching
@@ -349,37 +339,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   void initState() {
     super.initState();
     _loadPreferences();
-  }
-
-  Widget _buildSwipeToReplyWrapper({
-    required Widget child,
-    required String blockText,
-    required String blockType,
-    required int blockIndex,
-  }) {
-    final callback = widget.onReplyToAiBlock;
-    if (!kPlatformMobile ||
-        callback == null ||
-        widget.isUser ||
-        widget.isStreamingMessage ||
-        blockText.trim().isEmpty) {
-      return child;
-    }
-
-    double dragDx = 0;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: (details) {
-        dragDx += details.delta.dx;
-      },
-      onHorizontalDragEnd: (_) {
-        if (dragDx >= 42) {
-          callback(blockText, blockType, blockIndex);
-        }
-        dragDx = 0;
-      },
-      child: child,
-    );
   }
 
   Future<void> _loadPreferences() async {
@@ -667,9 +626,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         widget.images != null && widget.images!.isNotEmpty;
     final bool hideEmptyUserBubble =
         hasUserImages &&
-        _stripAttachmentHeaderForUser(widget.message).trim().isEmpty &&
-        (widget.replyPreviewText == null ||
-            widget.replyPreviewText!.trim().isEmpty);
+        _stripAttachmentHeaderForUser(widget.message).trim().isEmpty;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -1099,7 +1056,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     closeCurrentRound();
 
     // Render segments.
-    var segmentIndex = 0;
     var hasRenderedMainContent = false;
 
     void renderRound(_RenderSegment seg) {
@@ -1174,11 +1130,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     for (final seg in segments) {
       if (seg.isText) {
         children.addAll(
-          _buildSwipeableTextParagraphs(
+          _buildTextParagraphs(
             text: seg.text!,
             textColor: iconFgColor,
             bgColor: bgColor,
-            baseBlockIndex: segmentIndex * 1000,
           ),
         );
         hasRenderedMainContent = true;
@@ -1192,7 +1147,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       } else {
         renderRound(seg);
       }
-      segmentIndex++;
     }
 
     if (hasImages && !insertedImage) {
@@ -1687,33 +1641,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  List<String> _extractReplyParagraphs(String text) {
-    final String normalized = text.replaceAll('\r\n', '\n').trim();
-    if (normalized.isEmpty) {
-      return const <String>[];
-    }
-
-    // Keep fenced code intact; splitting on blank lines would break it.
-    if (normalized.contains('```')) {
-      return <String>[normalized];
-    }
-
-    final List<String> parts = normalized
-        .split(RegExp(r'\n\s*\n+'))
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-    if (parts.length <= 1) {
-      return <String>[normalized];
-    }
-    return parts;
-  }
-
-  List<Widget> _buildSwipeableTextParagraphs({
+  List<Widget> _buildTextParagraphs({
     required String text,
     required Color textColor,
     required Color bgColor,
-    required int baseBlockIndex,
   }) {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) {
@@ -1722,35 +1653,15 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (_hasVisualBlocks(trimmed)) {
       return <Widget>[
-        _buildSwipeToReplyWrapper(
-          blockText: trimmed,
-          blockType: 'text',
-          blockIndex: baseBlockIndex,
-          child: _buildVisualContent(
-            content: trimmed,
-            textColor: textColor,
-            bgColor: bgColor,
-          ),
+        _buildVisualContent(
+          content: trimmed,
+          textColor: textColor,
+          bgColor: bgColor,
         ),
       ];
     }
 
-    final List<String> paragraphs = _extractReplyParagraphs(trimmed);
-    final List<Widget> widgets = <Widget>[];
-    for (int i = 0; i < paragraphs.length; i++) {
-      widgets.add(
-        _buildSwipeToReplyWrapper(
-          blockText: paragraphs[i],
-          blockType: 'text',
-          blockIndex: baseBlockIndex + i,
-          child: _buildBlockText(paragraphs[i], textColor, bgColor),
-        ),
-      );
-      if (i < paragraphs.length - 1) {
-        widgets.add(const SizedBox(height: 2));
-      }
-    }
-    return widgets;
+    return <Widget>[_buildBlockText(trimmed, textColor, bgColor)];
   }
 
   /// Renders a reasoning content block as an expandable card.
@@ -3191,60 +3102,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (isUserMessage) {
       final List<Widget> children = <Widget>[];
-      final String? replyPreviewText = widget.replyPreviewText;
-      if (replyPreviewText != null && replyPreviewText.trim().isNotEmpty) {
-        children.add(
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: iconFgColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: iconFgColor.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.reply_rounded,
-                  size: 14,
-                  color: iconFgColor.withValues(alpha: 0.85),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.replyPreviewLabel ?? 'Reply to AI',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: iconFgColor.withValues(alpha: 0.85),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        replyPreviewText,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: iconFgColor.withValues(alpha: 0.75),
-                          fontSize: 12,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
 
       // Use plain Text so taps pass through to the GestureDetector
       // that toggles the action bar. Copy is available via the action bar.
@@ -3269,11 +3126,10 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
 
-    final List<Widget> aiParagraphs = _buildSwipeableTextParagraphs(
+    final List<Widget> aiParagraphs = _buildTextParagraphs(
       text: displayText,
       textColor: iconFgColor,
       bgColor: bgColor,
-      baseBlockIndex: 0,
     );
     if (aiParagraphs.isEmpty) {
       return const SizedBox.shrink();

@@ -158,11 +158,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
-  String? _pendingMessageReplyContext;
-  String? _pendingMessageReplyPreviewText;
-  String? _pendingReplyContext;
-  String? _pendingReplyPreviewText;
-  String _pendingReplyPreviewLabel = 'Reply to AI';
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
@@ -748,9 +743,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Show loading indicator immediately
     setState(() {
       _isLoadingChat = true;
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
     });
 
     // Use async function to handle lazy loading
@@ -862,10 +854,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 if (message.contentBlocks != null &&
                     message.contentBlocks!.isNotEmpty) {
                   map['contentBlocks'] = message.contentBlocks!;
-                }
-                if (message.replyContext != null &&
-                    message.replyContext!.isNotEmpty) {
-                  map['replyContext'] = message.replyContext!;
                 }
                 // Preserve local delivery status (pending/failed/interrupted).
                 // Without this an assistant message that was cut off mid-stream
@@ -1754,11 +1742,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _drainPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    final pendingReplyContext = _pendingMessageReplyContext;
-    final pendingReplyPreview = _pendingMessageReplyPreviewText;
     _pendingMessageText = null;
-    _pendingMessageReplyContext = null;
-    _pendingMessageReplyPreviewText = null;
 
     if (kDebugMode) {
       debugPrint(
@@ -1767,54 +1751,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     setState(() {
-      _pendingReplyContext = pendingReplyContext;
-      _pendingReplyPreviewText = pendingReplyPreview;
-      _pendingReplyPreviewLabel = pendingReplyPreview != null
-          ? ChatUiHelpers.extractReplyPreviewLabel(pendingReplyContext)
-          : 'Reply to AI';
       _controller.text = pending;
       _controller.selection = TextSelection.collapsed(offset: pending.length);
     });
     unawaited(_sendMessage());
-  }
-
-  void _clearPendingReplyContext() {
-    if (!mounted) return;
-    setState(() {
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
-    });
-  }
-
-  void _setPendingReplyContext({
-    required int messageIndex,
-    required int blockIndex,
-    required String blockType,
-    required String blockText,
-  }) {
-    final String trimmed = blockText.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    final String replyContext = ChatUiHelpers.buildReplyContextJson(
-      sourceMessageIndex: messageIndex,
-      sourceBlockIndex: blockIndex,
-      blockType: blockType,
-      blockText: trimmed,
-    );
-    final String? preview = ChatUiHelpers.extractReplyPreviewText(replyContext);
-    if (!mounted || preview == null || preview.isEmpty) return;
-
-    setState(() {
-      _pendingReplyContext = replyContext;
-      _pendingReplyPreviewText = preview;
-      _pendingReplyPreviewLabel = ChatUiHelpers.extractReplyPreviewLabel(
-        replyContext,
-      );
-    });
-    _textFieldFocusNode.requestFocus();
-    _showSnackBar('Reply target selected');
   }
 
   Future<void> _sendMessage() async {
@@ -1833,20 +1773,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       final text = _controller.text.trim();
       if (text.isNotEmpty) {
         _pendingMessageText = text;
-        _pendingMessageReplyContext = _pendingReplyContext;
-        _pendingMessageReplyPreviewText = _pendingReplyPreviewText;
         _controller.clear();
-        if (mounted) {
-          setState(() {
-            _pendingReplyContext = null;
-            _pendingReplyPreviewText = null;
-            _pendingReplyPreviewLabel = 'Reply to AI';
-          });
-        } else {
-          _pendingReplyContext = null;
-          _pendingReplyPreviewText = null;
-          _pendingReplyPreviewLabel = 'Reply to AI';
-        }
         if (kDebugMode) {
           debugPrint(
             '📋 [SendMessage] Queued pending message (${text.length} chars)',
@@ -1902,7 +1829,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Credit/free message checks are handled server-side (API returns 402)
 
     final String originalUserInput = _controller.text.trim();
-    final String? replyContextForMessage = _pendingReplyContext;
     final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;
 
     if (originalUserInput.isEmpty && !hasAttachments) {
@@ -1922,7 +1848,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           attachedFiles: _fileHandler.attachedFiles,
           selectedModelId: _selectedModelId,
           apiHistory: apiHistory,
-          replyContextJson: replyContextForMessage,
           systemPrompt: _systemPrompt,
           getProviderSlug: _ensureProviderSlugForCurrentModel,
         );
@@ -1996,9 +1921,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
         userMessage['images'] = jsonEncode(imageDataUrls);
       }
-      if (replyContextForMessage != null && replyContextForMessage.isNotEmpty) {
-        userMessage['replyContext'] = replyContextForMessage;
-      }
 
       // Store document attachments as JSON-encoded string if present
       final documentAttachments = attachedFilesForApi
@@ -2040,9 +1962,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
 
       _controller.clear();
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
       // Always clear attachments after sending (not just uploaded ones)
       // Clear directly without relying on callback since we're already in setState
       if (_fileHandler.attachedFiles.isNotEmpty) {
@@ -2077,7 +1996,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             modelId: _selectedModelId,
             providerSlug: _selectedProviderSlug ?? '',
             systemPrompt: resolvedSystemPrompt,
-            replyContext: replyContextForMessage,
             imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
                 ? jsonEncode(imageDataUrls)
                 : null,
@@ -2247,7 +2165,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     await _streamingHandler.sendMessage(
       userInput: originalUserInput,
       attachedFiles: attachedFilesForApi,
-      replyContextJson: replyContextForMessage,
       selectedModelId: _selectedModelId,
       selectedProviderSlug: _selectedProviderSlug,
       messages: _messages,
@@ -2395,8 +2312,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Future<void> _cancelCurrentOperation() async {
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
-    _pendingMessageReplyContext = null;
-    _pendingMessageReplyPreviewText = null;
 
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
@@ -2593,9 +2508,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (text.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: text.length),
@@ -3231,19 +3143,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                     } catch (_) {}
                                   }
 
-                                  final String? replyContextJson =
-                                      raw['replyContext'];
-                                  final String? replyPreviewText =
-                                      ChatUiHelpers.extractReplyPreviewText(
-                                        replyContextJson,
-                                      );
-                                  final String? replyPreviewLabel =
-                                      replyPreviewText != null
-                                      ? ChatUiHelpers.extractReplyPreviewLabel(
-                                          replyContextJson,
-                                        )
-                                      : null;
-
                                   final String? imageCostStr =
                                       raw['imageCostEur'];
                                   final double? imageCostEur =
@@ -3292,8 +3191,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                       toolCalls: toolCalls,
                                       showToolCalls: widget.showToolCalls,
                                       contentBlocks: parsedContentBlocks,
-                                      replyPreviewText: replyPreviewText,
-                                      replyPreviewLabel: replyPreviewLabel,
                                       isStreamingMessage: isStreamingMessage,
                                       images: images,
                                       imageMetas: imageMetas,
@@ -3332,19 +3229,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             toolCalls: toolCalls,
                                             contentBlocks: parsedContentBlocks,
                                           ),
-                                      onReplyToAiBlock:
-                                          !isUser && !isStreamingMessage
-                                          ? (
-                                              blockText,
-                                              blockType,
-                                              blockIndex,
-                                            ) => _setPendingReplyContext(
-                                              messageIndex: i,
-                                              blockIndex: blockIndex,
-                                              blockType: blockType,
-                                              blockText: blockText,
-                                            )
-                                          : null,
                                       useSharedSelectionArea: true,
                                       status: status,
                                       lastError: lastError,
@@ -3526,72 +3410,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_pendingReplyPreviewText != null &&
-            _pendingReplyPreviewText!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: bg.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: accent.withValues(alpha: 0.32),
-                  width: 1.2,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.reply_rounded,
-                    size: 16,
-                    color: accent.withValues(alpha: 0.95),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _pendingReplyPreviewLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: accent.withValues(alpha: 0.9),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _pendingReplyPreviewText!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: iconFg.withValues(alpha: 0.78),
-                            fontSize: 12,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      size: 18,
-                      color: iconFg.withValues(alpha: 0.8),
-                    ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _clearPendingReplyContext,
-                  ),
-                ],
-              ),
-            ),
-          ),
         if (hasAttachments)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),

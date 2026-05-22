@@ -19,7 +19,6 @@ class OfflineSendPayload {
     required this.modelId,
     required this.providerSlug,
     this.systemPrompt,
-    this.replyContext,
     this.imagesJson,
     this.attachmentsJson,
     this.attachedFilesJson,
@@ -34,7 +33,6 @@ class OfflineSendPayload {
       modelId: json['modelId'] as String? ?? '',
       providerSlug: json['providerSlug'] as String? ?? '',
       systemPrompt: json['systemPrompt'] as String?,
-      replyContext: json['replyContext'] as String?,
       imagesJson: json['imagesJson'] as String?,
       attachmentsJson: json['attachmentsJson'] as String?,
       attachedFilesJson: json['attachedFilesJson'] as String?,
@@ -48,7 +46,6 @@ class OfflineSendPayload {
   final String modelId;
   final String providerSlug;
   final String? systemPrompt;
-  final String? replyContext;
 
   /// JSON-encoded list of image data URLs (already prepared in send flow).
   final String? imagesJson;
@@ -69,8 +66,6 @@ class OfflineSendPayload {
     'providerSlug': providerSlug,
     if (systemPrompt != null && systemPrompt!.isNotEmpty)
       'systemPrompt': systemPrompt,
-    if (replyContext != null && replyContext!.isNotEmpty)
-      'replyContext': replyContext,
     if (imagesJson != null && imagesJson!.isNotEmpty) 'imagesJson': imagesJson,
     if (attachmentsJson != null && attachmentsJson!.isNotEmpty)
       'attachmentsJson': attachmentsJson,

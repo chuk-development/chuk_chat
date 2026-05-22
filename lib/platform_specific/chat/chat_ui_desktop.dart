@@ -153,15 +153,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
-  String? _pendingMessageReplyContext;
-  String? _pendingMessageReplyPreviewText;
-  String? _pendingReplyContext;
-  String? _pendingReplyPreviewText;
 
   /// When a new chat is started from a workspace, this holds the assistant ID
   /// until the chat is created and linked in the database.
   String? _pendingWorkspaceId;
-  String _pendingReplyPreviewLabel = 'Reply to AI';
 
   bool _showScrollToBottom = false;
   bool _isStickyBottom = true;
@@ -557,9 +552,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Show loading indicator immediately
     setState(() {
       _isLoadingChat = true;
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
     });
     _clearMessageDecodeCaches();
 
@@ -1247,9 +1239,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (text.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: text.length),
@@ -1620,44 +1609,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _decodedContentBlocksCache.clear();
   }
 
-  void _clearPendingReplyContext() {
-    if (!mounted) return;
-    setState(() {
-      _pendingReplyContext = null;
-      _pendingReplyPreviewText = null;
-      _pendingReplyPreviewLabel = 'Reply to AI';
-    });
-  }
-
-  void _setPendingReplyContext({
-    required int messageIndex,
-    required int blockIndex,
-    required String blockType,
-    required String blockText,
-  }) {
-    final String trimmed = blockText.trim();
-    if (trimmed.isEmpty) return;
-
-    final String replyContext = ChatUiHelpers.buildReplyContextJson(
-      sourceMessageIndex: messageIndex,
-      sourceBlockIndex: blockIndex,
-      blockType: blockType,
-      blockText: trimmed,
-    );
-    final String? preview = ChatUiHelpers.extractReplyPreviewText(replyContext);
-    if (!mounted || preview == null || preview.isEmpty) return;
-
-    setState(() {
-      _pendingReplyContext = replyContext;
-      _pendingReplyPreviewText = preview;
-      _pendingReplyPreviewLabel = ChatUiHelpers.extractReplyPreviewLabel(
-        replyContext,
-      );
-    });
-    _textFieldFocusNode.requestFocus();
-    _showSnackBar(AppLocalizations.of(context)!.replyTargetSelected);
-  }
-
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -1909,10 +1860,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             toolCalls: data.toolCalls,
                                             showToolCalls: widget.showToolCalls,
                                             contentBlocks: data.contentBlocks,
-                                            replyPreviewText:
-                                                data.replyPreviewText,
-                                            replyPreviewLabel:
-                                                data.replyPreviewLabel,
                                             isStreamingMessage:
                                                 data.isStreamingMessage,
                                             images: data.images,
@@ -1941,20 +1888,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   i,
                                                   data,
                                                 ),
-                                            onReplyToAiBlock:
-                                                !data.isUser &&
-                                                    !data.isStreamingMessage
-                                                ? (
-                                                    blockText,
-                                                    blockType,
-                                                    blockIndex,
-                                                  ) => _setPendingReplyContext(
-                                                    messageIndex: i,
-                                                    blockIndex: blockIndex,
-                                                    blockType: blockType,
-                                                    blockText: blockText,
-                                                  )
-                                                : null,
                                             status: data.status,
                                             lastError: data.lastError,
                                             onRetryPending: data.isUser &&
@@ -2095,75 +2028,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (_pendingReplyPreviewText != null &&
-                  _pendingReplyPreviewText!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: bg.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.35),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.reply_rounded,
-                          size: 16,
-                          color: accent.withValues(alpha: 0.95),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _pendingReplyPreviewLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: accent.withValues(alpha: 0.95),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _pendingReplyPreviewText!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: iconFg.withValues(alpha: 0.78),
-                                  fontSize: 12,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: AppLocalizations.of(context)!.clearReply,
-                          onPressed: _clearPendingReplyContext,
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: iconFg.withValues(alpha: 0.8),
-                            size: 18,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               // Attachment previews inside the textbox (right-padded so cards don't go under send button)
               if (_fileHandler.attachedFiles.isNotEmpty)
                 Padding(

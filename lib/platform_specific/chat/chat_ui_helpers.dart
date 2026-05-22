@@ -42,8 +42,6 @@ class MessageRenderData {
     this.attachments,
     this.toolCalls,
     this.contentBlocks,
-    this.replyPreviewText,
-    this.replyPreviewLabel,
     this.isStreamingMessage = false,
     this.status,
     this.queueId,
@@ -67,8 +65,6 @@ class MessageRenderData {
   final List<DocumentAttachment>? attachments;
   final List<ToolCall>? toolCalls;
   final List<ContentBlock>? contentBlocks;
-  final String? replyPreviewText;
-  final String? replyPreviewLabel;
   final bool isStreamingMessage;
 
   /// Local-only delivery status. `pending` / `failed` apply to user
@@ -89,8 +85,6 @@ class MessageRenderData {
 /// Static utility functions shared between the desktop and mobile chat UIs.
 class ChatUiHelpers {
   const ChatUiHelpers._();
-
-  static const int _kReplyPreviewMaxChars = 160;
 
   /// Format model info for display in message bubble.
   static String? formatModelInfo(String? modelId, String? provider) {
@@ -295,9 +289,6 @@ class ChatUiHelpers {
     if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
       map['contentBlocks'] = message.contentBlocks!;
     }
-    if (message.replyContext != null && message.replyContext!.isNotEmpty) {
-      map['replyContext'] = message.replyContext!;
-    }
     return map;
   }
 
@@ -362,68 +353,6 @@ class ChatUiHelpers {
 
   static bool _finalizeStaleToolCallsForRecovery(List<ToolCall> toolCalls) {
     return finalizeStaleToolCalls(toolCalls);
-  }
-
-  /// Build a normalized JSON payload for a reply-to-block target.
-  static String buildReplyContextJson({
-    required int sourceMessageIndex,
-    required int sourceBlockIndex,
-    required String blockType,
-    required String blockText,
-  }) {
-    final String normalized = blockText.trim();
-    final String truncated = normalized.length > 2000
-        ? '${normalized.substring(0, 2000)}...'
-        : normalized;
-    return jsonEncode({
-      'sourceMessageIndex': sourceMessageIndex,
-      'sourceBlockIndex': sourceBlockIndex,
-      'blockType': blockType.trim().toLowerCase(),
-      'blockText': truncated,
-    });
-  }
-
-  /// Extract a short preview text from a stored reply context JSON payload.
-  static String? extractReplyPreviewText(String? replyContextJson) {
-    if (replyContextJson == null || replyContextJson.trim().isEmpty) {
-      return null;
-    }
-    try {
-      final decoded = jsonDecode(replyContextJson);
-      if (decoded is! Map) return null;
-      final map = Map<String, dynamic>.from(decoded);
-      final String text = (map['blockText'] as String? ?? '').trim();
-      if (text.isEmpty) return null;
-      if (text.length <= _kReplyPreviewMaxChars) return text;
-      return '${text.substring(0, _kReplyPreviewMaxChars)}...';
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Extract a human-readable label from reply context JSON.
-  static String extractReplyPreviewLabel(String? replyContextJson) {
-    if (replyContextJson == null || replyContextJson.trim().isEmpty) {
-      return 'Reply to AI';
-    }
-    try {
-      final decoded = jsonDecode(replyContextJson);
-      if (decoded is! Map) return 'Reply to AI';
-      final map = Map<String, dynamic>.from(decoded);
-      final String blockType = (map['blockType'] as String? ?? 'text')
-          .trim()
-          .toLowerCase();
-      switch (blockType) {
-        case 'tool':
-          return 'Reply to AI tool block';
-        case 'reasoning':
-          return 'Reply to AI reasoning';
-        default:
-          return 'Reply to AI text';
-      }
-    } catch (_) {
-      return 'Reply to AI';
-    }
   }
 
   /// Decode images from JSON with caching support.
@@ -836,11 +765,6 @@ class ChatUiHelpers {
         ? DateTime.tryParse(imageGeneratedAtStr)
         : null;
     final List<ImageMeta>? imageMetas = ImageMeta.decode(raw['imageMetas']);
-    final String? replyContextJson = raw['replyContext'];
-    final String? replyPreviewText = extractReplyPreviewText(replyContextJson);
-    final String? replyPreviewLabel = replyPreviewText != null
-        ? extractReplyPreviewLabel(replyContextJson)
-        : null;
 
     ChatMessageStatus? status;
     final statusRaw = raw['status'];
@@ -879,8 +803,6 @@ class ChatUiHelpers {
       attachments: attachments,
       toolCalls: toolCalls,
       contentBlocks: parsedContentBlocks,
-      replyPreviewText: replyPreviewText,
-      replyPreviewLabel: replyPreviewLabel,
       isStreamingMessage: isStreamingMessage,
       status: status,
       queueId: queueId,

@@ -1,5 +1,4 @@
 // lib/services/message_composition_service.dart
-import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -68,7 +67,6 @@ class MessageCompositionService {
     required List<AttachedFile> attachedFiles,
     required String selectedModelId,
     required List<Map<String, dynamic>> apiHistory,
-    String? replyContextJson,
     String? systemPrompt,
     required Future<String?> Function() getProviderSlug,
   }) async {
@@ -112,10 +110,7 @@ class MessageCompositionService {
       userInput: userInput,
       attachedFiles: attachedFiles,
     );
-    final String aiPromptContent = _prependReplyContext(
-      messageContent.aiPromptContent,
-      replyContextJson,
-    );
+    final String aiPromptContent = messageContent.aiPromptContent;
 
     // Refresh session and get access token
     final session =
@@ -171,45 +166,6 @@ class MessageCompositionService {
       effectiveSystemPrompt: effectiveSystemPrompt,
       images: messageContent.images.isNotEmpty ? messageContent.images : null,
     );
-  }
-
-  static String _prependReplyContext(
-    String aiPromptContent,
-    String? replyContextJson,
-  ) {
-    if (replyContextJson == null || replyContextJson.trim().isEmpty) {
-      return aiPromptContent;
-    }
-
-    try {
-      final decoded = jsonDecode(replyContextJson);
-      if (decoded is! Map) {
-        return aiPromptContent;
-      }
-
-      final map = Map<String, dynamic>.from(decoded);
-      final String blockType = (map['blockType'] as String? ?? 'text')
-          .trim()
-          .toLowerCase();
-      final String rawBlockText = (map['blockText'] as String? ?? '').trim();
-      if (rawBlockText.isEmpty) {
-        return aiPromptContent;
-      }
-
-      final String blockText = rawBlockText.length > 2000
-          ? '${rawBlockText.substring(0, 2000)}...'
-          : rawBlockText;
-
-      return '[Reply Context]\n'
-          'The user is replying to a specific block from your previous answer.\n'
-          'Block type: $blockType\n'
-          'Quoted block:\n'
-          '"""\n$blockText\n"""\n'
-          '[End Reply Context]\n\n'
-          '$aiPromptContent';
-    } catch (_) {
-      return aiPromptContent;
-    }
   }
 
   /// Build message content with attachments
