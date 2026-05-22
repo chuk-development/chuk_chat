@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
 
 class SandboxInfo {
   const SandboxInfo({
@@ -128,12 +129,28 @@ class SandboxService {
     required String accessToken,
     String? chatId,
   }) async {
+    final payload = <String, dynamic>{
+      'chat_id': ?chatId,
+    };
+
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_create',
+      payload: payload,
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
+    }
+    if (mux.isOk) {
+      final body = mux.body!;
+      return SandboxInfo.fromJson(body);
+    }
+
     final uri = Uri.parse('$_base/v1/ai/sandbox/create');
     final response = await http
         .post(
           uri,
           headers: _authHeaders(accessToken, json: true),
-          body: jsonEncode({'chat_id': ?chatId}),
+          body: jsonEncode(payload),
         )
         .timeout(_controlTimeout);
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -150,21 +167,34 @@ class SandboxService {
   }
 
   static Future<List<SandboxInfo>> list({required String accessToken}) async {
-    final uri = Uri.parse('$_base/v1/ai/sandbox/list');
-    final response = await http
-        .get(uri, headers: _authHeaders(accessToken))
-        .timeout(_controlTimeout);
-    if (response.statusCode != 200) {
-      throw _toException(response);
+    Map<String, dynamic>? decoded;
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_list',
+      payload: const <String, dynamic>{},
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw SandboxServiceException(
-        response.statusCode,
-        'Malformed sandbox list response.',
-      );
+    if (mux.isOk) {
+      decoded = mux.body;
+    } else {
+      final uri = Uri.parse('$_base/v1/ai/sandbox/list');
+      final response = await http
+          .get(uri, headers: _authHeaders(accessToken))
+          .timeout(_controlTimeout);
+      if (response.statusCode != 200) {
+        throw _toException(response);
+      }
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) {
+        throw SandboxServiceException(
+          response.statusCode,
+          'Malformed sandbox list response.',
+        );
+      }
+      decoded = body;
     }
-    final raw = decoded['sandboxes'];
+    final raw = decoded?['sandboxes'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
@@ -176,6 +206,23 @@ class SandboxService {
     required String accessToken,
     required String sessionId,
   }) async {
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_info',
+      payload: {'session_id': sessionId},
+    );
+    if (mux.isError) {
+      final err = mux.error;
+      // The server signals a missing sandbox via a `not_found` code.
+      if (err.toString().toLowerCase().contains('not_found') ||
+          err.toString().contains('404')) {
+        return null;
+      }
+      throw SandboxServiceException(0, err.toString());
+    }
+    if (mux.isOk) {
+      return SandboxInfo.fromJson(mux.body!);
+    }
+
     final uri = Uri.parse('$_base/v1/ai/sandbox/$sessionId');
     final response = await http
         .get(uri, headers: _authHeaders(accessToken))
@@ -198,6 +245,15 @@ class SandboxService {
     required String accessToken,
     required String sessionId,
   }) async {
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_extend',
+      payload: {'session_id': sessionId},
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
+    }
+    if (mux.isOk) return;
+
     final uri = Uri.parse('$_base/v1/ai/sandbox/$sessionId/extend');
     final response = await http
         .post(uri, headers: _authHeaders(accessToken))
@@ -211,6 +267,15 @@ class SandboxService {
     required String accessToken,
     required String sessionId,
   }) async {
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_destroy',
+      payload: {'session_id': sessionId},
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
+    }
+    if (mux.isOk) return;
+
     final uri = Uri.parse('$_base/v1/ai/sandbox/$sessionId');
     final response = await http
         .delete(uri, headers: _authHeaders(accessToken))
@@ -227,8 +292,26 @@ class SandboxService {
     String language = 'python',
     int? timeout,
   }) async {
-    final uri = Uri.parse('$_base/v1/ai/sandbox/$sessionId/execute');
     final payload = <String, dynamic>{
+      'session_id': sessionId,
+      'code': code,
+      'language': language,
+      'timeout': ?timeout,
+    };
+
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_execute',
+      payload: payload,
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
+    }
+    if (mux.isOk) {
+      return SandboxExecResult.fromJson(mux.body!);
+    }
+
+    final uri = Uri.parse('$_base/v1/ai/sandbox/$sessionId/execute');
+    final httpPayload = <String, dynamic>{
       'code': code,
       'language': language,
       'timeout': ?timeout,
@@ -237,7 +320,7 @@ class SandboxService {
         .post(
           uri,
           headers: _authHeaders(accessToken, json: true),
-          body: jsonEncode(payload),
+          body: jsonEncode(httpPayload),
         )
         .timeout(_executeTimeout);
     if (response.statusCode != 200) {
@@ -258,23 +341,36 @@ class SandboxService {
     required String sessionId,
     String path = '/home/sandbox',
   }) async {
-    final uri = Uri.parse(
-      '$_base/v1/ai/sandbox/$sessionId/files/list',
-    ).replace(queryParameters: {'path': path});
-    final response = await http
-        .get(uri, headers: _authHeaders(accessToken))
-        .timeout(_transferTimeout);
-    if (response.statusCode != 200) {
-      throw _toException(response);
+    Map<String, dynamic>? decoded;
+    final mux = await tryToolViaMultiplex(
+      tool: 'sandbox_files_list',
+      payload: {'session_id': sessionId, 'path': path},
+    );
+    if (mux.isError) {
+      throw SandboxServiceException(0, mux.error.toString());
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw SandboxServiceException(
-        response.statusCode,
-        'Malformed listFiles response.',
-      );
+    if (mux.isOk) {
+      decoded = mux.body;
+    } else {
+      final uri = Uri.parse(
+        '$_base/v1/ai/sandbox/$sessionId/files/list',
+      ).replace(queryParameters: {'path': path});
+      final response = await http
+          .get(uri, headers: _authHeaders(accessToken))
+          .timeout(_transferTimeout);
+      if (response.statusCode != 200) {
+        throw _toException(response);
+      }
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) {
+        throw SandboxServiceException(
+          response.statusCode,
+          'Malformed listFiles response.',
+        );
+      }
+      decoded = body;
     }
-    final raw = decoded['files'];
+    final raw = decoded?['files'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()

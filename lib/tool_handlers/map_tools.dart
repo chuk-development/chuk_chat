@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+
 const String _nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
 const String _osrmBaseUrl = 'https://router.workspace-osrm.org';
 const Map<String, String> _defaultHeaders = {
@@ -285,25 +287,36 @@ Future<List<Map<String, dynamic>>> _fetchBravePlaces({
   String country = 'DE',
   String searchLang = 'de',
 }) async {
-  final response = await client
-      .post(
-        Uri.parse('$baseUrl/v1/tools/brave/places'),
-        headers: {'Content-Type': 'application/json', ...serverHeaders},
-        body: jsonEncode({
-          'query': query,
-          'count': count,
-          'country': country,
-          'search_lang': searchLang,
-        }),
-      )
-      .timeout(const Duration(seconds: 30));
+  final body = {
+    'query': query,
+    'count': count,
+    'country': country,
+    'search_lang': searchLang,
+  };
 
-  if (response.statusCode != 200) {
-    final err = _tryDecodeJsonObject(response.body)?['error']?.toString();
-    throw StateError(err ?? 'HTTP ${response.statusCode}');
+  Map<String, dynamic>? data;
+  final mux = await tryToolViaMultiplex(tool: 'brave_places', payload: body);
+  if (mux.isError) {
+    throw StateError(mux.error.toString());
   }
+  if (mux.isOk) {
+    data = mux.body;
+  } else {
+    final response = await client
+        .post(
+          Uri.parse('$baseUrl/v1/tools/brave/places'),
+          headers: {'Content-Type': 'application/json', ...serverHeaders},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 30));
 
-  final data = _tryDecodeJsonObject(response.body);
+    if (response.statusCode != 200) {
+      final err = _tryDecodeJsonObject(response.body)?['error']?.toString();
+      throw StateError(err ?? 'HTTP ${response.statusCode}');
+    }
+
+    data = _tryDecodeJsonObject(response.body);
+  }
   if (data == null) {
     throw StateError('Invalid server response');
   }

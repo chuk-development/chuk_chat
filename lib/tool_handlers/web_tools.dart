@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+
 const int _defaultSearchCount = 5;
 const int _maxSearchCount = 8;
 const int _defaultAutoCrawlCount = 2;
@@ -98,26 +100,43 @@ Future<_CrawlContext> _crawlForContext({
   required int maxChars,
 }) async {
   try {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/v1/tools/crawl'),
-          headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode({'url': url, 'max_chars': maxChars}),
-        )
-        .timeout(const Duration(seconds: 45));
-
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(
+      tool: 'crawl',
+      payload: {'url': url, 'max_chars': maxChars},
+    );
+    if (mux.isError) {
       return _CrawlContext(
         url: url,
         content: '',
         truncated: false,
-        error: error ?? 'HTTP ${response.statusCode}',
+        error: mux.error.toString(),
       );
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/v1/tools/crawl'),
+            headers: _buildJsonHeaders(serverHeaders),
+            body: jsonEncode({'url': url, 'max_chars': maxChars}),
+          )
+          .timeout(const Duration(seconds: 45));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return _CrawlContext(
+          url: url,
+          content: '',
+          truncated: false,
+          error: error ?? 'HTTP ${response.statusCode}',
+        );
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return _CrawlContext(
         url: url,
@@ -254,21 +273,30 @@ Future<String> executeWebSearch({
   if (gogglesId.isNotEmpty) body['goggles_id'] = gogglesId;
 
   try {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/v1/tools/brave/search'),
-          headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
-      return 'Web search error: ${error ?? 'HTTP ${response.statusCode}'}';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'brave_search', payload: body);
+    if (mux.isError) {
+      return 'Web search error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/v1/tools/brave/search'),
+            headers: _buildJsonHeaders(serverHeaders),
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return 'Web search error: ${error ?? 'HTTP ${response.statusCode}'}';
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return 'Web search error: Invalid server response';
     }
@@ -406,25 +434,36 @@ Future<String> executeImageSearch({
   }
 
   try {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/v1/tools/brave/images'),
-          headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode({
-            'query': query,
-            'count': searchCount,
-            'safesearch': safesearch,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
+    final body = <String, dynamic>{
+      'query': query,
+      'count': searchCount,
+      'safesearch': safesearch,
+    };
 
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
-      return 'Image search error: ${error ?? 'HTTP ${response.statusCode}'}';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'brave_images', payload: body);
+    if (mux.isError) {
+      return 'Image search error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/v1/tools/brave/images'),
+            headers: _buildJsonHeaders(serverHeaders),
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return 'Image search error: ${error ?? 'HTTP ${response.statusCode}'}';
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return 'Image search error: Invalid server response';
     }
@@ -533,21 +572,30 @@ Future<String> executeNewsSearch({
     if (country != null) body['country'] = country;
     if (searchLang != null) body['search_lang'] = searchLang;
 
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/v1/tools/brave/news'),
-          headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
-      return 'News search error: ${error ?? 'HTTP ${response.statusCode}'}';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'brave_news', payload: body);
+    if (mux.isError) {
+      return 'News search error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/v1/tools/brave/news'),
+            headers: _buildJsonHeaders(serverHeaders),
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return 'News search error: ${error ?? 'HTTP ${response.statusCode}'}';
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return 'News search error: Invalid server response';
     }
@@ -621,21 +669,32 @@ Future<String> executeWebCrawl({
   }
 
   try {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/v1/tools/crawl'),
-          headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode({'url': url, 'max_chars': 8000}),
-        )
-        .timeout(const Duration(seconds: 60));
+    final body = {'url': url, 'max_chars': 8000};
 
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
-      return 'Crawl error: ${error ?? 'HTTP ${response.statusCode}'}';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'crawl', payload: body);
+    if (mux.isError) {
+      return 'Crawl error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/v1/tools/crawl'),
+            headers: _buildJsonHeaders(serverHeaders),
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 60));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return 'Crawl error: ${error ?? 'HTTP ${response.statusCode}'}';
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return 'Crawl error: Invalid server response';
     }

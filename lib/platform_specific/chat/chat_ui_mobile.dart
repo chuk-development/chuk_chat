@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
@@ -229,6 +230,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           setState(() {
             _activeChatId = chatId;
           });
+          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }));
         }
       };
 
@@ -673,6 +679,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     if (_activeChatId != null) {
       _streamingHandler.cancelStream(_activeChatId);
+      MultiplexSession.closeForChat(_activeChatId!);
     }
     // Tear down the streaming handler so its lifecycle observer
     // unregisters and the periodic snapshot timer is cancelled. Without
@@ -797,6 +804,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             );
           }
           _activeChatId = storedChat.id;
+          unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }));
           _messages
             ..clear()
             ..addAll(

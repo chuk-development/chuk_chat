@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
@@ -239,6 +240,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _activeChatId = chatId;
           });
           widget.onChatIdChanged(chatId);
+          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }));
         }
       };
     _textFieldFocusNode = FocusNode(
@@ -460,6 +466,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (_isLoadingChat) {
       ChatStorageService.isLoadingChat = false;
     }
+    if (_activeChatId != null) {
+      MultiplexSession.closeForChat(_activeChatId!);
+    }
     // Don't cancel streams - they continue in background
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
@@ -533,6 +542,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // This ensures didUpdateWidget always sees the correct value when comparing
     // chatIdToSave with _activeChatId for persist logic
     _activeChatId = chatId;
+    if (chatId != null) {
+      unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+        }
+      }));
+    }
 
     // CRITICAL: Set global loading lock to prevent rapid chat switching
     // Sidebar checks this flag before allowing chat selection

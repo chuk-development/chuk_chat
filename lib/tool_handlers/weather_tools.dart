@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+
 /// Weather via server-side Brave Rich Callback proxy.
 ///
 /// The server calls Brave `/web/search?enable_rich_callback=1` to get a
@@ -44,29 +46,40 @@ Future<String> executeWeather({
   final shouldCloseClient = client == null;
 
   try {
-    final response = await effectiveClient
-        .post(
-          Uri.parse('$baseUrl/v1/tools/brave/rich'),
-          headers: {'Content-Type': 'application/json', ...serverHeaders},
-          body: jsonEncode({
-            'query': query,
-            'country': 'DE',
-            'search_lang': 'de',
-          }),
-        )
-        .timeout(const Duration(seconds: 25));
+    final body = {
+      'query': query,
+      'country': 'DE',
+      'search_lang': 'de',
+    };
 
-    if (response.statusCode == 404) {
-      return 'No weather data from Brave for "$query". Try rephrasing the '
-          'location or a different action.';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'brave_rich', payload: body);
+    if (mux.isError) {
+      return 'Weather error: ${mux.error}';
     }
-    if (response.statusCode != 200) {
-      final errorData = _tryDecodeJsonObject(response.body);
-      final error = errorData?['error']?.toString();
-      return 'Weather error: ${error ?? 'HTTP ${response.statusCode}'}';
-    }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final response = await effectiveClient
+          .post(
+            Uri.parse('$baseUrl/v1/tools/brave/rich'),
+            headers: {'Content-Type': 'application/json', ...serverHeaders},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 25));
 
-    final data = _tryDecodeJsonObject(response.body);
+      if (response.statusCode == 404) {
+        return 'No weather data from Brave for "$query". Try rephrasing the '
+            'location or a different action.';
+      }
+      if (response.statusCode != 200) {
+        final errorData = _tryDecodeJsonObject(response.body);
+        final error = errorData?['error']?.toString();
+        return 'Weather error: ${error ?? 'HTTP ${response.statusCode}'}';
+      }
+
+      data = _tryDecodeJsonObject(response.body);
+    }
     if (data == null) {
       return 'Weather error: Invalid server response';
     }
