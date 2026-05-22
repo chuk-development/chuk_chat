@@ -740,13 +740,192 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Capture sidebar state NOW - before any async operations
     final bool sidebarWasExpanded = widget.isSidebarExpanded;
 
-    // Show loading indicator immediately
+    // Synchronous fast path: if the requested chat is already in cache and
+    // fully loaded, populate inline without entering async / showing the
+    // spinner. This avoids a one-frame loading flash when switching between
+    // already-loaded chats.
+    if (chatId != null) {
+      final StoredChat? cached = ChatStorageService.getChatById(chatId);
+      if (cached != null && cached.isFullyLoaded) {
+        if (kDebugMode) {
+          debugPrint(
+            '│ ⚡ [LOAD-CHAT-MOBILE] Sync fast path for $chatId (${cached.messages.length} msgs)',
+          );
+        }
+        _activeChatId = cached.id;
+        unawaited(MultiplexSession.openForChat(cached.id).catchError((e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+          }
+        }));
+        _applyLoadedChat(cached, sidebarWasExpanded);
+        return;
+      }
+    }
+
+    // Slow path: cache miss or stale → show spinner, go async
     setState(() {
       _isLoadingChat = true;
     });
 
     // Use async function to handle lazy loading
     _loadChatByIdAsync(chatId, sidebarWasExpanded);
+  }
+
+  /// Apply a fully-loaded [StoredChat] to UI state synchronously: rebuild
+  /// `_messages`, run stale-tool-call recovery, splice in any buffered
+  /// streaming content, and clear `_isLoadingChat` in a single `setState`.
+  ///
+  /// Assumes `_activeChatId` has already been set to `chat.id` by the caller
+  /// and `MultiplexSession.openForChat` has been triggered.
+  void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded) {
+    if (!mounted) return;
+
+    final List<Map<String, String>> newMessages = chat.messages.map((message) {
+      final map = <String, String>{
+        'sender': message.sender,
+        'text': message.text,
+        'reasoning': message.reasoning ?? '',
+      };
+      if (message.modelId != null && message.modelId!.isNotEmpty) {
+        map['modelId'] = message.modelId!;
+      }
+      if (message.provider != null && message.provider!.isNotEmpty) {
+        map['provider'] = message.provider!;
+      }
+      // Include images if present
+      if (message.images != null && message.images!.isNotEmpty) {
+        map['images'] = message.images!;
+      }
+      if (message.imageMetas != null && message.imageMetas!.isNotEmpty) {
+        map['imageMetas'] = message.imageMetas!;
+      }
+      if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
+        map['imageCostEur'] = message.imageCostEur!;
+      }
+      if (message.imageGeneratedAt != null &&
+          message.imageGeneratedAt!.isNotEmpty) {
+        map['imageGeneratedAt'] = message.imageGeneratedAt!;
+      }
+      // Include attachments if present
+      if (message.attachments != null && message.attachments!.isNotEmpty) {
+        map['attachments'] = message.attachments!;
+        if (kDebugMode) {
+          debugPrint(
+            '📄 [AttachmentDebug] Loading message with attachments field',
+          );
+        }
+      }
+      // Include attachedFilesJson for retry/resend support
+      if (message.attachedFilesJson != null &&
+          message.attachedFilesJson!.isNotEmpty) {
+        map['attachedFilesJson'] = message.attachedFilesJson!;
+      }
+      if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
+        map['toolCalls'] = message.toolCalls!;
+      }
+      if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
+        map['contentBlocks'] = message.contentBlocks!;
+      }
+      // Preserve local delivery status (pending/failed/interrupted).
+      // Without this an assistant message that was cut off mid-stream
+      // loses its "Continue generation" affordance on reload.
+      final statusStr = _statusToRawString(message.status);
+      if (statusStr != null) {
+        map['status'] = statusStr;
+      }
+      if (message.queueId != null && message.queueId!.isNotEmpty) {
+        map['queueId'] = message.queueId!;
+      }
+      return map;
+    }).toList();
+
+    final String? activeChatId = _activeChatId;
+
+    // Stale-tool-call recovery (skip if a stream is in flight or just
+    // completed — the streaming flow handles its own finalization).
+    var recoveredStaleCalls = false;
+    if (activeChatId != null &&
+        !_streamingHandler.isChatStreaming(activeChatId) &&
+        !_streamingHandler.hasCompletedStream(activeChatId)) {
+      for (final message in newMessages) {
+        if (ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message)) {
+          recoveredStaleCalls = true;
+        }
+      }
+    }
+
+    // Splice buffered streaming content (if any) into the freshly-built list
+    // before it lands in _messages, so the user never sees a stale snapshot.
+    final bool chatIsStreaming =
+        activeChatId != null &&
+        _streamingHandler.isChatStreaming(activeChatId);
+    final bool chatHasCompletedStream =
+        activeChatId != null &&
+        _streamingHandler.hasCompletedStream(activeChatId);
+
+    if (activeChatId != null && (chatIsStreaming || chatHasCompletedStream)) {
+      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
+        activeChatId,
+      );
+      if (streamingMsgIndex != null &&
+          streamingMsgIndex >= 0 &&
+          streamingMsgIndex < newMessages.length) {
+        final String? bufferedContent = _streamingHandler.getBufferedContent(
+          activeChatId,
+        );
+        final String? bufferedReasoning = _streamingHandler
+            .getBufferedReasoning(activeChatId);
+
+        if (bufferedContent != null) {
+          final Map<String, String> updatedMessage = Map<String, String>.from(
+            newMessages[streamingMsgIndex],
+          );
+          updatedMessage['text'] = bufferedContent;
+          updatedMessage['reasoning'] = bufferedReasoning ?? '';
+          newMessages[streamingMsgIndex] = updatedMessage;
+          // Clean up completed stream data only after successful application
+          if (chatHasCompletedStream) {
+            _streamingHandler.consumeCompletedStream(activeChatId);
+          }
+        }
+      }
+    }
+
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(newMessages);
+      _isLoadingChat = false;
+      _showScrollToBottom = false;
+    });
+
+    if (recoveredStaleCalls) {
+      unawaited(
+        _persistenceHandler
+            .persistChat(
+              messages: _messages
+                  .map((m) => Map<String, String>.from(m))
+                  .toList(),
+              chatId: activeChatId,
+              waitForCompletion: false,
+              isOffline: _isOffline,
+              silent: true,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint('persistChat (recover stale) failed: $error');
+              }
+              return null;
+            }),
+      );
+    }
+
+    _scrollChatToBottom(force: true);
+    // Use captured sidebar state to prevent focus when sidebar was open
+    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+      _textFieldFocusNode.requestFocus();
+    }
   }
 
   Future<void> _loadChatByIdAsync(
@@ -762,222 +941,90 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           '│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat',
         );
       }
-      _messages.clear();
-      _fileHandler.clearAll();
-      _messageActionsHandler.cancelEdit();
-      _activeChatId = null;
-    } else {
-      // Find chat by ID
-      StoredChat? storedChat = ChatStorageService.getChatById(chatId);
-
-      if (storedChat != null) {
-        // LAZY LOADING: Check if chat is fully loaded
-        if (!storedChat.isFullyLoaded) {
-          if (kDebugMode) {
-            debugPrint(
-              '│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...',
-            );
-          }
-          storedChat = await ChatStorageService.loadFullChat(chatId);
-
-          // Check for stale load after async operation
-          if (!mounted) return;
-        }
-
-        if (storedChat != null && storedChat.isFullyLoaded) {
-          if (kDebugMode) {
-            debugPrint(
-              '│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages',
-            );
-          }
-          if (kDebugMode) {
-            debugPrint(
-              '│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}',
-            );
-          }
-          _activeChatId = storedChat.id;
-          unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-            }
-          }));
-          _messages
-            ..clear()
-            ..addAll(
-              storedChat.messages.map((message) {
-                final map = <String, String>{
-                  'sender': message.sender,
-                  'text': message.text,
-                  'reasoning': message.reasoning ?? '',
-                };
-                if (message.modelId != null && message.modelId!.isNotEmpty) {
-                  map['modelId'] = message.modelId!;
-                }
-                if (message.provider != null && message.provider!.isNotEmpty) {
-                  map['provider'] = message.provider!;
-                }
-                // Include images if present
-                if (message.images != null && message.images!.isNotEmpty) {
-                  map['images'] = message.images!;
-                }
-                if (message.imageMetas != null &&
-                    message.imageMetas!.isNotEmpty) {
-                  map['imageMetas'] = message.imageMetas!;
-                }
-                if (message.imageCostEur != null &&
-                    message.imageCostEur!.isNotEmpty) {
-                  map['imageCostEur'] = message.imageCostEur!;
-                }
-                if (message.imageGeneratedAt != null &&
-                    message.imageGeneratedAt!.isNotEmpty) {
-                  map['imageGeneratedAt'] = message.imageGeneratedAt!;
-                }
-                // Include attachments if present
-                if (message.attachments != null &&
-                    message.attachments!.isNotEmpty) {
-                  map['attachments'] = message.attachments!;
-                  if (kDebugMode) {
-                    debugPrint(
-                      '📄 [AttachmentDebug] Loading message with attachments field',
-                    );
-                  }
-                }
-                // Include attachedFilesJson for retry/resend support
-                if (message.attachedFilesJson != null &&
-                    message.attachedFilesJson!.isNotEmpty) {
-                  map['attachedFilesJson'] = message.attachedFilesJson!;
-                }
-                if (message.toolCalls != null &&
-                    message.toolCalls!.isNotEmpty) {
-                  map['toolCalls'] = message.toolCalls!;
-                }
-                if (message.contentBlocks != null &&
-                    message.contentBlocks!.isNotEmpty) {
-                  map['contentBlocks'] = message.contentBlocks!;
-                }
-                // Preserve local delivery status (pending/failed/interrupted).
-                // Without this an assistant message that was cut off mid-stream
-                // loses its "Continue generation" affordance on reload.
-                final statusStr = _statusToRawString(message.status);
-                if (statusStr != null) {
-                  map['status'] = statusStr;
-                }
-                if (message.queueId != null && message.queueId!.isNotEmpty) {
-                  map['queueId'] = message.queueId!;
-                }
-                return map;
-              }),
-            );
-
-          final bool shouldRecoverStaleToolCalls =
-              !_streamingHandler.isChatStreaming(_activeChatId!) &&
-              !_streamingHandler.hasCompletedStream(_activeChatId!);
-          if (shouldRecoverStaleToolCalls) {
-            var recoveredStaleCalls = false;
-            for (final message in _messages) {
-              if (ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message)) {
-                recoveredStaleCalls = true;
-              }
-            }
-
-            if (recoveredStaleCalls) {
-              unawaited(
-                _persistenceHandler
-                    .persistChat(
-                      messages: _messages
-                          .map((m) => Map<String, String>.from(m))
-                          .toList(),
-                      chatId: _activeChatId,
-                      waitForCompletion: false,
-                      isOffline: _isOffline,
-                      silent: true,
-                    )
-                    .catchError((error) {
-                      if (kDebugMode) {
-                        debugPrint(
-                          'persistChat (recover stale) failed: $error',
-                        );
-                      }
-                      return null;
-                    }),
-              );
-            }
-          }
-        } else {
-          // Chat load failed - treat as new chat
-          if (kDebugMode) {
-            debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId load failed!');
-          }
-          _messages.clear();
-          _fileHandler.clearAll();
-          _messageActionsHandler.cancelEdit();
-          _activeChatId = null;
-        }
-      } else {
-        // Chat not found - treat as new chat
-        if (kDebugMode) {
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
-        }
-        if (kDebugMode) {
-          debugPrint(
-            '│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...',
-          );
-        }
-        if (kDebugMode) {
-          debugPrint(
-            '│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null',
-          );
-        }
+      setState(() {
         _messages.clear();
         _fileHandler.clearAll();
         _messageActionsHandler.cancelEdit();
         _activeChatId = null;
+        _isLoadingChat = false;
+        _showScrollToBottom = false;
+      });
+      _scrollChatToBottom(force: true);
+      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+        _textFieldFocusNode.requestFocus();
       }
+      return;
     }
 
-    // Check for background streaming (still active) or completed stream
-    final bool chatIsStreaming =
-        _activeChatId != null &&
-        _streamingHandler.isChatStreaming(_activeChatId!);
-    final bool chatHasCompletedStream =
-        _activeChatId != null &&
-        _streamingHandler.hasCompletedStream(_activeChatId!);
+    // Find chat by ID
+    StoredChat? storedChat = ChatStorageService.getChatById(chatId);
 
-    if (_activeChatId != null && (chatIsStreaming || chatHasCompletedStream)) {
-      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
-        _activeChatId!,
-      );
-      if (streamingMsgIndex != null &&
-          streamingMsgIndex >= 0 &&
-          streamingMsgIndex < _messages.length) {
-        final String? bufferedContent = _streamingHandler.getBufferedContent(
-          _activeChatId!,
-        );
-        final String? bufferedReasoning = _streamingHandler
-            .getBufferedReasoning(_activeChatId!);
-
-        if (bufferedContent != null) {
-          final Map<String, String> updatedMessage = Map<String, String>.from(
-            _messages[streamingMsgIndex],
+    if (storedChat != null) {
+      // LAZY LOADING: Check if chat is fully loaded
+      if (!storedChat.isFullyLoaded) {
+        if (kDebugMode) {
+          debugPrint(
+            '│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...',
           );
-          updatedMessage['text'] = bufferedContent;
-          updatedMessage['reasoning'] = bufferedReasoning ?? '';
-          _messages[streamingMsgIndex] = updatedMessage;
-          // Clean up completed stream data only after successful application
-          if (chatHasCompletedStream) {
-            _streamingHandler.consumeCompletedStream(_activeChatId!);
-          }
         }
+        storedChat = await ChatStorageService.loadFullChat(chatId);
+
+        // Check for stale load after async operation
+        if (!mounted) return;
+      }
+
+      if (storedChat != null && storedChat.isFullyLoaded) {
+        if (kDebugMode) {
+          debugPrint(
+            '│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}',
+          );
+        }
+        _activeChatId = storedChat.id;
+        unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+          }
+        }));
+        _applyLoadedChat(storedChat, sidebarWasExpanded);
+        return;
+      }
+
+      // Chat load failed - treat as new chat
+      if (kDebugMode) {
+        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId load failed!');
+      }
+    } else {
+      // Chat not found - treat as new chat
+      if (kDebugMode) {
+        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...',
+        );
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null',
+        );
       }
     }
 
     if (!mounted) return;
     setState(() {
+      _messages.clear();
+      _fileHandler.clearAll();
+      _messageActionsHandler.cancelEdit();
+      _activeChatId = null;
       _isLoadingChat = false;
       _showScrollToBottom = false;
     });
     _scrollChatToBottom(force: true);
-    // Use captured sidebar state to prevent focus when sidebar was open
     if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
