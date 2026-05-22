@@ -737,25 +737,35 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Hamburger menu — stays anchored at the top-left, never moves.
-          // We force standard density + explicit 48x48 constraints because
-          // Flutter applies compact density (-2, -2 → 40x40) to IconButton on
-          // Linux/macOS/Windows by default, which would shift this icon's
-          // visual centre 4 px left of the rail icons below it. Locking both
-          // to 48x48 keeps every icon on the same vertical line.
+          // Uses the same Material+InkWell + BorderRadius.circular(10)
+          // hover affordance as the SbRailRow items below (New chat,
+          // Workspaces, Media) so the rounded-rectangle hover shape is
+          // consistent down the left rail instead of the default circular
+          // IconButton splash.
           Positioned(
             top: kTopInitialSpacing,
             left: kFixedLeftPadding,
             child: KeyedSubtree(
               key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
-              child: IconButton(
-                icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.standard,
-                constraints: const BoxConstraints.tightFor(
-                  width: kMenuButtonHeight,
-                  height: kMenuButtonHeight,
+              child: SizedBox(
+                width: kMenuButtonHeight,
+                height: kMenuButtonHeight,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _toggleSidebar,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Center(
+                      child: Icon(
+                        Icons.menu_rounded,
+                        color: iconFg,
+                        size: 24,
+                      ),
+                    ),
+                  ),
                 ),
-                onPressed: _toggleSidebar,
               ),
             ),
           ),
