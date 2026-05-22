@@ -1098,8 +1098,16 @@ class _MessageBubbleState extends State<MessageBubble> {
           contentBlockTimeline: timeline,
         ),
       );
-      children.add(const SizedBox(height: 6));
-      children.addAll(_buildArtifactCards(seg.toolCalls));
+      // Match the gap above the bar (8) — previously a 6-px spacer always
+      // sat between the bar and the artifact slot AND an 8-px spacer sat
+      // after artifacts. When there were no artifacts (the common case)
+      // those two stacked into 14 px below while the gap above stayed at
+      // 8, so the bar visually drifted toward the preceding text.
+      final artifactCards = _buildArtifactCards(seg.toolCalls);
+      if (artifactCards.isNotEmpty) {
+        children.add(const SizedBox(height: 6));
+        children.addAll(artifactCards);
+      }
       children.add(const SizedBox(height: 8));
       hasRenderedMainContent = true;
       // Image insertion right after the round that produced it.
