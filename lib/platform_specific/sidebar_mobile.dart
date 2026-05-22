@@ -621,6 +621,28 @@ class _SidebarMobileState extends State<SidebarMobile> {
             trailing: SbNewChatPill(onTap: widget.onNewChatTapped),
           ),
 
+          // Match desktop ordering: Workspaces → Media → Search at the bottom.
+          // The Search row morphs in-place into the input field when tapped
+          // (search row disappears, input takes the same slot) so the text
+          // field never pushes other rows out of place.
+          if (kFeatureWorkspaces)
+            SbNavItem(
+              icon: Icons.folder_rounded,
+              label: l.workspaces,
+              onTap: widget.onWorkspacesTapped,
+            ),
+          if (kFeatureMediaManager)
+            SbNavItem(
+              icon: Icons.image_rounded,
+              label: l.media,
+              onTap: widget.onMediaTapped,
+            ),
+          if (!showSearchField)
+            SbNavItem(
+              icon: Icons.search_rounded,
+              label: 'Search',
+              onTap: _toggleSearch,
+            ),
           if (showSearchField)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -654,11 +676,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     suffixIcon: InkResponse(
                       radius: 14,
                       onTap: () {
-                        if (_searchQuery.isNotEmpty) {
-                          _clearSearchQuery();
-                        } else {
-                          setState(() => _searchVisible = false);
-                        }
+                        // Tapping the X always collapses the search row back —
+                        // mirrors desktop. The text is cleared on the way out
+                        // so a future re-open starts fresh.
+                        _clearSearchQuery();
+                        setState(() => _searchVisible = false);
                       },
                       child: Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -681,24 +703,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   cursorColor: accentColor,
                 ),
               ),
-            ),
-
-          SbNavItem(
-            icon: Icons.search_rounded,
-            label: 'Search',
-            onTap: _toggleSearch,
-          ),
-          if (kFeatureWorkspaces)
-            SbNavItem(
-              icon: Icons.folder_rounded,
-              label: l.workspaces,
-              onTap: widget.onWorkspacesTapped,
-            ),
-          if (kFeatureMediaManager)
-            SbNavItem(
-              icon: Icons.image_rounded,
-              label: l.media,
-              onTap: widget.onMediaTapped,
             ),
           const SizedBox(height: 10),
 
