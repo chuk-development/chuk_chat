@@ -338,18 +338,21 @@ String _formatBravePlaces({
   buf.writeln();
 
   for (final place in places) {
-    final name = (place['name'] as String? ?? '').trim();
+    // Brave Places occasionally returns string fields as lists (e.g.
+    // multiple phone numbers, multiple price-range labels). Coerce
+    // defensively so one weird POI doesn't blow up the whole batch.
+    final name = _asString(place['name']).trim();
     final lat = place['lat'];
     final lon = place['lon'];
-    final address = (place['address'] as String? ?? '').trim();
-    final phone = (place['phone'] as String? ?? '').trim();
-    final website = (place['website'] as String? ?? '').trim();
-    final hours = (place['opening_hours'] as String? ?? '').trim();
-    final cuisine = (place['cuisine'] as String? ?? '').trim();
+    final address = _asString(place['address']).trim();
+    final phone = _asString(place['phone']).trim();
+    final website = _asString(place['website']).trim();
+    final hours = _asString(place['opening_hours']).trim();
+    final cuisine = _asString(place['cuisine']).trim();
     final rating = place['rating'];
     final reviews = place['review_count'];
-    final price = (place['price_range'] as String? ?? '').trim();
-    final description = (place['description'] as String? ?? '').trim();
+    final price = _asString(place['price_range']).trim();
+    final description = _asString(place['description']).trim();
 
     final latLonLabel = (lat != null && lon != null) ? ' [$lat, $lon]' : '';
     buf.writeln('- ${name.isEmpty ? '(unnamed)' : name}$latLonLabel');
@@ -511,4 +514,19 @@ int _coerceInt(dynamic value, {required int fallback}) {
   }
   final parsed = int.tryParse(value.toString().trim());
   return parsed ?? fallback;
+}
+
+/// Coerce a JSON-decoded value to a String. Server tools normally hand back
+/// strings for these fields but Brave Places occasionally surfaces a list
+/// (e.g. multi-value price_range) and a null is always possible.
+String _asString(dynamic value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  if (value is List) {
+    return value
+        .where((e) => e != null)
+        .map((e) => e.toString())
+        .join(', ');
+  }
+  return value.toString();
 }
