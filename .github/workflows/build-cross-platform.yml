@@ -125,8 +125,13 @@ jobs:
           TAG=${{ steps.bump.outputs.tag }}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists — skipping."
+          # Check the REMOTE for the tag — actions/checkout doesn't fetch
+          # tags by default, so a local rev-parse always returns "missing"
+          # even when the tag exists upstream. Without this we crash on
+          # `git push origin <tag>` with "tag already exists" whenever a
+          # release was tagged manually before triggering the workflow.
+          if git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin — skipping create."
           else
             git tag "$TAG"
             git push origin "$TAG"
