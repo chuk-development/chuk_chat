@@ -413,7 +413,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: iconFg,
-                    letterSpacing: -0.4,
                   ),
                 ),
               ),

@@ -1,6 +1,7 @@
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -972,10 +973,13 @@ class _ProviderPill extends StatelessWidget {
     if (isAutoSelected) return kAutoCheapestProviderSlug;
     final p = selectedProvider;
     if (p != null) return p.slug;
-    // Default suggestion: when nothing is selected AND the model has more
-    // than one provider, show "Auto (cheapest)" as the visual default. The
-    // user can still pick a specific provider; tapping Auto persists it.
-    if (model.providers.length > 1) return kAutoCheapestProviderSlug;
+    // Fix B.1: previously this returned kAutoCheapestProviderSlug whenever
+    // the user had not picked a provider yet AND the model had more than
+    // one provider — that made "Auto (cheapest)" the *visual* default for
+    // every model, which the user (correctly) read as it being silently
+    // pre-selected. Auto Cheapest must only appear as selected when the
+    // user explicitly picks it; otherwise the pill stays Disabled and the
+    // user has to make an active choice.
     return _kDisabledValue;
   }
 
@@ -986,12 +990,18 @@ class _ProviderPill extends StatelessWidget {
     final m3 = theme.m3;
     final bool hasMultipleProviders = model.providers.length > 1;
 
-    // Fixed column width keeps provider pills visually aligned across all
-    // cards. Wide enough to fit "Auto (cheapest) — currently: <Provider>"
-    // and the two-line "$X.XX/M in · $Y.YY/M out" price subtitle without
-    // truncation.
+    // Fix B.2: previously a fixed 280dp pill width. On narrow phones
+    // (≤ 360dp) that left no room for the model name in _NameRow and the
+    // name was pushed off-screen. Now the pill grows up to 280dp where
+    // there's room, but on narrow screens it shrinks so the model name
+    // stays visible. We subtract a generous reserve for the icon + edit
+    // button + horizontal padding in the surrounding Row.
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double pillWidth = screenWidth < 400
+        ? math.max(168.0, screenWidth - 200.0)
+        : 280.0;
     return SizedBox(
-      width: 280,
+      width: pillWidth,
       child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -1123,12 +1133,18 @@ class _ProviderPill extends StatelessWidget {
     final Color textColor =
         isSelected ? colorScheme.primary : colorScheme.onSurface;
 
+    // Fix B.2: shorten the selected (collapsed) pill label so the model
+    // name in the surrounding row stays visible on narrow phones. The
+    // dropdown menu items still show the full "Auto (cheapest) —
+    // currently: <provider>" so users see what they're picking; only the
+    // pill's collapsed face is abbreviated to "Auto" (the bolt icon next
+    // to it carries the "auto" semantic).
     final String label = (cheapest != null && isMenuItem)
         ? l.autoCheapestCurrently(
             cheapest.name,
             cheapest.pricing.formatTokenPrice(cheapest.pricing.completion),
           )
-        : l.autoCheapest;
+        : (isMenuItem ? l.autoCheapest : 'Auto');
 
     return Row(
       mainAxisSize: MainAxisSize.min,

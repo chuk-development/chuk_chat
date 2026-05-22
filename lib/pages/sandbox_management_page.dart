@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -171,6 +172,29 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Fix C: GitHub connection lives here now (was a top-level
+            // Settings entry). The token is only ever used by `git` / `gh`
+            // inside the sandbox, so the entry point belongs next to the
+            // sandbox itself.
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.code),
+                title: const Text('GitHub'),
+                subtitle: const Text(
+                  'Let the AI clone your repos, push, and open PRs in the sandbox',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const GitHubConnectionPage(),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),

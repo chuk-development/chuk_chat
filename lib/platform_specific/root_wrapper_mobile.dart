@@ -1,7 +1,6 @@
 // lib/platform_specific/root_wrapper_mobile.dart
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:math' as math;
 
 
 
@@ -466,7 +465,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color iconFg = Theme.of(context).resolvedIconColor;
 
-    final double sidebarVisibleWidth = math.min(screenWidth * 0.7, 280.0);
+    // Mobile sidebar fills the entire screen — a full-page panel instead
+    // of a partial drawer. Desktop is unaffected (sidebar_desktop.dart is
+    // hosted by root_wrapper_desktop.dart in its own layout).
+    final double sidebarVisibleWidth = screenWidth;
     final double titleAvailableWidth =
         screenWidth -
         kFixedLeftPadding -

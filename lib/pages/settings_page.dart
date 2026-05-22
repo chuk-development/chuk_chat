@@ -20,7 +20,6 @@ import 'package:chuk_chat/pages/sandbox_management_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
-import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -219,20 +218,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
-              _SettingsRow(
-                icon: Icons.code,
-                title: 'GitHub',
-                subtitle:
-                    'Let the AI clone your repos, push, and open PRs in the sandbox',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const GitHubConnectionPage(),
-                    ),
-                  );
-                },
-              ),
+              // Fix C: the standalone GitHub entry was removed and the
+              // GitHub connection now lives inside SandboxManagementPage —
+              // the GitHub token is only ever used by `git`/`gh` inside the
+              // sandbox, so the entry point belongs there.
               _SettingsRow(
                 icon: Icons.developer_board,
                 title: 'Sandboxes',

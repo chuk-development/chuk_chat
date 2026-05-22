@@ -850,15 +850,16 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     final String tooltip = showTestMessages
         ? 'Test messages: $_freeMessagesRemaining of $_freeMessagesTotal remaining'
         : 'Remaining credits: $formatted';
+    // Fix A: removed the inner ring (was a tinted BoxDecoration on this
+    // Container). The outer chip — drawn by the parent (e.g. sidebar
+    // bottom-bar) — already provides the visible ring around the amount,
+    // so this inner decoration produced a doubled "ring around the price"
+    // effect. We keep the Padding so the layout/spacing is unchanged.
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 500),
-      child: Container(
+      child: Padding(
         padding: resolvedPadding,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-        ),
         child: Text(formatted, style: resolvedTextStyle),
       ),
     );
