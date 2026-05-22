@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -75,6 +76,10 @@ class AuthService {
         await PasswordRevisionService.clearCachedRevision(userId: userId);
       }
       await SupabaseService.auth.signOut();
+      // Tear down the multiplexed /v2/ws connection so the new user (or
+      // re-auth) gets a fresh socket with their token. Best-effort —
+      // never blocks signOut on a hung socket teardown.
+      await MultiplexSession.shutdown();
       // Drop any sandbox session ids we cached for this user's chats —
       // the next sign-in must not reuse them. Done BEFORE clearKey() so
       // that if EncryptionService.clearKey() throws, the cache is still

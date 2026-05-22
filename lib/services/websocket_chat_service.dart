@@ -7,6 +7,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 import 'package:chuk_chat/utils/secure_token_handler.dart';
 
@@ -62,6 +64,34 @@ class WebSocketChatService {
     List<String>? images,
     String? reasoningEffort,
   }) async* {
+    // Prefer the multiplexed /v2/ws connection when a chat session is
+    // open. Falls through to the legacy per-request WS path when no
+    // session is bound — preserves behaviour for offline retry workers,
+    // title generation, etc.
+    final mux = MultiplexSession.current;
+    if (mux != null) {
+      yield* _sendViaMultiplex(
+        connection: mux,
+        message: message,
+        modelId: modelId,
+        providerSlug: providerSlug,
+        history: history,
+        systemPrompt: systemPrompt,
+        maxTokens: maxTokens,
+        temperature: temperature,
+        images: images,
+        reasoningEffort: reasoningEffort,
+      );
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '⚠️ [WebSocketChatService] no multiplex session bound, falling '
+        'back to legacy /v1/ai/chat/ws',
+      );
+    }
+
     WebSocketChannel? channel;
 
     try {
@@ -317,6 +347,57 @@ class WebSocketChatService {
         debugPrint('🧹 WebSocket closed and resources cleaned up');
       }
     }
+  }
+
+  /// Send a chat through the multiplexed `/v2/ws` connection. Mirrors
+  /// the legacy single-WS path: yields the same [ChatStreamEvent] flow
+  /// and lets the caller's drain loop handle book-keeping.
+  static Stream<ChatStreamEvent> _sendViaMultiplex({
+    required MultiplexConnection connection,
+    required String message,
+    required String modelId,
+    required String providerSlug,
+    List<Map<String, dynamic>>? history,
+    String? systemPrompt,
+    int maxTokens = 512,
+    double temperature = 0.7,
+    List<String>? images,
+    String? reasoningEffort,
+  }) async* {
+    if (kDebugMode) {
+      debugPrint('📤 [Multiplex] chat -> $modelId via $providerSlug');
+    }
+
+    final payload = <String, dynamic>{
+      'message': message,
+      'model_id': modelId,
+      'provider_slug': providerSlug,
+      'max_tokens': maxTokens,
+      'temperature': temperature,
+    };
+
+    if (history != null && history.isNotEmpty) {
+      payload['history'] = history;
+    }
+    if (systemPrompt != null && systemPrompt.isNotEmpty) {
+      payload['system_prompt'] = systemPrompt;
+    }
+    if (reasoningEffort != null) {
+      payload['reasoning_effort'] = reasoningEffort;
+    }
+    if (images != null && images.isNotEmpty) {
+      final base64Images = await _convertImagesToBase64(images);
+      if (base64Images.isNotEmpty) {
+        payload['images'] = base64Images;
+        if (kDebugMode) {
+          debugPrint(
+            '🖼️ [Multiplex] forwarded ${base64Images.length} images',
+          );
+        }
+      }
+    }
+
+    yield* connection.chat(payload: payload);
   }
 
   /// Convert image storage paths or existing Base64 URLs to Base64 data URLs.

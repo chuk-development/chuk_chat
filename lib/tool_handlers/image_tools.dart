@@ -2,13 +2,18 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+
 /// Shared helper: send a multipart POST to an image generation endpoint
-/// and return the IMAGE: result string.
+/// and return the IMAGE: result string. When a multiplex chat session
+/// is open the request is forwarded over /v2/ws instead — same payload,
+/// no HTTP round-trip.
 Future<String> _generateImageRequest({
   required String? serverHttpUrl,
   required String? accessToken,
   required String endpoint,
   required Map<String, String> fields,
+  required String muxTool,
 }) async {
   final baseUrl = serverHttpUrl;
   if (baseUrl == null || baseUrl.trim().isEmpty) {
@@ -16,29 +21,46 @@ Future<String> _generateImageRequest({
   }
 
   try {
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl$endpoint'),
-    )..fields.addAll(fields);
-
-    if (accessToken != null && accessToken.isNotEmpty) {
-      request.headers['Authorization'] = 'Bearer $accessToken';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(
+      tool: muxTool,
+      payload: Map<String, dynamic>.from(fields),
+    );
+    if (mux.isError) {
+      return 'Image generation error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl$endpoint'),
+      )..fields.addAll(fields);
 
-    final streamed = await request.send().timeout(const Duration(seconds: 120));
-    final response = await http.Response.fromStream(streamed);
-
-    if (response.statusCode != 200) {
-      try {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final detail = data['detail'] ?? data['error'] ?? 'Unknown error';
-        return 'Image generation error: $detail';
-      } catch (_) {
-        return 'Image generation error: HTTP ${response.statusCode}';
+      if (accessToken != null && accessToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $accessToken';
       }
+
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 120));
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode != 200) {
+        try {
+          final errBody = jsonDecode(response.body) as Map<String, dynamic>;
+          final detail = errBody['detail'] ?? errBody['error'] ?? 'Unknown error';
+          return 'Image generation error: $detail';
+        } catch (_) {
+          return 'Image generation error: HTTP ${response.statusCode}';
+        }
+      }
+
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    if (data == null) {
+      return 'Image generation error: empty response';
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
     final imageUrl = (data['image_url'] as String? ?? '').trim();
     if (imageUrl.isEmpty) {
       return 'Image generation error: no image URL returned';
@@ -80,6 +102,7 @@ Future<String> executeGenerateImage({
     serverHttpUrl: serverHttpUrl,
     accessToken: accessToken,
     endpoint: '/v1/ai/image/turbo',
+    muxTool: 'image_turbo',
     fields: {'prompt': prompt, 'image_size': imageSize},
   );
 }
@@ -108,6 +131,7 @@ Future<String> executeGenerateImageHunyuan({
     serverHttpUrl: serverHttpUrl,
     accessToken: accessToken,
     endpoint: '/v1/ai/image/hunyuan',
+    muxTool: 'image_hunyuan',
     fields: fields,
   );
 }
@@ -140,6 +164,7 @@ Future<String> executeGenerateImageFlux({
     serverHttpUrl: serverHttpUrl,
     accessToken: accessToken,
     endpoint: '/v1/ai/image/flux',
+    muxTool: 'image_flux',
     fields: fields,
   );
 }
@@ -220,30 +245,49 @@ Future<String> executeEditImage({
   final imageSize = (args['image_size'] as String? ?? 'auto').trim();
 
   try {
-    final request =
-        http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/ai/image/edit'))
-          ..fields['prompt'] = prompt
-          ..fields['image_url'] = imageUrl
-          ..fields['image_size'] = imageSize;
+    final payload = <String, dynamic>{
+      'prompt': prompt,
+      'image_url': imageUrl,
+      'image_size': imageSize,
+    };
 
-    if (accessToken != null && accessToken.isNotEmpty) {
-      request.headers['Authorization'] = 'Bearer $accessToken';
+    Map<String, dynamic>? data;
+    final mux = await tryToolViaMultiplex(tool: 'image_edit', payload: payload);
+    if (mux.isError) {
+      return 'Image edit error: ${mux.error}';
     }
+    if (mux.isOk) {
+      data = mux.body;
+    } else {
+      final request =
+          http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/ai/image/edit'))
+            ..fields['prompt'] = prompt
+            ..fields['image_url'] = imageUrl
+            ..fields['image_size'] = imageSize;
 
-    final streamed = await request.send().timeout(const Duration(seconds: 120));
-    final response = await http.Response.fromStream(streamed);
-
-    if (response.statusCode != 200) {
-      try {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final detail = data['detail'] ?? data['error'] ?? 'Unknown error';
-        return 'Image edit error: $detail';
-      } catch (_) {
-        return 'Image edit error: HTTP ${response.statusCode}';
+      if (accessToken != null && accessToken.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $accessToken';
       }
-    }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 120));
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode != 200) {
+        try {
+          final errBody = jsonDecode(response.body) as Map<String, dynamic>;
+          final detail = errBody['detail'] ?? errBody['error'] ?? 'Unknown error';
+          return 'Image edit error: $detail';
+        } catch (_) {
+          return 'Image edit error: HTTP ${response.statusCode}';
+        }
+      }
+
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    if (data == null) {
+      return 'Image edit error: empty response';
+    }
     final resultUrl = (data['image_url'] as String? ?? '').trim();
     if (resultUrl.isEmpty) {
       return 'Image edit error: no image URL returned';
