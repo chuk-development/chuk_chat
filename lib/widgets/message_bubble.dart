@@ -875,15 +875,22 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     final Widget toolBarSection = !hasVisibleToolCalls
         ? const SizedBox.shrink()
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildToolCallsBar(widget.toolCalls!),
-              const SizedBox(height: 6),
-              ..._buildArtifactCards(widget.toolCalls!),
-              const SizedBox(height: 8),
-            ],
+        : Builder(
+            builder: (_) {
+              final cards = _buildArtifactCards(widget.toolCalls!);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildToolCallsBar(widget.toolCalls!),
+                  if (cards.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    ...cards,
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              );
+            },
           );
 
     final Widget messageBody = _buildMessageBody(
@@ -2115,7 +2122,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     return SelectionContainer.disabled(
       child: Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 6),
+        // No baked-in bottom margin — callers control the gap below the
+        // bar via SizedBox so the spacing above and below the bar can
+        // stay symmetric. (Previously the bar carried `margin: only
+        // (bottom: 6)` which silently added 6 px under every pill on top
+        // of whatever spacer the caller added, making bar→text always
+        // taller than text→bar.)
         decoration: BoxDecoration(
           color: accentColor.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
