@@ -97,6 +97,9 @@ const Map<String, String> stringsDe = {
   'reasoningInContext': 'Reasoning im Kontext',
   'reasoningInContextSubtitle':
       'KI-Denkprozess in den Gesprächsverlauf einbeziehen',
+  'toolResultsInContext': 'Tool-Ergebnisse im Kontext',
+  'toolResultsInContextSubtitle':
+      'Frühere Tool-Aufrufe und ihre Ergebnisse mitsenden, damit die KI bereits geholte Daten wiederverwendet, statt dieselben Tools erneut auszuführen',
   'aiContextInfo':
       'Aktuelle Bilder sendet die Bilder der letzten 6 Nachrichten. Alle Bilder sendet jedes Bild der Unterhaltung. Reasoning bezieht den Denkprozess der KI als Kontext für Folgenachrichten ein.',
   'chatTitles': 'Chat-Titel',

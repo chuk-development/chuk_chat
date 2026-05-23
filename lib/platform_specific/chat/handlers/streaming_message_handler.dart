@@ -144,6 +144,7 @@ class StreamingMessageHandler {
     bool includeRecentImagesInHistory = true,
     bool includeAllImagesInHistory = false,
     bool includeReasoningInHistory = false,
+    bool includeToolResultsInHistory = true,
     bool toolCallingEnabled = true,
     bool toolDiscoveryMode = true,
     bool allowMarkdownToolCalls = true,
@@ -202,6 +203,7 @@ class StreamingMessageHandler {
       includeRecentImages: includeRecentImagesInHistory,
       includeAllImages: includeAllImagesInHistory,
       includeReasoning: includeReasoningInHistory,
+      includeToolResults: includeToolResultsInHistory,
     );
 
     // Prepare message using MessageCompositionService
@@ -1208,6 +1210,7 @@ class StreamingMessageHandler {
     bool includeRecentImages = true,
     bool includeAllImages = false,
     bool includeReasoning = false,
+    bool includeToolResults = true,
   }) async {
     final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
 
@@ -1286,6 +1289,7 @@ class StreamingMessageHandler {
         final assistantContent = formatAssistantContent(
           message,
           includeReasoning: includeReasoning,
+          includeToolResults: includeToolResults,
         );
         if (assistantContent == null) {
           continue;

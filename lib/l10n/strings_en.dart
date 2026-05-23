@@ -93,6 +93,9 @@ const Map<String, String> stringsEn = {
   'reasoningInContext': 'Reasoning in context',
   'reasoningInContextSubtitle':
       'Include AI thinking process in conversation history',
+  'toolResultsInContext': 'Tool results in context',
+  'toolResultsInContextSubtitle':
+      'Include prior tool calls and their results so the AI can reuse already-fetched data instead of re-running the same tools',
   'aiContextInfo':
       'Recent images sends the last 6 messages\' images. All images sends every image in the conversation. Reasoning includes the AI\'s thinking process as context for follow-up messages.',
   'chatTitles': 'Chat Titles',

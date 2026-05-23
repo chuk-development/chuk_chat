@@ -2126,6 +2126,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final assistantContent = formatAssistantContent(
           message,
           includeReasoning: widget.includeReasoningInHistory,
+          includeToolResults: widget.includeToolResultsInHistory,
         );
         if (assistantContent == null) continue;
         history.add({'role': 'assistant', 'content': assistantContent});

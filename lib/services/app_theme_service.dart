@@ -49,6 +49,7 @@ class AppThemeService extends ChangeNotifier {
   bool _includeRecentImagesInHistory = true;
   bool _includeAllImagesInHistory = false;
   bool _includeReasoningInHistory = false;
+  bool _includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory;
 
   // Tool-calling preferences
   bool _toolCallingEnabled = kDefaultToolCallingEnabled;
@@ -93,6 +94,8 @@ class AppThemeService extends ChangeNotifier {
       'includeAllImagesInHistory';
   static const String _kIncludeReasoningInHistoryKey =
       'includeReasoningInHistory';
+  static const String _kIncludeToolResultsInHistoryKey =
+      'includeToolResultsInHistory';
   static const String _kToolCallingEnabledKey = 'toolCallingEnabled';
   static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode';
   static const String _kShowToolCallsKey = 'showToolCalls';
@@ -130,6 +133,7 @@ class AppThemeService extends ChangeNotifier {
   bool get includeRecentImagesInHistory => _includeRecentImagesInHistory;
   bool get includeAllImagesInHistory => _includeAllImagesInHistory;
   bool get includeReasoningInHistory => _includeReasoningInHistory;
+  bool get includeToolResultsInHistory => _includeToolResultsInHistory;
   bool get toolCallingEnabled => _toolCallingEnabled;
   bool get toolDiscoveryMode => _toolDiscoveryMode;
   bool get showToolCalls => _showToolCalls;
@@ -187,6 +191,9 @@ class AppThemeService extends ChangeNotifier {
         prefs.getBool(_kIncludeAllImagesInHistoryKey) ?? false;
     _includeReasoningInHistory =
         prefs.getBool(_kIncludeReasoningInHistoryKey) ?? false;
+    _includeToolResultsInHistory =
+        prefs.getBool(_kIncludeToolResultsInHistoryKey) ??
+            kDefaultIncludeToolResultsInHistory;
     _toolCallingEnabled =
         prefs.getBool(_kToolCallingEnabledKey) ?? kDefaultToolCallingEnabled;
     _toolDiscoveryMode =
@@ -286,6 +293,8 @@ class AppThemeService extends ChangeNotifier {
             customizationPrefs.includeAllImagesInHistory ||
         _includeReasoningInHistory !=
             customizationPrefs.includeReasoningInHistory ||
+        _includeToolResultsInHistory !=
+            customizationPrefs.includeToolResultsInHistory ||
         _toolCallingEnabled != customizationPrefs.toolCallingEnabled ||
         _toolDiscoveryMode != customizationPrefs.toolDiscoveryMode ||
         _showToolCalls != customizationPrefs.showToolCalls ||
@@ -313,6 +322,8 @@ class AppThemeService extends ChangeNotifier {
         customizationPrefs.includeRecentImagesInHistory;
     _includeAllImagesInHistory = customizationPrefs.includeAllImagesInHistory;
     _includeReasoningInHistory = customizationPrefs.includeReasoningInHistory;
+    _includeToolResultsInHistory =
+        customizationPrefs.includeToolResultsInHistory;
     _toolCallingEnabled = customizationPrefs.toolCallingEnabled;
     _toolDiscoveryMode = customizationPrefs.toolDiscoveryMode;
     _showToolCalls = customizationPrefs.showToolCalls;
@@ -360,6 +371,10 @@ class AppThemeService extends ChangeNotifier {
       ),
       prefs.setBool(_kIncludeAllImagesInHistoryKey, _includeAllImagesInHistory),
       prefs.setBool(_kIncludeReasoningInHistoryKey, _includeReasoningInHistory),
+      prefs.setBool(
+        _kIncludeToolResultsInHistoryKey,
+        _includeToolResultsInHistory,
+      ),
       prefs.setBool(_kToolCallingEnabledKey, _toolCallingEnabled),
       prefs.setBool(_kToolDiscoveryModeKey, _toolDiscoveryMode),
       prefs.setBool(_kShowToolCallsKey, _showToolCalls),
@@ -425,6 +440,7 @@ class AppThemeService extends ChangeNotifier {
       includeRecentImagesInHistory: _includeRecentImagesInHistory,
       includeAllImagesInHistory: _includeAllImagesInHistory,
       includeReasoningInHistory: _includeReasoningInHistory,
+      includeToolResultsInHistory: _includeToolResultsInHistory,
       toolCallingEnabled: _toolCallingEnabled,
       toolDiscoveryMode: _toolDiscoveryMode,
       showToolCalls: _showToolCalls,
@@ -548,6 +564,12 @@ class AppThemeService extends ChangeNotifier {
 
   void setIncludeReasoningInHistory(bool value) {
     _includeReasoningInHistory = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setIncludeToolResultsInHistory(bool value) {
+    _includeToolResultsInHistory = value;
     notifyListeners();
     _debouncedSyncCustomization();
   }

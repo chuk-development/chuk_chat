@@ -52,6 +52,8 @@ class AppShellConfig {
   final Function(bool) setIncludeAllImagesInHistory;
   final bool includeReasoningInHistory;
   final Function(bool) setIncludeReasoningInHistory;
+  final bool includeToolResultsInHistory;
+  final Function(bool) setIncludeToolResultsInHistory;
 
   // ── Tool calling ───────────────────────────────────────────
   final bool toolCallingEnabled;
@@ -114,6 +116,8 @@ class AppShellConfig {
     required this.setIncludeAllImagesInHistory,
     required this.includeReasoningInHistory,
     required this.setIncludeReasoningInHistory,
+    required this.includeToolResultsInHistory,
+    required this.setIncludeToolResultsInHistory,
     required this.toolCallingEnabled,
     required this.setToolCallingEnabled,
     required this.toolDiscoveryMode,

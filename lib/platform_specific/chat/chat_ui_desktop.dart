@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
@@ -82,6 +83,7 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool includeRecentImagesInHistory;
   final bool includeAllImagesInHistory;
   final bool includeReasoningInHistory;
+  final bool includeToolResultsInHistory;
   // Tool-calling settings
   final bool toolCallingEnabled;
   final bool toolDiscoveryMode;
@@ -111,6 +113,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.includeRecentImagesInHistory = true,
     this.includeAllImagesInHistory = false,
     this.includeReasoningInHistory = false,
+    this.includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory,
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,

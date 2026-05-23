@@ -414,6 +414,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         includeReasoningInHistory: _themeService.includeReasoningInHistory,
         setIncludeReasoningInHistory:
             _themeService.setIncludeReasoningInHistory,
+        includeToolResultsInHistory:
+            _themeService.includeToolResultsInHistory,
+        setIncludeToolResultsInHistory:
+            _themeService.setIncludeToolResultsInHistory,
         toolCallingEnabled: _themeService.toolCallingEnabled,
         setToolCallingEnabled: _themeService.setToolCallingEnabled,
         toolDiscoveryMode: _themeService.toolDiscoveryMode,

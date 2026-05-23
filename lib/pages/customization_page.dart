@@ -32,6 +32,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedIncludeRecentImagesInHistory;
   late bool _selectedIncludeAllImagesInHistory;
   late bool _selectedIncludeReasoningInHistory;
+  late bool _selectedIncludeToolResultsInHistory;
   // Language selection state
   late String _selectedLocale;
   // Auto title generation state
@@ -67,6 +68,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
         widget.config.includeAllImagesInHistory;
     _selectedIncludeReasoningInHistory =
         widget.config.includeReasoningInHistory;
+    _selectedIncludeToolResultsInHistory =
+        widget.config.includeToolResultsInHistory;
     _selectedLocale = widget.config.uiLocale;
     _loadAutoTitleSetting();
   }
@@ -604,6 +607,19 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     _selectedIncludeReasoningInHistory = value;
                   });
                   widget.config.setIncludeReasoningInHistory(value);
+                },
+              ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.build_outlined,
+                title: l.toolResultsInContext,
+                subtitle: l.toolResultsInContextSubtitle,
+                value: _selectedIncludeToolResultsInHistory,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedIncludeToolResultsInHistory = value;
+                  });
+                  widget.config.setIncludeToolResultsInHistory(value);
                 },
               ),
             ],

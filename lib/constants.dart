@@ -30,6 +30,11 @@ const bool kDefaultToolDiscoveryMode = true;
 const bool kDefaultShowToolCalls = true;
 const bool kDefaultAllowMarkdownToolCalls = true;
 
+/// Include prior tool calls + their results in the API history so the
+/// model can reuse already-fetched data on follow-up questions instead
+/// of re-running the same tools (web_search, etc).
+const bool kDefaultIncludeToolResultsInHistory = true;
+
 /* ---------- CHAT FONT SIZE ---------- */
 const double kDefaultChatFontSize = 15.0;
 const double kMinChatFontSize = 11.0;

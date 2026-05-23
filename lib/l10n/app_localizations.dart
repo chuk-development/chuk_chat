@@ -151,6 +151,8 @@ class AppLocalizations {
   String get allImagesInContextSubtitle => _get('allImagesInContextSubtitle');
   String get reasoningInContext => _get('reasoningInContext');
   String get reasoningInContextSubtitle => _get('reasoningInContextSubtitle');
+  String get toolResultsInContext => _get('toolResultsInContext');
+  String get toolResultsInContextSubtitle => _get('toolResultsInContextSubtitle');
   String get aiContextInfo => _get('aiContextInfo');
   String get chatTitles => _get('chatTitles');
   String get autoGenerateTitles => _get('autoGenerateTitles');
