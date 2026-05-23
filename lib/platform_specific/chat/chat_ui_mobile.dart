@@ -25,6 +25,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
@@ -2235,14 +2236,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     for (final Map<String, String> message in _messages) {
       final String? sender = message['sender'];
       final String? text = message['text'];
-      if (text == null || text.trim().isEmpty || text == 'Thinking...') {
-        continue;
-      }
 
       if (sender == 'user') {
+        if (text == null || text.trim().isEmpty || text == 'Thinking...') {
+          continue;
+        }
         history.add({'role': 'user', 'content': text});
       } else if (sender == 'ai' || sender == 'assistant') {
-        history.add({'role': 'assistant', 'content': text});
+        // Include prior tool calls + results so the model can reuse data
+        // it already fetched on a follow-up question.
+        final assistantContent = formatAssistantContent(
+          message,
+          includeReasoning: widget.includeReasoningInHistory,
+        );
+        if (assistantContent == null) continue;
+        history.add({'role': 'assistant', 'content': assistantContent});
       }
     }
     return history;

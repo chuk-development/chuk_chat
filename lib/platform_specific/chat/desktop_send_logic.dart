@@ -2121,17 +2121,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           history.add({'role': 'user', 'content': text});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
-        if (text == null || text.trim().isEmpty || text == 'Thinking...') {
-          continue;
-        }
-        String assistantContent = text;
-        if (widget.includeReasoningInHistory) {
-          final reasoning = message['reasoning'] ?? '';
-          if (reasoning.isNotEmpty) {
-            assistantContent =
-                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
-          }
-        }
+        // Include prior tool calls + results so the model can reuse data
+        // it already fetched on a follow-up question.
+        final assistantContent = formatAssistantContent(
+          message,
+          includeReasoning: widget.includeReasoningInHistory,
+        );
+        if (assistantContent == null) continue;
         history.add({'role': 'assistant', 'content': assistantContent});
       }
     }
