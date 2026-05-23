@@ -9,12 +9,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:markdraw/markdraw.dart' as markdraw;
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
-import 'package:chuk_chat/services/excalidraw_share_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -939,7 +938,11 @@ class _ArtifactRenderer extends StatelessWidget {
       case ArtifactType.excalidraw:
         return RepaintBoundary(
           key: captureKey,
-          child: _ExcalidrawExternalOpenView(jsonString: content),
+          child: _ExcalidrawMarkdrawEditor(
+            key: ValueKey('mkdr_${artifactId ?? ""}'),
+            artifactId: artifactId,
+            jsonString: content,
+          ),
         );
       case ArtifactType.html:
         return HtmlArtifactView(
@@ -1094,191 +1097,203 @@ class _ArtifactRenderer extends StatelessWidget {
   }
 }
 
-class _ExcalidrawExternalOpenView extends StatefulWidget {
-  const _ExcalidrawExternalOpenView({required this.jsonString});
+/// Native cross-platform Excalidraw editor backed by the `markdraw`
+/// package. Loads the scene JSON into a controller, lets the user edit,
+/// and persists every change as a new artifact version so the next chat
+/// turn sees the user's edits.
+class _ExcalidrawMarkdrawEditor extends StatefulWidget {
+  const _ExcalidrawMarkdrawEditor({
+    super.key,
+    required this.jsonString,
+    this.artifactId,
+  });
 
   final String jsonString;
+  final String? artifactId;
 
   @override
-  State<_ExcalidrawExternalOpenView> createState() =>
-      _ExcalidrawExternalOpenViewState();
+  State<_ExcalidrawMarkdrawEditor> createState() =>
+      _ExcalidrawMarkdrawEditorState();
 }
 
-class _ExcalidrawExternalOpenViewState
-    extends State<_ExcalidrawExternalOpenView> {
+class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
+  late final markdraw.MarkdrawController _controller;
+  Timer? _saveDebounce;
+  String _lastPersisted = '';
+  bool _savingSelfTriggered = false;
   bool _busy = false;
-  Uri? _shareLink;
-  String? _error;
+  String? _saveError;
 
-  Future<void> _openExcalidraw() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final link =
-          _shareLink ??
-          await ExcalidrawShareService.createShareLink(widget.jsonString);
-      final launched = await launchUrl(
-        link,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        await launchUrl(link, mode: LaunchMode.platformDefault);
-      }
-      if (!mounted) return;
-      setState(() {
-        _shareLink = link;
-      });
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Excalidraw share-link upload failed: $error');
-      }
-      final fallback = ExcalidrawShareService.editorHomeUri;
-      var fallbackOpened = false;
-      try {
-        final opened = await launchUrl(
-          fallback,
-          mode: LaunchMode.externalApplication,
-        );
-        if (!opened) {
-          fallbackOpened = await launchUrl(
-            fallback,
-            mode: LaunchMode.platformDefault,
-          );
-        } else {
-          fallbackOpened = true;
-        }
-      } catch (_) {
-        // Keep showing error text below.
-      }
-      if (!mounted) return;
-      setState(() {
-        _error = fallbackOpened
-            ? 'Link creation failed. Opened excalidraw.com without scene.'
-            : 'Link creation failed and fallback page could not be opened.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
+  static const _saveDebounceWindow = Duration(milliseconds: 1200);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = markdraw.MarkdrawController();
+    _lastPersisted = widget.jsonString;
+    _loadIntoController(widget.jsonString);
   }
 
-  Future<void> _copyShareLink() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  void _loadIntoController(String json) {
+    if (json.trim().isEmpty) return;
     try {
-      final link =
-          _shareLink ??
-          await ExcalidrawShareService.createShareLink(widget.jsonString);
-      await Clipboard.setData(ClipboardData(text: link.toString()));
-      if (!mounted) return;
-      setState(() {
-        _shareLink = link;
-        _error = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Excalidraw link copied'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (error) {
+      _controller.loadFromContent(json, 'scene.excalidraw');
+    } catch (error, stack) {
       if (kDebugMode) {
-        debugPrint('Excalidraw share-link copy failed: $error');
-      }
-      if (!mounted) return;
-      setState(() {
-        _error = 'Could not create an Excalidraw share link.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
+        debugPrint('Markdraw load failed: $error\n$stack');
       }
     }
   }
 
   @override
-  void didUpdateWidget(covariant _ExcalidrawExternalOpenView oldWidget) {
+  void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Skip the rebuild that our OWN save triggered — otherwise we'd
+    // re-load the just-serialized content back into the controller
+    // and clobber the user's in-flight selection / undo history.
+    if (_savingSelfTriggered) {
+      _savingSelfTriggered = false;
+      _lastPersisted = widget.jsonString;
+      return;
+    }
     if (oldWidget.jsonString != widget.jsonString) {
-      _shareLink = null;
-      _error = null;
+      _lastPersisted = widget.jsonString;
+      _loadIntoController(widget.jsonString);
+    }
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    // Flush a final save if there are unsaved edits in the buffer.
+    _persistIfDirty(forceSync: true);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onSceneChanged(markdraw.Scene _) {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_saveDebounceWindow, _persistIfDirty);
+  }
+
+  Future<void> _persistIfDirty({bool forceSync = false}) async {
+    final id = widget.artifactId;
+    if (id == null || id.isEmpty) return;
+    final String serialized;
+    try {
+      serialized = _controller.serializeScene(
+        format: markdraw.DocumentFormat.excalidraw,
+      );
+    } catch (error) {
+      if (kDebugMode) debugPrint('Markdraw serialize failed: $error');
+      return;
+    }
+    if (serialized == _lastPersisted) return;
+    _lastPersisted = serialized;
+    _savingSelfTriggered = true;
+    if (mounted) setState(() => _busy = true);
+    try {
+      final updated = await ArtifactStorageService.rewriteArtifact(
+        artifactId: id,
+        content: serialized,
+        preserveMetadata: true,
+      );
+      // Swap the active doc so the panel + cache see the new version
+      // immediately (rewriteArtifact alone only fires `_emitChange`).
+      ArtifactStorageService.activeArtifactNotifier.value = updated;
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _saveError = null;
+        });
+      }
+    } catch (error, stack) {
+      if (kDebugMode) {
+        debugPrint('Excalidraw artifact save failed: $error\n$stack');
+      }
+      // Drop the dedupe baseline so the next change retries.
+      _lastPersisted = '';
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _saveError = 'Save failed: $error';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save edits: $error'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    if (forceSync) {
+      // Synchronous-path callers (dispose) cannot await — they only
+      // need the request to have started.
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 540),
-        child: Card(
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.open_in_new, size: 30, color: colorScheme.primary),
-                const SizedBox(height: 10),
-                const Text(
-                  'Excalidraw opens externally',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'The scene is uploaded to Excalidraw and opened in your browser.',
-                  style: TextStyle(
-                    color: colorScheme.onSurface.withValues(alpha: 0.75),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _error!,
-                    style: TextStyle(color: colorScheme.error, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                const SizedBox(height: 14),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _busy ? null : _openExcalidraw,
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open in Excalidraw'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _copyShareLink,
-                      icon: const Icon(Icons.link),
-                      label: const Text('Copy link'),
-                    ),
-                  ],
-                ),
-                if (_busy) ...[
-                  const SizedBox(height: 12),
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
-              ],
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: markdraw.MarkdrawEditor(
+            controller: _controller,
+            onSceneChanged: _onSceneChanged,
+            config: const markdraw.MarkdrawEditorConfig(
+              // Hide menu/library buttons that would otherwise expose
+              // file-system Save/Open dialogs — persistence is driven
+              // by the artifact panel itself, not the editor chrome.
+              showMenu: false,
+              showLibraryPanel: false,
             ),
           ),
         ),
-      ),
+        if (_busy)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Saving…', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+          ),
+        if (_saveError != null && !_busy)
+          Positioned(
+            bottom: 8,
+            left: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                _saveError!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

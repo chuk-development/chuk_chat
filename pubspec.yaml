@@ -62,17 +62,17 @@ dependencies:
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
-  # System-WebView renderer for Excalidraw (+ future HTML) artifacts on
+  # System-WebView renderer for HTML artifacts on
   # Android/iOS/macOS/Windows/Web. Linux has no stable federation for
-  # this plugin, so the desktop Linux build falls back to a native
-  # CustomPainter renderer for Excalidraw and a source view for HTML.
-  #
+  # this plugin, so the desktop Linux build falls back to a source view.
   # A separate "-full" Linux artifact built via CI injects `webview_cef`
-  # (CEF/Chromium) for real rendering. See .github/workflows and
-  # ci/linux_full/ for the swap-in files. The default pubspec below
-  # stays CEF-free so Android/iOS/macOS/Windows bundles don't carry the
-  # ~120 MB Chromium runtime.
+  # (CEF/Chromium) for real HTML rendering. See .github/workflows and
+  # ci/linux_full/ for the swap-in files.
   flutter_inappwebview: ^6.1.5
+  # Native cross-platform Excalidraw-compatible drawing widget. Replaces
+  # the old WebView-based renderer — works on every Flutter platform
+  # without bundling Chromium or shipping the official Excalidraw bundle.
+  markdraw: ^0.2.0
 
 dev_dependencies:
   flutter_test:
@@ -80,15 +80,22 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
+dependency_overrides:
+  # markdraw 0.2.0 still pins google_fonts ^6.2.1 — force the version the
+  # rest of the app already uses to keep a single resolution.
+  google_fonts: ^8.0.2
+  # markdraw 0.2.0 pins file_picker ^8.0.0; the rest of the app uses
+  # ^11.0.2 (newer API). Override to a single resolution and accept the
+  # risk that markdraw's MarkdrawFileHandler is unused (we drive
+  # file_picker ourselves elsewhere — see file_save_service.dart).
+  file_picker: ^11.0.2
+
 flutter:
   uses-material-design: true
   assets:
     - assets/logo.svg
     - assets/icons/
     - assets/icons/chuk_chat_tray_brand.png
-    - assets/excalidraw/
-    - assets/excalidraw/fonts/Assistant/
-    - assets/excalidraw/fonts/Excalifont/
     - web/icons/Icon-512.png
     - windows/runner/resources/app_icon.ico
 
