@@ -431,6 +431,16 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
               ),
             ],
           ),
+          if (usageSlice.cacheReadTokens > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${AppLocalizations.of(context)!.cachedTokens}: '
+              '${_formatCount(usageSlice.cacheReadTokens)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -730,6 +740,20 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
                 ),
               ],
             ),
+            if (entry.cacheReadTokens > 0) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 38),
+                child: Text(
+                  '${_formatCount(entry.cacheReadTokens)} cached  •  '
+                  '${_formatUsd(entry.cacheReadCostUsd, decimals: 6)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color: onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -885,6 +909,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     int mediaRequests = 0;
     double totalCreditsEur = 0;
     double totalCostUsd = 0;
+    int cacheReadTokens = 0;
 
     final Map<String, _MutableModelSliceSummary> byModel =
         <String, _MutableModelSliceSummary>{};
@@ -897,6 +922,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       }
       totalCreditsEur += entry.creditsDeductedEur;
       totalCostUsd += entry.totalCostUsd;
+      cacheReadTokens += entry.cacheReadTokens;
 
       final summary = byModel.putIfAbsent(
         entry.modelId,
@@ -932,6 +958,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       mediaRequests: mediaRequests,
       totalCreditsEur: totalCreditsEur,
       totalCostUsd: totalCostUsd,
+      cacheReadTokens: cacheReadTokens,
       models: modelSummaries,
     );
   }
@@ -1024,6 +1051,7 @@ class _UsageSlice {
     required this.totalCreditsEur,
     required this.totalCostUsd,
     required this.models,
+    this.cacheReadTokens = 0,
   });
 
   final List<UsageLogEntry> entries;
@@ -1032,6 +1060,7 @@ class _UsageSlice {
   final int mediaRequests;
   final double totalCreditsEur;
   final double totalCostUsd;
+  final int cacheReadTokens;
   final List<_ModelSliceSummary> models;
 }
 

@@ -12,6 +12,10 @@ class UsageLogEntry {
     required this.totalCostUsd,
     required this.creditsDeductedEur,
     required this.createdAt,
+    this.cacheReadTokens = 0,
+    this.cacheWriteTokens = 0,
+    this.cacheReadCostUsd = 0,
+    this.cacheWriteCostUsd = 0,
   });
 
   final String modelId;
@@ -22,8 +26,14 @@ class UsageLogEntry {
   final double totalCostUsd;
   final double creditsDeductedEur;
   final DateTime? createdAt;
+  final int cacheReadTokens;
+  final int cacheWriteTokens;
+  final double cacheReadCostUsd;
+  final double cacheWriteCostUsd;
 
   int get textTokens => promptTokens + completionTokens;
+
+  int get cachedTokens => cacheReadTokens + cacheWriteTokens;
 
   bool get isMediaRequest =>
       promptTokens == 0 && completionTokens == 0 && totalTokens > 0;
@@ -45,6 +55,10 @@ class UsageLogEntry {
       totalCostUsd: _parseDouble(row['total_cost_usd']),
       creditsDeductedEur: _parseDouble(row['credits_deducted_eur']),
       createdAt: _parseDateTime(row['created_at']),
+      cacheReadTokens: _parseInt(row['cache_read_tokens']),
+      cacheWriteTokens: _parseInt(row['cache_write_tokens']),
+      cacheReadCostUsd: _parseDouble(row['cache_read_cost_usd']),
+      cacheWriteCostUsd: _parseDouble(row['cache_write_cost_usd']),
     );
   }
 }
@@ -83,6 +97,10 @@ class UsageOverview {
     required this.totalCreditsAllocated,
     required this.creditsRemaining,
     required this.creditsLastRenewedPeriod,
+    this.totalCacheReadTokens = 0,
+    this.totalCacheWriteTokens = 0,
+    this.totalCacheReadCostUsd = 0,
+    this.totalCacheWriteCostUsd = 0,
   });
 
   final List<UsageLogEntry> entries;
@@ -95,6 +113,11 @@ class UsageOverview {
   final int totalMediaRequests;
   final double totalCostUsd;
   final double totalCreditsEur;
+
+  final int totalCacheReadTokens;
+  final int totalCacheWriteTokens;
+  final double totalCacheReadCostUsd;
+  final double totalCacheWriteCostUsd;
 
   final double? totalCreditsAllocated;
   final double? creditsRemaining;
@@ -141,6 +164,10 @@ class UsageLogsService {
       int totalMediaRequests = 0;
       double totalCostUsd = 0;
       double totalCreditsEur = 0;
+      int totalCacheReadTokens = 0;
+      int totalCacheWriteTokens = 0;
+      double totalCacheReadCostUsd = 0;
+      double totalCacheWriteCostUsd = 0;
 
       for (final entry in entries) {
         totalPromptTokens += entry.promptTokens;
@@ -151,6 +178,10 @@ class UsageLogsService {
         }
         totalCostUsd += entry.totalCostUsd;
         totalCreditsEur += entry.creditsDeductedEur;
+        totalCacheReadTokens += entry.cacheReadTokens;
+        totalCacheWriteTokens += entry.cacheWriteTokens;
+        totalCacheReadCostUsd += entry.cacheReadCostUsd;
+        totalCacheWriteCostUsd += entry.cacheWriteCostUsd;
       }
 
       return UsageOverview(
@@ -163,6 +194,10 @@ class UsageLogsService {
         totalMediaRequests: totalMediaRequests,
         totalCostUsd: totalCostUsd,
         totalCreditsEur: totalCreditsEur,
+        totalCacheReadTokens: totalCacheReadTokens,
+        totalCacheWriteTokens: totalCacheWriteTokens,
+        totalCacheReadCostUsd: totalCacheReadCostUsd,
+        totalCacheWriteCostUsd: totalCacheWriteCostUsd,
         totalCreditsAllocated: billing.totalCreditsAllocated,
         creditsRemaining: billing.creditsRemaining,
         creditsLastRenewedPeriod: billing.creditsLastRenewedPeriod,
@@ -184,7 +219,7 @@ class UsageLogsService {
       final response = await SupabaseService.client
           .from('usage_logs')
           .select(
-            'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at',
+            'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at,cache_read_tokens,cache_write_tokens,cache_read_cost_usd,cache_write_cost_usd',
           )
           .eq('user_id', userId)
           .order('created_at', ascending: false)

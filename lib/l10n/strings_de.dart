@@ -555,6 +555,7 @@ const Map<String, String> stringsDe = {
   'mediaRequestsNote':
       'Bild- und Audio-Anfragen werden als Medien-Anfragen behandelt und von den Text-Token-Gesamtwerten ausgeschlossen.',
   'noRequestsFound': 'Keine Anfragen für diesen Zeitraum gefunden.',
+  'cachedTokens': 'Gecachte Tokens',
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired':
