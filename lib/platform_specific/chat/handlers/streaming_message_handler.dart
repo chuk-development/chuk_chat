@@ -1000,6 +1000,17 @@ class StreamingMessageHandler {
           unawaited(_releaseForegroundKeepAlive());
         },
       );
+
+      // Snapshot the full message list (with placeholder already appended by
+      // the caller) into the StreamingManager. This is the authoritative
+      // recovery source if the user switches chats before the periodic cache
+      // flush lands the placeholder — the buffer overlay in
+      // getBackgroundMessages applies live tokens on top of this snapshot,
+      // so we only need to capture it once at stream start.
+      _streamingManager.setBackgroundMessages(
+        chatId,
+        messages.map((m) => Map<String, dynamic>.from(m)).toList(),
+      );
     }
 
     try {
@@ -1201,6 +1212,19 @@ class StreamingMessageHandler {
     List<Map<String, dynamic>> messages,
   ) {
     _streamingManager.setBackgroundMessages(chatId, messages);
+  }
+
+  /// Get the most recent background snapshot for a chat, with the live buffer
+  /// applied. Returns null if no snapshot was ever taken for this chat.
+  /// Survives the active→completed transition so the switch-back path can
+  /// recover final content after a stream finishes while the user was away.
+  List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
+    return _streamingManager.getBackgroundMessages(chatId);
+  }
+
+  /// Whether a background snapshot exists for this chat.
+  bool hasBackgroundMessages(String chatId) {
+    return _streamingManager.hasBackgroundMessages(chatId);
   }
 
   /// Build API history from messages, optionally including images and reasoning

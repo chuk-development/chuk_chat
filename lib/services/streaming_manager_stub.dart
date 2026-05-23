@@ -303,7 +303,10 @@ class StreamingManager {
     }
   }
 
-  /// Store background messages for a streaming chat
+  /// Store background messages for a streaming chat.
+  /// Accepted while the stream is active OR completed-but-not-yet-consumed,
+  /// matching the io implementation so the completion-while-away write path
+  /// can persist final content.
   void setBackgroundMessages(
     String chatId,
     List<Map<String, dynamic>> messages, {
@@ -311,7 +314,7 @@ class StreamingManager {
     String? provider,
   }) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive) return;
+    if (stream == null) return;
 
     stream.backgroundMessages = messages;
     stream.modelId = modelId;
@@ -323,12 +326,11 @@ class StreamingManager {
     }
   }
 
-  /// Get background messages with current buffer content applied
+  /// Get background messages with current buffer content applied.
+  /// Works for both active and completed-but-not-yet-consumed streams.
   List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null ||
-        !stream.isActive ||
-        stream.backgroundMessages == null) {
+    if (stream == null || stream.backgroundMessages == null) {
       return null;
     }
 
@@ -343,12 +345,11 @@ class StreamingManager {
     return messages;
   }
 
-  /// Check if a chat has background messages stored
+  /// Check if a chat has background messages stored.
+  /// True for both active and completed-but-not-yet-consumed streams.
   bool hasBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    return stream != null &&
-        stream.isActive &&
-        stream.backgroundMessages != null;
+    return stream != null && stream.backgroundMessages != null;
   }
 }
 
