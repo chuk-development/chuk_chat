@@ -7,10 +7,12 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
   flutter_secure_storage_linux
   gtk
+  irondash_engine_context
   pasteboard
   printing
   record_linux
   screen_retriever_linux
+  super_native_extensions
   tray_manager
   url_launcher_linux
   window_manager
