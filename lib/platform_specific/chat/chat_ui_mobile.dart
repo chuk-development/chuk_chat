@@ -10,6 +10,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -157,7 +158,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   // Network and UI state
   bool _isOffline = false;
-  bool _isSendingMessage = false; // Flag to prevent rapid send spam
 
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
@@ -174,6 +174,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool get _isCurrentChatStreaming =>
       _activeChatId != null &&
       _streamingHandler.isChatStreaming(_activeChatId!);
+
+  /// Per-chat send-in-flight flag, backed by the ChatRuntime for the
+  /// currently visible chat. Reads return false for chats with no runtime
+  /// yet (no send ever attempted). Writes are no-ops when there is no
+  /// active chat (the caller has nowhere to record state).
+  ///
+  /// Per-chat semantics are required for multi-chat parallel sends: a
+  /// send in chat A must not block a send in chat B.
+  bool get _isSendingMessage {
+    final cid = _activeChatId;
+    if (cid == null) return false;
+    return ChatRuntimeRegistry.instance.lookup(cid)?.isSending.value ?? false;
+  }
+
+  set _isSendingMessage(bool value) {
+    final cid = _activeChatId;
+    if (cid == null) return;
+    ChatRuntimeRegistry.instance.get(cid).isSending.value = value;
+  }
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kHorizontalPaddingSmall = 8.0;

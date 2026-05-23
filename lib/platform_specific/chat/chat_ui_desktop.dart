@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
@@ -149,7 +150,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late final AudioRecordingHandler _audioHandler;
   late final MessageActionsHandler _messageActionsHandler;
   late final ChatPersistenceHandler _persistenceHandler;
-  bool _isSending = false;
+
+  /// Per-chat send-in-flight flag, backed by the ChatRuntime for the
+  /// currently visible chat. See chat_ui_mobile.dart for rationale.
+  /// Required for multi-chat parallel sends.
+  bool get _isSending {
+    final cid = _activeChatId;
+    if (cid == null) return false;
+    return ChatRuntimeRegistry.instance.lookup(cid)?.isSending.value ?? false;
+  }
+
+  set _isSending(bool value) {
+    final cid = _activeChatId;
+    if (cid == null) return;
+    ChatRuntimeRegistry.instance.get(cid).isSending.value = value;
+  }
+
   int _sendOperationCounter = 0;
   int? _activeSendOperationId;
   int? _cancelledSendOperationId;
