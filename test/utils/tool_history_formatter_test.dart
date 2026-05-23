@@ -166,6 +166,30 @@ void main() {
       expect(result, 'Answer');
     });
 
+    test('skips tool block when includeToolResults=false', () {
+      final toolCallsJson = jsonEncode([
+        {
+          'name': 'web_search',
+          'arguments': {'query': 'foo'},
+          'result': 'should not appear',
+          'status': 'completed',
+        }
+      ]);
+
+      final result = formatAssistantContent(
+        {
+          'sender': 'ai',
+          'text': 'Final',
+          'toolCalls': toolCallsJson,
+        },
+        includeToolResults: false,
+      );
+
+      expect(result, 'Final');
+      expect(result, isNot(contains('previous_tool_results')));
+      expect(result, isNot(contains('should not appear')));
+    });
+
     test('caps total chars across many tool calls', () {
       final calls = <Map<String, dynamic>>[];
       for (int i = 0; i < 10; i++) {

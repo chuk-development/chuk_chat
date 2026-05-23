@@ -16,13 +16,16 @@ const int _maxTotalChars = 16000;
 String? formatAssistantContent(
   Map<String, String> message, {
   bool includeReasoning = false,
+  bool includeToolResults = true,
 }) {
   final text = (message['text'] ?? '').trim();
   if (text == 'Thinking...') {
     return null;
   }
 
-  final toolBlock = _buildPreviousToolResultsBlock(message['toolCalls']);
+  final toolBlock = includeToolResults
+      ? _buildPreviousToolResultsBlock(message['toolCalls'])
+      : '';
   final reasoning = includeReasoning ? (message['reasoning'] ?? '') : '';
 
   final buf = StringBuffer();

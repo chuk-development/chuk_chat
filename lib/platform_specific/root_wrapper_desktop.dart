@@ -524,6 +524,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       includeRecentImagesInHistory: widget.config.includeRecentImagesInHistory,
       includeAllImagesInHistory: widget.config.includeAllImagesInHistory,
       includeReasoningInHistory: widget.config.includeReasoningInHistory,
+      includeToolResultsInHistory: widget.config.includeToolResultsInHistory,
       toolCallingEnabled: widget.config.toolCallingEnabled,
       toolDiscoveryMode: widget.config.toolDiscoveryMode,
       showToolCalls: widget.config.showToolCalls,

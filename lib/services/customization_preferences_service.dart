@@ -17,6 +17,7 @@ class CustomizationPreferences {
     required this.includeRecentImagesInHistory,
     required this.includeAllImagesInHistory,
     required this.includeReasoningInHistory,
+    required this.includeToolResultsInHistory,
     required this.toolCallingEnabled,
     required this.toolDiscoveryMode,
     required this.showToolCalls,
@@ -41,6 +42,7 @@ class CustomizationPreferences {
   final bool includeRecentImagesInHistory;
   final bool includeAllImagesInHistory;
   final bool includeReasoningInHistory;
+  final bool includeToolResultsInHistory;
   // Tool-calling settings
   final bool toolCallingEnabled;
   final bool toolDiscoveryMode;
@@ -66,6 +68,7 @@ class CustomizationPreferences {
     bool? includeRecentImagesInHistory,
     bool? includeAllImagesInHistory,
     bool? includeReasoningInHistory,
+    bool? includeToolResultsInHistory,
     bool? toolCallingEnabled,
     bool? toolDiscoveryMode,
     bool? showToolCalls,
@@ -93,6 +96,8 @@ class CustomizationPreferences {
           includeAllImagesInHistory ?? this.includeAllImagesInHistory,
       includeReasoningInHistory:
           includeReasoningInHistory ?? this.includeReasoningInHistory,
+      includeToolResultsInHistory:
+          includeToolResultsInHistory ?? this.includeToolResultsInHistory,
       toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
       toolDiscoveryMode: toolDiscoveryMode ?? this.toolDiscoveryMode,
       showToolCalls: showToolCalls ?? this.showToolCalls,
@@ -119,6 +124,7 @@ class CustomizationPreferences {
       'include_recent_images_in_history': includeRecentImagesInHistory,
       'include_all_images_in_history': includeAllImagesInHistory,
       'include_reasoning_in_history': includeReasoningInHistory,
+      'include_tool_results_in_history': includeToolResultsInHistory,
       'tool_calling_enabled': toolCallingEnabled,
       'tool_discovery_mode': toolDiscoveryMode,
       'show_tool_calls': showToolCalls,
@@ -144,6 +150,7 @@ class CustomizationPreferences {
       includeRecentImagesInHistory: true, // Default ON
       includeAllImagesInHistory: false,
       includeReasoningInHistory: false,
+      includeToolResultsInHistory: kDefaultIncludeToolResultsInHistory,
       toolCallingEnabled: true,
       toolDiscoveryMode: true,
       showToolCalls: true,
@@ -178,6 +185,9 @@ class CustomizationPreferences {
           (map['include_all_images_in_history'] as bool?) ?? false,
       includeReasoningInHistory:
           (map['include_reasoning_in_history'] as bool?) ?? false,
+      includeToolResultsInHistory:
+          (map['include_tool_results_in_history'] as bool?) ??
+              kDefaultIncludeToolResultsInHistory,
       toolCallingEnabled: (map['tool_calling_enabled'] as bool?) ?? true,
       toolDiscoveryMode: (map['tool_discovery_mode'] as bool?) ?? true,
       showToolCalls: (map['show_tool_calls'] as bool?) ?? true,
