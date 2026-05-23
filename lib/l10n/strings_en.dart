@@ -526,6 +526,7 @@ const Map<String, String> stringsEn = {
   'mediaRequestsNote':
       'Image and audio requests are treated as media requests and excluded from text-token totals.',
   'noRequestsFound': 'No requests found for this period.',
+  'cachedTokens': 'Cached tokens',
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Session expired. Please sign in again.',

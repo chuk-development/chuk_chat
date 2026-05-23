@@ -525,6 +525,7 @@ class AppLocalizations {
   String get totals => _get('totals');
   String get mediaRequestsNote => _get('mediaRequestsNote');
   String get noRequestsFound => _get('noRequestsFound');
+  String get cachedTokens => _get('cachedTokens');
 
   // ── Model selector page ────────────────────────────────────
   String get sessionExpired => _get('sessionExpired');
