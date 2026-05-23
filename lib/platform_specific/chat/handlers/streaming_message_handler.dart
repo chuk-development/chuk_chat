@@ -252,6 +252,17 @@ class StreamingMessageHandler {
 
     final chatId = activeChatId;
 
+    // Capture an immutable copy of `messages` at send start. The caller
+    // passes the widget's live _messages list by reference; if the user
+    // switches chats during a tool-loop multi-pass turn the live list is
+    // cleared and refilled with another chat's content. Using the
+    // captured copy keeps the background snapshot anchored to *this*
+    // chat's user message + placeholder pair, no matter what the widget
+    // does afterwards.
+    final List<Map<String, dynamic>> capturedMessagesSnapshot = messages
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+
     late ToolLoopSession toolSession;
     late final String initialSystemPrompt;
     try {
@@ -1001,16 +1012,25 @@ class StreamingMessageHandler {
         },
       );
 
-      // Snapshot the full message list (with placeholder already appended by
-      // the caller) into the StreamingManager. This is the authoritative
-      // recovery source if the user switches chats before the periodic cache
-      // flush lands the placeholder — the buffer overlay in
-      // getBackgroundMessages applies live tokens on top of this snapshot,
-      // so we only need to capture it once at stream start.
-      _streamingManager.setBackgroundMessages(
-        chatId,
-        messages.map((m) => Map<String, dynamic>.from(m)).toList(),
-      );
+      // Snapshot the full message list (with placeholder already appended
+      // by the caller) into the StreamingManager on the FIRST pass only.
+      // This is the authoritative recovery source if the user switches
+      // chats before the periodic cache flush lands the placeholder.
+      // The buffer overlay in getBackgroundMessages applies live tokens
+      // on top of this snapshot.
+      //
+      // Critical: use `capturedMessagesSnapshot`, NOT the live `messages`
+      // reference. By the time pass N>0 runs, the widget may have cleared
+      // its _messages list because the user switched chats — using the
+      // live ref would snapshot the WRONG chat's content into our chat's
+      // recovery slot. Guarding on `currentPass == 0` keeps the snapshot
+      // pinned to the placeholder layout that was set up at send start.
+      if (currentPass == 0) {
+        _streamingManager.setBackgroundMessages(
+          chatId,
+          capturedMessagesSnapshot,
+        );
+      }
     }
 
     try {

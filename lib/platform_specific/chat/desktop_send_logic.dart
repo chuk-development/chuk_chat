@@ -812,12 +812,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
         // Snapshot the current message list (with placeholder appended) so
         // getBackgroundMessages has an authoritative recovery source from
-        // t=0. The buffer overlay applies live tokens on top, so one
-        // snapshot per pass is enough.
-        _streamingManager.setBackgroundMessages(
-          chatIdForStream,
-          _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
-        );
+        // t=0. Only do this on the first pass — `_messages` may have been
+        // mutated by the user switching chats by the time later tool-loop
+        // passes start. The buffer overlay applies live tokens on top, so
+        // one snapshot at start is enough for the duration of the turn.
+        if (currentPass == 0 && _activeChatId == chatIdForStream) {
+          _streamingManager.setBackgroundMessages(
+            chatIdForStream,
+            _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
+          );
+        }
       }
 
       if (_isSendOperationCancelled(sendOperationId)) {
@@ -2003,12 +2007,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
         // Snapshot the current message list (with placeholder appended) so
         // getBackgroundMessages has an authoritative recovery source from
-        // t=0. The buffer overlay applies live tokens on top, so one
-        // snapshot per pass is enough.
-        _streamingManager.setBackgroundMessages(
-          chatIdForStream,
-          _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
-        );
+        // t=0. Only do this on the first pass — `_messages` may have been
+        // mutated by the user switching chats by the time later tool-loop
+        // passes start. The buffer overlay applies live tokens on top, so
+        // one snapshot at start is enough for the duration of the turn.
+        if (currentPass == 0 && _activeChatId == chatIdForStream) {
+          _streamingManager.setBackgroundMessages(
+            chatIdForStream,
+            _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
+          );
+        }
       }
 
       if (_isSendOperationCancelled(sendOperationId)) {
