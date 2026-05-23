@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,10 +59,28 @@ class ChatStorageState {
     }
   }
 
-  /// GLOBAL LOCK: Prevents chat switching during message operations.
-  /// Set to true when a message send starts, cleared when streaming completes.
-  /// Check this in didUpdateWidget to prevent loading wrong chat.
-  static bool isMessageOperationInProgress = false;
+  /// Whether ANY chat currently has a send / stream in flight.
+  ///
+  /// Derived from [ChatRuntimeRegistry.isAnyStreaming] so that parallel
+  /// streams across multiple chats are reflected correctly. The legacy
+  /// setter is kept as a no-op for backward compatibility with the ~20
+  /// existing write sites — those calls are now redundant since the
+  /// flag is computed from per-chat runtime state. Write sites are
+  /// being deleted incrementally; do not add new ones.
+  static bool get isMessageOperationInProgress =>
+      ChatRuntimeRegistry.instance.isAnyStreaming ||
+      _legacyIsMessageOperationInProgress;
+
+  static set isMessageOperationInProgress(bool value) {
+    // The legacy field is preserved so existing callers that rely on
+    // "set true before await, set false after" semantics during a brief
+    // window before the runtime flips its own flags continue to work.
+    // Once the send / streaming handlers are fully migrated to the
+    // runtime the legacy field can be deleted entirely.
+    _legacyIsMessageOperationInProgress = value;
+  }
+
+  static bool _legacyIsMessageOperationInProgress = false;
 
   /// The chat ID currently being worked on during a message operation.
   /// Used to verify we don't accidentally switch away from an active chat.
