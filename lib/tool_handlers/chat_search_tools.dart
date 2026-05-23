@@ -9,7 +9,6 @@ import 'dart:math' as math;
 
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
-import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -124,14 +123,6 @@ String? _normalizeRole(dynamic raw) {
   }
   // Treat "ai" as an alias for "assistant".
   return value == 'ai' ? 'assistant' : value;
-}
-
-Future<bool> _ensureEncryptionKey() async {
-  if (EncryptionService.hasKey) {
-    return true;
-  }
-
-  return EncryptionService.tryLoadKey();
 }
 
 String? _currentUserId() {
@@ -401,6 +392,12 @@ String _renderMessageText(ChatMessage message) {
   return parts.join('\n').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
+// Local-only chat read for the AI search tool.
+//
+// Searching other chats must never hit Supabase: it can't write to them
+// (no persistence path here) and it must not pull from them either. Local
+// cache holds all synced chats in plaintext, so in-memory + SQLite cache
+// are the only sources.
 Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
   final inMemory = ChatStorageState.chatsById[chatId];
   if (inMemory != null && inMemory.isFullyLoaded) {
@@ -427,20 +424,7 @@ Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
     }
   }
 
-  if (!await _ensureEncryptionKey()) {
-    return null;
-  }
-
-  final loaded = await ChatStorageService.loadFullChat(chatId);
-  if (loaded == null || !loaded.isFullyLoaded) {
-    return null;
-  }
-
-  final messages = loaded.messagesOrNull ?? const <ChatMessage>[];
-  return _LoadedChatContent(
-    title: _chatTitle(loaded, messages),
-    messages: messages,
-  );
+  return null;
 }
 
 _ParsedPayload? _parsePayload(String? payload) {
