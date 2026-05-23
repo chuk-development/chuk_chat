@@ -17,6 +17,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
@@ -1279,16 +1280,15 @@ class StreamingMessageHandler {
           history.add({'role': 'user', 'content': text});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
-        if (text == null || text.trim().isEmpty || text == 'Thinking...') {
+        // Include prior tool calls + results so a follow-up question that
+        // depends on the same data doesn't force the model to re-run the
+        // tools (web searches, etc).
+        final assistantContent = formatAssistantContent(
+          message,
+          includeReasoning: includeReasoning,
+        );
+        if (assistantContent == null) {
           continue;
-        }
-        String assistantContent = text;
-        if (includeReasoning) {
-          final reasoning = message['reasoning'] ?? '';
-          if (reasoning.isNotEmpty) {
-            assistantContent =
-                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
-          }
         }
         history.add({'role': 'assistant', 'content': assistantContent});
       }
