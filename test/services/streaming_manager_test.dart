@@ -458,25 +458,43 @@ void main() {
       },
     );
 
-    test('background messages not available for completed streams', () async {
-      final ctx = await startTestStream(chatId: 'chat-1', messageIndex: 1);
+    test(
+      'background messages survive completion until consumed',
+      () async {
+        // Regression: previously getBackgroundMessages gated on isActive, which
+        // caused the completion-while-away write path to silently drop final
+        // content + tool calls because isActive flips to false BEFORE
+        // onComplete runs in _handleStreamEvent. The snapshot must remain
+        // accessible across the active→completed transition so the
+        // background-write path can persist final content to the chat cache.
+        final ctx = await startTestStream(chatId: 'chat-1', messageIndex: 1);
 
-      ctx.controller.add(const ContentEvent('Done'));
-      await Future.delayed(Duration.zero);
+        ctx.controller.add(const ContentEvent('Done'));
+        await Future.delayed(Duration.zero);
 
-      manager.setBackgroundMessages('chat-1', [
-        {'role': 'user', 'text': 'Hi'},
-        {'role': 'assistant', 'text': ''},
-      ]);
+        manager.setBackgroundMessages('chat-1', [
+          {'role': 'user', 'text': 'Hi'},
+          {'role': 'assistant', 'text': ''},
+        ]);
 
-      ctx.controller.add(const DoneEvent());
-      await Future.delayed(Duration.zero);
+        ctx.controller.add(const DoneEvent());
+        await Future.delayed(Duration.zero);
 
-      // After completion, background messages should not be available
-      // (the stream is no longer active)
-      expect(manager.hasBackgroundMessages('chat-1'), isFalse);
-      expect(manager.getBackgroundMessages('chat-1'), isNull);
-    });
+        // After completion the snapshot is still available so writers can
+        // persist final content. Buffer overlay applies the final tokens.
+        expect(manager.hasBackgroundMessages('chat-1'), isTrue);
+        final retrieved = manager.getBackgroundMessages('chat-1');
+        expect(retrieved, isNotNull);
+        expect(retrieved!.length, 2);
+        expect(retrieved[1]['text'], 'Done');
+
+        // Consumption removes the entry, simulating the UI applying the
+        // completed buffered content to its own message list.
+        manager.consumeCompletedStream('chat-1');
+        expect(manager.hasBackgroundMessages('chat-1'), isFalse);
+        expect(manager.getBackgroundMessages('chat-1'), isNull);
+      },
+    );
 
     test('setBackgroundMessages is a no-op for nonexistent chat', () {
       manager.setBackgroundMessages('nonexistent', [

@@ -622,18 +622,43 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       chatId,
     );
     if (desktopChatIsStreaming || desktopChatHasCompleted) {
-      final bufferedContent = _streamingManager.getBufferedContent(chatId);
-      final bufferedReasoning = _streamingManager.getBufferedReasoning(chatId);
-      final streamingIndex = _streamingManager.getStreamingMessageIndex(
-        chatId,
-      );
-
-      if (streamingIndex != null && streamingIndex < mappedMessages.length) {
-        mappedMessages[streamingIndex]['text'] =
-            bufferedContent ?? 'Thinking...';
-        mappedMessages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+      // Prefer the background snapshot — captured at stream start with the
+      // placeholder appended and live buffer overlaid. Cache copy can be
+      // missing the placeholder if user switched within the snapshot-flush
+      // window. Falls back to in-place splice when no snapshot exists.
+      final bgMessages = _streamingManager.getBackgroundMessages(chatId);
+      if (bgMessages != null && bgMessages.isNotEmpty) {
+        mappedMessages
+          ..clear()
+          ..addAll(
+            bgMessages.map((m) {
+              final converted = <String, String>{};
+              m.forEach((key, value) {
+                if (value == null) return;
+                converted[key] = value is String ? value : value.toString();
+              });
+              return converted;
+            }),
+          );
         if (desktopChatHasCompleted) {
           _streamingManager.consumeCompletedStream(chatId);
+        }
+      } else {
+        final bufferedContent = _streamingManager.getBufferedContent(chatId);
+        final bufferedReasoning = _streamingManager.getBufferedReasoning(
+          chatId,
+        );
+        final streamingIndex = _streamingManager.getStreamingMessageIndex(
+          chatId,
+        );
+
+        if (streamingIndex != null && streamingIndex < mappedMessages.length) {
+          mappedMessages[streamingIndex]['text'] =
+              bufferedContent ?? 'Thinking...';
+          mappedMessages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+          if (desktopChatHasCompleted) {
+            _streamingManager.consumeCompletedStream(chatId);
+          }
         }
       }
     }
@@ -804,22 +829,43 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     if (_activeChatId != null &&
         (desktopChatIsStreaming || desktopChatHasCompleted)) {
-      final bufferedContent = _streamingManager.getBufferedContent(
+      // Prefer the background snapshot — see fast-path branch for rationale.
+      final bgMessages = _streamingManager.getBackgroundMessages(
         _activeChatId!,
       );
-      final bufferedReasoning = _streamingManager.getBufferedReasoning(
-        _activeChatId!,
-      );
-      final streamingIndex = _streamingManager.getStreamingMessageIndex(
-        _activeChatId!,
-      );
-
-      if (streamingIndex != null && streamingIndex < _messages.length) {
-        _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
-        _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
-        // Clean up completed stream data only after successful application
+      if (bgMessages != null && bgMessages.isNotEmpty) {
+        _messages
+          ..clear()
+          ..addAll(
+            bgMessages.map((m) {
+              final converted = <String, String>{};
+              m.forEach((key, value) {
+                if (value == null) return;
+                converted[key] = value is String ? value : value.toString();
+              });
+              return converted;
+            }),
+          );
         if (desktopChatHasCompleted) {
           _streamingManager.consumeCompletedStream(_activeChatId!);
+        }
+      } else {
+        final bufferedContent = _streamingManager.getBufferedContent(
+          _activeChatId!,
+        );
+        final bufferedReasoning = _streamingManager.getBufferedReasoning(
+          _activeChatId!,
+        );
+        final streamingIndex = _streamingManager.getStreamingMessageIndex(
+          _activeChatId!,
+        );
+
+        if (streamingIndex != null && streamingIndex < _messages.length) {
+          _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
+          _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+          if (desktopChatHasCompleted) {
+            _streamingManager.consumeCompletedStream(_activeChatId!);
+          }
         }
       }
     }

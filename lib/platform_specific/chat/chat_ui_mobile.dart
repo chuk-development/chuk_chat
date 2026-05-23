@@ -869,28 +869,52 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _streamingHandler.hasCompletedStream(activeChatId);
 
     if (activeChatId != null && (chatIsStreaming || chatHasCompletedStream)) {
-      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
-        activeChatId,
-      );
-      if (streamingMsgIndex != null &&
-          streamingMsgIndex >= 0 &&
-          streamingMsgIndex < newMessages.length) {
-        final String? bufferedContent = _streamingHandler.getBufferedContent(
-          activeChatId,
-        );
-        final String? bufferedReasoning = _streamingHandler
-            .getBufferedReasoning(activeChatId);
-
-        if (bufferedContent != null) {
-          final Map<String, String> updatedMessage = Map<String, String>.from(
-            newMessages[streamingMsgIndex],
+      // Prefer the StreamingManager's background snapshot — captured at
+      // stream start (placeholder appended) with the live buffer overlaid by
+      // getBackgroundMessages. The cache copy can be stale or even missing
+      // the placeholder entirely if the user switched chats within the
+      // first snapshot-flush window (the "Thinking..." placeholder is not
+      // persisted synchronously). Falling back to in-place splice when no
+      // background snapshot exists.
+      final bgMessages = _streamingHandler.getBackgroundMessages(activeChatId);
+      if (bgMessages != null && bgMessages.isNotEmpty) {
+        newMessages
+          ..clear()
+          ..addAll(
+            bgMessages.map((m) {
+              final converted = <String, String>{};
+              m.forEach((key, value) {
+                if (value == null) return;
+                converted[key] = value is String ? value : value.toString();
+              });
+              return converted;
+            }),
           );
-          updatedMessage['text'] = bufferedContent;
-          updatedMessage['reasoning'] = bufferedReasoning ?? '';
-          newMessages[streamingMsgIndex] = updatedMessage;
-          // Clean up completed stream data only after successful application
-          if (chatHasCompletedStream) {
-            _streamingHandler.consumeCompletedStream(activeChatId);
+        if (chatHasCompletedStream) {
+          _streamingHandler.consumeCompletedStream(activeChatId);
+        }
+      } else {
+        final int? streamingMsgIndex = _streamingHandler
+            .getStreamingMessageIndex(activeChatId);
+        if (streamingMsgIndex != null &&
+            streamingMsgIndex >= 0 &&
+            streamingMsgIndex < newMessages.length) {
+          final String? bufferedContent = _streamingHandler.getBufferedContent(
+            activeChatId,
+          );
+          final String? bufferedReasoning = _streamingHandler
+              .getBufferedReasoning(activeChatId);
+
+          if (bufferedContent != null) {
+            final Map<String, String> updatedMessage = Map<String, String>.from(
+              newMessages[streamingMsgIndex],
+            );
+            updatedMessage['text'] = bufferedContent;
+            updatedMessage['reasoning'] = bufferedReasoning ?? '';
+            newMessages[streamingMsgIndex] = updatedMessage;
+            if (chatHasCompletedStream) {
+              _streamingHandler.consumeCompletedStream(activeChatId);
+            }
           }
         }
       }

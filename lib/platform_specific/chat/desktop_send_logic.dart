@@ -809,6 +809,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             }
           },
         );
+
+        // Snapshot the current message list (with placeholder appended) so
+        // getBackgroundMessages has an authoritative recovery source from
+        // t=0. The buffer overlay applies live tokens on top, so one
+        // snapshot per pass is enough.
+        _streamingManager.setBackgroundMessages(
+          chatIdForStream,
+          _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
+        );
       }
 
       if (_isSendOperationCancelled(sendOperationId)) {
@@ -1990,6 +1999,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }
             }
           },
+        );
+
+        // Snapshot the current message list (with placeholder appended) so
+        // getBackgroundMessages has an authoritative recovery source from
+        // t=0. The buffer overlay applies live tokens on top, so one
+        // snapshot per pass is enough.
+        _streamingManager.setBackgroundMessages(
+          chatIdForStream,
+          _messages.map((m) => Map<String, dynamic>.from(m)).toList(),
         );
       }
 
