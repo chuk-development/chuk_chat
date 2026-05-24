@@ -1333,10 +1333,11 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     }
   }
 
+  Size _lastKnownCanvasSize = const Size(800, 600);
+
   void _centerCanvas() {
-    final size = _controller.lastCanvasSize ?? const Size(800, 600);
     try {
-      _controller.zoomToFit(size);
+      _controller.zoomToFit(_lastKnownCanvasSize);
     } catch (error) {
       if (kDebugMode) debugPrint('zoomToFit failed: $error');
     }
@@ -1344,6 +1345,15 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _lastKnownCanvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+        return _buildStack(context);
+      },
+    );
+  }
+
+  Widget _buildStack(BuildContext context) {
     return Stack(
       children: [
         // ClipRect contains markdraw's floating PropertyPanel /
