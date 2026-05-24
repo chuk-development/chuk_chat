@@ -125,6 +125,18 @@ class ArtifactStorageService {
   }
 
   static String? _activeChatId;
+
+  /// Stable id of the assistant message currently being streamed.
+  ///
+  /// Set by the send pipeline when it creates the assistant placeholder so
+  /// every artifact version produced during that turn (create, rewrite,
+  /// inline `<artifact>` tag) is stamped with the same `message_id`. The
+  /// regenerate / resend rollback uses this stamp to undo only the
+  /// versions belonging to the discarded turn(s).
+  ///
+  /// `null` between turns. Tests and callers may set it directly when
+  /// simulating a turn boundary.
+  static String? currentMessageId;
   static String? _cacheUserId;
   static bool _artifactStorageAvailable = true;
   static bool _missingSchemaLogged = false;
@@ -369,6 +381,7 @@ class ArtifactStorageService {
         encryptedContent: encrypted,
         createdAt: now,
         attachmentPath: attachmentPath,
+        messageId: messageId,
       );
     } catch (error) {
       try {
@@ -765,7 +778,17 @@ class ArtifactStorageService {
     required String encryptedContent,
     required DateTime createdAt,
     String? attachmentPath,
+    String? messageId,
   }) async {
+    // Pull from the current-turn stamp when the caller didn't pass one
+    // explicitly. Empty strings collapse to null so the column stays NULL
+    // for orphan snapshots (e.g. background backfills) and the rollback
+    // ignores them.
+    final stamp = (messageId?.trim().isNotEmpty == true)
+        ? messageId!.trim()
+        : currentMessageId;
+    final normalizedStamp =
+        (stamp != null && stamp.trim().isNotEmpty) ? stamp.trim() : null;
     try {
       await SupabaseService.client.from(_versionsTable).insert({
         'artifact_id': artifactId,
@@ -775,6 +798,7 @@ class ArtifactStorageService {
         'content': encryptedContent,
         'attachment_path': attachmentPath,
         'created_at': createdAt.toIso8601String(),
+        'message_id': normalizedStamp,
       });
     } on PostgrestException catch (error) {
       if (_handleMissingArtifactSchema(error, operation: '_insertVersion')) {
@@ -782,6 +806,326 @@ class ArtifactStorageService {
       }
       rethrow;
     }
+  }
+
+  /// Roll back any artifact versions whose `message_id` is in [messageIds].
+  ///
+  /// For each affected artifact:
+  ///   * Snapshot rows belonging to a discarded message are deleted.
+  ///   * If a prior snapshot remains, `artifacts.content`, `version`, and
+  ///     `attachment_path` are reset to the latest remaining snapshot.
+  ///   * If no snapshot remains (the discarded message originally created
+  ///     the artifact), the artifact row is deleted entirely.
+  ///
+  /// Used by the regenerate / resend flow before the new AI request goes
+  /// out so the next pass writes a fresh version on top of clean state.
+  ///
+  /// Idempotent: empty input or message ids with no artifacts is a no-op.
+  /// Best-effort: per-artifact failures are logged but do not abort the
+  /// whole batch — the caller (resend) cannot block on artifact cleanup.
+  static Future<void> rollbackArtifactsForMessages(
+    Iterable<String> messageIds,
+  ) async {
+    if (!_artifactStorageAvailable) return;
+    final ids = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    _ensureCacheForUser(user.id);
+
+    // 1. Find the snapshot rows that belong to the discarded messages.
+    final List discardedRows;
+    try {
+      discardedRows = await SupabaseService.client
+          .from(_versionsTable)
+          .select('id, artifact_id, version, chat_id')
+          .inFilter('message_id', ids)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(select)',
+      )) {
+        return;
+      }
+      if (kDebugMode) {
+        debugPrint('[rollbackArtifactsForMessages] select failed: $error');
+      }
+      return;
+    }
+
+    if (discardedRows.isEmpty) return;
+
+    // 2. Group discarded snapshots by artifact_id.
+    final discardedByArtifact = <String, List<Map<String, dynamic>>>{};
+    for (final row in discardedRows) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final artifactId = (map['artifact_id'] as String?)?.trim();
+      if (artifactId == null || artifactId.isEmpty) continue;
+      discardedByArtifact.putIfAbsent(artifactId, () => []).add(map);
+    }
+    if (discardedByArtifact.isEmpty) return;
+
+    // 3. For each affected artifact, delete the discarded snapshot rows
+    //    and then either roll back to the latest remaining snapshot or
+    //    delete the artifact entirely. Per-artifact failures are logged
+    //    but do not abort the whole batch.
+    final affectedChats = <String>{};
+    final fullyDeleted = <String>{};
+    for (final entry in discardedByArtifact.entries) {
+      final artifactId = entry.key;
+      final discardedSnapshots = entry.value;
+      try {
+        final outcome = await _rollbackOneArtifact(
+          artifactId: artifactId,
+          discardedSnapshots: discardedSnapshots,
+          userId: user.id,
+        );
+        if (outcome.affectedChatId != null) {
+          affectedChats.add(outcome.affectedChatId!);
+        }
+        if (outcome.deleted) {
+          fullyDeleted.add(artifactId);
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            '[rollbackArtifactsForMessages] artifact $artifactId failed: '
+            '$error',
+          );
+        }
+        unawaited(
+          DiagnosticsLogService.error(
+            'artifact',
+            'Artifact rollback failed for one artifact',
+            data: {
+              'artifactId': artifactId,
+              'error': error.toString(),
+            },
+          ),
+        );
+      }
+    }
+
+    // 4. Drop the cached version history for every touched artifact.
+    for (final id in discardedByArtifact.keys) {
+      _versionCache.remove(id);
+    }
+
+    // 5. Fire a single change event so listeners (panel, sidebar) refresh.
+    if (affectedChats.isNotEmpty || fullyDeleted.isNotEmpty) {
+      _changesController.add(null);
+    }
+  }
+
+  /// Internal helper: roll back a single artifact based on its discarded
+  /// snapshot rows. Returns `({deleted, affectedChatId})`.
+  ///
+  /// Steps:
+  ///   1. Delete the discarded snapshot rows.
+  ///   2. Query the new latest remaining snapshot.
+  ///   3. If a snapshot remains → update `artifacts` row to that snapshot.
+  ///   4. Otherwise → delete the artifact row.
+  /// Cache + active-notifier updates happen here so the caller only has to
+  /// emit one change event after the batch.
+  static Future<({bool deleted, String? affectedChatId})> _rollbackOneArtifact({
+    required String artifactId,
+    required List<Map<String, dynamic>> discardedSnapshots,
+    required String userId,
+  }) async {
+    // Load the current artifact so we know which chat it belongs to and
+    // whether the active notifier is pointing at it.
+    final current = await loadArtifactById(artifactId);
+    final chatId = current?.chatId ??
+        ((discardedSnapshots.first['chat_id'] as String?)?.trim());
+
+    // Delete the snapshot rows for the discarded versions.
+    final discardedVersions = discardedSnapshots
+        .map((row) => (row['version'] as num?)?.toInt())
+        .whereType<int>()
+        .toList(growable: false);
+    if (discardedVersions.isNotEmpty) {
+      try {
+        await SupabaseService.client
+            .from(_versionsTable)
+            .delete()
+            .eq('artifact_id', artifactId)
+            .eq('user_id', userId)
+            .inFilter('version', discardedVersions);
+      } on PostgrestException catch (error) {
+        if (_handleMissingArtifactSchema(
+          error,
+          operation: 'rollbackArtifactsForMessages(deleteVersions)',
+        )) {
+          return (deleted: false, affectedChatId: chatId);
+        }
+        rethrow;
+      }
+    }
+
+    // Look up the latest remaining snapshot.
+    final latestRemaining = await _loadLatestRemainingSnapshot(
+      artifactId: artifactId,
+      userId: userId,
+    );
+
+    if (latestRemaining == null) {
+      // No prior snapshot — discarded message created this artifact.
+      // Delete the row entirely.
+      try {
+        await SupabaseService.client
+            .from(_artifactsTable)
+            .delete()
+            .eq('id', artifactId)
+            .eq('user_id', userId);
+      } on PostgrestException catch (error) {
+        if (_handleMissingArtifactSchema(
+          error,
+          operation: 'rollbackArtifactsForMessages(deleteArtifact)',
+        )) {
+          return (deleted: false, affectedChatId: chatId);
+        }
+        rethrow;
+      }
+
+      _removeArtifactFromCache(artifactId);
+      final active = activeArtifactNotifier.value;
+      if (active != null && active.id == artifactId) {
+        activeArtifactNotifier.value = null;
+        panelOpenNotifier.value = false;
+      }
+      return (deleted: true, affectedChatId: chatId);
+    }
+
+    // A prior snapshot remains — reset the artifact row to it. Use the
+    // raw encrypted content from the snapshot row to avoid a redundant
+    // encrypt round-trip.
+    final raw = latestRemaining['content'] as String? ?? '';
+    final attachmentPath =
+        (latestRemaining['attachment_path'] as String?)?.trim().isEmpty == true
+            ? null
+            : latestRemaining['attachment_path'] as String?;
+    final restoredVersion = (latestRemaining['version'] as num?)?.toInt() ?? 1;
+    final restoredCreatedAt = DateTime.tryParse(
+          latestRemaining['created_at'] as String? ?? '',
+        ) ??
+        DateTime.now().toUtc();
+
+    try {
+      await SupabaseService.client
+          .from(_artifactsTable)
+          .update({
+            'content': raw,
+            'version': restoredVersion,
+            'attachment_path': attachmentPath,
+            'updated_at': restoredCreatedAt.toIso8601String(),
+          })
+          .eq('id', artifactId)
+          .eq('user_id', userId);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(resetArtifact)',
+      )) {
+        return (deleted: false, affectedChatId: chatId);
+      }
+      rethrow;
+    }
+
+    // Decrypt the restored content for the in-memory cache + notifier.
+    final decryptedContent = await _decryptMaybe(raw);
+    final restored = (current ??
+            ArtifactDocument(
+              id: artifactId,
+              chatId: chatId ?? '',
+              userId: userId,
+              title: artifactId,
+              type: ArtifactType.markdown,
+              content: decryptedContent,
+              version: restoredVersion,
+              createdAt: restoredCreatedAt,
+              updatedAt: restoredCreatedAt,
+            ))
+        .copyWith(
+      content: decryptedContent,
+      version: restoredVersion,
+      attachmentPath: attachmentPath,
+      updatedAt: restoredCreatedAt,
+    );
+
+    _insertIntoCache(restored);
+    final active = activeArtifactNotifier.value;
+    if (active != null && active.id == artifactId) {
+      activeArtifactNotifier.value = restored;
+    } else if (_activeChatId == restored.chatId) {
+      // Keep `_emitChange` semantics in sync — the active chat saw an
+      // artifact mutation even if the active notifier was pointed at a
+      // sibling artifact.
+    }
+    return (deleted: false, affectedChatId: restored.chatId);
+  }
+
+  /// Returns the latest remaining snapshot row for [artifactId] (after the
+  /// rollback delete), or `null` if no snapshot survived. Encrypted content
+  /// is returned raw so the caller can avoid a redundant decrypt cycle when
+  /// it only needs to forward the value to the `artifacts` table.
+  static Future<Map<String, dynamic>?> _loadLatestRemainingSnapshot({
+    required String artifactId,
+    required String userId,
+  }) async {
+    try {
+      final row = await SupabaseService.client
+          .from(_versionsTable)
+          .select()
+          .eq('artifact_id', artifactId)
+          .eq('user_id', userId)
+          .order('version', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (row == null) return null;
+      return Map<String, dynamic>.from(row as Map);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(loadLatest)',
+      )) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Pure helper extracted for testing. Given a sorted-by-version snapshot
+  /// list and the set of versions to discard, returns the latest version
+  /// number that survives the rollback (or `null` if nothing remains).
+  ///
+  /// `snapshots` may be in any order — the helper picks the highest
+  /// non-discarded version. Exposed for unit tests so the rollback's
+  /// "find the latest remaining version" decision stays covered without
+  /// requiring a live Supabase backend.
+  @visibleForTesting
+  static int? latestRemainingVersion({
+    required List<int> snapshotVersions,
+    required Set<int> discardedVersions,
+  }) {
+    int? best;
+    for (final v in snapshotVersions) {
+      if (discardedVersions.contains(v)) continue;
+      if (best == null || v > best) best = v;
+    }
+    return best;
+  }
+
+  static void _removeArtifactFromCache(String artifactId) {
+    for (final entry in _cacheByChatId.entries) {
+      entry.value.removeWhere((doc) => doc.id == artifactId);
+    }
+    _versionCache.remove(artifactId);
   }
 
   /// Hard-deletes the given artifact ids (and their version history) for the
