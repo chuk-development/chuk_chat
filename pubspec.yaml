@@ -1,5 +1,6 @@
 name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
+publish_to: 'none'
 
 version: 1.0.98
 
@@ -72,23 +73,19 @@ dependencies:
   # Native cross-platform Excalidraw-compatible drawing widget. Replaces
   # the old WebView-based renderer — works on every Flutter platform
   # without bundling Chromium or shipping the official Excalidraw bundle.
-  markdraw: ^0.2.0
+  #
+  # Vendored from pub.dev markdraw 0.2.0 (see vendor/markdraw/). Patched
+  # to relax file_picker / google_fonts constraints and to no-op
+  # MarkdrawFileHandler (incompatible with file_picker ^11 API). Upgrading
+  # markdraw requires re-vendoring + re-applying these patches.
+  markdraw:
+    path: vendor/markdraw
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-
-dependency_overrides:
-  # markdraw 0.2.0 still pins google_fonts ^6.2.1 — force the version the
-  # rest of the app already uses to keep a single resolution.
-  google_fonts: ^8.0.2
-  # markdraw 0.2.0 pins file_picker ^8.0.0; the rest of the app uses
-  # ^11.0.2 (newer API). Override to a single resolution and accept the
-  # risk that markdraw's MarkdrawFileHandler is unused (we drive
-  # file_picker ourselves elsewhere — see file_save_service.dart).
-  file_picker: ^11.0.2
 
 flutter:
   uses-material-design: true
