@@ -1102,19 +1102,19 @@ class _ArtifactRenderer extends StatelessWidget {
 }
 
 /// Native cross-platform Excalidraw editor backed by the `markdraw`
-/// package. Loads the scene JSON into a controller, lets the user edit,
-/// and persists changes in-place via
-/// [ArtifactStorageService.overwriteCurrentArtifact] — i.e. the artifact's
-/// `version` stays stable while the user is dragging things around.
-/// Only AI-driven rewrites (via `artifact_manager`) bump the version, so
-/// "Version 1" is the AI's first cut, "Version 2" is the AI's second
-/// cut, and the user's edits land inside whichever version is active.
+/// package. Loads the scene JSON into a controller and lets the user
+/// edit live — but **never** mutates existing artifact versions. Every
+/// persisted change is a fresh version via
+/// [ArtifactStorageService.rewriteArtifact]; user edits are held in
+/// memory until the chat-send pipeline flushes them (or the editor is
+/// disposed). That way "Version 1" stays exactly what the AI authored
+/// and the user's scribbles land in "Version 2", "Version 3", ….
 ///
 /// A flush callback is registered with
-/// [ArtifactStorageService.registerPendingFlusher] so the chat-send
-/// pipeline (via `ArtifactContextService.buildArtifactsSystemMessage`)
-/// can force any debounce-pending edits to disk before the AI's next
-/// request sees the artifact body.
+/// [ArtifactStorageService.registerPendingFlusher] so
+/// `ArtifactContextService.buildArtifactsSystemMessage` can force any
+/// pending edits to a new version before the AI's next request reads
+/// the artifact body.
 class _ExcalidrawMarkdrawEditor extends StatefulWidget {
   const _ExcalidrawMarkdrawEditor({
     super.key,
@@ -1139,10 +1139,10 @@ class _ExcalidrawMarkdrawEditor extends StatefulWidget {
 
 class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
   late final markdraw.MarkdrawController _controller;
-  Timer? _saveDebounce;
   String _lastPersisted = '';
   bool _savingSelfTriggered = false;
   bool _busy = false;
+  bool _hasUnsavedChanges = false;
   String? _saveError;
 
   /// The flush callback we registered with [ArtifactStorageService]. Held
@@ -1150,23 +1150,34 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
   /// later one that replaced ours, e.g. after a chat switch).
   Future<void> Function()? _registeredFlush;
 
-  static const _saveDebounceWindow = Duration(milliseconds: 1200);
-
   @override
   void initState() {
     super.initState();
     _controller = markdraw.MarkdrawController();
-    _lastPersisted = widget.jsonString;
     _loadIntoController(widget.jsonString);
     _applyTitleToController(widget.title);
     _registerFlusher();
   }
 
   void _loadIntoController(String json) {
-    if (json.trim().isEmpty) return;
+    if (json.trim().isEmpty) {
+      _lastPersisted = json;
+      return;
+    }
     try {
       _controller.loadFromContent(json, 'scene.excalidraw');
+      // markdraw's parser normalises the scene (fills defaults, drops
+      // unknown excalidraw fields) — so the very next `serializeScene`
+      // returns a string that differs from the raw AI-authored JSON even
+      // though nothing was edited. Baseline the dedupe key off the
+      // post-parse serialization so the first `onSceneChanged` doesn't
+      // immediately overwrite the original artifact content with the
+      // lossy round-trip.
+      _lastPersisted = _controller.serializeScene(
+        format: markdraw.DocumentFormat.excalidraw,
+      );
     } catch (error, stack) {
+      _lastPersisted = json;
       if (kDebugMode) {
         debugPrint('Markdraw load failed: $error\n$stack');
       }
@@ -1190,9 +1201,7 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     final id = widget.artifactId;
     if (id == null || id.isEmpty) return;
     Future<void> flush() async {
-      _saveDebounce?.cancel();
-      _saveDebounce = null;
-      await _persistIfDirty();
+      await _persistAsNewVersion();
     }
 
     _registeredFlush = flush;
@@ -1207,16 +1216,17 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     // and clobber the user's in-flight selection / undo history.
     if (_savingSelfTriggered) {
       _savingSelfTriggered = false;
-      _lastPersisted = widget.jsonString;
-      // Title may still differ even on a self-triggered rebuild, so keep
-      // it in sync.
+      // The widget's `jsonString` is now whatever we serialized — but
+      // since we just persisted it, our in-memory controller is already
+      // canonical. Rebase the dedupe key off the current controller
+      // state so we don't get tricked into re-saving a no-op.
+      _lastPersisted = _safeSerialize();
       if (oldWidget.title != widget.title) {
         _applyTitleToController(widget.title);
       }
       return;
     }
     if (oldWidget.jsonString != widget.jsonString) {
-      _lastPersisted = widget.jsonString;
       _loadIntoController(widget.jsonString);
     }
     if (oldWidget.title != widget.title) {
@@ -1239,7 +1249,6 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
 
   @override
   void dispose() {
-    _saveDebounce?.cancel();
     final id = widget.artifactId;
     if (id != null && id.isNotEmpty && _registeredFlush != null) {
       ArtifactStorageService.unregisterPendingFlusher(id, _registeredFlush);
@@ -1247,58 +1256,67 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     _registeredFlush = null;
     // Flush a final save if there are unsaved edits in the buffer. We
     // don't await — the framework's dispose can't be async — but kicking
-    // it off ensures the request reaches the network.
-    unawaited(_persistIfDirty());
+    // it off ensures the request reaches the network. This is also a
+    // safety net for the "user closes panel without sending a message"
+    // path: the next AI turn still sees the latest scene.
+    unawaited(_persistAsNewVersion());
     _controller.dispose();
     super.dispose();
   }
 
   void _onSceneChanged(markdraw.Scene _) {
-    _saveDebounce?.cancel();
-    _saveDebounce = Timer(
-      _saveDebounceWindow,
-      () => unawaited(_persistIfDirty()),
-    );
+    // Live edits stay in memory only. We do NOT auto-save mid-drag —
+    // every persisted change must be a fresh artifact version so the
+    // existing snapshots stay immutable. The actual flush happens when
+    // the user sends a chat message (via the pending-flusher registry)
+    // or when the editor is disposed.
+    final hasChanges = _safeSerialize() != _lastPersisted;
+    if (hasChanges != _hasUnsavedChanges && mounted) {
+      setState(() => _hasUnsavedChanges = hasChanges);
+    }
   }
 
-  Future<void> _persistIfDirty() async {
-    final id = widget.artifactId;
-    if (id == null || id.isEmpty) return;
-    final String serialized;
+  String _safeSerialize() {
     try {
-      serialized = _controller.serializeScene(
+      return _controller.serializeScene(
         format: markdraw.DocumentFormat.excalidraw,
       );
     } catch (error) {
       if (kDebugMode) debugPrint('Markdraw serialize failed: $error');
-      return;
+      return _lastPersisted;
     }
+  }
+
+  /// Commits the current scene as a NEW artifact version. Called only
+  /// by `flushPendingEdits` (chat send) and `dispose`. Never overwrites
+  /// an existing version — `rewriteArtifact` always bumps. If the scene
+  /// hasn't changed since the last flush, this is a no-op.
+  Future<void> _persistAsNewVersion() async {
+    final id = widget.artifactId;
+    if (id == null || id.isEmpty) return;
+    final serialized = _safeSerialize();
     if (serialized == _lastPersisted) return;
     _lastPersisted = serialized;
     _savingSelfTriggered = true;
     if (mounted) setState(() => _busy = true);
     try {
-      // overwriteCurrentArtifact keeps the version stable — only AI-driven
-      // changes (artifact_manager rewrite/update) bump the version. Live
-      // user drags shouldn't pollute the version history.
-      final updated = await ArtifactStorageService.overwriteCurrentArtifact(
+      final updated = await ArtifactStorageService.rewriteArtifact(
         artifactId: id,
         content: serialized,
+        preserveMetadata: true,
       );
-      // Swap the active doc so the panel + cache see the new content
-      // immediately (overwriteCurrentArtifact only fires `_emitChange`).
       ArtifactStorageService.activeArtifactNotifier.value = updated;
       if (mounted) {
         setState(() {
           _busy = false;
           _saveError = null;
+          _hasUnsavedChanges = false;
         });
       }
     } catch (error, stack) {
       if (kDebugMode) {
         debugPrint('Excalidraw artifact save failed: $error\n$stack');
       }
-      // Drop the dedupe baseline so the next change retries.
       _lastPersisted = '';
       if (mounted) {
         setState(() {
@@ -1327,8 +1345,12 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
               // Hide menu/library buttons that would otherwise expose
               // file-system Save/Open dialogs — persistence is driven
               // by the artifact panel itself, not the editor chrome.
+              // Hide the markdown-panel toggle too: it opens the split
+              // pane showing the `.markdraw` source format, which would
+              // confuse the user (we only store `.excalidraw` JSON).
               showMenu: false,
               showLibraryPanel: false,
+              showMarkdownButton: false,
             ),
           ),
         ),
@@ -1353,6 +1375,25 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
                   SizedBox(width: 8),
                   Text('Saving…', style: TextStyle(fontSize: 11)),
                 ],
+              ),
+            ),
+          )
+        else if (_hasUnsavedChanges)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Unsaved — sent on next chat message',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
+                ),
               ),
             ),
           ),
