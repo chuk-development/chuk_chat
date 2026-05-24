@@ -125,4 +125,435 @@ void main() {
       expect(ArtifactStorageService.currentMessageId, isNull);
     });
   });
+
+  group('ArtifactStorageService.computeOrphanBrackets', () {
+    test('returns empty when no discarded stamps', () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: const [],
+        nextStampedEvents: const [],
+      );
+      expect(brackets, isEmpty);
+    });
+
+    test(
+        'open-ended bracket when no next stamped event in the same chat',
+        () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:00:00Z',
+          },
+        ],
+        nextStampedEvents: const [],
+      );
+      expect(brackets, hasLength(1));
+      expect(brackets.first.chatId, 'chat-A');
+      expect(brackets.first.start, DateTime.utc(2026, 5, 20, 10));
+      expect(
+        brackets.first.end,
+        isNull,
+        reason: 'open-ended bracket runs up to "now"',
+      );
+    });
+
+    test('closes the bracket at the next stamped event in the same chat',
+        () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:00:00Z',
+          },
+        ],
+        nextStampedEvents: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T11:30:00Z',
+            'message_id': 'm-next',
+          },
+        ],
+      );
+      expect(brackets, hasLength(1));
+      expect(brackets.first.end, DateTime.utc(2026, 5, 20, 11, 30));
+    });
+
+    test('ignores stamped events from other chats', () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:00:00Z',
+          },
+        ],
+        nextStampedEvents: [
+          {
+            'chat_id': 'chat-OTHER',
+            'created_at': '2026-05-20T10:30:00Z',
+            'message_id': 'm-other',
+          },
+        ],
+      );
+      expect(brackets.first.end, isNull,
+          reason: 'cross-chat events must not close our bracket');
+    });
+
+    test('picks the earliest stamped event strictly after the start', () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:00:00Z',
+          },
+        ],
+        nextStampedEvents: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T09:00:00Z', // BEFORE start — skip
+            'message_id': 'm-before',
+          },
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T12:00:00Z', // candidate
+            'message_id': 'm-mid',
+          },
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T14:00:00Z', // later candidate — skip
+            'message_id': 'm-late',
+          },
+        ],
+      );
+      expect(brackets.first.end, DateTime.utc(2026, 5, 20, 12));
+    });
+
+    test('deduplicates identical (chatId, start) pairs', () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {'chat_id': 'chat-A', 'created_at': '2026-05-20T10:00:00Z'},
+          {'chat_id': 'chat-A', 'created_at': '2026-05-20T10:00:00Z'},
+        ],
+        nextStampedEvents: const [],
+      );
+      expect(brackets, hasLength(1));
+    });
+
+    test('skips rows with missing or malformed fields', () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {'chat_id': '', 'created_at': '2026-05-20T10:00:00Z'},
+          {'chat_id': 'chat-A', 'created_at': null},
+          {'chat_id': 'chat-A', 'created_at': 'not-a-date'},
+          {'chat_id': 'chat-A', 'created_at': '2026-05-20T10:00:00Z'},
+        ],
+        nextStampedEvents: const [],
+      );
+      expect(brackets, hasLength(1));
+      expect(brackets.first.chatId, 'chat-A');
+    });
+
+    test('produces one bracket per distinct discarded message in same chat',
+        () {
+      final brackets = ArtifactStorageService.computeOrphanBrackets(
+        discardedStamps: [
+          {'chat_id': 'chat-A', 'created_at': '2026-05-20T10:00:00Z'},
+          {'chat_id': 'chat-A', 'created_at': '2026-05-20T12:00:00Z'},
+        ],
+        nextStampedEvents: [
+          {
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T15:00:00Z',
+            'message_id': 'm-after-all',
+          },
+        ],
+      );
+      expect(brackets, hasLength(2));
+      // Both brackets close on the same later event (the only stamped
+      // event strictly after both starts).
+      expect(brackets[0].end, DateTime.utc(2026, 5, 20, 15));
+      expect(brackets[1].end, DateTime.utc(2026, 5, 20, 15));
+    });
+  });
+
+  group('ArtifactStorageService.filterOrphanSnapshotsInBrackets', () {
+    test('returns empty when no candidates or no brackets', () {
+      expect(
+        ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+          candidateSnapshots: const [],
+          brackets: const [],
+        ),
+        isEmpty,
+      );
+      expect(
+        ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+          candidateSnapshots: const [
+            {
+              'message_id': null,
+              'chat_id': 'chat-A',
+              'created_at': '2026-05-20T10:30:00Z',
+            },
+          ],
+          brackets: const [],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('snapshot inside the bracket window is matched', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'id': 99,
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:30:00Z',
+            'version': 3,
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      expect(result, hasLength(1));
+      expect(result.first['artifact_id'], 'art-1');
+    });
+
+    test('snapshot BEFORE the bracket start is NOT matched', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T09:00:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      expect(result, isEmpty);
+    });
+
+    test('snapshot AT OR AFTER the bracket end is NOT matched', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            // exactly at end — half-open `< end` should exclude.
+            'created_at': '2026-05-20T11:00:00Z',
+          },
+          {
+            'artifact_id': 'art-2',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T12:00:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      expect(result, isEmpty);
+    });
+
+    test('open-ended bracket (end == null) catches everything from start to now',
+        () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:00:00Z',
+          },
+          {
+            'artifact_id': 'art-2',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2099-01-01T00:00:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: null,
+          ),
+        ],
+      );
+      expect(result, hasLength(2));
+    });
+
+    test('safety guard: STAMPED rows are NEVER matched even inside window',
+        () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': 'live-msg-id',
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+          {
+            'artifact_id': 'art-2',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:31:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      // Only the un-stamped row is rolled back. The live-msg row is left
+      // alone even though it's in-window.
+      expect(result, hasLength(1));
+      expect(result.first['artifact_id'], 'art-2');
+    });
+
+    test('cross-chat snapshots in the window are NOT matched', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-OTHER',
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      expect(result, isEmpty);
+    });
+
+    test('multiple discarded brackets → multiple windows are honored', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+          {
+            'artifact_id': 'art-2',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T13:00:00Z',
+          },
+          {
+            'artifact_id': 'art-3',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            // Between the two brackets — must NOT match.
+            'created_at': '2026-05-20T11:30:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 12, 30),
+            end: DateTime.utc(2026, 5, 20, 13, 30),
+          ),
+        ],
+      );
+      final matchedIds =
+          result.map((r) => r['artifact_id'] as String).toSet();
+      expect(matchedIds, {'art-1', 'art-2'});
+    });
+
+    test('skips rows with missing chat_id or unparseable created_at', () {
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': null,
+            'chat_id': null,
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+          {
+            'artifact_id': 'art-2',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': 'not-a-date',
+          },
+          {
+            'artifact_id': 'art-3',
+            'message_id': null,
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      expect(result, hasLength(1));
+      expect(result.first['artifact_id'], 'art-3');
+    });
+
+    test(
+        'whitespace-only message_id is treated as orphan (consistent with _insertVersion normalization)',
+        () {
+      // PostgREST returns JSON null for NULL columns, and _insertVersion
+      // normalizes empty/whitespace stamps to null on write. If a
+      // whitespace-only value somehow sneaks in, treat it as an orphan
+      // so rollback stays consistent with how the data is written.
+      final result = ArtifactStorageService.filterOrphanSnapshotsInBrackets(
+        candidateSnapshots: const [
+          {
+            'artifact_id': 'art-1',
+            'message_id': '   ',
+            'chat_id': 'chat-A',
+            'created_at': '2026-05-20T10:30:00Z',
+          },
+        ],
+        brackets: [
+          (
+            chatId: 'chat-A',
+            start: DateTime.utc(2026, 5, 20, 10),
+            end: DateTime.utc(2026, 5, 20, 11),
+          ),
+        ],
+      );
+      // Whitespace-only `message_id` is treated as orphan (consistent
+      // with `_insertVersion` which trims and collapses empty to null).
+      expect(result, hasLength(1));
+    });
+  });
 }

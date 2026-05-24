@@ -835,6 +835,28 @@ class ArtifactStorageService {
   /// Idempotent: empty input or message ids with no artifacts is a no-op.
   /// Best-effort: per-artifact failures are logged but do not abort the
   /// whole batch — the caller (resend) cannot block on artifact cleanup.
+  ///
+  /// ## Timestamp-bracket fallback
+  ///
+  /// Snapshots created BEFORE the `artifact_versions.message_id` column
+  /// shipped (or from any build path that wrote the row without a stamp)
+  /// have `message_id = NULL`. The `message_id IN (...)` query above
+  /// silently skips them, so a resend would leave orphan v3/v4 in place
+  /// and the next AI run would stack v5 on top.
+  ///
+  /// When the direct lookup returns zero rows, the rollback falls back
+  /// to a TIMESTAMP-BASED match. It uses [_artifactsTable]`.message_id`
+  /// (stamped on every create from day one of the message-id feature) to
+  /// translate each discarded message id into a `(chat_id, created_at)`
+  /// pair, then for each pair brackets a window from that timestamp up to
+  /// the next stamped event in the same chat (or `now` if nothing
+  /// stamped follows). Any `artifact_versions` row in that window
+  /// belonging to the same chat AND with `message_id IS NULL` is treated
+  /// as an orphan of the discarded message.
+  ///
+  /// Safety: the fallback ONLY matches rows where `message_id IS NULL`.
+  /// It never touches a row stamped to a different (live) message, even
+  /// if that row happens to fall in the window.
   static Future<void> rollbackArtifactsForMessages(
     Iterable<String> messageIds,
   ) async {
@@ -871,8 +893,6 @@ class ArtifactStorageService {
       return;
     }
 
-    if (discardedRows.isEmpty) return;
-
     // 2. Group discarded snapshots by artifact_id.
     final discardedByArtifact = <String, List<Map<String, dynamic>>>{};
     for (final row in discardedRows) {
@@ -881,6 +901,27 @@ class ArtifactStorageService {
       if (artifactId == null || artifactId.isEmpty) continue;
       discardedByArtifact.putIfAbsent(artifactId, () => []).add(map);
     }
+
+    // 2a. If nothing matched by `message_id`, try the timestamp fallback
+    //     for legacy / un-stamped snapshots. The fallback only touches
+    //     rows whose `message_id IS NULL`, so it cannot harm legitimately
+    //     stamped versions from interleaved chats.
+    if (discardedByArtifact.isEmpty) {
+      final fallbackMatches = await _findOrphanSnapshotsForMessages(
+        messageIds: ids,
+        userId: user.id,
+      );
+      if (fallbackMatches.isEmpty) return;
+      if (kDebugMode) {
+        debugPrint(
+          '[rollbackArtifactsForMessages] timestamp fallback matched '
+          '${fallbackMatches.values.fold<int>(0, (sum, list) => sum + list.length)} '
+          'legacy snapshot(s) for messages ${ids.join(",")}',
+        );
+      }
+      discardedByArtifact.addAll(fallbackMatches);
+    }
+
     if (discardedByArtifact.isEmpty) return;
 
     // 3. For each affected artifact, delete the discarded snapshot rows
@@ -1131,6 +1172,281 @@ class ArtifactStorageService {
       if (best == null || v > best) best = v;
     }
     return best;
+  }
+
+  /// Pure helper: given a set of stamped artifact rows (each `{chat_id,
+  /// created_at}`) belonging to discarded messages, compute a list of
+  /// `(chatId, start, end?)` bracket windows by pairing each discarded
+  /// stamp with the next chronologically-later stamped event in the same
+  /// chat (drawn from [nextStampedEvents]). When no later event exists,
+  /// the bracket is open-ended (`end == null`, treated as "now" by the
+  /// caller).
+  ///
+  /// Inputs may be in any order. Output windows are de-duplicated by
+  /// `(chatId, start)` so calling with overlapping discarded stamps does
+  /// not produce double work. Exposed for unit tests.
+  ///
+  /// Both [discardedStamps] and [nextStampedEvents] entries must contain
+  /// `chat_id` (String) and `created_at` (ISO-8601 String). Entries with
+  /// missing / malformed fields are skipped.
+  @visibleForTesting
+  static List<({String chatId, DateTime start, DateTime? end})>
+      computeOrphanBrackets({
+    required List<Map<String, dynamic>> discardedStamps,
+    required List<Map<String, dynamic>> nextStampedEvents,
+  }) {
+    // Group next-events by chat for fast "first event strictly after X" lookup.
+    final eventsByChat = <String, List<DateTime>>{};
+    for (final row in nextStampedEvents) {
+      final chatId = (row['chat_id'] as String?)?.trim();
+      final createdAtRaw = row['created_at'] as String?;
+      if (chatId == null || chatId.isEmpty) continue;
+      if (createdAtRaw == null) continue;
+      final createdAt = DateTime.tryParse(createdAtRaw);
+      if (createdAt == null) continue;
+      eventsByChat.putIfAbsent(chatId, () => []).add(createdAt.toUtc());
+    }
+    for (final list in eventsByChat.values) {
+      list.sort();
+    }
+
+    final brackets = <({String chatId, DateTime start, DateTime? end})>[];
+    final seen = <String>{}; // dedupe key: "chatId|start.iso"
+    for (final row in discardedStamps) {
+      final chatId = (row['chat_id'] as String?)?.trim();
+      final createdAtRaw = row['created_at'] as String?;
+      if (chatId == null || chatId.isEmpty) continue;
+      if (createdAtRaw == null) continue;
+      final start = DateTime.tryParse(createdAtRaw)?.toUtc();
+      if (start == null) continue;
+
+      final dedupeKey = '$chatId|${start.toIso8601String()}';
+      if (!seen.add(dedupeKey)) continue;
+
+      // Find the first stamped event in the same chat that is strictly
+      // AFTER `start`. Linear scan — the per-chat lists are small.
+      DateTime? end;
+      final chatEvents = eventsByChat[chatId];
+      if (chatEvents != null) {
+        for (final ts in chatEvents) {
+          if (ts.isAfter(start)) {
+            end = ts;
+            break;
+          }
+        }
+      }
+
+      brackets.add((chatId: chatId, start: start, end: end));
+    }
+    return brackets;
+  }
+
+  /// Pure helper: filters [candidateSnapshots] (each `{message_id,
+  /// chat_id, created_at}`) down to ONLY rows whose `message_id IS NULL`
+  /// AND that fall inside one of the [brackets] for the matching chat.
+  /// A snapshot at `t` is in-window when `bracket.start <= t < bracket.end`
+  /// (or `bracket.start <= t` when `bracket.end == null` — open-ended).
+  ///
+  /// The `message_id IS NULL` guard is the load-bearing safety check:
+  /// the fallback must NEVER roll back a row stamped to a different
+  /// (live) message just because it shares the chat / timestamp range.
+  @visibleForTesting
+  static List<Map<String, dynamic>> filterOrphanSnapshotsInBrackets({
+    required List<Map<String, dynamic>> candidateSnapshots,
+    required List<({String chatId, DateTime start, DateTime? end})> brackets,
+  }) {
+    if (candidateSnapshots.isEmpty || brackets.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    // Index brackets by chat_id.
+    final bracketsByChat =
+        <String, List<({DateTime start, DateTime? end})>>{};
+    for (final b in brackets) {
+      bracketsByChat
+          .putIfAbsent(b.chatId, () => [])
+          .add((start: b.start, end: b.end));
+    }
+
+    final matched = <Map<String, dynamic>>[];
+    for (final row in candidateSnapshots) {
+      // Safety guard: only un-stamped rows are eligible. A stamped row
+      // belongs to a live message — never roll it back via this path.
+      final stamp = row['message_id'];
+      if (stamp != null && stamp.toString().trim().isNotEmpty) continue;
+
+      final chatId = (row['chat_id'] as String?)?.trim();
+      final createdAtRaw = row['created_at'] as String?;
+      if (chatId == null || chatId.isEmpty) continue;
+      if (createdAtRaw == null) continue;
+      final ts = DateTime.tryParse(createdAtRaw)?.toUtc();
+      if (ts == null) continue;
+
+      final chatBrackets = bracketsByChat[chatId];
+      if (chatBrackets == null) continue;
+
+      bool inWindow = false;
+      for (final b in chatBrackets) {
+        final start = b.start;
+        final end = b.end;
+        final atOrAfterStart = !ts.isBefore(start); // ts >= start
+        if (!atOrAfterStart) continue;
+        if (end == null || ts.isBefore(end)) {
+          inWindow = true;
+          break;
+        }
+      }
+      if (inWindow) matched.add(row);
+    }
+    return matched;
+  }
+
+  /// Looks up legacy / un-stamped `artifact_versions` rows that belong to
+  /// the discarded messages by translating each [messageIds] into a
+  /// `(chat_id, created_at)` bracket via the `artifacts` table (which
+  /// stamps `message_id` on create from day one of the feature), then
+  /// scanning for `message_id IS NULL` snapshot rows in those windows.
+  ///
+  /// Returns a map `artifact_id -> [snapshot rows]` shaped exactly like
+  /// the primary `message_id IN (...)` lookup so the rest of the
+  /// rollback pipeline doesn't have to branch.
+  ///
+  /// Best-effort: any PostgREST failure short-circuits to an empty map
+  /// rather than aborting the resend flow.
+  static Future<Map<String, List<Map<String, dynamic>>>>
+      _findOrphanSnapshotsForMessages({
+    required List<String> messageIds,
+    required String userId,
+  }) async {
+    if (messageIds.isEmpty) return const {};
+
+    // Step 1: look up which artifacts were created by the discarded
+    // messages. `artifacts.message_id` has been populated from day one
+    // of the message-id feature, so even if `artifact_versions.message_id`
+    // is NULL for old snapshots, we can usually still find the parent
+    // artifact's chat + creation time.
+    final List discardedArtifactRows;
+    try {
+      discardedArtifactRows = await SupabaseService.client
+          .from(_artifactsTable)
+          .select('id, chat_id, created_at, message_id')
+          .inFilter('message_id', messageIds)
+          .eq('user_id', userId);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(fallback artifacts)',
+      )) {
+        return const {};
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '[rollbackArtifactsForMessages] fallback artifacts query failed: '
+          '$error',
+        );
+      }
+      return const {};
+    }
+
+    final discardedStamps = discardedArtifactRows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    if (discardedStamps.isEmpty) return const {};
+
+    final chatIds = discardedStamps
+        .map((row) => (row['chat_id'] as String?)?.trim())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (chatIds.isEmpty) return const {};
+
+    // Step 2: pull the upper bracket bounds — any stamped event in the
+    // same chats whose message_id is OUTSIDE the discarded set. The
+    // earliest such event AFTER a discarded stamp is the bracket end.
+    // We deliberately also pull versions (not just artifact creates) so
+    // a later rewrite by a different message closes the window early.
+    final List stampedEventRows;
+    try {
+      stampedEventRows = await SupabaseService.client
+          .from(_versionsTable)
+          .select('chat_id, created_at, message_id')
+          .inFilter('chat_id', chatIds)
+          .eq('user_id', userId)
+          .not('message_id', 'is', null);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(fallback events)',
+      )) {
+        return const {};
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '[rollbackArtifactsForMessages] fallback events query failed: '
+          '$error',
+        );
+      }
+      return const {};
+    }
+
+    final discardedSet = messageIds.toSet();
+    final nextStampedEvents = stampedEventRows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) {
+      final stamp = (row['message_id'] as String?)?.trim();
+      return stamp != null && stamp.isNotEmpty && !discardedSet.contains(stamp);
+    }).toList(growable: false);
+
+    final brackets = computeOrphanBrackets(
+      discardedStamps: discardedStamps,
+      nextStampedEvents: nextStampedEvents,
+    );
+    if (brackets.isEmpty) return const {};
+
+    // Step 3: pull every NULL-stamp snapshot in the affected chats and
+    // filter to those inside a bracket window.
+    final List candidateRows;
+    try {
+      candidateRows = await SupabaseService.client
+          .from(_versionsTable)
+          .select('id, artifact_id, version, chat_id, created_at, message_id')
+          .inFilter('chat_id', chatIds)
+          .eq('user_id', userId)
+          .filter('message_id', 'is', null);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'rollbackArtifactsForMessages(fallback candidates)',
+      )) {
+        return const {};
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '[rollbackArtifactsForMessages] fallback candidates query failed: '
+          '$error',
+        );
+      }
+      return const {};
+    }
+
+    final candidateSnapshots = candidateRows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+
+    final orphanMatches = filterOrphanSnapshotsInBrackets(
+      candidateSnapshots: candidateSnapshots,
+      brackets: brackets,
+    );
+    if (orphanMatches.isEmpty) return const {};
+
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final row in orphanMatches) {
+      final artifactId = (row['artifact_id'] as String?)?.trim();
+      if (artifactId == null || artifactId.isEmpty) continue;
+      grouped.putIfAbsent(artifactId, () => []).add(row);
+    }
+    return grouped;
   }
 
   static void _removeArtifactFromCache(String artifactId) {
