@@ -1040,10 +1040,9 @@ packages:
   markdraw:
     dependency: "direct main"
     description:
-      name: markdraw
-      sha256: a4f4327d57c46b7d156bba4f640479a60b229ce0b119ca6e539aa964576c459a
-      url: "https://pub.dev"
-    source: hosted
+      path: "vendor/markdraw"
+      relative: true
+    source: path
     version: "0.2.0"
   matcher:
     dependency: transitive
