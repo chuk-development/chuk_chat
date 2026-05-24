@@ -1333,6 +1333,15 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     }
   }
 
+  void _centerCanvas() {
+    final size = _controller.lastCanvasSize ?? const Size(800, 600);
+    try {
+      _controller.zoomToFit(size);
+    } catch (error) {
+      if (kDebugMode) debugPrint('zoomToFit failed: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -1356,6 +1365,27 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
                 showMenu: false,
                 showLibraryPanel: false,
                 showMarkdownButton: false,
+              ),
+            ),
+          ),
+        ),
+        // Fit-to-view button. markdraw ships its own bottom-left zoom
+        // controls, but they're easy to miss and don't have an obvious
+        // "centre the whole scene" affordance — when the user has
+        // panned far away from the content this is the rescue button.
+        Positioned(
+          top: 8,
+          left: 8,
+          child: Material(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            elevation: 1,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: _centerCanvas,
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.center_focus_strong, size: 18),
               ),
             ),
           ),
