@@ -235,6 +235,33 @@ class ToolPromptBuilder {
       '**notes** tool which is always available (no discovery needed).',
     );
     buffer.writeln();
+    buffer.writeln('### HARD RULE — TOOL NAME');
+    buffer.writeln();
+    buffer.writeln(
+      'The ONLY way to update memory, user info, or soul is the `notes` '
+      'tool with action="update_memory", "update_user", or "update_soul". '
+      'There is NO `update_memory` tool, NO `update_user` tool, and NO '
+      '`update_soul` tool — calling those names directly WILL BE REJECTED '
+      'with "Tool not in declared tool set".',
+    );
+    buffer.writeln();
+    buffer.writeln(
+      'CORRECT: <tool_call>{"name":"notes","arguments":'
+      '{"action":"update_memory","content":"…"}}</tool_call>',
+    );
+    buffer.writeln(
+      'WRONG (rejected): <tool_call>{"name":"update_memory",'
+      '"arguments":{…}}</tool_call>',
+    );
+    buffer.writeln(
+      'WRONG (rejected): <tool_call>{"name":"update_user",'
+      '"arguments":{…}}</tool_call>',
+    );
+    buffer.writeln(
+      'WRONG (rejected): <tool_call>{"name":"update_soul",'
+      '"arguments":{…}}</tool_call>',
+    );
+    buffer.writeln();
     buffer.writeln('### CRITICAL — WHEN TO UPDATE');
     buffer.writeln();
     buffer.writeln(
@@ -630,6 +657,7 @@ Artifact rules:
 5. Reuse the same artifact_id across follow-up edits so version history stays intact.
 6. When recreating an artifact in a different format, use action="rewrite" with the SAME artifact_id and set the new type. Do NOT create a new artifact_id.
 7. **Keep artifacts in sync with memory / user-profile corrections.** If the user corrects a fact about themselves (preferences, habits, hardware, projects, health, etc.) AND an existing artifact in this chat visualizes or summarizes that fact (mindmap, profile sketch, info diagram, persona doc, etc.), update BOTH the memory/notes AND the artifact in the same response. Do NOT update only one. When the pronoun is ambiguous ("update das", "korrigier das"), default to updating every place the fact appears — never silently skip the artifact. For excalidraw / mermaid / svg artifacts where targeted `update` edits often fail due to repeated substrings, switch to `action="rewrite"` and send the full corrected scene.
+8. **Rewrites MUST be derived from the CURRENT artifact body in the system message — never from your own memory of what you originally produced.** The body shown under "ACTIVE ARTIFACTS (LATEST VERSION)" is the live state, including every edit the user made (moved boxes, recolored elements, added text, deleted shapes, etc.). When you call `action="rewrite"`, copy that current body verbatim and apply ONLY the requested change on top of it. Do NOT regenerate the artifact from scratch using your initial idea of it — that silently destroys every user edit between your original version and now. This applies especially to excalidraw, mermaid, svg, and technical_drawing artifacts where the user routinely tweaks the scene between turns.
 
 ### MANDATORY schema lookup before complex types
 
