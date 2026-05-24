@@ -289,6 +289,9 @@ class ChatUiHelpers {
     if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
       map['contentBlocks'] = message.contentBlocks!;
     }
+    if (message.messageId != null && message.messageId!.isNotEmpty) {
+      map['messageId'] = message.messageId!;
+    }
     return map;
   }
 

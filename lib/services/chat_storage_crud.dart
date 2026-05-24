@@ -917,6 +917,7 @@ class ChatStorageCrud {
         provider: m['provider'] as String?,
         status: status,
         queueId: m['queueId'] as String?,
+        messageId: m['messageId'] as String?,
       );
     }).toList();
   }

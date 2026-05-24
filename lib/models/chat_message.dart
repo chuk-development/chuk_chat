@@ -59,6 +59,7 @@ class ChatMessage {
     this.provider,
     this.status,
     this.queueId,
+    this.messageId,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -79,6 +80,7 @@ class ChatMessage {
       provider: json['provider'] as String?,
       status: _statusFromString(json['status'] as String?),
       queueId: json['queueId'] as String?,
+      messageId: json['messageId'] as String?,
     );
   }
 
@@ -114,6 +116,15 @@ class ChatMessage {
   /// in [OfflineQueueService]. Local-only.
   final String? queueId;
 
+  /// Stable id assigned to an assistant message at placeholder creation time.
+  /// Persisted so the artifact rollback path (regenerate / resend) can match
+  /// `artifact_versions.message_id` rows across reloads. `null` for legacy
+  /// messages that pre-date the field; the rollback then falls back to
+  /// hard-deleting any artifacts created by the discarded message via the
+  /// `artifacts.message_id` link (which has been populated since artifact
+  /// creation was introduced).
+  final String? messageId;
+
   // Alias for backwards compatibility
   String get sender => role == 'assistant' ? 'ai' : role;
 
@@ -138,6 +149,7 @@ class ChatMessage {
     String? provider,
     ChatMessageStatus? status,
     String? queueId,
+    String? messageId,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -156,6 +168,7 @@ class ChatMessage {
       provider: provider ?? this.provider,
       status: status ?? this.status,
       queueId: queueId ?? this.queueId,
+      messageId: messageId ?? this.messageId,
     );
   }
 
@@ -182,5 +195,6 @@ class ChatMessage {
     if (provider != null && provider!.isNotEmpty) 'provider': provider,
     if (_statusToString(status) != null) 'status': _statusToString(status),
     if (queueId != null && queueId!.isNotEmpty) 'queueId': queueId,
+    if (messageId != null && messageId!.isNotEmpty) 'messageId': messageId,
   };
 }

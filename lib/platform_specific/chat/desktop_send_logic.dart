@@ -80,16 +80,24 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // For resend flows on older messages, reset the chat branch from this
       // point by clearing everything below the resent message. Before removing
-      // AI messages, collect artifact ids they emitted so the backing artifact
-      // rows get deleted alongside the messages that created them — otherwise
-      // resend leaves orphan artifact cards in the chat.
+      // AI messages, collect:
+      //   * artifact ids they created (legacy fallback — pre-instrumentation
+      //     chats where the version snapshots aren't stamped with message_id),
+      //   * message ids so we can roll back the artifact versions those
+      //     messages produced (new chats: only the versions belonging to
+      //     the discarded turn are removed, prior history survives).
       final artifactIdsToDelete = <String>{};
+      final discardedMessageIds = <String>{};
       void collectArtifactsFrom(int start, int end) {
         for (int i = start; i < end && i < _messages.length; i++) {
           if (_messages[i]['sender'] != 'ai') continue;
           artifactIdsToDelete.addAll(
             ChatUiHelpers.extractArtifactIdsFromRawMessage(_messages[i]),
           );
+          final mid = _messages[i]['messageId'];
+          if (mid != null && mid.isNotEmpty) {
+            discardedMessageIds.add(mid);
+          }
         }
       }
 
@@ -107,6 +115,19 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         });
       }
 
+      // Roll back per-message version history first so prior snapshots
+      // survive and `artifacts.content/version` is reset to the latest
+      // remaining snapshot. Artifacts that have no remaining snapshot
+      // (created by a discarded message) are deleted in the same call.
+      if (discardedMessageIds.isNotEmpty) {
+        await ArtifactStorageService.rollbackArtifactsForMessages(
+          discardedMessageIds,
+        );
+      }
+
+      // Legacy fallback for chats whose versions pre-date message_id
+      // stamping. `deleteArtifactsByIds` is idempotent for already-deleted
+      // rows, so it's safe to call after the rollback above.
       if (artifactIdsToDelete.isNotEmpty) {
         // MUST await. deleteArtifactsByIds prunes the in-memory cache
         // only after the Supabase round-trip, and the new AI turn
@@ -218,6 +239,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
       }
 
+      // Stamp the new assistant turn with a stable messageId so any
+      // artifact versions it produces (create / rewrite / inline tag) are
+      // tied to this turn for future regenerate rollbacks.
+      final String assistantMessageId = _uuid.v4();
+      ArtifactStorageService.currentMessageId = assistantMessageId;
       setState(() {
         _isSending = true;
         _messages.add({
@@ -226,6 +252,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'reasoning': '',
           'modelId': modelIdToUse,
           'provider': providerToUse ?? '',
+          'messageId': assistantMessageId,
         });
         placeholderIndex = _messages.length - 1;
       });

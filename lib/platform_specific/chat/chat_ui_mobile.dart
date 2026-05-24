@@ -2450,16 +2450,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _messages[index]['text'] = newText;
     });
 
-    // Before removing AI messages, collect artifact ids they emitted so the
-    // backing artifact rows get deleted alongside the messages that created
-    // them — otherwise resend leaves orphan artifact cards in the chat.
+    // Before removing AI messages, collect:
+    //   * artifact ids they created (legacy fallback for chats whose
+    //     version snapshots pre-date message_id stamping),
+    //   * message ids so we can roll back the artifact versions those
+    //     messages produced. The rollback resets `artifacts.content` to
+    //     the latest remaining snapshot, or deletes the artifact entirely
+    //     if no prior snapshot exists.
     final artifactIdsToDelete = <String>{};
+    final discardedMessageIds = <String>{};
     void collectArtifactsFrom(int start, int end) {
       for (int i = start; i < end && i < _messages.length; i++) {
         if (_messages[i]['sender'] != 'ai') continue;
         artifactIdsToDelete.addAll(
           ChatUiHelpers.extractArtifactIdsFromRawMessage(_messages[i]),
         );
+        final mid = _messages[i]['messageId'];
+        if (mid != null && mid.isNotEmpty) {
+          discardedMessageIds.add(mid);
+        }
       }
     }
 
@@ -2477,11 +2486,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
     }
 
+    // Roll back per-message version history first so prior snapshots
+    // survive when an AI message only updated an existing artifact.
+    if (discardedMessageIds.isNotEmpty) {
+      await ArtifactStorageService.rollbackArtifactsForMessages(
+        discardedMessageIds,
+      );
+    }
+
     if (artifactIdsToDelete.isNotEmpty) {
       // MUST await. deleteArtifactsByIds prunes the in-memory cache
       // only after the Supabase round-trip; firing it unawaited lets
       // the next loadArtifactsForChat return the ghost artifact which
-      // ends up in the system prompt as a "still active" item.
+      // ends up in the system prompt as a "still active" item. Idempotent
+      // for ids the rollback above already deleted.
       await ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete);
     }
 
@@ -2520,6 +2538,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ChatStorageService.activeMessageChatId = chatId;
     ChatStorageService.selectedChatId ??= chatId;
 
+    // Stamp the new assistant turn with a stable messageId so any
+    // artifact versions it produces (create / rewrite / inline tag) are
+    // tied to this turn for future regenerate rollbacks. Mirrors the
+    // desktop resend path.
+    final String assistantMessageId = _uuid.v4();
+    ArtifactStorageService.currentMessageId = assistantMessageId;
     setState(() {
       _messages.add({
         'sender': 'ai',
@@ -2527,6 +2551,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         'reasoning': '',
         'modelId': modelIdToUse,
         'provider': providerToUse ?? '',
+        'messageId': assistantMessageId,
       });
       placeholderIndex = _messages.length - 1;
     });
