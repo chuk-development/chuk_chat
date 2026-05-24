@@ -14,6 +14,71 @@ import 'package:chuk_chat/services/supabase_service.dart';
 class ArtifactStorageService {
   const ArtifactStorageService._();
 
+  // Pending-flush registry — editors register a "flush" callback keyed by
+  // artifactId so the chat-send / system-prompt-build path can force any
+  // in-memory edits to be persisted before the AI sees the artifact body.
+  // Keeps the data flow simple (no global event bus) and lifecycle-safe:
+  // editors call `unregisterPendingFlusher` from their `dispose`.
+  static final Map<String, Future<void> Function()> _pendingFlushers =
+      <String, Future<void> Function()>{};
+
+  /// Registers a callback that flushes pending in-memory edits for
+  /// [artifactId] to storage. The chat-send pipeline calls
+  /// [flushPendingEdits] right before assembling the request payload so the
+  /// AI sees the latest scene. Safe to call repeatedly — the latest
+  /// callback wins.
+  static void registerPendingFlusher(
+    String artifactId,
+    Future<void> Function() flush,
+  ) {
+    final id = artifactId.trim();
+    if (id.isEmpty) return;
+    _pendingFlushers[id] = flush;
+  }
+
+  /// Removes a previously registered flusher. Editors must call this from
+  /// `dispose` so we don't hold dead callbacks across chat switches.
+  /// Idempotent — no-op if [artifactId] was never registered or if a newer
+  /// flusher has already replaced ours.
+  static void unregisterPendingFlusher(
+    String artifactId, [
+    Future<void> Function()? expected,
+  ]) {
+    final id = artifactId.trim();
+    if (id.isEmpty) return;
+    if (expected == null) {
+      _pendingFlushers.remove(id);
+      return;
+    }
+    final current = _pendingFlushers[id];
+    if (identical(current, expected)) {
+      _pendingFlushers.remove(id);
+    }
+  }
+
+  /// Invokes every registered flusher and awaits them all. Used right
+  /// before the chat-send pipeline serializes artifacts into the AI
+  /// request payload so live editor scenes (e.g. excalidraw mid-drag) are
+  /// committed to the latest snapshot. Per-flusher errors are swallowed
+  /// so a stuck editor cannot block the user's send.
+  static Future<void> flushPendingEdits() async {
+    if (_pendingFlushers.isEmpty) return;
+    // Snapshot the values to a list so a flusher that unregisters itself
+    // mid-flight doesn't mutate the iterable we're walking.
+    final flushers = List<Future<void> Function()>.of(
+      _pendingFlushers.values,
+    );
+    for (final flush in flushers) {
+      try {
+        await flush();
+      } catch (error, stack) {
+        if (kDebugMode) {
+          debugPrint('Pending-flush callback failed: $error\n$stack');
+        }
+      }
+    }
+  }
+
   static const String _artifactsTable = 'artifacts';
   static const String _versionsTable = 'artifact_versions';
   static const String _missingSchemaMessage =
@@ -514,6 +579,128 @@ class ArtifactStorageService {
     // (artifact_manager update/rewrite, <artifact> tag). Panel should pop
     // so the user sees the new version.
     panelOpenNotifier.value = true;
+    return updated;
+  }
+
+  /// In-place update of the current artifact row WITHOUT bumping `version`
+  /// or inserting a new `artifact_versions` snapshot. The snapshot row for
+  /// the current version is replaced (or inserted, if missing) so version
+  /// history stays consistent.
+  ///
+  /// Use this for live user edits (drag, resize, color change) where each
+  /// micro-movement creating a new version would be noise. AI-driven
+  /// rewrites still go through [rewriteArtifact] so the version increments
+  /// and is auditable.
+  ///
+  /// Does NOT touch [panelOpenNotifier] — the panel is already open during
+  /// edits and popping it up mid-drag would be jarring.
+  static Future<ArtifactDocument> overwriteCurrentArtifact({
+    required String artifactId,
+    required String content,
+  }) async {
+    if (!_artifactStorageAvailable) {
+      throw StateError(_missingSchemaMessage);
+    }
+
+    final current = await loadArtifactById(artifactId);
+    if (current == null) {
+      throw StateError('Artifact "$artifactId" not found.');
+    }
+
+    _validateContentSize(content);
+
+    final now = DateTime.now().toUtc();
+    final encrypted = await _encryptOrThrow(content);
+
+    final List updateRows;
+    try {
+      updateRows = await SupabaseService.client
+          .from(_artifactsTable)
+          .update({
+            'content': encrypted,
+            'updated_at': now.toIso8601String(),
+          })
+          .eq('id', current.id)
+          .eq('user_id', current.userId)
+          .eq('version', current.version)
+          .select('id');
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'overwriteCurrentArtifact',
+      )) {
+        throw StateError(_missingSchemaMessage);
+      }
+      rethrow;
+    }
+
+    if (updateRows.isEmpty) {
+      // Either the artifact disappeared, or its version advanced (an AI
+      // rewrite landed mid-edit). Either way, the caller's in-memory copy
+      // is stale — surface a clear error and let them reload.
+      throw StateError(
+        'Artifact "${current.id}" was updated elsewhere; reload before saving.',
+      );
+    }
+
+    // Keep the per-version snapshot in sync. Try update first; if no row
+    // exists for this version (older artifacts pre-dating version
+    // snapshotting), fall back to insert.
+    try {
+      final List versionUpdateRows = await SupabaseService.client
+          .from(_versionsTable)
+          .update({
+            'content': encrypted,
+            'attachment_path': current.attachmentPath,
+            'created_at': now.toIso8601String(),
+          })
+          .eq('artifact_id', current.id)
+          .eq('user_id', current.userId)
+          .eq('version', current.version)
+          .select('id');
+
+      if (versionUpdateRows.isEmpty) {
+        await _insertVersion(
+          artifactId: current.id,
+          chatId: current.chatId,
+          userId: current.userId,
+          version: current.version,
+          encryptedContent: encrypted,
+          createdAt: now,
+          attachmentPath: current.attachmentPath,
+        );
+      }
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'overwriteCurrentArtifact(version sync)',
+      )) {
+        throw StateError(_missingSchemaMessage);
+      }
+      rethrow;
+    }
+
+    final updated = ArtifactDocument(
+      id: current.id,
+      chatId: current.chatId,
+      userId: current.userId,
+      messageId: current.messageId,
+      title: current.title,
+      type: current.type,
+      language: current.language,
+      content: content,
+      version: current.version,
+      attachmentPath: current.attachmentPath,
+      createdAt: current.createdAt,
+      updatedAt: now,
+    );
+
+    _insertIntoCache(updated);
+    // Drop cached version history for this artifact — the snapshot row we
+    // just rewrote in-place is stale in the cache.
+    _versionCache.remove(updated.id);
+    _emitChange(updated.chatId, updated);
+    // Intentionally NOT touching panelOpenNotifier — see method doc.
     return updated;
   }
 

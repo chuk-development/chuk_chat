@@ -9,7 +9,12 @@ class ArtifactContextService {
   static const int _maxContextChars = 140000;
 
   /// Builds a system-prompt section with active artifacts for [chatId].
+  ///
+  /// Flushes any pending in-memory editor state (e.g. live excalidraw
+  /// edits that are still inside the debounce window) so the AI sees the
+  /// user's latest scene, not the last debounced snapshot.
   static Future<String?> buildArtifactsSystemMessage(String chatId) async {
+    await ArtifactStorageService.flushPendingEdits();
     final artifacts = await ArtifactStorageService.loadArtifactsForChat(chatId);
     if (artifacts.isEmpty) {
       return null;
