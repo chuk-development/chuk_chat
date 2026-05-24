@@ -70,7 +70,19 @@ class ArtifactStorageService {
     );
     for (final flush in flushers) {
       try {
-        await flush();
+        // Cap each flusher at 5s — a hung Supabase call (offline, race
+        // with a freshly-created artifact, etc.) must never block the
+        // outgoing chat request. Worst case the AI sees the previous
+        // snapshot instead of the live one; that's recoverable, a
+        // frozen chat is not.
+        await flush().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            if (kDebugMode) {
+              debugPrint('Pending-flush callback timed out (5s)');
+            }
+          },
+        );
       } catch (error, stack) {
         if (kDebugMode) {
           debugPrint('Pending-flush callback failed: $error\n$stack');
