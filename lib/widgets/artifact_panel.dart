@@ -1337,20 +1337,26 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // ClipRect contains markdraw's floating PropertyPanel /
+        // toolbar / overlays — they're built with `Positioned` inside
+        // an internal Stack and will happily render outside our bounds
+        // (into the chat area on the left) if we don't clip.
         Positioned.fill(
-          child: markdraw.MarkdrawEditor(
-            controller: _controller,
-            onSceneChanged: _onSceneChanged,
-            config: const markdraw.MarkdrawEditorConfig(
-              // Hide menu/library buttons that would otherwise expose
-              // file-system Save/Open dialogs — persistence is driven
-              // by the artifact panel itself, not the editor chrome.
-              // Hide the markdown-panel toggle too: it opens the split
-              // pane showing the `.markdraw` source format, which would
-              // confuse the user (we only store `.excalidraw` JSON).
-              showMenu: false,
-              showLibraryPanel: false,
-              showMarkdownButton: false,
+          child: ClipRect(
+            child: markdraw.MarkdrawEditor(
+              controller: _controller,
+              onSceneChanged: _onSceneChanged,
+              config: const markdraw.MarkdrawEditorConfig(
+                // Hide menu/library buttons that would otherwise expose
+                // file-system Save/Open dialogs — persistence is driven
+                // by the artifact panel itself, not the editor chrome.
+                // Hide the markdown-panel toggle too: it opens the split
+                // pane showing the `.markdraw` source format, which would
+                // confuse the user (we only store `.excalidraw` JSON).
+                showMenu: false,
+                showLibraryPanel: false,
+                showMarkdownButton: false,
+              ),
             ),
           ),
         ),
