@@ -52,10 +52,26 @@ enum _ArtifactViewMode { preview, code }
 class _ArtifactPanelState extends State<ArtifactPanel> {
   bool _loadingVersions = true;
   bool _busy = false;
+  bool _repairing = false;
   List<ArtifactVersionSnapshot> _versions = const [];
   int? _selectedVersion;
   String? _selectedVersionContent;
   _ArtifactViewMode _viewMode = _ArtifactViewMode.preview;
+
+  /// True when the user has picked a snapshot older than the live row.
+  /// Disables editing so saving from a historical view doesn't silently
+  /// fork off the latest version.
+  bool get _isViewingHistory =>
+      _selectedVersion != null &&
+      _selectedVersion != widget.artifact.version;
+
+  /// The version chain is "healthy" when there is one snapshot per
+  /// integer version from 1..current. Anything less and we offer the
+  /// Repair button. We also offer it when there are zero snapshots, even
+  /// though `_versions.length <= 1` hides the dropdown — that's the
+  /// exact case the repair tool exists for.
+  bool get _versionChainHealthy =>
+      _versions.length == widget.artifact.version;
 
   /// All artifacts currently available in this chat. Used for the
   /// switcher button in the header. Refreshed on mount + on every
@@ -196,6 +212,44 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       _selectedVersion = target;
       _selectedVersionContent = found.content;
     });
+  }
+
+  Future<void> _repairVersions() async {
+    if (_repairing) return;
+    setState(() => _repairing = true);
+    try {
+      final inserted = await ArtifactStorageService.repairVersionChain(
+        widget.artifact.id,
+      );
+      // Always refresh the dropdown — even when 0 rows were inserted the
+      // user pressed the button and deserves to see the up-to-date state.
+      await _loadVersions();
+      if (!mounted) return;
+      final message = inserted > 0
+          ? 'Repaired $inserted version${inserted == 1 ? "" : "s"}'
+          : 'Version history already healthy';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Artifact repair failed: $error\n$stackTrace');
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Repair failed: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _repairing = false);
+      }
+    }
   }
 
   Future<void> _copyContent() async {
@@ -529,6 +583,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   ),
                 ));
 
+    final bool showRepair = !_loadingVersions && !_versionChainHealthy;
     final actionMenu = PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, size: 20),
       tooltip: 'More',
@@ -538,10 +593,12 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             _copyContent();
           case 'download':
             if (!_busy) _showDownloadMenu();
+          case 'repair':
+            if (!_repairing) _repairVersions();
         }
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(
+      itemBuilder: (_) => [
+        const PopupMenuItem(
           value: 'copy',
           child: Row(
             children: [
@@ -551,7 +608,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'download',
           child: Row(
             children: [
@@ -561,6 +618,17 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             ],
           ),
         ),
+        if (showRepair)
+          const PopupMenuItem(
+            value: 'repair',
+            child: Row(
+              children: [
+                Icon(Icons.healing_outlined, size: 18),
+                SizedBox(width: 10),
+                Text('Repair version history'),
+              ],
+            ),
+          ),
       ],
     );
 
@@ -687,6 +755,18 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               onPressed: _busy ? null : _showDownloadMenu,
               tooltip: 'Download',
             ),
+            if (showRepair)
+              IconButton(
+                icon: _repairing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.healing_outlined, size: 18),
+                onPressed: _repairing ? null : _repairVersions,
+                tooltip: 'Repair version history',
+              ),
             if (widget.onClose != null)
               IconButton(
                 icon: const Icon(Icons.close, size: 18),
@@ -701,6 +781,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     return Column(
       children: [
         if (widget.showHeader) header,
+        if (_isViewingHistory)
+          _HistoryReadOnlyBanner(
+            selectedVersion: _selectedVersion ?? widget.artifact.version,
+            latestVersion: widget.artifact.version,
+            onSwitchToLatest: () =>
+                _selectVersion(widget.artifact.version),
+          ),
         Expanded(
           child: Container(
             width: double.infinity,
@@ -716,6 +803,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               forceCodeView:
                   _hasDualView && _viewMode == _ArtifactViewMode.code,
               codeLanguageHint: _codeLanguageHint,
+              readOnly: _isViewingHistory,
             ),
           ),
         ),
@@ -895,6 +983,7 @@ class _ArtifactRenderer extends StatelessWidget {
     this.captureKey,
     this.forceCodeView = false,
     this.codeLanguageHint = '',
+    this.readOnly = false,
   });
 
   final ArtifactType type;
@@ -905,6 +994,11 @@ class _ArtifactRenderer extends StatelessWidget {
   final String? title;
   final bool forceCodeView;
   final String codeLanguageHint;
+
+  /// True when the user has selected a non-current snapshot. Forces
+  /// editor widgets (e.g. markdraw) into a non-mutating mode so saves
+  /// can't accidentally fork a new version off a historical body.
+  final bool readOnly;
 
   /// Attached to visual artifacts (SVG, technical drawings) so parent can
   /// capture a PNG via RenderRepaintBoundary.toImage().
@@ -942,10 +1036,14 @@ class _ArtifactRenderer extends StatelessWidget {
         return RepaintBoundary(
           key: captureKey,
           child: _ExcalidrawMarkdrawEditor(
-            key: ValueKey('mkdr_${artifactId ?? ""}'),
+            // Key changes when readOnly flips so didUpdateWidget can't
+            // be tricked into keeping a previously-registered flusher
+            // alive on a historical view.
+            key: ValueKey('mkdr_${artifactId ?? ""}_${readOnly ? "ro" : "rw"}'),
             artifactId: artifactId,
             title: title,
             jsonString: content,
+            readOnly: readOnly,
           ),
         );
       case ArtifactType.html:
@@ -1121,6 +1219,7 @@ class _ExcalidrawMarkdrawEditor extends StatefulWidget {
     required this.jsonString,
     this.artifactId,
     this.title,
+    this.readOnly = false,
   });
 
   final String jsonString;
@@ -1131,6 +1230,13 @@ class _ExcalidrawMarkdrawEditor extends StatefulWidget {
   /// the artifact title. Without this the export shows up nameless when
   /// the user downloads the scene file.
   final String? title;
+
+  /// When true, the editor renders the scene but rejects all edits and
+  /// never registers a pending-flusher. Used when the artifact panel is
+  /// showing a historical snapshot — saving from there would create a
+  /// new version off the OLD body, which is almost never what the user
+  /// wants. The official "latest" body remains the only editable surface.
+  final bool readOnly;
 
   @override
   State<_ExcalidrawMarkdrawEditor> createState() =>
@@ -1156,7 +1262,13 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     _controller = markdraw.MarkdrawController();
     _loadIntoController(widget.jsonString);
     _applyTitleToController(widget.title);
-    _registerFlusher();
+    // Read-only views never register a flusher — that callback is what
+    // would silently push the historical snapshot's body as a NEW
+    // version on the next chat send. Skipping it keeps the historical
+    // view truly read-only.
+    if (!widget.readOnly) {
+      _registerFlusher();
+    }
     _scheduleAutoCenter();
   }
 
@@ -1284,17 +1396,27 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
       ArtifactStorageService.unregisterPendingFlusher(id, _registeredFlush);
     }
     _registeredFlush = null;
-    // Flush a final save if there are unsaved edits in the buffer. We
-    // don't await — the framework's dispose can't be async — but kicking
-    // it off ensures the request reaches the network. This is also a
-    // safety net for the "user closes panel without sending a message"
-    // path: the next AI turn still sees the latest scene.
-    unawaited(_persistAsNewVersion());
+    // Read-only views never accepted edits, so there is nothing legitimate
+    // to flush. Skip the dispose-time save so leaving a historical view
+    // can't fork a new version off the OLD body.
+    if (!widget.readOnly) {
+      // Flush a final save if there are unsaved edits in the buffer. We
+      // don't await — the framework's dispose can't be async — but kicking
+      // it off ensures the request reaches the network. This is also a
+      // safety net for the "user closes panel without sending a message"
+      // path: the next AI turn still sees the latest scene.
+      unawaited(_persistAsNewVersion());
+    }
     _controller.dispose();
     super.dispose();
   }
 
   void _onSceneChanged(markdraw.Scene _) {
+    // Hard ignore in read-only mode — the IgnorePointer should prevent
+    // user input, but markdraw may still fire programmatic scene
+    // updates (auto-fit, internal normalisation) which must not count
+    // as "unsaved changes" or trigger flushes.
+    if (widget.readOnly) return;
     // Live edits stay in memory only. We do NOT auto-save mid-drag —
     // every persisted change must be a fresh artifact version so the
     // existing snapshots stay immutable. The actual flush happens when
@@ -1392,19 +1514,27 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
         // (into the chat area on the left) if we don't clip.
         Positioned.fill(
           child: ClipRect(
-            child: markdraw.MarkdrawEditor(
-              controller: _controller,
-              onSceneChanged: _onSceneChanged,
-              config: const markdraw.MarkdrawEditorConfig(
-                // Hide menu/library buttons that would otherwise expose
-                // file-system Save/Open dialogs — persistence is driven
-                // by the artifact panel itself, not the editor chrome.
-                // Hide the markdown-panel toggle too: it opens the split
-                // pane showing the `.markdraw` source format, which would
-                // confuse the user (we only store `.excalidraw` JSON).
-                showMenu: false,
-                showLibraryPanel: false,
-                showMarkdownButton: false,
+            // IgnorePointer (instead of AbsorbPointer) so a tap on the
+            // historical view goes THROUGH to the banner's "Switch to
+            // latest" button when overlaid. Markdraw has no native
+            // read-only flag, so this is the cleanest way to suppress
+            // all editing input without forking the package.
+            child: IgnorePointer(
+              ignoring: widget.readOnly,
+              child: markdraw.MarkdrawEditor(
+                controller: _controller,
+                onSceneChanged: _onSceneChanged,
+                config: const markdraw.MarkdrawEditorConfig(
+                  // Hide menu/library buttons that would otherwise expose
+                  // file-system Save/Open dialogs — persistence is driven
+                  // by the artifact panel itself, not the editor chrome.
+                  // Hide the markdown-panel toggle too: it opens the split
+                  // pane showing the `.markdraw` source format, which would
+                  // confuse the user (we only store `.excalidraw` JSON).
+                  showMenu: false,
+                  showLibraryPanel: false,
+                  showMarkdownButton: false,
+                ),
               ),
             ),
           ),
@@ -1958,6 +2088,68 @@ class _DownloadFormat {
   const _DownloadFormat(this.label, this.ext);
   final String label;
   final String ext;
+}
+
+/// Thin banner shown above the renderer when the user has selected a
+/// historical snapshot in the version dropdown. Makes "this is read-only,
+/// switch back to the latest version to edit" loudly visible — the editor
+/// surface itself can look identical to the live one, so without this
+/// banner the user would silently lose every edit they make.
+class _HistoryReadOnlyBanner extends StatelessWidget {
+  const _HistoryReadOnlyBanner({
+    required this.selectedVersion,
+    required this.latestVersion,
+    required this.onSwitchToLatest,
+  });
+
+  final int selectedVersion;
+  final int latestVersion;
+  final VoidCallback onSwitchToLatest;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.history,
+              size: 18,
+              color: scheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Viewing v$selectedVersion (read-only). Switch to latest '
+                '(v$latestVersion) to edit.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: scheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: onSwitchToLatest,
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.onTertiaryContainer,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text('Switch to v$latestVersion'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Header title + switcher. When the current chat has more than one artifact,
