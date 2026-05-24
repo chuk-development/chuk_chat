@@ -711,6 +711,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               content: _effectiveContent,
               attachmentPath: _effectiveAttachmentPath,
               artifactId: widget.artifact.id,
+              title: widget.artifact.title,
               captureKey: _visualCaptureKey,
               forceCodeView:
                   _hasDualView && _viewMode == _ArtifactViewMode.code,
@@ -890,6 +891,7 @@ class _ArtifactRenderer extends StatelessWidget {
     this.language,
     this.attachmentPath,
     this.artifactId,
+    this.title,
     this.captureKey,
     this.forceCodeView = false,
     this.codeLanguageHint = '',
@@ -900,6 +902,7 @@ class _ArtifactRenderer extends StatelessWidget {
   final String? language;
   final String? attachmentPath;
   final String? artifactId;
+  final String? title;
   final bool forceCodeView;
   final String codeLanguageHint;
 
@@ -941,6 +944,7 @@ class _ArtifactRenderer extends StatelessWidget {
           child: _ExcalidrawMarkdrawEditor(
             key: ValueKey('mkdr_${artifactId ?? ""}'),
             artifactId: artifactId,
+            title: title,
             jsonString: content,
           ),
         );
@@ -1099,17 +1103,34 @@ class _ArtifactRenderer extends StatelessWidget {
 
 /// Native cross-platform Excalidraw editor backed by the `markdraw`
 /// package. Loads the scene JSON into a controller, lets the user edit,
-/// and persists every change as a new artifact version so the next chat
-/// turn sees the user's edits.
+/// and persists changes in-place via
+/// [ArtifactStorageService.overwriteCurrentArtifact] — i.e. the artifact's
+/// `version` stays stable while the user is dragging things around.
+/// Only AI-driven rewrites (via `artifact_manager`) bump the version, so
+/// "Version 1" is the AI's first cut, "Version 2" is the AI's second
+/// cut, and the user's edits land inside whichever version is active.
+///
+/// A flush callback is registered with
+/// [ArtifactStorageService.registerPendingFlusher] so the chat-send
+/// pipeline (via `ArtifactContextService.buildArtifactsSystemMessage`)
+/// can force any debounce-pending edits to disk before the AI's next
+/// request sees the artifact body.
 class _ExcalidrawMarkdrawEditor extends StatefulWidget {
   const _ExcalidrawMarkdrawEditor({
     super.key,
     required this.jsonString,
     this.artifactId,
+    this.title,
   });
 
   final String jsonString;
   final String? artifactId;
+
+  /// Forwarded to the markdraw controller via `renameDocument` so the
+  /// `appState.name` field in the serialized `.excalidraw` JSON carries
+  /// the artifact title. Without this the export shows up nameless when
+  /// the user downloads the scene file.
+  final String? title;
 
   @override
   State<_ExcalidrawMarkdrawEditor> createState() =>
@@ -1124,6 +1145,11 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
   bool _busy = false;
   String? _saveError;
 
+  /// The flush callback we registered with [ArtifactStorageService]. Held
+  /// so `dispose` can unregister exactly the closure we installed (not a
+  /// later one that replaced ours, e.g. after a chat switch).
+  Future<void> Function()? _registeredFlush;
+
   static const _saveDebounceWindow = Duration(milliseconds: 1200);
 
   @override
@@ -1132,6 +1158,8 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     _controller = markdraw.MarkdrawController();
     _lastPersisted = widget.jsonString;
     _loadIntoController(widget.jsonString);
+    _applyTitleToController(widget.title);
+    _registerFlusher();
   }
 
   void _loadIntoController(String json) {
@@ -1145,6 +1173,32 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     }
   }
 
+  void _applyTitleToController(String? title) {
+    // Empty string clears the name (matches markdraw's contract). Trim
+    // so trailing whitespace from a paste doesn't leak into the export.
+    final next = (title ?? '').trim();
+    try {
+      _controller.renameDocument(next);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Markdraw renameDocument failed: $error');
+      }
+    }
+  }
+
+  void _registerFlusher() {
+    final id = widget.artifactId;
+    if (id == null || id.isEmpty) return;
+    Future<void> flush() async {
+      _saveDebounce?.cancel();
+      _saveDebounce = null;
+      await _persistIfDirty();
+    }
+
+    _registeredFlush = flush;
+    ArtifactStorageService.registerPendingFlusher(id, flush);
+  }
+
   @override
   void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1154,29 +1208,60 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     if (_savingSelfTriggered) {
       _savingSelfTriggered = false;
       _lastPersisted = widget.jsonString;
+      // Title may still differ even on a self-triggered rebuild, so keep
+      // it in sync.
+      if (oldWidget.title != widget.title) {
+        _applyTitleToController(widget.title);
+      }
       return;
     }
     if (oldWidget.jsonString != widget.jsonString) {
       _lastPersisted = widget.jsonString;
       _loadIntoController(widget.jsonString);
     }
+    if (oldWidget.title != widget.title) {
+      _applyTitleToController(widget.title);
+    }
+    if (oldWidget.artifactId != widget.artifactId) {
+      // Artifact identity changed (panel reused for a different artifact).
+      // Drop the old flusher, register a fresh one keyed to the new id.
+      final oldId = oldWidget.artifactId;
+      if (oldId != null && oldId.isNotEmpty && _registeredFlush != null) {
+        ArtifactStorageService.unregisterPendingFlusher(
+          oldId,
+          _registeredFlush,
+        );
+      }
+      _registeredFlush = null;
+      _registerFlusher();
+    }
   }
 
   @override
   void dispose() {
     _saveDebounce?.cancel();
-    // Flush a final save if there are unsaved edits in the buffer.
-    _persistIfDirty(forceSync: true);
+    final id = widget.artifactId;
+    if (id != null && id.isNotEmpty && _registeredFlush != null) {
+      ArtifactStorageService.unregisterPendingFlusher(id, _registeredFlush);
+    }
+    _registeredFlush = null;
+    // Flush a final save if there are unsaved edits in the buffer. We
+    // don't await — the framework's dispose can't be async — but kicking
+    // it off ensures the request reaches the network.
+    unawaited(_persistIfDirty());
     _controller.dispose();
     super.dispose();
   }
 
   void _onSceneChanged(markdraw.Scene _) {
     _saveDebounce?.cancel();
-    _saveDebounce = Timer(_saveDebounceWindow, _persistIfDirty);
+    _saveDebounce = Timer(
+      _saveDebounceWindow,
+      () => unawaited(_persistIfDirty()),
+    );
   }
 
-  Future<void> _persistIfDirty({bool forceSync = false}) async {
+  Future<void> _persistIfDirty() async {
     final id = widget.artifactId;
     if (id == null || id.isEmpty) return;
     final String serialized;
@@ -1193,13 +1278,15 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     _savingSelfTriggered = true;
     if (mounted) setState(() => _busy = true);
     try {
-      final updated = await ArtifactStorageService.rewriteArtifact(
+      // overwriteCurrentArtifact keeps the version stable — only AI-driven
+      // changes (artifact_manager rewrite/update) bump the version. Live
+      // user drags shouldn't pollute the version history.
+      final updated = await ArtifactStorageService.overwriteCurrentArtifact(
         artifactId: id,
         content: serialized,
-        preserveMetadata: true,
       );
-      // Swap the active doc so the panel + cache see the new version
-      // immediately (rewriteArtifact alone only fires `_emitChange`).
+      // Swap the active doc so the panel + cache see the new content
+      // immediately (overwriteCurrentArtifact only fires `_emitChange`).
       ArtifactStorageService.activeArtifactNotifier.value = updated;
       if (mounted) {
         setState(() {
@@ -1225,10 +1312,6 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
           ),
         );
       }
-    }
-    if (forceSync) {
-      // Synchronous-path callers (dispose) cannot await — they only
-      // need the request to have started.
     }
   }
 
