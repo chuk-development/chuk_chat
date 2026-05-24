@@ -2106,7 +2106,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           artifactId: artifactId,
           title: title,
           type: type,
-          version: version,
+          authoredVersion: version,
         ),
       );
     }
@@ -3572,21 +3572,98 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
 
 /// Compact artifact card shown inline in chat after artifact_manager calls.
 /// Clicking it opens the artifact panel (Claude.ai-style UX).
-class _ArtifactInlineCard extends StatelessWidget {
+///
+/// The card is *reactive*: it always shows the latest current version of the
+/// referenced artifact, looked up live from [ArtifactStorageService]. The
+/// version originally captured when the assistant message was authored
+/// ([authoredVersion]) is used only to show a subtle "(was vN)" hint when the
+/// artifact has moved on, never as the primary label. This keeps old chat
+/// bubbles in sync with the artifact's current state instead of advertising
+/// stale snapshot numbers.
+///
+/// If the artifact has been deleted (e.g. by a regenerate rollback that
+/// removed the version that created it), the card degrades to a disabled
+/// "Artifact removed" state instead of dangling open a 404. While the
+/// artifact has not yet been resolved (chat still loading, network in
+/// flight) the card falls back to the authored title/version to avoid a
+/// flash of "Removed".
+class _ArtifactInlineCard extends StatefulWidget {
   const _ArtifactInlineCard({
     required this.artifactId,
     required this.title,
     required this.type,
-    this.version,
+    this.authoredVersion,
   });
 
   final String artifactId;
+
+  /// Title captured at message-author time. Used as a fallback before the
+  /// live artifact has been resolved, and as the title when the artifact
+  /// has been deleted.
   final String title;
+
+  /// Type captured at message-author time (e.g. `excalidraw`, `markdown`).
+  /// Drives the icon and type label. Type can't change for an artifact id,
+  /// so we don't need a live lookup for this.
   final String type;
-  final int? version;
+
+  /// The artifact's version at the time the assistant message was authored.
+  /// Used to render the "(was vN)" hint when the artifact has been rewritten
+  /// since, and as the fallback label while the live lookup is in flight.
+  final int? authoredVersion;
+
+  @override
+  State<_ArtifactInlineCard> createState() => _ArtifactInlineCardState();
+}
+
+class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
+  /// Latest live snapshot of the artifact, or `null` until the first load
+  /// resolves. Distinct from [_resolved] so we can tell "not loaded yet"
+  /// (show authored fallback) from "loaded and confirmed missing" (show
+  /// removed state).
+  ArtifactDocument? _live;
+
+  /// `true` once we've completed at least one resolution attempt — even if
+  /// it returned `null`. Used to differentiate the initial loading state
+  /// from a confirmed-deleted state.
+  bool _resolved = false;
+
+  StreamSubscription<void>? _changesSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _changesSub = ArtifactStorageService.changes.listen((_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _changesSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final doc = await ArtifactStorageService.loadArtifactById(
+        widget.artifactId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _live = doc;
+        _resolved = true;
+      });
+    } catch (_) {
+      // Resolution failure is non-fatal — keep showing the authored fallback.
+      if (!mounted) return;
+      // Do NOT flip _resolved here. A transient network error must not
+      // collapse the card into the "Removed" state. The next changes-stream
+      // event (or a retry) can still upgrade us to a live snapshot.
+    }
+  }
 
   IconData get _icon {
-    switch (type) {
+    switch (widget.type) {
       case 'code':
         return Icons.code;
       case 'markdown':
@@ -3609,7 +3686,7 @@ class _ArtifactInlineCard extends StatelessWidget {
   }
 
   String get _typeLabel {
-    switch (type) {
+    switch (widget.type) {
       case 'code':
         return 'Code';
       case 'markdown':
@@ -3635,8 +3712,7 @@ class _ArtifactInlineCard extends StatelessWidget {
     // Always try to resolve and activate the clicked artifact — even when the
     // panel is already showing something with a matching id. Users may have
     // multiple cards for the same artifact (e.g. create + rewrite) and expect
-    // each click to refocus that artifact at the version captured in this
-    // chat bubble.
+    // each click to refocus that artifact at the live version.
     //
     // loadArtifactById hits Supabase directly and does not depend on
     // ArtifactStorageService.activeChatId. The deferred setActiveChat() call
@@ -3645,13 +3721,13 @@ class _ArtifactInlineCard extends StatelessWidget {
     // exactly the "first start, artifact card does nothing" symptom.
     try {
       ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
-        artifactId,
+        widget.artifactId,
       );
       final chatId = ArtifactStorageService.activeChatId;
       if (match == null && chatId != null && chatId.isNotEmpty) {
         match = (await ArtifactStorageService.loadArtifactsForChat(
           chatId,
-        )).where((a) => a.id == artifactId).firstOrNull;
+        )).where((a) => a.id == widget.artifactId).firstOrNull;
       }
 
       if (match != null) {
@@ -3665,12 +3741,15 @@ class _ArtifactInlineCard extends StatelessWidget {
     }
     // Fire the open-request event last so the listener reads a fresh
     // active artifact. Using requestOpen() ensures repeated taps reopen the
-    // sheet even when panelOpenNotifier is already true. The artifact id is
-    // required so a stale panel state for a different artifact cannot
-    // accidentally consume this request and pin the wrong version.
+    // sheet even when panelOpenNotifier is already true.
+    //
+    // Pass `version: null` so the panel opens at the LATEST version, not
+    // the snapshot captured at message-author time. The card's whole point
+    // is to point at the live artifact; pinning to an old version on click
+    // would be inconsistent with the label we just rendered.
     ArtifactStorageService.requestOpen(
-      artifactId: artifactId,
-      version: version,
+      artifactId: widget.artifactId,
+      version: null,
     );
   }
 
@@ -3678,11 +3757,50 @@ class _ArtifactInlineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final borderColor = theme.colorScheme.outline.withValues(alpha: 0.3);
+
+    // Artifact is confirmed-deleted: render a disabled "removed" state.
+    // We keep the authored title so the user knows WHICH artifact is gone.
+    final bool removed = _resolved && _live == null;
+
+    // Build the secondary label.
+    //   - Removed:                  "Artifact removed"
+    //   - Live + version moved:     "Excalidraw sketch · v3 (was v1)"
+    //   - Live + same version:      "Excalidraw sketch · v3"
+    //   - Not yet resolved:         "Excalidraw sketch · v1" (authored)
+    //   - No version info anywhere: "Excalidraw sketch"
+    final String secondaryLabel;
+    if (removed) {
+      secondaryLabel = 'Artifact removed';
+    } else {
+      final liveVersion = _live?.version;
+      final authoredVersion = widget.authoredVersion;
+      final shownVersion = liveVersion ?? authoredVersion;
+      if (shownVersion == null) {
+        secondaryLabel = _typeLabel;
+      } else if (liveVersion != null &&
+          authoredVersion != null &&
+          liveVersion != authoredVersion) {
+        secondaryLabel = '$_typeLabel · v$liveVersion (was v$authoredVersion)';
+      } else {
+        secondaryLabel = '$_typeLabel · v$shownVersion';
+      }
+    }
+
+    // Prefer the live title once resolved (artifact may have been renamed
+    // via rewrite). Fall back to the authored title for the loading
+    // window and for the removed state.
+    final String shownTitle = _live?.title ?? widget.title;
+
+    final bool enabled = !removed;
+    final secondaryColor = removed
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => _open(context),
+        onTap: enabled ? () => _open(context) : null,
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -3699,7 +3817,11 @@ class _ArtifactInlineCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 alignment: Alignment.center,
-                child: Icon(_icon, size: 20),
+                child: Icon(
+                  removed ? Icons.delete_outline : _icon,
+                  size: 20,
+                  color: removed ? theme.colorScheme.error : null,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -3708,7 +3830,7 @@ class _ArtifactInlineCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      title,
+                      shownTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -3718,18 +3840,15 @@ class _ArtifactInlineCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      version != null ? '$_typeLabel · v$version' : _typeLabel,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      secondaryLabel,
+                      style: TextStyle(fontSize: 12, color: secondaryColor),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               TextButton(
-                onPressed: () => _open(context),
+                onPressed: enabled ? () => _open(context) : null,
                 child: const Text('Open'),
               ),
             ],
