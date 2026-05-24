@@ -1300,6 +1300,7 @@ Rules:
 CRITICAL:
 - Content must be VALID JSON — no trailing commas, no comments, no single quotes, no ```json fences around the JSON.
 - Wrap the full JSON in the artifact_manager tool call as the `content` string argument. Do NOT wrap it in a code fence inside the content.
+- PREFER `action: "rewrite"` over `action: "update"` for excalidraw artifacts. Excalidraw scenes have many repeated substrings (color hex codes, fontSize values, group IDs, identical "type": "rectangle" entries), so old_str matching almost always fails with "matches N places". Send the whole new scene JSON via rewrite — it is faster and more reliable than diffing.
 ''';
 
 const String _technicalDrawingSchemaText = '''
