@@ -36,4 +36,52 @@ void main() {
       expect(section, contains('not for display-only rendering'));
     });
   });
+
+  group('ToolPromptBuilder artifact rewrite rule (regression for user-edit drop)', () {
+    test(
+      'artifact protocol forbids regenerating rewrites from the AI\'s own memory',
+      () {
+        final builder = ToolPromptBuilder(discoveryMode: false);
+        final artifactTool = <String, dynamic>{
+          'name': 'artifact_manager',
+          'description': 'Manage artifacts.',
+          'parameters': <String, dynamic>{
+            'action': 'create | update | rewrite',
+          },
+        };
+
+        final section = builder.buildToolProtocolSection(
+          tools: <Map<String, dynamic>>[artifactTool],
+          artifactToolDef: artifactTool,
+          includeMapVisualOutput: false,
+          includeChartVisualOutput: false,
+        );
+
+        // The rule must be present so excalidraw / mermaid / svg rewrites
+        // base their output on the live body in the system message instead
+        // of regenerating from the AI's memory of the original version
+        // (which silently destroys user edits between turns — the bug we
+        // are fixing here).
+        expect(
+          section,
+          contains('Rewrites MUST be derived from the CURRENT artifact body'),
+          reason:
+              'tool protocol must instruct the AI to base rewrites on the '
+              'system-message body, not its memory of the previous version',
+        );
+        expect(
+          section,
+          contains('never from your own memory'),
+          reason: 'the explicit "do not regenerate from memory" clause '
+              'must be present',
+        );
+        expect(
+          section,
+          contains('silently destroys every user edit'),
+          reason: 'the consequence (silent edit loss) must be stated so '
+              'the model treats this as a hard rule, not a suggestion',
+        );
+      },
+    );
+  });
 }

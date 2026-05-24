@@ -1157,6 +1157,32 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     _loadIntoController(widget.jsonString);
     _applyTitleToController(widget.title);
     _registerFlusher();
+    _scheduleAutoCenter();
+  }
+
+  /// Auto-fit the scene to the viewport on first paint. Has to wait
+  /// for LayoutBuilder to deliver a non-zero size, otherwise zoomToFit
+  /// has nothing to fit against. We retry a couple of frames in case
+  /// the panel is still animating in.
+  void _scheduleAutoCenter() {
+    var attempts = 0;
+    void tryCenter() {
+      if (!mounted) return;
+      if (_lastKnownCanvasSize.width > 0 &&
+          _lastKnownCanvasSize.height > 0) {
+        try {
+          _controller.zoomToFit(_lastKnownCanvasSize);
+        } catch (error) {
+          if (kDebugMode) debugPrint('auto-center zoomToFit failed: $error');
+        }
+        return;
+      }
+      attempts++;
+      if (attempts > 10) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => tryCenter());
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => tryCenter());
   }
 
   void _loadIntoController(String json) {
@@ -1228,6 +1254,10 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
     }
     if (oldWidget.jsonString != widget.jsonString) {
       _loadIntoController(widget.jsonString);
+      // Fresh content (artifact switched, or AI generated a new version
+      // externally) — recentre so the user actually sees the new scene
+      // instead of staring at the pan/zoom from the previous artifact.
+      _scheduleAutoCenter();
     }
     if (oldWidget.title != widget.title) {
       _applyTitleToController(widget.title);

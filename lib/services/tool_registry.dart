@@ -213,14 +213,33 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'notes',
     description:
-        'Identity & memory system. You can read and write all three stores. '
-        'update_memory: replace the full memory text (curated knowledge). '
-        'update_user: replace the full user profile text. '
-        'update_soul: replace the soul/personality text (MUST inform user). '
+        '**THE ONLY WAY TO UPDATE MEMORY OR USER INFO IS `notes(action=update_memory)` '
+        'OR `notes(action=update_user)`. THERE IS NO `update_memory` TOOL AND NO '
+        '`update_user` TOOL — THOSE NAMES WILL BE REJECTED. Same for soul: use '
+        '`notes(action=update_soul)`, NOT a top-level `update_soul` tool.** '
+        'Identity & memory system. You can read and write all three stores '
+        '(Soul, User, Memory) by calling the `notes` tool with the matching '
+        '`action`. '
+        'SUPPORTED ACTIONS (the ONLY valid values for the `action` parameter): '
+        '"update_memory" | "update_user" | "update_soul". Any other action '
+        'value is invalid. '
+        '- update_memory: replace the full memory text (curated knowledge). '
+        '- update_user: replace the full user profile text. '
+        '- update_soul: replace the soul/personality text (MUST inform user). '
         'All three (Soul, User, Memory) are always in context — you already '
-        'know what is stored. Proactively update when you learn new facts.',
+        'know what is stored. Proactively update when you learn new facts. '
+        'CORRECT: <tool_call>{"name":"notes","arguments":{"action":'
+        '"update_memory","content":"…"}}</tool_call>. '
+        'WRONG (will be rejected): <tool_call>{"name":"update_memory",'
+        '"arguments":{…}}</tool_call>. '
+        'WRONG (will be rejected): <tool_call>{"name":"update_user",'
+        '"arguments":{…}}</tool_call>. '
+        'WRONG (will be rejected): <tool_call>{"name":"update_soul",'
+        '"arguments":{…}}</tool_call>.',
     parameters: {
-      'action': 'string (update_memory, update_user, update_soul)',
+      'action':
+          'string (REQUIRED — MUST be exactly one of: "update_memory" | '
+          '"update_user" | "update_soul". No other value is accepted.)',
       'content': 'string (full replacement text for the chosen store)',
     },
     type: ToolType.builtin,
