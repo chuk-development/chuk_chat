@@ -782,6 +782,137 @@ class ArtifactStorageService {
     return List<ArtifactVersionSnapshot>.from(versions);
   }
 
+  /// Rebuilds [artifact_versions] from the current [artifacts] row when the
+  /// snapshot chain is missing or incomplete. Idempotent — only inserts
+  /// snapshots for versions not already present. Use to repair legacy
+  /// artifacts that pre-date the version-snapshot feature.
+  ///
+  /// Behaviour:
+  ///   * Loads the current artifact row.
+  ///   * Reads which `version` rows already exist in `artifact_versions`.
+  ///   * Inserts a snapshot for `current.version` if missing (using the
+  ///     live encrypted content + attachment path).
+  ///   * If NO snapshots exist at all and `current.version > 1`, also
+  ///     inserts a v1 snapshot mirroring the current content. This is a
+  ///     lossy approximation — the genuinely-original v1 body is
+  ///     unrecoverable — and a warning is logged.
+  ///
+  /// Returns the number of snapshot rows inserted (0 when the chain is
+  /// already healthy or the artifact doesn't exist).
+  static Future<int> repairVersionChain(String artifactId) async {
+    if (!_artifactStorageAvailable) return 0;
+    final normalizedId = artifactId.trim();
+    if (normalizedId.isEmpty) return 0;
+
+    final current = await loadArtifactById(normalizedId);
+    if (current == null) return 0;
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return 0;
+
+    final List existingRows;
+    try {
+      existingRows = await SupabaseService.client
+          .from(_versionsTable)
+          .select('version')
+          .eq('artifact_id', normalizedId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'repairVersionChain(select)',
+      )) {
+        return 0;
+      }
+      rethrow;
+    }
+
+    final existingVersions = existingRows
+        .map((row) => (row as Map)['version'])
+        .map((v) => v is num ? v.toInt() : null)
+        .whereType<int>()
+        .toSet();
+
+    final missingVersions = <int>{};
+    if (!existingVersions.contains(current.version)) {
+      missingVersions.add(current.version);
+    }
+    // If nothing at all exists and version > 1, also seed a v1 from the
+    // current content. The genuine v1 body is gone — log so the user knows
+    // older versions are a lossy approximation.
+    final seedV1 = existingVersions.isEmpty && current.version > 1;
+    if (seedV1) {
+      missingVersions.add(1);
+      unawaited(
+        DiagnosticsLogService.warning(
+          'artifact',
+          'repairVersionChain: seeding v1 from current content (lossy)',
+          data: {
+            'artifactId': normalizedId,
+            'currentVersion': current.version,
+          },
+        ),
+      );
+      if (kDebugMode) {
+        debugPrint(
+          '[repairVersionChain] $normalizedId: no snapshots exist, '
+          'seeding v1 from current v${current.version} (older versions '
+          'are unrecoverable).',
+        );
+      }
+    }
+
+    if (missingVersions.isEmpty) return 0;
+
+    // Encrypt once and reuse for every insert — the same content is being
+    // mirrored into each missing snapshot row.
+    final encrypted = await _encryptOrThrow(current.content);
+
+    int inserted = 0;
+    for (final version in missingVersions) {
+      try {
+        await _insertVersion(
+          artifactId: normalizedId,
+          chatId: current.chatId,
+          userId: current.userId,
+          version: version,
+          encryptedContent: encrypted,
+          createdAt: current.updatedAt,
+          attachmentPath: current.attachmentPath,
+          messageId: current.messageId,
+        );
+        inserted++;
+      } catch (error, stack) {
+        // Don't abort the whole repair on a single failed insert — log
+        // and continue so a partially-broken chain still gets partial
+        // repair. The caller surfaces the count back to the user.
+        unawaited(
+          DiagnosticsLogService.error(
+            'artifact',
+            'repairVersionChain insert failed',
+            data: {
+              'artifactId': normalizedId,
+              'version': version,
+              'error': error.toString(),
+            },
+          ),
+        );
+        if (kDebugMode) {
+          debugPrint(
+            '[repairVersionChain] insert v$version for $normalizedId '
+            'failed: $error\n$stack',
+          );
+        }
+      }
+    }
+
+    if (inserted > 0) {
+      _versionCache.remove(normalizedId);
+      _changesController.add(null);
+    }
+    return inserted;
+  }
+
   static Future<void> _insertVersion({
     required String artifactId,
     required String chatId,
