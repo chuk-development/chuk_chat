@@ -514,6 +514,22 @@ class UserPreferencesService {
     }
   }
 
+  /// Drop the in-memory provider-preferences cache so the next
+  /// [loadAllProviderPreferences] hits Supabase. Called by realtime listeners
+  /// when another device mutates `user_model_providers`.
+  static void invalidateProviderPreferencesCache() {
+    _cachedProviderPreferences = null;
+    _providerPrefsFetchedAt = null;
+  }
+
+  /// Drop the in-memory selected-model cache so the next [loadSelectedModel]
+  /// hits Supabase. Called by realtime listeners when another device updates
+  /// `user_preferences.selected_model_id`.
+  static void invalidateSelectedModelCache() {
+    _cachedSelectedModel = null;
+    _selectedModelFetchedAt = null;
+  }
+
   /// Clear all provider preferences for a user
   static Future<bool> clearAllProviderPreferences() async {
     try {

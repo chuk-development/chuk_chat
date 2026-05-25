@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
@@ -150,6 +151,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   String? _error;
   Map<String, String> _lastSavedPreferences = {};
   Timer? _apiAvailabilityTimer;
+  StreamSubscription<void>? _refreshSubscription;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -162,6 +164,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
       });
+    });
+    _refreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
+      if (!mounted) return;
+      // Realtime change from another device — re-fetch silently so the user
+      // sees the new active-model list without pulling to refresh.
+      unawaited(_fetchModels());
     });
     _initializeModelSelections();
   }
@@ -661,6 +669,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   @override
   void dispose() {
     _stopApiAvailabilityPolling();
+    _refreshSubscription?.cancel();
+    _refreshSubscription = null;
     _searchController.dispose();
     super.dispose();
   }

@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_model_prefs_realtime_service.dart';
 
 /// Callback for session-related events
 typedef SessionEventCallback = void Function();
@@ -66,6 +67,9 @@ class SessionManagerService extends ChangeNotifier {
     if (kDebugMode) {
       debugPrint('🔐 [SessionManager] Session active for user: ${user.id}');
     }
+
+    // Cross-device sync for model selections / activations. Idempotent.
+    unawaited(UserModelPrefsRealtimeService.instance.start(user.id));
 
     // Initialize user session (chat loading, sync, theme) — but only once
     // per user. Token refreshes re-trigger onAuthStateChange, so we guard
@@ -157,6 +161,7 @@ class SessionManagerService extends ChangeNotifier {
 
     // Stop sync immediately
     ChatSyncService.stop();
+    unawaited(UserModelPrefsRealtimeService.instance.stop());
 
     // Check if this is a real logout or just offline
     final isOnline = await _checkNetworkStatus();
