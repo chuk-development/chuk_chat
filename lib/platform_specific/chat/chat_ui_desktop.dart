@@ -2057,6 +2057,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   i,
                                                   data,
                                                 ),
+                                            useSharedSelectionArea: true,
                                             status: data.status,
                                             lastError: data.lastError,
                                             onRetryPending: data.isUser &&
