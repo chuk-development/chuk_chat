@@ -288,7 +288,7 @@ const Map<String, String> stringsBn = {
   'updateAvailable': 'আপডেট উপলব্ধ: v{version} — ডাউনলোড করতে ট্যাপ করুন',
   'versionUnavailable': 'সংস্করণ তথ্য অনুপলব্ধ।',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nসর্বস্বত্ব সংরক্ষিত।',
+      '\u00a9 {year} Chuk Development\nসর্বস্বত্ব সংরক্ষিত।',
   'licenses': 'লাইসেন্স',
   'unableToLoadLicenses': 'লাইসেন্স লোড করা যাচ্ছে না।',
   'tapToViewLicense': 'সম্পূর্ণ লাইসেন্স টেক্সট দেখতে ট্যাপ করুন',

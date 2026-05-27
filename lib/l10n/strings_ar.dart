@@ -288,7 +288,7 @@ const Map<String, String> stringsAr = {
   'updateAvailable': 'تحديث متاح: v{version} — انقر للتحميل',
   'versionUnavailable': 'معلومات الإصدار غير متاحة.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nجميع الحقوق محفوظة.',
+      '\u00a9 {year} Chuk Development\nجميع الحقوق محفوظة.',
   'licenses': 'التراخيص',
   'unableToLoadLicenses': 'تعذر تحميل التراخيص.',
   'tapToViewLicense': 'انقر لعرض نص الترخيص الكامل',

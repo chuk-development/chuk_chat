@@ -295,7 +295,7 @@ const Map<String, String> stringsRu = {
   'updateAvailable': 'Доступно обновление: v{version} — нажмите для загрузки',
   'versionUnavailable': 'Информация о версии недоступна.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nВсе права защищены.',
+      '\u00a9 {year} Chuk Development\nВсе права защищены.',
   'licenses': 'Лицензии',
   'unableToLoadLicenses': 'Не удалось загрузить лицензии.',
   'tapToViewLicense': 'Нажмите для просмотра полного текста лицензии',

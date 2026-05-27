@@ -376,7 +376,7 @@ const Map<String, String> stringsDe = {
       'Update verfügbar: v{version} \u2014 zum Herunterladen tippen',
   'versionUnavailable': 'Versionsinformationen nicht verfügbar.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nAlle Rechte vorbehalten.',
+      '\u00a9 {year} Chuk Development\nAlle Rechte vorbehalten.',
   'licenses': 'Lizenzen',
   'unableToLoadLicenses': 'Lizenzen konnten nicht geladen werden.',
   'tapToViewLicense': 'Tippen, um den vollständigen Lizenztext anzuzeigen',

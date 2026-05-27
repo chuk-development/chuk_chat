@@ -325,7 +325,7 @@ const Map<String, String> stringsFr = {
   'versionUnavailable':
       'Informations de version indisponibles.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nTous droits réservés.',
+      '\u00a9 {year} Chuk Development\nTous droits réservés.',
   'licenses': 'Licences',
   'unableToLoadLicenses':
       'Impossible de charger les licences.',
