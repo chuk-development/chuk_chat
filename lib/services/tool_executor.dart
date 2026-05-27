@@ -1323,13 +1323,13 @@ DIN ISO 128-style engineering drawing. Content is JSON:
     "sheet": "1/1"
   },
   "elements": [
-    {"type":"rect","lineStyle":"solid","weight":"thick","x":50,"y":30,"w":120,"h":80},
-    {"type":"circle","lineStyle":"solid","weight":"thick","cx":110,"cy":70,"r":15},
+    {"type":"rect","lineStyle":"solid","weight":"thick","x":50,"y":30,"w":120,"h":80,"color":"#1e1e1e","fill":"#a5d8ff"},
+    {"type":"circle","lineStyle":"solid","weight":"thick","cx":110,"cy":70,"r":15,"color":"#c92a2a"},
     {"type":"line","lineStyle":"centerline","weight":"thin","x1":85,"y1":70,"x2":135,"y2":70},
     {"type":"dimension","subtype":"linear_h","x1":50,"x2":170,"y":110,"offset":14,"value":"120"},
     {"type":"dimension","subtype":"linear_v","y1":30,"y2":110,"x":50,"offset":-14,"value":"80"},
     {"type":"dimension","subtype":"diameter","cx":110,"cy":70,"r":15,"angle":45,"value":"\\u00d8 30"},
-    {"type":"note","x":50,"y":22,"text":"t = 10"}
+    {"type":"note","x":50,"y":22,"text":"t = 10","color":"#2b8a3e"}
   ]
 }
 ```
@@ -1343,6 +1343,7 @@ Rules:
 - note: freeform text at (x,y).
 - meta fields populate the DIN title block.
 - Dimension all significant features, centerlines through circles and symmetry axes.
+- Colors (optional): "color" sets stroke / text color on rect, circle, line, note. "fill" sets fill color on rect and circle (default: no fill). Both accept hex strings — "#RRGGBB", "#RGB", or "none". Default stroke/text color is black ("#000000"). Keep DIN drawings monochrome by default; only use color when the user asks for it (highlight features, layer-coded layouts, presentation drawings, schematics). Dimensions stay black per DIN convention.
 ''';
 
 const String _typstSchemaText = '''
