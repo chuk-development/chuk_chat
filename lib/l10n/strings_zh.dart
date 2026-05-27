@@ -252,7 +252,7 @@ const Map<String, String> stringsZh = {
   'versionText': '版本 {version}',
   'updateAvailable': '有新版本可用：v{version} \u2014 点击下载',
   'versionUnavailable': '版本信息不可用。',
-  'copyrightYear': '\u00a9 {year} Chuk Chat\n保留所有权利。',
+  'copyrightYear': '\u00a9 {year} Chuk Development\n保留所有权利。',
   'licenses': '许可证',
   'unableToLoadLicenses': '无法加载许可证。',
   'tapToViewLicense': '点击查看完整许可证文本',

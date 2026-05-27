@@ -285,7 +285,7 @@ const Map<String, String> stringsJa = {
   'updateAvailable': 'アップデートあり: v{version} — タップしてダウンロード',
   'versionUnavailable': 'バージョン情報は利用できません。',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nAll rights reserved.',
+      '\u00a9 {year} Chuk Development\nAll rights reserved.',
   'licenses': 'ライセンス',
   'unableToLoadLicenses': 'ライセンスを読み込めません。',
   'tapToViewLicense': 'タップしてライセンス全文を表示',

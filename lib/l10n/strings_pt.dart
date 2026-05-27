@@ -297,7 +297,7 @@ const Map<String, String> stringsPt = {
       'Atualização disponível: v{version} \u2014 toque para baixar',
   'versionUnavailable': 'Informações da versão indisponíveis.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nTodos os direitos reservados.',
+      '\u00a9 {year} Chuk Development\nTodos os direitos reservados.',
   'licenses': 'Licenças',
   'unableToLoadLicenses': 'Não foi possível carregar as licenças.',
   'tapToViewLicense': 'Toque para ver o texto completo da licença',

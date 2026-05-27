@@ -358,7 +358,7 @@ const Map<String, String> stringsEn = {
   'updateAvailable': 'Update available: v{version} \u2014 tap to download',
   'versionUnavailable': 'Version information unavailable.',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nAll rights reserved.',
+      '\u00a9 {year} Chuk Development\nAll rights reserved.',
   'licenses': 'Licenses',
   'unableToLoadLicenses': 'Unable to load licenses.',
   'tapToViewLicense': 'Tap to view full license text',

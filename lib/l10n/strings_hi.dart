@@ -288,7 +288,7 @@ const Map<String, String> stringsHi = {
   'updateAvailable': 'अपडेट उपलब्ध: v{version} — डाउनलोड करने के लिए टैप करें',
   'versionUnavailable': 'संस्करण जानकारी उपलब्ध नहीं।',
   'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nसर्वाधिकार सुरक्षित।',
+      '\u00a9 {year} Chuk Development\nसर्वाधिकार सुरक्षित।',
   'licenses': 'लाइसेंस',
   'unableToLoadLicenses': 'लाइसेंस लोड करने में असमर्थ।',
   'tapToViewLicense': 'पूर्ण लाइसेंस टेक्स्ट देखने के लिए टैप करें',
