@@ -296,10 +296,24 @@ class TechDrawPainter extends CustomPainter {
     final strokeW = weight == 'thick' ? _mm(0.7) : _mm(0.25);
 
     return Paint()
-      ..color = Colors.black
+      ..color = _parseColor(e['color'], Colors.black)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeW
       ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+  }
+
+  Paint? _fillPaint(Map<String, dynamic> e) {
+    final raw = e['fill'];
+    if (raw == null) return null;
+    if (raw is String && (raw.isEmpty || raw.toLowerCase() == 'none')) {
+      return null;
+    }
+    final c = _parseColor(raw, Colors.transparent);
+    if (c.a == 0) return null;
+    return Paint()
+      ..color = c
+      ..style = PaintingStyle.fill
       ..isAntiAlias = true;
   }
 
@@ -309,6 +323,23 @@ class TechDrawPainter extends CustomPainter {
     ..strokeCap = StrokeCap.round
     ..isAntiAlias = true;
 
+  /// Parse hex color: #RGB, #RRGGBB, #RRGGBBAA (or without #). Returns
+  /// [fallback] on any error.
+  static Color _parseColor(dynamic v, Color fallback) {
+    if (v is! String) return fallback;
+    var h = v.trim();
+    if (h.isEmpty) return fallback;
+    if (h.startsWith('#')) h = h.substring(1);
+    if (h.length == 3) {
+      h = h.split('').map((c) => '$c$c').join();
+    }
+    if (h.length == 6) h = 'FF$h';
+    if (h.length != 8) return fallback;
+    final n = int.tryParse(h, radix: 16);
+    if (n == null) return fallback;
+    return Color(n);
+  }
+
   void _drawRect(Canvas canvas, Map<String, dynamic> e) {
     final x = _d(e['x']);
     final y = _d(e['y']);
@@ -316,9 +347,13 @@ class TechDrawPainter extends CustomPainter {
     final h = _d(e['h']);
     final lineStyle = e['lineStyle'] as String? ?? 'solid';
     final paint = _elementPaint(e);
+    final fill = _fillPaint(e);
+
+    final rect = Rect.fromLTWH(_mm(x), _mm(y), _mm(w), _mm(h));
+    if (fill != null) canvas.drawRect(rect, fill);
 
     if (lineStyle == 'solid') {
-      canvas.drawRect(Rect.fromLTWH(_mm(x), _mm(y), _mm(w), _mm(h)), paint);
+      canvas.drawRect(rect, paint);
     } else {
       // Draw each edge as a styled line.
       _drawStyledLine(canvas, x, y, x + w, y, paint, lineStyle);
@@ -334,6 +369,9 @@ class TechDrawPainter extends CustomPainter {
     final r = _d(e['r']);
     final lineStyle = e['lineStyle'] as String? ?? 'solid';
     final paint = _elementPaint(e);
+    final fill = _fillPaint(e);
+
+    if (fill != null) canvas.drawCircle(_pt(cx, cy), _mm(r), fill);
 
     if (lineStyle == 'solid') {
       canvas.drawCircle(_pt(cx, cy), _mm(r), paint);
@@ -653,7 +691,7 @@ class TechDrawPainter extends CustomPainter {
 
     final fontSize = _mm(3.2);
     final textStyle = ui.TextStyle(
-      color: Colors.black,
+      color: _parseColor(e['color'], Colors.black),
       fontSize: fontSize,
       fontFamily: 'sans-serif',
     );

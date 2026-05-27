@@ -176,8 +176,26 @@ String _strokeAttrs(Map<String, dynamic> e) {
   final lineStyle = e['lineStyle'] as String? ?? 'solid';
   final dash = _dashArray(lineStyle);
   final sw = _strokeWidth(weight);
-  final base = 'stroke="black" stroke-width="$sw" fill="none"';
+  final stroke = _normalizeHex(e['color']) ?? 'black';
+  final fill = _normalizeHex(e['fill']) ?? 'none';
+  final base = 'stroke="$stroke" stroke-width="$sw" fill="$fill"';
   return dash == null ? base : '$base stroke-dasharray="$dash"';
+}
+
+/// Normalize hex (#RGB, #RRGGBB, RGB, RRGGBB) → "#RRGGBB". Returns null
+/// on invalid input (caller substitutes default). 'none' / empty → "none".
+String? _normalizeHex(dynamic v) {
+  if (v is! String) return null;
+  final t = v.trim();
+  if (t.isEmpty) return null;
+  if (t.toLowerCase() == 'none') return 'none';
+  var h = t.startsWith('#') ? t.substring(1) : t;
+  if (h.length == 3) {
+    h = h.split('').map((c) => '$c$c').join();
+  }
+  if (h.length != 6) return null;
+  if (int.tryParse(h, radix: 16) == null) return null;
+  return '#${h.toUpperCase()}';
 }
 
 void _writeRect(StringBuffer sb, Map<String, dynamic> e) {
@@ -376,6 +394,7 @@ void _writeNote(StringBuffer sb, Map<String, dynamic> e) {
   final x = _d(e['x']);
   final y = _d(e['y']);
   final text = _escapeXml(e['text'] as String? ?? '');
+  final color = _normalizeHex(e['color']) ?? 'black';
   // Rough width estimate (3.2mm font ≈ 1.9mm/char).
   final estW = text.length * 1.9;
   const h = 4.0;
@@ -386,7 +405,7 @@ void _writeNote(StringBuffer sb, Map<String, dynamic> e) {
     )
     ..writeln(
       '<text x="${_f(x)}" y="${_f(y)}" font-family="sans-serif" '
-      'font-size="3.2" fill="black">$text</text>',
+      'font-size="3.2" fill="$color">$text</text>',
     );
 }
 
