@@ -1631,17 +1631,41 @@ class _MessageBubbleState extends State<MessageBubble> {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-            child: AspectRatio(
-              aspectRatio: 16 / 10,
-              child: Image.network(
-                rawUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: colorScheme.surfaceContainerHighest,
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: colorScheme.onSurfaceVariant,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _openImagePreview(
+                  imageSource: rawUrl,
+                  images: [rawUrl],
+                  index: 0,
+                ),
+                child: Image.network(
+                  rawUrl,
+                  width: double.infinity,
+                  fit: BoxFit.fitWidth,
+                  frameBuilder: (context, child, frame, wasSync) {
+                    if (frame == null) {
+                      return Container(
+                        height: 180,
+                        color: colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
+                    return child;
+                  },
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 120,
+                    color: colorScheme.surfaceContainerHighest,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),

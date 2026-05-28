@@ -1,9 +1,11 @@
 // lib/widgets/image_viewer.dart
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
@@ -102,6 +104,21 @@ class _ImageViewerState extends State<ImageViewer> {
         throw const FormatException('Invalid Base64 data URI');
       }
       bytes = base64Decode(imageSource.substring(commaIndex + 1));
+    } else if (imageSource.startsWith('http://') ||
+        imageSource.startsWith('https://')) {
+      const maxImageBytes = 20 * 1024 * 1024;
+      final resp = await http
+          .get(Uri.parse(imageSource))
+          .timeout(const Duration(seconds: 30));
+      if (resp.statusCode != 200) {
+        throw Exception('HTTP ${resp.statusCode} fetching image');
+      }
+      if (resp.bodyBytes.length > maxImageBytes) {
+        throw Exception(
+          'Image exceeds maximum size of $maxImageBytes bytes',
+        );
+      }
+      bytes = resp.bodyBytes;
     } else {
       bytes = await ImageStorageService.downloadAndDecryptImage(imageSource);
     }
