@@ -740,6 +740,20 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
                 ),
               ],
             ),
+            if (!entry.isMediaRequest &&
+                (entry.promptCostUsd > 0 || entry.completionCostUsd > 0)) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 38),
+                child: Text(
+                  _buildCostBreakdownLine(entry),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color: onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ],
             if (entry.cacheReadTokens > 0) ...[
               const SizedBox(height: 6),
               Padding(
@@ -758,6 +772,23 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         ),
       ),
     );
+  }
+
+  String _buildCostBreakdownLine(UsageLogEntry entry) {
+    final List<String> parts = <String>[];
+    if (entry.promptCostUsd > 0) {
+      parts.add('Prompt ${_formatUsd(entry.promptCostUsd, decimals: 6)}');
+    }
+    if (entry.completionCostUsd > 0) {
+      parts.add(
+        'Completion ${_formatUsd(entry.completionCostUsd, decimals: 6)}',
+      );
+    }
+    final double cacheTotal = entry.cacheReadCostUsd + entry.cacheWriteCostUsd;
+    if (cacheTotal > 0) {
+      parts.add('Cache ${_formatUsd(cacheTotal, decimals: 6)}');
+    }
+    return parts.join('  •  ');
   }
 
   Widget _buildPill(BuildContext context, String text) {
