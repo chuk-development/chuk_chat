@@ -16,6 +16,8 @@ class UsageLogEntry {
     this.cacheWriteTokens = 0,
     this.cacheReadCostUsd = 0,
     this.cacheWriteCostUsd = 0,
+    this.promptCostUsd = 0,
+    this.completionCostUsd = 0,
   });
 
   final String modelId;
@@ -30,6 +32,8 @@ class UsageLogEntry {
   final int cacheWriteTokens;
   final double cacheReadCostUsd;
   final double cacheWriteCostUsd;
+  final double promptCostUsd;
+  final double completionCostUsd;
 
   int get textTokens => promptTokens + completionTokens;
 
@@ -59,6 +63,8 @@ class UsageLogEntry {
       cacheWriteTokens: _parseInt(row['cache_write_tokens']),
       cacheReadCostUsd: _parseDouble(row['cache_read_cost_usd']),
       cacheWriteCostUsd: _parseDouble(row['cache_write_cost_usd']),
+      promptCostUsd: _parseDouble(row['prompt_cost_usd']),
+      completionCostUsd: _parseDouble(row['completion_cost_usd']),
     );
   }
 }
@@ -72,6 +78,8 @@ class UsageModelSummary {
     required this.mediaRequestCount,
     required this.totalCostUsd,
     required this.totalCreditsEur,
+    this.totalPromptCostUsd = 0,
+    this.totalCompletionCostUsd = 0,
   });
 
   final String modelId;
@@ -81,6 +89,8 @@ class UsageModelSummary {
   final int mediaRequestCount;
   final double totalCostUsd;
   final double totalCreditsEur;
+  final double totalPromptCostUsd;
+  final double totalCompletionCostUsd;
 }
 
 class UsageOverview {
@@ -101,6 +111,8 @@ class UsageOverview {
     this.totalCacheWriteTokens = 0,
     this.totalCacheReadCostUsd = 0,
     this.totalCacheWriteCostUsd = 0,
+    this.totalPromptCostUsd = 0,
+    this.totalCompletionCostUsd = 0,
   });
 
   final List<UsageLogEntry> entries;
@@ -118,6 +130,9 @@ class UsageOverview {
   final int totalCacheWriteTokens;
   final double totalCacheReadCostUsd;
   final double totalCacheWriteCostUsd;
+
+  final double totalPromptCostUsd;
+  final double totalCompletionCostUsd;
 
   final double? totalCreditsAllocated;
   final double? creditsRemaining;
@@ -168,6 +183,8 @@ class UsageLogsService {
       int totalCacheWriteTokens = 0;
       double totalCacheReadCostUsd = 0;
       double totalCacheWriteCostUsd = 0;
+      double totalPromptCostUsd = 0;
+      double totalCompletionCostUsd = 0;
 
       for (final entry in entries) {
         totalPromptTokens += entry.promptTokens;
@@ -182,6 +199,8 @@ class UsageLogsService {
         totalCacheWriteTokens += entry.cacheWriteTokens;
         totalCacheReadCostUsd += entry.cacheReadCostUsd;
         totalCacheWriteCostUsd += entry.cacheWriteCostUsd;
+        totalPromptCostUsd += entry.promptCostUsd;
+        totalCompletionCostUsd += entry.completionCostUsd;
       }
 
       return UsageOverview(
@@ -198,6 +217,8 @@ class UsageLogsService {
         totalCacheWriteTokens: totalCacheWriteTokens,
         totalCacheReadCostUsd: totalCacheReadCostUsd,
         totalCacheWriteCostUsd: totalCacheWriteCostUsd,
+        totalPromptCostUsd: totalPromptCostUsd,
+        totalCompletionCostUsd: totalCompletionCostUsd,
         totalCreditsAllocated: billing.totalCreditsAllocated,
         creditsRemaining: billing.creditsRemaining,
         creditsLastRenewedPeriod: billing.creditsLastRenewedPeriod,
@@ -219,7 +240,7 @@ class UsageLogsService {
       final response = await SupabaseService.client
           .from('usage_logs')
           .select(
-            'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at,cache_read_tokens,cache_write_tokens,cache_read_cost_usd,cache_write_cost_usd',
+            'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at,cache_read_tokens,cache_write_tokens,cache_read_cost_usd,cache_write_cost_usd,prompt_cost_usd,completion_cost_usd',
           )
           .eq('user_id', userId)
           .order('created_at', ascending: false)
@@ -298,6 +319,8 @@ class UsageLogsService {
       }
       summary.totalCostUsd += entry.totalCostUsd;
       summary.totalCreditsEur += entry.creditsDeductedEur;
+      summary.totalPromptCostUsd += entry.promptCostUsd;
+      summary.totalCompletionCostUsd += entry.completionCostUsd;
       summary.providerHits[entry.providerSlug] =
           (summary.providerHits[entry.providerSlug] ?? 0) + 1;
     }
@@ -312,6 +335,8 @@ class UsageLogsService {
             mediaRequestCount: item.mediaRequestCount,
             totalCostUsd: item.totalCostUsd,
             totalCreditsEur: item.totalCreditsEur,
+            totalPromptCostUsd: item.totalPromptCostUsd,
+            totalCompletionCostUsd: item.totalCompletionCostUsd,
           ),
         )
         .toList(growable: false);
@@ -360,6 +385,8 @@ class _MutableModelSummary {
   int mediaRequestCount = 0;
   double totalCostUsd = 0;
   double totalCreditsEur = 0;
+  double totalPromptCostUsd = 0;
+  double totalCompletionCostUsd = 0;
 
   String get primaryProvider {
     if (providerHits.isEmpty) {
