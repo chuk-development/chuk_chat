@@ -550,7 +550,7 @@ jobs:
 
       - name: Install Flutter (manual ARM64)
         run: |
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1 "$HOME/flutter"
+          git clone https://github.com/flutter/flutter.git -b 3.41.4 --depth 1 "$HOME/flutter"
           echo "$HOME/flutter/bin" >> $GITHUB_PATH
 
       - name: Flutter setup
@@ -953,7 +953,7 @@ jobs:
 
       - name: Install Flutter (manual ARM64)
         run: |
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1 "$HOME/flutter"
+          git clone https://github.com/flutter/flutter.git -b 3.41.4 --depth 1 "$HOME/flutter"
           echo "$HOME/flutter/bin" >> $GITHUB_PATH
 
       - name: Flutter setup
@@ -1262,7 +1262,7 @@ jobs:
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
-        with: { channel: stable, cache: true }
+        with: { flutter-version: '3.41.4', cache: true }
 
       - run: flutter pub get
 
@@ -1336,7 +1336,7 @@ jobs:
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
-        with: { channel: stable, cache: true }
+        with: { flutter-version: '3.41.4', cache: true }
 
       - run: flutter pub get
 
