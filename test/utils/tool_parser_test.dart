@@ -122,6 +122,34 @@ void main() {
         expect(cleaned, 'Suche Bild...');
       },
     );
+
+    test('strips Kimi <|tool_calls_section_begin|> special token', () {
+      const content = 'Ich suche das nach.\n<|tool_calls_section_begin|>';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Ich suche das nach.');
+    });
+
+    test('strips a dangling lone "<" left at the end of a tool round', () {
+      const content = 'Ich schaue das nach.\n<';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Ich schaue das nach.');
+    });
+
+    test('reduces a content that is only "<" to empty', () {
+      expect(stripToolCallBlocksForDisplay('<'), '');
+    });
+
+    test('preserves a mid-text "<" used as a less-than sign', () {
+      const content = 'Wenn a < b dann gilt das.';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Wenn a < b dann gilt das.');
+    });
   });
 
   group('hasToolCallStartMarker', () {
