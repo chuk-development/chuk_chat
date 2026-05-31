@@ -64,8 +64,8 @@ debian/
 rpm/
 AppDir/
 
-# Build tools (downloaded automatically)
-tools/
+# Build tools (downloaded automatically) — root only, do not match vendored tools/ dirs
+/tools/
 
 # Generated files
 combined_code_for_llm.txt

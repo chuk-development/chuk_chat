@@ -343,6 +343,20 @@ String stripToolCallBlocksForDisplay(
     if (markdownPartialIdx != -1) {
       cleaned = cleaned.substring(0, markdownPartialIdx);
     }
+
+    // Kimi K2.x (Fireworks) emits native tool calls wrapped in special
+    // tokens like `<|tool_calls_section_begin|>`. The structured calls are
+    // surfaced separately by the v2 multiplex path, but the leading `<` (and
+    // sometimes a partial `<|…` token) leaks into the content stream. Strip
+    // complete special-token blocks, any trailing partial token, and a bare
+    // dangling `<` so it never renders as a stray `<` text block above the
+    // tool-call bar.
+    cleaned = cleaned.replaceAll(RegExp(r'<\|[^>]*\|>'), '');
+    cleaned = cleaned.replaceFirst(RegExp(r'<\|[^>]*$'), '');
+    // A lone `<` left dangling at the very end is a tag-opener fragment
+    // (start of `<tool_call>` / `<|…|>` that was split or server-stripped),
+    // never real prose. Mid-text `<` (e.g. "a < b") is preserved.
+    cleaned = cleaned.replaceFirst(RegExp(r'<\s*$'), '');
   }
 
   return cleaned.trim();
