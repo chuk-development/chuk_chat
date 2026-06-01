@@ -15,6 +15,7 @@ RUN flutter doctor -v
 
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
+COPY vendor/ ./vendor/
 RUN flutter pub get
 
 COPY . .
