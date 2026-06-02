@@ -517,6 +517,7 @@ const Map<String, String> stringsPt = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
+  'queuedLabel': 'Na fila',
   'editYourMessage': 'Edite sua mensagem...',
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',
   'micAccessFailed': 'Falha no acesso ao microfone',

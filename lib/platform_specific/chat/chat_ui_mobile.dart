@@ -1831,12 +1831,32 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
+  /// Cancel a queued follow-up message and restore its text to the composer so
+  /// the user can edit or discard it instead of losing it silently.
+  void _cancelPendingMessage() {
+    final pending = _pendingMessageText;
+    if (pending == null) return;
+    final bool restore = _controller.text.trim().isEmpty;
+    if (mounted) {
+      setState(() {
+        _pendingMessageText = null;
+        if (restore) {
+          _controller.text = pending;
+          _controller.selection = TextSelection.collapsed(
+            offset: pending.length,
+          );
+        }
+      });
+    } else {
+      _pendingMessageText = null;
+    }
+  }
+
   /// If a message was queued while the AI was streaming, inject it into the
   /// text field and trigger a new send cycle.
   void _drainPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    _pendingMessageText = null;
 
     if (kDebugMode) {
       debugPrint(
@@ -1845,6 +1865,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     setState(() {
+      _pendingMessageText = null;
       _controller.text = pending;
       _controller.selection = TextSelection.collapsed(offset: pending.length);
     });
@@ -1866,7 +1887,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // AI is still streaming — queue the message instead of cancelling.
       final text = _controller.text.trim();
       if (text.isNotEmpty) {
-        _pendingMessageText = text;
+        if (mounted) {
+          setState(() {
+            _pendingMessageText = text;
+          });
+        } else {
+          _pendingMessageText = text;
+        }
         _controller.clear();
         if (kDebugMode) {
           debugPrint(
@@ -3089,7 +3116,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
-        40.0 + (hasAttachments ? 80.0 : 0.0) + 32.0 + mediaQuery.padding.bottom;
+        40.0 +
+        (hasAttachments ? 80.0 : 0.0) +
+        (_pendingMessageText != null ? 28.0 : 0.0) +
+        32.0 +
+        mediaQuery.padding.bottom;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
       10,
@@ -3699,6 +3730,63 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                       ),
                                       child: Text(
                                         'Cancel',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.onSurface
+                                              .withValues(alpha: 0.6),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          // ── Queued message indicator ──
+                          // Shown when the user sent while the AI was still
+                          // streaming; it auto-sends on completion.
+                          if (_pendingMessageText != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule,
+                                    size: 12,
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      '${AppLocalizations.of(context)!.queuedLabel}: '
+                                      '"${_pendingMessageText!}"',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary
+                                            .withValues(alpha: 0.7),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _cancelPendingMessage,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        AppLocalizations.of(context)!.cancel,
                                         style: TextStyle(
                                           color: theme.colorScheme.onSurface
                                               .withValues(alpha: 0.6),

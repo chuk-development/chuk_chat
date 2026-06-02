@@ -608,6 +608,7 @@ const Map<String, String> stringsDe = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Frag mich alles!',
+  'queuedLabel': 'In Warteschlange',
   'editYourMessage': 'Nachricht bearbeiten...',
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
   'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',

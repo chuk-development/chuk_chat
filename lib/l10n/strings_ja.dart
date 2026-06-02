@@ -499,6 +499,7 @@ const Map<String, String> stringsJa = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '何でも聞いてください！',
+  'queuedLabel': '待機中',
   'editYourMessage': 'メッセージを編集...',
   'addMessageOrDocs': 'メッセージを追加またはドキュメントを送信',
   'micAccessFailed': 'マイクへのアクセスに失敗しました',

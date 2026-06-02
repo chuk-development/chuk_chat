@@ -577,6 +577,7 @@ const Map<String, String> stringsEn = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Ask me anything !',
+  'queuedLabel': 'Queued',
   'editYourMessage': 'Edit your message...',
   'addMessageOrDocs': 'Add a message or send documents',
   'micAccessFailed': 'Mic access failed',

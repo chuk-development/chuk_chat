@@ -512,6 +512,7 @@ const Map<String, String> stringsRu = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Спросите меня о чём угодно!',
+  'queuedLabel': 'В очереди',
   'editYourMessage': 'Редактируйте ваше сообщение...',
   'addMessageOrDocs': 'Добавьте сообщение или отправьте документы',
   'micAccessFailed': 'Не удалось получить доступ к микрофону',

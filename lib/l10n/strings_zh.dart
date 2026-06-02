@@ -444,6 +444,7 @@ const Map<String, String> stringsZh = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '问我任何问题！',
+  'queuedLabel': '排队中',
   'editYourMessage': '编辑你的消息...',
   'addMessageOrDocs': '添加消息或发送文档',
   'micAccessFailed': '麦克风访问失败',
