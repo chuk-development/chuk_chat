@@ -211,6 +211,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static const double _kAttachmentBarHeight = 40.0;
   static const double _kAttachmentBarMarginBottom =
       8.0; // Margin between attachment bar and search bar
+  static const double _kQueuedBannerHeight =
+      26.0; // Queued-message banner row height (icon + text + bottom padding)
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
   static const double _kShowScrollButtonDistance = 260.0;
@@ -1807,6 +1809,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       inputAreaVisualHeight +=
           _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
     }
+    // Queued-message banner adds a row above the text field.
+    if (_pendingMessageText != null) {
+      inputAreaVisualHeight += _kQueuedBannerHeight;
+    }
     double inputAreaTotalHeight =
         inputAreaVisualHeight +
         (2 *
@@ -2247,6 +2253,44 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Queued message indicator — shown when the user sent a message
+              // while the AI was still streaming. It auto-sends on completion.
+              if (_pendingMessageText != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 14,
+                        color: iconFg.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${AppLocalizations.of(context)!.queuedLabel}: '
+                          '"${_pendingMessageText!}"',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: iconFg.withValues(alpha: 0.6),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: _cancelPendingMessage,
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: accent.withValues(alpha: 0.8),
                         ),
                       ),
                     ],

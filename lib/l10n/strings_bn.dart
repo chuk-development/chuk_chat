@@ -503,6 +503,7 @@ const Map<String, String> stringsBn = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'আমাকে যেকোনো কিছু জিজ্ঞাসা করুন!',
+  'queuedLabel': 'সারিবদ্ধ',
   'editYourMessage': 'আপনার মেসেজ সম্পাদনা করুন...',
   'addMessageOrDocs': 'একটি মেসেজ যোগ করুন বা ডকুমেন্ট পাঠান',
   'micAccessFailed': 'মাইক্রোফোন অ্যাক্সেস ব্যর্থ',

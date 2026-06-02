@@ -1085,7 +1085,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         // AI is still streaming — queue the message instead of cancelling.
         final text = _controller.text.trim();
         if (text.isNotEmpty) {
-          _pendingMessageText = text;
+          if (mounted) {
+            setState(() {
+              _pendingMessageText = text;
+            });
+          } else {
+            _pendingMessageText = text;
+          }
           _controller.clear();
           if (kDebugMode) {
             debugPrint(
@@ -2450,10 +2456,35 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   /// If a message was queued while the AI was streaming, inject it into the
   /// text field and trigger a new send cycle.
+  /// Cancel a queued follow-up message and restore its text to the composer so
+  /// the user can edit or discard it instead of losing it silently.
+  void _cancelPendingMessage() {
+    final pending = _pendingMessageText;
+    if (pending == null) return;
+    if (mounted) {
+      setState(() {
+        _pendingMessageText = null;
+      });
+    } else {
+      _pendingMessageText = null;
+    }
+    if (_controller.text.trim().isEmpty) {
+      _controller.text = pending;
+      _controller.selection = TextSelection.collapsed(offset: pending.length);
+    }
+    _textFieldFocusNode.requestFocus();
+  }
+
   void _drainPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    _pendingMessageText = null;
+    if (mounted) {
+      setState(() {
+        _pendingMessageText = null;
+      });
+    } else {
+      _pendingMessageText = null;
+    }
 
     if (kDebugMode) {
       debugPrint(

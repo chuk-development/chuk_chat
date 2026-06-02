@@ -589,6 +589,7 @@ const Map<String, String> stringsFr = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Posez-moi n\'importe quelle question !',
+  'queuedLabel': 'En file d\'attente',
   'editYourMessage': 'Modifier votre message...',
   'addMessageOrDocs':
       'Ajouter un message ou envoyer des documents',

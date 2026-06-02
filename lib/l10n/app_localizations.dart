@@ -575,6 +575,7 @@ class AppLocalizations {
 
   // ── Chat UI ────────────────────────────────────────────────
   String get askMeAnything => _get('askMeAnything');
+  String get queuedLabel => _get('queuedLabel');
   String get editYourMessage => _get('editYourMessage');
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');
