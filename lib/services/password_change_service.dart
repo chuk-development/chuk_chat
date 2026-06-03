@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/utils/client_platform.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 
 class PasswordChangeService {
@@ -82,7 +83,10 @@ class PasswordChangeService {
 
     try {
       await SupabaseService.auth.updateUser(
-        UserAttributes(password: trimmedNew),
+        UserAttributes(
+          password: trimmedNew,
+          data: {'pw_change_client': clientPlatformName()},
+        ),
       );
     } on AuthException catch (error) {
       final restored = await _tryRestoreEncryption(

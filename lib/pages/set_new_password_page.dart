@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/key_version_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/utils/client_platform.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
@@ -62,9 +63,14 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
     try {
       final newPassword = _passwordCtrl.text.trim();
 
-      // 1. Update the Supabase auth password
+      // 1. Update the Supabase auth password. Stamp the client platform into
+      // user_metadata so the "password changed" notification email can show
+      // where the change originated.
       await SupabaseService.auth.updateUser(
-        UserAttributes(password: newPassword),
+        UserAttributes(
+          password: newPassword,
+          data: {'pw_change_client': clientPlatformName()},
+        ),
       );
 
       // 2. Get the current user (now authenticated via reset link)
