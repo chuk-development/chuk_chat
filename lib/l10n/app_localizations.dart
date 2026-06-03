@@ -205,7 +205,7 @@ class AppLocalizations {
   String get filmGrainSubtitle => _get('filmGrainSubtitle');
   String get dynamicColor => _get('dynamicColor');
   String get dynamicColorSubtitle => _get('dynamicColorSubtitle');
-  String get accentColorDynamicNote => _get('accentColorDynamicNote');
+  String get colorDynamicNote => _get('colorDynamicNote');
   String get customHexColor => _get('customHexColor');
   String get pickCustomColor => _get('pickCustomColor');
   String get pickAColor => _get('pickAColor');

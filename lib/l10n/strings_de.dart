@@ -153,8 +153,8 @@ const Map<String, String> stringsDe = {
   'dynamicColor': 'Material You',
   'dynamicColorSubtitle':
       'Systemfarben verwenden und Theme-Änderungen automatisch übernehmen',
-  'accentColorDynamicNote':
-      'Die Akzentfarbe wird von deinem Material-You-Systemtheme festgelegt.',
+  'colorDynamicNote':
+      'Wird automatisch von deiner Material-You-Systempalette festgelegt.',
   'customHexColor': 'Benutzerdefinierte Hex-Farbe (#RRGGBB)',
   'pickCustomColor': 'Eigene Farbe wählen',
   'pickAColor': 'Farbe auswählen',

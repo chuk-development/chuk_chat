@@ -112,9 +112,12 @@ class AppThemeService extends ChangeNotifier {
   SharedPreferences? _cachedPrefs;
   Timer? _syncDebounce;
   ThemeData? _cachedThemeData;
-  // The accent the cached theme was built with (may differ from _accentColor
-  // when Material You / dynamic colour is overriding it).
+  // The resolved colours the cached theme was built with. These differ from
+  // _accentColor/_bgColor/_iconFgColor when Material You / dynamic colour is
+  // overriding the whole palette, so the cache is keyed on all three.
   Color? _cachedThemeAccent;
+  Color? _cachedThemeBg;
+  Color? _cachedThemeIconFg;
   bool _hasAppliedSupabaseTheme = false;
   Future<void>? _supabaseLoadInFlight;
   DateTime? _lastSupabaseLoadAt;
@@ -668,37 +671,51 @@ class AppThemeService extends ChangeNotifier {
   ///
   /// When [dynamicColorEnabled] is on and the platform exposes a Material You
   /// palette, the [lightDynamic]/[darkDynamic] schemes (provided by
-  /// `DynamicColorBuilder`) drive the accent colour instead of the
-  /// user-picked accent. The rest of the theme (background, icon/foreground
-  /// colour, surface ladder) keeps following the user's explicit choices.
+  /// `DynamicColorBuilder`) drive the *entire* palette — accent (from
+  /// `primary`), background (from `surface`) and icon/foreground (from
+  /// `onSurface`) — instead of the user-picked colours. The surface ladder and
+  /// containers are then derived from those in [buildAppTheme], so a wallpaper
+  /// or system-accent change re-tints the whole app, not just the accent.
   ///
-  /// The cache is keyed on the *resolved* accent so that when the system
-  /// palette changes (e.g. the user changes their wallpaper), a fresh theme
-  /// is rebuilt automatically.
+  /// The cache is keyed on all three *resolved* colours so that when the
+  /// system palette changes (e.g. the user changes their wallpaper), a fresh
+  /// theme is rebuilt automatically.
   ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic}) {
-    final Color accent = _resolveAccent(
+    final ColorScheme? dynamicScheme = _resolveDynamicScheme(
       lightDynamic: lightDynamic,
       darkDynamic: darkDynamic,
     );
-    if (_cachedThemeData != null && _cachedThemeAccent == accent) {
+    final Color accent = dynamicScheme?.primary ?? _accentColor;
+    final Color bg = dynamicScheme?.surface ?? _bgColor;
+    final Color iconFg = dynamicScheme?.onSurface ?? _iconFgColor;
+
+    if (_cachedThemeData != null &&
+        _cachedThemeAccent == accent &&
+        _cachedThemeBg == bg &&
+        _cachedThemeIconFg == iconFg) {
       return _cachedThemeData!;
     }
     _cachedThemeAccent = accent;
+    _cachedThemeBg = bg;
+    _cachedThemeIconFg = iconFg;
     _cachedThemeData = buildAppTheme(
       accent: accent,
-      iconFg: _iconFgColor,
-      bg: _bgColor,
+      iconFg: iconFg,
+      bg: bg,
       brightness: _themeMode,
     );
     return _cachedThemeData!;
   }
 
-  Color _resolveAccent({ColorScheme? lightDynamic, ColorScheme? darkDynamic}) {
-    if (!_dynamicColorEnabled) return _accentColor;
-    final ColorScheme? scheme = _themeMode == Brightness.dark
-        ? darkDynamic
-        : lightDynamic;
-    return scheme?.primary ?? _accentColor;
+  /// The dynamic scheme for the active brightness, or `null` when Material You
+  /// is off or the platform exposes no dynamic palette (so callers fall back
+  /// to the user-picked colours).
+  ColorScheme? _resolveDynamicScheme({
+    ColorScheme? lightDynamic,
+    ColorScheme? darkDynamic,
+  }) {
+    if (!_dynamicColorEnabled) return null;
+    return _themeMode == Brightness.dark ? darkDynamic : lightDynamic;
   }
 
   @override
