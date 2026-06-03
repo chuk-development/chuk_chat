@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
 import 'package:chuk_chat/pages/forgot_password_page.dart';
+import 'package:chuk_chat/pages/otp_verification_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
@@ -34,7 +35,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
   bool _confirmedAge = false;
-  bool _showEmailConfirmationBanner = false;
   String? _errorMessage;
   String _currentPassword = '';
 
@@ -105,14 +105,11 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (!mounted) return;
-        setState(() {
-          _isSignInMode = true;
-          _showEmailConfirmationBanner = true;
-          _passwordCtrl.clear();
-          _confirmPasswordCtrl.clear();
-          _displayNameCtrl.clear();
-          _currentPassword = '';
-        });
+        // Sign-up succeeded (and the email is new — otherwise
+        // signUpWithPassword would have thrown). Move to OTP code entry.
+        // The plaintext password is captured by the verify closure so we can
+        // initialize the encryption key once the account is confirmed.
+        await _openSignupOtpVerification(email: email, password: password);
       }
     } on AuthServiceException catch (error) {
       final bool isEmailAlreadyRegistered =
@@ -160,11 +157,48 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// Pushes the OTP code-entry page after a successful sign-up. On a valid
+  /// code the account is confirmed, the encryption key is initialized with
+  /// [password], and we pop back — revealing the signed-in app shell (the
+  /// AuthGate has already flipped to its signed-in view underneath this
+  /// route). No second login is required.
+  Future<void> _openSignupOtpVerification({
+    required String email,
+    required String password,
+  }) async {
+    final navigator = Navigator.of(context);
+    final l = AppLocalizations.of(context)!;
+
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => OtpVerificationPage(
+          email: email,
+          body: l.verifySignupBody(email),
+          onSubmit: (code) async {
+            await _authService.verifySignupOtp(email: email, token: code);
+            // Brand-new account: set up the encryption key for the first time.
+            await EncryptionService.initializeForPassword(password);
+            navigator.pop();
+          },
+          onResend: () => _authService.resendSignupOtp(email: email),
+        ),
+      ),
+    );
+
+    // Back from the OTP page without completing (user tapped "use a different
+    // email"). Clear sensitive fields so they aren't left populated.
+    if (!mounted) return;
+    setState(() {
+      _passwordCtrl.clear();
+      _confirmPasswordCtrl.clear();
+      _currentPassword = '';
+    });
+  }
+
   void _toggleMode() {
     setState(() {
       _isSignInMode = !_isSignInMode;
       _errorMessage = null;
-      _showEmailConfirmationBanner = false;
       _agreedToTerms = false; // Reset checkbox when switching modes
       _confirmedAge = false;
       _confirmPasswordCtrl.clear();
@@ -257,55 +291,6 @@ class _LoginPageState extends State<LoginPage> {
                             color: Colors.orange.shade200,
                           ),
                           textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                    if (_showEmailConfirmationBanner) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.1,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.mark_email_unread_outlined,
-                              color: theme.colorScheme.primary,
-                              size: 22,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    l.confirmEmailToContinue,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    l.confirmEmailBody,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: iconFg.withValues(alpha: 0.8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                         ),
                       ),
                     ],
