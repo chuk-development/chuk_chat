@@ -99,6 +99,50 @@ void main() {
     expect(second.colorScheme.primary, const Color(0xFF00AA00));
   });
 
+  test('dynamic colour ON: whole palette follows the system scheme', () async {
+    service.setThemeMode(Brightness.dark);
+    await service.setDynamicColorEnabled(true);
+
+    final dyn = _schemeWithPrimary(const Color(0xFF00FF00), Brightness.dark);
+    final theme = service.buildTheme(lightDynamic: dyn, darkDynamic: dyn);
+
+    // Not just the accent — background (surface) and foreground (onSurface)
+    // come from the dynamic scheme too.
+    expect(theme.colorScheme.primary, const Color(0xFF00FF00));
+    expect(theme.colorScheme.surface, dyn.surface);
+    expect(theme.colorScheme.onSurface, dyn.onSurface);
+    expect(theme.scaffoldBackgroundColor, dyn.surface);
+  });
+
+  test('dynamic colour OFF: surface/onSurface keep user-picked colours',
+      () async {
+    await service.setDynamicColorEnabled(false);
+    service.setThemeMode(Brightness.dark);
+
+    final dyn = _schemeWithPrimary(const Color(0xFFFF0000), Brightness.dark);
+    final theme = service.buildTheme(lightDynamic: dyn, darkDynamic: dyn);
+
+    expect(theme.colorScheme.surface, kDefaultBgColor);
+    expect(theme.colorScheme.onSurface, kDefaultIconFgColor);
+  });
+
+  test('changing only the system surface rebuilds the theme', () async {
+    service.setThemeMode(Brightness.dark);
+    await service.setDynamicColorEnabled(true);
+
+    const accent = Color(0xFF00AA00);
+    final schemeA = _schemeWithPrimary(accent, Brightness.dark)
+        .copyWith(surface: const Color(0xFF101010));
+    final schemeB = _schemeWithPrimary(accent, Brightness.dark)
+        .copyWith(surface: const Color(0xFF202020));
+
+    final first = service.buildTheme(darkDynamic: schemeA);
+    final second = service.buildTheme(darkDynamic: schemeB);
+
+    expect(first.colorScheme.surface, const Color(0xFF101010));
+    expect(second.colorScheme.surface, const Color(0xFF202020));
+  });
+
   test('setDynamicColorEnabled persists to SharedPreferences', () async {
     // Force a state transition so the write is not skipped by the
     // no-op guard (the singleton may already hold `true` from a prior test).

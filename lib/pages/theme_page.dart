@@ -201,16 +201,12 @@ class _ThemePageState extends State<ThemePage> {
           ),
           const SizedBox(height: 24),
 
+          // Material You drives the whole palette (accent, icon/foreground and
+          // background). While it is on, every colour picker is replaced by a
+          // note so the UI never implies a choice that the system overrides.
           _SectionHeader(l.accentColor),
           if (_selectedDynamicColor)
-            _GroupedCard(
-              children: [
-                _NoteRow(
-                  icon: Icons.auto_awesome_outlined,
-                  text: l.accentColorDynamicNote,
-                ),
-              ],
-            )
+            _dynamicColorNote(l)
           else
             _ColorCard(
               description: l.accentColorSubtitle,
@@ -239,60 +235,79 @@ class _ThemePageState extends State<ThemePage> {
           const SizedBox(height: 24),
 
           _SectionHeader(l.iconFgColor),
-          _ColorCard(
-            description: l.iconFgColorSubtitle,
-            hexLabel: l.customHexColor,
-            currentColor: _selectedIconFgColor,
-            options: _iconFgColorOptions,
-            hexController: _iconFgHexController,
-            gridColumns: 5,
-            onColorSelected: (c) {
-              setState(() {
-                _selectedIconFgColor = c;
-                _iconFgHexController.text = c.toHexString();
-                _applyThemeChanges();
-              });
-            },
-            onHexChanged: (hex) {
-              try {
-                final c = ColorExtension.fromHexString(hex);
+          if (_selectedDynamicColor)
+            _dynamicColorNote(l)
+          else
+            _ColorCard(
+              description: l.iconFgColorSubtitle,
+              hexLabel: l.customHexColor,
+              currentColor: _selectedIconFgColor,
+              options: _iconFgColorOptions,
+              hexController: _iconFgHexController,
+              gridColumns: 5,
+              onColorSelected: (c) {
                 setState(() {
                   _selectedIconFgColor = c;
+                  _iconFgHexController.text = c.toHexString();
                   _applyThemeChanges();
                 });
-              } catch (_) {}
-            },
-          ),
+              },
+              onHexChanged: (hex) {
+                try {
+                  final c = ColorExtension.fromHexString(hex);
+                  setState(() {
+                    _selectedIconFgColor = c;
+                    _applyThemeChanges();
+                  });
+                } catch (_) {}
+              },
+            ),
           const SizedBox(height: 24),
 
           _SectionHeader(l.backgroundColor),
-          _ColorCard(
-            description: l.backgroundColorSubtitle,
-            hexLabel: l.customHexColor,
-            currentColor: _selectedBgColor,
-            options: _bgColorOptions,
-            hexController: _bgHexController,
-            gridColumns: 8,
-            onColorSelected: (c) {
-              setState(() {
-                _selectedBgColor = c;
-                _bgHexController.text = c.toHexString();
-                _applyThemeChanges();
-              });
-            },
-            onHexChanged: (hex) {
-              try {
-                final c = ColorExtension.fromHexString(hex);
+          if (_selectedDynamicColor)
+            _dynamicColorNote(l)
+          else
+            _ColorCard(
+              description: l.backgroundColorSubtitle,
+              hexLabel: l.customHexColor,
+              currentColor: _selectedBgColor,
+              options: _bgColorOptions,
+              hexController: _bgHexController,
+              gridColumns: 8,
+              onColorSelected: (c) {
                 setState(() {
                   _selectedBgColor = c;
+                  _bgHexController.text = c.toHexString();
                   _applyThemeChanges();
                 });
-              } catch (_) {}
-            },
-          ),
+              },
+              onHexChanged: (hex) {
+                try {
+                  final c = ColorExtension.fromHexString(hex);
+                  setState(() {
+                    _selectedBgColor = c;
+                    _applyThemeChanges();
+                  });
+                } catch (_) {}
+              },
+            ),
           const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+
+  // Shown in place of a colour picker while Material You is active — the
+  // system palette owns the colour, so there is nothing to choose here.
+  Widget _dynamicColorNote(AppLocalizations l) {
+    return _GroupedCard(
+      children: [
+        _NoteRow(
+          icon: Icons.auto_awesome_outlined,
+          text: l.colorDynamicNote,
+        ),
+      ],
     );
   }
 

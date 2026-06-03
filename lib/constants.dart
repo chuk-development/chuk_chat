@@ -13,10 +13,11 @@ const Brightness kDefaultThemeMode = Brightness.dark;
 const bool kDefaultGrainEnabled = false;
 
 /* ---------- MATERIAL YOU / DYNAMIC COLOUR DEFAULT ---------- */
-/// When enabled, the accent colour is taken from the system's Material You
-/// palette (Android 12+, and some desktops) and follows wallpaper/accent
-/// changes automatically. Device-local — not synced to Supabase, since it
-/// depends on the OS supporting dynamic colour.
+/// When enabled, the entire palette (accent, background and foreground) is
+/// taken from the system's Material You palette (Android 12+, and some
+/// desktops) and follows wallpaper/accent changes automatically. Device-local
+/// — not synced to Supabase, since it depends on the OS supporting dynamic
+/// colour.
 const bool kDefaultDynamicColorEnabled = false;
 
 /* ---------- REASONING TOKENS DEFAULT ---------- */
