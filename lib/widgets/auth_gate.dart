@@ -18,16 +18,11 @@ class AuthGate extends StatefulWidget {
     required this.signedInBuilder,
     required this.signedOutBuilder,
     this.loadingBuilder,
-    this.passwordRecoveryBuilder,
   });
 
   final WidgetBuilder signedInBuilder;
   final WidgetBuilder signedOutBuilder;
   final WidgetBuilder? loadingBuilder;
-
-  /// Builder shown when the user arrives via a password reset link.
-  /// If null, the signed-in builder is shown instead.
-  final WidgetBuilder? passwordRecoveryBuilder;
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -37,7 +32,6 @@ class _AuthGateState extends State<AuthGate> {
   StreamSubscription<AuthState>? _authSubscription;
   Session? _session;
   bool _checkingSession = true;
-  bool _isPasswordRecovery = false;
 
   @override
   void initState() {
@@ -65,7 +59,6 @@ class _AuthGateState extends State<AuthGate> {
       setState(() {
         _session = event.session;
         _checkingSession = false;
-        _isPasswordRecovery = event.event == AuthChangeEvent.passwordRecovery;
       });
     });
 
@@ -90,9 +83,6 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (_session != null) {
-      if (_isPasswordRecovery && widget.passwordRecoveryBuilder != null) {
-        return widget.passwordRecoveryBuilder!(context);
-      }
       return widget.signedInBuilder(context);
     }
 
