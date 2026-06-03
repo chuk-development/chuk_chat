@@ -164,7 +164,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
   }
 
-  // Recovery section only shows when there are locked chats.
+  // Recovery section shows whenever the account has previous encryption keys
+  // (i.e. the password was reset/changed at least once). It must NOT gate on
+  // lockedChatCount: the local plaintext cache (kept on desktop) can hold
+  // readable copies of old-key chats, which zeroes that count even though the
+  // server copies are still encrypted with the old key and need recovery.
   Widget _buildRecoverChatsSection([AppLocalizations? localizations]) {
     final l = localizations ?? AppLocalizations.of(context)!;
     final user = SupabaseService.auth.currentUser;
@@ -172,15 +176,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       return const SizedBox.shrink();
     }
 
+    // Informational only — show the locked count when reliably known (>0),
+    // otherwise a generic prompt. Never use it to hide the section.
     final lockedCount = PasswordResetService.lockedChatCount;
-    if (lockedCount == 0) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader('Chat Recovery'),
         _InfoCard(
-          text: l.lockedChatsCount(lockedCount),
+          text: lockedCount > 0
+              ? l.lockedChatsCount(lockedCount)
+              : l.recoverOldChatsAvailable,
           tone: InfoTone.neutral,
           icon: Icons.lock_outline,
         ),

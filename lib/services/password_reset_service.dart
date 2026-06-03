@@ -38,6 +38,20 @@ class PasswordResetService {
     return ChatStorageService.savedChats.where((c) => c.isLocked).length;
   }
 
+  /// Versions that still have a previous key registered — i.e. recovery
+  /// candidates — regardless of whether any chat is currently flagged
+  /// `isLocked`. This is the robust source of truth: on desktop a plaintext
+  /// cache can hold readable copies of old-key chats, which would otherwise
+  /// zero out [lockedChatCount] and hide recovery entirely.
+  static List<int> getRecoverableVersions() {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return [];
+    final versions =
+        KeyVersionService.getPreviousKeys(user).map((k) => k.version).toList();
+    versions.sort();
+    return versions;
+  }
+
   /// Attempt to recover all locked chats for a specific key version
   /// using the old password. Returns the number of recovered chats.
   ///
@@ -68,28 +82,47 @@ class PasswordResetService {
       salt,
     );
 
-    // 3. Get all locked chats for this version (null keyVersion = legacy = version 1)
-    final lockedChats = ChatStorageService.savedChats
-        .where((c) => c.isLocked && (c.keyVersion ?? 1) == targetVersion)
-        .toList();
-
-    if (lockedChats.isEmpty) {
-      throw const RecoveryException('No locked chats found for this version.');
-    }
-
     onProgress?.call('Verifying password...');
 
-    // 4. Fetch encrypted payloads from Supabase for these chats
-    final chatIds = lockedChats.map((c) => c.id).toList();
-    final rows = await SupabaseService.client
-        .from('encrypted_chats')
-        .select('id, encrypted_payload, encrypted_title, created_at, updated_at, is_starred')
-        .eq('user_id', user.id)
-        .inFilter('id', chatIds)
-        .timeout(const Duration(seconds: 30));
+    // 3. Determine candidate chats. Prefer the chats flagged locked in memory;
+    //    but on desktop a plaintext cache can hold readable copies so nothing
+    //    is flagged. In that case scan ALL of the user's server rows and match
+    //    by the key version embedded in each encrypted payload. (null version
+    //    = legacy = version 1, mirroring the (keyVersion ?? 1) convention.)
+    const selectCols =
+        'id, encrypted_payload, encrypted_title, created_at, updated_at, is_starred';
+    final flaggedLockedIds = ChatStorageService.savedChats
+        .where((c) => c.isLocked && (c.keyVersion ?? 1) == targetVersion)
+        .map((c) => c.id)
+        .toList();
+
+    // 4. Fetch encrypted payloads from Supabase.
+    final List<Map<String, dynamic>> rows;
+    if (flaggedLockedIds.isNotEmpty) {
+      rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select(selectCols)
+          .eq('user_id', user.id)
+          .inFilter('id', flaggedLockedIds)
+          .timeout(const Duration(seconds: 30));
+    } else {
+      final allRows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select(selectCols)
+          .eq('user_id', user.id)
+          .timeout(const Duration(seconds: 30));
+      rows = allRows.where((r) {
+        final payload = r['encrypted_payload'] as String?;
+        if (payload == null || payload.isEmpty) return false;
+        final kv = EncryptionService.extractKeyVersion(payload) ?? 1;
+        return kv == targetVersion;
+      }).toList();
+    }
 
     if (rows.isEmpty) {
-      throw const RecoveryException('Could not fetch encrypted chats.');
+      throw const RecoveryException(
+        'No chats found to recover for this version.',
+      );
     }
 
     // 5. Try to decrypt first payload to verify password

@@ -953,7 +953,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }) {
     final bool isSelected = chat.id == widget.selectedChatId;
     final bool isStreaming = StreamingManager().isStreaming(chat.id);
-    final String title = chat.isLocked ? 'Locked chat' : _deriveChatTitle(chat);
+    final String title = chat.isLocked
+        ? 'Locked encrypted chat'
+        : _deriveChatTitle(chat);
     final bool isLocked = chat.isLocked;
     final bool isPinned = chat.isStarred;
     return SbChatTile(
@@ -1153,9 +1155,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           ],
         ),
         content: const Text(
-          'This chat is encrypted with a previous password. '
-          'Go to Settings \u2192 Recover Encrypted Chats to unlock it '
-          'by entering your old password.',
+          'This chat is encrypted with a previous password and can\'t be '
+          'opened with your current one. Go to Account Settings \u2192 Chat '
+          'Recovery and enter your old password to unlock it.',
         ),
         actions: [
           TextButton(

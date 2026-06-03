@@ -324,6 +324,8 @@ class AppLocalizations {
   String lockedChatsCount(int count) => _get(
     count == 1 ? 'lockedChatsSingular' : 'lockedChatsPlural',
   ).replaceAll('{count}', count.toString());
+  String get recoverOldChatsAvailable => _get('recoverOldChatsAvailable');
+  String get chatsFromPreviousPassword => _get('chatsFromPreviousPassword');
   String get recoverChats => _get('recoverChats');
   String get dangerZone => _get('dangerZone');
   String get dangerZoneSubtitle => _get('dangerZoneSubtitle');

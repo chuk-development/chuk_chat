@@ -26,10 +26,15 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   }
 
   void _loadLockedInfo() {
-    final info = PasswordResetService.getLockedChatInfo();
+    // Drive the version list from the registered previous keys, NOT from the
+    // locked-chat count: a plaintext cache (kept on desktop) can hold readable
+    // copies that zero out the locked count even though the server copies still
+    // need recovery. Counts are merged in for display only (0 = unknown here).
+    final counts = PasswordResetService.getLockedChatInfo();
+    final versions = PasswordResetService.getRecoverableVersions();
     setState(() {
-      _lockedInfo = info;
-      for (final version in info.keys) {
+      _lockedInfo = {for (final v in versions) v: counts[v] ?? 0};
+      for (final version in _lockedInfo.keys) {
         _passwordControllers.putIfAbsent(version, TextEditingController.new);
         _obscurePasswords.putIfAbsent(version, () => true);
         _isRecovering.putIfAbsent(version, () => false);
@@ -280,7 +285,9 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    l.lockedChatCount(count),
+                    count > 0
+                        ? l.lockedChatCount(count)
+                        : l.chatsFromPreviousPassword,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),

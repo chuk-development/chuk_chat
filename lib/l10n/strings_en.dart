@@ -275,6 +275,9 @@ const Map<String, String> stringsEn = {
   'encryptedChatRecovery': 'Encrypted Chat Recovery',
   'lockedChatsSingular': '{count} chat encrypted with a previous password.',
   'lockedChatsPlural': '{count} chats encrypted with a previous password.',
+  'recoverOldChatsAvailable':
+      'You have chats encrypted with a previous password. Enter your old password to unlock them.',
+  'chatsFromPreviousPassword': 'Chats from a previous password',
   'recoverChats': 'Recover chats',
   'dangerZone': 'Danger Zone',
   'dangerZoneSubtitle': 'Irreversible actions that affect your entire account.',
