@@ -291,6 +291,9 @@ const Map<String, String> stringsDe = {
       '{count} Chat mit einem früheren Passwort verschlüsselt.',
   'lockedChatsPlural':
       '{count} Chats mit einem früheren Passwort verschlüsselt.',
+  'recoverOldChatsAvailable':
+      'Du hast Chats, die mit einem früheren Passwort verschlüsselt sind. Gib dein altes Passwort ein, um sie zu entsperren.',
+  'chatsFromPreviousPassword': 'Chats von einem früheren Passwort',
   'recoverChats': 'Chats wiederherstellen',
   'dangerZone': 'Gefahrenzone',
   'dangerZoneSubtitle':

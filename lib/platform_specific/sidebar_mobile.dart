@@ -1115,7 +1115,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
     bool isSelected = chat.id == widget.selectedChatId;
     final bool isLocked = chat.isLocked;
     final bool isPinned = chat.isStarred;
-    final String title = isLocked ? 'Locked chat' : _deriveChatTitle(chat);
+    final String title =
+        isLocked ? 'Locked encrypted chat' : _deriveChatTitle(chat);
     return SbChatTile(
       title: title,
       createdAt: chat.updatedAt ?? chat.createdAt,
@@ -1151,9 +1152,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ],
         ),
         content: const Text(
-          'This chat is encrypted with a previous password. '
-          'Go to Settings \u2192 Recover Encrypted Chats to unlock it '
-          'by entering your old password.',
+          'This chat is encrypted with a previous password and can\'t be '
+          'opened with your current one. Go to Account Settings \u2192 Chat '
+          'Recovery and enter your old password to unlock it.',
         ),
         actions: [
           TextButton(

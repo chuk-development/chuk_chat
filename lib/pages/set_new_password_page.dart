@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/key_version_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -97,6 +98,13 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       // Re-fetch user since metadata may have changed
       final updatedUser = SupabaseService.auth.currentUser ?? user;
       await PasswordRevisionService.bumpRevision(updatedUser);
+
+      // 6. Web: clear the local plaintext cache so old-key chats reload from
+      // the server and surface as locked (recoverable with the old password).
+      // Native keeps the cache so the user retains access on their own device.
+      if (kIsWeb) {
+        await LocalChatCacheService.clear(updatedUser.id);
+      }
 
       if (!mounted) return;
 
