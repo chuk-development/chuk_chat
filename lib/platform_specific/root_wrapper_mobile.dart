@@ -416,7 +416,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
     final text = DebugChatFormatter.format(
       messages,
-      systemPrompt: state?.debugSystemPrompt,
       context: _debugContext(state),
     );
     Clipboard.setData(ClipboardData(text: text));

@@ -329,7 +329,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     }
     final text = DebugChatFormatter.format(
       messages,
-      systemPrompt: state?.debugSystemPrompt,
       context: _debugContext(state),
     );
     Clipboard.setData(ClipboardData(text: text));

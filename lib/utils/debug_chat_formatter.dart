@@ -14,7 +14,6 @@ class DebugChatFormatter {
   const DebugChatFormatter._();
 
   static const int _maxContextValueChars = 220;
-  static const int _maxSystemPromptChars = 1800;
   static const int _maxReasoningChars = 400;
   static const int _maxMessageTextChars = 2200;
   static const int _maxToolArgsChars = 320;
@@ -52,17 +51,17 @@ class DebugChatFormatter {
   ///
   /// Optional context — when supplied — is rendered above the message list so
   /// a pasted debug log is self-contained:
-  /// - [systemPrompt]: the resolved system prompt sent with requests.
   /// - [context]: ordered key/value pairs (model, provider, workspace, flags).
   ///   Use a LinkedHashMap (or plain literal) for a stable order.
+  ///
+  /// The resolved system prompt is deliberately NOT included: it can carry
+  /// sensitive or injected instructions, and a debug copy is meant to capture
+  /// the *conversation*, not the prompt scaffolding.
   static String format(
     List<Map<String, String>> messages, {
-    String? systemPrompt,
     Map<String, String>? context,
   }) {
-    final hasContext =
-        systemPrompt != null && systemPrompt.trim().isNotEmpty ||
-        (context != null && context.isNotEmpty);
+    final hasContext = context != null && context.isNotEmpty;
 
     if (messages.isEmpty && !hasContext) return '(empty chat)';
 
@@ -82,17 +81,6 @@ class DebugChatFormatter {
         );
         buf.writeln('$k: $compactValue');
       });
-      buf.writeln();
-    }
-
-    if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
-      buf.writeln('--- System Prompt ---');
-      buf.writeln(
-        _truncateForExport(
-          ClipboardTextSanitizer.sanitize(systemPrompt),
-          maxChars: _maxSystemPromptChars,
-        ),
-      );
       buf.writeln();
     }
 
