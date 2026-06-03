@@ -459,6 +459,26 @@ class AppLocalizations {
   String unexpectedError(String error) =>
       _get('unexpectedError').replaceAll('{error}', error);
 
+  // ── Email OTP verification (signup + recovery) ─────────────
+  String get verifyEmailTitle => _get('verifyEmailTitle');
+  String verifySignupBody(String email) =>
+      _get('verifySignupBody').replaceAll('{email}', email);
+  String verifyRecoveryBody(String email) =>
+      _get('verifyRecoveryBody').replaceAll('{email}', email);
+  String get verificationCode => _get('verificationCode');
+  String get verificationCodeHint => _get('verificationCodeHint');
+  String get verifyButton => _get('verifyButton');
+  String get verifying => _get('verifying');
+  String get resendCode => _get('resendCode');
+  String resendCodeIn(String seconds) =>
+      _get('resendCodeIn').replaceAll('{seconds}', seconds);
+  String get codeResent => _get('codeResent');
+  String get enterVerificationCode => _get('enterVerificationCode');
+  String get invalidCode => _get('invalidCode');
+  String get tooManyAttempts => _get('tooManyAttempts');
+  String get otpVerificationFailed => _get('otpVerificationFailed');
+  String get changeEmailAddress => _get('changeEmailAddress');
+
   // ── Recover chats page ─────────────────────────────────────
   String get recoverEncryptedChats => _get('recoverEncryptedChats');
   String get noLockedChats => _get('noLockedChats');

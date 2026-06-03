@@ -120,27 +120,8 @@ class PasswordChangeService {
       );
     }
 
-    final email = user.email;
-    if (email == null || email.isEmpty) {
-      throw const PasswordChangeException(
-        'Password updated but no email address is available to send a confirmation.',
-      );
-    }
-
-    try {
-      await SupabaseService.auth.signInWithOtp(email: email);
-    } on AuthException catch (error) {
-      throw PasswordChangeException(
-        'Password updated but sending the confirmation email failed: ${error.message}',
-      );
-    } catch (error) {
-      throw PasswordChangeException(
-        'Password updated but sending the confirmation email failed: $error',
-      );
-    }
-
     await ChatStorageService.loadChats();
-    return 'Password updated. Check $email to confirm the change.';
+    return 'Password updated.';
   }
 
   Future<void> _rotateEncryptionForPasswordChange({

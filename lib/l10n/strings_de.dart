@@ -442,6 +442,25 @@ const Map<String, String> stringsDe = {
       'Sie müssen mindestens 16 Jahre alt sein, um diesen Dienst zu nutzen.',
   'unexpectedError': 'Unerwarteter Fehler: {error}',
 
+  // ── Email OTP verification (signup + recovery) ─────────────
+  'verifyEmailTitle': 'Code eingeben',
+  'verifySignupBody':
+      'Wir haben einen 6-stelligen Code an {email} gesendet. Gib ihn unten ein, um dein Konto zu bestätigen.',
+  'verifyRecoveryBody':
+      'Wir haben einen 6-stelligen Code an {email} gesendet. Gib ihn unten ein, um dein Passwort zurückzusetzen.',
+  'verificationCode': 'Bestätigungscode',
+  'verificationCodeHint': '6-stelliger Code',
+  'verifyButton': 'Bestätigen',
+  'verifying': 'Wird bestätigt...',
+  'resendCode': 'Code erneut senden',
+  'resendCodeIn': 'Erneut senden in {seconds}s',
+  'codeResent': 'Ein neuer Code wurde gesendet.',
+  'enterVerificationCode': 'Gib den 6-stelligen Code ein.',
+  'invalidCode': 'Dieser Code ist ungültig oder abgelaufen. Fordere einen neuen an.',
+  'tooManyAttempts': 'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
+  'otpVerificationFailed': 'Bestätigung fehlgeschlagen. Bitte versuche es erneut.',
+  'changeEmailAddress': 'Andere E-Mail verwenden',
+
   // ── Recover chats page ─────────────────────────────────────
   'recoverEncryptedChats': 'Verschlüsselte Chats wiederherstellen',
   'noLockedChats': 'Keine gesperrten Chats',
