@@ -21,6 +21,10 @@ class AppShellConfig {
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
 
+  // ── Material You / dynamic colour ──────────────────────────
+  final bool dynamicColorEnabled;
+  final Future<void> Function(bool) setDynamicColorEnabled;
+
   // ── Display toggles ────────────────────────────────────────
   final bool showReasoningTokens;
   final Function(bool) setShowReasoningTokens;
@@ -92,6 +96,8 @@ class AppShellConfig {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
+    required this.dynamicColorEnabled,
+    required this.setDynamicColorEnabled,
     required this.showReasoningTokens,
     required this.setShowReasoningTokens,
     required this.showModelInfo,

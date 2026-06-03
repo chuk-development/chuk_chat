@@ -62,16 +62,14 @@ const Map<String, String> stringsEn = {
   'uiScalePercentage': 'UI Scale: {percent}%',
   'fontSizePreview': 'The quick brown fox jumps over the lazy dog.',
   'chatFontFamily': 'Chat font',
-  'chatFontFamilySubtitle':
-      'Choose the typeface for chat message text',
+  'chatFontFamilySubtitle': 'Choose the typeface for chat message text',
   'fontFamilySystem': 'System default',
   'fontFamilyArimo': 'Arimo (sans-serif)',
   'fontFamilyMerriweather': 'Merriweather (serif)',
   'fontFamilyJetBrainsMono': 'JetBrains Mono',
   // ── Downloads page ─────────────────────────────────────────
   'downloads': 'Downloads',
-  'downloadsSubtitle':
-      'Where saved files go and whether to prompt each time',
+  'downloadsSubtitle': 'Where saved files go and whether to prompt each time',
   'downloadsAlwaysAsk': 'Always ask where to save',
   'downloadsAlwaysAskHintCan':
       'Turn off to save directly to your default folder',
@@ -100,8 +98,7 @@ const Map<String, String> stringsEn = {
       'Recent images sends the last 6 messages\' images. All images sends every image in the conversation. Reasoning includes the AI\'s thinking process as context for follow-up messages.',
   'chatTitles': 'Chat Titles',
   'autoGenerateTitles': 'Auto-generate chat titles',
-  'autoGenerateTitlesSubtitle':
-      'Use AI to generate titles for new chats',
+  'autoGenerateTitlesSubtitle': 'Use AI to generate titles for new chats',
   'titleGenerationPrompt': 'Title Generation Prompt',
   'usingCustomPrompt': 'Using custom prompt',
   'usingDefaultPrompt': 'Using default prompt',
@@ -148,6 +145,11 @@ const Map<String, String> stringsEn = {
   'backgroundColorSubtitle': 'Choose the main background color for the app',
   'filmGrainEffect': 'Film Grain Effect',
   'filmGrainSubtitle': 'Add a subtle shot-on-film texture',
+  'dynamicColor': 'Material You',
+  'dynamicColorSubtitle':
+      'Use your system colors and follow theme changes automatically',
+  'accentColorDynamicNote':
+      'Accent color is set by your system Material You theme.',
   'customHexColor': 'Custom Hex Color (#RRGGBB)',
   'pickCustomColor': 'Pick custom color',
   'pickAColor': 'Pick a color',
@@ -204,24 +206,18 @@ const Map<String, String> stringsEn = {
   'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Search the web, fetch pages, generate images, and look up data',
-  'catUtilitiesDesc':
-      'Calculator, clock, notes, QR codes, and other utilities',
-  'catMapsLocationDesc':
-      'Find places, geocode addresses, and calculate routes',
+  'catUtilitiesDesc': 'Calculator, clock, notes, QR codes, and other utilities',
+  'catMapsLocationDesc': 'Find places, geocode addresses, and calculate routes',
   'catDeviceDesc': 'Access device features like GPS, calendar, and reminders',
   'catSpotifyDesc': 'Control playback and browse your Spotify library',
   'catBashTerminalDesc': 'Run sandboxed shell commands on the desktop',
-  'catGitHubDesc':
-      'Access repos, issues, PRs, and commits from GitHub',
-  'catSlackDesc':
-      'Send messages, search channels, and fetch Slack data',
+  'catGitHubDesc': 'Access repos, issues, PRs, and commits from GitHub',
+  'catSlackDesc': 'Send messages, search channels, and fetch Slack data',
   'catGoogleCalGmailDesc':
       'Manage your schedule and email via Google Calendar and Gmail',
   'catEmailImapSmtpDesc': 'Send and receive email via IMAP and SMTP',
-  'catWhoopDesc':
-      'View recovery, strain, sleep, and workout data from WHOOP',
-  'catNextcloudDesc':
-      'Browse files, calendar, and contacts on Nextcloud',
+  'catWhoopDesc': 'View recovery, strain, sleep, and workout data from WHOOP',
+  'catNextcloudDesc': 'Browse files, calendar, and contacts on Nextcloud',
   'catSandboxDesc':
       'Run Python or shell code in an isolated sandbox and read/write files',
   'connect': 'Connect',
@@ -231,8 +227,7 @@ const Map<String, String> stringsEn = {
   'cancel': 'Cancel',
   'categoryConnected': '{label} connected',
   'failedToConnect': 'Failed to connect {label}',
-  'unableToConnect':
-      'Unable to connect {label}. Please try again.',
+  'unableToConnect': 'Unable to connect {label}. Please try again.',
   'toolWebSearch': 'Web Search',
   'toolWebCrawl': 'Web Crawl',
   'toolImageGen': 'Image Generation',
@@ -262,8 +257,7 @@ const Map<String, String> stringsEn = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profile',
-  'profileSubtitle':
-      'Update how your name and email appear inside Chuk Chat.',
+  'profileSubtitle': 'Update how your name and email appear inside Chuk Chat.',
   'displayName': 'Display name',
   'displayNameHint': 'How other people see you',
   'emailAddress': 'Email address',
@@ -283,8 +277,7 @@ const Map<String, String> stringsEn = {
   'lockedChatsPlural': '{count} chats encrypted with a previous password.',
   'recoverChats': 'Recover chats',
   'dangerZone': 'Danger Zone',
-  'dangerZoneSubtitle':
-      'Irreversible actions that affect your entire account.',
+  'dangerZoneSubtitle': 'Irreversible actions that affect your entire account.',
   'deleteAccountWarning':
       'Deleting your account will cancel all subscriptions, remove your data, and cannot be undone.',
   'deleteAccount': 'Delete Account',
@@ -357,8 +350,7 @@ const Map<String, String> stringsEn = {
   'builtOn': 'Built {date}',
   'updateAvailable': 'Update available: v{version} \u2014 tap to download',
   'versionUnavailable': 'Version information unavailable.',
-  'copyrightYear':
-      '\u00a9 {year} Chuk Development\nAll rights reserved.',
+  'copyrightYear': '\u00a9 {year} Chuk Development\nAll rights reserved.',
   'licenses': 'Licenses',
   'unableToLoadLicenses': 'Unable to load licenses.',
   'tapToViewLicense': 'Tap to view full license text',
@@ -376,8 +368,7 @@ const Map<String, String> stringsEn = {
   'plus': 'Plus',
   'pricePerMonth': '\u20ac20/month',
   'monthlyCredits': 'Monthly AI credits: \u20ac16.00',
-  'unusedCreditsExpire':
-      'Unused credits expire at the end of each month.',
+  'unusedCreditsExpire': 'Unused credits expire at the end of each month.',
   'manageBilling': 'Manage Billing',
   'manageBillingSubtitle':
       'Use the billing portal to cancel your subscription or update payment methods.',
@@ -473,8 +464,7 @@ const Map<String, String> stringsEn = {
   'noAuthenticatedUser': 'No authenticated user after password update.',
   'failedToPreserveEncryption':
       'Failed to preserve old encryption data. Please check your connection and try again.',
-  'failedToSetNewPassword':
-      'Failed to set new password. Please try again.',
+  'failedToSetNewPassword': 'Failed to set new password. Please try again.',
 
   // ── Diagnostics page ───────────────────────────────────────
   'devOptionsToggle': 'Developer options',
@@ -495,8 +485,7 @@ const Map<String, String> stringsEn = {
   'copiedRecentLogs': 'Copied recent logs to clipboard',
   'noFocusedDebugData': 'No focused debug data available yet',
   'copiedFocusedDebug': 'Copied focused model-menu debug report',
-  'failedFocusedDebug':
-      'Failed to create focused debug report: {error}',
+  'failedFocusedDebug': 'Failed to create focused debug report: {error}',
   'noDiagnosticsLog': 'No diagnostics log available',
   'diagnosticsLogNotFound': 'Diagnostics log file not found',
   'failedToShareLog': 'Failed to share diagnostics log: {error}',
@@ -522,8 +511,7 @@ const Map<String, String> stringsEn = {
   'usageDetails': 'Usage Details',
   'unableToLoadUsage': 'Unable to load usage details right now.',
   'usageAndBilling': 'Usage and Billing',
-  'usageReadOnly':
-      'This screen is read-only and pulled from your usage logs.',
+  'usageReadOnly': 'This screen is read-only and pulled from your usage logs.',
   'period': 'Period',
   'totals': 'Totals',
   'mediaRequestsNote':
@@ -553,8 +541,7 @@ const Map<String, String> stringsEn = {
   'unableToSaveImage': 'Unable to save image',
   'image': 'Image',
   'openLink': 'Open Link',
-  'openLinkConfirm':
-      'Do you really want to leave the app and open {url}?',
+  'openLinkConfirm': 'Do you really want to leave the app and open {url}?',
   'open': 'Open',
 
   // ── Misc / shared ─────────────────────────────────────────
@@ -621,12 +608,10 @@ const Map<String, String> stringsEn = {
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Media Manager',
   'imageUsedInChats': 'Image Used in Chats',
-  'imageUsedInChatsBody':
-      'This image is used in the following chats:',
+  'imageUsedInChatsBody': 'This image is used in the following chats:',
   'deleteImageShowDeleted':
       'If you delete this image, it will show as "Image deleted" in those chats.',
-  'deleteImageConfirm':
-      'Are you sure you want to delete this image?',
+  'deleteImageConfirm': 'Are you sure you want to delete this image?',
   'deleteAnyway': 'Delete Anyway',
   'deleteImageTitle': 'Delete Image',
   'deleteImageBody':
@@ -745,8 +730,7 @@ const Map<String, String> stringsEn = {
   'tourSettingsTitle': 'Make it yours',
   'tourSettingsBody':
       'Settings is where you change theme, font size, UI scale, and your account.',
-  'tourSettingsPageBody':
-      'Customize the app: theme, font, UI scale, account.',
+  'tourSettingsPageBody': 'Customize the app: theme, font, UI scale, account.',
   'tourSettingsTapHere': 'Tap Settings here.',
   'tourMenuTitle': 'Open the menu',
   'tourMenuBody': 'Tap the menu icon to find Settings.',
@@ -762,6 +746,5 @@ const Map<String, String> stringsEn = {
   'tourSettingsAiIdentityBody':
       'Configure system prompt, memory on/off, and reasoning here.',
   'tourDoneTitle': "You're all set",
-  'tourDoneBody':
-      'You can replay this tour any time from Settings.',
+  'tourDoneBody': 'You can replay this tour any time from Settings.',
 };

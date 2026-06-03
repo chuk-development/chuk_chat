@@ -12,6 +12,13 @@ const Brightness kDefaultThemeMode = Brightness.dark;
 /* ---------- FILM GRAIN DEFAULT ---------- */
 const bool kDefaultGrainEnabled = false;
 
+/* ---------- MATERIAL YOU / DYNAMIC COLOUR DEFAULT ---------- */
+/// When enabled, the accent colour is taken from the system's Material You
+/// palette (Android 12+, and some desktops) and follows wallpaper/accent
+/// changes automatically. Device-local — not synced to Supabase, since it
+/// depends on the OS supporting dynamic colour.
+const bool kDefaultDynamicColorEnabled = false;
+
 /* ---------- REASONING TOKENS DEFAULT ---------- */
 const bool kDefaultShowReasoningTokens = true;
 
@@ -94,9 +101,7 @@ ThemeData buildAppTheme({
   final Color onTertiaryContainer = isDark
       ? Color.lerp(tertiary, const Color(0xFFFFFFFF), 0.55)!
       : Color.lerp(tertiary, const Color(0xFF000000), 0.55)!;
-  final Color secondaryContainer = isDark
-      ? bg.lighten(0.18)
-      : bg.darken(0.15);
+  final Color secondaryContainer = isDark ? bg.lighten(0.18) : bg.darken(0.15);
   final Color onSecondaryContainer = iconFg;
 
   final Color outline = iconFg.withValues(alpha: 0.55);

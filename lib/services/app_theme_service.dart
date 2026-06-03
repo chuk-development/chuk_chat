@@ -29,6 +29,7 @@ class AppThemeService extends ChangeNotifier {
   Color _iconFgColor = kDefaultIconFgColor;
   Color _bgColor = kDefaultBgColor;
   bool _grainEnabled = kDefaultGrainEnabled;
+  bool _dynamicColorEnabled = kDefaultDynamicColorEnabled;
 
   // Message display preferences
   bool _showReasoningTokens = kDefaultShowReasoningTokens;
@@ -78,6 +79,7 @@ class AppThemeService extends ChangeNotifier {
   static const String _kIconFgColorKey = 'iconFgColor';
   static const String _kBgColorKey = 'bgColor';
   static const String _kGrainEnabledKey = 'grainEnabled';
+  static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
   static const String _kShowTpsKey = 'showTps';
@@ -110,6 +112,9 @@ class AppThemeService extends ChangeNotifier {
   SharedPreferences? _cachedPrefs;
   Timer? _syncDebounce;
   ThemeData? _cachedThemeData;
+  // The accent the cached theme was built with (may differ from _accentColor
+  // when Material You / dynamic colour is overriding it).
+  Color? _cachedThemeAccent;
   bool _hasAppliedSupabaseTheme = false;
   Future<void>? _supabaseLoadInFlight;
   DateTime? _lastSupabaseLoadAt;
@@ -121,6 +126,7 @@ class AppThemeService extends ChangeNotifier {
   Color get iconFgColor => _iconFgColor;
   Color get bgColor => _bgColor;
   bool get grainEnabled => _grainEnabled;
+  bool get dynamicColorEnabled => _dynamicColorEnabled;
   bool get showReasoningTokens => _showReasoningTokens;
   bool get showModelInfo => _showModelInfo;
   bool get showTps => _showTps;
@@ -173,6 +179,8 @@ class AppThemeService extends ChangeNotifier {
       fallback: kDefaultBgColor,
     );
     _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
+    _dynamicColorEnabled =
+        prefs.getBool(_kDynamicColorEnabledKey) ?? kDefaultDynamicColorEnabled;
     _showReasoningTokens =
         prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
     _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
@@ -193,7 +201,7 @@ class AppThemeService extends ChangeNotifier {
         prefs.getBool(_kIncludeReasoningInHistoryKey) ?? false;
     _includeToolResultsInHistory =
         prefs.getBool(_kIncludeToolResultsInHistoryKey) ??
-            kDefaultIncludeToolResultsInHistory;
+        kDefaultIncludeToolResultsInHistory;
     _toolCallingEnabled =
         prefs.getBool(_kToolCallingEnabledKey) ?? kDefaultToolCallingEnabled;
     _toolDiscoveryMode =
@@ -209,9 +217,7 @@ class AppThemeService extends ChangeNotifier {
     _chatFontFamily = _sanitizeChatFontFamily(
       prefs.getString(_kChatFontFamilyKey),
     );
-    _uiScale = _clampUiScale(
-      prefs.getDouble(_kUiScaleKey) ?? kDefaultUiScale,
-    );
+    _uiScale = _clampUiScale(prefs.getDouble(_kUiScaleKey) ?? kDefaultUiScale);
     _onboardingCompleted = prefs.getBool(_kOnboardingCompletedKey) ?? false;
 
     _cachedThemeData = null;
@@ -330,7 +336,9 @@ class AppThemeService extends ChangeNotifier {
     _allowMarkdownToolCalls = customizationPrefs.allowMarkdownToolCalls;
     _uiLocale = customizationPrefs.uiLocale;
     _chatFontSize = _clampChatFontSize(customizationPrefs.chatFontSize);
-    _chatFontFamily = _sanitizeChatFontFamily(customizationPrefs.chatFontFamily);
+    _chatFontFamily = _sanitizeChatFontFamily(
+      customizationPrefs.chatFontFamily,
+    );
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
@@ -496,6 +504,18 @@ class AppThemeService extends ChangeNotifier {
     _debouncedSyncTheme();
   }
 
+  /// Material You / dynamic colour is a per-device display preference (it
+  /// depends on the OS exposing a dynamic palette), so — like [setUiScale] —
+  /// it is persisted to SharedPreferences only and NOT synced to Supabase.
+  Future<void> setDynamicColorEnabled(bool enabled) async {
+    if (_dynamicColorEnabled == enabled) return;
+    _dynamicColorEnabled = enabled;
+    _cachedThemeData = null;
+    notifyListeners();
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kDynamicColorEnabledKey, _dynamicColorEnabled);
+  }
+
   void setShowReasoningTokens(bool show) {
     _showReasoningTokens = show;
     notifyListeners();
@@ -644,15 +664,41 @@ class AppThemeService extends ChangeNotifier {
     _hasAppliedSupabaseTheme = false;
   }
 
-  /// Build the ThemeData from current settings
-  ThemeData buildTheme() {
-    _cachedThemeData ??= buildAppTheme(
-      accent: _accentColor,
+  /// Build the ThemeData from current settings.
+  ///
+  /// When [dynamicColorEnabled] is on and the platform exposes a Material You
+  /// palette, the [lightDynamic]/[darkDynamic] schemes (provided by
+  /// `DynamicColorBuilder`) drive the accent colour instead of the
+  /// user-picked accent. The rest of the theme (background, icon/foreground
+  /// colour, surface ladder) keeps following the user's explicit choices.
+  ///
+  /// The cache is keyed on the *resolved* accent so that when the system
+  /// palette changes (e.g. the user changes their wallpaper), a fresh theme
+  /// is rebuilt automatically.
+  ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic}) {
+    final Color accent = _resolveAccent(
+      lightDynamic: lightDynamic,
+      darkDynamic: darkDynamic,
+    );
+    if (_cachedThemeData != null && _cachedThemeAccent == accent) {
+      return _cachedThemeData!;
+    }
+    _cachedThemeAccent = accent;
+    _cachedThemeData = buildAppTheme(
+      accent: accent,
       iconFg: _iconFgColor,
       bg: _bgColor,
       brightness: _themeMode,
     );
     return _cachedThemeData!;
+  }
+
+  Color _resolveAccent({ColorScheme? lightDynamic, ColorScheme? darkDynamic}) {
+    if (!_dynamicColorEnabled) return _accentColor;
+    final ColorScheme? scheme = _themeMode == Brightness.dark
+        ? darkDynamic
+        : lightDynamic;
+    return scheme?.primary ?? _accentColor;
   }
 
   @override

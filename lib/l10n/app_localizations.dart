@@ -97,10 +97,12 @@ class AppLocalizations {
   String get logout => _get('logout');
   String get noChatsToExport => _get('noChatsToExport');
   String get copiedToClipboard => _get('copiedToClipboard');
-  String savedToPath(String path) => _get('savedToPath').replaceAll('{path}', path);
+  String savedToPath(String path) =>
+      _get('savedToPath').replaceAll('{path}', path);
   String get exportCancelled => _get('exportCancelled');
   String get shareOpened => _get('shareOpened');
-  String exportFailed(String error) => _get('exportFailed').replaceAll('{error}', error);
+  String exportFailed(String error) =>
+      _get('exportFailed').replaceAll('{error}', error);
   String get saveChatExport => _get('saveChatExport');
 
   // ── Customization page ─────────────────────────────────────
@@ -139,20 +141,21 @@ class AppLocalizations {
   String get downloadsAlwaysAskHintNoFolder =>
       _get('downloadsAlwaysAskHintNoFolder');
   String get downloadsDefaultFolder => _get('downloadsDefaultFolder');
-  String get downloadsDefaultFolderUnset =>
-      _get('downloadsDefaultFolderUnset');
+  String get downloadsDefaultFolderUnset => _get('downloadsDefaultFolderUnset');
   String get downloadsChooseFolderDialog => _get('downloadsChooseFolderDialog');
   String get downloadsClear => _get('downloadsClear');
   String get downloadsInfo => _get('downloadsInfo');
   String get aiContext => _get('aiContext');
   String get recentImagesInContext => _get('recentImagesInContext');
-  String get recentImagesInContextSubtitle => _get('recentImagesInContextSubtitle');
+  String get recentImagesInContextSubtitle =>
+      _get('recentImagesInContextSubtitle');
   String get allImagesInContext => _get('allImagesInContext');
   String get allImagesInContextSubtitle => _get('allImagesInContextSubtitle');
   String get reasoningInContext => _get('reasoningInContext');
   String get reasoningInContextSubtitle => _get('reasoningInContextSubtitle');
   String get toolResultsInContext => _get('toolResultsInContext');
-  String get toolResultsInContextSubtitle => _get('toolResultsInContextSubtitle');
+  String get toolResultsInContextSubtitle =>
+      _get('toolResultsInContextSubtitle');
   String get aiContextInfo => _get('aiContextInfo');
   String get chatTitles => _get('chatTitles');
   String get autoGenerateTitles => _get('autoGenerateTitles');
@@ -200,6 +203,9 @@ class AppLocalizations {
   String get backgroundColorSubtitle => _get('backgroundColorSubtitle');
   String get filmGrainEffect => _get('filmGrainEffect');
   String get filmGrainSubtitle => _get('filmGrainSubtitle');
+  String get dynamicColor => _get('dynamicColor');
+  String get dynamicColorSubtitle => _get('dynamicColorSubtitle');
+  String get accentColorDynamicNote => _get('accentColorDynamicNote');
   String get customHexColor => _get('customHexColor');
   String get pickCustomColor => _get('pickCustomColor');
   String get pickAColor => _get('pickAColor');
@@ -262,12 +268,16 @@ class AppLocalizations {
   String get catSandboxDesc => _get('catSandboxDesc');
   String get connect => _get('connect');
   String get disconnect => _get('disconnect');
-  String disconnectCategory(String label) => _get('disconnectCategory').replaceAll('{label}', label);
+  String disconnectCategory(String label) =>
+      _get('disconnectCategory').replaceAll('{label}', label);
   String get removeCredentialsWarning => _get('removeCredentialsWarning');
   String get cancel => _get('cancel');
-  String categoryConnected(String label) => _get('categoryConnected').replaceAll('{label}', label);
-  String failedToConnect(String label) => _get('failedToConnect').replaceAll('{label}', label);
-  String unableToConnect(String label) => _get('unableToConnect').replaceAll('{label}', label);
+  String categoryConnected(String label) =>
+      _get('categoryConnected').replaceAll('{label}', label);
+  String failedToConnect(String label) =>
+      _get('failedToConnect').replaceAll('{label}', label);
+  String unableToConnect(String label) =>
+      _get('unableToConnect').replaceAll('{label}', label);
   String get toolWebSearch => _get('toolWebSearch');
   String get toolWebCrawl => _get('toolWebCrawl');
   String get toolImageGen => _get('toolImageGen');
@@ -311,9 +321,9 @@ class AppLocalizations {
   String get confirmNewPassword => _get('confirmNewPassword');
   String get updatePassword => _get('updatePassword');
   String get encryptedChatRecovery => _get('encryptedChatRecovery');
-  String lockedChatsCount(int count) =>
-      _get(count == 1 ? 'lockedChatsSingular' : 'lockedChatsPlural')
-          .replaceAll('{count}', count.toString());
+  String lockedChatsCount(int count) => _get(
+    count == 1 ? 'lockedChatsSingular' : 'lockedChatsPlural',
+  ).replaceAll('{count}', count.toString());
   String get recoverChats => _get('recoverChats');
   String get dangerZone => _get('dangerZone');
   String get dangerZoneSubtitle => _get('dangerZoneSubtitle');
@@ -322,12 +332,16 @@ class AppLocalizations {
   String get unableToLoadProfile => _get('unableToLoadProfile');
   String get retry => _get('retry');
   String get saved => _get('saved');
-  String emailUpdated(String email) => _get('emailUpdated').replaceAll('{email}', email);
-  String failedToLoadProfile(String error) => _get('failedToLoadProfile').replaceAll('{error}', error);
-  String failedToSaveProfile(String error) => _get('failedToSaveProfile').replaceAll('{error}', error);
+  String emailUpdated(String email) =>
+      _get('emailUpdated').replaceAll('{email}', email);
+  String failedToLoadProfile(String error) =>
+      _get('failedToLoadProfile').replaceAll('{error}', error);
+  String failedToSaveProfile(String error) =>
+      _get('failedToSaveProfile').replaceAll('{error}', error);
   String get emailCannotBeEmpty => _get('emailCannotBeEmpty');
   String get passwordsDoNotMatch => _get('passwordsDoNotMatch');
-  String failedToChangePassword(String error) => _get('failedToChangePassword').replaceAll('{error}', error);
+  String failedToChangePassword(String error) =>
+      _get('failedToChangePassword').replaceAll('{error}', error);
   String get deleteAccountQuestion => _get('deleteAccountQuestion');
   String get deleteAccountConfirmBody => _get('deleteAccountConfirmBody');
   String get yesDelete => _get('yesDelete');
@@ -339,9 +353,11 @@ class AppLocalizations {
   String get confirmPasswordBody => _get('confirmPasswordBody');
   String get password => _get('password');
   String get passwordRequired => _get('passwordRequired');
-  String verificationFailed(String error) => _get('verificationFailed').replaceAll('{error}', error);
+  String verificationFailed(String error) =>
+      _get('verificationFailed').replaceAll('{error}', error);
   String get verifyAndDelete => _get('verifyAndDelete');
-  String failedToDeleteAccount(String error) => _get('failedToDeleteAccount').replaceAll('{error}', error);
+  String failedToDeleteAccount(String error) =>
+      _get('failedToDeleteAccount').replaceAll('{error}', error);
 
   // ── System prompt / Identity page ──────────────────────────
   String get identitySystem => _get('identitySystem');
@@ -371,19 +387,22 @@ class AppLocalizations {
   String get legalDocuments => _get('legalDocuments');
   String get termsOfService => _get('termsOfService');
   String get privacyPolicy => _get('privacyPolicy');
-  String versionText(String version) => _get('versionText').replaceAll('{version}', version);
+  String versionText(String version) =>
+      _get('versionText').replaceAll('{version}', version);
   String builtOn(String date) => _get('builtOn').replaceAll('{date}', date);
-  String updateAvailable(String version) => _get('updateAvailable').replaceAll('{version}', version);
+  String updateAvailable(String version) =>
+      _get('updateAvailable').replaceAll('{version}', version);
   String get versionUnavailable => _get('versionUnavailable');
-  String copyrightYear(String year) => _get('copyrightYear').replaceAll('{year}', year);
+  String copyrightYear(String year) =>
+      _get('copyrightYear').replaceAll('{year}', year);
   String get licenses => _get('licenses');
   String get unableToLoadLicenses => _get('unableToLoadLicenses');
   String get tapToViewLicense => _get('tapToViewLicense');
   String get devOptionsEnabled => _get('devOptionsEnabled');
   String get devOptionsAlreadyEnabled => _get('devOptionsAlreadyEnabled');
-  String devOptionsTaps(int taps) =>
-      _get(taps == 1 ? 'devOptionsTapSingular' : 'devOptionsTapsPlural')
-          .replaceAll('{taps}', taps.toString());
+  String devOptionsTaps(int taps) => _get(
+    taps == 1 ? 'devOptionsTapSingular' : 'devOptionsTapsPlural',
+  ).replaceAll('{taps}', taps.toString());
 
   // ── Pricing page ───────────────────────────────────────────
   String get subscription => _get('subscription');
@@ -437,37 +456,42 @@ class AppLocalizations {
   String get confirmAge16 => _get('confirmAge16');
   String get mustAgreeToTerms => _get('mustAgreeToTerms');
   String get mustBe16 => _get('mustBe16');
-  String unexpectedError(String error) => _get('unexpectedError').replaceAll('{error}', error);
+  String unexpectedError(String error) =>
+      _get('unexpectedError').replaceAll('{error}', error);
 
   // ── Recover chats page ─────────────────────────────────────
   String get recoverEncryptedChats => _get('recoverEncryptedChats');
   String get noLockedChats => _get('noLockedChats');
   String get allChatsAccessible => _get('allChatsAccessible');
   String get recoverChatsInfo => _get('recoverChatsInfo');
-  String encryptedWithVersion(int version) => _get('encryptedWithVersion').replaceAll('{version}', version.toString());
+  String encryptedWithVersion(int version) =>
+      _get('encryptedWithVersion').replaceAll('{version}', version.toString());
   String get oldPassword => _get('oldPassword');
   String get enterOldPassword => _get('enterOldPassword');
-  String lockedChatCount(int count) =>
-      _get(count == 1 ? 'lockedChatCountSingular' : 'lockedChatCountPlural')
-          .replaceAll('{count}', count.toString());
+  String lockedChatCount(int count) => _get(
+    count == 1 ? 'lockedChatCountSingular' : 'lockedChatCountPlural',
+  ).replaceAll('{count}', count.toString());
   String get deleteLockedChatsTitle => _get('deleteLockedChatsTitle');
-  String deleteLockedChatsBody(int count) =>
-      _get(count == 1 ? 'deleteLockedChatsBodySingular' : 'deleteLockedChatsBodyPlural')
-          .replaceAll('{count}', count.toString());
+  String deleteLockedChatsBody(int count) => _get(
+    count == 1
+        ? 'deleteLockedChatsBodySingular'
+        : 'deleteLockedChatsBodyPlural',
+  ).replaceAll('{count}', count.toString());
   String get deletePermanently => _get('deletePermanently');
   String get areYouSure => _get('areYouSure');
-  String confirmDeleteChats(int count) => _get('confirmDeleteChats').replaceAll('{count}', count.toString());
+  String confirmDeleteChats(int count) =>
+      _get('confirmDeleteChats').replaceAll('{count}', count.toString());
   String get typeDelete => _get('typeDelete');
   String get confirmDelete => _get('confirmDelete');
   String get pleaseEnterOldPassword => _get('pleaseEnterOldPassword');
   String get derivingKey => _get('derivingKey');
-  String recoveredChats(int count) =>
-      _get(count == 1 ? 'recoveredChatsSingular' : 'recoveredChatsPlural')
-          .replaceAll('{count}', count.toString());
+  String recoveredChats(int count) => _get(
+    count == 1 ? 'recoveredChatsSingular' : 'recoveredChatsPlural',
+  ).replaceAll('{count}', count.toString());
   String get recoveryFailed => _get('recoveryFailed');
-  String deletedChats(int count) =>
-      _get(count == 1 ? 'deletedChatsSingular' : 'deletedChatsPlural')
-          .replaceAll('{count}', count.toString());
+  String deletedChats(int count) => _get(
+    count == 1 ? 'deletedChatsSingular' : 'deletedChatsPlural',
+  ).replaceAll('{count}', count.toString());
   String get deletionFailed => _get('deletionFailed');
   String get recover => _get('recover');
   String get delete => _get('delete');
@@ -498,12 +522,15 @@ class AppLocalizations {
   String get copiedRecentLogs => _get('copiedRecentLogs');
   String get noFocusedDebugData => _get('noFocusedDebugData');
   String get copiedFocusedDebug => _get('copiedFocusedDebug');
-  String failedFocusedDebug(String error) => _get('failedFocusedDebug').replaceAll('{error}', error);
+  String failedFocusedDebug(String error) =>
+      _get('failedFocusedDebug').replaceAll('{error}', error);
   String get noDiagnosticsLog => _get('noDiagnosticsLog');
   String get diagnosticsLogNotFound => _get('diagnosticsLogNotFound');
-  String failedToShareLog(String error) => _get('failedToShareLog').replaceAll('{error}', error);
+  String failedToShareLog(String error) =>
+      _get('failedToShareLog').replaceAll('{error}', error);
   String get diagnosticsLogCleared => _get('diagnosticsLogCleared');
-  String failedToClearLog(String error) => _get('failedToClearLog').replaceAll('{error}', error);
+  String failedToClearLog(String error) =>
+      _get('failedToClearLog').replaceAll('{error}', error);
   String get recentLogLines => _get('recentLogLines');
   String get devOptionsDisabledMsg => _get('devOptionsDisabledMsg');
   String get noLogsYet => _get('noLogsYet');
@@ -539,28 +566,31 @@ class AppLocalizations {
   String get perRequest => _get('perRequest');
   String get best => _get('best');
   String get autoCheapest => _get('autoCheapest');
-  String autoCheapestCurrently(String provider, String price) =>
-      _get('autoCheapestCurrently')
-          .replaceAll('{provider}', provider)
-          .replaceAll('{price}', price);
+  String autoCheapestCurrently(String provider, String price) => _get(
+    'autoCheapestCurrently',
+  ).replaceAll('{provider}', provider).replaceAll('{price}', price);
 
   // ── Message bubble / chat ──────────────────────────────────
   String get openInMailApp => _get('openInMailApp');
   String costLabel(String cost) => _get('costLabel').replaceAll('{cost}', cost);
-  String generatedLabel(String label) => _get('generatedLabel').replaceAll('{label}', label);
+  String generatedLabel(String label) =>
+      _get('generatedLabel').replaceAll('{label}', label);
   String get unableToCopyImage => _get('unableToCopyImage');
   String get unableToSaveImage => _get('unableToSaveImage');
   String get image => _get('image');
   String get openLink => _get('openLink');
-  String openLinkConfirm(String url) => _get('openLinkConfirm').replaceAll('{url}', url);
+  String openLinkConfirm(String url) =>
+      _get('openLinkConfirm').replaceAll('{url}', url);
   String get open => _get('open');
 
   // ── Misc / shared ─────────────────────────────────────────
   String get contentCopied => _get('contentCopied');
   String get artifactCopied => _get('artifactCopied');
   String get fileSaved => _get('fileSaved');
-  String failedToExportArtifact(String error) => _get('failedToExportArtifact').replaceAll('{error}', error);
-  String failedToSave(String error) => _get('failedToSave').replaceAll('{error}', error);
+  String failedToExportArtifact(String error) =>
+      _get('failedToExportArtifact').replaceAll('{error}', error);
+  String failedToSave(String error) =>
+      _get('failedToSave').replaceAll('{error}', error);
   String get markdownSaved => _get('markdownSaved');
   String get original => _get('original');
   String get markdown => _get('markdown');
@@ -568,9 +598,12 @@ class AppLocalizations {
   String get addSummary => _get('addSummary');
   String get deletedFile => _get('deletedFile');
   String get deleteFile => _get('deleteFile');
-  String deleteFileConfirm(String name) => _get('deleteFileConfirm').replaceAll('{name}', name);
-  String deleteFailed(String error) => _get('deleteFailed').replaceAll('{error}', error);
-  String uploadedFile(String name) => _get('uploadedFile').replaceAll('{name}', name);
+  String deleteFileConfirm(String name) =>
+      _get('deleteFileConfirm').replaceAll('{name}', name);
+  String deleteFailed(String error) =>
+      _get('deleteFailed').replaceAll('{error}', error);
+  String uploadedFile(String name) =>
+      _get('uploadedFile').replaceAll('{name}', name);
   String get freeMessagePlaceholder => _get('freeMessagePlaceholder');
 
   // ── Chat UI ────────────────────────────────────────────────
@@ -592,7 +625,8 @@ class AppLocalizations {
   // ── Model selector ─────────────────────────────────────────
   String get models => _get('models');
   String get searchModels => _get('searchModels');
-  String modelError(String error) => _get('modelError').replaceAll('{error}', error);
+  String modelError(String error) =>
+      _get('modelError').replaceAll('{error}', error);
 
   // ── Message bubble extras ──────────────────────────────────
   String get copyImage => _get('copyImage');
@@ -602,11 +636,14 @@ class AppLocalizations {
 
   // ── Free message display ───────────────────────────────────
   String get freeMessages => _get('freeMessages');
-  String freeUsed(String count) => _get('freeUsed').replaceAll('{count}', count);
-  String freeTotal(String count) => _get('freeTotal').replaceAll('{count}', count);
+  String freeUsed(String count) =>
+      _get('freeUsed').replaceAll('{count}', count);
+  String freeTotal(String count) =>
+      _get('freeTotal').replaceAll('{count}', count);
   String get subscribeToContinue => _get('subscribeToContinue');
-  String freeRemaining(String remaining, String total) =>
-      _get('freeRemaining').replaceAll('{remaining}', remaining).replaceAll('{total}', total);
+  String freeRemaining(String remaining, String total) => _get(
+    'freeRemaining',
+  ).replaceAll('{remaining}', remaining).replaceAll('{total}', total);
 
   // ── Model selection dropdown ───────────────────────────────
   String get selectModel => _get('selectModel');
@@ -627,16 +664,22 @@ class AppLocalizations {
   String get deleteImageTitle => _get('deleteImageTitle');
   String get deleteImageBody => _get('deleteImageBody');
   String get imageDeleted => _get('imageDeleted');
-  String failedToDeleteImage(String error) => _get('failedToDeleteImage').replaceAll('{error}', error);
+  String failedToDeleteImage(String error) =>
+      _get('failedToDeleteImage').replaceAll('{error}', error);
   String get someImagesUsedInChats => _get('someImagesUsedInChats');
   String get deletedImagesWarning => _get('deletedImagesWarning');
-  String deleteAllCount(int count) => _get('deleteAllCount').replaceAll('{count}', count.toString());
+  String deleteAllCount(int count) =>
+      _get('deleteAllCount').replaceAll('{count}', count.toString());
   String get deleteAll => _get('deleteAll');
   String get deleteSelectedImages => _get('deleteSelectedImages');
-  String deleteSelectedCount(int count) => _get('deleteSelectedCount').replaceAll('{count}', count.toString());
+  String deleteSelectedCount(int count) =>
+      _get('deleteSelectedCount').replaceAll('{count}', count.toString());
   String deletedImagesResult(int deleted, int failed) =>
-      _get('deletedImagesResult').replaceAll('{deleted}', deleted.toString()).replaceAll('{failed}', failed.toString());
-  String deletedImagesSuccess(int count) => _get('deletedImagesSuccess').replaceAll('{count}', count.toString());
+      _get('deletedImagesResult')
+          .replaceAll('{deleted}', deleted.toString())
+          .replaceAll('{failed}', failed.toString());
+  String deletedImagesSuccess(int count) =>
+      _get('deletedImagesSuccess').replaceAll('{count}', count.toString());
   String get downloadSelected => _get('downloadSelected');
   String get deleteSelected => _get('deleteSelected');
   String get errorLoadingImages => _get('errorLoadingImages');
@@ -645,7 +688,8 @@ class AppLocalizations {
   String get download => _get('download');
 
   // ── Attachment preview bar ─────────────────────────────────
-  String removeFile(String name) => _get('removeFile').replaceAll('{name}', name);
+  String removeFile(String name) =>
+      _get('removeFile').replaceAll('{name}', name);
   String get edit => _get('edit');
   String get close => _get('close');
 
@@ -658,15 +702,14 @@ class AppLocalizations {
   String get projectKnowledge => _get('projectKnowledge');
   String get projectInstructions => _get('projectInstructions');
   String get projectInstructionsEmpty => _get('projectInstructionsEmpty');
-  String get projectInstructionsSubtitle =>
-      _get('projectInstructionsSubtitle');
+  String get projectInstructionsSubtitle => _get('projectInstructionsSubtitle');
   String get projectLatestChats => _get('projectLatestChats');
   String get projectNoChats => _get('projectNoChats');
   String get projectNoChatsHint => _get('projectNoChatsHint');
   String get projectNewChat => _get('projectNewChat');
-  String projectFileCount(int count) =>
-      _get(count == 1 ? 'projectFileCountSingular' : 'projectFileCountPlural')
-          .replaceAll('{count}', count.toString());
+  String projectFileCount(int count) => _get(
+    count == 1 ? 'projectFileCountSingular' : 'projectFileCountPlural',
+  ).replaceAll('{count}', count.toString());
   String get projectNoFiles => _get('projectNoFiles');
   String get projectAddContent => _get('projectAddContent');
   String get projectUploadFromDevice => _get('projectUploadFromDevice');
@@ -703,8 +746,9 @@ class AppLocalizations {
   String projectImagePickFailed(String error) =>
       _get('projectImagePickFailed').replaceAll('{error}', error);
   String get projectContextBudgetTitle => _get('projectContextBudgetTitle');
-  String projectContextBudgetBody(int tokens) => _get('projectContextBudgetBody')
-      .replaceAll('{tokens}', tokens.toString());
+  String projectContextBudgetBody(int tokens) => _get(
+    'projectContextBudgetBody',
+  ).replaceAll('{tokens}', tokens.toString());
   String get projectUploadAnyway => _get('projectUploadAnyway');
   String get projectEncryptingUploading => _get('projectEncryptingUploading');
   String get projectConvertingMarkdown => _get('projectConvertingMarkdown');
@@ -753,8 +797,7 @@ class AppLocalizations {
   String get tourProviderPillBody => _get('tourProviderPillBody');
   String get tourSettingsPricingTitle => _get('tourSettingsPricingTitle');
   String get tourSettingsPricingBody => _get('tourSettingsPricingBody');
-  String get tourSettingsAiIdentityTitle =>
-      _get('tourSettingsAiIdentityTitle');
+  String get tourSettingsAiIdentityTitle => _get('tourSettingsAiIdentityTitle');
   String get tourSettingsAiIdentityBody => _get('tourSettingsAiIdentityBody');
   String get tourDoneTitle => _get('tourDoneTitle');
   String get tourDoneBody => _get('tourDoneBody');
@@ -765,9 +808,19 @@ class _AppLocalizationsDelegate
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) =>
-      ['en', 'de', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ja']
-          .contains(locale.languageCode);
+  bool isSupported(Locale locale) => [
+    'en',
+    'de',
+    'zh',
+    'hi',
+    'es',
+    'fr',
+    'ar',
+    'bn',
+    'pt',
+    'ru',
+    'ja',
+  ].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>
