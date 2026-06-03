@@ -22,6 +22,7 @@ class _ThemePageState extends State<ThemePage> {
   late Color _selectedIconFgColor;
   late Color _selectedBgColor;
   late bool _selectedGrain;
+  late bool _selectedDynamicColor;
 
   final TextEditingController _accentHexController = TextEditingController();
   final TextEditingController _iconFgHexController = TextEditingController();
@@ -102,6 +103,7 @@ class _ThemePageState extends State<ThemePage> {
     _selectedIconFgColor = widget.config.currentIconFgColor;
     _selectedBgColor = widget.config.currentBgColor;
     _selectedGrain = widget.config.grainEnabled;
+    _selectedDynamicColor = widget.config.dynamicColorEnabled;
 
     _accentHexController.text = _selectedAccentColor.toHexString();
     _iconFgHexController.text = _selectedIconFgColor.toHexString();
@@ -142,6 +144,13 @@ class _ThemePageState extends State<ThemePage> {
     });
   }
 
+  void _updateDynamicColorEnabled(bool enabled) {
+    setState(() {
+      _selectedDynamicColor = enabled;
+    });
+    widget.config.setDynamicColorEnabled(enabled);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -180,35 +189,53 @@ class _ThemePageState extends State<ThemePage> {
                 value: _selectedGrain,
                 onChanged: _updateGrainEnabled,
               ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.palette_outlined,
+                title: l.dynamicColor,
+                subtitle: l.dynamicColorSubtitle,
+                value: _selectedDynamicColor,
+                onChanged: _updateDynamicColorEnabled,
+              ),
             ],
           ),
           const SizedBox(height: 24),
 
           _SectionHeader(l.accentColor),
-          _ColorCard(
-            description: l.accentColorSubtitle,
-            hexLabel: l.customHexColor,
-            currentColor: _selectedAccentColor,
-            options: _accentColorOptions,
-            hexController: _accentHexController,
-            gridColumns: 8,
-            onColorSelected: (c) {
-              setState(() {
-                _selectedAccentColor = c;
-                _accentHexController.text = c.toHexString();
-                _applyThemeChanges();
-              });
-            },
-            onHexChanged: (hex) {
-              try {
-                final c = ColorExtension.fromHexString(hex);
+          if (_selectedDynamicColor)
+            _GroupedCard(
+              children: [
+                _NoteRow(
+                  icon: Icons.auto_awesome_outlined,
+                  text: l.accentColorDynamicNote,
+                ),
+              ],
+            )
+          else
+            _ColorCard(
+              description: l.accentColorSubtitle,
+              hexLabel: l.customHexColor,
+              currentColor: _selectedAccentColor,
+              options: _accentColorOptions,
+              hexController: _accentHexController,
+              gridColumns: 8,
+              onColorSelected: (c) {
                 setState(() {
                   _selectedAccentColor = c;
+                  _accentHexController.text = c.toHexString();
                   _applyThemeChanges();
                 });
-              } catch (_) {}
-            },
-          ),
+              },
+              onHexChanged: (hex) {
+                try {
+                  final c = ColorExtension.fromHexString(hex);
+                  setState(() {
+                    _selectedAccentColor = c;
+                    _applyThemeChanges();
+                  });
+                } catch (_) {}
+              },
+            ),
           const SizedBox(height: 24),
 
           _SectionHeader(l.iconFgColor),
@@ -376,6 +403,35 @@ class _SwitchRow extends StatelessWidget {
   }
 }
 
+// Informational row (icon + text) used to explain a disabled control,
+// e.g. the accent picker when Material You / dynamic colour is active.
+class _NoteRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _NoteRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: m3.onSurfaceVariant),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 13, color: m3.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // Color section: description, swatch grid, hex input field.
 class _ColorCard extends StatelessWidget {
   final String description;
@@ -421,19 +477,20 @@ class _ColorCard extends StatelessWidget {
             builder: (context, constraints) {
               const spacing = 8.0;
               final totalSpacing = spacing * (gridColumns - 1);
-              final size =
-                  (constraints.maxWidth - totalSpacing) / gridColumns;
+              final size = (constraints.maxWidth - totalSpacing) / gridColumns;
               final swatchSize = size.clamp(32.0, 40.0);
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
                 children: options
-                    .map((c) => _Swatch(
-                          color: c,
-                          selected: c == currentColor,
-                          size: swatchSize,
-                          onTap: () => onColorSelected(c),
-                        ))
+                    .map(
+                      (c) => _Swatch(
+                        color: c,
+                        selected: c == currentColor,
+                        size: swatchSize,
+                        onTap: () => onColorSelected(c),
+                      ),
+                    )
                     .toList(),
               );
             },
@@ -451,8 +508,10 @@ class _ColorCard extends StatelessWidget {
           TextFormField(
             controller: hexController,
             decoration: InputDecoration(
-              prefixIcon:
-                  Icon(Icons.colorize_outlined, color: m3.onSurfaceVariant),
+              prefixIcon: Icon(
+                Icons.colorize_outlined,
+                color: m3.onSurfaceVariant,
+              ),
               suffixIcon: IconButton(
                 icon: Icon(Icons.check_circle, color: cs.primary),
                 onPressed: () => onHexChanged(hexController.text),
@@ -609,8 +668,11 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
             TextFormField(
               controller: _hexController,
               decoration: InputDecoration(
-                prefixIcon:
-                    Icon(Icons.tag, color: m3.onSurfaceVariant, size: 18),
+                prefixIcon: Icon(
+                  Icons.tag,
+                  color: m3.onSurfaceVariant,
+                  size: 18,
+                ),
                 hintText: '#RRGGBB',
                 isDense: true,
               ),
@@ -654,60 +716,62 @@ class _GradientSlider extends StatelessWidget {
     const thumbDiameter = 22.0;
     return SizedBox(
       height: thumbDiameter + 4,
-      child: LayoutBuilder(builder: (context, c) {
-        final w = c.maxWidth;
-        void update(double dx) {
-          final v = (dx / w).clamp(0.0, 1.0);
-          onChanged(v);
-        }
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          void update(double dx) {
+            final v = (dx / w).clamp(0.0, 1.0);
+            onChanged(v);
+          }
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => update(d.localPosition.dx),
-          onPanStart: (d) => update(d.localPosition.dx),
-          onPanUpdate: (d) => update(d.localPosition.dx),
-          child: Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              Container(
-                height: trackHeight,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: colors),
-                  borderRadius: BorderRadius.circular(trackHeight / 2),
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.08),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: ((w - thumbDiameter) * value).clamp(
-                  0.0,
-                  (w - thumbDiameter).clamp(0.0, double.infinity),
-                ),
-                child: Container(
-                  width: thumbDiameter,
-                  height: thumbDiameter,
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (d) => update(d.localPosition.dx),
+            onPanStart: (d) => update(d.localPosition.dx),
+            onPanUpdate: (d) => update(d.localPosition.dx),
+            child: Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                Container(
+                  height: trackHeight,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: colors),
+                    borderRadius: BorderRadius.circular(trackHeight / 2),
                     border: Border.all(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      width: 2,
+                      color: Colors.black.withValues(alpha: 0.08),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      }),
+                Positioned(
+                  left: ((w - thumbDiameter) * value).clamp(
+                    0.0,
+                    (w - thumbDiameter).clamp(0.0, double.infinity),
+                  ),
+                  child: Container(
+                    width: thumbDiameter,
+                    height: thumbDiameter,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -730,8 +794,8 @@ class _Swatch extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     // Check mark uses a contrast-aware foreground so it stays legible
     // on both light and dark swatches.
-    final checkColor = ThemeData.estimateBrightnessForColor(color) ==
-            Brightness.dark
+    final checkColor =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
         ? Colors.white
         : Colors.black;
     return InkWell(
@@ -747,12 +811,7 @@ class _Swatch extends StatelessWidget {
               ? Border.all(color: cs.onSurface, width: 2)
               : Border.all(color: Colors.transparent, width: 2),
           boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: cs.surface,
-                    spreadRadius: 3,
-                  ),
-                ]
+              ? [BoxShadow(color: cs.surface, spreadRadius: 3)]
               : null,
         ),
         child: selected

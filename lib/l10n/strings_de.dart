@@ -9,8 +9,7 @@ const Map<String, String> stringsDe = {
   'customization': 'Anpassung',
   'customizationSubtitle': 'App-Verhalten und Einstellungen konfigurieren',
   'toolCalling': 'Tool-Aufrufe',
-  'toolCallingSubtitle':
-      'Tool-Nutzung, Erkennung und Anzeige steuern',
+  'toolCallingSubtitle': 'Tool-Nutzung, Erkennung und Anzeige steuern',
   'developerOptions': 'Entwickleroptionen',
   'developerOptionsSubtitle': 'Diagnose-Logs und Debug-Werkzeuge',
   'modelSelection': 'Modellauswahl',
@@ -48,8 +47,7 @@ const Map<String, String> stringsDe = {
       'Wenn aktiviert, werden Sprachtranskriptionen sofort gesendet. Wenn deaktiviert (Standard), erscheinen Transkriptionen im Textfeld zur Überprüfung.',
   'messageDisplay': 'Nachrichtenanzeige',
   'showReasoningTokens': 'Reasoning-Tokens anzeigen',
-  'showReasoningTokensSubtitle':
-      'Denkprozess-Tokens in KI-Antworten anzeigen',
+  'showReasoningTokensSubtitle': 'Denkprozess-Tokens in KI-Antworten anzeigen',
   'showModelInfo': 'Modellinfo anzeigen',
   'showModelInfoSubtitle':
       'Modellname und Informationen in Chat-Nachrichten anzeigen',
@@ -65,8 +63,7 @@ const Map<String, String> stringsDe = {
   'fontSizePreview':
       'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.',
   'chatFontFamily': 'Chat-Schriftart',
-  'chatFontFamilySubtitle':
-      'Schriftart für Chatnachrichten auswählen',
+  'chatFontFamilySubtitle': 'Schriftart für Chatnachrichten auswählen',
   'fontFamilySystem': 'System-Standard',
   'fontFamilyArimo': 'Arimo (Serifenlos)',
   'fontFamilyMerriweather': 'Merriweather (Serifen)',
@@ -81,8 +78,7 @@ const Map<String, String> stringsDe = {
   'downloadsAlwaysAskHintNoFolder':
       'Standardordner unten festlegen, um dies ausschalten zu können',
   'downloadsDefaultFolder': 'Standard-Download-Ordner',
-  'downloadsDefaultFolderUnset':
-      'Nicht festgelegt — jeder Download fragt nach',
+  'downloadsDefaultFolderUnset': 'Nicht festgelegt — jeder Download fragt nach',
   'downloadsChooseFolderDialog': 'Standard-Download-Ordner wählen',
   'downloadsClear': 'Löschen',
   'downloadsInfo':
@@ -129,8 +125,7 @@ const Map<String, String> stringsDe = {
       'Modellspezifischer Prompt konnte nicht gespeichert werden.',
   'perModelPromptDeleteFailed':
       'Modellspezifischer Prompt konnte nicht entfernt werden.',
-  'perModelPromptModeLabel':
-      'Mit globalem / Workspace-Prompt kombinieren',
+  'perModelPromptModeLabel': 'Mit globalem / Workspace-Prompt kombinieren',
   'perModelPromptModeOff': 'Aus',
   'perModelPromptModeAppend': 'Anhängen',
   'perModelPromptModePrepend': 'Voranstellen',
@@ -155,6 +150,11 @@ const Map<String, String> stringsDe = {
   'backgroundColorSubtitle': 'Haupt-Hintergrundfarbe der App wählen',
   'filmGrainEffect': 'Filmkorn-Effekt',
   'filmGrainSubtitle': 'Subtile Filmkorn-Textur hinzufügen',
+  'dynamicColor': 'Material You',
+  'dynamicColorSubtitle':
+      'Systemfarben verwenden und Theme-Änderungen automatisch übernehmen',
+  'accentColorDynamicNote':
+      'Die Akzentfarbe wird von deinem Material-You-Systemtheme festgelegt.',
   'customHexColor': 'Benutzerdefinierte Hex-Farbe (#RRGGBB)',
   'pickCustomColor': 'Eigene Farbe wählen',
   'pickAColor': 'Farbe auswählen',
@@ -219,17 +219,14 @@ const Map<String, String> stringsDe = {
       'Auf Gerätefunktionen wie GPS, Kalender und Erinnerungen zugreifen',
   'catSpotifyDesc':
       'Wiedergabe steuern und Ihre Spotify-Bibliothek durchsuchen',
-  'catBashTerminalDesc':
-      'Sandboxed Shell-Befehle auf dem Desktop ausführen',
-  'catGitHubDesc':
-      'Auf Repos, Issues, PRs und Commits von GitHub zugreifen',
+  'catBashTerminalDesc': 'Sandboxed Shell-Befehle auf dem Desktop ausführen',
+  'catGitHubDesc': 'Auf Repos, Issues, PRs und Commits von GitHub zugreifen',
   'catSlackDesc':
       'Nachrichten senden, Kanäle durchsuchen und Slack-Daten abrufen',
   'catGoogleCalGmailDesc':
       'Termine und E-Mails über Google Kalender und Gmail verwalten',
   'catEmailImapSmtpDesc': 'E-Mails über IMAP und SMTP senden und empfangen',
-  'catWhoopDesc':
-      'Erholung, Belastung, Schlaf und Training von WHOOP anzeigen',
+  'catWhoopDesc': 'Erholung, Belastung, Schlaf und Training von WHOOP anzeigen',
   'catNextcloudDesc':
       'Dateien, Kalender und Kontakte auf Nextcloud durchsuchen',
   'catSandboxDesc':
@@ -301,8 +298,7 @@ const Map<String, String> stringsDe = {
   'deleteAccountWarning':
       'Das Löschen Ihres Kontos beendet alle Abonnements, entfernt Ihre Daten und kann nicht rückgängig gemacht werden.',
   'deleteAccount': 'Konto löschen',
-  'unableToLoadProfile':
-      'Ihr Profil kann derzeit nicht geladen werden.',
+  'unableToLoadProfile': 'Ihr Profil kann derzeit nicht geladen werden.',
   'retry': 'Erneut versuchen',
   'saved': 'Gespeichert',
   'emailUpdated':
@@ -311,8 +307,7 @@ const Map<String, String> stringsDe = {
   'failedToSaveProfile': 'Profil konnte nicht gespeichert werden: {error}',
   'emailCannotBeEmpty': 'E-Mail darf nicht leer sein.',
   'passwordsDoNotMatch': 'Neue Passwörter stimmen nicht überein.',
-  'failedToChangePassword':
-      'Passwort konnte nicht geändert werden: {error}',
+  'failedToChangePassword': 'Passwort konnte nicht geändert werden: {error}',
   'deleteAccountQuestion': 'Konto löschen?',
   'deleteAccountConfirmBody':
       'Sind Sie sicher, dass Sie Ihr Konto löschen möchten?\n\nDies wird unwiderruflich löschen:\n  \u2022 Alle Ihre Chats und Nachrichten\n  \u2022 Alle gespeicherten Erinnerungen\n  \u2022 Ihr Profil und Ihre Einstellungen\n  \u2022 Alle aktiven Abonnements\n\nDiese Aktion ist unwiderruflich. Ihre Daten können nicht wiederhergestellt werden.',
@@ -329,14 +324,12 @@ const Map<String, String> stringsDe = {
   'passwordRequired': 'Passwort ist erforderlich',
   'verificationFailed': 'Überprüfung fehlgeschlagen: {error}',
   'verifyAndDelete': 'Überprüfen & Löschen',
-  'failedToDeleteAccount':
-      'Konto konnte nicht gelöscht werden: {error}',
+  'failedToDeleteAccount': 'Konto konnte nicht gelöscht werden: {error}',
 
   // ── System prompt / Identity page ──────────────────────────
   'identitySystem': 'Identitätssystem',
   'identityActive': 'Seele, Benutzer und Gedächtnis sind aktiv',
-  'identityDisabled':
-      'Deaktiviert \u2014 KI hat keine persistente Identität',
+  'identityDisabled': 'Deaktiviert \u2014 KI hat keine persistente Identität',
   'soul': 'Seele',
   'soulHint':
       'Definieren Sie die Persönlichkeit, den Ton und die Grenzen der KI. Dies prägt die Kommunikation über alle Unterhaltungen hinweg.',
@@ -375,17 +368,14 @@ const Map<String, String> stringsDe = {
   'updateAvailable':
       'Update verfügbar: v{version} \u2014 zum Herunterladen tippen',
   'versionUnavailable': 'Versionsinformationen nicht verfügbar.',
-  'copyrightYear':
-      '\u00a9 {year} Chuk Development\nAlle Rechte vorbehalten.',
+  'copyrightYear': '\u00a9 {year} Chuk Development\nAlle Rechte vorbehalten.',
   'licenses': 'Lizenzen',
   'unableToLoadLicenses': 'Lizenzen konnten nicht geladen werden.',
   'tapToViewLicense': 'Tippen, um den vollständigen Lizenztext anzuzeigen',
   'devOptionsEnabled': 'Entwickleroptionen aktiviert',
   'devOptionsAlreadyEnabled': 'Entwickleroptionen bereits aktiviert',
-  'devOptionsTapSingular':
-      'Noch {taps} Mal tippen für Entwickleroptionen',
-  'devOptionsTapsPlural':
-      'Noch {taps} Mal tippen für Entwickleroptionen',
+  'devOptionsTapSingular': 'Noch {taps} Mal tippen für Entwickleroptionen',
+  'devOptionsTapsPlural': 'Noch {taps} Mal tippen für Entwickleroptionen',
 
   // ── Pricing page ───────────────────────────────────────────
   'subscription': 'Abonnement',
@@ -396,8 +386,7 @@ const Map<String, String> stringsDe = {
   'plus': 'Plus',
   'pricePerMonth': '20\u00a0\u20ac/Monat',
   'monthlyCredits': 'Monatliches KI-Guthaben: 16,00\u00a0\u20ac',
-  'unusedCreditsExpire':
-      'Ungenutztes Guthaben verfällt am Ende jedes Monats.',
+  'unusedCreditsExpire': 'Ungenutztes Guthaben verfällt am Ende jedes Monats.',
   'manageBilling': 'Abrechnung verwalten',
   'manageBillingSubtitle':
       'Verwenden Sie das Abrechnungsportal, um Ihr Abonnement zu kündigen oder Zahlungsmethoden zu aktualisieren.',
@@ -417,8 +406,7 @@ const Map<String, String> stringsDe = {
   'immediateAccessAck':
       'Ich möchte sofortigen Zugang zu Chuk Chat und erkenne an, dass ich mein ',
   'rightOfWithdrawal': 'Widerrufsrecht',
-  'onceServiceBegins':
-      ' verliere, sobald der Dienst beginnt. Ich stimme den ',
+  'onceServiceBegins': ' verliere, sobald der Dienst beginnt. Ich stimme den ',
   'subscribeNow': 'Jetzt abonnieren',
   'alreadySubscribed': 'Sie haben bereits ein aktives Abonnement.',
   'opening': 'Wird geöffnet...',
@@ -484,8 +472,7 @@ const Map<String, String> stringsDe = {
       'Wiederherstellung fehlgeschlagen. Bitte versuchen Sie es erneut.',
   'deletedChatsSingular': '{count} Chat gelöscht.',
   'deletedChatsPlural': '{count} Chats gelöscht.',
-  'deletionFailed':
-      'Löschen fehlgeschlagen. Bitte versuchen Sie es erneut.',
+  'deletionFailed': 'Löschen fehlgeschlagen. Bitte versuchen Sie es erneut.',
   'recover': 'Wiederherstellen',
   'delete': 'Löschen',
   'deleting': 'Wird gelöscht...',
@@ -525,11 +512,9 @@ const Map<String, String> stringsDe = {
       'Fokussierter Debug-Report konnte nicht erstellt werden: {error}',
   'noDiagnosticsLog': 'Kein Diagnose-Log verfügbar',
   'diagnosticsLogNotFound': 'Diagnose-Logdatei nicht gefunden',
-  'failedToShareLog':
-      'Diagnose-Log konnte nicht geteilt werden: {error}',
+  'failedToShareLog': 'Diagnose-Log konnte nicht geteilt werden: {error}',
   'diagnosticsLogCleared': 'Diagnose-Log gelöscht',
-  'failedToClearLog':
-      'Diagnose-Log konnte nicht gelöscht werden: {error}',
+  'failedToClearLog': 'Diagnose-Log konnte nicht gelöscht werden: {error}',
   'recentLogLines': 'Letzte Log-Zeilen',
   'devOptionsDisabledMsg': 'Entwickleroptionen deaktiviert.',
   'noLogsYet':
@@ -548,8 +533,7 @@ const Map<String, String> stringsDe = {
 
   // ── Usage details page ─────────────────────────────────────
   'usageDetails': 'Nutzungsdetails',
-  'unableToLoadUsage':
-      'Nutzungsdetails können derzeit nicht geladen werden.',
+  'unableToLoadUsage': 'Nutzungsdetails können derzeit nicht geladen werden.',
   'usageAndBilling': 'Nutzung und Abrechnung',
   'usageReadOnly':
       'Dieser Bildschirm ist schreibgeschützt und wird aus Ihren Nutzungsprotokollen abgerufen.',
@@ -561,8 +545,7 @@ const Map<String, String> stringsDe = {
   'cachedTokens': 'Gecachte Tokens',
 
   // ── Model selector page ────────────────────────────────────
-  'sessionExpired':
-      'Sitzung abgelaufen. Bitte melden Sie sich erneut an.',
+  'sessionExpired': 'Sitzung abgelaufen. Bitte melden Sie sich erneut an.',
   'offlineMessage':
       'Sie scheinen offline zu sein. Bitte überprüfen Sie Ihre Internetverbindung.',
   'cannotReachApi': 'Der API-Server ist nicht erreichbar.',
@@ -583,16 +566,14 @@ const Map<String, String> stringsDe = {
   'unableToSaveImage': 'Bild konnte nicht gespeichert werden',
   'image': 'Bild',
   'openLink': 'Link öffnen',
-  'openLinkConfirm':
-      'Möchten Sie die App wirklich verlassen und {url} öffnen?',
+  'openLinkConfirm': 'Möchten Sie die App wirklich verlassen und {url} öffnen?',
   'open': 'Öffnen',
 
   // ── Misc / shared ─────────────────────────────────────────
   'contentCopied': 'Inhalt in Zwischenablage kopiert',
   'artifactCopied': 'Artefakt in Zwischenablage kopiert',
   'fileSaved': 'Datei gespeichert',
-  'failedToExportArtifact':
-      'Artefakt konnte nicht exportiert werden: {error}',
+  'failedToExportArtifact': 'Artefakt konnte nicht exportiert werden: {error}',
   'failedToSave': 'Speichern fehlgeschlagen: {error}',
   'markdownSaved': 'Markdown gespeichert',
   'original': 'Original',
@@ -652,12 +633,10 @@ const Map<String, String> stringsDe = {
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Medienverwaltung',
   'imageUsedInChats': 'Bild in Chats verwendet',
-  'imageUsedInChatsBody':
-      'Dieses Bild wird in folgenden Chats verwendet:',
+  'imageUsedInChatsBody': 'Dieses Bild wird in folgenden Chats verwendet:',
   'deleteImageShowDeleted':
       'Wenn Sie dieses Bild löschen, wird es in diesen Chats als „Bild gelöscht" angezeigt.',
-  'deleteImageConfirm':
-      'Möchten Sie dieses Bild wirklich löschen?',
+  'deleteImageConfirm': 'Möchten Sie dieses Bild wirklich löschen?',
   'deleteAnyway': 'Trotzdem löschen',
   'deleteImageTitle': 'Bild löschen',
   'deleteImageBody':

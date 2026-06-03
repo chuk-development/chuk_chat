@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
@@ -297,75 +298,87 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      navigatorObservers: [OnboardingTourController.navigatorObserver],
-      title: 'Chuk Chat',
-      debugShowCheckedModeBanner: false,
-      theme: _themeService.buildTheme(),
-      locale: Locale(_themeService.uiLocale),
-      supportedLocales: AppLocalizations.supportedLocales,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      builder: (context, child) {
-        if (child == null) return const SizedBox.shrink();
-
-        // Apply user-chosen UI scale to all text in the app via MediaQuery.
-        // This is the safest scaling approach — it doesn't break layout
-        // calculations the way Transform.scale would.
-        final scaled = MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(_themeService.uiScale),
+    // DynamicColorBuilder exposes the platform's Material You palette (when
+    // available) and rebuilds automatically when the system colours change,
+    // so the app follows wallpaper/accent changes live when the user has
+    // enabled dynamic colour.
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          navigatorObservers: [OnboardingTourController.navigatorObserver],
+          title: 'Chuk Chat',
+          debugShowCheckedModeBanner: false,
+          theme: _themeService.buildTheme(
+            lightDynamic: lightDynamic,
+            darkDynamic: darkDynamic,
           ),
-          child: child,
-        );
-
-        // Linux: skip film-grain overlay to avoid startup and interaction jank.
-        if (!_themeService.grainEnabled || _isLinuxDesktop) return scaled;
-
-        return Stack(
-          children: [
-            scaled,
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: GrainOverlay(
-                  opacity: 0.10,
-                  speedMs: 160,
-                  noiseSize: 140,
-                  blendMode: BlendMode.overlay,
-                ),
-              ),
-            ),
+          locale: Locale(_themeService.uiLocale),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
           ],
-        );
-      },
-      home: AuthGate(
-        loadingBuilder: (context) =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
-        signedOutBuilder: (context) => const LoginPage(),
-        signedInBuilder: (context) {
-          final config = _buildShellConfig();
-          return _OnboardingFirstLaunchGate(
-            shellConfig: config,
-            child: RootWrapper(config: config),
-          );
-        },
-        passwordRecoveryBuilder: (context) => SetNewPasswordPage(
-          onComplete: () {
-            // Force rebuild of AuthGate to transition to signed-in view.
-            // The auth state is already signed-in; we just need to clear
-            // the password recovery flag by navigating.
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute<void>(builder: (_) => _buildRootWrapper()),
-              (route) => false,
+          builder: (context, child) {
+            if (child == null) return const SizedBox.shrink();
+
+            // Apply user-chosen UI scale to all text in the app via MediaQuery.
+            // This is the safest scaling approach — it doesn't break layout
+            // calculations the way Transform.scale would.
+            final scaled = MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(_themeService.uiScale)),
+              child: child,
+            );
+
+            // Linux: skip film-grain overlay to avoid startup and interaction jank.
+            if (!_themeService.grainEnabled || _isLinuxDesktop) return scaled;
+
+            return Stack(
+              children: [
+                scaled,
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: GrainOverlay(
+                      opacity: 0.10,
+                      speedMs: 160,
+                      noiseSize: 140,
+                      blendMode: BlendMode.overlay,
+                    ),
+                  ),
+                ),
+              ],
             );
           },
-        ),
-      ),
+          home: AuthGate(
+            loadingBuilder: (context) => const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+            signedOutBuilder: (context) => const LoginPage(),
+            signedInBuilder: (context) {
+              final config = _buildShellConfig();
+              return _OnboardingFirstLaunchGate(
+                shellConfig: config,
+                child: RootWrapper(config: config),
+              );
+            },
+            passwordRecoveryBuilder: (context) => SetNewPasswordPage(
+              onComplete: () {
+                // Force rebuild of AuthGate to transition to signed-in view.
+                // The auth state is already signed-in; we just need to clear
+                // the password recovery flag by navigating.
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute<void>(builder: (_) => _buildRootWrapper()),
+                  (route) => false,
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -375,65 +388,63 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   AppShellConfig _buildShellConfig() {
     return AppShellConfig(
-        currentThemeMode: _themeService.themeMode,
-        currentAccentColor: _themeService.accentColor,
-        currentIconFgColor: _themeService.iconFgColor,
-        currentBgColor: _themeService.bgColor,
-        setThemeMode: _themeService.setThemeMode,
-        setAccentColor: _themeService.setAccentColor,
-        setIconFgColor: _themeService.setIconFgColor,
-        setBgColor: _themeService.setBgColor,
-        grainEnabled: _themeService.grainEnabled,
-        setGrainEnabled: _themeService.setGrainEnabled,
-        showReasoningTokens: _themeService.showReasoningTokens,
-        setShowReasoningTokens: _themeService.setShowReasoningTokens,
-        showModelInfo: _themeService.showModelInfo,
-        setShowModelInfo: _themeService.setShowModelInfo,
-        showTps: _themeService.showTps,
-        setShowTps: _themeService.setShowTps,
-        autoSendVoiceTranscription: _themeService.autoSendVoiceTranscription,
-        setAutoSendVoiceTranscription:
-            _themeService.setAutoSendVoiceTranscription,
-        imageGenEnabled: _themeService.imageGenEnabled,
-        setImageGenEnabled: _themeService.setImageGenEnabled,
-        imageGenDefaultSize: _themeService.imageGenDefaultSize,
-        setImageGenDefaultSize: _themeService.setImageGenDefaultSize,
-        imageGenCustomWidth: _themeService.imageGenCustomWidth,
-        setImageGenCustomWidth: _themeService.setImageGenCustomWidth,
-        imageGenCustomHeight: _themeService.imageGenCustomHeight,
-        setImageGenCustomHeight: _themeService.setImageGenCustomHeight,
-        imageGenUseCustomSize: _themeService.imageGenUseCustomSize,
-        setImageGenUseCustomSize: _themeService.setImageGenUseCustomSize,
-        includeRecentImagesInHistory:
-            _themeService.includeRecentImagesInHistory,
-        setIncludeRecentImagesInHistory:
-            _themeService.setIncludeRecentImagesInHistory,
-        includeAllImagesInHistory: _themeService.includeAllImagesInHistory,
-        setIncludeAllImagesInHistory:
-            _themeService.setIncludeAllImagesInHistory,
-        includeReasoningInHistory: _themeService.includeReasoningInHistory,
-        setIncludeReasoningInHistory:
-            _themeService.setIncludeReasoningInHistory,
-        includeToolResultsInHistory:
-            _themeService.includeToolResultsInHistory,
-        setIncludeToolResultsInHistory:
-            _themeService.setIncludeToolResultsInHistory,
-        toolCallingEnabled: _themeService.toolCallingEnabled,
-        setToolCallingEnabled: _themeService.setToolCallingEnabled,
-        toolDiscoveryMode: _themeService.toolDiscoveryMode,
-        setToolDiscoveryMode: _themeService.setToolDiscoveryMode,
-        showToolCalls: _themeService.showToolCalls,
-        setShowToolCalls: _themeService.setShowToolCalls,
-        allowMarkdownToolCalls: _themeService.allowMarkdownToolCalls,
-        setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
-        uiLocale: _themeService.uiLocale,
-        setUiLocale: _themeService.setUiLocale,
-        chatFontSize: _themeService.chatFontSize,
-        setChatFontSize: _themeService.setChatFontSize,
-        chatFontFamily: _themeService.chatFontFamily,
-        setChatFontFamily: _themeService.setChatFontFamily,
-        uiScale: _themeService.uiScale,
-        setUiScale: _themeService.setUiScale,
+      currentThemeMode: _themeService.themeMode,
+      currentAccentColor: _themeService.accentColor,
+      currentIconFgColor: _themeService.iconFgColor,
+      currentBgColor: _themeService.bgColor,
+      setThemeMode: _themeService.setThemeMode,
+      setAccentColor: _themeService.setAccentColor,
+      setIconFgColor: _themeService.setIconFgColor,
+      setBgColor: _themeService.setBgColor,
+      grainEnabled: _themeService.grainEnabled,
+      setGrainEnabled: _themeService.setGrainEnabled,
+      dynamicColorEnabled: _themeService.dynamicColorEnabled,
+      setDynamicColorEnabled: _themeService.setDynamicColorEnabled,
+      showReasoningTokens: _themeService.showReasoningTokens,
+      setShowReasoningTokens: _themeService.setShowReasoningTokens,
+      showModelInfo: _themeService.showModelInfo,
+      setShowModelInfo: _themeService.setShowModelInfo,
+      showTps: _themeService.showTps,
+      setShowTps: _themeService.setShowTps,
+      autoSendVoiceTranscription: _themeService.autoSendVoiceTranscription,
+      setAutoSendVoiceTranscription:
+          _themeService.setAutoSendVoiceTranscription,
+      imageGenEnabled: _themeService.imageGenEnabled,
+      setImageGenEnabled: _themeService.setImageGenEnabled,
+      imageGenDefaultSize: _themeService.imageGenDefaultSize,
+      setImageGenDefaultSize: _themeService.setImageGenDefaultSize,
+      imageGenCustomWidth: _themeService.imageGenCustomWidth,
+      setImageGenCustomWidth: _themeService.setImageGenCustomWidth,
+      imageGenCustomHeight: _themeService.imageGenCustomHeight,
+      setImageGenCustomHeight: _themeService.setImageGenCustomHeight,
+      imageGenUseCustomSize: _themeService.imageGenUseCustomSize,
+      setImageGenUseCustomSize: _themeService.setImageGenUseCustomSize,
+      includeRecentImagesInHistory: _themeService.includeRecentImagesInHistory,
+      setIncludeRecentImagesInHistory:
+          _themeService.setIncludeRecentImagesInHistory,
+      includeAllImagesInHistory: _themeService.includeAllImagesInHistory,
+      setIncludeAllImagesInHistory: _themeService.setIncludeAllImagesInHistory,
+      includeReasoningInHistory: _themeService.includeReasoningInHistory,
+      setIncludeReasoningInHistory: _themeService.setIncludeReasoningInHistory,
+      includeToolResultsInHistory: _themeService.includeToolResultsInHistory,
+      setIncludeToolResultsInHistory:
+          _themeService.setIncludeToolResultsInHistory,
+      toolCallingEnabled: _themeService.toolCallingEnabled,
+      setToolCallingEnabled: _themeService.setToolCallingEnabled,
+      toolDiscoveryMode: _themeService.toolDiscoveryMode,
+      setToolDiscoveryMode: _themeService.setToolDiscoveryMode,
+      showToolCalls: _themeService.showToolCalls,
+      setShowToolCalls: _themeService.setShowToolCalls,
+      allowMarkdownToolCalls: _themeService.allowMarkdownToolCalls,
+      setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
+      uiLocale: _themeService.uiLocale,
+      setUiLocale: _themeService.setUiLocale,
+      chatFontSize: _themeService.chatFontSize,
+      setChatFontSize: _themeService.setChatFontSize,
+      chatFontFamily: _themeService.chatFontFamily,
+      setChatFontFamily: _themeService.setChatFontFamily,
+      uiScale: _themeService.uiScale,
+      setUiScale: _themeService.setUiScale,
     );
   }
 }
