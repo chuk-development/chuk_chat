@@ -45,33 +45,19 @@ void main() {
       expect(formatted.contains('Request Payloads:'), isTrue);
     });
 
-    test('renders system prompt when provided', () {
+    test('never includes a system prompt section', () {
       final messages = [
         <String, String>{'sender': 'user', 'text': 'hi'},
       ];
 
       final formatted = DebugChatFormatter.format(
         messages,
-        systemPrompt: 'You are Goggins. Predige immer.',
+        context: {'Model': 'x'},
       );
 
-      expect(formatted.contains('--- System Prompt ---'), isTrue);
-      expect(formatted.contains('You are Goggins. Predige immer.'), isTrue);
-    });
-
-    test('skips system prompt block when null or blank', () {
-      final messages = [
-        <String, String>{'sender': 'user', 'text': 'hi'},
-      ];
-
-      final emptyPrompt = DebugChatFormatter.format(
-        messages,
-        systemPrompt: '   ',
-      );
-      final nullPrompt = DebugChatFormatter.format(messages);
-
-      expect(emptyPrompt.contains('--- System Prompt ---'), isFalse);
-      expect(nullPrompt.contains('--- System Prompt ---'), isFalse);
+      // The system prompt is intentionally excluded from debug copies so
+      // sensitive or injected prompt scaffolding never lands on the clipboard.
+      expect(formatted.contains('--- System Prompt ---'), isFalse);
     });
 
     test('renders context block with provided keys in order', () {
@@ -108,11 +94,9 @@ void main() {
       () {
         final formatted = DebugChatFormatter.format(
           const [],
-          systemPrompt: 'prompt',
           context: {'Model': 'x'},
         );
 
-        expect(formatted.contains('--- System Prompt ---'), isTrue);
         expect(formatted.contains('Model: x'), isTrue);
         expect(formatted.contains('Messages: 0'), isTrue);
       },
@@ -123,33 +107,14 @@ void main() {
       expect(formatted, equals('(empty chat)'));
     });
 
-    test('redacts sensitive data inside system prompt', () {
-      final messages = [
-        <String, String>{'sender': 'user', 'text': 'hi'},
-      ];
-
-      final formatted = DebugChatFormatter.format(
-        messages,
-        systemPrompt: 'Attached image: data:image/png;base64,SGVsbG8=',
-      );
-
-      expect(formatted.contains('data:image/png'), isFalse);
-      expect(formatted.contains('[image removed]'), isTrue);
-    });
-
-    test('truncates oversized system prompt and message text', () {
-      final longPrompt = 'p' * 2500;
+    test('truncates oversized message text', () {
       final longText = 't' * 2600;
       final messages = [
         <String, String>{'sender': 'assistant', 'text': longText},
       ];
 
-      final formatted = DebugChatFormatter.format(
-        messages,
-        systemPrompt: longPrompt,
-      );
+      final formatted = DebugChatFormatter.format(messages);
 
-      expect(formatted.contains('(2500 chars total)'), isTrue);
       expect(formatted.contains('(2600 chars total)'), isTrue);
     });
   });

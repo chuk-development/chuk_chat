@@ -1,6 +1,7 @@
 // lib/widgets/message_bubble.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -3032,25 +3033,42 @@ class _MessageBubbleState extends State<MessageBubble> {
           // aspect ratio stays predictable on both mobile and desktop.
           // Mobile stays compact (~140 px side); desktop gets a larger square
           // sized to ~45 % of the bubble's max width, clamped.
-          final double userSquare = kPlatformMobile
-              ? 140.0
-              : (maxWidth * 0.45).clamp(200.0, 320.0);
-          final double imageWidth = widget.isUser ? userSquare : maxWidth;
-          final double imageHeight = widget.isUser
-              ? userSquare
-              : (kPlatformMobile
-                    ? 280.0
-                    : (maxWidth * 0.65).clamp(280.0, 512.0));
+          if (widget.isUser) {
+            final double userSquare = kPlatformMobile
+                ? 140.0
+                : (maxWidth * 0.45).clamp(200.0, 320.0);
+            // Outer Column already right-aligns user messages via
+            // CrossAxisAlignment.end — do NOT wrap in Align here, or the frame
+            // stretches to full width and shows an asymmetric gap on the left.
+            return _captionedTile(
+              imageSource: imageSource,
+              width: userSquare,
+              height: userSquare,
+              borderRadius: 12,
+              fit: BoxFit.cover,
+              caption: _captionFor(0),
+              onTap: () => _openImagePreview(
+                imageSource: imageSource,
+                images: images,
+                index: 0,
+              ),
+            );
+          }
 
-          // Outer Column already right-aligns user messages via
-          // CrossAxisAlignment.end — do NOT wrap in Align here, or the frame
-          // stretches to full width and shows an asymmetric gap on the left.
+          // AI-generated images render full bubble width and follow the
+          // image's *real* aspect ratio (same as web-fetched <image> blocks),
+          // instead of being cropped into a fixed-height box. A tall portrait
+          // (e.g. 9:16 phone wallpaper) keeps its height; height is capped so a
+          // freak panorama can't dominate the chat. Until the bytes decode, a
+          // placeholder of the same width reserves space and shows a spinner,
+          // then the tile resizes to the true ratio.
           return _captionedTile(
             imageSource: imageSource,
-            width: imageWidth,
-            height: imageHeight,
+            width: maxWidth,
+            height: maxWidth, // placeholder height before decode (square)
             borderRadius: 12,
-            fit: BoxFit.cover,
+            naturalAspect: true,
+            maxNaturalHeight: maxWidth * 1.9,
             caption: _captionFor(0),
             onTap: () => _openImagePreview(
               imageSource: imageSource,
@@ -3099,6 +3117,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     required VoidCallback onTap,
     String? caption,
     BoxFit fit = BoxFit.cover,
+    bool naturalAspect = false,
+    double? maxNaturalHeight,
   }) {
     final thumbnail = _CachedImageThumbnail(
       imageDataUrl: imageSource,
@@ -3106,6 +3126,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       height: height,
       borderRadius: borderRadius,
       fit: fit,
+      naturalAspect: naturalAspect,
+      maxNaturalHeight: maxNaturalHeight,
       onTap: onTap,
     );
     if (caption == null) return thumbnail;
@@ -3441,6 +3463,8 @@ class _CachedImageThumbnail extends StatefulWidget {
     required this.onTap,
     this.borderRadius = 8,
     this.fit = BoxFit.cover,
+    this.naturalAspect = false,
+    this.maxNaturalHeight,
   });
 
   /// Can be either:
@@ -3448,9 +3472,22 @@ class _CachedImageThumbnail extends StatefulWidget {
   /// - A storage path: "user-id/uuid.enc"
   final String imageDataUrl;
   final double width;
+
+  /// Used as a fixed tile height in the default (cropped) mode, and as the
+  /// placeholder height while bytes are still loading in [naturalAspect] mode.
   final double height;
   final double borderRadius;
   final BoxFit fit;
+
+  /// When true the tile renders at [width] and follows the decoded image's own
+  /// aspect ratio (no cropping), capped at [maxNaturalHeight]. The decode-time
+  /// [height] is only the placeholder size shown before the ratio is known.
+  final bool naturalAspect;
+
+  /// Upper bound on height in [naturalAspect] mode so an extreme portrait /
+  /// panorama can't take over the chat. Ignored when [naturalAspect] is false.
+  final double? maxNaturalHeight;
+
   final VoidCallback onTap;
 
   @override
@@ -3461,6 +3498,10 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     with AutomaticKeepAliveClientMixin {
   Uint8List? _cachedBytes;
   bool _isLoading = true;
+
+  /// Intrinsic width/height of the decoded image. Only resolved (and only
+  /// used) in [_CachedImageThumbnail.naturalAspect] mode.
+  double? _aspectRatio;
 
   @override
   bool get wantKeepAlive => true;
@@ -3500,6 +3541,26 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
         debugPrint('Failed to load image: $e');
       }
     }
+
+    // In natural-aspect mode, decode the intrinsic dimensions so the tile can
+    // size itself to the real ratio instead of a placeholder square.
+    if (widget.naturalAspect && _cachedBytes != null) {
+      try {
+        final codec = await ui.instantiateImageCodec(_cachedBytes!);
+        final frame = await codec.getNextFrame();
+        final img = frame.image;
+        if (img.height > 0) {
+          _aspectRatio = img.width / img.height;
+        }
+        img.dispose();
+        codec.dispose();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to decode image dimensions: $e');
+        }
+      }
+    }
+
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -3529,64 +3590,95 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
+    // Resolve the height this tile should occupy. In natural-aspect mode we
+    // follow the decoded ratio once it is known (capped), otherwise we fall
+    // back to the placeholder square; in default mode it is always the fixed
+    // tile height.
+    final double renderHeight;
+    if (widget.naturalAspect && _aspectRatio != null && _aspectRatio! > 0) {
+      final double natural = widget.width / _aspectRatio!;
+      final double cap = widget.maxNaturalHeight ?? double.infinity;
+      renderHeight = natural > cap ? cap : natural;
+    } else {
+      renderHeight = widget.height;
+    }
+
+    // In natural-aspect mode the placeholder → real-image height change is
+    // animated so the bubble grows/shrinks smoothly instead of snapping.
+    Widget wrap(Widget child) {
+      if (!widget.naturalAspect) return child;
+      return AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        alignment: Alignment.topCenter,
+        child: child,
+      );
+    }
+
     if (_isLoading) {
-      return Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-        ),
-        child: const Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
+      return wrap(
+        Container(
+          width: widget.width,
+          height: renderHeight,
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+          ),
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
         ),
       );
     }
 
     if (_cachedBytes == null) {
-      return Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(widget.borderRadius),
+      return wrap(
+        Container(
+          width: widget.width,
+          height: renderHeight,
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+          ),
+          child: const Icon(Icons.broken_image, size: 32),
         ),
-        child: const Icon(Icons.broken_image, size: 32),
       );
     }
 
-    return InkWell(
-      onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(widget.borderRadius),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          child: Image.memory(
-            _cachedBytes!,
-            width: widget.width,
-            height: widget.height,
-            fit: widget.fit,
-            // Only constrain cacheWidth to preserve aspect ratio during decode.
-            // Setting both cacheWidth AND cacheHeight distorts the image before
-            // BoxFit.cover can crop it properly.
-            cacheWidth: (widget.width * 2).toInt(),
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: widget.width,
-                height: widget.height,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(widget.borderRadius),
-                ),
-                child: const Icon(Icons.broken_image, size: 32),
-              );
-            },
+    return wrap(
+      InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            child: Image.memory(
+              _cachedBytes!,
+              width: widget.width,
+              height: renderHeight,
+              fit: widget.fit,
+              // Only constrain cacheWidth to preserve aspect ratio during
+              // decode. Setting both cacheWidth AND cacheHeight distorts the
+              // image before BoxFit.cover can crop it properly.
+              cacheWidth: (widget.width * 2).toInt(),
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: widget.width,
+                  height: renderHeight,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(widget.borderRadius),
+                  ),
+                  child: const Icon(Icons.broken_image, size: 32),
+                );
+              },
+            ),
           ),
         ),
       ),
