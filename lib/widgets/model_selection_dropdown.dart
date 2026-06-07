@@ -1045,12 +1045,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     double measure(String text) =>
         _measureTextWidth(text, textStyle, textDirection, textScaler);
 
-    double longestTextWidth = measure(selectedLabel);
+    double longestTextWidth = measure(_stripLabPrefix(selectedLabel));
     for (final model in _allModels.where((m) => !m.isToggle)) {
-      longestTextWidth = math.max(longestTextWidth, measure(model.name));
+      longestTextWidth =
+          math.max(longestTextWidth, measure(_stripLabPrefix(model.name)));
     }
 
-    final selectedTextWidth = measure(selectedLabel);
+    final selectedTextWidth = measure(_stripLabPrefix(selectedLabel));
 
     final desiredMenuWidth = _menuWidthFromTextWidth(longestTextWidth);
     final desiredButtonWidth = _buttonWidthFromTextWidth(selectedTextWidth);
@@ -1207,7 +1208,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    _selectedModelName,
+                    _stripLabPrefix(_selectedModelName),
                     style: TextStyle(
                       color: iconFgColor,
                       fontSize: 14,
@@ -1352,7 +1353,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                       else ...[
                         Expanded(
                           child: Text(
-                            model.name,
+                            _stripLabPrefix(model.name),
                             style: TextStyle(
                               color: selected
                                   ? iconFgColor
@@ -1430,3 +1431,14 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
 bool get _isLinuxDesktop =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+/// OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
+/// In the compact in-chat selector the lab prefix is redundant — it eats space
+/// and the lab is usually obvious from the model name itself. Strip it here only;
+/// the full "Lab: Model" name stays in the model selector page.
+String _stripLabPrefix(String name) {
+  final idx = name.indexOf(': ');
+  if (idx <= 0) return name;
+  final stripped = name.substring(idx + 2).trim();
+  return stripped.isEmpty ? name : stripped;
+}

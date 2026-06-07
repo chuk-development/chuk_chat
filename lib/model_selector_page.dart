@@ -979,126 +979,144 @@ class _ProviderPill extends StatelessWidget {
     required this.buildIconWidget,
   });
 
-  String get _selectedValue {
-    if (isAutoSelected) return kAutoCheapestProviderSlug;
-    final p = selectedProvider;
-    if (p != null) return p.slug;
-    // Fix B.1: previously this returned kAutoCheapestProviderSlug whenever
-    // the user had not picked a provider yet AND the model had more than
-    // one provider — that made "Auto (cheapest)" the *visual* default for
-    // every model, which the user (correctly) read as it being silently
-    // pre-selected. Auto Cheapest must only appear as selected when the
-    // user explicitly picks it; otherwise the pill stays Disabled and the
-    // user has to make an active choice.
-    return _kDisabledValue;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
     final bool hasMultipleProviders = model.providers.length > 1;
 
-    // Fix B.2: previously a fixed 280dp pill width. On narrow phones
-    // (≤ 360dp) that left no room for the model name in _NameRow and the
-    // name was pushed off-screen. Now the pill grows up to 280dp where
-    // there's room, but on narrow screens it shrinks so the model name
-    // stays visible. We subtract a generous reserve for the icon + edit
-    // button + horizontal padding in the surrounding Row.
+    // Closed face is sized to its own content (Container + Row with
+    // mainAxisSize.min), capped to pillWidth so a long provider name
+    // ellipsizes instead of pushing the model name off narrow phones.
+    // The open menu is independently wider (BoxConstraints below) so the
+    // full provider names + prices stay readable — a plain DropdownButton
+    // can't do that since its closed face and menu share one width.
     final double screenWidth = MediaQuery.of(context).size.width;
-    final double pillWidth = screenWidth < 400
-        ? math.max(168.0, screenWidth - 200.0)
+    final double pillMaxWidth = screenWidth < 400
+        ? math.max(140.0, screenWidth - 200.0)
         : 280.0;
-    return SizedBox(
-      width: pillWidth,
-      child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
+    final double menuWidth =
+        math.min(340.0, screenWidth - 48.0).clamp(220.0, 340.0).toDouble();
+
+    return Theme(
+      data: theme.copyWith(
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedValue,
-          dropdownColor: m3.surfaceContainerHigh,
+      child: PopupMenuButton<String>(
+        color: m3.surfaceContainerHigh,
+        constraints: BoxConstraints.tightFor(width: menuWidth),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          isExpanded: true,
-          icon: Icon(
-            Icons.arrow_drop_down,
-            color: m3.onSurfaceVariant,
-          ),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface,
-          ),
-          onChanged: (value) {
-            if (value == null || value == _kDisabledValue) {
-              onProviderChanged(null);
+        ),
+        onSelected: (value) {
+          if (value == _kDisabledValue) {
+            onProviderChanged(null);
+            return;
+          }
+          if (value == kAutoCheapestProviderSlug) {
+            onAutoSelected?.call();
+            return;
+          }
+          for (final p in model.providers) {
+            if (p.slug == value) {
+              onProviderChanged(p);
               return;
             }
-            if (value == kAutoCheapestProviderSlug) {
-              onAutoSelected?.call();
-              return;
-            }
-            for (final p in model.providers) {
-              if (p.slug == value) {
-                onProviderChanged(p);
-                return;
-              }
-            }
-          },
-          isDense: true,
-          hint: _buildDisabledDisplay(context),
-          items: [
-            DropdownMenuItem<String>(
-              value: _kDisabledValue,
-              child: _buildDisabledDisplay(context),
-            ),
-            if (hasMultipleProviders)
-              DropdownMenuItem<String>(
-                value: kAutoCheapestProviderSlug,
-                child: _buildAutoDisplay(
-                  context,
-                  cheapest: _cheapestProvider(),
-                  isSelected: isAutoSelected,
-                  isMenuItem: true,
-                ),
-              ),
-            ...model.providers.map(
-              (provider) => DropdownMenuItem<String>(
-                value: provider.slug,
-                child: _buildProviderDisplay(
-                  context,
-                  provider,
-                  isSelected:
-                      !isAutoSelected && selectedProvider?.slug == provider.slug,
-                  showPrice: true,
-                ),
+          }
+        },
+        itemBuilder: (ctx) => [
+          PopupMenuItem<String>(
+            value: _kDisabledValue,
+            height: 40,
+            child: _buildDisabledDisplay(ctx),
+          ),
+          if (hasMultipleProviders)
+            PopupMenuItem<String>(
+              value: kAutoCheapestProviderSlug,
+              height: 44,
+              child: _buildAutoDisplay(
+                ctx,
+                cheapest: _cheapestProvider(),
+                isSelected: isAutoSelected,
+                isMenuItem: true,
               ),
             ),
-          ],
-          selectedItemBuilder: (ctx) {
-            return [
-              _buildDisabledDisplay(ctx),
-              if (hasMultipleProviders)
-                _buildAutoDisplay(
-                  ctx,
-                  cheapest: _cheapestProvider(),
-                  isSelected: true,
-                  isMenuItem: false,
-                ),
-              ...model.providers.map(
-                (provider) => _buildProviderDisplay(
-                  ctx,
-                  provider,
-                  isSelected: true,
-                  showPrice: false,
-                ),
+          ...model.providers.map(
+            (provider) => PopupMenuItem<String>(
+              value: provider.slug,
+              height: 44,
+              child: _buildProviderDisplay(
+                ctx,
+                provider,
+                isSelected:
+                    !isAutoSelected && selectedProvider?.slug == provider.slug,
+                showPrice: true,
               ),
-            ];
-          },
+            ),
+          ),
+        ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: pillMaxWidth),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: m3.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildCollapsedFace(context),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_drop_down, color: m3.onSurfaceVariant),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  /// Compact face shown when the pill is closed — only the current selection
+  /// (icon + label), label ellipsized. Width follows content, unlike the
+  /// wider open menu.
+  Widget _buildCollapsedFace(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final style = theme.textTheme.bodyMedium?.copyWith(
+      color: m3.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+
+    final Widget iconWidget;
+    final String label;
+    if (isAutoSelected) {
+      iconWidget = Icon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
+      label = 'Auto';
+    } else if (selectedProvider != null) {
+      iconWidget =
+          buildIconWidget(selectedProvider!.iconUrl, Icons.business, size: 16);
+      label = selectedProvider!.name;
+    } else {
+      iconWidget = Icon(Icons.block, color: m3.onSurfaceVariant, size: 16);
+      label = 'Disabled';
+    }
+
+    return Flexible(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          iconWidget,
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
       ),
     );
   }
