@@ -1952,9 +1952,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 ),
                                 child: SelectionArea(
                                   contextMenuBuilder: _buildMessageContextMenu,
-                                  child: GestureDetector(
+                                  // Listener (not GestureDetector) so this does
+                                  // not enter the gesture arena. A competing tap
+                                  // recognizer here would beat SelectionArea's
+                                  // double-tap recognizer and break
+                                  // double-click-to-select-word.
+                                  child: Listener(
                                     behavior: HitTestBehavior.translucent,
-                                    onTapDown: (_) {
+                                    onPointerDown: (_) {
                                       // Ensure keyboard shortcuts such as Ctrl+C
                                       // target message selection instead of the composer.
                                       FocusScope.of(context).unfocus();
