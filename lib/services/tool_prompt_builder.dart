@@ -142,9 +142,6 @@ class ToolPromptBuilder {
           'web_search',
           'web_crawl',
           'generate_image',
-          'generate_image_hunyuan',
-          'generate_image_flux',
-          'edit_image',
           'fetch_image',
           'view_chat_images',
           'search_chats',
@@ -444,8 +441,8 @@ VISUAL OUTPUT NOTE:
 
 REAL PHOTOS vs AI ART — HARD RULE:
 - User wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events) -> call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url.
-- Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, something fictional, or a stylized generated image.
-- NEVER fall back to generate_image* just because image search returned nothing useful. Retry web_search with type="images" and a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
+- Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, something fictional, or a stylized generated image.
+- NEVER fall back to generate_image just because image search returned nothing useful. Retry web_search with type="images" and a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
 - `fetch_image` is for fetch/store/vision flows (e.g. user asks to attach/store/analyze an image), not for display-only rendering.
 
 NEWS QUERIES:
@@ -592,6 +589,8 @@ FRESH RELEASES: Search engines take hours/days to index new content. When the us
 - Official blogs and announcement pages
 If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
 
+PRIOR-CONVERSATION REFERENCE IS A HARD TRIGGER: If the user refers to something from an earlier chat — "the X we talked about", "das Modell von neulich", "in den letzten Chats", "you said earlier", "remember when", "wie besprochen", "das Ding von gestern", or any pointer to a past conversation whose subject is NOT already present in the CURRENT chat — you MUST call `search_chats` (action="find_chats") to find the actual referenced content BEFORE answering (call `find_tools` first if its description is not yet shown). Do NOT guess the subject's identity from training data or from Memory. Memory may say a topic was discussed without recording the specifics, and your training data does not contain this user's chats. Resolve the real subject from the chat history first; only then web_search/web_crawl for facts about it. If find_chats returns nothing relevant, say you could not find the prior chat and ask the user to clarify which subject they mean — never substitute a plausible-but-unverified guess.
+
 ## TOOLS
 
 $toolsText
@@ -613,10 +612,10 @@ NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <w
 4. NEVER invent factual data (phone numbers, addresses, URLs, prices, ratings). Only include what tools returned.
 5. web_search includes search snippets and auto-fetched context from top pages. Use web_crawl for deeper extraction of a specific URL.
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
-7. COST & PRIVACY: Before calling generate_image, generate_image_hunyuan, generate_image_flux, or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. Use generate_image (fast, ~0.01 EUR) by default; use generate_image_hunyuan (high quality, ~0.08 EUR) or generate_image_flux (best quality, ~0.02 EUR) when the user requests higher quality or a specific model.
+7. COST & PRIVACY: Before calling generate_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. generate_image takes a "model" parameter: use model="turbo" (fast, ~0.01 EUR) by default; use "hunyuan" (high quality, ~0.08 EUR), "flux" (best quality, ~0.02 EUR), or "ideogram" (best text rendering, ~0.03–0.10 EUR) when the user requests higher quality, text in the image, or a specific model; use "edit" (requires image_url, ~0.03 EUR) to modify an existing image.
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
-9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
-   IMAGE CAPTIONS: When you call fetch_image or generate_image* and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
+9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
+   IMAGE CAPTIONS: When you call fetch_image or generate_image and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
 10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). Then emit a `<news>` block with the structured results — the app renders polished cards. Do NOT also list the same articles as markdown. Follow up with `web_crawl` only when the user asks for full article detail.
 11. WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.
 
