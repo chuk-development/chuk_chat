@@ -97,6 +97,39 @@ void main() {
       expect(processed.imageGeneratedAt, equals('2026-04-24T12:00:00.000Z'));
     });
 
+    test('carries generator model label from IMAGE payload', () async {
+      final payload = jsonEncode({
+        'data_uri': 'data:image/png;base64,xyz',
+        'model': 'FLUX 2 Klein 9B',
+      });
+
+      final call = ToolCall(
+        name: 'generate_image_flux',
+        arguments: const {'prompt': 'cat'},
+        result: 'IMAGE:$payload',
+        status: ToolCallStatus.completed,
+      );
+
+      final processed = await ToolImageResultService.processToolCalls([call]);
+
+      expect(processed.imageMetas, hasLength(1));
+      expect(processed.imageMetas.first['model'], equals('FLUX 2 Klein 9B'));
+    });
+
+    test('omits model when IMAGE payload lacks it', () async {
+      final call = ToolCall(
+        name: 'generate_image',
+        arguments: const {'prompt': 'cat'},
+        result: 'IMAGE:${jsonEncode({'data_uri': 'data:image/png;base64,xyz'})}',
+        status: ToolCallStatus.completed,
+      );
+
+      final processed = await ToolImageResultService.processToolCalls([call]);
+
+      expect(processed.imageMetas, hasLength(1));
+      expect(processed.imageMetas.first.containsKey('model'), isFalse);
+    });
+
     test('preserves per-image metadata order across mixed tool calls',
         () async {
       final fetched = ToolCall(
