@@ -34,6 +34,7 @@ class ToolPromptBuilder {
     Map<String, dynamic>? askUserToolDef,
     Map<String, dynamic>? webSearchToolDef,
     Map<String, dynamic>? webCrawlToolDef,
+    Map<String, dynamic>? searchChatsToolDef,
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
     Map<String, dynamic>? artifactSchemaToolDef,
@@ -96,6 +97,9 @@ class ToolPromptBuilder {
       }
       if (webCrawlToolDef != null) {
         alwaysAvailableTools.add(webCrawlToolDef);
+      }
+      if (searchChatsToolDef != null) {
+        alwaysAvailableTools.add(searchChatsToolDef);
       }
       if (projectToolDef != null) {
         alwaysAvailableTools.add(projectToolDef);
@@ -589,7 +593,7 @@ FRESH RELEASES: Search engines take hours/days to index new content. When the us
 - Official blogs and announcement pages
 If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
 
-PRIOR-CONVERSATION REFERENCE IS A HARD TRIGGER: If the user refers to something from an earlier chat — "the X we talked about", "das Modell von neulich", "in den letzten Chats", "you said earlier", "remember when", "wie besprochen", "das Ding von gestern", or any pointer to a past conversation whose subject is NOT already present in the CURRENT chat — you MUST call `search_chats` (action="find_chats") to find the actual referenced content BEFORE answering (call `find_tools` first if its description is not yet shown). Do NOT guess the subject's identity from training data or from Memory. Memory may say a topic was discussed without recording the specifics, and your training data does not contain this user's chats. Resolve the real subject from the chat history first; only then web_search/web_crawl for facts about it. If find_chats returns nothing relevant, say you could not find the prior chat and ask the user to clarify which subject they mean — never substitute a plausible-but-unverified guess.
+PRIOR-CONVERSATION REFERENCE IS A HARD TRIGGER: Whenever the user's message presupposes shared history that is NOT present in the CURRENT chat — they treat a subject as already known, point back to an earlier discussion, or use a definite/deictic reference whose antecedent you cannot find in the messages above — you MUST call `search_chats` (action="find_chats") to recover the real subject from past chats BEFORE answering. This is about meaning, not specific words: if you cannot fully resolve what the user is referring to from the current chat alone, search first. Do NOT guess the subject's identity from training data or from Memory — Memory may note that a topic was discussed without recording the specifics, and your training data does not contain this user's chats. Resolve the real subject from chat history first; only then web_search/web_crawl for facts about it. If find_chats returns nothing relevant, say you could not find the prior chat and ask the user to clarify — never substitute a plausible-but-unverified guess.
 
 ## TOOLS
 
