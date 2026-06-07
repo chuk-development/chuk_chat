@@ -37,6 +37,35 @@ void main() {
     });
   });
 
+  group('ToolPromptBuilder continuation guidance (isToolResult)', () {
+    final tools = <Map<String, dynamic>>[
+      {
+        'name': 'generate_image',
+        'description': 'Generate an image',
+        'parameters': <String, dynamic>{},
+      },
+    ];
+
+    test('adds continuation block on post-tool-result passes', () {
+      final builder = ToolPromptBuilder(discoveryMode: true);
+      final section = builder.buildToolProtocolSection(
+        tools: tools,
+        isToolResult: true,
+      );
+      expect(section, contains('CONTINUATION'));
+      expect(section, contains('ALREADY shown to the user'));
+    });
+
+    test('omits continuation block on the initial pass', () {
+      final builder = ToolPromptBuilder(discoveryMode: true);
+      final section = builder.buildToolProtocolSection(
+        tools: tools,
+        isToolResult: false,
+      );
+      expect(section, isNot(contains('CONTINUATION —')));
+    });
+  });
+
   group('ToolPromptBuilder artifact rewrite rule (regression for user-edit drop)', () {
     test(
       'artifact protocol forbids regenerating rewrites from the AI\'s own memory',
