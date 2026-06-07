@@ -1703,9 +1703,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _scrollChatToBottom({bool animate = true, bool force = false}) {
     if (!mounted) return;
     if (!force && !_isStickyBottom) return;
+
+    // Instant jump (e.g. opening an existing chat): ListView.builder only
+    // reports an *estimated* maxScrollExtent from the items laid out so far,
+    // and async-sized content (images, code blocks) can grow it over several
+    // frames. A single post-frame jump lands short of the real bottom, so
+    // settle across a few frames until the extent stops growing.
+    if (force && !animate) {
+      _settleScrollToBottom();
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      if (_scrollController.position.isScrollingNotifier.value) return;
+      if (!mounted || !_scrollController.hasClients) return;
+      // Honour an in-progress scroll only for passive (non-forced) calls; a
+      // forced scroll-to-bottom (button press, chat open) must win regardless.
+      if (!force && _scrollController.position.isScrollingNotifier.value) return;
 
       final position = _scrollController.position;
       final isNearBottom = position.maxScrollExtent - position.pixels < 100;
@@ -1721,6 +1734,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _scrollController.jumpTo(position.maxScrollExtent);
         }
       }
+    });
+  }
+
+  /// Jump to the bottom, then keep re-jumping on subsequent frames until the
+  /// scroll extent stabilises. ListView.builder grows its *estimated*
+  /// maxScrollExtent as it lays out more items / async-sized content, so a
+  /// single jump on chat open often stops short of the real bottom.
+  void _settleScrollToBottom({double lastExtent = -1, int attempt = 0}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      final target = position.maxScrollExtent;
+
+      if ((target - position.pixels).abs() > 0.5) {
+        _scrollController.jumpTo(target);
+      }
+
+      // Stop once the extent stops growing (or after a bounded number of
+      // frames, to avoid looping forever on pathological layouts).
+      final bool stable = (target - lastExtent).abs() < 0.5;
+      if (stable || attempt >= 10) return;
+      _settleScrollToBottom(lastExtent: target, attempt: attempt + 1);
     });
   }
 
