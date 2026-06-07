@@ -104,8 +104,8 @@ void main() {
       });
 
       final call = ToolCall(
-        name: 'generate_image_flux',
-        arguments: const {'prompt': 'cat'},
+        name: 'generate_image',
+        arguments: const {'prompt': 'cat', 'model': 'flux'},
         result: 'IMAGE:$payload',
         status: ToolCallStatus.completed,
       );
