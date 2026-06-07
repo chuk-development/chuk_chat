@@ -968,7 +968,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       );
     }
 
-    _scrollChatToBottom(force: true);
+    // Opening an existing chat should *start* at the bottom, not animate.
+    _scrollChatToBottom(force: true, animate: false);
     // Use captured sidebar state to prevent focus when sidebar was open
     if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
@@ -996,7 +997,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _isLoadingChat = false;
         _showScrollToBottom = false;
       });
-      _scrollChatToBottom(force: true);
+      _scrollChatToBottom(force: true, animate: false);
       if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
         _textFieldFocusNode.requestFocus();
       }
@@ -1071,7 +1072,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _isLoadingChat = false;
       _showScrollToBottom = false;
     });
-    _scrollChatToBottom(force: true);
+    _scrollChatToBottom(force: true, animate: false);
     if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
@@ -3032,12 +3033,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
-  void _scrollChatToBottom({bool force = false}) {
+  void _scrollChatToBottom({bool force = false, bool animate = true}) {
     if (!mounted) return;
     if (!force && !_isStickyBottom) return;
+
+    // Instant jump (e.g. opening an existing chat): ListView.builder only
+    // reports an *estimated* maxScrollExtent from the items laid out so far,
+    // and async-sized content (images, code blocks) can grow it over several
+    // frames. A single post-frame jump lands short of the real bottom, so
+    // settle across a few frames until the extent stops growing.
+    if (force && !animate) {
+      _settleScrollToBottom();
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      if (_scrollController.position.isScrollingNotifier.value) return;
+      if (!mounted || !_scrollController.hasClients) return;
+      // Honour an in-progress scroll only for passive (non-forced) calls.
+      if (!force && _scrollController.position.isScrollingNotifier.value) return;
 
       final position = _scrollController.position;
       final isNearBottom = position.maxScrollExtent - position.pixels < 100;
@@ -3049,6 +3062,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  /// Jump to the bottom, then keep re-jumping on subsequent frames until the
+  /// scroll extent stabilises. ListView.builder grows its *estimated*
+  /// maxScrollExtent as it lays out more items / async-sized content, so a
+  /// single jump on chat open often stops short of the real bottom.
+  void _settleScrollToBottom({double lastExtent = -1, int attempt = 0}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      final target = position.maxScrollExtent;
+
+      if ((target - position.pixels).abs() > 0.5) {
+        _scrollController.jumpTo(target);
+      }
+
+      final bool stable = (target - lastExtent).abs() < 0.5;
+      if (stable || attempt >= 10) return;
+      _settleScrollToBottom(lastExtent: target, attempt: attempt + 1);
     });
   }
 
