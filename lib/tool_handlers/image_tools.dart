@@ -91,6 +91,11 @@ Future<String> _generateImageRequest({
 /// Human-readable display names per generator key. Adding a model = one entry
 /// here (and the matching server registry entry). The single `generate_image`
 /// tool routes everything through `/v1/ai/image/generate` (mux: image_generate).
+///
+/// PRIVACY note: the per-model privacy warning is driven by the prompt text in
+/// `tool_prompt_builder.dart` (COST & PRIVACY rule). Confirmed no-retention
+/// models (no privacy warning): turbo, flux. Keep that list in sync there when
+/// adding/verifying a model — hunyuan/ideogram/edit currently keep the warning.
 const Map<String, String> imageModelDisplayNames = {
   'turbo': 'Z-Image Turbo',
   'hunyuan': 'Hunyuan Image 3',

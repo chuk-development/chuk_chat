@@ -485,10 +485,12 @@ final List<ClientTool> builtinTools = [
         'user asks for higher quality, a specific model, text-in-image, or an '
         'edit. The image is displayed inline automatically — do NOT repeat the '
         'URL, dimensions, seed, or other technical details to the user. '
-        'PRIVACY: images are processed on an external server and the operator '
-        'can see them — they are NOT end-to-end encrypted like chat messages. '
-        'Before calling, inform the user about the cost and that image '
-        'generation is not private.',
+        'COST & PRIVACY: always mention the credit cost. turbo and flux run '
+        'under a no-retention policy (inputs/outputs not stored or trained on) '
+        '— no privacy warning needed. For hunyuan, ideogram, and edit, also '
+        'warn the user that the image is processed on an external server, can '
+        'be seen by the operator, and is NOT end-to-end encrypted like chat '
+        'messages.',
     parameters: {
       'model':
           'string (required: turbo | hunyuan | flux | ideogram | edit)',
