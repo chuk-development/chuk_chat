@@ -160,6 +160,36 @@ void main() {
 
       expect(cleaned, 'Wenn a < b dann gilt das.');
     });
+
+    test('strips an echoed <previous_tool_results> block (doubled opener)', () {
+      // The model echoes the scaffolding tag the app feeds it, sometimes with
+      // a `<<` opener, and the real reply follows the block.
+      const content =
+          '<<previous_tool_results>\n'
+          '[generate_image] args: {"model":"turbo"} | result: ok\n'
+          '</previous_tool_results>\n\n'
+          'Turbo zieht durch. Bild ist da.';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Turbo zieht durch. Bild ist da.');
+    });
+
+    test('truncates a dangling <previous_tool_results> opener mid-stream', () {
+      const content = 'Reply text\n\n<previous_tool_results>\n[generate_image]';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Reply text');
+    });
+
+    test('preserves prose mentioning previous tool results without tags', () {
+      const content = 'I will reuse previous tool results here.';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'I will reuse previous tool results here.');
+    });
   });
 
   group('hasToolCallStartMarker', () {

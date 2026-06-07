@@ -25,6 +25,22 @@ final RegExp _markdownToolCallStartPattern = RegExp(
   r'```(?:tool_call|toolcall|tool-call)\b',
   caseSensitive: false,
 );
+// The app prepends a `<previous_tool_results>…</previous_tool_results>` block
+// to the assistant `content` it feeds back to the model (see
+// tool_history_formatter.dart). The model sees its own prior turns starting
+// with that tag and sometimes echoes it verbatim into its visible output —
+// occasionally with a doubled `<<` opener, and occasionally fabricating a
+// fake tool result in place of a real call. Strip the echoed block (and any
+// mid-stream opener) so it never renders as raw protocol text. `<+` tolerates
+// the doubled opener; the close tag is matched leniently too.
+final RegExp _previousToolResultsBlockPattern = RegExp(
+  r'<+\s*previous_tool_results\s*>[\s\S]*?<\s*/\s*previous_tool_results\s*>',
+  caseSensitive: false,
+);
+final RegExp _previousToolResultsStartPattern = RegExp(
+  r'<+\s*previous_tool_results\b',
+  caseSensitive: false,
+);
 const Set<String> _knownDirectXmlToolNames = <String>{
   'ask_user',
   'web_search',
@@ -301,7 +317,8 @@ String stripToolCallBlocksForDisplay(
 }) {
   var cleaned = content
       .replaceAll(_xmlToolCallBlockPattern, '')
-      .replaceAll(_markdownToolCallBlockPattern, '');
+      .replaceAll(_markdownToolCallBlockPattern, '')
+      .replaceAll(_previousToolResultsBlockPattern, '');
   cleaned = cleaned.replaceAllMapped(_xmlDirectToolTagBlockPattern, (match) {
     final tagName = (match.group(1) ?? '').trim().toLowerCase();
     if (_isKnownDirectXmlToolName(tagName)) {
@@ -339,6 +356,16 @@ String stripToolCallBlocksForDisplay(
     final markdownPartialIdx = _earliestMarkdownToolCallStart(cleaned);
     if (markdownPartialIdx != -1) {
       cleaned = cleaned.substring(0, markdownPartialIdx);
+    }
+
+    // A `<previous_tool_results>` opener with no matching close is an echoed
+    // scaffolding tag still streaming in (or one whose close never arrived) —
+    // truncate from it so the protocol block never flashes into view.
+    final prevResultsStart = _previousToolResultsStartPattern.firstMatch(
+      cleaned,
+    );
+    if (prevResultsStart != null) {
+      cleaned = cleaned.substring(0, prevResultsStart.start);
     }
 
     // Kimi K2.x (Fireworks) emits native tool calls wrapped in special
