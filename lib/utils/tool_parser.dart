@@ -350,10 +350,13 @@ String stripToolCallBlocksForDisplay(
     // tool-call bar.
     cleaned = cleaned.replaceAll(RegExp(r'<\|[^>]*\|>'), '');
     cleaned = cleaned.replaceFirst(RegExp(r'<\|[^>]*$'), '');
-    // A lone `<` left dangling at the very end is a tag-opener fragment
-    // (start of `<tool_call>` / `<|…|>` that was split or server-stripped),
-    // never real prose. Mid-text `<` (e.g. "a < b") is preserved.
-    cleaned = cleaned.replaceFirst(RegExp(r'<\s*$'), '');
+    // One or more `<` left dangling at the very end are tag-opener fragments
+    // (start of `<tool_call>` / `<|…|>` that were split or server-stripped),
+    // never real prose. A multiplex with several tool-call sections can leak
+    // more than one — e.g. `…verschlüsselt.\n\n<\n<` — so strip the whole
+    // trailing run, not just the last `<`. Mid-text `<` (e.g. "a < b") is
+    // preserved because the run must reach end-of-string.
+    cleaned = cleaned.replaceFirst(RegExp(r'(?:<\s*)+$'), '');
   }
 
   return cleaned.trim();

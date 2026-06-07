@@ -143,6 +143,16 @@ void main() {
       expect(stripToolCallBlocksForDisplay('<'), '');
     });
 
+    test('strips multiple dangling "<" leaked by a multi-section multiplex', () {
+      // Kimi can leak one bare `<` per tool-call section, producing a trailing
+      // run like `…\n\n<\n<`. The whole run must go, not just the last `<`.
+      const content = 'Hunyuan läuft extern, nicht E2E-verschlüsselt.\n\n<\n<';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Hunyuan läuft extern, nicht E2E-verschlüsselt.');
+    });
+
     test('preserves a mid-text "<" used as a less-than sign', () {
       const content = 'Wenn a < b dann gilt das.';
 
