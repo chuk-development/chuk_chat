@@ -309,9 +309,6 @@ class ToolCallHandler {
     'generate_qr',
     'calculate',
     'generate_image',
-    'generate_image_hunyuan',
-    'generate_image_flux',
-    'edit_image',
     'fetch_image',
   };
 

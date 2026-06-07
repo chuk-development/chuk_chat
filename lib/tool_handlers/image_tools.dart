@@ -76,6 +76,7 @@ Future<String> _generateImageRequest({
       'prompt': data['prompt'] ?? fields['prompt'],
       'image_size': fields['image_size'],
       'model': modelName,
+      if (data['source_url'] != null) 'source_url': data['source_url'],
       if (billing != null) ...{
         'cost_eur': billing['cost_eur'],
         'megapixels': billing['megapixels'],
@@ -87,89 +88,84 @@ Future<String> _generateImageRequest({
   }
 }
 
-/// Z-Image Turbo — fastest, cheapest.
+/// Human-readable display names per generator key. Adding a model = one entry
+/// here (and the matching server registry entry). The single `generate_image`
+/// tool routes everything through `/v1/ai/image/generate` (mux: image_generate).
+const Map<String, String> imageModelDisplayNames = {
+  'turbo': 'Z-Image Turbo',
+  'hunyuan': 'Hunyuan Image 3',
+  'flux': 'FLUX 2 Klein 9B',
+  'ideogram': 'Ideogram v4',
+  'edit': 'Qwen Image Edit Plus',
+};
+
+/// Single image generation/editing tool. `args['model']` selects the
+/// generator; only the params relevant to that model are forwarded.
 Future<String> executeGenerateImage({
   required String? serverHttpUrl,
   required String? accessToken,
   required Map<String, dynamic> args,
 }) async {
+  final model = (args['model'] as String? ?? 'turbo').trim().toLowerCase();
+  final modelName = imageModelDisplayNames[model];
+  if (modelName == null) {
+    return 'Error: unknown image model "$model". '
+        'Valid: ${imageModelDisplayNames.keys.join(', ')}.';
+  }
+
   final prompt = (args['prompt'] as String? ?? '').trim();
   if (prompt.isEmpty) {
     return 'Error: "prompt" parameter required';
   }
 
-  final imageSize = (args['image_size'] as String? ?? 'landscape_4_3').trim();
+  final fields = <String, String>{'model': model, 'prompt': prompt};
 
-  return _generateImageRequest(
-    serverHttpUrl: serverHttpUrl,
-    accessToken: accessToken,
-    endpoint: '/v1/ai/image/turbo',
-    muxTool: 'image_turbo',
-    modelName: 'Z-Image Turbo',
-    fields: {'prompt': prompt, 'image_size': imageSize},
-  );
-}
-
-/// Hunyuan Image 3 — high quality, flat $0.08/image.
-Future<String> executeGenerateImageHunyuan({
-  required String? serverHttpUrl,
-  required String? accessToken,
-  required Map<String, dynamic> args,
-}) async {
-  final prompt = (args['prompt'] as String? ?? '').trim();
-  if (prompt.isEmpty) {
-    return 'Error: "prompt" parameter required';
-  }
-
-  final fields = <String, String>{'prompt': prompt};
-  final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
-  if (aspectRatio != null && aspectRatio.isNotEmpty) {
-    fields['aspect_ratio'] = aspectRatio;
-  } else {
-    fields['image_size'] =
-        (args['image_size'] as String? ?? 'landscape_4_3').trim();
-  }
-
-  return _generateImageRequest(
-    serverHttpUrl: serverHttpUrl,
-    accessToken: accessToken,
-    endpoint: '/v1/ai/image/hunyuan',
-    muxTool: 'image_hunyuan',
-    modelName: 'Hunyuan Image 3',
-    fields: fields,
-  );
-}
-
-/// FLUX 2 Klein 9B — best quality, $0.015/megapixel.
-Future<String> executeGenerateImageFlux({
-  required String? serverHttpUrl,
-  required String? accessToken,
-  required Map<String, dynamic> args,
-}) async {
-  final prompt = (args['prompt'] as String? ?? '').trim();
-  if (prompt.isEmpty) {
-    return 'Error: "prompt" parameter required';
-  }
-
-  final fields = <String, String>{'prompt': prompt};
-  final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
-  if (aspectRatio != null && aspectRatio.isNotEmpty) {
-    fields['aspect_ratio'] = aspectRatio;
-  } else {
-    fields['image_size'] =
-        (args['image_size'] as String? ?? 'landscape_4_3').trim();
-  }
-  final megapixels = (args['megapixels'] as String?)?.trim();
-  if (megapixels != null && megapixels.isNotEmpty) {
-    fields['megapixels'] = megapixels;
+  switch (model) {
+    case 'edit':
+      final imageUrl = (args['image_url'] as String? ?? '').trim();
+      if (imageUrl.isEmpty) {
+        return 'Error: "image_url" parameter required for model "edit" — '
+            'provide the URL of an image to edit';
+      }
+      fields['image_url'] = imageUrl;
+      fields['image_size'] = (args['image_size'] as String? ?? 'auto').trim();
+      break;
+    case 'ideogram':
+      fields['tier'] = (args['tier'] as String? ?? 'quality').trim();
+      final resolution = (args['resolution'] as String?)?.trim();
+      if (resolution != null && resolution.isNotEmpty) {
+        fields['resolution'] = resolution;
+      }
+      final jsonPrompt = (args['json_prompt'] as String?)?.trim();
+      if (jsonPrompt != null && jsonPrompt.isNotEmpty) {
+        fields['json_prompt'] = jsonPrompt;
+      }
+      break;
+    default:
+      // turbo / hunyuan / flux: aspect_ratio (hunyuan/flux only) overrides
+      // image_size. turbo has no aspect_ratio, so it always uses image_size.
+      final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
+      if (model != 'turbo' && aspectRatio != null && aspectRatio.isNotEmpty) {
+        fields['aspect_ratio'] = aspectRatio;
+      } else {
+        fields['image_size'] =
+            (args['image_size'] as String? ?? 'landscape_4_3').trim();
+      }
+      if (model == 'flux') {
+        final megapixels = (args['megapixels'] as String?)?.trim();
+        if (megapixels != null && megapixels.isNotEmpty) {
+          fields['megapixels'] = megapixels;
+        }
+      }
+      break;
   }
 
   return _generateImageRequest(
     serverHttpUrl: serverHttpUrl,
     accessToken: accessToken,
-    endpoint: '/v1/ai/image/flux',
-    muxTool: 'image_flux',
-    modelName: 'FLUX 2 Klein 9B',
+    endpoint: '/v1/ai/image/generate',
+    muxTool: 'image_generate',
+    modelName: modelName,
     fields: fields,
   );
 }
@@ -222,99 +218,6 @@ Future<String> executeFetchImage(
     if (shouldCloseClient) {
       effectiveClient.close();
     }
-  }
-}
-
-/// Qwen Image Edit Plus — flat $0.03/image.
-Future<String> executeEditImage({
-  required String? serverHttpUrl,
-  required String? accessToken,
-  required Map<String, dynamic> args,
-}) async {
-  final prompt = (args['prompt'] as String? ?? '').trim();
-  if (prompt.isEmpty) {
-    return 'Error: "prompt" parameter required';
-  }
-
-  final imageUrl = (args['image_url'] as String? ?? '').trim();
-  if (imageUrl.isEmpty) {
-    return 'Error: "image_url" parameter required – provide the URL of '
-        'an image to edit';
-  }
-
-  final baseUrl = serverHttpUrl;
-  if (baseUrl == null || baseUrl.trim().isEmpty) {
-    return 'Error: Not connected to server';
-  }
-
-  final imageSize = (args['image_size'] as String? ?? 'auto').trim();
-
-  try {
-    final payload = <String, dynamic>{
-      'prompt': prompt,
-      'image_url': imageUrl,
-      'image_size': imageSize,
-    };
-
-    Map<String, dynamic>? data;
-    final mux = await tryToolViaMultiplex(tool: 'image_edit', payload: payload);
-    if (mux.isError) {
-      return 'Image edit error: ${mux.error}';
-    }
-    if (mux.isOk) {
-      data = mux.body;
-    } else {
-      final request =
-          http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/ai/image/edit'))
-            ..fields['prompt'] = prompt
-            ..fields['image_url'] = imageUrl
-            ..fields['image_size'] = imageSize;
-
-      if (accessToken != null && accessToken.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $accessToken';
-      }
-
-      final streamed =
-          await request.send().timeout(const Duration(seconds: 120));
-      final response = await http.Response.fromStream(streamed);
-
-      if (response.statusCode != 200) {
-        try {
-          final errBody = jsonDecode(response.body) as Map<String, dynamic>;
-          final detail = errBody['detail'] ?? errBody['error'] ?? 'Unknown error';
-          return 'Image edit error: $detail';
-        } catch (_) {
-          return 'Image edit error: HTTP ${response.statusCode}';
-        }
-      }
-
-      data = jsonDecode(response.body) as Map<String, dynamic>;
-    }
-    if (data == null) {
-      return 'Image edit error: empty response';
-    }
-    final resultUrl = (data['image_url'] as String? ?? '').trim();
-    if (resultUrl.isEmpty) {
-      return 'Image edit error: no image URL returned';
-    }
-
-    final billing = data['billing'] as Map<String, dynamic>?;
-    final result = {
-      'url': resultUrl,
-      'width': data['width'],
-      'height': data['height'],
-      'seed': data['seed'],
-      'prompt': data['prompt'] ?? prompt,
-      'source_url': imageUrl,
-      'model': 'Qwen Image Edit Plus',
-      if (billing != null) ...{
-        'cost_eur': billing['cost_eur'],
-        'megapixels': billing['megapixels'],
-      },
-    };
-    return 'IMAGE:${jsonEncode(result)}';
-  } catch (error) {
-    return 'Image edit failed: $error';
   }
 }
 

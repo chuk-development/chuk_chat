@@ -103,6 +103,11 @@ class StreamingMessageHandler {
   bool _isStreaming = false;
   bool _isSending = false;
   bool _isDisposed = false;
+  // Set by cancelStream(); checked at every agentic-pass boundary so a
+  // cancel that lands while a tool is still running (e.g. image gen, 3-5s)
+  // stops the loop instead of firing one more streaming pass once the tool
+  // resolves. Reset at the start of each sendMessage().
+  bool _cancelRequested = false;
   bool _hasForegroundKeepAliveLock = false;
   Future<void>? _activeToolLoopFuture;
 
@@ -245,6 +250,7 @@ class StreamingMessageHandler {
 
     _isSending = true;
     _isStreaming = true;
+    _cancelRequested = false;
     _streamFinalized = false;
     _clearSnapshot();
     onUpdateUI?.call();
@@ -469,6 +475,13 @@ class StreamingMessageHandler {
       int currentPass = 0,
       int reconnectRetries = 0,
     }) async {
+      // A cancel landed (button) — the current stream was already torn down
+      // and the message finalized by cancelStream(); do not open another pass.
+      if (_cancelRequested) {
+        await _releaseForegroundKeepAlive();
+        return;
+      }
+
       if (currentPass >= kMaxStreamingPasses) {
         const stopMessage =
             'Tool loop stopped after reaching the safety limit.';
@@ -714,6 +727,10 @@ class StreamingMessageHandler {
                 }
 
                 if (_isDisposed) return;
+                if (_cancelRequested) {
+                  await _releaseForegroundKeepAlive();
+                  return;
+                }
 
                 final next = loopResult.nextStep!;
                 await _updateForegroundNotification(
@@ -804,6 +821,10 @@ class StreamingMessageHandler {
 
                 await Future<void>.delayed(const Duration(milliseconds: 500));
                 if (_isDisposed) return;
+                if (_cancelRequested) {
+                  await _releaseForegroundKeepAlive();
+                  return;
+                }
 
                 await startStreamingPass(
                   message: aiPromptContent,
@@ -1066,6 +1087,7 @@ class StreamingMessageHandler {
       if (kDebugMode) {
         debugPrint('Cancelling stream for chat $chatId...');
       }
+      _cancelRequested = true;
       await _streamingManager.cancelStream(chatId);
 
       // Mark the placeholder message as interrupted so the UI surfaces the
