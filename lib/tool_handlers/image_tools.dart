@@ -14,6 +14,7 @@ Future<String> _generateImageRequest({
   required String endpoint,
   required Map<String, String> fields,
   required String muxTool,
+  required String modelName,
 }) async {
   final baseUrl = serverHttpUrl;
   if (baseUrl == null || baseUrl.trim().isEmpty) {
@@ -74,6 +75,7 @@ Future<String> _generateImageRequest({
       'seed': data['seed'],
       'prompt': data['prompt'] ?? fields['prompt'],
       'image_size': fields['image_size'],
+      'model': modelName,
       if (billing != null) ...{
         'cost_eur': billing['cost_eur'],
         'megapixels': billing['megapixels'],
@@ -103,6 +105,7 @@ Future<String> executeGenerateImage({
     accessToken: accessToken,
     endpoint: '/v1/ai/image/turbo',
     muxTool: 'image_turbo',
+    modelName: 'Z-Image Turbo',
     fields: {'prompt': prompt, 'image_size': imageSize},
   );
 }
@@ -132,6 +135,7 @@ Future<String> executeGenerateImageHunyuan({
     accessToken: accessToken,
     endpoint: '/v1/ai/image/hunyuan',
     muxTool: 'image_hunyuan',
+    modelName: 'Hunyuan Image 3',
     fields: fields,
   );
 }
@@ -165,6 +169,7 @@ Future<String> executeGenerateImageFlux({
     accessToken: accessToken,
     endpoint: '/v1/ai/image/flux',
     muxTool: 'image_flux',
+    modelName: 'FLUX 2 Klein 9B',
     fields: fields,
   );
 }
@@ -301,6 +306,7 @@ Future<String> executeEditImage({
       'seed': data['seed'],
       'prompt': data['prompt'] ?? prompt,
       'source_url': imageUrl,
+      'model': 'Qwen Image Edit Plus',
       if (billing != null) ...{
         'cost_eur': billing['cost_eur'],
         'megapixels': billing['megapixels'],

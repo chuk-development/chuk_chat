@@ -20,7 +20,8 @@ class ToolImageUpdateResult {
   final List<String> imagePaths;
 
   /// Per-image metadata aligned with [imagePaths]. Each entry:
-  /// `{"source": "generated"|"fetched", "caption": "..."}` (caption optional).
+  /// `{"source": "generated"|"fetched", "caption": "...", "model": "..."}`
+  /// (caption and model optional; model is only set for generated images).
   final List<Map<String, dynamic>> imageMetas;
   final String? imageCostEur;
   final String? imageGeneratedAt;
@@ -55,6 +56,7 @@ class ToolImageResultService {
       String path, {
       required String source,
       String? caption,
+      String? model,
     }) {
       if (!seenPaths.add(path)) {
         return;
@@ -64,6 +66,10 @@ class ToolImageResultService {
       final trimmedCaption = caption?.trim();
       if (trimmedCaption != null && trimmedCaption.isNotEmpty) {
         meta['caption'] = trimmedCaption;
+      }
+      final trimmedModel = model?.trim();
+      if (trimmedModel != null && trimmedModel.isNotEmpty) {
+        meta['model'] = trimmedModel;
       }
       imageMetas.add(meta);
     }
@@ -92,6 +98,7 @@ class ToolImageResultService {
             storagePath,
             source: 'generated',
             caption: caption ?? _nonEmptyString(payload['caption']),
+            model: _nonEmptyString(payload['model']),
           );
         }
 

@@ -66,13 +66,18 @@ const double _kCardStackGap = 6;
 /// Per-image metadata describing how an image arrived in the chat and
 /// an optional caption the AI attached to it.
 class ImageMeta {
-  const ImageMeta({required this.source, this.caption});
+  const ImageMeta({required this.source, this.caption, this.model});
 
   /// "generated" (AI image tool) or "fetched" (fetch_image from URL).
   final String source;
 
   /// Optional short subtitle supplied by the AI, shown under the image.
   final String? caption;
+
+  /// Human-readable image-generation model label (e.g. "FLUX 2 Klein 9B").
+  /// Only set for generated images. Shown under the caption and as a corner
+  /// badge on the image so it is always clear which generator produced it.
+  final String? model;
 
   bool get isGenerated => source == 'generated';
 
@@ -84,9 +89,11 @@ class ImageMeta {
       return decoded.whereType<Map>().map((raw) {
         final source = raw['source']?.toString() ?? 'generated';
         final captionRaw = raw['caption']?.toString().trim() ?? '';
+        final modelRaw = raw['model']?.toString().trim() ?? '';
         return ImageMeta(
           source: source,
           caption: captionRaw.isEmpty ? null : captionRaw,
+          model: modelRaw.isEmpty ? null : modelRaw,
         );
       }).toList();
     } catch (_) {
@@ -2985,6 +2992,16 @@ class _MessageBubbleState extends State<MessageBubble> {
     return caption;
   }
 
+  /// Human-readable generator model for the image at [index], or null when
+  /// unknown (legacy images, user uploads, web-fetched images).
+  String? _modelFor(int index) {
+    final metas = widget.imageMetas;
+    if (metas == null || index < 0 || index >= metas.length) return null;
+    final model = metas[index].model?.trim();
+    if (model == null || model.isEmpty) return null;
+    return model;
+  }
+
   /// Whether the message has at least one AI-generated image. When
   /// [imageMetas] is absent (legacy messages), assume generated so the
   /// existing "Generated:" menu stays visible.
@@ -3024,6 +3041,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               borderRadius: 12,
               fit: BoxFit.contain,
               caption: _captionFor(0),
+              model: _modelFor(0),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
                 images: images,
@@ -3053,6 +3071,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               borderRadius: 12,
               fit: BoxFit.cover,
               caption: _captionFor(0),
+              model: _modelFor(0),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
                 images: images,
@@ -3076,6 +3095,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             naturalAspect: true,
             maxNaturalHeight: maxWidth * 1.9,
             caption: _captionFor(0),
+            model: _modelFor(0),
             onTap: () => _openImagePreview(
               imageSource: imageSource,
               images: images,
@@ -3103,6 +3123,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               height: tileWidth,
               borderRadius: 10,
               caption: _captionFor(index),
+              model: _modelFor(index),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
                 images: images,
@@ -3122,6 +3143,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     required double borderRadius,
     required VoidCallback onTap,
     String? caption,
+    String? model,
     BoxFit fit = BoxFit.cover,
     bool naturalAspect = false,
     double? maxNaturalHeight,
@@ -3136,7 +3158,62 @@ class _MessageBubbleState extends State<MessageBubble> {
       maxNaturalHeight: maxNaturalHeight,
       onTap: onTap,
     );
-    if (caption == null) return thumbnail;
+
+    final hasModel = model != null && model.trim().isNotEmpty;
+
+    // Overlay the generator model as a small pill in the bottom-right corner
+    // of the image so it is always visible, even when the image is shared or
+    // viewed without the caption text below it.
+    final Widget framedThumbnail = hasModel
+        ? Stack(
+            children: [
+              thumbnail,
+              Positioned(
+                right: 6,
+                bottom: 6,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: width - 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 10,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                        const SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            model,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : thumbnail;
+
+    if (caption == null && !hasModel) return framedThumbnail;
 
     final captionColor = Theme.of(context).colorScheme.onSurface;
     return SizedBox(
@@ -3145,19 +3222,48 @@ class _MessageBubbleState extends State<MessageBubble> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          thumbnail,
-          const SizedBox(height: 4),
-          Text(
-            caption,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: captionColor.withValues(alpha: 0.85),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 1.25,
+          framedThumbnail,
+          if (caption != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              caption,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: captionColor.withValues(alpha: 0.85),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                height: 1.25,
+              ),
             ),
-          ),
+          ],
+          if (hasModel) ...[
+            SizedBox(height: caption != null ? 2 : 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  size: 11,
+                  color: captionColor.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    model,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: captionColor.withValues(alpha: 0.6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
