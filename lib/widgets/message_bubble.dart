@@ -3226,7 +3226,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     bool naturalAspect = false,
     double? maxNaturalHeight,
   }) {
-    final thumbnail = _CachedImageThumbnail(
+    Widget thumbnail = _CachedImageThumbnail(
       imageDataUrl: imageSource,
       width: width,
       height: height,
@@ -3236,6 +3236,20 @@ class _MessageBubbleState extends State<MessageBubble> {
       maxNaturalHeight: maxNaturalHeight,
       onTap: onTap,
     );
+
+    // Right-click (desktop) / long-press (mobile) on a stored image opens a
+    // context menu to delete it from storage. Skip data: URIs (QR codes,
+    // base64 fallbacks) — there is no storage object to remove.
+    if (!imageSource.startsWith('data:image/')) {
+      thumbnail = GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTapDown: (d) =>
+            _showImageContextMenu(d.globalPosition, imageSource),
+        onLongPressStart: (d) =>
+            _showImageContextMenu(d.globalPosition, imageSource),
+        child: thumbnail,
+      );
+    }
 
     final hasModel = model != null && model.trim().isNotEmpty;
     if (!hasModel) return thumbnail;
@@ -3304,6 +3318,100 @@ class _MessageBubbleState extends State<MessageBubble> {
         fullscreenDialog: true,
       ),
     );
+  }
+
+  /// Context menu shown on right-click / long-press of a stored chat image.
+  /// Currently a single Delete action; deletion removes the encrypted object
+  /// from storage (like the Media Manager) and the tile live-updates to
+  /// "Image deleted" via [ImageStorageService.onImageDeleted].
+  Future<void> _showImageContextMenu(Offset globalPosition, String path) async {
+    final l = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+              const SizedBox(width: 8),
+              Text(l.delete, style: const TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (selected == 'delete' && mounted) {
+      await _confirmDeleteImage(path);
+    }
+  }
+
+  /// Confirms and deletes a stored image's encrypted object. Mirrors the Media
+  /// Manager flow: warn (but still allow) when the image is referenced by
+  /// chats, then delete. The tile repaints to "Image deleted" via the deletion
+  /// broadcast, so no message mutation is needed here.
+  Future<void> _confirmDeleteImage(String path) async {
+    final l = AppLocalizations.of(context)!;
+
+    List<ChatUsingImage> usedIn = const [];
+    try {
+      usedIn = await ImageStorageService.findChatsUsingImage(path);
+    } catch (_) {
+      // Best-effort: if the usage lookup fails, fall back to a plain confirm.
+    }
+    if (!mounted) return;
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(l.deleteImageTitle),
+            content: Text(
+              usedIn.isNotEmpty
+                  ? '${l.deleteImageShowDeleted}\n\n${l.deleteImageConfirm}'
+                  : l.deleteImageBody,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l.cancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: Text(usedIn.isNotEmpty ? l.deleteAnyway : l.delete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    try {
+      await ImageStorageService.deleteEncryptedImage(path);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.imageDeleted)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.deleteFailed(e.toString()))));
+      }
+    }
   }
 
   /// Renders document attachment chips as a Wrap. Renders NO external
@@ -3513,6 +3621,8 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   /// used) in [_CachedImageThumbnail.naturalAspect] mode.
   double? _aspectRatio;
 
+  StreamSubscription<String>? _deletionSub;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -3520,6 +3630,26 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   void initState() {
     super.initState();
     _loadImage();
+    // Live-swap to the "Image deleted" state the moment this exact storage
+    // object is removed anywhere (chat right-click, Media Manager) — no reload
+    // needed. Data: URIs have no storage object, so skip the subscription.
+    if (!widget.imageDataUrl.startsWith('data:image/')) {
+      _deletionSub = ImageStorageService.onImageDeleted.listen((deletedPath) {
+        if (deletedPath == widget.imageDataUrl && mounted) {
+          setState(() {
+            _cachedBytes = null;
+            _notFound = true;
+            _isLoading = false;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _deletionSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadImage() async {
