@@ -3503,6 +3503,12 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   Uint8List? _cachedBytes;
   bool _isLoading = true;
 
+  /// True when the storage object 404'd — i.e. the image was deleted from the
+  /// backend (a manual Media-Manager delete, or a purged bucket). Distinguished
+  /// from a generic load failure so the tile can say "deleted" instead of a
+  /// bare broken-image icon.
+  bool _notFound = false;
+
   /// Intrinsic width/height of the decoded image. Only resolved (and only
   /// used) in [_CachedImageThumbnail.naturalAspect] mode.
   double? _aspectRatio;
@@ -3541,6 +3547,15 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
         );
       }
     } catch (e) {
+      // Detect a deleted/missing storage object (404) so the tile can show a
+      // clear "Image deleted" state rather than a generic broken-image icon.
+      // Mirrors the heuristic in EncryptedImageWidget.
+      final errorStr = e.toString().toLowerCase();
+      _notFound =
+          errorStr.contains('not found') ||
+          errorStr.contains('404') ||
+          errorStr.contains('does not exist') ||
+          errorStr.contains('object not found');
       if (kDebugMode) {
         debugPrint('Failed to load image: $e');
       }
@@ -3640,6 +3655,10 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     }
 
     if (_cachedBytes == null) {
+      // Only show the text label when the tile is tall enough for icon + gap +
+      // caption, so a small grid thumbnail can't overflow vertically.
+      final bool showLabel = renderHeight >= 64;
+      final Color fg = Theme.of(context).colorScheme.onSurfaceVariant;
       return wrap(
         Container(
           width: widget.width,
@@ -3648,7 +3667,33 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
             color: Colors.grey.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(widget.borderRadius),
           ),
-          child: const Icon(Icons.broken_image, size: 32),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _notFound ? Icons.image_not_supported_outlined : Icons.broken_image,
+                  size: 32,
+                  color: fg,
+                ),
+                if (showLabel) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _notFound ? 'Image deleted' : 'Failed to load',
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 12,
+                      fontStyle: _notFound
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       );
     }
