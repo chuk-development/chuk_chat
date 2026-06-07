@@ -907,6 +907,7 @@ class ChatStorageCrud {
         reasoning: m['reasoning'] as String?,
         replyContext: m['replyContext'] as String?,
         images: m['images'] as String?,
+        imageMetas: m['imageMetas'] as String?,
         imageCostEur: m['imageCostEur'] as String?,
         imageGeneratedAt: m['imageGeneratedAt'] as String?,
         attachments: m['attachments'] as String?,

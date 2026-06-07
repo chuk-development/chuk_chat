@@ -18,11 +18,17 @@ class ImageViewer extends StatefulWidget {
     required this.imageDataUrl,
     this.initialIndex = 0,
     this.allImages,
+    this.models,
   });
 
   final String imageDataUrl;
   final int initialIndex;
   final List<String>? allImages;
+
+  /// Per-image generator model labels (aligned with [allImages]). Entries may
+  /// be null for user-uploaded or web-fetched images. Shown top-right next to
+  /// the copy/download actions for the current image.
+  final List<String?>? models;
 
   @override
   State<ImageViewer> createState() => _ImageViewerState();
@@ -135,6 +141,17 @@ class _ImageViewerState extends State<ImageViewer> {
   bool get _hasMultipleImages =>
       widget.allImages != null && widget.allImages!.length > 1;
 
+  /// Generator model label for the currently-shown image, or null when none.
+  String? get _currentModel {
+    final models = widget.models;
+    if (models == null || _currentIndex < 0 || _currentIndex >= models.length) {
+      return null;
+    }
+    final model = models[_currentIndex]?.trim();
+    if (model == null || model.isEmpty) return null;
+    return model;
+  }
+
   GlobalKey _imageKeyForIndex(int index) {
     return _imageKeys.putIfAbsent(
       index,
@@ -188,6 +205,38 @@ class _ImageViewerState extends State<ImageViewer> {
             tooltip: 'Close',
           ),
           actions: [
+            if (_currentModel != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            size: 12, color: iconColor.withValues(alpha: 0.9)),
+                        const SizedBox(width: 4),
+                        Text(
+                          _currentModel!,
+                          style: TextStyle(
+                            color: iconColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             IconButton(
               icon: Icon(Icons.file_copy_outlined,
                   color: iconColor, size: 20),

@@ -917,6 +917,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         : Builder(
             builder: (_) {
               final cards = _buildArtifactCards(widget.toolCalls!);
+              final pendingImage = _buildPendingImagePlaceholder(
+                widget.toolCalls!,
+              );
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -925,6 +928,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                   if (cards.isNotEmpty) ...[
                     const SizedBox(height: _kArtifactGap),
                     ..._stackArtifactCards(cards),
+                  ],
+                  if (pendingImage != null) ...[
+                    const SizedBox(height: _kArtifactGap),
+                    pendingImage,
                   ],
                   const SizedBox(height: _kBlockGap),
                 ],
@@ -950,13 +957,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       ],
       if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-        if (_hasGeneratedImage)
-          _buildImageMetaMenu(
-            iconFgColor,
-            alignRight,
-            widget.imageCostEur,
-            widget.imageGeneratedAt,
-          ),
         const SizedBox(height: _kBlockGap),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
@@ -967,13 +967,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       if (hasVisibleToolCalls) toolBarSection,
       if (renderImagesInBubble && placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-        if (_hasGeneratedImage)
-          _buildImageMetaMenu(
-            iconFgColor,
-            alignRight,
-            widget.imageCostEur,
-            widget.imageGeneratedAt,
-          ),
         const SizedBox(height: _kBlockGap),
       ],
       if (!streamingTextBeforeTools) messageBody,
@@ -1171,6 +1164,14 @@ class _MessageBubbleState extends State<MessageBubble> {
         children.add(const SizedBox(height: _kArtifactGap));
         children.addAll(_stackArtifactCards(artifactCards));
       }
+      // While this round's generate_image call is still running, reserve a
+      // placeholder at the known target resolution with a spinner — replaced
+      // in place by the real image grid once the result arrives.
+      final pendingImage = _buildPendingImagePlaceholder(seg.toolCalls);
+      if (pendingImage != null) {
+        children.add(const SizedBox(height: _kArtifactGap));
+        children.add(pendingImage);
+      }
       children.add(const SizedBox(height: _kBlockGap));
       hasRenderedMainContent = true;
       // Image insertion right after the round that produced it.
@@ -1182,16 +1183,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         });
         if (hasImageResult) {
           children.add(_buildImagesGrid(widget.images!));
-          if (_hasGeneratedImage) {
-            children.add(
-              _buildImageMetaMenu(
-                iconFgColor,
-                alignRight,
-                widget.imageCostEur,
-                widget.imageGeneratedAt,
-              ),
-            );
-          }
           children.add(const SizedBox(height: _kBlockGap));
           insertedImage = true;
         }
@@ -1222,14 +1213,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (hasImages && !insertedImage) {
       children.add(_buildImagesGrid(widget.images!));
-      children.add(
-        _buildImageMetaMenu(
-          iconFgColor,
-          alignRight,
-          widget.imageCostEur,
-          widget.imageGeneratedAt,
-        ),
-      );
       children.add(const SizedBox(height: _kBlockGap));
     }
 
@@ -2984,14 +2967,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return [AskUserCard(options: options, onSelect: widget.onAskUserAnswer!)];
   }
 
-  String? _captionFor(int index) {
-    final metas = widget.imageMetas;
-    if (metas == null || index < 0 || index >= metas.length) return null;
-    final caption = metas[index].caption?.trim();
-    if (caption == null || caption.isEmpty) return null;
-    return caption;
-  }
-
   /// Human-readable generator model for the image at [index], or null when
   /// unknown (legacy images, user uploads, web-fetched images).
   String? _modelFor(int index) {
@@ -3002,20 +2977,128 @@ class _MessageBubbleState extends State<MessageBubble> {
     return model;
   }
 
-  /// Whether the message has at least one AI-generated image. When
-  /// [imageMetas] is absent (legacy messages), assume generated so the
-  /// existing "Generated:" menu stays visible.
-  bool get _hasGeneratedImage {
-    final metas = widget.imageMetas;
-    if (metas == null || metas.isEmpty) {
-      return widget.images != null && widget.images!.isNotEmpty;
-    }
-    return metas.any((m) => m.isGenerated);
-  }
-
   /// Renders the image grid (1, 2+1, or N-col Wrap) for the message.
   /// Renders NO external margin — callers add `_kBlockGap` after the
   /// grid to separate it from the next block.
+  /// While a `generate_image` tool call is still running we already know the
+  /// target resolution from its arguments, so we reserve a placeholder at that
+  /// aspect ratio with a spinner + resolution label instead of leaving a blank
+  /// gap until the image arrives. The real image (rendered by
+  /// [_buildImagesGrid]) replaces it in place once the tool call completes.
+  ///
+  /// Returns null when no image generation is in flight for [toolCalls].
+  Widget? _buildPendingImagePlaceholder(List<ToolCall> toolCalls) {
+    if (!widget.isStreamingMessage) return null;
+
+    ToolCall? pending;
+    for (final tc in toolCalls) {
+      if (tc.name != 'generate_image') continue;
+      final bool running =
+          tc.status == ToolCallStatus.running ||
+          tc.status == ToolCallStatus.pending;
+      final String? r = tc.result;
+      final bool hasImage =
+          r != null && (r.startsWith('IMAGE:') || r.startsWith('IMAGE_DATA:'));
+      if (running && !hasImage) {
+        pending = tc;
+        break;
+      }
+    }
+    if (pending == null) return null;
+
+    // Best-effort (aspectRatio = width / height, label) from the args. Models
+    // express the target size differently: `resolution` (ideogram, "1024x768"),
+    // `aspect_ratio` (flux/hunyuan, "16:9"), or an `image_size` preset (turbo/
+    // edit). Server falls back to landscape_4_3 when none is given.
+    double aspect = 1024 / 768;
+    String label = '';
+    final args = pending.arguments;
+
+    final resolution = args['resolution'];
+    final aspectRatio = args['aspect_ratio'];
+    final imageSize = args['image_size'];
+
+    final resMatch = resolution is String
+        ? RegExp(r'(\d+)\s*[x×]\s*(\d+)').firstMatch(resolution)
+        : null;
+    final arMatch = aspectRatio is String
+        ? RegExp(r'(\d+)\s*[:x×]\s*(\d+)').firstMatch(aspectRatio)
+        : null;
+
+    const presets = <String, List<int>>{
+      'square_hd': [1024, 1024],
+      'square': [512, 512],
+      'portrait_4_3': [768, 1024],
+      'portrait_16_9': [576, 1024],
+      'landscape_4_3': [1024, 768],
+      'landscape_16_9': [1024, 576],
+    };
+
+    if (resMatch != null) {
+      final w = int.parse(resMatch.group(1)!);
+      final h = int.parse(resMatch.group(2)!);
+      if (w > 0 && h > 0) {
+        aspect = w / h;
+        label = '$w × $h';
+      }
+    } else if (arMatch != null) {
+      final w = int.parse(arMatch.group(1)!);
+      final h = int.parse(arMatch.group(2)!);
+      if (w > 0 && h > 0) {
+        aspect = w / h;
+        label = aspectRatio as String;
+      }
+    } else if (imageSize is String && presets.containsKey(imageSize)) {
+      final dims = presets[imageSize]!;
+      aspect = dims[0] / dims[1];
+      label = '${dims[0]} × ${dims[1]}';
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width * 0.8;
+        // Mirror the AI-image cap in _buildImagesGrid so a tall portrait
+        // placeholder can't dominate the chat.
+        final double height = (maxWidth / aspect).clamp(80.0, maxWidth * 1.9);
+        return Container(
+          width: maxWidth,
+          height: height,
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                if (label.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildImagesGrid(List<String> images) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3040,7 +3123,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               height: squareSize,
               borderRadius: 12,
               fit: BoxFit.contain,
-              caption: _captionFor(0),
               model: _modelFor(0),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
@@ -3070,7 +3152,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               height: userSquare,
               borderRadius: 12,
               fit: BoxFit.cover,
-              caption: _captionFor(0),
               model: _modelFor(0),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
@@ -3094,7 +3175,6 @@ class _MessageBubbleState extends State<MessageBubble> {
             borderRadius: 12,
             naturalAspect: true,
             maxNaturalHeight: maxWidth * 1.9,
-            caption: _captionFor(0),
             model: _modelFor(0),
             onTap: () => _openImagePreview(
               imageSource: imageSource,
@@ -3122,7 +3202,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               width: tileWidth,
               height: tileWidth,
               borderRadius: 10,
-              caption: _captionFor(index),
               model: _modelFor(index),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
@@ -3142,7 +3221,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     required double height,
     required double borderRadius,
     required VoidCallback onTap,
-    String? caption,
     String? model,
     BoxFit fit = BoxFit.cover,
     bool naturalAspect = false,
@@ -3160,112 +3238,53 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
 
     final hasModel = model != null && model.trim().isNotEmpty;
+    if (!hasModel) return thumbnail;
 
-    // Overlay the generator model as a small pill in the bottom-right corner
-    // of the image so it is always visible, even when the image is shared or
-    // viewed without the caption text below it.
-    final Widget framedThumbnail = hasModel
-        ? Stack(
-            children: [
-              thumbnail,
-              Positioned(
-                right: 6,
-                bottom: 6,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: width - 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          size: 10,
-                          color: Colors.white.withValues(alpha: 0.9),
-                        ),
-                        const SizedBox(width: 3),
-                        Flexible(
-                          child: Text(
-                            model,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              height: 1.0,
-                            ),
-                          ),
-                        ),
-                      ],
+    // The generator model is overlaid as a small pill in the bottom-right
+    // corner of the image itself — the only place it is shown (no duplicate
+    // caption row below the image). Works for single and multi-image grids.
+    return Stack(
+      children: [
+        thumbnail,
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width - 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 10,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      model,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        height: 1.0,
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
-          )
-        : thumbnail;
-
-    if (caption == null && !hasModel) return framedThumbnail;
-
-    final captionColor = Theme.of(context).colorScheme.onSurface;
-    return SizedBox(
-      width: width,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          framedThumbnail,
-          if (caption != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              caption,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: captionColor.withValues(alpha: 0.85),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                height: 1.25,
+                ],
               ),
             ),
-          ],
-          if (hasModel) ...[
-            SizedBox(height: caption != null ? 2 : 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.auto_awesome,
-                  size: 11,
-                  color: captionColor.withValues(alpha: 0.55),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    model,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: captionColor.withValues(alpha: 0.6),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      height: 1.2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3280,6 +3299,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           imageDataUrl: imageSource,
           initialIndex: index,
           allImages: images,
+          models: [for (int i = 0; i < images.length; i++) _modelFor(i)],
         ),
         fullscreenDialog: true,
       ),
@@ -3435,134 +3455,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: aiParagraphs,
     );
-  }
-
-  /// Renders the small "..." popup button below the image grid.
-  /// The widget owns a `Padding(top: 4, right: 6)` for its alignment
-  /// against the image grid above — that is intentional INTERNAL
-  /// padding (positions the pill relative to the grid's bottom-right
-  /// corner), not a layout gap. Callers still add `_kBlockGap` between
-  /// the meta menu and the next block.
-  Widget _buildImageMetaMenu(
-    Color iconFgColor,
-    bool alignRight,
-    double? imageCostEur,
-    DateTime? imageGeneratedAt,
-  ) {
-    final String generatedLabel = imageGeneratedAt != null
-        ? _formatGeneratedAt(imageGeneratedAt)
-        : 'Unknown';
-    final String? costLabel = imageCostEur != null
-        ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
-        : null;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-
-    // Image actions always align right, directly under the image.
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, right: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Container(
-            height: kPlatformMobile ? _mobileBottomBarHeight : null,
-            decoration: BoxDecoration(
-              color: bgColor.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(
-                color: iconFgColor.withValues(alpha: 0.25),
-                width: 1,
-              ),
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: kPlatformMobile ? 4 : 8,
-              vertical: kPlatformMobile ? 0 : 4,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Builder(
-                  builder: (btnContext) => _imageActionIcon(
-                    icon: Icons.more_vert,
-                    tooltip: AppLocalizations.of(context)!.imageDetails,
-                    color: iconFgColor,
-                    onPressed: () {
-                      final renderBox =
-                          btnContext.findRenderObject() as RenderBox;
-                      final pos = renderBox.localToGlobal(Offset.zero);
-                      showMenu<String>(
-                        context: btnContext,
-                        position: RelativeRect.fromLTRB(
-                          pos.dx,
-                          pos.dy + renderBox.size.height,
-                          pos.dx + renderBox.size.width,
-                          pos.dy + renderBox.size.height,
-                        ),
-                        items: [
-                          if (costLabel != null)
-                            PopupMenuItem<String>(
-                              enabled: false,
-                              value: 'cost',
-                              child: Text(
-                                AppLocalizations.of(
-                                  btnContext,
-                                )!.costLabel(costLabel),
-                              ),
-                            ),
-                          PopupMenuItem<String>(
-                            enabled: false,
-                            value: 'time',
-                            child: Text(
-                              AppLocalizations.of(
-                                btnContext,
-                              )!.generatedLabel(generatedLabel),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _imageActionIcon({
-    required IconData icon,
-    required String tooltip,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, color: color, size: 18),
-        padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
-        visualDensity: VisualDensity.compact,
-        constraints: BoxConstraints(
-          minWidth: kPlatformMobile ? 28 : 30,
-          minHeight: kPlatformMobile ? 28 : 30,
-        ),
-        style: IconButton.styleFrom(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        onPressed: onPressed,
-      ),
-    );
-  }
-
-  String _formatGeneratedAt(DateTime timestamp) {
-    final local = timestamp.toLocal();
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final year = local.year.toString();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$day.$month.$year $hour:$minute';
   }
 }
 
