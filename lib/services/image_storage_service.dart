@@ -120,6 +120,14 @@ class ImageStorageService {
             ),
           );
 
+      // Pre-warm the in-memory cache with the image we just uploaded, keyed by
+      // its storage path. `downloadAndDecryptImage(path)` returns exactly these
+      // (decrypted == compressed) bytes, so the first render reads them
+      // instantly instead of re-downloading and decrypting the file we already
+      // have in hand — this redundant Supabase round-trip + decrypt is the main
+      // cause of the multi-second lag between "image generated" and display.
+      _imageCache.put(path, compressedBytes);
+
       // Return the storage path (not the public URL, since files are encrypted)
       return path;
     } catch (e) {

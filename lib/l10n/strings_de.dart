@@ -634,6 +634,7 @@ const Map<String, String> stringsDe = {
   'copyImage': 'Bild kopieren',
   'downloadImage': 'Bild herunterladen',
   'imageDetails': 'Bilddetails',
+  'generatingImage': 'Wird generiert…',
   'imageCopied': 'Bild kopiert',
 
   // ── Free message display ───────────────────────────────────

@@ -212,6 +212,26 @@ class ToolPromptBuilder {
       }
     }
 
+    // After tool results come back the model is prompted again to continue.
+    // Without guidance it re-runs the full discovery protocol and narrates the
+    // plan a second time ("I'll generate…" → tool runs → "Done, shown above"),
+    // which reads to the user as several separate answers for one request.
+    // Steer the continuation pass toward a single, final reply. (Previously the
+    // `isToolResult` flag was threaded all the way here but never used.)
+    if (isToolResult && tools.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln(
+        'CONTINUATION — you already have the tool results above:\n'
+        '- The tool output (images, data, etc.) is ALREADY shown to the user. '
+        'Do NOT restate it, repeat URLs / IDs / dimensions / metadata, or '
+        'describe what a tool returned.\n'
+        '- Do NOT re-announce your plan or narrate what you are "about to" do '
+        '(no "I\'ll generate…", "Let me…", "Now I will…") — that step is done.\n'
+        '- If the results fully satisfy the request, reply ONCE with a short '
+        'final answer. Only call another tool if genuinely more work remains.',
+      );
+    }
+
     return buffer.toString();
   }
 

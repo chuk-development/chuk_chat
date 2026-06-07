@@ -654,6 +654,7 @@ class AppLocalizations {
   String get copyImage => _get('copyImage');
   String get downloadImage => _get('downloadImage');
   String get imageDetails => _get('imageDetails');
+  String get generatingImage => _get('generatingImage');
   String get imageCopied => _get('imageCopied');
 
   // ── Free message display ───────────────────────────────────

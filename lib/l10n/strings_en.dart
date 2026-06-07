@@ -609,6 +609,7 @@ const Map<String, String> stringsEn = {
   'copyImage': 'Copy image',
   'downloadImage': 'Download image',
   'imageDetails': 'Image details',
+  'generatingImage': 'Generating…',
   'imageCopied': 'Image copied',
 
   // ── Free message display ───────────────────────────────────

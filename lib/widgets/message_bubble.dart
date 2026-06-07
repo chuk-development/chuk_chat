@@ -917,8 +917,11 @@ class _MessageBubbleState extends State<MessageBubble> {
         : Builder(
             builder: (_) {
               final cards = _buildArtifactCards(widget.toolCalls!);
-              final pendingImage = _buildPendingImagePlaceholder(
+              // Classic layout renders arrived images separately above, so the
+              // loader grid here shows loaders only (includeArrived: false).
+              final generatingGrid = _buildGeneratingImagesGrid(
                 widget.toolCalls!,
+                includeArrived: false,
               );
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -929,9 +932,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                     const SizedBox(height: _kArtifactGap),
                     ..._stackArtifactCards(cards),
                   ],
-                  if (pendingImage != null) ...[
+                  if (generatingGrid != null) ...[
                     const SizedBox(height: _kArtifactGap),
-                    pendingImage,
+                    generatingGrid,
                   ],
                   const SizedBox(height: _kBlockGap),
                 ],
@@ -1164,13 +1167,20 @@ class _MessageBubbleState extends State<MessageBubble> {
         children.add(const SizedBox(height: _kArtifactGap));
         children.addAll(_stackArtifactCards(artifactCards));
       }
-      // While this round's generate_image call is still running, reserve a
-      // placeholder at the known target resolution with a spinner — replaced
-      // in place by the real image grid once the result arrives.
-      final pendingImage = _buildPendingImagePlaceholder(seg.toolCalls);
-      if (pendingImage != null) {
+      // While any generate_image call in this round is still running, render a
+      // single unified grid (arrived images + loader tiles) in place of the
+      // normal image grid, so the images don't reflow as loaders are replaced.
+      final generatingGrid = _buildGeneratingImagesGrid(
+        seg.toolCalls,
+        includeArrived: true,
+      );
+      if (generatingGrid != null) {
         children.add(const SizedBox(height: _kArtifactGap));
-        children.add(pendingImage);
+        children.add(generatingGrid);
+        children.add(const SizedBox(height: _kBlockGap));
+        hasRenderedMainContent = true;
+        insertedImage = true;
+        return;
       }
       children.add(const SizedBox(height: _kBlockGap));
       hasRenderedMainContent = true;
@@ -2977,54 +2987,216 @@ class _MessageBubbleState extends State<MessageBubble> {
     return model;
   }
 
-  /// Renders the image grid (1, 2+1, or N-col Wrap) for the message.
-  /// Renders NO external margin — callers add `_kBlockGap` after the
-  /// grid to separate it from the next block.
-  /// While a `generate_image` tool call is still running we already know the
-  /// target resolution from its arguments, so we reserve a placeholder at that
-  /// aspect ratio with a spinner + resolution label instead of leaving a blank
-  /// gap until the image arrives. The real image (rendered by
-  /// [_buildImagesGrid]) replaces it in place once the tool call completes.
+  /// A round can fan out N `generate_image` tool calls that produce N images.
+  /// While ANY of them is still running we render a single unified grid —
+  /// already-arrived images in their real tiles, still-running ones as loader
+  /// tiles — laid out exactly like the final [_buildImagesGrid] so nothing
+  /// reflows when a loader is swapped for the finished image.
   ///
-  /// Returns null when no image generation is in flight for [toolCalls].
-  Widget? _buildPendingImagePlaceholder(List<ToolCall> toolCalls) {
-    if (!widget.isStreamingMessage) return null;
-
-    ToolCall? pending;
-    for (final tc in toolCalls) {
+  /// We deliberately do NOT gate on [MessageBubble.isStreamingMessage]: a
+  /// `generate_image` call with status running/pending and no IMAGE result is
+  /// in flight by definition, and the desktop streaming flag flips false during
+  /// the tool-execution phase (so gating on it hid the loaders entirely). A
+  /// finalized message has its stale tool calls flipped to error by
+  /// [finalizeStaleToolCalls], so they won't match here.
+  ///
+  /// [includeArrived] folds already-finished images into this grid (content-
+  /// blocks layout, where it replaces the normal grid). The classic layout
+  /// renders arrived images separately, so it passes false (loaders only).
+  ///
+  /// Returns null when no image generation is in flight for [roundToolCalls].
+  Widget? _buildGeneratingImagesGrid(
+    List<ToolCall> roundToolCalls, {
+    required bool includeArrived,
+  }) {
+    int runningCount = 0;
+    int completedWithImage = 0;
+    ToolCall? firstPending;
+    for (final tc in roundToolCalls) {
       if (tc.name != 'generate_image') continue;
-      final bool running =
-          tc.status == ToolCallStatus.running ||
-          tc.status == ToolCallStatus.pending;
       final String? r = tc.result;
       final bool hasImage =
           r != null && (r.startsWith('IMAGE:') || r.startsWith('IMAGE_DATA:'));
-      if (running && !hasImage) {
-        pending = tc;
-        break;
+      if (hasImage) {
+        completedWithImage++;
+        continue;
+      }
+      final bool running =
+          tc.status == ToolCallStatus.running ||
+          tc.status == ToolCallStatus.pending;
+      if (running) {
+        runningCount++;
+        firstPending ??= tc;
       }
     }
-    if (pending == null) return null;
 
-    // Best-effort (aspectRatio = width / height, label) from the args. Models
-    // express the target size differently: `resolution` (ideogram, "1024x768"),
-    // `aspect_ratio` (flux/hunyuan, "16:9"), or an `image_size` preset (turbo/
-    // edit). Server falls back to landscape_4_3 when none is given.
-    double aspect = 1024 / 768;
-    String label = '';
-    final args = pending.arguments;
+    final List<String> arrived = includeArrived
+        ? (widget.images ?? const <String>[])
+        : const <String>[];
+    final int arrivedCount = arrived.length;
 
+    // Keep a loader for every generate_image that is still running AND for
+    // every completed-with-result image whose bytes haven't been folded into
+    // [widget.images] yet — the fetch/encrypt/upload step after the tool
+    // result lands. This keeps the tile count stable (no reflow) and stops a
+    // finished-but-not-yet-displayed image from briefly vanishing.
+    final int unfetched = includeArrived
+        ? (completedWithImage - arrivedCount).clamp(0, completedWithImage)
+        : 0;
+    final int loaderCount = runningCount + unfetched;
+    if (loaderCount == 0) return null;
+    final int total = arrivedCount + loaderCount;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width * 0.8;
+
+        // Single loader: follow the requested aspect ratio, like a lone AI
+        // image renders at its natural ratio.
+        if (total == 1) {
+          final size = firstPending != null
+              ? _pendingImageSize(firstPending.arguments)
+              : MapEntry<double, String>(1024 / 768, '');
+          final double height = (maxWidth / size.key).clamp(
+            80.0,
+            maxWidth * 1.9,
+          );
+          return _loaderTile(
+            width: maxWidth,
+            height: height,
+            borderRadius: 12,
+            label: size.value,
+          );
+        }
+
+        // Multi: mirror _buildImagesGrid's Wrap layout exactly so arrived
+        // images and loaders share one consistent grid.
+        final int columns = total == 3 ? 3 : (maxWidth > 520 ? 3 : 2);
+        final double tileWidth = ((maxWidth - ((columns - 1) * 8)) / columns)
+            .clamp(90.0, 260.0);
+
+        final List<Widget> cells = <Widget>[];
+        for (int i = 0; i < arrived.length; i++) {
+          final String src = arrived[i];
+          cells.add(
+            _captionedTile(
+              imageSource: src,
+              width: tileWidth,
+              height: tileWidth,
+              borderRadius: 10,
+              model: _modelFor(i),
+              onTap: () => _openImagePreview(
+                imageSource: src,
+                images: arrived,
+                index: i,
+              ),
+            ),
+          );
+        }
+        for (int i = 0; i < loaderCount; i++) {
+          cells.add(
+            _loaderTile(
+              width: tileWidth,
+              height: tileWidth,
+              borderRadius: 10,
+            ),
+          );
+        }
+
+        return Wrap(spacing: 8, runSpacing: 8, children: cells);
+      },
+    );
+  }
+
+  /// A grey rounded loader tile for an image that is being *generated*. The
+  /// sparkle icon + "Generating…" caption deliberately distinguish it from the
+  /// plain spinner [_CachedImageThumbnail] shows while merely *fetching* an
+  /// already-generated image from storage — so it's clear the AI is still
+  /// creating the picture, not just downloading it.
+  ///
+  /// The caption text is shown only on tiles wide enough to fit it; [label]
+  /// (a resolution / aspect hint) is appended on larger single tiles.
+  Widget _loaderTile({
+    required double width,
+    required double height,
+    required double borderRadius,
+    String? label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color fg = colorScheme.onSurface.withValues(alpha: 0.6);
+    final bool roomForText = width >= 150 && height >= 110;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome, size: 18, color: fg),
+            const SizedBox(height: 8),
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            if (roomForText) ...[
+              const SizedBox(height: 10),
+              Text(
+                AppLocalizations.of(context)?.generatingImage ?? 'Generating…',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
+              ),
+              if (label != null && label.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Best-effort target size for a pending `generate_image` call: returns
+  /// (aspectRatio = width / height, human label). Models express size via
+  /// `resolution` ("1024x768"), `aspect_ratio` ("16:9"), or an `image_size`
+  /// preset; the server falls back to landscape_4_3 when none is given.
+  MapEntry<double, String> _pendingImageSize(Map<String, dynamic> args) {
     final resolution = args['resolution'];
+    if (resolution is String) {
+      final m = RegExp(r'(\d+)\s*[x×]\s*(\d+)').firstMatch(resolution);
+      if (m != null) {
+        final w = int.parse(m.group(1)!);
+        final h = int.parse(m.group(2)!);
+        if (w > 0 && h > 0) return MapEntry(w / h, '$w × $h');
+      }
+    }
     final aspectRatio = args['aspect_ratio'];
-    final imageSize = args['image_size'];
-
-    final resMatch = resolution is String
-        ? RegExp(r'(\d+)\s*[x×]\s*(\d+)').firstMatch(resolution)
-        : null;
-    final arMatch = aspectRatio is String
-        ? RegExp(r'(\d+)\s*[:x×]\s*(\d+)').firstMatch(aspectRatio)
-        : null;
-
+    if (aspectRatio is String) {
+      final m = RegExp(r'(\d+)\s*[:x×]\s*(\d+)').firstMatch(aspectRatio);
+      if (m != null) {
+        final w = int.parse(m.group(1)!);
+        final h = int.parse(m.group(2)!);
+        if (w > 0 && h > 0) return MapEntry(w / h, aspectRatio);
+      }
+    }
     const presets = <String, List<int>>{
       'square_hd': [1024, 1024],
       'square': [512, 512],
@@ -3033,72 +3205,17 @@ class _MessageBubbleState extends State<MessageBubble> {
       'landscape_4_3': [1024, 768],
       'landscape_16_9': [1024, 576],
     };
-
-    if (resMatch != null) {
-      final w = int.parse(resMatch.group(1)!);
-      final h = int.parse(resMatch.group(2)!);
-      if (w > 0 && h > 0) {
-        aspect = w / h;
-        label = '$w × $h';
-      }
-    } else if (arMatch != null) {
-      final w = int.parse(arMatch.group(1)!);
-      final h = int.parse(arMatch.group(2)!);
-      if (w > 0 && h > 0) {
-        aspect = w / h;
-        label = aspectRatio as String;
-      }
-    } else if (imageSize is String && presets.containsKey(imageSize)) {
+    final imageSize = args['image_size'];
+    if (imageSize is String && presets.containsKey(imageSize)) {
       final dims = presets[imageSize]!;
-      aspect = dims[0] / dims[1];
-      label = '${dims[0]} × ${dims[1]}';
+      return MapEntry(dims[0] / dims[1], '${dims[0]} × ${dims[1]}');
     }
-
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double maxWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.of(context).size.width * 0.8;
-        // Mirror the AI-image cap in _buildImagesGrid so a tall portrait
-        // placeholder can't dominate the chat.
-        final double height = (maxWidth / aspect).clamp(80.0, maxWidth * 1.9);
-        return Container(
-          width: maxWidth,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.grey.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-                if (label.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    return MapEntry(1024 / 768, '');
   }
 
+  /// Renders the image grid (1, 2+1, or N-col Wrap) for the message.
+  /// Renders NO external margin — callers add `_kBlockGap` after the
+  /// grid to separate it from the next block.
   Widget _buildImagesGrid(List<String> images) {
     return LayoutBuilder(
       builder: (context, constraints) {
