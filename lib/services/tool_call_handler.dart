@@ -1101,6 +1101,13 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
+    // search_chats is always available: the AI must be able to recover the
+    // subject of a prior-conversation reference without a discovery round-trip.
+    final searchChatsToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'search_chats')
+        .map((t) => t.toJson())
+        .firstOrNull;
+
     // update_project is always available when a workspace is active.
     Map<String, dynamic>? projectToolDef;
     if (WorkspaceStorageService.selectedWorkspaceId != null) {
@@ -1146,6 +1153,7 @@ class ToolCallHandler {
           askUserToolDef: askUserToolDef,
           webSearchToolDef: webSearchToolDef,
           webCrawlToolDef: webCrawlToolDef,
+          searchChatsToolDef: searchChatsToolDef,
           projectToolDef: projectToolDef,
           artifactToolDef: artifactToolDef,
           artifactSchemaToolDef: artifactSchemaToolDef,
