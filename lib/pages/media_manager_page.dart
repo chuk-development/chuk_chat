@@ -34,9 +34,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   bool _isLoadingArtifacts = true;
   _MediaFilter _filter = _MediaFilter.images;
 
-  // Cache for loaded image thumbnails
+  // Cache for loaded image thumbnails. `_thumbnailCache` holds decoded bytes
+  // once a download succeeds; `_thumbnailFutures` memoizes the in-flight
+  // download so every rebuild (and the preview/export paths) share ONE future
+  // per path instead of spawning a fresh one each build.
   final Map<String, Uint8List> _thumbnailCache = {};
-  final Map<String, bool> _loadingImages = {};
+  final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
 
   @override
   void initState() {
@@ -96,25 +99,32 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     }
   }
 
-  Future<Uint8List?> _loadThumbnail(String path) async {
-    if (_thumbnailCache.containsKey(path)) {
-      return _thumbnailCache[path];
+  Future<Uint8List?> _loadThumbnail(String path) {
+    final cached = _thumbnailCache[path];
+    if (cached != null) {
+      return Future.value(cached);
     }
+    // Reuse the in-flight download if one already started for this path. This
+    // is the fix for thumbnails that only appeared after scrolling away and
+    // back: previously each rebuild created a new future and a concurrent
+    // rebuild got a future that resolved to null (the old loading guard),
+    // detaching the FutureBuilder from the real download so its completion
+    // never triggered a repaint.
+    return _thumbnailFutures[path] ??= _downloadThumbnail(path);
+  }
 
-    if (_loadingImages[path] == true) {
-      return null;
-    }
-
-    _loadingImages[path] = true;
-
+  Future<Uint8List?> _downloadThumbnail(String path) async {
     try {
       final bytes = await ImageStorageService.downloadAndDecryptImage(path);
       _thumbnailCache[path] = bytes;
-      _loadingImages[path] = false;
       return bytes;
     } catch (e) {
-      _loadingImages[path] = false;
       return null;
+    } finally {
+      // Drop the completed future so a later refresh / re-add can retry; the
+      // decoded bytes stay in _thumbnailCache so successful loads don't redo
+      // the download.
+      _thumbnailFutures.remove(path);
     }
   }
 
