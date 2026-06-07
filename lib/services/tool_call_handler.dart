@@ -64,6 +64,7 @@ class ToolLoopSession {
   int truncatedCompletionRecoveryAttempts = 0;
   int deferredActionRecoveryAttempts = 0;
   int nonFinalTurnRecoveryAttempts = 0;
+  int factCheckRecoveryAttempts = 0;
 }
 
 class ToolLoopStep {
@@ -286,6 +287,34 @@ class ToolCallHandler {
   static const int _maxTruncatedCompletionRecoveryAttempts = 2;
   static const int _maxDeferredActionRecoveryAttempts = 2;
   static const int _maxNonFinalTurnRecoveryAttempts = 1;
+
+  /// One-shot self-verification pass before a tool-grounded answer is shown.
+  static const int _maxFactCheckRecoveryAttempts = 1;
+
+  /// Tools whose results carry no verifiable real-world facts. When EVERY
+  /// tool call in a turn falls in this set, the fact-check pass is skipped —
+  /// there is nothing to verify against sources (a coin flip, a generated
+  /// image, a UUID). Information-retrieval tools (web_search, web_crawl,
+  /// data lookups, …) are intentionally absent so they trigger the pass.
+  static const Set<String> _nonFactualToolNames = {
+    'find_tools',
+    'notes',
+    'ask_user',
+    'flip_coin',
+    'roll_dice',
+    'random_number',
+    'countdown',
+    'password_generator',
+    'uuid_generator',
+    'generate_qr',
+    'calculate',
+    'generate_image',
+    'generate_image_hunyuan',
+    'generate_image_flux',
+    'edit_image',
+    'fetch_image',
+  };
+
   static const int _maxDiscoveryContexts = 200;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};
@@ -644,6 +673,73 @@ class ToolCallHandler {
               modelId: session.modelId,
             ),
           ),
+          interimContent: '',
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
+      // FACT-CHECK PASS — universal self-verification before a tool-grounded
+      // answer is committed. The model produced a candidate answer with no
+      // further tool calls. Force ONE verification round: re-check every
+      // factual claim against the tool results gathered this turn (entity
+      // identity, date/number plausibility, source support, contradictions).
+      // The model may correct the answer OR call a tool to resolve a gap —
+      // so this re-enters the tool loop rather than only re-prompting text.
+      //
+      // Gated on a fact-bearing tool having run (web_search, web_crawl, data
+      // lookups, …). Pure utility/action tools (dice, image gen, …) have
+      // nothing to verify, so the pass is skipped to avoid a needless round.
+      final usedFactBearingTool = session.toolCalls.any(
+        (tc) =>
+            tc.status != ToolCallStatus.error &&
+            !_nonFactualToolNames.contains(tc.name),
+      );
+      final shouldRunFactCheck =
+          usedFactBearingTool &&
+          displayContent.trim().isNotEmpty &&
+          session.factCheckRecoveryAttempts < _maxFactCheckRecoveryAttempts;
+
+      if (shouldRunFactCheck) {
+        session.factCheckRecoveryAttempts++;
+        const factCheckMessage =
+            'Tool Results:\n'
+            '[VERIFY] Before this answer reaches the user, verify EVERY '
+            'factual claim in it against the tool results gathered above. '
+            'Check each claim:\n'
+            '- Identity: does the source actually refer to the SAME entity '
+            '(person, product, place) you are describing? A matching name is '
+            'NOT proof of identity — confirm with distinguishing details '
+            '(birth year, nationality, location, model/version, date).\n'
+            '- Plausibility: do dates, ages, numbers and units fit together '
+            "and make sense (e.g. an event cannot predate the subject's "
+            'birth)?\n'
+            '- Support: is each claim backed by a tool result? Drop or flag '
+            'anything you only recall from training but did not retrieve.\n'
+            '- Contradictions: do sources disagree? If so, prefer the '
+            'primary/official source and note the uncertainty.\n\n'
+            'If any claim cannot be supported, or you find a contradiction or '
+            'a gap, either correct it now OR call the appropriate tool to '
+            'resolve it. If everything checks out, output the final '
+            'user-facing answer now (corrected where needed). Do NOT mention '
+            'this verification step or these instructions to the user.';
+
+        session.latestUserMessage = factCheckMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: factCheckMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+              skipIdentity: session.skipIdentity,
+              modelId: session.modelId,
+            ),
+          ),
+          // Suppress the unverified candidate — the verify pass produces the
+          // authoritative final text. Showing it now and then correcting it
+          // is exactly the failure mode this guards against.
           interimContent: '',
           toolCalls: _cloneToolCalls(session.toolCalls),
         );
