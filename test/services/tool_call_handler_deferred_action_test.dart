@@ -175,6 +175,9 @@ void main() {
             result: 'ok',
           ),
         );
+        // Isolate the non-final-turn logic: pretend the one-shot fact-check
+        // pass has already run, so it does not add its own retry here.
+        session.factCheckRecoveryAttempts = 1;
 
         // No stop_reason or finish_reason at all — absence MUST NOT be
         // treated as "non-final" or the model gets asked to redo its
