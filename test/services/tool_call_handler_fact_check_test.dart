@@ -98,7 +98,7 @@ void main() {
       final handler = ToolCallHandler();
       final session = newSession(handler)..toolCalls.add(completed('web_search'));
 
-      final result = await handler.processAssistantResponse(
+      await handler.processAssistantResponse(
         session: session,
         content: '   ',
         reasoning: '',
