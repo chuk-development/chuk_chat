@@ -386,6 +386,20 @@ String stripToolCallBlocksForDisplay(
     cleaned = cleaned.replaceFirst(RegExp(r'(?:<\s*)+$'), '');
   }
 
+  // A line consisting solely of `<` characters is never real prose — it is a
+  // dangling tag-opener fragment (the leading `<` of a `<|tool_calls_section_…`
+  // special token whose remainder the server already stripped). In a multi-pass
+  // Kimi stream these land *between* prose blocks, so the end-anchored trailing
+  // strip above misses them. Drop such lines unconditionally so they vanish
+  // from cached/finalised messages too. Mid-prose `<` (e.g. `a < b`) is kept
+  // because the line must begin with `<` to match.
+  // Trailing blank lines left by the junk run are swallowed too so the prose
+  // on either side rejoins with a single separator rather than a widening gap.
+  cleaned = cleaned.replaceAll(
+    RegExp(r'^[ \t]*<+[ \t]*\r?$\n?(?:[ \t]*\r?\n)*', multiLine: true),
+    '',
+  );
+
   return cleaned.trim();
 }
 
