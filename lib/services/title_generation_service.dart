@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -16,9 +17,14 @@ import 'package:chuk_chat/services/encryption_service.dart';
 /// Service for automatically generating chat titles using AI.
 /// Uses qwen/qwen3.5-9b model for title generation over WebSocket.
 class TitleGenerationService {
-  // Model and provider for title generation
+  // Model for title generation. The provider is resolved at call time from
+  // the cached model list (see [_resolveTitleProvider]) — hardcoding an empty
+  // provider made the server reject every title request with a generic
+  // "An error occurred" because `provider_slug` is always sent on the wire.
   static const String _titleModel = 'qwen/qwen3.5-9b';
-  static const String _titleProvider = '';
+
+  // Cached provider slug for [_titleModel], resolved once per session.
+  static String? _resolvedTitleProvider;
 
   // Settings keys
   static const String _settingsKey = 'auto_generate_titles';
@@ -305,6 +311,44 @@ Rules:
     }
   }
 
+  /// Resolve the provider slug to use for the title model.
+  ///
+  /// The backend always sends `provider_slug` on the wire and rejects an
+  /// empty value, so we look up [_titleModel] in the cached model list and
+  /// use its first available provider. Result is cached for the session.
+  /// Returns an empty string only when the model isn't in the cache yet
+  /// (best-effort — the request will then fail the same way it did before
+  /// this fix, which is no worse than the old hardcoded behaviour).
+  static Future<String> _resolveTitleProvider() async {
+    if (_resolvedTitleProvider != null) {
+      return _resolvedTitleProvider!;
+    }
+    try {
+      final models = await ModelCacheService.loadAvailableModels();
+      for (final model in models) {
+        if (model['id'] != _titleModel) continue;
+        final providers = model['providers'];
+        if (providers is List) {
+          for (final provider in providers) {
+            if (provider is Map<String, dynamic>) {
+              final slug = provider['slug'] as String?;
+              if (slug != null && slug.isNotEmpty) {
+                _resolvedTitleProvider = slug;
+                return slug;
+              }
+            }
+          }
+        }
+        break;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Failed to resolve title provider: $e');
+      }
+    }
+    return '';
+  }
+
   /// Check if using custom system prompt
   static Future<bool> hasCustomSystemPrompt() async {
     final prompt = await getSystemPrompt();
@@ -362,12 +406,13 @@ Rules:
 
       // Use WebSocket streaming (same as main chat)
       final StringBuffer titleBuffer = StringBuffer();
+      final titleProvider = await _resolveTitleProvider();
 
       await for (final event in WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
         message: userMessage,
         modelId: _titleModel,
-        providerSlug: _titleProvider,
+        providerSlug: titleProvider,
         systemPrompt: systemPrompt,
         maxTokens: 32, // Very short for titles
         temperature: 0.3, // Lower temperature for more focused output
