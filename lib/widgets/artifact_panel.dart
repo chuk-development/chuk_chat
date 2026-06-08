@@ -52,7 +52,6 @@ enum _ArtifactViewMode { preview, code }
 class _ArtifactPanelState extends State<ArtifactPanel> {
   bool _loadingVersions = true;
   bool _busy = false;
-  bool _repairing = false;
   List<ArtifactVersionSnapshot> _versions = const [];
   int? _selectedVersion;
   String? _selectedVersionContent;
@@ -64,14 +63,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   bool get _isViewingHistory =>
       _selectedVersion != null &&
       _selectedVersion != widget.artifact.version;
-
-  /// The version chain is "healthy" when there is one snapshot per
-  /// integer version from 1..current. Anything less and we offer the
-  /// Repair button. We also offer it when there are zero snapshots, even
-  /// though `_versions.length <= 1` hides the dropdown — that's the
-  /// exact case the repair tool exists for.
-  bool get _versionChainHealthy =>
-      _versions.length == widget.artifact.version;
 
   /// All artifacts currently available in this chat. Used for the
   /// switcher button in the header. Refreshed on mount + on every
@@ -212,44 +203,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       _selectedVersion = target;
       _selectedVersionContent = found.content;
     });
-  }
-
-  Future<void> _repairVersions() async {
-    if (_repairing) return;
-    setState(() => _repairing = true);
-    try {
-      final inserted = await ArtifactStorageService.repairVersionChain(
-        widget.artifact.id,
-      );
-      // Always refresh the dropdown — even when 0 rows were inserted the
-      // user pressed the button and deserves to see the up-to-date state.
-      await _loadVersions();
-      if (!mounted) return;
-      final message = inserted > 0
-          ? 'Repaired $inserted version${inserted == 1 ? "" : "s"}'
-          : 'Version history already healthy';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Artifact repair failed: $error\n$stackTrace');
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Repair failed: $error'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _repairing = false);
-      }
-    }
   }
 
   Future<void> _copyContent() async {
@@ -583,7 +536,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   ),
                 ));
 
-    final bool showRepair = !_loadingVersions && !_versionChainHealthy;
     final actionMenu = PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, size: 20),
       tooltip: 'More',
@@ -593,8 +545,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             _copyContent();
           case 'download':
             if (!_busy) _showDownloadMenu();
-          case 'repair':
-            if (!_repairing) _repairVersions();
         }
       },
       itemBuilder: (_) => [
@@ -618,17 +568,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             ],
           ),
         ),
-        if (showRepair)
-          const PopupMenuItem(
-            value: 'repair',
-            child: Row(
-              children: [
-                Icon(Icons.healing_outlined, size: 18),
-                SizedBox(width: 10),
-                Text('Repair version history'),
-              ],
-            ),
-          ),
       ],
     );
 
@@ -755,18 +694,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               onPressed: _busy ? null : _showDownloadMenu,
               tooltip: 'Download',
             ),
-            if (showRepair)
-              IconButton(
-                icon: _repairing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.healing_outlined, size: 18),
-                onPressed: _repairing ? null : _repairVersions,
-                tooltip: 'Repair version history',
-              ),
             if (widget.onClose != null)
               IconButton(
                 icon: const Icon(Icons.close, size: 18),
