@@ -35,9 +35,50 @@ import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Collapse consecutive identical debug log lines into a single line with a
+/// `(×N)` count, so spammy repeats (e.g. "[Lifecycle] App resumed" firing
+/// dozens of times) don't drown the console. Debug-only — release builds emit
+/// no logs at all. Wraps (not replaces) the throttling default so throttling
+/// is preserved.
+void _installLogDeduper() {
+  final original = debugPrint;
+  String? lastMessage;
+  int repeatCount = 0;
+  Timer? flushTimer;
+
+  void flush() {
+    flushTimer?.cancel();
+    flushTimer = null;
+    if (repeatCount > 1 && lastMessage != null) {
+      original('$lastMessage  (×$repeatCount)');
+    }
+    repeatCount = 0;
+  }
+
+  debugPrint = (String? message, {int? wrapWidth}) {
+    if (message != null && message == lastMessage) {
+      // Suppress the duplicate; schedule a trailing flush so the final count
+      // still prints even when no different line follows.
+      repeatCount++;
+      flushTimer?.cancel();
+      flushTimer = Timer(const Duration(milliseconds: 250), flush);
+      return;
+    }
+    flush();
+    lastMessage = message;
+    repeatCount = 1;
+    original(message, wrapWidth: wrapWidth);
+  };
+}
+
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Dedupe spammy repeated log lines (debug only).
+  if (kDebugMode) {
+    _installLogDeduper();
+  }
 
   // Register certificate pinning for native platforms.
   // On web this is a no-op (browser handles TLS).
