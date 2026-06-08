@@ -52,10 +52,15 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
         _isTextLike(mime);
   }
 
-  bool _isTextLike(String mime) =>
-      mime.startsWith('text/') ||
-      mime == 'application/json' ||
-      mime == 'application/xml';
+  bool _isTextLike(String mime) {
+    // HTML is never previewed as source — dumping raw markup into the bubble
+    // is noise (the user wants the rendered file, not its code). It falls
+    // through to a plain file card with Download/Save instead.
+    if (mime == 'text/html' || mime == 'application/xhtml+xml') return false;
+    return mime.startsWith('text/') ||
+        mime == 'application/json' ||
+        mime == 'application/xml';
+  }
 
   @override
   void initState() {

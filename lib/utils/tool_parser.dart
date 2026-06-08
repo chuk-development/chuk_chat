@@ -17,6 +17,13 @@ final RegExp _xmlToolCallStartPattern = RegExp(
   r'<tool_call>',
   caseSensitive: false,
 );
+// Kimi-style structured tool-call section tokens, e.g.
+// `<|tool_calls_section_begin|>` / `<|tool_call_begin|>`. Matched from the
+// opener so an incomplete token mid-stream still signals a tool round.
+final RegExp _kimiToolCallStartPattern = RegExp(
+  r'<\|tool_calls?(?:_section)?_begin',
+  caseSensitive: false,
+);
 final RegExp _markdownToolCallBlockPattern = RegExp(
   r'```(?:tool_call|toolcall|tool-call)\s*([\s\S]*?)```',
   caseSensitive: false,
@@ -303,6 +310,7 @@ Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs) {
 bool hasToolCallStartMarker(String content) {
   return _xmlToolCallStartPattern.hasMatch(content) ||
       _markdownToolCallStartPattern.hasMatch(content) ||
+      _kimiToolCallStartPattern.hasMatch(content) ||
       _earliestDirectXmlToolStart(content) != -1;
 }
 

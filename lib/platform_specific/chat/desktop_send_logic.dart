@@ -475,7 +475,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             if (mounted &&
                 _isValidMessageIndex(placeholderIndex) &&
                 _activeChatId == chatIdForStream) {
-              final displayContent = stripToolCallBlocksForDisplay(content);
+              // Structural, no text matching: the streamed content is the
+              // model working (not the answer) whenever we're mid tool-loop
+              // (a prior round already produced blocks) OR a tool-call token
+              // has appeared in this round's stream. In those cases it stays
+              // out of the answer body and folds into the round's reasoning on
+              // completion. A plain round with no tool calls streams live.
+              final isWorkingRound =
+                  contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
+              final displayContent =
+                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
               final prefix = accumulatedText.toString();
               final fullDisplay = prefix.isEmpty
                   ? displayContent
@@ -524,6 +533,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     providerReasoning: finalReasoning,
                     newToolCalls: newToolCalls,
                     interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+                    // Interim content-channel prose is the model thinking out
+                    // loud between tool calls (Kimi dumps CoT + draft HTML
+                    // there) — fold it into reasoning, never the answer body.
+                    foldInterimIntoReasoning: true,
                   );
                   contentBlocks.addAll(roundResult.blocks);
 
@@ -533,13 +546,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     contentBlocks.addAll(loopResult.producedBlocks);
                   }
 
-                  final interimOutputText = roundResult.interimOutputText;
-
-                  // Accumulate text for backward-compat message field.
-                  if (interimOutputText.isNotEmpty) {
-                    accumulatedText.write(interimOutputText);
-                    accumulatedText.write('\n\n');
-                  }
+                  // Interim text is folded into reasoning above, so it must
+                  // not accumulate into the answer field.
 
                   final contentBlocksJson = jsonEncode(
                     contentBlocks.map((b) => b.toJson()).toList(),
@@ -1572,7 +1580,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           stream: stream,
           onUpdate: (content, reasoning) {
             if (mounted && _activeChatId == chatIdForStream) {
-              final displayContent = stripToolCallBlocksForDisplay(content);
+              // Structural working-round suppression (see site above): keep
+              // mid-loop / tool-call content out of the answer body.
+              final isWorkingRound =
+                  contentBlocks2.isNotEmpty || hasToolCallStartMarker(content);
+              final displayContent =
+                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
                 _messages[placeholderIndex]['text'] = displayContent;
@@ -1626,6 +1639,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                           newToolCalls: newToolCalls,
                           interimBeforeToolCalls:
                               loopResult.interimBeforeToolCalls,
+                          // Fold interim content-channel prose into reasoning
+                          // instead of the answer body (see site above).
+                          foldInterimIntoReasoning: true,
                         );
                     contentBlocks2.addAll(roundResult.blocks);
 
@@ -1635,13 +1651,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       contentBlocks2.addAll(loopResult.producedBlocks);
                     }
 
-                    final interimOutputText = roundResult.interimOutputText;
-
-                    // Accumulate text for backward-compat message field.
-                    if (interimOutputText.isNotEmpty) {
-                      accumulatedText2.write(interimOutputText);
-                      accumulatedText2.write('\n\n');
-                    }
+                    // Interim text folded into reasoning — do not accumulate
+                    // it into the answer field.
 
                     final contentBlocksJson = jsonEncode(
                       contentBlocks2.map((b) => b.toJson()).toList(),

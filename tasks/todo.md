@@ -1,97 +1,84 @@
-# Task: Single image-gen tool (model param) + cancel-bug fix
+# Fix: Kimi k2.6 reasoning/draft-code leaking into answer + live streaming
 
-## Goal
-1. ONE `generate_image` tool. AI picks generator via `model` param. Adding a
-   generator = one registry entry (both server + client).
-2. Fold all imaging into it: turbo | hunyuan | flux | ideogram | edit.
-   Ideogram v4 now live on API — expose it.
-3. Fix cancel bug: cancelling a response still resumes a few seconds later
-   (next agentic pass fires after in-flight tool finishes).
+## Problem (from live session + 2 debug exports, chat 0635cd09)
 
-Decisions: FULL server rewrite (config-driven, shared billing). Fold `edit`
-into generate_image. `fetch_image` stays separate (client-only download, no
-model/cost).
+Model: moonshotai/kimi-k2.6 (fireworks). Kimi dumps chain-of-thought AND draft
+HTML into the **content channel** between tool calls. The send loop treats
+interim content-channel prose as the *answer* → it renders as the message body.
 
----
+Final message `Text:` field = 14,201 chars of CoT ("Wait for real results…",
+"Lass mich die Folien strukturieren:", a full ```html``` draft) instead of a
+real answer. Block order ends `… → sandboxArtifact → text` (the leaked CoT).
 
-## Part A — Server (`/home/user/git/api_server`)
+### Symptoms
+- A. Reasoning prose shown as answer body
+- B. Draft ```html``` code block shown as answer
+- C. Answer doesn't stream live during tool passes — "snaps" at end
+- D. Final answer after last tool round empty / is actually leaked CoT
+- E. (user) sent HTML file should show only the file card, not the code
 
-`main.py`:
-- [ ] Add `ImageGenerator` spec + `IMAGE_GENERATORS` registry (turbo, hunyuan,
-      flux, ideogram, edit). Each entry: billing_model_id, analytics_backend,
-      endpoint_label, `prepare(params)` -> (model_ref, replicate_input,
-      cost_usd, extra_response, output_mode, log_detail).
-- [ ] Add shared core `_run_image_generation(gen, user, request, params)`:
-      token-check -> rate limit -> prepare/validate -> billing pre-deduct ->
-      replicate.run -> extract url (single/list/ideogram modes) -> analytics ->
-      unified return. On failure: refund + analytics + raise. (Collapses the 5
-      duplicated endpoint bodies.)
-- [ ] New endpoint `POST /v1/ai/image/generate` (model=Form, all optional
-      params) -> dispatch via registry.
-- [ ] Rewrite the 5 existing endpoints (turbo/hunyuan/flux/edit/ideogram) as
-      thin wrappers calling `_run_image_generation` (backward compat for old
-      clients + old chats).
+### Decisions (user)
+- Interim content-channel text -> **fold into reasoning** (general, not just Kimi)
+- Live streaming -> **yes, live trailing text** during passes
+- The draft code must **not** be shown to the user at all
 
-`routers/multiplex.py`:
-- [ ] Replace `_tool_image_turbo/hunyuan/flux/edit` with one
-      `_tool_image_generate` reading `payload["model"]`.
-- [ ] Registry: add `"image_generate"`. Keep old `image_*` names as aliases
-      (inject model) for in-flight old clients.
+## Plan
 
-## Part B — Flutter client (`/home/user/git/chuk_chat`)
+### Phase 1 — Stop the leak (A, B, D, E)  [core]
+- [ ] `round_content_block_service.dart`: add `foldInterimIntoReasoning` mode to
+      `buildRoundBlocks` (and segmented variant). When set:
+      - interim content text merged into the round's reasoning block (with
+        provider reasoning), NOT emitted as a `text` block
+      - strip fenced ```code``` blocks from the folded interim text
+      - `interimOutputText` returns '' so it never pollutes the answer field
+- [ ] `desktop_send_logic.dart:522` (interim branch): use fold mode; stop
+      writing `interimOutputText` into `accumulatedText`
+- [ ] `desktop_send_logic.dart:1623` (other build site): same treatment
+- [ ] `streaming_message_handler.dart:648/653` (mobile): same treatment
+- [ ] Terminal (final-answer) pass unchanged — its content stays the answer
 
-- [ ] `tool_registry.dart`: replace the 3 generator defs + `edit_image` with ONE
-      `generate_image` (model enum + per-model optional params + caption).
-      Update `toolCategoryMap` (drop hunyuan/flux/edit; keep generate_image,
-      fetch_image, view_chat_images).
-- [ ] `tool_handlers/image_tools.dart`: single `executeGenerateImage(args)` with
-      a `_imageModels` map (display name + allowed params per model). Routes to
-      `/v1/ai/image/generate` + mux `image_generate`. Fold edit in (model=edit,
-      image_url). Drop the 3 separate executors + executeEditImage. Keep
-      executeFetchImage.
-- [ ] `tool_executor.dart`: single `generate_image` case; drop hunyuan/flux/edit
-      cases + names from executable list. Keep fetch_image.
-- [ ] `find_tools_handler.dart`: companions -> generate_image bundles
-      fetch_image/view_chat_images only.
-- [ ] `tool_prompt_builder.dart`: rewrite image guidance for one tool + model
-      selection.
-- [ ] `tool_parser.dart`: keep only `generate_image` among image gen names.
-- [ ] Sweep `tool_enforcer.dart`, `customization_page.dart`,
-      `tool_calling_settings_page.dart` for removed names; update.
+### Phase 2 — Live trailing text (C)
+- [ ] Verify `message_bubble.dart` trailingText (l.1056-1111) shows current
+      pass's streaming content live now that `accumulatedText` isn't polluted
+- [ ] Strip complete fenced code blocks from the live display
+- [ ] Confirm the real final answer streams live and stays
 
-## Part C — Cancel bug (`streaming_message_handler.dart`)
-- [ ] Add `bool _cancelRequested`. Reset false at send entrypoint.
-- [ ] `cancelStream()` sets it true.
-- [ ] Guard top of `startStreamingPass` + before both recursive
-      `startStreamingPass(currentPass+1)` calls (lines ~725, ~808): if
-      `_cancelRequested` -> release keepalive + return (no next pass).
+### Phase 3 — verify
+- [ ] `flutter test` green (+ tests for fold mode + fenced-code strip)
+- [ ] `flutter analyze`
+- [ ] Manual: re-run Schlaf-Präsentation prompt
+- [ ] coderabbit review
 
-## Verify
-- [ ] `flutter analyze` clean
-- [ ] `flutter test` all pass
-- [ ] api_server import/pytest sanity
-- [ ] coderabbit review, then commit + push (both repos)
+### Deferred (note, not now)
+- HTML file inline preview/webview on Linux — user OK with file card for now
 
-## Review
+## Review — STRUCTURAL redesign (no text filtering)
 
-Done:
-- Server (`api_server`): added `ImageGenerator` registry + `PreparedImageJob` +
-  shared `_run_image_generation` core (5 endpoint bodies → 5 tiny `prepare_*`
-  fns). New `POST /v1/ai/image/generate` (model param). 5 old endpoints now thin
-  wrappers (backward compat). Mux: `_tool_image_generate` + legacy `image_*`
-  aliases; registry has `image_generate`. `main` imports clean; registry =
-  turbo/hunyuan/flux/ideogram/edit. Ideogram now reachable via mux.
-- Client (`chuk_chat`): one `generate_image` ClientTool with `model` enum +
-  per-model params; `image_tools.executeGenerateImage` routes by model to
-  `/v1/ai/image/generate` (mux `image_generate`); edit folded in. Removed
-  hunyuan/flux/edit executors, cases, names across tool_executor, tool_registry,
-  tool_enforcer, tool_call_handler, tool_parser, find_tools companions,
-  tool_prompt_builder. fetch_image untouched.
-- Cancel bug: `_cancelRequested` flag — reset on send, set in `cancelStream`,
-  checked at top of `startStreamingPass` + before both recursive next-pass calls
-  → no ghost-resume after an in-flight tool finishes.
+Hard rule from user: never classify model output by its TEXT (always varies).
+Classify by PROTOCOL only.
 
-Verify: `flutter analyze` clean · `flutter test` 745 pass · api_server imports +
-prompt test pass.
+Implemented:
+- `round_content_block_service.dart`: `foldInterimIntoReasoning` on both
+  `buildRoundBlocks` + `buildSegmentedRoundBlocks`. A round that emits tool
+  calls -> its content is folded VERBATIM into that round's reasoning (collapsed
+  in the tool bar); `interimOutputText` returns ''. No text edits, no code
+  stripping. `_mergeReasoning` dedups only by containment.
+- Wired fold at all 3 build sites (desktop x2 + mobile handler); interim text
+  no longer accumulates into the answer field.
+- Live (onUpdate, all 3 sites): a round's streamed content stays OUT of the
+  answer body whenever `contentBlocks.isNotEmpty` (mid tool-loop) OR
+  `hasToolCallStartMarker(content)` (a tool-call token has appeared). Purely
+  structural. A plain round with no tool calls streams live as before.
+- `tool_parser.dart`: `hasToolCallStartMarker` now also detects Kimi
+  `<|tool_calls_section_begin|>` / `<|tool_call_begin|>` tokens (structural).
+- Tests: fold-verbatim + Kimi-token detection. 765 green, analyze clean.
 
-Pending: CodeRabbit, commit + push (both repos).
+Behaviour: tool bar collapses all CoT/draft; answer body shows only a round
+with no tool calls. Final answer of a tool-turn appears on completion (not
+char-streamed) — the structural cost of "no text heuristics". Plain answers
+still stream live.
+
+Known structural limit: a terminal round whose content is itself pure CoT (no
+tool calls) still shows as the answer — unavoidable without text heuristics.
+
+Deferred: Linux HTML inline preview (file card is fine for now).

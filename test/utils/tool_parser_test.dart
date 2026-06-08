@@ -221,5 +221,21 @@ void main() {
       const content = '<fetch_image>{"url":"https://example.com/a.jpg"}';
       expect(hasToolCallStartMarker(content), isTrue);
     });
+
+    test('detects Kimi section token mid-stream (incomplete)', () {
+      const content =
+          'Lass mich strukturieren.\n<|tool_calls_section_begin|><|tool_call_begin|>';
+      expect(hasToolCallStartMarker(content), isTrue);
+    });
+
+    test('detects Kimi single tool_call_begin token', () {
+      const content = 'working\n<|tool_call_begin|>functions.web_search';
+      expect(hasToolCallStartMarker(content), isTrue);
+    });
+
+    test('plain prose with no tool token is not a tool round', () {
+      const content = 'Hier ist deine Zusammenfassung über Schlaf.';
+      expect(hasToolCallStartMarker(content), isFalse);
+    });
   });
 }
