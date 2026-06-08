@@ -87,6 +87,12 @@ class ModelSelectionDropdown extends StatefulWidget {
   final String? compactLabel;
   final bool transparentStyle;
 
+  /// Render as the right half of a merged segmented control: no own border,
+  /// no trailing chevron, transparent background with a right-rounded hover
+  /// fill. The outer pill (built by the caller) supplies the border/rounding
+  /// and a left sibling segment (e.g. the reasoning toggle).
+  final bool mergedSegmentStyle;
+
   const ModelSelectionDropdown({
     super.key,
     required this.initialSelectedModelId,
@@ -95,6 +101,7 @@ class ModelSelectionDropdown extends StatefulWidget {
     this.isCompactMode = false,
     this.compactLabel,
     this.transparentStyle = false,
+    this.mergedSegmentStyle = false,
   });
 
   static final ValueNotifier<String> selectedModelNotifier =
@@ -1179,6 +1186,39 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 Icons.tag_rounded,
                 size: 18,
                 color: iconFgColor.withValues(alpha: 0.6),
+              ),
+            );
+          }
+
+          // Merged-segment mode: borderless, no chevron, transparent bg with a
+          // subtle right-rounded hover fill. The outer pill owns the border.
+          if (widget.mergedSegmentStyle) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.only(left: 10, right: 12),
+              height: 36,
+              decoration: BoxDecoration(
+                color: hovered
+                    ? iconFgColor.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(17),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              // No `#` icon and no chevron in merged mode — just the model
+              // name; the reasoning toggle sits to its left.
+              child: Text(
+                _stripLabPrefix(_selectedModelName),
+                style: TextStyle(
+                  color: iconFgColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                softWrap: false,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
               ),
             );
           }

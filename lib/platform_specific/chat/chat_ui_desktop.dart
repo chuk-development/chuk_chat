@@ -2478,52 +2478,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           );
                                         },
                                       ),
-                                      // Reasoning toggle (only for reasoning models)
-                                      if (ModelSelectionDropdown.modelSupportsReasoning(
-                                        _selectedModelId,
-                                      )) ...[
-                                        Tooltip(
-                                          message: _reasoningEnabled
-                                              ? 'Reasoning on — click to disable for faster responses'
-                                              : 'Reasoning off — click to enable deeper thinking',
-                                          child: _buildIconBtn(
-                                            icon: Icons.psychology,
-                                            onTap: () {
-                                              setState(() {
-                                                _reasoningEnabled =
-                                                    !_reasoningEnabled;
-                                              });
-                                            },
-                                            isActive: _reasoningEnabled,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      KeyedSubtree(
-                                        key: TourKeyRegistry.instance.keyFor(
-                                          TourSlots.modelDropdown,
-                                        ),
-                                        child: ModelSelectionDropdown(
-                                          key: const ValueKey<String>(
-                                            'desktop-model-selection-dropdown',
-                                          ),
-                                          initialSelectedModelId:
-                                              _selectedModelId,
-                                          onModelSelected: (newModelId) {
-                                            setState(() {
-                                              _selectedModelId = newModelId;
-                                            });
-                                            if (kDebugMode) {
-                                              debugPrint(
-                                                'Selected model ID: $_selectedModelId',
-                                              );
-                                            }
-                                          },
-                                          textFieldFocusNode:
-                                              _textFieldFocusNode,
-                                          isCompactMode: isCompactMode,
-                                          transparentStyle: true,
-                                        ),
+                                      // Reasoning toggle + model selector,
+                                      // merged into one rounded segmented pill
+                                      // when the model supports reasoning.
+                                      _buildModelControlPill(
+                                        isCompactMode: isCompactMode,
                                       ),
                                     ],
                                   ),
@@ -2642,6 +2601,101 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
+  /// The model selector, merged with the reasoning toggle into a single
+  /// rounded segmented pill — `[ 🧠 | # Model ]` — sharing one outer border.
+  /// The left segment toggles reasoning; the right opens the model dropdown.
+  /// Falls back to a plain dropdown (no merge) for non-reasoning models, and
+  /// to the legacy toggle-beside-dropdown layout in compact mode.
+  Widget _buildModelControlPill({required bool isCompactMode}) {
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final bool supportsReasoning =
+        ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId);
+    final bool merged = supportsReasoning && !isCompactMode;
+
+    final Widget dropdown = KeyedSubtree(
+      key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+      child: ModelSelectionDropdown(
+        key: const ValueKey<String>('desktop-model-selection-dropdown'),
+        initialSelectedModelId: _selectedModelId,
+        onModelSelected: (newModelId) {
+          setState(() {
+            _selectedModelId = newModelId;
+          });
+          if (kDebugMode) {
+            debugPrint('Selected model ID: $_selectedModelId');
+          }
+        },
+        textFieldFocusNode: _textFieldFocusNode,
+        isCompactMode: isCompactMode,
+        transparentStyle: true,
+        mergedSegmentStyle: merged,
+      ),
+    );
+
+    if (!merged) {
+      if (!supportsReasoning) return dropdown;
+      // Compact mode: keep the toggle as its own button beside the dropdown.
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: _reasoningTooltip,
+            child: _buildIconBtn(
+              icon: Icons.psychology,
+              onTap: _toggleReasoning,
+              isActive: _reasoningEnabled,
+            ),
+          ),
+          const SizedBox(width: 6),
+          dropdown,
+        ],
+      );
+    }
+
+    // One outer rounded oval (the model selector), with the reasoning toggle
+    // as a full CIRCLE laid on top at the left end: its left half sits on the
+    // oval's left rounding (same line) and its right half is the divider toward
+    // the model name. Off → circle outline; on → filled bold.
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        Container(
+          height: 36,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: iconFg.withValues(alpha: 0.3),
+              width: 1.8,
+            ),
+          ),
+          // Left padding clears the overlaid oval so the model name never
+          // sits under it.
+          child: Padding(
+            padding: const EdgeInsets.only(
+              left: _ReasoningSegmentButton.width,
+            ),
+            child: dropdown,
+          ),
+        ),
+        _ReasoningSegmentButton(
+          isActive: _reasoningEnabled,
+          tooltip: _reasoningTooltip,
+          onTap: _toggleReasoning,
+        ),
+      ],
+    );
+  }
+
+  String get _reasoningTooltip => _reasoningEnabled
+      ? 'Reasoning on — click to disable for faster responses'
+      : 'Reasoning off — click to enable deeper thinking';
+
+  void _toggleReasoning() {
+    setState(() {
+      _reasoningEnabled = !_reasoningEnabled;
+    });
+  }
+
   Widget _buildIconBtn({
     IconData? icon,
     String? svgAssetPath,
@@ -2713,6 +2767,86 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   : Icon(icon!, color: effectiveIconColor, size: iconSize),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// The reasoning toggle as an oval (stadium) laid on the left end of the model
+/// oval. Wider than tall, same rounding family as the outer oval: its left end
+/// coincides with the oval's left rounding (same line) and its right end is the
+/// divider toward the model name. Off → outline (opaque fill so the oval border
+/// underneath is covered cleanly); on → filled bold with the inverted icon.
+class _ReasoningSegmentButton extends StatefulWidget {
+  const _ReasoningSegmentButton({
+    required this.isActive,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final bool isActive;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  static const double width = 50;
+  static const double height = 36;
+
+  @override
+  State<_ReasoningSegmentButton> createState() =>
+      _ReasoningSegmentButtonState();
+}
+
+class _ReasoningSegmentButtonState extends State<_ReasoningSegmentButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    // App accent — same fill as the send / voice-mode buttons (its icon is
+    // black on the accent, so match that here).
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final bool active = widget.isActive;
+
+    // The gray outline stays put in BOTH states (only hover deepens it). Use
+    // an OPAQUE gray (the off-state border's look flattened onto the bg) so it
+    // stays visible over the accent fill when on — a translucent border washes
+    // out against a bright fill.
+    final Color borderColor = _hovered
+        ? iconFg
+        : Color.alphaBlend(iconFg.withValues(alpha: 0.4), bg);
+
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            width: _ReasoningSegmentButton.width,
+            height: _ReasoningSegmentButton.height,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              // On → accent fill right up to the (still gray) border, no gap.
+              // Opaque either way so the pill border underneath is covered.
+              color: active ? accent : bg,
+              borderRadius: BorderRadius.circular(
+                _ReasoningSegmentButton.height / 2,
+              ),
+              border: Border.all(color: borderColor, width: 1.8),
+            ),
+            child: Icon(
+              Icons.psychology,
+              color: active ? Colors.black : iconFg,
+              size: 18,
+            ),
+          ),
         ),
       ),
     );
