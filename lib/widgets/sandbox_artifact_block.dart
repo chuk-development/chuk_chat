@@ -17,9 +17,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/models/content_block.dart' show SandboxArtifactPayload;
+import 'package:chuk_chat/platform_config.dart' show kFeatureArtifacts;
+import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
@@ -144,6 +149,75 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     }
   }
 
+  /// Maps a sandbox file's MIME to an artifact type the side panel can render,
+  /// or null when the file has no panel renderer (binary, pdf, raster image).
+  /// Lets a sent HTML/SVG/markdown/code file open and render exactly like an
+  /// artifact instead of sitting as an opaque download.
+  static ArtifactType? _panelArtifactType(String mime) {
+    final m = mime.toLowerCase().split(';').first.trim();
+    if (m == 'text/html' || m == 'application/xhtml+xml') {
+      return ArtifactType.html;
+    }
+    if (m == 'image/svg+xml') return ArtifactType.svg;
+    if (m == 'text/markdown' || m == 'text/x-markdown') {
+      return ArtifactType.markdown;
+    }
+    if (m == 'application/json' ||
+        m == 'application/xml' ||
+        m.startsWith('text/')) {
+      return ArtifactType.code;
+    }
+    return null;
+  }
+
+  bool get _canOpenInPanel =>
+      kFeatureArtifacts && _panelArtifactType(widget.payload.mime) != null;
+
+  /// Opens the file in the shared artifact side panel as an ephemeral
+  /// (non-persisted) artifact, so it renders identically to artifact_manager
+  /// output. Version history simply comes back empty for these.
+  Future<void> _openInPanel(BuildContext context) async {
+    final type = _panelArtifactType(widget.payload.mime);
+    if (type == null) return;
+
+    var bytes = _bytes;
+    if (bytes == null) {
+      try {
+        bytes = await PdfAttachmentService.download(widget.payload.storagePath);
+      } catch (e) {
+        if (context.mounted) {
+          NiceSnackBar.showError(context, 'Could not open file: $e');
+        }
+        return;
+      }
+    }
+
+    String content;
+    try {
+      content = utf8.decode(bytes);
+    } catch (_) {
+      if (context.mounted) {
+        NiceSnackBar.showError(context, 'File is not valid UTF-8 text.');
+      }
+      return;
+    }
+
+    final now = DateTime.now();
+    final artifact = ArtifactDocument(
+      id: 'sandbox_${widget.payload.storagePath.replaceAll('/', '_')}',
+      chatId: ChatStorageService.selectedChatId ?? '',
+      userId: SupabaseService.auth.currentUser?.id ?? '',
+      title: widget.payload.filename,
+      type: type,
+      content: content,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    );
+    ArtifactStorageService.activeArtifactNotifier.value = artifact;
+    ArtifactStorageService.requestOpen(artifactId: artifact.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final mime = widget.payload.mime;
@@ -163,6 +237,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
+      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
       child: _content(
         builder: (bytes) {
           return GestureDetector(
@@ -192,6 +267,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
+      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
       child: _content(
         builder: (bytes) => SizedBox(
           height: 480,
@@ -216,6 +292,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
+      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
       child: _content(
         builder: (bytes) {
           String preview;
@@ -287,6 +364,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
+      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
       child: null,
     );
   }
@@ -322,11 +400,16 @@ class _ArtifactCard extends StatelessWidget {
     required this.payload,
     required this.onSave,
     required this.child,
+    this.onOpen,
   });
 
   final SandboxArtifactPayload payload;
   final Future<void> Function() onSave;
   final Widget? child;
+
+  /// When non-null, the card shows an "Open" action that renders the file in
+  /// the artifact side panel (in addition to Download).
+  final Future<void> Function()? onOpen;
 
   IconData get _icon {
     final mime = payload.mime;
@@ -391,6 +474,14 @@ class _ArtifactCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (onOpen != null) ...[
+                FilledButton.tonalIcon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Open'),
+                ),
+                const SizedBox(width: 8),
+              ],
               FilledButton.tonalIcon(
                 onPressed: onSave,
                 icon: const Icon(Icons.download, size: 18),
