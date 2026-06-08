@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
@@ -20,6 +21,7 @@ import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -4173,6 +4175,50 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
     );
   }
 
+  /// Saves the artifact's source to a file. Mirrors the file card's Download so
+  /// artifacts and sent files expose the same Open + Download actions. The
+  /// panel header still offers richer rendered exports (PDF/DOCX/PNG); this is
+  /// the always-available source download.
+  Future<void> _download(BuildContext context) async {
+    try {
+      final art =
+          _live ??
+          await ArtifactStorageService.loadArtifactById(widget.artifactId);
+      if (art == null) {
+        if (context.mounted) {
+          NiceSnackBar.showError(context, 'Artifact is no longer available.');
+        }
+        return;
+      }
+      final rawTitle = art.title.trim();
+      final safeTitle = rawTitle.isEmpty ? 'artifact' : rawTitle;
+      final ext = art.type.defaultExtension;
+      final name = safeTitle.toLowerCase().endsWith('.$ext')
+          ? safeTitle
+          : '$safeTitle.$ext';
+      final result = await FileSaveService.save(
+        bytes: Uint8List.fromList(utf8.encode(art.content)),
+        suggestedName: name,
+        dialogTitle: 'Save $name',
+      );
+      if (!context.mounted) return;
+      switch (result.outcome) {
+        case SaveOutcome.savedToFolder:
+        case SaveOutcome.savedViaPicker:
+        case SaveOutcome.savedViaShare:
+          NiceSnackBar.show(context, 'Saved $name');
+        case SaveOutcome.cancelled:
+          break;
+        case SaveOutcome.failed:
+          NiceSnackBar.showError(context, 'Could not save file');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        NiceSnackBar.showError(context, 'Download failed: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -4267,6 +4313,11 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
                 ),
               ),
               const SizedBox(width: 8),
+              if (enabled)
+                TextButton(
+                  onPressed: () => _download(context),
+                  child: const Text('Download'),
+                ),
               TextButton(
                 onPressed: enabled ? () => _open(context) : null,
                 child: const Text('Open'),
