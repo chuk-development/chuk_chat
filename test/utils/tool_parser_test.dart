@@ -153,6 +153,20 @@ void main() {
       expect(cleaned, 'Hunyuan läuft extern, nicht E2E-verschlüsselt.');
     });
 
+    test('strips bare "<" lines sandwiched between prose in a multi-pass turn',
+        () {
+      // A finalised Kimi multiplex turn (text → toolCall → text → …) leaks one
+      // bare `<` per section *between* prose blocks, not just at the end — so
+      // the end-anchored trailing strip misses them. Each lone-`<` line must go
+      // while the prose on either side stays intact.
+      const content =
+          'Gute Funde schon. Ich grabe tiefer.\n\n<\n<\n<\n\nJa, gibt es.';
+
+      final cleaned = stripToolCallBlocksForDisplay(content);
+
+      expect(cleaned, 'Gute Funde schon. Ich grabe tiefer.\n\nJa, gibt es.');
+    });
+
     test('preserves a mid-text "<" used as a less-than sign', () {
       const content = 'Wenn a < b dann gilt das.';
 
