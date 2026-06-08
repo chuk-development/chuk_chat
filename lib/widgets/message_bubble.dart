@@ -1076,7 +1076,6 @@ class _MessageBubbleState extends State<MessageBubble> {
             );
           }
         case ContentBlockType.text:
-          closeCurrentRound();
           // Strip Kimi tool-call special tokens / dangling `<` at RENDER time,
           // exactly like the trailing-text path above. The desktop send path
           // strips before committing the block, but mobile (and any block
@@ -1084,7 +1083,16 @@ class _MessageBubbleState extends State<MessageBubble> {
           // text block — this guarantees it never renders as a stray `<`
           // line above a tool-call bar, on every platform.
           final t = stripToolCallBlocksForDisplay(block.text ?? '').trim();
-          if (t.isNotEmpty) segments.add(_RenderSegment.text(t));
+          // A text block that strips to nothing (e.g. a lone `<` junk block a
+          // Kimi multiplex leaks between two tool-call sections) is NOT a real
+          // separator. Closing the round on it would split one logical tool
+          // round into several bars — round 1 of `web_search ×4 → text → …`
+          // rendering as four bars instead of one `web_search (4×)`. Skip it
+          // (mirroring the trailing-text `isNotEmpty` guard) so adjacent
+          // tool-call blocks still merge into a single bar.
+          if (t.isEmpty) break;
+          closeCurrentRound();
+          segments.add(_RenderSegment.text(t));
         case ContentBlockType.sandboxArtifact:
           // Sandbox artifacts are first-class inline blocks. Close the
           // current reasoning/tool round so the artifact appears between
