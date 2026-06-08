@@ -436,5 +436,83 @@ void main() {
         );
       },
     );
+
+    group('fold interim into reasoning', () {
+      test(
+        'folds interim content-channel prose into reasoning, no text block',
+        () {
+          final toolCalls = [
+            ToolCall(name: 'web_search', status: ToolCallStatus.completed),
+          ];
+
+          final result = RoundContentBlockService.buildRoundBlocks(
+            interimText:
+                'Lass mich die Folien strukturieren. Nein, ich bleibe dabei.',
+            providerReasoning: 'Ich pruefe die Fakten.',
+            newToolCalls: toolCalls,
+            foldInterimIntoReasoning: true,
+          );
+
+          // Only reasoning + tool calls — the interim prose never becomes the
+          // answer body.
+          expect(
+            result.blocks.map((b) => b.type).toList(),
+            equals([ContentBlockType.reasoning, ContentBlockType.toolCalls]),
+          );
+          expect(result.interimOutputText, isEmpty);
+          final reasoning = result.blocks.first.text ?? '';
+          expect(reasoning, contains('Ich pruefe die Fakten.'));
+          expect(reasoning, contains('Lass mich die Folien strukturieren.'));
+        },
+      );
+
+      test('fold keeps interim content verbatim in reasoning (no text edits)', () {
+        final toolCalls = [
+          ToolCall(name: 'sandbox_write', status: ToolCallStatus.completed),
+        ];
+
+        const interim =
+            'Ich baue die Datei.\n\n```html\n<!DOCTYPE html>\n<body>x</body>\n```\n\nFertig.';
+        final result = RoundContentBlockService.buildRoundBlocks(
+          interimText: interim,
+          providerReasoning: '',
+          newToolCalls: toolCalls,
+          foldInterimIntoReasoning: true,
+        );
+
+        // No tool calls remain in the answer (interimOutputText empty); the
+        // working text — including the model's draft code — lives untouched in
+        // the collapsed reasoning. We never edit model text by pattern.
+        expect(result.interimOutputText, isEmpty);
+        final reasoning = result.blocks
+            .firstWhere((b) => b.type == ContentBlockType.reasoning)
+            .text!;
+        expect(reasoning, equals(interim.trim()));
+      });
+
+      test('segmented builder also folds text segments into reasoning', () {
+        final segments = [
+          RoundSegment.text('Erst denke ich nach.'),
+          RoundSegment.toolCall(
+            ToolCall(name: 'web_search', status: ToolCallStatus.completed),
+          ),
+          RoundSegment.text('Dann noch Schluss.'),
+        ];
+
+        final result = RoundContentBlockService.buildSegmentedRoundBlocks(
+          segments: segments,
+          providerReasoning: '',
+          foldInterimIntoReasoning: true,
+        );
+
+        expect(
+          result.blocks.map((b) => b.type).toList(),
+          equals([ContentBlockType.reasoning, ContentBlockType.toolCalls]),
+        );
+        final reasoning = result.blocks.first.text!;
+        expect(reasoning, contains('Erst denke ich nach.'));
+        expect(reasoning, contains('Schluss.'));
+      });
+    });
   });
 }

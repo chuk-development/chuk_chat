@@ -25,9 +25,42 @@ class RoundContentBlockService {
   static RoundContentBlockResult buildSegmentedRoundBlocks({
     required List<RoundSegment> segments,
     required String providerReasoning,
+    bool foldInterimIntoReasoning = false,
     List<ContentBlock> existingBlocks = const [],
   }) {
     final blocks = <ContentBlock>[];
+
+    // When folding, the model's interim content-channel prose (e.g. Kimi
+    // dumping chain-of-thought + draft code between tool calls) is NOT the
+    // answer — merge it into this round's reasoning so it lands collapsed in
+    // the tool-call bar instead of the message body.
+    if (foldInterimIntoReasoning) {
+      final foldedInterim = segments
+          .where((s) => s.isText)
+          .map((s) => s.text!.trim())
+          .where((t) => t.isNotEmpty)
+          .join('\n\n');
+      final reasoning = _mergeReasoning(providerReasoning, foldedInterim);
+      if (reasoning.isNotEmpty &&
+          !_lastReasoningMatches(existingBlocks, reasoning)) {
+        blocks.add(ContentBlock.reasoning(reasoning));
+      }
+      final tools = segments
+          .where((s) => s.isToolCall)
+          .map((s) => s.toolCall!)
+          .toList();
+      if (tools.isNotEmpty) {
+        blocks.add(ContentBlock.toolCalls(tools));
+      }
+      if (blocks.isNotEmpty && _tailMatches(existingBlocks, blocks)) {
+        return const RoundContentBlockResult(
+          blocks: <ContentBlock>[],
+          interimOutputText: '',
+        );
+      }
+      return RoundContentBlockResult(blocks: blocks, interimOutputText: '');
+    }
+
     final reasoning = providerReasoning.trim();
     if (reasoning.isNotEmpty &&
         !_lastReasoningMatches(existingBlocks, reasoning)) {
@@ -86,18 +119,43 @@ class RoundContentBlockService {
     required String providerReasoning,
     required List<ToolCall> newToolCalls,
     bool interimBeforeToolCalls = false,
+    bool foldInterimIntoReasoning = false,
     List<ContentBlock> existingBlocks = const [],
   }) {
     final normalizedInterim = interimText.trim();
     final normalizedProviderReasoning = providerReasoning.trim();
 
     final hasProviderReasoning = normalizedProviderReasoning.isNotEmpty;
-    final roundReasoning = hasProviderReasoning
+    final baseRoundReasoning = hasProviderReasoning
         ? normalizedProviderReasoning
         : (newToolCalls.isNotEmpty
               ? (newToolCalls.first.roundThinking?.trim() ?? '')
               : '');
 
+    // Fold mode: interim content-channel prose is the model thinking out loud
+    // between tool calls, not the answer. Merge it (minus draft code fences)
+    // into the round's reasoning and emit NO text block, so it renders
+    // collapsed in the tool-call bar instead of the message body.
+    if (foldInterimIntoReasoning) {
+      final roundReasoning = _mergeReasoning(baseRoundReasoning, normalizedInterim);
+      final blocks = <ContentBlock>[];
+      if (roundReasoning.isNotEmpty &&
+          !_lastReasoningMatches(existingBlocks, roundReasoning)) {
+        blocks.add(ContentBlock.reasoning(roundReasoning));
+      }
+      if (newToolCalls.isNotEmpty) {
+        blocks.add(ContentBlock.toolCalls(newToolCalls));
+      }
+      if (blocks.isNotEmpty && _tailMatches(existingBlocks, blocks)) {
+        return const RoundContentBlockResult(
+          blocks: <ContentBlock>[],
+          interimOutputText: '',
+        );
+      }
+      return RoundContentBlockResult(blocks: blocks, interimOutputText: '');
+    }
+
+    final roundReasoning = baseRoundReasoning;
     var interimOutputText = normalizedInterim;
     if (roundReasoning.isNotEmpty && interimOutputText.isNotEmpty) {
       if (interimOutputText == roundReasoning) {
@@ -243,5 +301,20 @@ class RoundContentBlockService {
   /// Whitespace-normalized form used for duplicate detection.
   static String normalizeTextForCompare(String s) {
     return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Merge provider reasoning with folded interim prose into one reasoning
+  /// string, dropping empties and avoiding a doubled copy when one already
+  /// contains the other.
+  static String _mergeReasoning(String providerReasoning, String foldedInterim) {
+    final a = providerReasoning.trim();
+    final b = foldedInterim.trim();
+    if (a.isEmpty) return b;
+    if (b.isEmpty) return a;
+    final na = normalizeTextForCompare(a);
+    final nb = normalizeTextForCompare(b);
+    if (na == nb || na.contains(nb)) return a;
+    if (nb.contains(na)) return b;
+    return '$a\n\n$b';
   }
 }

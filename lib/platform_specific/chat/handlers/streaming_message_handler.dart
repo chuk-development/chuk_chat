@@ -551,7 +551,15 @@ class StreamingMessageHandler {
         stream: stream,
         onUpdate: (content, reasoning) {
           if (_isDisposed) return;
-          final displayContent = stripToolCallBlocksForDisplay(content);
+          // Structural, no text matching: the streamed content is the model
+          // working (not the answer) whenever we're mid tool-loop (a prior
+          // round already produced blocks) OR a tool-call token has appeared
+          // in this round's stream. It then folds into the round's reasoning
+          // on completion. A plain round with no tool calls streams live.
+          final isWorkingRound =
+              contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
+          final displayContent =
+              isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
           final prefix = accumulatedText.toString();
           final fullDisplay = prefix.isEmpty
               ? displayContent
@@ -648,6 +656,7 @@ class StreamingMessageHandler {
                     ? RoundContentBlockService.buildSegmentedRoundBlocks(
                         segments: newSegments,
                         providerReasoning: finalReasoning,
+                        foldInterimIntoReasoning: true,
                         existingBlocks: contentBlocks,
                       )
                     : RoundContentBlockService.buildRoundBlocks(
@@ -656,6 +665,10 @@ class StreamingMessageHandler {
                         newToolCalls: newToolCalls,
                         interimBeforeToolCalls:
                             loopResult.interimBeforeToolCalls,
+                        // Fold interim content-channel prose into reasoning
+                        // (Kimi dumps CoT + draft code there) — never the
+                        // answer body.
+                        foldInterimIntoReasoning: true,
                         existingBlocks: contentBlocks,
                       );
                 final appendedBlocks = roundResult.blocks;
@@ -690,21 +703,10 @@ class StreamingMessageHandler {
                   );
                 }
 
-                // Accumulate the *original* interim text (not the deduped
-                // version used for content blocks).  buildRoundBlocks may
-                // clear interimOutputText when it matches the reasoning
-                // block — that's correct for block rendering (no duplicate
-                // text block), but for the flat streaming display we must
-                // keep it so the user doesn't see text flash and disappear
-                // between passes.
-                //
-                // When the round was an idempotent no-op (retry with the
-                // exact same reasoning+toolCalls as the tail), don't
-                // accumulate either — that text is already represented.
-                if (interimText.isNotEmpty && appendedBlocks.isNotEmpty) {
-                  accumulatedText.write(interimText);
-                  accumulatedText.write('\n\n');
-                }
+                // Interim content-channel prose is folded into this round's
+                // reasoning block (collapsed in the tool-call bar), so it must
+                // NOT accumulate into the flat answer text — otherwise the
+                // model's chain-of-thought + draft code leaks into the body.
 
                 // Keep accumulated visible text between passes so the user
                 // never sees earlier assistant text disappear.
