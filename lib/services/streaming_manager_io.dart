@@ -272,6 +272,18 @@ class StreamingManager {
       _cleanupStream(chatId);
     });
 
+    // Record time-to-first-token on the first real delta (content or reasoning).
+    if ((event is ContentEvent || event is ReasoningEvent) &&
+        activeStream.firstTokenAt == null) {
+      activeStream.firstTokenAt = DateTime.now();
+      if (kDebugMode) {
+        final ttftMs = activeStream.firstTokenAt!
+            .difference(activeStream.startedAt)
+            .inMilliseconds;
+        debugPrint('⏱️ [TTFT] chat $chatId: first token in ${ttftMs}ms');
+      }
+    }
+
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
       final content = activeStream.contentBuffer.toString();
@@ -602,6 +614,12 @@ class _ActiveStream {
   // Tokens per second metric (set when TpsEvent is received)
   double? tps;
   Map<String, dynamic>? latestMeta;
+
+  // Time-to-first-token measurement.
+  // startedAt = when the stream subscription is created (≈ message sent).
+  // firstTokenAt = when the first content/reasoning delta arrives.
+  final DateTime startedAt = DateTime.now();
+  DateTime? firstTokenAt;
 
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;
