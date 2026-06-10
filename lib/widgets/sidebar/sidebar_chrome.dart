@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 
 class SidebarTokens {
   final Color iconFg;
@@ -86,12 +87,17 @@ class SbBrand extends StatelessWidget {
             ),
             const SizedBox(width: 10),
           ],
-          Text(label,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: fontWeight,
-                color: t.iconFg,
-              )),
+          // Brand label renders as the frozen SVG wordmark; any other
+          // label (none in production today) falls back to plain text.
+          if (label == 'Chuk Chat')
+            BrandWordmark(color: t.iconFg, height: fontSize * 0.75)
+          else
+            Text(label,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: fontWeight,
+                  color: t.iconFg,
+                )),
           const Spacer(),
           ?trailing,
         ],
