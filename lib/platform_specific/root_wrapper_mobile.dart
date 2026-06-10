@@ -25,6 +25,7 @@ import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -513,11 +514,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 child: ClipRect(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4.0),
-                    child: Text(
-                      'Chuk Chat',
-                      style: TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.w700),
-                      softWrap: false,
-                      overflow: TextOverflow.clip,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: BrandWordmark(color: iconFg),
                     ),
                   ),
                 ),

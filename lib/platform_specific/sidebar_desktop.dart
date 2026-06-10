@@ -17,6 +17,7 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:flutter/foundation.dart';
 
@@ -407,14 +408,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'Chuk Chat',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: iconFg,
-                  ),
-                ),
+                child: BrandWordmark(color: iconFg),
               ),
             ),
           ),

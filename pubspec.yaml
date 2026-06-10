@@ -92,6 +92,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.svg
+    - assets/wordmark.svg
     - assets/icons/
     - assets/icons/chuk_chat_tray_brand.png
     - web/icons/Icon-512.png
