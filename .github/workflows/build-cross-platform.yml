@@ -1120,6 +1120,13 @@ jobs:
         # inherited by the child configure) restores the old policy minimum.
         env:
           CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+          # VS 2026 / MSVC 14.51 makes <experimental/coroutine> a hard error
+          # (STL1011). Several plugins (flutter_inappwebview_windows,
+          # permission_handler_windows, flutter_local_notifications_windows)
+          # still include it. cl.exe prepends options from the CL env var to
+          # every compile, so this silences the deprecation across all plugins
+          # without patching each one's CMakeLists.
+          CL: '/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS'
         run: |
           flutter build windows --release `
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
