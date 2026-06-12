@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
@@ -317,6 +318,12 @@ class StreamingMessageHandler {
     const int kMaxMessageLevelRetries = 1;
     int messageLevelRetries = 0;
 
+    // A server `cache_miss` means a tool-result reference expired/evicted. We
+    // clear the local cache registry (so the retry sends full content) and
+    // replay the pass once. After clearing, no refs are emitted, so a second
+    // miss is impossible — one retry is the ceiling.
+    const int kMaxCacheMissRetries = 1;
+
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
     final accumulatedText = StringBuffer();
@@ -480,6 +487,7 @@ class StreamingMessageHandler {
       List<String>? passImages,
       int currentPass = 0,
       int reconnectRetries = 0,
+      int cacheMissRetries = 0,
     }) async {
       // A cancel landed (button) — the current stream was already torn down
       // and the message finalized by cancelStream(); do not open another pass.
@@ -984,6 +992,28 @@ class StreamingMessageHandler {
         },
         onError: (errorMessage) {
           if (_isDisposed) return;
+
+          // A referenced tool result is no longer cached server-side. Drop the
+          // registry so the replay uploads full content, then retry this pass
+          // once. Refs can't miss again after the clear.
+          if (errorMessage.contains(kCacheMissErrorCode) &&
+              cacheMissRetries < kMaxCacheMissRetries &&
+              !_isDisposed) {
+            ToolResultCacheRegistry.instance.handleMiss();
+            unawaited(() async {
+              if (_isDisposed) return;
+              await startStreamingPass(
+                message: message,
+                history: history,
+                systemPrompt: systemPrompt,
+                passImages: passImages,
+                currentPass: currentPass,
+                reconnectRetries: reconnectRetries,
+                cacheMissRetries: cacheMissRetries + 1,
+              );
+            }());
+            return;
+          }
 
           final normalizedError = errorMessage.toLowerCase();
           final isReconnectable =
