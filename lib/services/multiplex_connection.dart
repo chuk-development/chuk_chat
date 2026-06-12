@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 
 const _uuid = Uuid();
@@ -323,7 +324,14 @@ class MultiplexConnection {
         break;
       case 'error':
         final detail = data['detail']?.toString() ?? 'unknown error';
-        ctrl.add(ChatStreamEvent.error(detail));
+        // Surface the server `code` for cache misses so the streaming handler
+        // can recognise it (clear the cache registry + replay full) instead of
+        // treating it as a generic, user-facing failure.
+        final code = data['code']?.toString();
+        final message = code == kCacheMissErrorCode
+            ? '$kCacheMissErrorCode: $detail'
+            : detail;
+        ctrl.add(ChatStreamEvent.error(message));
         // Don't close yet — server still owes us `done`. If it never
         // arrives the transport-failure path will close us.
         break;

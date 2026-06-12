@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 import 'package:chuk_chat/utils/secure_token_handler.dart';
 
@@ -377,6 +378,8 @@ class WebSocketChatService {
       debugPrint('📤 [Multiplex] chat -> $modelId via $providerSlug');
     }
 
+    final registry = ToolResultCacheRegistry.instance;
+
     final payload = <String, dynamic>{
       'message': message,
       'model_id': modelId,
@@ -385,8 +388,15 @@ class WebSocketChatService {
       'temperature': temperature,
     };
 
+    // Cache a large message server-side under a client-issued id so later
+    // passes of this turn can reference it instead of re-uploading the text.
+    // The message still goes up in full this once (the server needs it now).
+    if (registry.shouldCache(message)) {
+      payload['message_cache_id'] = registry.register(message);
+    }
+
     if (history != null && history.isNotEmpty) {
-      payload['history'] = history;
+      payload['history'] = _foldHistoryRefs(history, registry);
     }
     if (systemPrompt != null && systemPrompt.isNotEmpty) {
       payload['system_prompt'] = systemPrompt;
@@ -397,10 +407,33 @@ class WebSocketChatService {
     if (images != null && images.isNotEmpty) {
       final base64Images = await _convertImagesToBase64(images);
       if (base64Images.isNotEmpty) {
-        payload['images'] = base64Images;
+        // Images are the heaviest payload and, because history is text-only,
+        // get re-sent on every tool pass. Send each in full ONCE (tagged with a
+        // parallel cache id so the server stores it), then reference it by id on
+        // later passes — turning megabytes of repeated base64 into a short ref.
+        final fullImages = <String>[];
+        final fullImageIds = <String>[];
+        final imageRefs = <String>[];
+        for (final img in base64Images) {
+          final ref = registry.refFor(img);
+          if (ref != null) {
+            imageRefs.add(ref);
+          } else {
+            fullImages.add(img);
+            fullImageIds.add(registry.register(img));
+          }
+        }
+        if (fullImages.isNotEmpty) {
+          payload['images'] = fullImages;
+          payload['image_cache_ids'] = fullImageIds;
+        }
+        if (imageRefs.isNotEmpty) {
+          payload['image_cache_refs'] = imageRefs;
+        }
         if (kDebugMode) {
           debugPrint(
-            '🖼️ [Multiplex] forwarded ${base64Images.length} images',
+            '🖼️ [Multiplex] images: ${fullImages.length} full + '
+            '${imageRefs.length} cached refs',
           );
         }
       }
@@ -413,6 +446,29 @@ class WebSocketChatService {
       chatId: chatId,
       payload: payload,
     );
+  }
+
+  /// Replace large `history` entries whose content was already uploaded (and
+  /// cached server-side) with a tiny `{role, cache_ref}` marker, so the bytes
+  /// travel up the wire only once per turn. Entries that aren't cached (too
+  /// small, expired, or never registered) are passed through unchanged and
+  /// upload in full. A server `cache_miss` clears the registry and the turn
+  /// re-sends everything in full — refs are never a silent data loss.
+  static List<Map<String, dynamic>> _foldHistoryRefs(
+    List<Map<String, dynamic>> history,
+    ToolResultCacheRegistry registry,
+  ) {
+    return history.map((entry) {
+      final content = entry['content'];
+      final role = entry['role'];
+      if (content is String && role != null && registry.shouldCache(content)) {
+        final ref = registry.refFor(content);
+        if (ref != null) {
+          return <String, dynamic>{'role': role, 'cache_ref': ref};
+        }
+      }
+      return entry;
+    }).toList();
   }
 
   /// Convert image storage paths or existing Base64 URLs to Base64 data URLs.
