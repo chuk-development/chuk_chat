@@ -70,7 +70,9 @@ class AppThemeService extends ChangeNotifier {
   // UI scale (applies to entire app via MediaQuery textScaler)
   double _uiScale = kDefaultUiScale;
 
-  // Onboarding (device-local, NOT synced to Supabase)
+  // Onboarding completion. Per-user: cached locally under a user-scoped key
+  // and synced to Supabase (customization_preferences.onboarding_completed)
+  // so the tour shows once per account, not once per device.
   bool _onboardingCompleted = false;
 
   // Keys for SharedPreferences
@@ -106,7 +108,12 @@ class AppThemeService extends ChangeNotifier {
   static const String _kChatFontSizeKey = 'chatFontSize';
   static const String _kChatFontFamilyKey = 'chatFontFamily';
   static const String _kUiScaleKey = 'uiScale';
+  // Legacy device-global onboarding key. Migrated to the per-user key (and
+  // Supabase) on the first Supabase load after update, then removed.
   static const String _kOnboardingCompletedKey = 'onboardingCompleted';
+
+  static String _onboardingKeyFor(String userId) =>
+      '$_kOnboardingCompletedKey:$userId';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -221,10 +228,23 @@ class AppThemeService extends ChangeNotifier {
       prefs.getString(_kChatFontFamilyKey),
     );
     _uiScale = _clampUiScale(prefs.getDouble(_kUiScaleKey) ?? kDefaultUiScale);
-    _onboardingCompleted = prefs.getBool(_kOnboardingCompletedKey) ?? false;
+    _onboardingCompleted = _readLocalOnboarding(prefs);
 
     _cachedThemeData = null;
     notifyListeners();
+  }
+
+  /// Reads the locally cached onboarding state for the signed-in user,
+  /// falling back to the legacy device-global key from older app versions.
+  bool _readLocalOnboarding(SharedPreferences prefs) {
+    final user =
+        SupabaseService.isInitialized ? SupabaseService.auth.currentUser : null;
+    if (user == null) {
+      return prefs.getBool(_kOnboardingCompletedKey) ?? false;
+    }
+    return prefs.getBool(_onboardingKeyFor(user.id)) ??
+        prefs.getBool(_kOnboardingCompletedKey) ??
+        false;
   }
 
   double _clampChatFontSize(double v) =>
@@ -345,10 +365,31 @@ class AppThemeService extends ChangeNotifier {
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
+    await _reconcileOnboarding(user.id, customizationPrefs.onboardingCompleted);
+
     if (hasVisualOrBehaviorChange) {
       notifyListeners();
       // Persist to prefs in background only if state changed.
       unawaited(_persistToPrefs());
+    }
+  }
+
+  /// Merges the per-user Supabase onboarding flag with the local cache.
+  /// Completion wins on either side: a locally completed tour (legacy key or
+  /// offline completion) is pushed up; a server-side completion is cached
+  /// down so fresh installs don't re-show the tour. The legacy device-global
+  /// key is removed after the first reconcile so later accounts on the same
+  /// device still get their own tour.
+  Future<void> _reconcileOnboarding(String userId, bool serverCompleted) async {
+    final prefs = await _getPrefs();
+    final localCompleted = _readLocalOnboarding(prefs);
+    _onboardingCompleted = localCompleted || serverCompleted;
+    await prefs.setBool(_onboardingKeyFor(userId), _onboardingCompleted);
+    if (prefs.containsKey(_kOnboardingCompletedKey)) {
+      await prefs.remove(_kOnboardingCompletedKey);
+    }
+    if (localCompleted && !serverCompleted) {
+      _debouncedSyncCustomization();
     }
   }
 
@@ -459,6 +500,7 @@ class AppThemeService extends ChangeNotifier {
       uiLocale: _uiLocale,
       chatFontSize: _chatFontSize,
       chatFontFamily: _chatFontFamily,
+      onboardingCompleted: _onboardingCompleted,
     );
 
     try {
@@ -654,13 +696,23 @@ class AppThemeService extends ChangeNotifier {
     await prefs.setDouble(_kUiScaleKey, _uiScale);
   }
 
-  /// Onboarding completion is per-device and NOT synced to Supabase.
+  /// Onboarding completion is per-user: cached locally under a user-scoped
+  /// key and synced to Supabase so other devices skip the tour too.
   Future<void> setOnboardingCompleted(bool completed) async {
     if (_onboardingCompleted == completed) return;
     _onboardingCompleted = completed;
     notifyListeners();
     final prefs = await _getPrefs();
-    await prefs.setBool(_kOnboardingCompletedKey, _onboardingCompleted);
+    final user =
+        SupabaseService.isInitialized ? SupabaseService.auth.currentUser : null;
+    if (user != null) {
+      await prefs.setBool(_onboardingKeyFor(user.id), _onboardingCompleted);
+      _debouncedSyncCustomization();
+    } else {
+      // No signed-in user (shouldn't happen — the tour only runs signed in).
+      // Fall back to the legacy device-global key so the state isn't lost.
+      await prefs.setBool(_kOnboardingCompletedKey, _onboardingCompleted);
+    }
   }
 
   void resetSupabaseThemeFlag() {
