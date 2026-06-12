@@ -1,4 +1,5 @@
 // lib/services/notification_service_io.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,9 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   static GlobalKey<NavigatorState>? _navigatorKey;
   static bool _isInitialized = false;
+
+  /// Brand accent used to tint the notification icon and title on Android.
+  static const Color _brandColor = Color(0xFF285DA9);
 
   /// Initialize the notification service
   static Future<void> initialize(GlobalKey<NavigatorState> navigatorKey) async {
@@ -60,6 +64,8 @@ class NotificationService {
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
+      enableLights: true,
+      ledColor: _brandColor,
     );
 
     await _plugin
@@ -91,11 +97,14 @@ class NotificationService {
     final preview = contentPreview.isEmpty
         ? 'New AI response'
         : _formatContentPreview(contentPreview);
+    // Use the chat name as the title so it is clear which chat replied.
+    final trimmedTitle = chatTitle.trim();
+    final title = trimmedTitle.isEmpty ? 'AI Chat' : trimmedTitle;
 
     try {
       await _plugin.show(
         id: chatId.hashCode, // Unique ID per chat
-        title: 'Response ready',
+        title: title,
         body: preview,
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
@@ -107,6 +116,19 @@ class NotificationService {
             enableVibration: true,
             playSound: true,
             icon: 'ic_notification',
+            color: _brandColor,
+            ledColor: _brandColor,
+            ledOnMs: 1000,
+            ledOffMs: 500,
+            // Dismiss the notification as soon as it is tapped.
+            autoCancel: true,
+            ticker: 'Response ready',
+            // Expandable body so the full preview is readable.
+            styleInformation: BigTextStyleInformation(
+              preview,
+              contentTitle: title,
+              summaryText: 'Response ready',
+            ),
           ),
           iOS: const DarwinNotificationDetails(
             presentAlert: true,
@@ -143,6 +165,8 @@ class NotificationService {
             '[NotificationService] Notification tapped, navigating to chat $chatId',
           );
         }
+        // Dismiss the tapped notification (and any duplicate for this chat).
+        unawaited(_plugin.cancel(id: chatId.hashCode));
         // Update selected chat and navigate
         ChatStorageService.selectedChatId = chatId;
         // Pop to root - the RootWrapper will show the correct chat
