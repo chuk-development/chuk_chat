@@ -1113,6 +1113,13 @@ jobs:
       - run: flutter pub get
 
       - name: Build Windows
+        # The Windows runner ships CMake 4.x, which dropped support for
+        # cmake_minimum_required(VERSION < 3.5). The pdfx plugin downloads
+        # pdfium, whose bundled CMakeLists declares an old minimum, so its
+        # nested cmake configure fails. This env var (honored by CMake and
+        # inherited by the child configure) restores the old policy minimum.
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: '3.5'
         run: |
           flutter build windows --release `
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
