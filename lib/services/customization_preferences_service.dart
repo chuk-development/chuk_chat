@@ -25,6 +25,7 @@ class CustomizationPreferences {
     required this.uiLocale,
     required this.chatFontSize,
     required this.chatFontFamily,
+    required this.onboardingCompleted,
   });
 
   final String userId;
@@ -54,6 +55,9 @@ class CustomizationPreferences {
   final double chatFontSize;
   // Chat body font family identifier (see constants.dart, e.g. 'arimo')
   final String chatFontFamily;
+  // Whether the user finished (or dismissed) the onboarding tour. Per-user so
+  // the tour shows once per account, not once per device.
+  final bool onboardingCompleted;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
@@ -76,6 +80,7 @@ class CustomizationPreferences {
     String? uiLocale,
     double? chatFontSize,
     String? chatFontFamily,
+    bool? onboardingCompleted,
   }) {
     return CustomizationPreferences(
       userId: userId,
@@ -106,6 +111,7 @@ class CustomizationPreferences {
       uiLocale: uiLocale ?? this.uiLocale,
       chatFontSize: chatFontSize ?? this.chatFontSize,
       chatFontFamily: chatFontFamily ?? this.chatFontFamily,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
     );
   }
 
@@ -132,6 +138,7 @@ class CustomizationPreferences {
       'ui_locale': uiLocale,
       'chat_font_size': chatFontSize,
       'chat_font_family': chatFontFamily,
+      'onboarding_completed': onboardingCompleted,
     };
   }
 
@@ -158,6 +165,7 @@ class CustomizationPreferences {
       uiLocale: 'en',
       chatFontSize: kDefaultChatFontSize,
       chatFontFamily: kDefaultChatFontFamily,
+      onboardingCompleted: false,
     );
   }
 
@@ -197,6 +205,7 @@ class CustomizationPreferences {
       chatFontSize:
           (map['chat_font_size'] as num?)?.toDouble() ?? kDefaultChatFontSize,
       chatFontFamily: _sanitizeFontFamily(map['chat_font_family'] as String?),
+      onboardingCompleted: (map['onboarding_completed'] as bool?) ?? false,
     );
   }
 }

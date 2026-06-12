@@ -48,6 +48,10 @@ class SupabaseService {
 
   static GoTrueClient get auth => client.auth;
 
+  /// Whether [initialize] has completed. Lets callers (and tests) read
+  /// auth state opportunistically without risking a [StateError].
+  static bool get isInitialized => _initialized;
+
   /// Force-refresh the session, bypassing the throttle.
   /// Returns null if the refresh token has been revoked (auth error).
   /// Throws on network errors so caller can distinguish.

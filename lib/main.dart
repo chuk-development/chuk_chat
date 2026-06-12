@@ -474,8 +474,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 }
 
-/// Starts the interactive onboarding tour once per app launch if the user
-/// hasn't completed it. Persists completion via
+/// Starts the interactive onboarding tour if the signed-in user has never
+/// completed it. Completion is per-user (synced via Supabase), so the gate
+/// waits for the server value before showing — a fresh install for an
+/// existing user must not re-show the tour. Persists completion via
 /// [AppThemeService.setOnboardingCompleted]. Also tears the tour down if the
 /// user signs out mid-tour so the overlay can't leak.
 class _OnboardingFirstLaunchGate extends StatefulWidget {
@@ -518,10 +520,16 @@ class _OnboardingFirstLaunchGateState
     super.dispose();
   }
 
-  void _maybeStart() {
+  Future<void> _maybeStart() async {
     if (_didStartTour) return;
-    if (AppThemeService.instance.onboardingCompleted) return;
-    if (!mounted) return;
+    final themeService = AppThemeService.instance;
+    if (themeService.onboardingCompleted) return;
+    // Local prefs can't know about completion on other devices — wait for the
+    // per-user Supabase value before deciding. Errors are swallowed inside
+    // loadFromSupabaseAsync; offline first launches still get the tour.
+    await themeService.loadFromSupabaseAsync();
+    if (!mounted || _didStartTour) return;
+    if (themeService.onboardingCompleted) return;
     _didStartTour = true;
     OnboardingTourController.instance.start(
       context,

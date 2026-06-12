@@ -87,6 +87,7 @@ image_gen_default_size        TEXT DEFAULT 'landscape_4_3'
 image_gen_custom_width        INTEGER DEFAULT 1024
 image_gen_custom_height       INTEGER DEFAULT 768
 image_gen_use_custom_size     BOOLEAN DEFAULT false
+onboarding_completed          BOOLEAN DEFAULT false  -- tour shown once per user
 created_at                    TIMESTAMPTZ
 updated_at                    TIMESTAMPTZ
 ```
