@@ -303,7 +303,13 @@ class StreamingMessageHandler {
       return;
     }
     const int kMaxStreamingPasses = 20;
-    const int kMaxPassReconnectRetries = 1;
+    // Weak / flapping mobile links drop the multiplex WS mid-turn (see the
+    // backend `websocket_disconnected` analytics). A single reconnect attempt
+    // often races the link's recovery and loses, escalating to the far more
+    // expensive message-level restart (which rebuilds the whole tool session
+    // and resends from scratch). Give the link a few cheap pass-level
+    // reconnects with exponential backoff before giving up.
+    const int kMaxPassReconnectRetries = 3;
 
     // Message-level auto-retry: if the final answer is empty after all
     // tool-loop retries, re-send the last user message once to give the
@@ -881,6 +887,26 @@ class StreamingMessageHandler {
 
               // --- Build final content blocks ---
               if (contentBlocks.isNotEmpty) {
+                // The final pass's reasoning — the model "thinking" after the
+                // tools ran, just before it writes the final answer — only
+                // lived in the flat message reasoning field, which the bubble
+                // suppresses in content-block mode. So it never rendered: a
+                // web-search turn showed the pass-1 "I should search"
+                // reasoning but silently dropped the pass-2 "based on the
+                // results…" reasoning. Emit it as its own reasoning block,
+                // right before the final text, mirroring how each tool round's
+                // reasoning is captured. Skip if an identical reasoning block
+                // is already present (model repeated itself / single-pass).
+                final finalReasoningText = effectiveReasoning.trim();
+                final reasoningAlreadyShown = contentBlocks.any(
+                  (b) =>
+                      b.type == ContentBlockType.reasoning &&
+                      (b.text?.trim() ?? '') == finalReasoningText,
+                );
+                if (finalReasoningText.isNotEmpty && !reasoningAlreadyShown) {
+                  contentBlocks.add(ContentBlock.reasoning(finalReasoningText));
+                }
+
                 // Only use the final pass's text for the text block —
                 // interim text from earlier passes is already in content
                 // blocks.
@@ -976,7 +1002,11 @@ class StreamingMessageHandler {
                 title: 'Reconnecting...',
                 content: 'Retrying connection',
               );
-              await Future<void>.delayed(const Duration(milliseconds: 700));
+              // Exponential backoff: 700ms, 1.4s, 2.8s. Gives a flapping
+              // mobile link progressively more time to recover instead of
+              // hammering it with a single fixed-delay retry.
+              final backoffMs = 700 * (1 << reconnectRetries);
+              await Future<void>.delayed(Duration(milliseconds: backoffMs));
               if (_isDisposed) return;
               await startStreamingPass(
                 message: message,

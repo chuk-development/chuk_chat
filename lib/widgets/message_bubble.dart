@@ -1070,7 +1070,18 @@ class _MessageBubbleState extends State<MessageBubble> {
       switch (block.type) {
         case ContentBlockType.reasoning:
           final r = block.text?.trim() ?? '';
-          if (r.isNotEmpty) current.reasonings.add(r);
+          if (r.isNotEmpty) {
+            // A reasoning block that arrives AFTER tool calls in the same open
+            // round is the model thinking *about the tool results* — a later
+            // streaming pass's reasoning (buildRoundBlocks always emits a
+            // pass's own reasoning BEFORE its tool calls, so reasoning-after-
+            // tools can only come from a subsequent pass / the appended final-
+            // pass reasoning). Close the current round so it renders as its own
+            // standalone reasoning card instead of being merged — and back-
+            // dated above — the tool bar it actually followed.
+            if (current.toolCalls.isNotEmpty) closeCurrentRound();
+            current.reasonings.add(r);
+          }
         case ContentBlockType.toolCalls:
           if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
             current.toolCalls.addAll(
