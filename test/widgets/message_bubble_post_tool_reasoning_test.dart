@@ -13,11 +13,11 @@ void main() {
   // vanished and users saw only one reasoning block. StreamingMessageHandler
   // now appends the final pass's reasoning as its own ContentBlock.reasoning
   // right before the final text block. This test locks the render contract:
-  // a reasoning block sitting between a tool-call round and the final text
-  // renders as its own standalone "Reasoning" card.
-  testWidgets('post-tool reasoning before final text renders as its own card', (
-    tester,
-  ) async {
+  // that trailing reasoning is NOT peeled out as a standalone card between the
+  // bar and the answer — it folds INTO the one tool bar as the last card, so
+  // the whole turn reads as one disclosure followed by the answer.
+  testWidgets('post-tool reasoning folds into the tool bar, not a standalone '
+      'card', (tester) async {
     final search = ToolCall(
       id: 'call_1',
       name: 'web_search',
@@ -45,14 +45,19 @@ void main() {
       ),
     );
 
-    // The standalone reasoning card (label + preview) is present...
-    expect(find.text('Reasoning'), findsOneWidget);
-    expect(
-      find.textContaining('Synthesizing the search findings'),
-      findsOneWidget,
-    );
-    // ...and the final answer text still renders after it.
+    // Collapsed: only the single tool bar (header = 'web_search') and the
+    // answer are visible. The trailing reasoning lives INSIDE the collapsed
+    // bar, so its 'Reasoning' card is not in the tree yet. Structural check —
+    // we never assert the reasoning prose (blocks are classified by
+    // ContentBlockType, never by text content).
+    expect(find.text('web_search'), findsOneWidget);
+    expect(find.text('Reasoning'), findsNothing);
     expect(find.textContaining('Here is the final answer.'), findsOneWidget);
+
+    // Expand the bar — the folded-in final reasoning card now appears inside it.
+    await tester.tap(find.text('web_search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reasoning'), findsOneWidget);
   });
 
   // Sanity contrast: with no post-tool reasoning block, no standalone
