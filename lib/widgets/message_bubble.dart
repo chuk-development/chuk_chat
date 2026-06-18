@@ -145,7 +145,8 @@ class MessageBubbleAction {
 class _RenderSegment {
   _RenderSegment._({this.text, this.sandboxArtifact})
       : reasonings = <String>[],
-        toolCalls = <ToolCall>[];
+        toolCalls = <ToolCall>[],
+        timeline = <_ToolTimelineEntry>[];
 
   _RenderSegment.text(String t) : this._(text: t);
   _RenderSegment.round() : this._();
@@ -161,6 +162,12 @@ class _RenderSegment {
 
   final List<String> reasonings;
   final List<ToolCall> toolCalls;
+
+  /// Interleaved reasoning/tool entries in true source order. A run of
+  /// `reasoning → tool → reasoning → tool` (multiple streaming passes with no
+  /// text between them) accumulates here so it renders as ONE collapsible bar
+  /// with cards in the order they happened — instead of one bar per pass.
+  final List<_ToolTimelineEntry> timeline;
 
   bool get isText => text != null;
   bool get isSandboxArtifact => sandboxArtifact != null;
@@ -1048,7 +1055,35 @@ class _MessageBubbleState extends State<MessageBubble> {
     _RenderSegment current = _RenderSegment.round();
 
     void closeCurrentRound() {
-      if (current.hasContent) segments.add(current);
+      if (!current.hasContent) {
+        current = _RenderSegment.round();
+        return;
+      }
+      // Peel any reasoning that trails the LAST tool call into its own
+      // standalone reasoning segment (rendered after the tool bar). That
+      // trailing reasoning is the final pass thinking *about the results*
+      // before the answer — it keeps its prominent standalone card. Reasoning
+      // emitted BETWEEN tools stays inside the round's timeline, so a run of
+      // consecutive tool calls (with inter-tool reasoning) merges into ONE bar
+      // instead of one bar per streaming pass.
+      if (current.toolCalls.isNotEmpty) {
+        final trailing = <String>[];
+        while (current.timeline.isNotEmpty && current.timeline.last.isReasoning) {
+          trailing.insert(0, current.timeline.removeLast().reasoning!);
+          if (current.reasonings.isNotEmpty) current.reasonings.removeLast();
+        }
+        segments.add(current);
+        if (trailing.isNotEmpty) {
+          final reasoningSeg = _RenderSegment.round();
+          for (final r in trailing) {
+            reasoningSeg.reasonings.add(r);
+            reasoningSeg.timeline.add(_ToolTimelineEntry.reasoning(r));
+          }
+          segments.add(reasoningSeg);
+        }
+      } else {
+        segments.add(current);
+      }
       current = _RenderSegment.round();
     }
 
@@ -1071,22 +1106,25 @@ class _MessageBubbleState extends State<MessageBubble> {
         case ContentBlockType.reasoning:
           final r = block.text?.trim() ?? '';
           if (r.isNotEmpty) {
-            // A reasoning block that arrives AFTER tool calls in the same open
-            // round is the model thinking *about the tool results* — a later
-            // streaming pass's reasoning (buildRoundBlocks always emits a
-            // pass's own reasoning BEFORE its tool calls, so reasoning-after-
-            // tools can only come from a subsequent pass / the appended final-
-            // pass reasoning). Close the current round so it renders as its own
-            // standalone reasoning card instead of being merged — and back-
-            // dated above — the tool bar it actually followed.
-            if (current.toolCalls.isNotEmpty) closeCurrentRound();
+            // Reasoning that arrives AFTER tool calls in the same open round is
+            // a later streaming pass thinking *about the tool results*
+            // (buildRoundBlocks always emits a pass's reasoning BEFORE its
+            // tools, so reasoning-after-tools can only come from a subsequent
+            // pass / the appended final-pass reasoning). We keep it in the SAME
+            // round — appended to the ordered timeline — so a run of
+            // reasoning+tool emissions renders as ONE bar with cards in true
+            // order, instead of one bar per pass. `reasonings` stays the merged
+            // string for the reasoning-only and `showToolCalls == false` paths.
             current.reasonings.add(r);
+            current.timeline.add(_ToolTimelineEntry.reasoning(r));
           }
         case ContentBlockType.toolCalls:
           if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
-            current.toolCalls.addAll(
-              block.toolCalls!.map((tc) => ToolCall.fromJson(tc.toJson())),
-            );
+            for (final raw in block.toolCalls!) {
+              final tc = ToolCall.fromJson(raw.toJson());
+              current.toolCalls.add(tc);
+              current.timeline.add(_ToolTimelineEntry.tool(tc));
+            }
           }
         case ContentBlockType.text:
           // Strip Kimi tool-call special tokens / dangling `<` at RENDER time,
@@ -1125,6 +1163,9 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (liveToolCalls.isNotEmpty) {
       current.toolCalls.addAll(liveToolCalls);
+      for (final tc in liveToolCalls) {
+        current.timeline.add(_ToolTimelineEntry.tool(tc));
+      }
     }
     closeCurrentRound();
 
@@ -1157,15 +1198,16 @@ class _MessageBubbleState extends State<MessageBubble> {
         }
         return;
       }
-      final timeline = <_ToolTimelineEntry>[];
-      if (seg.reasonings.isNotEmpty) {
-        timeline.add(
-          _ToolTimelineEntry.reasoning(seg.reasonings.join('\n\n')),
-        );
-      }
-      for (final tc in seg.toolCalls) {
-        timeline.add(_ToolTimelineEntry.tool(tc));
-      }
+      // Use the ordered timeline (reasoning/tool interleaved in source order)
+      // so cards render in the order they happened. Fall back to the legacy
+      // reasoning-first ordering only if the timeline wasn't populated.
+      final timeline = seg.timeline.isNotEmpty
+          ? seg.timeline
+          : <_ToolTimelineEntry>[
+              if (seg.reasonings.isNotEmpty)
+                _ToolTimelineEntry.reasoning(seg.reasonings.join('\n\n')),
+              for (final tc in seg.toolCalls) _ToolTimelineEntry.tool(tc),
+            ];
       if (hasRenderedMainContent) {
         children.add(const SizedBox(height: _kBlockGap));
       }
