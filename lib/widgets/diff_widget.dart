@@ -6,12 +6,22 @@ import 'package:flutter/material.dart';
 enum _LineType { added, removed, context }
 
 class _DiffLine {
-  const _DiffLine(this.type, this.text, {this.counterpart});
+  _DiffLine(
+    this.type,
+    this.text, {
+    this.counterpart,
+    this.oldNo,
+    this.newNo,
+  });
   final _LineType type;
   final String text;
 
-  /// For paired removed↔added lines: the opposite side's text for intra-line diff.
+  /// For paired removed↔added lines: the opposite side's text for word diff.
   final String? counterpart;
+
+  /// 1-based line numbers in the old / new document (null if N/A).
+  final int? oldNo;
+  final int? newNo;
 }
 
 class _Span {
@@ -20,7 +30,13 @@ class _Span {
   final bool changed;
 }
 
-/// Renders a before/after text comparison as a VS Code–style unified diff.
+/// Number of unchanged context lines kept around each change before folding.
+const int _kContextLines = 2;
+
+/// Renders a before/after comparison as a VS Code–style unified diff:
+/// line numbers in the gutter, only changed hunks (+ a little context),
+/// long unchanged runs folded away, and word-level highlighting with
+/// strikethrough on removed text.
 class DiffWidget extends StatefulWidget {
   const DiffWidget({
     super.key,
@@ -70,7 +86,7 @@ class _DiffWidgetState extends State<DiffWidget> {
     return result.reversed.toList();
   }
 
-  // ── Line-level diff ───────────────────────────────────────────────────────
+  // ── Line-level diff with line numbers ─────────────────────────────────────
 
   static List<_DiffLine> _lineDiff(String before, String after) {
     final old = before.isEmpty ? <String>[] : before.split('\n');
@@ -103,26 +119,74 @@ class _DiffWidgetState extends State<DiffWidget> {
     }
     final ops = raw.reversed.toList();
 
-    // Pair adjacent removed+added lines for intra-line diff.
+    // Assign line numbers + pair adjacent removed/added for word diff.
     final result = <_DiffLine>[];
+    var oldNo = 0, newNo = 0;
     var k = 0;
     while (k < ops.length) {
       final (text, type) = ops[k];
-      if (type == _LineType.removed &&
+      if (type == _LineType.context) {
+        oldNo++;
+        newNo++;
+        result.add(_DiffLine(type, text, oldNo: oldNo, newNo: newNo));
+        k++;
+      } else if (type == _LineType.removed &&
           k + 1 < ops.length &&
           ops[k + 1].$2 == _LineType.added) {
-        result.add(_DiffLine(_LineType.removed, text, counterpart: ops[k + 1].$1));
-        result.add(_DiffLine(_LineType.added, ops[k + 1].$1, counterpart: text));
+        oldNo++;
+        newNo++;
+        result.add(_DiffLine(_LineType.removed, text,
+            counterpart: ops[k + 1].$1, oldNo: oldNo));
+        result.add(_DiffLine(_LineType.added, ops[k + 1].$1,
+            counterpart: text, newNo: newNo));
         k += 2;
+      } else if (type == _LineType.removed) {
+        oldNo++;
+        result.add(_DiffLine(type, text, oldNo: oldNo));
+        k++;
       } else {
-        result.add(_DiffLine(type, text));
+        newNo++;
+        result.add(_DiffLine(type, text, newNo: newNo));
         k++;
       }
     }
     return result;
   }
 
-  // ── Intra-line word diff ─────────────────────────────────────────────────
+  /// Marks which lines should be visible (changes + context). Returns a list
+  /// where entries are either a `_DiffLine` or an `int` = number of folded
+  /// unchanged lines.
+  static List<Object> _foldContext(List<_DiffLine> lines) {
+    final keep = List<bool>.filled(lines.length, false);
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].type != _LineType.context) {
+        final lo = max(0, i - _kContextLines);
+        final hi = min(lines.length - 1, i + _kContextLines);
+        for (var j = lo; j <= hi; j++) {
+          keep[j] = true;
+        }
+      }
+    }
+
+    final out = <Object>[];
+    var i = 0;
+    while (i < lines.length) {
+      if (keep[i]) {
+        out.add(lines[i]);
+        i++;
+      } else {
+        var folded = 0;
+        while (i < lines.length && !keep[i]) {
+          folded++;
+          i++;
+        }
+        out.add(folded);
+      }
+    }
+    return out;
+  }
+
+  // ── Word-level diff ───────────────────────────────────────────────────────
 
   static List<String> _tokenise(String line) {
     final tokens = <String>[];
@@ -132,7 +196,7 @@ class _DiffWidgetState extends State<DiffWidget> {
     return tokens;
   }
 
-  /// Returns spans for [source] showing which tokens differ from [other].
+  /// Spans for [source] highlighting tokens that differ from [other].
   static List<_Span> _wordDiff(String source, String other) {
     final srcTok = _tokenise(source);
     final othTok = _tokenise(other);
@@ -149,7 +213,6 @@ class _DiffWidgetState extends State<DiffWidget> {
       }
     }
 
-    // Merge consecutive same-changed spans.
     final merged = <_Span>[];
     for (final s in spans) {
       if (merged.isNotEmpty && merged.last.changed == s.changed) {
@@ -186,6 +249,7 @@ class _DiffWidgetState extends State<DiffWidget> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
     final lines = _lineDiff(widget.before, widget.after);
+    final folded = _foldContext(lines);
     final addedCount = lines.where((l) => l.type == _LineType.added).length;
     final removedCount = lines.where((l) => l.type == _LineType.removed).length;
 
@@ -206,17 +270,14 @@ class _DiffWidgetState extends State<DiffWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: topRadius,
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: headerBg,
-                borderRadius: topRadius,
-              ),
+              decoration:
+                  BoxDecoration(color: headerBg, borderRadius: topRadius),
               child: Row(
                 children: [
                   Text(
@@ -258,15 +319,39 @@ class _DiffWidgetState extends State<DiffWidget> {
           if (_expanded) ...[
             Divider(height: 1, thickness: 1, color: borderColor),
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(7)),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(7)),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: lines.map((l) => _buildLine(l, isDark)).toList(),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final entry in folded)
+                    if (entry is int)
+                      _buildFold(entry, isDark)
+                    else
+                      _buildLine(entry as _DiffLine, isDark),
+                ],
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildFold(int count, bool isDark) {
+    final bg = isDark ? const Color(0xFF161A24) : const Color(0xFFF0F3F6);
+    final fg = isDark ? const Color(0xFF5A6678) : const Color(0xFF8C959F);
+    return Container(
+      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      child: Text(
+        '⋯ $count unchanged line${count == 1 ? '' : 's'}',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 11,
+          color: fg,
+          fontStyle: FontStyle.italic,
+        ),
       ),
     );
   }
@@ -278,14 +363,12 @@ class _DiffWidgetState extends State<DiffWidget> {
 
     switch (line.type) {
       case _LineType.added:
-        // VS Code: light green bg
         lineBg = isDark ? const Color(0xFF0F2318) : const Color(0xFFE6FFEC);
         baseColor =
             isDark ? const Color(0xFF7EE787) : const Color(0xFF1A7F37);
         prefix = '+';
         break;
       case _LineType.removed:
-        // VS Code: light red bg
         lineBg = isDark ? const Color(0xFF290D0D) : const Color(0xFFFFEBE9);
         baseColor =
             isDark ? const Color(0xFFFF7B72) : const Color(0xFFCF222E);
@@ -299,61 +382,95 @@ class _DiffWidgetState extends State<DiffWidget> {
         break;
     }
 
-    // Intra-line word diff for paired removed/added lines.
+    final gutterColor =
+        isDark ? const Color(0xFF566072) : const Color(0xFF8C959F);
+
     final hasPair = line.counterpart != null && line.type != _LineType.context;
     final spans = hasPair ? _wordDiff(line.text, line.counterpart!) : null;
 
-    // VS Code highlight: darker bg on changed words
     final wordHighlight = line.type == _LineType.added
         ? (isDark ? const Color(0xFF1A5C2A) : const Color(0xFFABF2BC))
         : (isDark ? const Color(0xFF5C1414) : const Color(0xFFFFBBBB));
 
     return Container(
       color: lineBg,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            // Prefix gutter
-            TextSpan(
-              text: '$prefix ',
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Old line number gutter
+          SizedBox(
+            width: 26,
+            child: Text(
+              line.oldNo?.toString() ?? '',
+              textAlign: TextAlign.right,
               style: TextStyle(
                 fontFamily: 'monospace',
-                fontSize: 12,
-                color: baseColor,
+                fontSize: 11,
+                color: gutterColor,
               ),
             ),
-            // Line content
-            if (spans == null)
+          ),
+          const SizedBox(width: 6),
+          // New line number gutter
+          SizedBox(
+            width: 26,
+            child: Text(
+              line.newNo?.toString() ?? '',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: gutterColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Content
+          Expanded(
+            child: Text.rich(
               TextSpan(
-                text: line.text,
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: baseColor,
-                ),
-              )
-            else
-              for (final span in spans)
-                TextSpan(
-                  text: span.text,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: baseColor,
-                    backgroundColor:
-                        span.changed ? wordHighlight : Colors.transparent,
-                    // VS Code: strikethrough on removed words
-                    decoration: (span.changed &&
-                            line.type == _LineType.removed)
-                        ? TextDecoration.lineThrough
-                        : TextDecoration.none,
-                    decorationColor: baseColor,
+                children: [
+                  TextSpan(
+                    text: '$prefix ',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: baseColor,
+                    ),
                   ),
-                ),
-          ],
-        ),
+                  if (spans == null)
+                    TextSpan(
+                      text: line.text,
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        color: baseColor,
+                      ),
+                    )
+                  else
+                    for (final span in spans)
+                      TextSpan(
+                        text: span.text,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: baseColor,
+                          backgroundColor: span.changed
+                              ? wordHighlight
+                              : Colors.transparent,
+                          decoration:
+                              (span.changed && line.type == _LineType.removed)
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                          decorationColor: baseColor,
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

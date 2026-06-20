@@ -2542,27 +2542,36 @@ class _MessageBubbleState extends State<MessageBubble> {
         ? rawCode
         : null;
 
+    // For notes updates that render a diff, the diff card already shows
+    // exactly what changed — so suppress the redundant raw args
+    // (action / edits / content) to avoid showing the same change twice.
+    final bool hasDiffResult =
+        toolCall.result != null && _diffBlockRegex.hasMatch(toolCall.result!);
+    final bool suppressArgs = toolCall.name == 'notes' && hasDiffResult;
+
     if (codeArg != null) {
       sections.add(_buildToolSection(label: 'code', body: codeArg, mono: true));
     }
 
-    args.forEach((k, v) {
-      if (v == null) return;
-      if (v is String) {
-        final mono = v.contains('\n') || v.length > 80;
-        sections.add(_buildToolSection(label: k, body: v, mono: mono));
-      } else if (v is num || v is bool) {
-        sections.add(_buildToolSection(label: k, body: v.toString()));
-      } else {
-        String pretty;
-        try {
-          pretty = const JsonEncoder.withIndent('  ').convert(v);
-        } catch (_) {
-          pretty = v.toString();
+    if (!suppressArgs) {
+      args.forEach((k, v) {
+        if (v == null) return;
+        if (v is String) {
+          final mono = v.contains('\n') || v.length > 80;
+          sections.add(_buildToolSection(label: k, body: v, mono: mono));
+        } else if (v is num || v is bool) {
+          sections.add(_buildToolSection(label: k, body: v.toString()));
+        } else {
+          String pretty;
+          try {
+            pretty = const JsonEncoder.withIndent('  ').convert(v);
+          } catch (_) {
+            pretty = v.toString();
+          }
+          sections.add(_buildToolSection(label: k, body: pretty, mono: true));
         }
-        sections.add(_buildToolSection(label: k, body: pretty, mono: true));
-      }
-    });
+      });
+    }
 
     final result = toolCall.result;
     if (result != null && result.isNotEmpty) {
@@ -2755,8 +2764,20 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     // Strip <diff> blocks so raw JSON doesn't appear in the collapsed preview.
     final preview = result.replaceAll(_diffBlockRegex, '').trim();
-    if (preview.isEmpty) return null;
-    return _truncatePreview(preview, 70);
+    if (preview.isNotEmpty) return _truncatePreview(preview, 70);
+
+    // Result was diff-only — derive a clean human summary from the diff
+    // title instead of leaking raw JSON into the collapsed preview.
+    final diffMatch = _diffBlockRegex.firstMatch(result);
+    if (diffMatch != null) {
+      try {
+        final data = jsonDecode(diffMatch.group(1)!) as Map<String, dynamic>;
+        final title = (data['title'] as String?)?.trim();
+        if (title != null && title.isNotEmpty) return title;
+      } catch (_) {}
+      return 'Updated';
+    }
+    return null;
   }
 
   // ─── Sources bar (web search / web crawl citations) ──────────────────
