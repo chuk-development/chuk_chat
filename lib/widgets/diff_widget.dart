@@ -255,8 +255,9 @@ class _DiffWidgetState extends State<DiffWidget> {
 
     final borderColor =
         isDark ? const Color(0xFF2D3748) : const Color(0xFFD0D7DE);
-    final headerBg =
-        isDark ? const Color(0xFF1E2433) : const Color(0xFFF0F3F6);
+    // No tinted header — keep it flat so it blends with the surrounding
+    // tool card instead of adding a colored (blue) bar.
+    const headerBg = Colors.transparent;
     final topRadius = _expanded
         ? const BorderRadius.vertical(top: Radius.circular(7))
         : BorderRadius.circular(7);
@@ -339,10 +340,8 @@ class _DiffWidgetState extends State<DiffWidget> {
   }
 
   Widget _buildFold(int count, bool isDark) {
-    final bg = isDark ? const Color(0xFF161A24) : const Color(0xFFF0F3F6);
     final fg = isDark ? const Color(0xFF5A6678) : const Color(0xFF8C959F);
     return Container(
-      color: bg,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Text(
         '⋯ $count unchanged line${count == 1 ? '' : 's'}',
