@@ -10,17 +10,17 @@ class _DiffLine {
   final _LineType type;
   final String text;
 
-  /// For paired removed/added lines: the opposite side's text (for intra-line diff).
+  /// For paired removed↔added lines: the opposite side's text for intra-line diff.
   final String? counterpart;
 }
 
-/// A token-level diff segment within a single line.
 class _Span {
   const _Span(this.text, {required this.changed});
   final String text;
   final bool changed;
 }
 
+/// Renders a before/after text comparison as a VS Code–style unified diff.
 class DiffWidget extends StatefulWidget {
   const DiffWidget({
     super.key,
@@ -33,8 +33,6 @@ class DiffWidget extends StatefulWidget {
   final String before;
   final String after;
   final String? title;
-
-  /// Semantic type label: 'user_info', 'memory', 'soul', 'artifact', etc.
   final String? type;
 
   @override
@@ -44,9 +42,9 @@ class DiffWidget extends StatefulWidget {
 class _DiffWidgetState extends State<DiffWidget> {
   bool _expanded = true;
 
-  // ── LCS helpers ──────────────────────────────────────────────────────────
+  // ── LCS ──────────────────────────────────────────────────────────────────
 
-  static List<T> _lcs<T>(List<T> a, List<T> b) {
+  static List<T> _lcsOf<T>(List<T> a, List<T> b) {
     final m = a.length, n = b.length;
     final dp = List.generate(m + 1, (_) => List.filled(n + 1, 0));
     for (var i = 1; i <= m; i++) {
@@ -88,7 +86,6 @@ class _DiffWidgetState extends State<DiffWidget> {
       }
     }
 
-    // Collect raw diff operations: removed / added / context
     final raw = <(String, _LineType)>[];
     var i = m, j = n;
     while (i > 0 || j > 0) {
@@ -106,7 +103,7 @@ class _DiffWidgetState extends State<DiffWidget> {
     }
     final ops = raw.reversed.toList();
 
-    // Pair up adjacent removed/added lines for intra-line diff.
+    // Pair adjacent removed+added lines for intra-line diff.
     final result = <_DiffLine>[];
     var k = 0;
     while (k < ops.length) {
@@ -125,36 +122,34 @@ class _DiffWidgetState extends State<DiffWidget> {
     return result;
   }
 
-  // ── Word-level intra-line diff ───────────────────────────────────────────
+  // ── Intra-line word diff ─────────────────────────────────────────────────
 
   static List<String> _tokenise(String line) {
-    // Split on word boundaries but keep punctuation/spaces as own tokens.
     final tokens = <String>[];
-    final re = RegExp(r'\w+|[^\w]');
-    for (final m in re.allMatches(line)) {
+    for (final m in RegExp(r'\w+|[^\w]').allMatches(line)) {
       tokens.add(m.group(0)!);
     }
     return tokens;
   }
 
-  static List<_Span> _intraLineDiff(String a, String b, bool isRemoved) {
-    final aTokens = _tokenise(a);
-    final bTokens = _tokenise(b);
-    final sourceTokens = isRemoved ? aTokens : bTokens;
-    final otherTokens = isRemoved ? bTokens : aTokens;
-    final commonSeq = _lcs(sourceTokens, otherTokens);
+  /// Returns spans for [source] showing which tokens differ from [other].
+  static List<_Span> _wordDiff(String source, String other) {
+    final srcTok = _tokenise(source);
+    final othTok = _tokenise(other);
+    final common = _lcsOf(srcTok, othTok);
 
     final spans = <_Span>[];
-    var commonIdx = 0;
-    for (final tok in sourceTokens) {
-      if (commonIdx < commonSeq.length && tok == commonSeq[commonIdx]) {
+    var ci = 0;
+    for (final tok in srcTok) {
+      if (ci < common.length && tok == common[ci]) {
         spans.add(_Span(tok, changed: false));
-        commonIdx++;
+        ci++;
       } else {
         spans.add(_Span(tok, changed: true));
       }
     }
-    // Merge consecutive same-changed spans for cleaner output.
+
+    // Merge consecutive same-changed spans.
     final merged = <_Span>[];
     for (final s in spans) {
       if (merged.isNotEmpty && merged.last.changed == s.changed) {
@@ -167,7 +162,7 @@ class _DiffWidgetState extends State<DiffWidget> {
     return merged;
   }
 
-  // ── UI ────────────────────────────────────────────────────────────────────
+  // ── Label ────────────────────────────────────────────────────────────────
 
   String _typeLabel() {
     switch (widget.type) {
@@ -184,6 +179,8 @@ class _DiffWidgetState extends State<DiffWidget> {
     }
   }
 
+  // ── Build ────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -192,44 +189,43 @@ class _DiffWidgetState extends State<DiffWidget> {
     final addedCount = lines.where((l) => l.type == _LineType.added).length;
     final removedCount = lines.where((l) => l.type == _LineType.removed).length;
 
-    final bgColor = isDark ? const Color(0xFF1B2030) : const Color(0xFFF6F8FA);
     final borderColor =
         isDark ? const Color(0xFF2D3748) : const Color(0xFFD0D7DE);
     final headerBg =
-        isDark ? const Color(0xFF242B3D) : const Color(0xFFEFF2F5);
+        isDark ? const Color(0xFF1E2433) : const Color(0xFFF0F3F6);
     final topRadius = _expanded
         ? const BorderRadius.vertical(top: Radius.circular(7))
         : BorderRadius.circular(7);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: topRadius,
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration:
-                  BoxDecoration(color: headerBg, borderRadius: topRadius),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: headerBg,
+                borderRadius: topRadius,
+              ),
               child: Row(
                 children: [
-                  Icon(Icons.difference_rounded,
-                      size: 14, color: colorScheme.primary),
-                  const SizedBox(width: 6),
                   Text(
                     widget.title ?? _typeLabel(),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
+                      color: colorScheme.onSurface.withValues(alpha: 0.7),
+                      letterSpacing: 0.2,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -241,10 +237,10 @@ class _DiffWidgetState extends State<DiffWidget> {
                   ],
                   if (addedCount == 0 && removedCount == 0)
                     Text(
-                      'no changes',
+                      'unchanged',
                       style: TextStyle(
                         fontSize: 11,
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
                   const Spacer(),
@@ -252,8 +248,8 @@ class _DiffWidgetState extends State<DiffWidget> {
                     _expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
-                    size: 16,
-                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                    size: 14,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ],
               ),
@@ -266,9 +262,7 @@ class _DiffWidgetState extends State<DiffWidget> {
                   bottom: Radius.circular(7)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: lines
-                    .map((l) => _buildLine(l, isDark))
-                    .toList(),
+                children: lines.map((l) => _buildLine(l, isDark)).toList(),
               ),
             ),
           ],
@@ -278,66 +272,66 @@ class _DiffWidgetState extends State<DiffWidget> {
   }
 
   Widget _buildLine(_DiffLine line, bool isDark) {
-    final Color bg;
-    final Color baseText;
+    final Color lineBg;
+    final Color baseColor;
     final String prefix;
 
     switch (line.type) {
       case _LineType.added:
-        bg = isDark ? const Color(0xFF0D2F1A) : const Color(0xFFE6FFEC);
-        baseText =
+        // VS Code: light green bg
+        lineBg = isDark ? const Color(0xFF0F2318) : const Color(0xFFE6FFEC);
+        baseColor =
             isDark ? const Color(0xFF7EE787) : const Color(0xFF1A7F37);
         prefix = '+';
         break;
       case _LineType.removed:
-        bg = isDark ? const Color(0xFF2D0F0F) : const Color(0xFFFFEBE9);
-        baseText =
+        // VS Code: light red bg
+        lineBg = isDark ? const Color(0xFF290D0D) : const Color(0xFFFFEBE9);
+        baseColor =
             isDark ? const Color(0xFFFF7B72) : const Color(0xFFCF222E);
         prefix = '-';
         break;
       case _LineType.context:
-        bg = Colors.transparent;
-        baseText =
-            isDark ? const Color(0xFFADBBC4) : const Color(0xFF57606A);
+        lineBg = Colors.transparent;
+        baseColor =
+            isDark ? const Color(0xFF8B9BB4) : const Color(0xFF57606A);
         prefix = ' ';
         break;
     }
 
-    // For paired changed lines, show intra-line word diff.
-    final hasPair = line.counterpart != null &&
-        line.type != _LineType.context;
-    final spans = hasPair
-        ? _intraLineDiff(
-            line.text, line.counterpart!, line.type == _LineType.removed)
-        : null;
+    // Intra-line word diff for paired removed/added lines.
+    final hasPair = line.counterpart != null && line.type != _LineType.context;
+    final spans = hasPair ? _wordDiff(line.text, line.counterpart!) : null;
 
-    final highlightBg = line.type == _LineType.added
-        ? (isDark ? const Color(0xFF1A4F1A) : const Color(0xFFACF2BD))
-        : (isDark ? const Color(0xFF5C1414) : const Color(0xFFFFA5A5));
+    // VS Code highlight: darker bg on changed words
+    final wordHighlight = line.type == _LineType.added
+        ? (isDark ? const Color(0xFF1A5C2A) : const Color(0xFFABF2BC))
+        : (isDark ? const Color(0xFF5C1414) : const Color(0xFFFFBBBB));
 
     return Container(
-      color: bg,
+      color: lineBg,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
       child: Text.rich(
         TextSpan(
           children: [
+            // Prefix gutter
             TextSpan(
               text: '$prefix ',
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
-                color: baseText,
-                fontWeight: FontWeight.w600,
+                color: baseColor,
               ),
             ),
+            // Line content
             if (spans == null)
               TextSpan(
                 text: line.text,
                 style: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 12,
-                  color: baseText,
+                  color: baseColor,
                 ),
               )
             else
@@ -347,11 +341,15 @@ class _DiffWidgetState extends State<DiffWidget> {
                   style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
-                    color: baseText,
+                    color: baseColor,
                     backgroundColor:
-                        span.changed ? highlightBg : Colors.transparent,
-                    fontWeight:
-                        span.changed ? FontWeight.w700 : FontWeight.normal,
+                        span.changed ? wordHighlight : Colors.transparent,
+                    // VS Code: strikethrough on removed words
+                    decoration: (span.changed &&
+                            line.type == _LineType.removed)
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                    decorationColor: baseColor,
                   ),
                 ),
           ],
@@ -369,11 +367,11 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Text(
         label,
