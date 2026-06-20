@@ -2483,33 +2483,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       ),
     );
 
-    final diffWidgets = _extractNoteDiffWidgets(toolCalls);
-    if (diffWidgets.isEmpty) return bar;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [bar, const SizedBox(height: 4), ...diffWidgets],
-    );
-  }
-
-  List<Widget> _extractNoteDiffWidgets(List<ToolCall> toolCalls) {
-    final result = <Widget>[];
-    for (final tc in toolCalls) {
-      if (tc.name != 'notes' || tc.result == null) continue;
-      for (final match in _diffBlockRegex.allMatches(tc.result!)) {
-        try {
-          final data = jsonDecode(match.group(1)!) as Map<String, dynamic>;
-          result.add(
-            DiffWidget(
-              before: data['before'] as String? ?? '',
-              after: data['after'] as String? ?? '',
-              title: data['title'] as String?,
-              type: data['type'] as String?,
-            ),
-          );
-        } catch (_) {}
-      }
-    }
-    return result;
+    return bar;
   }
 
   IconData _toolCallIcon(ToolCallStatus status) {
@@ -2695,9 +2669,27 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   List<Widget> _buildToolResultSections(ToolCall toolCall, String result) {
-    // Strip <diff> blocks — rendered separately as DiffWidget cards.
+    // Extract and render any <diff> blocks inline in the expanded result area.
+    final diffWidgets = <Widget>[];
+    for (final match in _diffBlockRegex.allMatches(result)) {
+      try {
+        final data = jsonDecode(match.group(1)!) as Map<String, dynamic>;
+        diffWidgets.add(
+          DiffWidget(
+            before: data['before'] as String? ?? '',
+            after: data['after'] as String? ?? '',
+            title: data['title'] as String?,
+            type: data['type'] as String?,
+          ),
+        );
+      } catch (_) {}
+    }
+
+    // Strip <diff> blocks from the plain text portion.
     final displayResult = result.replaceAll(_diffBlockRegex, '').trim();
-    if (displayResult.isEmpty) return const [];
+
+    // If the result is only a diff (nothing else to show), return just the widgets.
+    if (displayResult.isEmpty) return diffWidgets;
 
     final stdoutMarker = RegExp(r'^--- stdout ---\s*$', multiLine: true);
     final stderrMarker = RegExp(r'^--- stderr ---\s*$', multiLine: true);
@@ -2727,19 +2719,22 @@ class _MessageBubbleState extends State<MessageBubble> {
       if (stderr.isNotEmpty) {
         out.add(_buildToolSection(label: 'stderr', body: stderr, mono: true));
       }
-      return out;
+      return [...out, ...diffWidgets];
     }
 
     final isError =
         toolCall.status == ToolCallStatus.error ||
         displayResult.startsWith('Error:');
-    return [
-      _buildToolSection(
-        label: isError ? 'error' : 'result',
-        body: displayResult,
-        mono: true,
-      ),
-    ];
+    final textSections = displayResult.isEmpty
+        ? <Widget>[]
+        : [
+            _buildToolSection(
+              label: isError ? 'error' : 'result',
+              body: displayResult,
+              mono: true,
+            ),
+          ];
+    return [...textSections, ...diffWidgets];
   }
 
   String? _toolCallSubtitle(ToolCall toolCall) {
