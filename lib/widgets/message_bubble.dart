@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
+import 'package:chuk_chat/widgets/diff_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
@@ -305,13 +306,19 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
   /// `<weather>`, `<news>`, `<image>`).
   static final RegExp _richBlockRegex = RegExp(
-    r'<\s*(chart|map|email|weather|news|image)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
+    r'<\s*(chart|map|email|weather|news|image|diff)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
     multiLine: true,
     caseSensitive: false,
   );
 
   static final RegExp _visualBlockStartRegex = RegExp(
-    r'<\s*(chart|map|email|weather|news|image)\b',
+    r'<\s*(chart|map|email|weather|news|image|diff)\b',
+    caseSensitive: false,
+  );
+
+  /// Matches `<diff>...</diff>` blocks embedded in tool results.
+  static final RegExp _diffBlockRegex = RegExp(
+    r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>',
     caseSensitive: false,
   );
 
@@ -1339,7 +1346,13 @@ class _MessageBubbleState extends State<MessageBubble> {
       final blockJson = match.group(2)!.trim();
 
       try {
-        if (blockType == 'map') {
+        if (blockType == 'diff') {
+          final parsed = _tryParseJson(blockJson);
+          if (parsed is! Map<String, dynamic>) {
+            throw const FormatException('Expected JSON object');
+          }
+          widgets.add(_buildDiffBlock(parsed));
+        } else if (blockType == 'map') {
           widgets.add(MapBlockWidget(jsonString: blockJson));
         } else if (blockType == 'email') {
           final parsed = _tryParseJson(blockJson);
@@ -1433,6 +1446,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: widgets,
+    );
+  }
+
+  Widget _buildDiffBlock(Map<String, dynamic> data) {
+    return DiffWidget(
+      before: data['before'] as String? ?? '',
+      after: data['after'] as String? ?? '',
+      title: data['title'] as String?,
+      type: data['type'] as String?,
     );
   }
 
@@ -2295,7 +2317,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ? Colors.orange
               : Colors.green);
 
-    return SelectionContainer.disabled(
+    final bar = SelectionContainer.disabled(
       child: Container(
         width: double.infinity,
         // No baked-in margin — see the doc comment on
@@ -2460,6 +2482,34 @@ class _MessageBubbleState extends State<MessageBubble> {
         ),
       ),
     );
+
+    final diffWidgets = _extractNoteDiffWidgets(toolCalls);
+    if (diffWidgets.isEmpty) return bar;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [bar, const SizedBox(height: 4), ...diffWidgets],
+    );
+  }
+
+  List<Widget> _extractNoteDiffWidgets(List<ToolCall> toolCalls) {
+    final result = <Widget>[];
+    for (final tc in toolCalls) {
+      if (tc.name != 'notes' || tc.result == null) continue;
+      for (final match in _diffBlockRegex.allMatches(tc.result!)) {
+        try {
+          final data = jsonDecode(match.group(1)!) as Map<String, dynamic>;
+          result.add(
+            DiffWidget(
+              before: data['before'] as String? ?? '',
+              after: data['after'] as String? ?? '',
+              title: data['title'] as String?,
+              type: data['type'] as String?,
+            ),
+          );
+        } catch (_) {}
+      }
+    }
+    return result;
   }
 
   IconData _toolCallIcon(ToolCallStatus status) {
@@ -2645,18 +2695,22 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   List<Widget> _buildToolResultSections(ToolCall toolCall, String result) {
+    // Strip <diff> blocks — rendered separately as DiffWidget cards.
+    final displayResult = result.replaceAll(_diffBlockRegex, '').trim();
+    if (displayResult.isEmpty) return const [];
+
     final stdoutMarker = RegExp(r'^--- stdout ---\s*$', multiLine: true);
     final stderrMarker = RegExp(r'^--- stderr ---\s*$', multiLine: true);
-    final stdoutMatch = stdoutMarker.firstMatch(result);
-    final stderrMatch = stderrMarker.firstMatch(result);
+    final stdoutMatch = stdoutMarker.firstMatch(displayResult);
+    final stderrMatch = stderrMarker.firstMatch(displayResult);
 
     if (stdoutMatch != null) {
-      final header = result.substring(0, stdoutMatch.start).trim();
+      final header = displayResult.substring(0, stdoutMatch.start).trim();
       final stdoutStart = stdoutMatch.end;
-      final stdoutEnd = stderrMatch?.start ?? result.length;
-      final stdout = result.substring(stdoutStart, stdoutEnd).trim();
+      final stdoutEnd = stderrMatch?.start ?? displayResult.length;
+      final stdout = displayResult.substring(stdoutStart, stdoutEnd).trim();
       final stderr = stderrMatch != null
-          ? result.substring(stderrMatch.end).trim()
+          ? displayResult.substring(stderrMatch.end).trim()
           : '';
 
       final out = <Widget>[];
@@ -2678,11 +2732,11 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     final isError =
         toolCall.status == ToolCallStatus.error ||
-        result.startsWith('Error:');
+        displayResult.startsWith('Error:');
     return [
       _buildToolSection(
         label: isError ? 'error' : 'result',
-        body: result,
+        body: displayResult,
         mono: true,
       ),
     ];
@@ -2704,7 +2758,10 @@ class _MessageBubbleState extends State<MessageBubble> {
       return null;
     }
 
-    return _truncatePreview(result, 70);
+    // Strip <diff> blocks so raw JSON doesn't appear in the collapsed preview.
+    final preview = result.replaceAll(_diffBlockRegex, '').trim();
+    if (preview.isEmpty) return null;
+    return _truncatePreview(preview, 70);
   }
 
   // ─── Sources bar (web search / web crawl citations) ──────────────────

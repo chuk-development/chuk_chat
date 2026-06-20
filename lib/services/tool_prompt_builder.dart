@@ -313,17 +313,30 @@ class ToolPromptBuilder {
     buffer.writeln('### Update rules');
     buffer.writeln();
     buffer.writeln(
-      '- **Soul** (action: update_soul): You CAN update it but you MUST '
-      'tell the user what you changed and why. It is your personality — '
-      'treat changes with care.',
+      '- **Prefer patch_* over update_*** for small changes. '
+      'patch_user/patch_memory/patch_soul accept an "edits" list of '
+      '{old_str, new_str} pairs — each old_str must match exactly once. '
+      'Use update_* only when rewriting the whole document.',
     );
     buffer.writeln(
-      '- **User** (action: update_user): Update the FULL text. Include '
-      'all existing facts plus the new ones. Do not lose old info.',
+      '- **Soul** (action: update_soul or patch_soul): You CAN update it '
+      'but you MUST tell the user what you changed and why. '
+      'The app shows a visual diff automatically — no need to describe '
+      'the changes in text unless the user needs context.',
     );
     buffer.writeln(
-      '- **Memory** (action: update_memory): Update the FULL text. Keep '
-      'it curated — distilled knowledge, not raw logs.',
+      '- **User** (action: update_user or patch_user): For update_user, '
+      'include ALL existing facts plus the new ones. Do not lose old info. '
+      'For patch_user, supply only the changed lines.',
+    );
+    buffer.writeln(
+      '- **Memory** (action: update_memory or patch_memory): Keep it '
+      'curated — distilled knowledge, not raw logs.',
+    );
+    buffer.writeln(
+      '- **Visual diff**: After any notes update the app renders a diff '
+      'card showing exactly what changed. You do NOT need to describe the '
+      'diff in your reply unless the user asks.',
     );
 
     // ── Soul (personality / tone / boundaries) ──
@@ -732,6 +745,30 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   /// Docs for visual tags that are always available regardless of the
   /// chart/map feature switches (email drafts, weather/news/image cards).
   void _appendAlwaysOnVisualTags(StringBuffer buffer) {
+    buffer.writeln();
+    buffer.writeln('### Diffs');
+    buffer.writeln(
+      'To show a before/after comparison in your response, emit a <diff> block. '
+      'The app renders it as a color-coded diff card (+/- lines). '
+      'notes tool results already include this automatically — you only need '
+      'to emit <diff> yourself for comparisons unrelated to notes updates.',
+    );
+    buffer.writeln('<diff>');
+    buffer.writeln(
+      '{"type":"user_info","title":"User Info updated",'
+      '"before":"Name: Alice\\nCity: Berlin",'
+      '"after":"Name: Alice\\nCity: Hamburg"}',
+    );
+    buffer.writeln('</diff>');
+    buffer.writeln();
+    buffer.writeln('**Diff fields:**');
+    buffer.writeln(
+      '- "type": "user_info" | "memory" | "soul" | "artifact" | any string (shown as label)',
+    );
+    buffer.writeln('- "title": header text (optional)');
+    buffer.writeln('- "before": original text (required)');
+    buffer.writeln('- "after": updated text (required)');
+
     buffer.writeln();
     buffer.writeln('### Images');
     buffer.writeln(

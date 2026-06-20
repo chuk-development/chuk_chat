@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/services/artifact_diff_engine.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -634,6 +636,12 @@ Future<String> executeNotes(Map<String, dynamic> args) async {
         return _updateUserInfo(args);
       case 'update_soul':
         return _updateSoul(args);
+      case 'patch_memory':
+        return _patchMemory(args);
+      case 'patch_user':
+        return _patchUserInfo(args);
+      case 'patch_soul':
+        return _patchSoul(args);
       // Legacy key-value actions (still supported).
       case 'save':
         return _saveNote(args);
@@ -647,11 +655,37 @@ Future<String> executeNotes(Map<String, dynamic> args) async {
         return _clearNotes();
       default:
         return 'Error: Unknown action "$action". Use: update_memory, '
-            'update_user, update_soul';
+            'update_user, update_soul, patch_memory, patch_user, patch_soul';
     }
   } catch (error) {
     return 'Notes error: $error';
   }
+}
+
+/// Builds a <diff> visual block showing what changed.
+String _buildDiffResult(
+  String type,
+  String title,
+  String before,
+  String after,
+) {
+  final diffJson = jsonEncode({
+    'type': type,
+    'title': '$title updated',
+    'before': before,
+    'after': after,
+  });
+  return '<diff>$diffJson</diff>';
+}
+
+/// Parse `edits` arg into a list of [ArtifactEdit].
+List<ArtifactEdit>? _parseEdits(dynamic rawEdits) {
+  if (rawEdits is! List) return null;
+  final edits = <ArtifactEdit>[];
+  for (final e in rawEdits) {
+    if (e is Map<String, dynamic>) edits.add(ArtifactEdit.fromMap(e));
+  }
+  return edits.isEmpty ? null : edits;
 }
 
 // ─── Soul (personality) — AI can update but must inform the user ──────
@@ -698,8 +732,22 @@ Future<String> _updateUserInfo(Map<String, dynamic> args) async {
   if (content.isEmpty) {
     return 'Error: "content" parameter required for update_user';
   }
+  final before = await loadUserInfoText();
   await saveUserInfoText(content);
-  return 'User info updated (${content.length} chars).';
+  return _buildDiffResult('user_info', 'User Info', before, content);
+}
+
+/// AI action: apply targeted edits to the user info text.
+Future<String> _patchUserInfo(Map<String, dynamic> args) async {
+  final edits = _parseEdits(args['edits']);
+  if (edits == null) {
+    return 'Error: "edits" must be a non-empty list of '
+        '{old_str, new_str} objects for patch_user';
+  }
+  final before = await loadUserInfoText();
+  final after = ArtifactDiffEngine.applyEdits(before, edits);
+  await saveUserInfoText(after);
+  return _buildDiffResult('user_info', 'User Info', before, after);
 }
 
 // ─── Memory (long-term knowledge) — free-text, AI can update ─────────
@@ -730,8 +778,22 @@ Future<String> _updateMemory(Map<String, dynamic> args) async {
   if (content.isEmpty) {
     return 'Error: "content" parameter required for update_memory';
   }
+  final before = await loadMemoryText();
   await saveMemoryText(content);
-  return 'Memory updated (${content.length} chars).';
+  return _buildDiffResult('memory', 'Memory', before, content);
+}
+
+/// AI action: apply targeted edits to the memory text.
+Future<String> _patchMemory(Map<String, dynamic> args) async {
+  final edits = _parseEdits(args['edits']);
+  if (edits == null) {
+    return 'Error: "edits" must be a non-empty list of '
+        '{old_str, new_str} objects for patch_memory';
+  }
+  final before = await loadMemoryText();
+  final after = ArtifactDiffEngine.applyEdits(before, edits);
+  await saveMemoryText(after);
+  return _buildDiffResult('memory', 'Memory', before, after);
 }
 
 /// AI action: update the soul (personality) text.
@@ -741,9 +803,24 @@ Future<String> _updateSoul(Map<String, dynamic> args) async {
   if (content.isEmpty) {
     return 'Error: "content" parameter required for update_soul';
   }
+  final before = await loadSoulText();
   await saveSoulText(content);
-  return 'Soul updated (${content.length} chars). '
-      'IMPORTANT: Tell the user what you changed and why.';
+  final diff = _buildDiffResult('soul', 'Soul', before, content);
+  return '$diff\nIMPORTANT: Tell the user what you changed and why.';
+}
+
+/// AI action: apply targeted edits to the soul text.
+Future<String> _patchSoul(Map<String, dynamic> args) async {
+  final edits = _parseEdits(args['edits']);
+  if (edits == null) {
+    return 'Error: "edits" must be a non-empty list of '
+        '{old_str, new_str} objects for patch_soul';
+  }
+  final before = await loadSoulText();
+  final after = ArtifactDiffEngine.applyEdits(before, edits);
+  await saveSoulText(after);
+  final diff = _buildDiffResult('soul', 'Soul', before, after);
+  return '$diff\nIMPORTANT: Tell the user what you changed and why.';
 }
 
 /// Load all saved notes. Public so the system prompt builder can inject them.
