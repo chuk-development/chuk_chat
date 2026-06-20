@@ -217,27 +217,29 @@ final List<ClientTool> builtinTools = [
         'Identity & memory system. You can read and write all three stores '
         '(Soul, User, Memory) by calling the `notes` tool with the matching '
         '`action`. '
-        'SUPPORTED ACTIONS (the ONLY valid values for the `action` parameter): '
-        '"update_memory" | "update_user" | "update_soul". Any other action '
-        'value is invalid. '
-        '- update_memory: replace the full memory text (curated knowledge). '
-        '- update_user: replace the full user profile text. '
-        '- update_soul: replace the soul/personality text (MUST inform user). '
-        'All three (Soul, User, Memory) are always in context — you already '
-        'know what is stored. Proactively update when you learn new facts. '
-        'CORRECT: <tool_call>{"name":"notes","arguments":{"action":'
-        '"update_memory","content":"…"}}</tool_call>. '
-        'WRONG (will be rejected): <tool_call>{"name":"update_memory",'
-        '"arguments":{…}}</tool_call>. '
-        'WRONG (will be rejected): <tool_call>{"name":"update_user",'
-        '"arguments":{…}}</tool_call>. '
-        'WRONG (will be rejected): <tool_call>{"name":"update_soul",'
-        '"arguments":{…}}</tool_call>.',
+        'SUPPORTED ACTIONS: '
+        '"update_memory" | "update_user" | "update_soul" — replace full text. '
+        '"patch_memory" | "patch_user" | "patch_soul" — apply targeted edits '
+        'without rewriting the whole document (preferred for small changes). '
+        '- update_*: provide "content" with the full replacement text. '
+        '- patch_*: provide "edits" as a list of {old_str, new_str} pairs. '
+        '  Each old_str must match exactly once. Max 5 edits per call. '
+        '  Example: {"action":"patch_user","edits":[{"old_str":"Berlin","new_str":"Hamburg"}]}. '
+        '- update_soul / patch_soul: MUST inform user of what changed and why. '
+        'All three stores are always in context. Proactively update when you learn new facts. '
+        'The app renders a visual diff showing what changed — no need to describe changes in text. '
+        'CORRECT: <tool_call>{"name":"notes","arguments":{"action":"patch_memory",'
+        '"edits":[{"old_str":"old text","new_str":"new text"}]}}</tool_call>. '
+        'WRONG: <tool_call>{"name":"update_memory","arguments":{…}}</tool_call>.',
     parameters: {
       'action':
-          'string (REQUIRED — MUST be exactly one of: "update_memory" | '
-          '"update_user" | "update_soul". No other value is accepted.)',
-      'content': 'string (full replacement text for the chosen store)',
+          'string (REQUIRED — one of: "update_memory" | "update_user" | '
+          '"update_soul" | "patch_memory" | "patch_user" | "patch_soul")',
+      'content':
+          'string (full replacement text — use with update_* actions)',
+      'edits':
+          'list of {old_str, new_str} objects — use with patch_* actions. '
+          'Each old_str must appear exactly once in the current content.',
     },
     type: ToolType.builtin,
     tags: [
