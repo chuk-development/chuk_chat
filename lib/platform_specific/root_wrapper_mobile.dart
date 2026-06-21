@@ -19,8 +19,10 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
@@ -41,6 +43,11 @@ class RootWrapperMobile extends StatefulWidget {
 
 class _RootWrapperMobileState extends State<RootWrapperMobile>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  /// Guards the battery-optimization prompt to once per app process so the
+  /// system dialog isn't re-shown on every screen unlock. Static so it
+  /// survives widget rebuilds within the same launch.
+  static bool _batteryPromptedThisLaunch = false;
+
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
@@ -203,6 +210,55 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       _showPermissionBlockedSnackBar('Notifications');
     } else if (notifStatus.isDenied || notifStatus.isRestricted) {
       await Permission.notification.request();
+    }
+
+    // Battery optimization exemption — without it Android freezes the app
+    // shortly after the screen locks, killing in-flight multi-pass tool loops.
+    await _ensureBatteryOptimizationDisabled();
+  }
+
+  /// Ask the user to exempt the app from battery optimization.
+  ///
+  /// Re-checks on every cold launch (so it keeps nagging until granted), but
+  /// only prompts once per app process to avoid re-spamming the system dialog
+  /// on every screen unlock. No-op once the exemption is in place.
+  Future<void> _ensureBatteryOptimizationDisabled() async {
+    if (!Platform.isAndroid) return;
+    if (_RootWrapperMobileState._batteryPromptedThisLaunch) return;
+
+    final ignoring =
+        await StreamingForegroundService.isIgnoringBatteryOptimizations();
+    if (ignoring || !mounted) return;
+
+    _RootWrapperMobileState._batteryPromptedThisLaunch = true;
+
+    final l = AppLocalizations.of(context);
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l?.batteryOptimizationTitle ?? 'Keep responses running'),
+        content: Text(
+          l?.batteryOptimizationBody ??
+              'Android may pause Chuk Chat when the screen is locked, '
+                  'cutting off long AI responses and tool steps mid-way. '
+                  'Allow unrestricted background activity so replies finish '
+                  'even when your phone is locked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l?.batteryOptimizationLater ?? 'Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l?.batteryOptimizationAllow ?? 'Allow'),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed == true) {
+      await StreamingForegroundService.requestIgnoreBatteryOptimization();
     }
   }
 

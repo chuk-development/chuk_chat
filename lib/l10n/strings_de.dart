@@ -797,4 +797,13 @@ const Map<String, String> stringsDe = {
   'tourDoneTitle': 'Alles bereit',
   'tourDoneBody':
       'Du kannst diese Tour jederzeit in den Einstellungen erneut starten.',
+  // ── Akku-Optimierung ─────────────────────────────────────────
+  'batteryOptimizationTitle': 'Antworten am Laufen halten',
+  'batteryOptimizationBody':
+      'Android kann Chuk Chat pausieren, sobald der Bildschirm gesperrt ist, '
+      'und bricht so lange AI-Antworten und Tool-Schritte mittendrin ab. '
+      'Erlaube uneingeschränkte Hintergrundaktivität, damit Antworten auch '
+      'bei gesperrtem Handy fertig werden.',
+  'batteryOptimizationAllow': 'Erlauben',
+  'batteryOptimizationLater': 'Später',
 };
