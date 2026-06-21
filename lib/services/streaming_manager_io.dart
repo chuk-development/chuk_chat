@@ -21,6 +21,14 @@ class StreamingManager {
   DateTime? _lastNotificationUpdate;
   static const _notificationUpdateInterval = Duration(milliseconds: 500);
 
+  /// Coalesce UI updates to roughly one per frame. Each onUpdate triggers a
+  /// full-message markdown re-parse + tool-call regex strip + setState in the
+  /// UI layer — all O(n) in the message-so-far, so running them per token is
+  /// O(n²) and makes long responses feel sluggish. Flushing the latest buffer
+  /// at most every ~33ms (≈30fps) cuts that work by 2–4× on fast streams with
+  /// no visible difference; the final buffer is always flushed on completion.
+  static const _uiUpdateInterval = Duration(milliseconds: 33);
+
   /// Idle timeout: if no event arrives for this duration, the stream
   /// is considered dead. This prevents the "Thinking..." state from
   /// hanging forever when the server silently drops the connection.
@@ -156,6 +164,7 @@ class StreamingManager {
   void _cleanupStream(String chatId) {
     final stream = _activeStreams.remove(chatId);
     stream?.cancelIdleTimer();
+    stream?.cancelUiThrottle();
     // Stop foreground service if no more active streams
     if (Platform.isAndroid && !hasActiveStreams) {
       unawaited(StreamingForegroundService.stopService());
@@ -174,6 +183,7 @@ class StreamingManager {
       stream.isActive = false;
       stream.completedAt = DateTime.now();
       stream.cancelIdleTimer();
+      stream.cancelUiThrottle();
       // Cancel the subscription but keep the entry in the map
       unawaited(stream.subscription.cancel());
       if (kDebugMode) {
@@ -286,16 +296,13 @@ class StreamingManager {
 
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
-      final content = activeStream.contentBuffer.toString();
-      onUpdate(content, activeStream.reasoningBuffer.toString());
-      // Update notification with streaming content (throttled)
-      _updateNotificationThrottled(content);
+      // Coalesced flush (see _uiUpdateInterval) — avoids re-parsing the whole
+      // message on every token. Notification update happens inside the flush
+      // so we don't stringify the buffer per token.
+      _scheduleUiFlush(activeStream, onUpdate);
     } else if (event is ReasoningEvent) {
       activeStream.reasoningBuffer.write(event.text);
-      onUpdate(
-        activeStream.contentBuffer.toString(),
-        activeStream.reasoningBuffer.toString(),
-      );
+      _scheduleUiFlush(activeStream, onUpdate);
     } else if (event is TpsEvent) {
       // Store TPS metric for later use in onComplete
       activeStream.tps = event.tokensPerSecond;
@@ -390,6 +397,28 @@ class StreamingManager {
 
     // Keep completed stream data available for chat reload
     _completeStream(chatId);
+  }
+
+  /// Schedule a coalesced UI flush: at most one [onUpdate] per
+  /// [_uiUpdateInterval], always carrying the latest buffered content. The
+  /// expensive per-update work (markdown parse, tool-call strip, setState)
+  /// thus runs at frame rate instead of token rate. The final buffer is
+  /// delivered separately via onComplete, so dropping the last pending flush
+  /// is harmless.
+  void _scheduleUiFlush(
+    _ActiveStream stream,
+    Function(String content, String reasoning) onUpdate,
+  ) {
+    stream.uiUpdatePending = true;
+    if (stream.uiThrottleTimer != null) return;
+    stream.uiThrottleTimer = Timer(_uiUpdateInterval, () {
+      stream.uiThrottleTimer = null;
+      if (!stream.uiUpdatePending || !stream.isActive) return;
+      stream.uiUpdatePending = false;
+      final content = stream.contentBuffer.toString();
+      onUpdate(content, stream.reasoningBuffer.toString());
+      _updateNotificationThrottled(content);
+    });
   }
 
   /// Update notification with content (throttled to avoid excessive updates)
@@ -628,6 +657,18 @@ class _ActiveStream {
   // Reset on every incoming event. If it fires, the stream is
   // considered dead and will be cleaned up with an error.
   Timer? idleTimer;
+
+  // UI-update coalescing: holds the timer that flushes the latest buffer to
+  // the UI at most once per [_uiUpdateInterval], plus whether a token has
+  // arrived since the last flush.
+  Timer? uiThrottleTimer;
+  bool uiUpdatePending = false;
+
+  void cancelUiThrottle() {
+    uiThrottleTimer?.cancel();
+    uiThrottleTimer = null;
+    uiUpdatePending = false;
+  }
 
   // Background message storage for when user switches away during streaming
   List<Map<String, dynamic>>? backgroundMessages;

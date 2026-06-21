@@ -78,12 +78,14 @@ void main() {
       final ctx = await startTestStream();
 
       ctx.controller.add(const ContentEvent('Hello '));
-      await Future.delayed(Duration.zero);
+      // onUpdate is coalesced (~33ms) so wait past the flush window before
+      // asserting the UI-callback value; the buffer itself updates eagerly.
+      await Future.delayed(const Duration(milliseconds: 60));
       expect(ctx.getContent(), equals('Hello '));
       expect(manager.getBufferedContent('chat-1'), equals('Hello '));
 
       ctx.controller.add(const ContentEvent('world!'));
-      await Future.delayed(Duration.zero);
+      await Future.delayed(const Duration(milliseconds: 60));
       expect(ctx.getContent(), equals('Hello world!'));
       expect(manager.getBufferedContent('chat-1'), equals('Hello world!'));
 
@@ -95,12 +97,13 @@ void main() {
       final ctx = await startTestStream();
 
       ctx.controller.add(const ReasoningEvent('Let me think'));
-      await Future.delayed(Duration.zero);
+      // onUpdate is coalesced (~33ms) — wait past the flush window.
+      await Future.delayed(const Duration(milliseconds: 60));
       expect(ctx.getReasoning(), equals('Let me think'));
       expect(manager.getBufferedReasoning('chat-1'), equals('Let me think'));
 
       ctx.controller.add(const ReasoningEvent('... more'));
-      await Future.delayed(Duration.zero);
+      await Future.delayed(const Duration(milliseconds: 60));
       expect(ctx.getReasoning(), equals('Let me think... more'));
       expect(
         manager.getBufferedReasoning('chat-1'),
@@ -240,7 +243,8 @@ void main() {
       ctx.controller.add(const UsageEvent({'prompt_tokens': 10}));
       ctx.controller.add(const MetaEvent({'model': 'gpt-4'}));
       ctx.controller.add(const ContentEvent('After meta'));
-      await Future.delayed(Duration.zero);
+      // onUpdate is coalesced (~33ms) — wait past the flush window.
+      await Future.delayed(const Duration(milliseconds: 60));
 
       expect(ctx.getContent(), equals('After meta'));
       expect(manager.isStreaming('chat-1'), isTrue);
