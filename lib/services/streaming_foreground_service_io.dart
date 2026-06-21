@@ -196,6 +196,37 @@ class StreamingForegroundService {
     return notificationPermission == NotificationPermission.granted;
   }
 
+  /// Whether the app is exempt from Android battery optimization.
+  ///
+  /// When the app is NOT exempt, the OS can freeze it shortly after the
+  /// screen locks, cutting off in-flight multi-pass tool loops. Always
+  /// `true` on non-Android platforms (no such restriction).
+  static Future<bool> isIgnoringBatteryOptimizations() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] battery-opt check failed: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Show the system dialog asking the user to exempt the app from battery
+  /// optimization. Returns `true` if the app is exempt afterwards.
+  static Future<bool> requestIgnoreBatteryOptimization() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] battery-opt request failed: $e');
+      }
+      return false;
+    }
+  }
+
   /// Strip common markdown syntax for clean notification display.
   static String _stripMarkdown(String content) {
     final plainContent = stripToolCallBlocksForDisplay(content);

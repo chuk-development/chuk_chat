@@ -57,4 +57,14 @@ class StreamingForegroundService {
   static Future<bool> canStart() async {
     return false;
   }
+
+  /// Web has no battery optimization restriction — always exempt.
+  static Future<bool> isIgnoringBatteryOptimizations() async {
+    return true;
+  }
+
+  /// No-op on web — nothing to request.
+  static Future<bool> requestIgnoreBatteryOptimization() async {
+    return true;
+  }
 }

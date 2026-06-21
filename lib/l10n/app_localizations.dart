@@ -824,6 +824,12 @@ class AppLocalizations {
   String get tourSettingsAiIdentityBody => _get('tourSettingsAiIdentityBody');
   String get tourDoneTitle => _get('tourDoneTitle');
   String get tourDoneBody => _get('tourDoneBody');
+
+  // ── Battery optimization prompt ────────────────────────────
+  String get batteryOptimizationTitle => _get('batteryOptimizationTitle');
+  String get batteryOptimizationBody => _get('batteryOptimizationBody');
+  String get batteryOptimizationAllow => _get('batteryOptimizationAllow');
+  String get batteryOptimizationLater => _get('batteryOptimizationLater');
 }
 
 class _AppLocalizationsDelegate

@@ -770,4 +770,12 @@ const Map<String, String> stringsEn = {
       'Configure system prompt, memory on/off, and reasoning here.',
   'tourDoneTitle': "You're all set",
   'tourDoneBody': 'You can replay this tour any time from Settings.',
+  // ── Battery optimization prompt ──────────────────────────────
+  'batteryOptimizationTitle': 'Keep responses running',
+  'batteryOptimizationBody':
+      'Android may pause Chuk Chat when the screen is locked, cutting off long '
+      'AI responses and tool steps mid-way. Allow unrestricted background '
+      'activity so replies finish even when your phone is locked.',
+  'batteryOptimizationAllow': 'Allow',
+  'batteryOptimizationLater': 'Later',
 };
