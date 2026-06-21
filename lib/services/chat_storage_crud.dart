@@ -330,11 +330,10 @@ class ChatStorageCrud {
     Stopwatch stopwatch,
   ) async {
     try {
-      final cachedRows = await LocalChatCacheService.load(userId);
-      final cachedRow = cachedRows.cast<Map<String, dynamic>?>().firstWhere(
-        (r) => r?['id'] == chatId,
-        orElse: () => null,
-      );
+      // Indexed single-row lookup — avoid loading and parsing every cached
+      // chat payload just to find one (that made each chat open scale with
+      // total chat count, flashing the loading spinner on mobile).
+      final cachedRow = await LocalChatCacheService.loadById(userId, chatId);
 
       if (cachedRow == null) {
         if (kDebugMode) {
