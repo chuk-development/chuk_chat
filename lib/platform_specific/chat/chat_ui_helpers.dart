@@ -195,7 +195,8 @@ class ChatUiHelpers {
   }) async {
     String? basePrompt;
     try {
-      basePrompt = await UserPreferencesService.loadSystemPrompt();
+      // Fast path: in-memory / local cache, no per-send Supabase round-trip.
+      basePrompt = await UserPreferencesService.loadSystemPromptFast();
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Error resolving system prompt for send: $error');

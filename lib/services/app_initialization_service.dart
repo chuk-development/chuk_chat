@@ -17,6 +17,7 @@ import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 
 /// Callback for initialization events
 typedef InitProgressCallback = void Function(String stage, int progressPercent);
@@ -401,6 +402,7 @@ class AppInitializationService {
   Future<void> resetServices() async {
     ChatSyncService.stop();
     ChatPreloadService.reset();
+    UserPreferencesService.resetCache();
     // Clear encryption key first, then reset storage services in parallel
     await EncryptionService.clearKey();
     await Future.wait([
