@@ -181,6 +181,19 @@ class MultiplexSession {
     }
   }
 
+  /// Return the live connection, opening one on demand if none exists.
+  ///
+  /// This is the guarantee behind "one socket carries everything": every
+  /// send routes through here, so there is never a per-request throwaway
+  /// connection. Returns null only when the socket genuinely can't be
+  /// established (offline / auth failure) — the caller surfaces that as a
+  /// stream error rather than silently degrading to a second transport.
+  static Future<MultiplexConnection?> ensureCurrent() async {
+    if (_current != null) return _current;
+    await prewarm();
+    return _current;
+  }
+
   /// Schedule the connection to close after [_idleCloseDelay]. If
   /// another chat is opened in the meantime the timer is cancelled and
   /// the same socket is reused.

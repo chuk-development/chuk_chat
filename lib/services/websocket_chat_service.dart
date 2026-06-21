@@ -1,58 +1,33 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
-import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
-import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
-import 'package:chuk_chat/utils/secure_token_handler.dart';
 
-/// Service for handling streaming chat responses via WebSocket.
-/// WebSocket provides better reliability than HTTP streaming,
-/// especially on mobile devices when the app is backgrounded.
+/// Service for handling streaming chat responses.
+///
+/// Every chat send — main responses, tool-loop passes, and title
+/// generation alike — is routed over the **single** multiplexed `/v2/ws`
+/// connection owned by [MultiplexSession]. There is no per-request socket
+/// and no legacy `/v1/ai/chat/ws` fallback in this client: one socket per
+/// session carries everything, multiplexed by `req_id`. (The backend keeps
+/// `/v1/ai/chat/ws` only so older app builds still work.)
 class WebSocketChatService {
-  /// Timeout for establishing the WebSocket connection.
-  static const _connectionTimeout = Duration(seconds: 15);
-
-  /// Timeout for receiving the first response chunk after sending a message.
-  /// This covers the "thinking" phase where the model is processing.
-  static const _firstChunkTimeout = Duration(seconds: 120);
-
-  // Inter-chunk timeout (60s) is handled by StreamingManager's idle timer.
-
-  static Uri get _wsBaseUrl {
-    final httpUrl = ApiConfigService.apiBaseUrl;
-    final uri = Uri.parse(httpUrl);
-
-    // Convert HTTP(S) scheme to WS(S) scheme
-    final wsScheme = uri.scheme == 'https' ? 'wss' : 'ws';
-
-    return Uri(
-      scheme: wsScheme,
-      host: uri.host,
-      port: uri.hasPort ? uri.port : null,
-      path: uri.path.isEmpty ? '/' : uri.path,
-    );
-  }
-
-  /// Sends a streaming chat request via WebSocket and yields chunks as they arrive.
+  /// Sends a streaming chat request and yields chunks as they arrive.
   ///
-  /// WebSocket advantages over HTTP streaming:
-  /// - Persistent connection survives app backgrounding
-  /// - Bidirectional communication
-  /// - Lower latency
-  /// - Better mobile battery efficiency
+  /// Ensures the shared multiplex connection is open (establishing it on
+  /// demand if a send beats [MultiplexSession.openForChat]), then routes
+  /// the request through it. When the socket genuinely can't be
+  /// established the stream yields an error + done rather than opening a
+  /// throwaway connection.
   ///
-  /// Timeouts:
-  /// - Connection: [_connectionTimeout] (15s)
-  /// - First chunk: [_firstChunkTimeout] (120s) — covers model "thinking" time
-  /// - Between chunks: 60s via StreamingManager idle timer — detects dead connections
+  /// [accessToken] is accepted for API stability; authentication now flows
+  /// through the multiplex handshake (which fetches the token itself), so
+  /// it is not used to build the request payload.
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -66,301 +41,44 @@ class WebSocketChatService {
     String? reasoningEffort,
     String? chatId,
   }) async* {
-    // Prefer the multiplexed /v2/ws connection when a chat session is
-    // open. Falls through to the legacy per-request WS path when no
-    // session is bound — preserves behaviour for offline retry workers
-    // and similar side paths.
-    //
-    // When [chatId] is supplied, the multiplex routes through
-    // [MultiplexSession.chatForChat] which enforces a single in-flight
-    // chat stream per chat id. Callers without a chat id (offline
-    // executor, anonymous side paths) still get the legacy un-tracked
-    // [MultiplexConnection.chat] behaviour.
-    final mux = MultiplexSession.current;
-    if (mux != null) {
-      yield* _sendViaMultiplex(
-        connection: mux,
-        message: message,
-        modelId: modelId,
-        providerSlug: providerSlug,
-        history: history,
-        systemPrompt: systemPrompt,
-        maxTokens: maxTokens,
-        temperature: temperature,
-        images: images,
-        reasoningEffort: reasoningEffort,
-        chatId: chatId,
+    // One connection carries everything. When [chatId] is supplied the
+    // multiplex routes through [MultiplexSession.chatForChat] (single
+    // in-flight stream per chat id); callers without a chat id (title
+    // generation, offline executor) get the un-tracked
+    // [MultiplexConnection.chat] over the same socket.
+    final connection = await MultiplexSession.ensureCurrent();
+    if (connection == null) {
+      if (kDebugMode) {
+        debugPrint(
+          '❌ [WebSocketChatService] multiplex connection unavailable',
+        );
+      }
+      yield const ChatStreamEvent.error(
+        'Could not establish a connection to the server. '
+        'Please check your internet connection and try again.',
       );
+      yield const ChatStreamEvent.done();
       return;
     }
 
-    if (kDebugMode) {
-      debugPrint(
-        '⚠️ [WebSocketChatService] no multiplex session bound, falling '
-        'back to legacy /v1/ai/chat/ws',
-      );
-    }
-
-    WebSocketChannel? channel;
-
-    try {
-      // Validate token before use
-      final tokenError = SecureTokenHandler.validateTokenForRequest(
-        accessToken,
-        context: 'WebSocket chat',
-      );
-      if (tokenError != null) {
-        yield ChatStreamEvent.error(tokenError);
-        return;
-      }
-
-      final wsUrl = _wsBaseUrl.replace(path: '/v1/ai/chat/ws');
-
-      // Log WebSocket connection with masked token
-      SecureTokenHandler.logWebSocketConnection(
-        url: wsUrl.toString(),
-        accessToken: accessToken,
-      );
-
-      if (kDebugMode) {
-        debugPrint('Request Details:');
-        debugPrint('  - Provider: $providerSlug');
-        debugPrint('  - Model: $modelId');
-        debugPrint('  - Message Length: ${message.length} chars');
-        debugPrint('  - Max Tokens: $maxTokens');
-        debugPrint('  - Temperature: $temperature');
-        debugPrint('  - History: ${history?.length ?? 0} messages');
-        debugPrint(
-          '  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}',
-        );
-      }
-
-      // Connect to WebSocket with connection timeout.
-      // On native platforms in release mode, this uses certificate pinning
-      // via a custom HttpClient (see websocket_connector_io.dart).
-      try {
-        channel = await ws_connector
-            .connectWebSocket(wsUrl)
-            .timeout(_connectionTimeout);
-        await channel.ready.timeout(_connectionTimeout);
-      } on TimeoutException {
-        yield ChatStreamEvent.error(
-          'Connection timed out after ${_connectionTimeout.inSeconds}s. '
-          'Please check your internet connection and try again.',
-        );
-        return;
-      }
-
-      if (kDebugMode) {
-        debugPrint('✅ WebSocket connected');
-      }
-
-      // Prepare the request payload
-      final requestPayload = {
-        'token': accessToken,
-        'message': message,
-        'model_id': modelId,
-        'provider_slug': providerSlug,
-        'max_tokens': maxTokens,
-        'temperature': temperature,
-      };
-
-      if (history != null && history.isNotEmpty) {
-        requestPayload['history'] = history;
-      }
-
-      if (systemPrompt != null && systemPrompt.isNotEmpty) {
-        requestPayload['system_prompt'] = systemPrompt;
-      }
-
-      if (reasoningEffort != null) {
-        requestPayload['reasoning_effort'] = reasoningEffort;
-      }
-
-      // Convert image storage paths to Base64 data URLs on-the-fly
-      if (images != null && images.isNotEmpty) {
-        final base64Images = await _convertImagesToBase64(images);
-        if (base64Images.isNotEmpty) {
-          requestPayload['images'] = base64Images;
-          if (kDebugMode) {
-            debugPrint('🖼️ Converted ${base64Images.length} images to Base64');
-          }
-        }
-      }
-
-      // Send the request
-      channel.sink.add(jsonEncode(requestPayload));
-
-      if (kDebugMode) {
-        debugPrint('📤 Request sent via WebSocket');
-      }
-
-      // Listen for responses with a generous timeout to cover the initial
-      // model thinking time. The StreamingManager's idle timer
-      // (see streaming_manager_io.dart) provides a separate, shorter
-      // inter-chunk timeout once the first chunk has arrived.
-      bool receivedFirstChunk = false;
-      bool yieldedContent = false;
-      bool retriedTransient = false;
-
-      await for (final message in channel.stream.timeout(
-        _firstChunkTimeout,
-        onTimeout: (sink) {
-          // No data received within the timeout window — close the sink
-          // to break out of the await-for loop.
-          sink.close();
-        },
-      )) {
-        receivedFirstChunk = true;
-
-        if (message is String) {
-          try {
-            final Map<String, dynamic> data = jsonDecode(message);
-
-            if (data.containsKey('error')) {
-              final rawError = data['error'] as String;
-              // Backend occasionally returns a transient routing/cache miss
-              // (e.g. "Model 'X' is not available on Fireworks AI." or
-              // "No provider selected") on the synthesis pass after tool calls
-              // succeeded. Resending the identical payload normally works.
-              // Retry once silently, but only before any content was streamed.
-              final transient =
-                  !yieldedContent &&
-                  !retriedTransient &&
-                  (rawError.contains('is not available on') ||
-                      rawError.contains('No provider') ||
-                      rawError.contains('no provider'));
-              if (transient) {
-                retriedTransient = true;
-                if (kDebugMode) {
-                  debugPrint('↻ Transient backend error, retrying once');
-                }
-                channel.sink.add(jsonEncode(requestPayload));
-                continue;
-              }
-
-              final errorMsg = SecureTokenHandler.createSafeErrorMessage(
-                rawError,
-                token: accessToken,
-              );
-
-              if (kDebugMode) {
-                debugPrint('❌ WebSocket error: $errorMsg');
-              }
-
-              yield ChatStreamEvent.error(errorMsg);
-              break;
-            }
-
-            if (data.containsKey('done') && data['done'] == true) {
-              if (kDebugMode) {
-                debugPrint(
-                  '═══════════════════════════════════════════════════════════',
-                );
-                debugPrint('✅ WEBSOCKET STREAM COMPLETED');
-                debugPrint('Provider: $providerSlug');
-                debugPrint('Model: $modelId');
-                debugPrint(
-                  '═══════════════════════════════════════════════════════════',
-                );
-              }
-              yield const ChatStreamEvent.done();
-              break;
-            }
-
-            if (data.containsKey('content')) {
-              yieldedContent = true;
-              yield ChatStreamEvent.content(data['content'] as String);
-            } else if (data.containsKey('reasoning')) {
-              yieldedContent = true;
-              yield ChatStreamEvent.reasoning(data['reasoning'] as String);
-            } else if (data.containsKey('usage')) {
-              yield ChatStreamEvent.usage(
-                data['usage'] as Map<String, dynamic>,
-              );
-            } else if (data.containsKey('meta')) {
-              yield ChatStreamEvent.meta(data['meta'] as Map<String, dynamic>);
-            } else if (data.containsKey('tps')) {
-              yield ChatStreamEvent.tps((data['tps'] as num).toDouble());
-            }
-          } on FormatException catch (e) {
-            // JSON parse error — likely a proxy error page or garbled data.
-            // Surface to the user so they know data was lost.
-            // Privacy: never log the raw `message` body. It may contain the
-            // model's streaming chat output (per CLAUDE.md "Privacy: Logging":
-            // "NEVER log message content"). Log only length + error class.
-            if (kDebugMode) {
-              debugPrint(
-                'Failed to parse WebSocket message: '
-                'len=${message.length} err=${e.runtimeType}',
-              );
-            }
-            yield ChatStreamEvent.error(
-              'Received invalid response from server. '
-              'This may indicate a network issue — please try again.',
-            );
-            break;
-          } catch (e) {
-            // Unexpected error (e.g. type cast failure on malformed payload)
-            if (kDebugMode) {
-              debugPrint('Unexpected error processing WebSocket message: $e');
-            }
-            yield ChatStreamEvent.error(
-              'Unexpected error processing server response. '
-              'Please try again.',
-            );
-            break;
-          }
-        }
-      }
-
-      // If we never received any chunk, the timeout triggered
-      if (!receivedFirstChunk) {
-        yield ChatStreamEvent.error(
-          'No response received after ${_firstChunkTimeout.inSeconds}s. '
-          'The server may be overloaded — please try again.',
-        );
-      }
-    } on WebSocketChannelException catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-        debugPrint('❌ WEBSOCKET ERROR');
-        debugPrint('Provider: $providerSlug');
-        debugPrint('Model: $modelId');
-        debugPrint('Error: $e');
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-      }
-      throw WebSocketChatException('WebSocket connection failed: $e');
-    } catch (e, stackTrace) {
-      if (kDebugMode) {
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-        debugPrint('❌ WEBSOCKET ERROR');
-        debugPrint('Provider: $providerSlug');
-        debugPrint('Model: $modelId');
-        debugPrint('Error: $e');
-        debugPrint('Stack Trace: $stackTrace');
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-      }
-      throw WebSocketChatException('WebSocket streaming failed: $e');
-    } finally {
-      await channel?.sink.close();
-      if (kDebugMode) {
-        debugPrint('🧹 WebSocket closed and resources cleaned up');
-      }
-    }
+    yield* _sendViaMultiplex(
+      connection: connection,
+      message: message,
+      modelId: modelId,
+      providerSlug: providerSlug,
+      history: history,
+      systemPrompt: systemPrompt,
+      maxTokens: maxTokens,
+      temperature: temperature,
+      images: images,
+      reasoningEffort: reasoningEffort,
+      chatId: chatId,
+    );
   }
 
-  /// Send a chat through the multiplexed `/v2/ws` connection. Mirrors
-  /// the legacy single-WS path: yields the same [ChatStreamEvent] flow
-  /// and lets the caller's drain loop handle book-keeping.
+  /// Send a chat through the multiplexed `/v2/ws` connection. Yields the
+  /// [ChatStreamEvent] flow and lets the caller's drain loop handle
+  /// book-keeping.
   static Stream<ChatStreamEvent> _sendViaMultiplex({
     required MultiplexConnection connection,
     required String message,
@@ -442,10 +160,53 @@ class WebSocketChatService {
     // Route through the per-chatId tracker so two concurrent chat
     // streams for the same chat (e.g. title generation racing the
     // main response) can never interleave into the same UI buffer.
-    yield* MultiplexSession.chatForChat(
-      chatId: chatId,
-      payload: payload,
-    );
+    //
+    // The backend occasionally returns a transient routing error (e.g.
+    // "Model 'X' is not available on Fireworks AI." or "No provider
+    // selected") on the synthesis pass right after tool calls succeed;
+    // re-issuing the identical request normally works. Retry once,
+    // silently, but only before any content has streamed. (Carried over
+    // from the removed legacy path so this self-heal isn't lost.)
+    var retriedTransient = false;
+    var yieldedContent = false;
+    while (true) {
+      var shouldRetry = false;
+      await for (final event in MultiplexSession.chatForChat(
+        chatId: chatId,
+        payload: payload,
+      )) {
+        if (event is ContentEvent || event is ReasoningEvent) {
+          yieldedContent = true;
+          yield event;
+        } else if (event is ErrorEvent) {
+          final msg = event.message;
+          final transient =
+              !yieldedContent &&
+              !retriedTransient &&
+              (msg.contains('is not available on') ||
+                  msg.contains('No provider') ||
+                  msg.contains('no provider'));
+          if (transient) {
+            retriedTransient = true;
+            shouldRetry = true;
+            if (kDebugMode) {
+              debugPrint(
+                '↻ [Multiplex] transient backend error, retrying once',
+              );
+            }
+            // Abandon this attempt's stream (cancels it server-side) and
+            // re-issue below. Do NOT forward the error or the done that
+            // chatForChat would append.
+            break;
+          }
+          yield event;
+        } else {
+          // usage / meta / tps / done — forward unchanged.
+          yield event;
+        }
+      }
+      if (!shouldRetry) break;
+    }
   }
 
   /// Replace large `history` entries whose content was already uploaded (and
@@ -500,14 +261,4 @@ class WebSocketChatService {
 
     return base64Images;
   }
-}
-
-/// Exception thrown when WebSocket chat fails.
-class WebSocketChatException implements Exception {
-  final String message;
-
-  const WebSocketChatException(this.message);
-
-  @override
-  String toString() => message;
 }
