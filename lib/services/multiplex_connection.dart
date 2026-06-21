@@ -69,6 +69,14 @@ class MultiplexConnection {
   StreamSubscription<dynamic>? _channelSubscription;
   Timer? _pingTimer;
 
+  /// Wall-clock time of the last frame received from the server (including
+  /// pongs). Used to gauge whether a backgrounded socket has gone stale:
+  /// while the app is suspended the heartbeat timer is frozen, so a load
+  /// balancer can silently drop the idle connection without the listener's
+  /// onDone/onError ever firing. [ensureReady] would then hand back the
+  /// already-resolved handshake and never notice. See [sinceLastInbound].
+  DateTime? _lastInboundAt;
+
   /// Single shared handshake future. While non-null any [ensureReady]
   /// call returns it; reset to null when the handshake settles (success
   /// or failure).
@@ -133,6 +141,7 @@ class MultiplexConnection {
     _channel = channel;
     _channelSubscription = channel.stream.listen(
       (dynamic raw) {
+        _lastInboundAt = DateTime.now();
         if (!authCompleter.isCompleted) {
           // We're still inside the auth handshake — interpret the very
           // first frame as auth_ok / auth_error.
@@ -224,6 +233,19 @@ class MultiplexConnection {
       debugPrint('🔌 [Multiplex] /v2/ws ready');
     }
   }
+
+  /// Time since the last server frame arrived, or null if the socket has
+  /// never received one. A large value after an app resume strongly implies
+  /// the connection was silently dropped while backgrounded.
+  Duration? get sinceLastInbound => _lastInboundAt == null
+      ? null
+      : DateTime.now().difference(_lastInboundAt!);
+
+  /// True while any chat stream or tool call is still awaiting frames. Used
+  /// to avoid reconnecting a socket that's actively in use (e.g. a stream
+  /// kept alive by the foreground service across a screen lock).
+  bool get hasInFlight =>
+      _chatControllers.isNotEmpty || _toolCompleters.isNotEmpty;
 
   Uri _resolveWsUrl() {
     final uri = Uri.parse(baseUrl);

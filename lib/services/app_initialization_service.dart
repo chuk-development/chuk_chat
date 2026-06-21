@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -133,6 +134,11 @@ class AppInitializationService {
     if (kDebugMode) {
       debugPrint('🚀 [AppInit] Starting user session init for ${user.id}...');
     }
+
+    // Open the chat socket now (the Supabase token is already available and
+    // doesn't need the encryption key) so the TLS + auth handshake overlaps
+    // with sidebar/key/sync work instead of blocking the first send.
+    unawaited(MultiplexSession.prewarm());
 
     try {
       // Load cached sidebar data first so startup UI is responsive even if

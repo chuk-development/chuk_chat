@@ -28,6 +28,13 @@ import 'package:chuk_chat/services/supabase_service.dart';
 /// underlying socket.
 const Duration _idleCloseDelay = Duration(seconds: 60);
 
+/// How long without an inbound frame before [MultiplexSession.prewarm]
+/// treats a socket as stale and reconnects from scratch. Comfortably above
+/// the connection's 25s heartbeat so a healthy, foregrounded socket (which
+/// gets a pong every cycle) is never mistaken for dead, while a connection
+/// silently dropped during an app suspend is replaced proactively on resume.
+const Duration _staleReconnectThreshold = Duration(seconds: 40);
+
 class MultiplexSession {
   MultiplexSession._();
 
@@ -100,6 +107,80 @@ class MultiplexSession {
     _current = connection;
   }
 
+  /// Pre-open the multiplex socket before the first send so the TLS + auth
+  /// handshake overlaps with the user composing their message (and with
+  /// startup work) instead of blocking time-to-first-token. Without this,
+  /// the first message in a fresh chat — and the first send after a cold
+  /// start, a long idle, or an app resume — pays the full connect + auth
+  /// roundtrip on the critical path, which on mobile reads as "the
+  /// connection takes forever".
+  ///
+  /// Best-effort: failures are swallowed (the send path re-runs
+  /// [MultiplexConnection.ensureReady] and surfaces real errors). Leaves
+  /// [currentChatId] untouched — when no chat is bound the socket is
+  /// scheduled to idle-close so a prewarm that's never used doesn't leak a
+  /// permanently-open connection.
+  static Future<void> prewarm() async {
+    final existing = _current;
+    if (existing != null) {
+      // A socket that hasn't heard from the server in a while was probably
+      // dropped silently while the app was suspended. ensureReady() would
+      // hand back the stale, already-resolved handshake, so reconnect from
+      // scratch instead — but only when nothing is actively streaming on it
+      // (don't kill a response the foreground service kept alive).
+      final idleFor = existing.sinceLastInbound;
+      final stale = idleFor != null && idleFor > _staleReconnectThreshold;
+      if (stale && !existing.hasInFlight && !_hasActiveStreams) {
+        if (kDebugMode) {
+          debugPrint(
+            '🔁 [MultiplexSession] socket stale (${idleFor.inSeconds}s idle), '
+            'reconnecting',
+          );
+        }
+        await existing.dispose();
+        _current = null;
+        // Fall through to a fresh connect below.
+      } else {
+        // Cheap when already authenticated.
+        try {
+          await existing.ensureReady();
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [MultiplexSession] prewarm re-auth failed: $e');
+          }
+        }
+        return;
+      }
+    }
+
+    final connection = MultiplexConnection(
+      baseUrl: ApiConfigService.apiBaseUrl,
+      accessTokenProvider: _tokenProvider,
+    );
+    try {
+      await connection.ensureReady();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] prewarm failed: $e');
+      }
+      await connection.dispose();
+      return;
+    }
+
+    // Another opener (openForChat) may have won the race while we awaited
+    // the handshake — keep theirs, drop ours.
+    if (_current != null) {
+      await connection.dispose();
+      return;
+    }
+    _current = connection;
+    // Nothing has claimed the socket — let it idle-close like closeForChat
+    // would, so an unused prewarm doesn't keep a socket open forever.
+    if (_currentChatId == null) {
+      _scheduleIdleClose();
+    }
+  }
+
   /// Schedule the connection to close after [_idleCloseDelay]. If
   /// another chat is opened in the meantime the timer is cancelled and
   /// the same socket is reused.
@@ -110,12 +191,18 @@ class MultiplexSession {
       return;
     }
     _currentChatId = null;
+    _scheduleIdleClose();
+  }
+
+  /// Arm the idle-close timer. Tears the socket down after [_idleCloseDelay]
+  /// only if no chat has claimed it in the meantime.
+  static void _scheduleIdleClose() {
     _idleCloseTimer?.cancel();
     _idleCloseTimer = Timer(_idleCloseDelay, () {
       _idleCloseTimer = null;
       // The chat id may have been claimed by a new openForChat call in
       // the meantime — only tear down if nothing is using it.
-      if (_currentChatId == null) {
+      if (_currentChatId == null && !_hasActiveStreams) {
         final conn = _current;
         _current = null;
         if (conn != null) {
@@ -124,6 +211,8 @@ class MultiplexSession {
       }
     });
   }
+
+  static bool get _hasActiveStreams => _activeChatStreams.isNotEmpty;
 
   /// Tear down the connection immediately. Used on logout.
   static Future<void> shutdown() async {
