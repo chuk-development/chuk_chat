@@ -577,6 +577,35 @@ class UserPreferencesService {
   /// Local SharedPreferences key for the decrypted system prompt cache.
   static const String _systemPromptCacheKey = 'cached_system_prompt';
 
+  /// In-memory decrypted system prompt. Populated by [loadSystemPrompt] /
+  /// [saveSystemPrompt] and read by [loadSystemPromptFast] so the send path
+  /// never blocks on a Supabase round-trip for a value that changes only
+  /// when the user edits it. `''` is a valid cached value (no prompt set);
+  /// null means "not loaded yet this session".
+  static String? _systemPromptMemCache;
+
+  /// Drop the in-memory system-prompt cache. MUST be called on logout so a
+  /// different user signing in within the same process can't inherit the
+  /// previous user's prompt.
+  static void resetCache() {
+    _systemPromptMemCache = null;
+  }
+
+  /// Fast system-prompt read for the send path: in-memory → local
+  /// (SharedPreferences, decrypt, no network) → network as a last resort.
+  /// Avoids the per-send Supabase select that [loadSystemPrompt] performs.
+  /// Edits go through [saveSystemPrompt]/[clearSystemPrompt], which keep all
+  /// three layers in sync, so cache-first is correct for the same device.
+  static Future<String?> loadSystemPromptFast() async {
+    if (_systemPromptMemCache != null) return _systemPromptMemCache;
+    final local = await loadSystemPromptLocal();
+    if (local != null) {
+      _systemPromptMemCache = local;
+      return local;
+    }
+    return loadSystemPrompt();
+  }
+
   /// Load the system prompt from local SharedPreferences only (no network).
   /// The cached value is stored encrypted; returns `null` if nothing is cached
   /// or if decryption fails (e.g. encryption key not yet loaded).
@@ -648,6 +677,7 @@ class UserPreferencesService {
         } catch (_) {
           // Non-critical — caching is best-effort.
         }
+        _systemPromptMemCache = systemPrompt;
         if (kDebugMode) {
           debugPrint('Successfully saved encrypted system prompt');
         }
@@ -700,6 +730,7 @@ class UserPreferencesService {
         } catch (_) {
           // Non-critical — caching is best-effort.
         }
+        _systemPromptMemCache = decryptedPrompt;
 
         if (kDebugMode) {
           debugPrint(
@@ -708,6 +739,9 @@ class UserPreferencesService {
         }
         return decryptedPrompt;
       } else {
+        // No prompt set — cache the empty result so the fast path doesn't
+        // re-hit the network on every send for users without a custom prompt.
+        _systemPromptMemCache = '';
         if (kDebugMode) {
           debugPrint('No system prompt found for user');
         }
@@ -747,6 +781,7 @@ class UserPreferencesService {
           final prefs = await SharedPreferences.getInstance();
           await prefs.remove(_systemPromptCacheKey);
         } catch (_) {}
+        _systemPromptMemCache = '';
         if (kDebugMode) {
           debugPrint('Successfully cleared system prompt');
         }
