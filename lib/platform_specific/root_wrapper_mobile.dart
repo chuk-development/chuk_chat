@@ -19,6 +19,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -167,6 +168,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       // Re-check permissions on resume — Android can revoke them after
       // an APK update or if the user toggled them in system settings.
       _ensurePermissions();
+      // Reconnect the chat socket proactively. While backgrounded, Android
+      // Doze freezes the heartbeat timer and the load balancer drops the
+      // idle WS — without this the first post-unlock send pays the full
+      // reconnect on the critical path. prewarm() reuses a healthy socket
+      // and never tears down an in-flight stream.
+      unawaited(MultiplexSession.prewarm());
     }
   }
 
