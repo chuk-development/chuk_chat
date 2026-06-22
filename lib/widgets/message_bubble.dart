@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/widgets/morph_spinner.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/diff_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
@@ -1887,14 +1888,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 child: Row(
                   children: [
                     if (isStreaming)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: barAccent,
-                        ),
-                      )
+                      MorphSpinner(size: 14, color: barAccent)
                     else
                       Icon(
                         _hasReasoning
@@ -2042,14 +2036,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 child: Row(
                   children: [
                     if (isRunning)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: accentColor,
-                        ),
-                      )
+                      MorphSpinner(size: 14, color: accentColor)
                     else
                       Icon(icon, size: 14, color: accentColor),
                     const SizedBox(width: 8),
@@ -2345,14 +2332,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 child: Row(
                   children: [
                     if (showSpinner)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: accentColor,
-                        ),
-                      )
+                      MorphSpinner(size: 14, color: accentColor)
                     else
                       Icon(icon, size: 14, color: accentColor),
                     const SizedBox(width: 8),
