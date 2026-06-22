@@ -670,7 +670,6 @@ class StreamingMessageHandler {
                     ? RoundContentBlockService.buildSegmentedRoundBlocks(
                         segments: newSegments,
                         providerReasoning: finalReasoning,
-                        foldInterimIntoReasoning: true,
                         existingBlocks: contentBlocks,
                       )
                     : RoundContentBlockService.buildRoundBlocks(
@@ -679,10 +678,10 @@ class StreamingMessageHandler {
                         newToolCalls: newToolCalls,
                         interimBeforeToolCalls:
                             loopResult.interimBeforeToolCalls,
-                        // Fold interim content-channel prose into reasoning
-                        // (Kimi dumps CoT + draft code there) — never the
-                        // answer body.
-                        foldInterimIntoReasoning: true,
+                        // Never fold content into reasoning: reasoning is a
+                        // toggleable channel, so folded prose vanishes when the
+                        // user hides reasoning. The content channel is the
+                        // answer and is always shown verbatim.
                         existingBlocks: contentBlocks,
                       );
                 final appendedBlocks = roundResult.blocks;

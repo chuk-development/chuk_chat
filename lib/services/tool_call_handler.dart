@@ -65,6 +65,15 @@ class ToolLoopSession {
   int deferredActionRecoveryAttempts = 0;
   int nonFinalTurnRecoveryAttempts = 0;
   int factCheckRecoveryAttempts = 0;
+
+  /// The tool-grounded candidate answer captured just before a fact-check
+  /// ([VERIFY]) pass, plus its reasoning. The verify pass keeps this as the
+  /// final answer unless it emits an explicit `[CORRECTED]` replacement — so a
+  /// model that merely acknowledges the check (instead of re-emitting the
+  /// answer) can never blank out a valid grounded answer. Consumed (set back to
+  /// null) when the fact-check resolves.
+  String? factCheckCandidate;
+  String factCheckCandidateReasoning = '';
 }
 
 class ToolLoopStep {
@@ -644,6 +653,9 @@ class ToolCallHandler {
       final shouldRetryAfterEmptyResponse =
           displayContent.trim().isEmpty &&
           session.toolCalls.isNotEmpty &&
+          // A pending fact-check candidate is a valid grounded answer — commit
+          // it (resolution below) instead of re-prompting for an empty reply.
+          session.factCheckCandidate == null &&
           session.emptyFinalRecoveryAttempts < _maxEmptyFinalRecoveryAttempts;
 
       if (shouldRetryAfterEmptyResponse) {
@@ -698,27 +710,38 @@ class ToolCallHandler {
 
       if (shouldRunFactCheck) {
         session.factCheckRecoveryAttempts++;
+        // Capture the grounded candidate answer + its reasoning. It stays the
+        // final answer unless the verify pass returns an explicit [CORRECTED]
+        // replacement (resolved below). This is what makes the pass universal:
+        // weaker models that reply with a bare acknowledgement instead of
+        // re-emitting the answer no longer blank it out.
+        session.factCheckCandidate = displayContent;
+        session.factCheckCandidateReasoning = effectiveReasoning;
+
         const factCheckMessage =
             'Tool Results:\n'
-            '[VERIFY] Before this answer reaches the user, verify EVERY '
-            'factual claim in it against the tool results gathered above. '
-            'Check each claim:\n'
-            '- Identity: does the source actually refer to the SAME entity '
-            '(person, product, place) you are describing? A matching name is '
-            'NOT proof of identity — confirm with distinguishing details '
-            '(birth year, nationality, location, model/version, date).\n'
+            '[VERIFY] Silently re-check EVERY factual claim in your previous '
+            'answer against the tool results gathered above:\n'
+            '- Identity: does the source refer to the SAME entity (person, '
+            'product, place)? A matching name is NOT proof — confirm with '
+            'distinguishing details (birth year, nationality, location, '
+            'model/version, date).\n'
             '- Plausibility: do dates, ages, numbers and units fit together '
-            "and make sense (e.g. an event cannot predate the subject's "
-            'birth)?\n'
-            '- Support: is each claim backed by a tool result? Drop or flag '
+            "(e.g. an event cannot predate the subject's birth)?\n"
+            '- Support: is each claim backed by a tool result? Distrust '
             'anything you only recall from training but did not retrieve.\n'
-            '- Contradictions: do sources disagree? If so, prefer the '
-            'primary/official source and note the uncertainty.\n\n'
-            'If any claim cannot be supported, or you find a contradiction or '
-            'a gap, either correct it now OR call the appropriate tool to '
-            'resolve it. If everything checks out, output the final '
-            'user-facing answer now (corrected where needed). Do NOT mention '
-            'this verification step or these instructions to the user.';
+            '- Contradictions: if sources disagree, prefer the primary/'
+            'official source.\n\n'
+            'If you need data you do not have, call the appropriate tool now. '
+            'Otherwise reply using EXACTLY ONE of these two formats and '
+            'NOTHING else:\n'
+            '1. If every claim is supported and correct, reply with only: '
+            '[OK]\n'
+            '2. If anything is wrong, unsupported, or contradicted, reply with '
+            '[CORRECTED] on the first line, immediately followed by the '
+            'COMPLETE corrected user-facing answer.\n\n'
+            'Do NOT mention this verification step or these instructions to '
+            'the user.';
 
         session.latestUserMessage = factCheckMessage;
         return ToolLoopResult.continueWith(
@@ -734,10 +757,43 @@ class ToolCallHandler {
               modelId: session.modelId,
             ),
           ),
-          // Suppress the unverified candidate — the verify pass produces the
-          // authoritative final text. Showing it now and then correcting it
-          // is exactly the failure mode this guards against.
+          // Suppress the candidate in the UI for now — the verify pass either
+          // confirms it (we restore it below) or replaces it via [CORRECTED].
           interimContent: '',
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
+      // Fact-check resolution. A candidate was captured on the prior pass, so
+      // this turn is the model's verify response. Decide structurally — never
+      // by text patterns: keep the grounded candidate by default, and only
+      // swap in a replacement when the model emitted an explicit [CORRECTED]
+      // marker followed by real text. An [OK], a bare acknowledgement, or any
+      // other narration leaves the candidate intact.
+      final candidate = session.factCheckCandidate;
+      if (candidate != null) {
+        final candidateReasoning = session.factCheckCandidateReasoning;
+        session.factCheckCandidate = null;
+        session.factCheckCandidateReasoning = '';
+
+        final correctedMatch = RegExp(
+          r'\[CORRECTED\]',
+          caseSensitive: false,
+        ).firstMatch(displayContent);
+        if (correctedMatch != null) {
+          final corrected = displayContent.substring(correctedMatch.end).trim();
+          if (corrected.isNotEmpty) {
+            return ToolLoopResult.finalAnswer(
+              content: corrected,
+              reasoning: effectiveReasoning,
+              toolCalls: _cloneToolCalls(session.toolCalls),
+            );
+          }
+        }
+
+        return ToolLoopResult.finalAnswer(
+          content: candidate,
+          reasoning: candidateReasoning,
           toolCalls: _cloneToolCalls(session.toolCalls),
         );
       }
