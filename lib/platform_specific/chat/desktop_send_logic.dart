@@ -533,10 +533,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     providerReasoning: finalReasoning,
                     newToolCalls: newToolCalls,
                     interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
-                    // Interim content-channel prose is the model thinking out
-                    // loud between tool calls (Kimi dumps CoT + draft HTML
-                    // there) — fold it into reasoning, never the answer body.
-                    foldInterimIntoReasoning: true,
+                    // Never fold content into reasoning: reasoning is a
+                    // toggleable channel, so folded prose vanishes when the user
+                    // hides reasoning. The content channel is the answer and is
+                    // always shown verbatim.
                   );
                   contentBlocks.addAll(roundResult.blocks);
 
@@ -1639,9 +1639,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                           newToolCalls: newToolCalls,
                           interimBeforeToolCalls:
                               loopResult.interimBeforeToolCalls,
-                          // Fold interim content-channel prose into reasoning
-                          // instead of the answer body (see site above).
-                          foldInterimIntoReasoning: true,
+                          // Never fold content into reasoning; see site above.
                         );
                     contentBlocks2.addAll(roundResult.blocks);
 
