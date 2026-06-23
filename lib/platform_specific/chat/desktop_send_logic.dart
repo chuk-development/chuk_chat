@@ -38,10 +38,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     String newText, {
     bool removeFollowingAssistant = true,
     bool clearMessagesBelow = false,
+    List<AttachedFile>? attachedFilesOverride,
   }) async {
     if (!_isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
-    if (trimmedText.isEmpty) {
+    final bool hasOverrideAttachments =
+        attachedFilesOverride != null && attachedFilesOverride.isNotEmpty;
+    if (trimmedText.isEmpty && !hasOverrideAttachments) {
       _showSnackBar('Message cannot be empty.');
       return;
     }
@@ -136,6 +139,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         // ends up in the system prompt as a "still active" item the
         // model then tries to update instead of creating fresh.
         await ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete);
+      }
+
+      // Reflect the (possibly reduced) attachment set chosen during editing so
+      // the saved bubble, the resend payload (images/attachedFilesJson are read
+      // back below), and any future edit all match what the user kept. Must run
+      // before the image/attached-file reconstruction further down.
+      if (attachedFilesOverride != null) {
+        ChatUiHelpers.writeAttachmentsToMessage(
+          _messages[index],
+          attachedFilesOverride,
+        );
       }
 
       _persistChat();

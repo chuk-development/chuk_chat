@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:uuid/uuid.dart';
+
+import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
@@ -73,6 +76,87 @@ void main() {
       final changed = ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message);
 
       expect(changed, isFalse);
+    });
+  });
+
+  group('ChatUiHelpers.writeAttachmentsToMessage', () {
+    final uuid = const Uuid();
+
+    AttachedFile image(String path) => AttachedFile(
+      id: uuid.v4(),
+      fileName: 'pic.jpg',
+      isImage: true,
+      isUploading: false,
+      encryptedImagePath: path,
+    );
+
+    test('round-trips an image set through reconstructAttachedFilesForResend',
+        () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final files = [image('u/a.enc'), image('u/b.enc')];
+
+      ChatUiHelpers.writeAttachmentsToMessage(message, files);
+
+      // images field holds the encrypted storage paths for the bubble.
+      expect(jsonDecode(message['images']!), ['u/a.enc', 'u/b.enc']);
+
+      final restored =
+          ChatUiHelpers.reconstructAttachedFilesForResend(message, uuid);
+      expect(restored.map((f) => f.encryptedImagePath), [
+        'u/a.enc',
+        'u/b.enc',
+      ]);
+    });
+
+    test('removing an image during edit drops it from every stored field', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final kept = image('u/keep.enc');
+      ChatUiHelpers.writeAttachmentsToMessage(message, [
+        kept,
+        image('u/remove.enc'),
+      ]);
+
+      // Simulate the user removing the second image, then submitting.
+      ChatUiHelpers.writeAttachmentsToMessage(message, [kept]);
+
+      expect(jsonDecode(message['images']!), ['u/keep.enc']);
+      final restored =
+          ChatUiHelpers.reconstructAttachedFilesForResend(message, uuid);
+      expect(restored.length, 1);
+      expect(restored.single.encryptedImagePath, 'u/keep.enc');
+    });
+
+    test('clearing all attachments removes the fields entirely', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      ChatUiHelpers.writeAttachmentsToMessage(message, [image('u/a.enc')]);
+
+      ChatUiHelpers.writeAttachmentsToMessage(message, const []);
+
+      expect(message.containsKey('images'), isFalse);
+      expect(message.containsKey('attachedFilesJson'), isFalse);
+      expect(message.containsKey('attachments'), isFalse);
+      expect(
+        ChatUiHelpers.reconstructAttachedFilesForResend(message, uuid),
+        isEmpty,
+      );
+    });
+
+    test('preserves document attachments separately from images', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final doc = AttachedFile(
+        id: uuid.v4(),
+        fileName: 'notes.md',
+        isImage: false,
+        isUploading: false,
+        markdownContent: '# Notes',
+      );
+
+      ChatUiHelpers.writeAttachmentsToMessage(message, [image('u/a.enc'), doc]);
+
+      expect(jsonDecode(message['images']!), ['u/a.enc']);
+      final docs = (jsonDecode(message['attachments']!) as List).cast<Map>();
+      expect(docs.single['fileName'], 'notes.md');
+      expect(docs.single['markdownContent'], '# Notes');
     });
   });
 }

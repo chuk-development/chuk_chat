@@ -8,6 +8,37 @@ import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
+/// Converts a raw stream error into a concise, user-safe message.
+///
+/// Raw exceptions can carry huge or binary payload fragments — e.g. a
+/// "413 Payload Too Large" body that echoes base64 image data, or control
+/// bytes — which otherwise get rendered verbatim into the chat bubble as a
+/// garbled wall of "frame text" (seen when sending several images at once).
+/// Keep it short, printable, and free of leaked payload.
+String _sanitizeStreamError(Object error) {
+  if (error is StreamingChatException && error.statusCode == 413) {
+    return 'Attachments are too large to send. Try fewer or smaller images.';
+  }
+
+  // Collapse control/non-printable bytes that make the error look garbled.
+  var msg = error.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]+'), ' ').trim();
+
+  // A base64 / data-URL fragment leaked into the error — don't surface it.
+  if (msg.contains('data:image/') ||
+      RegExp(r'[A-Za-z0-9+/]{200,}').hasMatch(msg)) {
+    return 'Failed to send attachments — they may be too large. '
+        'Try fewer or smaller images.';
+  }
+
+  // Keep only the first line and cap the length so the bubble stays readable.
+  final int newline = msg.indexOf('\n');
+  if (newline >= 0) msg = msg.substring(0, newline).trim();
+  const int maxLen = 200;
+  if (msg.length > maxLen) msg = '${msg.substring(0, maxLen)}…';
+
+  return msg.isEmpty ? 'Something went wrong. Please try again.' : msg;
+}
+
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
   static final StreamingManager _instance = StreamingManager._internal();
@@ -86,7 +117,7 @@ class StreamingManager {
         if (error is StreamingChatException && error.statusCode == 402) {
           onError('__PAYMENT_REQUIRED__');
         } else {
-          onError('Error: $error');
+          onError('Error: ${_sanitizeStreamError(error)}');
         }
         _cleanupStream(chatId);
       },

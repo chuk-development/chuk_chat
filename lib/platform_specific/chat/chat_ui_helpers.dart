@@ -580,6 +580,46 @@ class ChatUiHelpers {
     return attachedFiles;
   }
 
+  /// Overwrite a stored message's attachment fields so the rendered bubble and
+  /// any future edit/resend reflect [attachedFiles] (e.g. after the user removed
+  /// an image while editing). Mirrors the field layout written on first send:
+  ///   * `images`           — encrypted storage paths for image attachments,
+  ///   * `attachments`      — document attachments (fileName + markdownContent),
+  ///   * `attachedFilesJson`— full AttachedFile objects for resend.
+  /// Fields are removed entirely when the corresponding set becomes empty.
+  static void writeAttachmentsToMessage(
+    Map<String, String> message,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final imagePaths = attachedFiles
+        .where((f) => f.isImage && f.encryptedImagePath != null)
+        .map((f) => f.encryptedImagePath!)
+        .toList();
+    if (imagePaths.isNotEmpty) {
+      message['images'] = jsonEncode(imagePaths);
+    } else {
+      message.remove('images');
+    }
+
+    final documents = attachedFiles
+        .where((f) => !f.isImage && f.markdownContent != null)
+        .map((f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent})
+        .toList();
+    if (documents.isNotEmpty) {
+      message['attachments'] = jsonEncode(documents);
+    } else {
+      message.remove('attachments');
+    }
+
+    if (attachedFiles.isNotEmpty) {
+      message['attachedFilesJson'] = jsonEncode(
+        attachedFiles.map((f) => f.toJson()).toList(),
+      );
+    } else {
+      message.remove('attachedFilesJson');
+    }
+  }
+
   /// Extract the user's original query from display text that may include
   /// attachment headers.
   static String extractResendUserQuery(
