@@ -192,6 +192,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Timer? _audioVisualizerTimer;
 
   late final DesktopFileHandler _fileHandler;
+
+  /// IDs of attachments restored into the composer when an edit started. These
+  /// belong to the saved message, so removing them must NOT delete from storage
+  /// (the original survives if the edit is cancelled); attachments uploaded
+  /// fresh during the edit are not in this set and ARE deleted on removal.
+  final Set<String> _restoredAttachmentIds = <String>{};
   final Uuid _uuid = Uuid();
   late final DesktopClipboardHandler _clipboardHandler;
   bool get _isLinuxDesktop =>
@@ -298,24 +304,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           return KeyEventResult.handled;
         }
 
-        // Bare Enter: send message (or submit edit), consume to prevent newline
-        if (_messageActionsHandler.isEditing) {
-          final editIndex = _messageActionsHandler.editingMessageIndex!;
-          final newText = _controller.text.trim();
-          _cancelEditMessage();
-          if (newText.isNotEmpty) {
-            unawaited(
-              _submitEditedMessage(
-                editIndex,
-                newText,
-                removeFollowingAssistant: false,
-                clearMessagesBelow: true,
-              ),
-            );
-          }
-        } else {
-          unawaited(_sendMessage());
-        }
+        // Bare Enter: send message (or submit edit), consume to prevent newline.
+        // Route through _sendOrSubmitEdit so an edit keeps its (possibly
+        // modified) attachment set instead of dropping the user's changes.
+        unawaited(_sendOrSubmitEdit());
         return KeyEventResult.handled;
       },
     );
@@ -1376,20 +1368,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     if (result.text != null && result.text!.isNotEmpty) {
+      // When editing, the transcription must go through the edit-submit path,
+      // which guards on `_isSending` — so do NOT pre-set the flag in that case
+      // or the submit would bail. _sendMessage() sets the flag itself.
+      final bool editing = _messageActionsHandler.isEditing;
       setState(() {
         _controller.text = result.text!;
         _controller.selection = TextSelection.fromPosition(
           TextPosition(offset: result.text!.length),
         );
         // Set sending flag instantly so loading indicator shows without gap
-        if (widget.autoSendVoiceTranscription) {
+        if (widget.autoSendVoiceTranscription && !editing) {
           _isSending = true;
         }
       });
 
-      // If auto-send is enabled, send the message immediately
+      // If auto-send is enabled, send the message immediately. Route through
+      // _sendOrSubmitEdit so a transcription produced while editing replaces the
+      // edited message (and truncates below) instead of appending a new one.
       if (widget.autoSendVoiceTranscription) {
-        await _sendMessage();
+        await _sendOrSubmitEdit();
       } else {
         // Otherwise, focus the text field so user can review before sending
         Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
@@ -1407,13 +1405,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _editMessageAt(int index) {
     if (!_isValidMessageIndex(index)) return;
     final String text = (_messages[index]['text'] ?? '').trim();
-    if (text.isEmpty) return;
+    // Restore the message's attachments into the composer so the user can see
+    // and remove them while editing. Removal is list-only (see
+    // _removeComposerAttachment) so the saved message is never corrupted if the
+    // edit is cancelled.
+    final List<AttachedFile> attached = _reconstructAttachedFilesForResend(
+      index,
+    );
+    if (text.isEmpty && attached.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: text.length),
       );
+      _restoredAttachmentIds
+        ..clear()
+        ..addAll(attached.map((f) => f.id));
+      _fileHandler.attachedFiles
+        ..clear()
+        ..addAll(attached);
     });
   }
 
@@ -1421,7 +1432,53 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _messageActionsHandler.cancelEdit();
       _controller.clear();
+      // List-only clear: the restored attachments still belong to the saved
+      // message until an edit is submitted, so do NOT delete them from storage.
+      _fileHandler.attachedFiles.clear();
+      _restoredAttachmentIds.clear();
     });
+  }
+
+  /// Remove an attachment from the composer.
+  /// - While editing, attachments restored from the saved message are removed
+  ///   list-only (they still belong to that message until submit, and a cancel
+  ///   must leave the original intact).
+  /// - Attachments uploaded fresh during the edit (not in the restored set),
+  ///   and all removals outside editing, also delete the file from storage.
+  void _removeComposerAttachment(String fileId) {
+    if (_messageActionsHandler.isEditing &&
+        _restoredAttachmentIds.contains(fileId)) {
+      setState(() {
+        _fileHandler.attachedFiles.removeWhere((f) => f.id == fileId);
+      });
+    } else {
+      _fileHandler.removeAttachedFile(fileId);
+    }
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+  }
+
+  /// Sends the message, or submits an edited message if in edit mode.
+  Future<void> _sendOrSubmitEdit() async {
+    if (_messageActionsHandler.isEditing) {
+      final editIndex = _messageActionsHandler.editingMessageIndex!;
+      final newText = _controller.text.trim();
+      // Snapshot the (possibly reduced) attachment set BEFORE cancel clears it.
+      final attachedSnapshot = List<AttachedFile>.from(
+        _fileHandler.attachedFiles,
+      );
+      _cancelEditMessage();
+      if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
+        await _submitEditedMessage(
+          editIndex,
+          newText,
+          attachedFilesOverride: attachedSnapshot,
+          removeFollowingAssistant: false,
+          clearMessagesBelow: true,
+        );
+      }
+    } else {
+      await _sendMessage();
+    }
   }
 
   Future<void> _resendMessageAt(int index) async {
@@ -2254,13 +2311,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ),
                   child: AttachmentPreviewBar(
                     files: _fileHandler.attachedFiles,
-                    onRemove: (fileId) {
-                      _fileHandler.removeAttachedFile(fileId);
-                      Future.delayed(
-                        Duration.zero,
-                        () => _textFieldFocusNode.requestFocus(),
-                      );
-                    },
+                    onRemove: _removeComposerAttachment,
                   ),
                 ),
               // Editing indicator
@@ -2538,21 +2589,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         _cancelCurrentOperation();
                       } else if (_audioHandler.isMicActive) {
                         _handleAudioSend();
-                      } else if (_messageActionsHandler.isEditing) {
-                        final editIndex =
-                            _messageActionsHandler.editingMessageIndex!;
-                        final newText = _controller.text.trim();
-                        _cancelEditMessage();
-                        if (newText.isNotEmpty) {
-                          _submitEditedMessage(
-                            editIndex,
-                            newText,
-                            removeFollowingAssistant: false,
-                            clearMessagesBelow: true,
-                          );
-                        }
                       } else {
-                        _sendMessage();
+                        _sendOrSubmitEdit();
                       }
                     },
               child: Container(

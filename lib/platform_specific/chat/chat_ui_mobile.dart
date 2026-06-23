@@ -146,6 +146,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   late final ChatPersistenceHandler _persistenceHandler;
   late final StreamingMessageHandler _streamingHandler;
 
+  /// IDs of attachments restored into the composer when an edit started. These
+  /// belong to the saved message, so removing them must NOT delete from storage
+  /// (the original survives if the edit is cancelled); attachments uploaded
+  /// fresh during the edit are not in this set and ARE deleted on removal.
+  final Set<String> _restoredAttachmentIds = <String>{};
+
   // Model and provider state
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
@@ -1257,8 +1263,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // Do NOT set _isSendingMessage here — _sendMessage() guards on that flag
       // at its top and would bail before doing any work. _sendMessage() sets
       // the flag itself once it passes the guard.
+      // Route through _sendOrSubmitEdit so a transcription produced while
+      // editing replaces the edited message (and truncates below) instead of
+      // being appended as a brand-new message at the end.
       if (widget.autoSendVoiceTranscription) {
-        await _sendMessage();
+        await _sendOrSubmitEdit();
       } else {
         // Otherwise, focus the text field so user can review before sending
         _textFieldFocusNode.requestFocus();
@@ -1810,25 +1819,66 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     } else if (!isActiveChat) {
       // User switched to a different chat - _messages belongs to the OTHER chat!
       // DO NOT check _messages.length - it's the wrong chat's message list.
-      // Persist using the background update handler which reads from storage.
-      unawaited(
-        _persistenceHandler
-            .updateBackgroundChatMessage(
-              chatId: chatId,
-              messageIndex: index,
-              content: content,
-              reasoning: reasoning,
-              status: 'sent',
-              immediate: true,
-            )
-            .catchError((error) {
-              if (kDebugMode) {
-                debugPrint(
-                  'updateBackgroundChatMessage (chat-switched) failed: $error',
-                );
-              }
-            }),
-      );
+      //
+      // Persist the FULL message list from the streaming snapshot (captured at
+      // send start, with the live buffer overlaid) and inject the final answer.
+      // This reliably inserts/updates the chat even if it was never persisted
+      // yet — the previous single-index update silently dropped the answer when
+      // the chat (or its placeholder row) wasn't in storage at flush time,
+      // which is exactly the race when you start a NEW chat mid-stream.
+      final List<Map<String, dynamic>>? bgMessages = _streamingHandler
+          .getBackgroundMessages(chatId);
+      if (bgMessages != null && index >= 0 && index < bgMessages.length) {
+        final List<Map<String, String>> fullMessages = bgMessages.map((m) {
+          final converted = <String, String>{};
+          m.forEach((key, value) {
+            if (value == null) return;
+            converted[key] = value is String ? value : value.toString();
+          });
+          return converted;
+        }).toList();
+        fullMessages[index]['text'] = content;
+        fullMessages[index]['reasoning'] = reasoning;
+        if (tps != null) fullMessages[index]['tps'] = tps.toString();
+        if (fullMessages[index]['status'] == 'interrupted') {
+          fullMessages[index].remove('status');
+        }
+        unawaited(
+          _persistenceHandler
+              .persistChat(
+                messages: fullMessages,
+                chatId: chatId,
+                isOffline: _isOffline,
+                silent: true,
+              )
+              .catchError((error) {
+                if (kDebugMode) {
+                  debugPrint('persistChat (chat-switched full) failed: $error');
+                }
+                return null;
+              }),
+        );
+      } else {
+        // Fallback: no snapshot available — best-effort single-index update.
+        unawaited(
+          _persistenceHandler
+              .updateBackgroundChatMessage(
+                chatId: chatId,
+                messageIndex: index,
+                content: content,
+                reasoning: reasoning,
+                status: 'sent',
+                immediate: true,
+              )
+              .catchError((error) {
+                if (kDebugMode) {
+                  debugPrint(
+                    'updateBackgroundChatMessage (chat-switched) failed: $error',
+                  );
+                }
+              }),
+        );
+      }
     }
   }
 
@@ -2467,6 +2517,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     String newText, {
     bool removeFollowingAssistant = true,
     bool clearMessagesBelow = false,
+    List<AttachedFile>? attachedFilesOverride,
   }) async {
     if (index < 0 || index >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
@@ -2476,6 +2527,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     setState(() {
       _messages[index]['text'] = newText;
+      // Reflect the attachment set chosen during editing (the user may have
+      // removed images) so the saved bubble and any future edit match it.
+      if (attachedFilesOverride != null) {
+        ChatUiHelpers.writeAttachmentsToMessage(
+          _messages[index],
+          attachedFilesOverride,
+        );
+      }
     });
 
     // Before removing AI messages, collect:
@@ -2545,6 +2604,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _messages[index]['provider'] = providerToUse ?? '';
 
     final List<AttachedFile> attachedFilesForResend =
+        attachedFilesOverride ??
         ChatUiHelpers.reconstructAttachedFilesForResend(
           _messages[index],
           _uuid,
@@ -2662,13 +2722,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _editMessageAt(int index) {
     if (index < 0 || index >= _messages.length) return;
     final String text = (_messages[index]['text'] ?? '').trim();
-    if (text.isEmpty) return;
+    // Restore the message's attachments into the composer so the user can see
+    // and remove them while editing. These are already-uploaded files; removal
+    // here is list-only (see _removeComposerAttachment) so the original message
+    // is never corrupted if the edit is cancelled.
+    final List<AttachedFile> attached =
+        ChatUiHelpers.reconstructAttachedFilesForResend(_messages[index], _uuid);
+    if (text.isEmpty && attached.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: text.length),
       );
+      _restoredAttachmentIds
+        ..clear()
+        ..addAll(attached.map((f) => f.id));
+      _fileHandler.attachedFiles
+        ..clear()
+        ..addAll(attached);
     });
     _textFieldFocusNode.requestFocus();
   }
@@ -2677,7 +2749,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     setState(() {
       _messageActionsHandler.cancelEdit();
       _controller.clear();
+      // List-only clear: the restored attachments still belong to the saved
+      // message until an edit is actually submitted, so do NOT delete them
+      // from storage here (that would break the original message).
+      _fileHandler.attachedFiles.clear();
+      _restoredAttachmentIds.clear();
     });
+  }
+
+  /// Remove an attachment from the composer.
+  /// - While editing, attachments restored from the saved message are removed
+  ///   list-only (they still belong to that message until submit, and a cancel
+  ///   must leave the original intact).
+  /// - Attachments uploaded fresh during the edit (not in the restored set),
+  ///   and all removals outside editing, also delete the file from storage.
+  void _removeComposerAttachment(String fileId) {
+    if (_messageActionsHandler.isEditing &&
+        _restoredAttachmentIds.contains(fileId)) {
+      setState(() {
+        _fileHandler.attachedFiles.removeWhere((f) => f.id == fileId);
+      });
+    } else {
+      _fileHandler.removeFile(fileId);
+    }
   }
 
   /// Sends the message, or submits an edited message if in edit mode.
@@ -2685,11 +2779,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_messageActionsHandler.isEditing) {
       final editIndex = _messageActionsHandler.editingMessageIndex!;
       final newText = _controller.text.trim();
+      // Snapshot the (possibly reduced) attachment set BEFORE cancel clears it.
+      final attachedSnapshot = List<AttachedFile>.from(
+        _fileHandler.attachedFiles,
+      );
       _cancelEditMessage();
-      if (newText.isNotEmpty) {
+      if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
         await _submitEditedMessage(
           editIndex,
           newText,
+          attachedFilesOverride: attachedSnapshot,
           removeFollowingAssistant: false,
           clearMessagesBelow: true,
         );
@@ -3609,7 +3708,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             padding: const EdgeInsets.only(bottom: 8),
             child: AttachmentPreviewBar(
               files: _fileHandler.attachedFiles,
-              onRemove: _fileHandler.removeFile,
+              onRemove: _removeComposerAttachment,
             ),
           ),
         Row(

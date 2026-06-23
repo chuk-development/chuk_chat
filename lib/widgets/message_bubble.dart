@@ -1851,14 +1851,18 @@ class _MessageBubbleState extends State<MessageBubble> {
     final bool isStreaming = widget.isReasoningStreaming;
 
     // Determine header label and state.
-    // When the message is still "Thinking..." (no tokens yet), show
-    // "Connecting..." to indicate we're waiting for the server.
+    // When the message is still "Thinking..." (no tokens yet) we are NOT
+    // connecting — the multiplex socket is persistent and already open by the
+    // time a message is sent (a genuine reconnect surfaces its own
+    // "Reconnecting..." notification). The long dead-air gap before the first
+    // token is the provider working through the prompt, so label it as such
+    // instead of "Connecting...", which wrongly implied a problem on our side.
     final bool waitingForTokens =
         isStreaming &&
         !_hasReasoning &&
         (widget.message == 'Thinking...' || widget.message.isEmpty);
     final String label = waitingForTokens
-        ? 'Connecting...'
+        ? 'Processing prompt...'
         : _hasReasoning
         ? (isStreaming ? 'Reasoning...' : 'Reasoning')
         : 'Model Info';
