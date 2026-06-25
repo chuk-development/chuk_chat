@@ -1205,12 +1205,14 @@ List<TextSpan> _collectSpans(
 /// Tag used to identify LaTeX elements
 const String _latexTag = 'latex';
 
-/// LaTeX inline syntax parser - matches $...$ and $$...$$ and \(...\) and \[...\]
+/// LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
+///
+/// Single-dollar math is intentionally unsupported because prose often uses
+/// dollar amounts, and pairing those amounts across a sentence hides the
+/// currency text inside a math span.
 class LatexSyntax extends m.InlineSyntax {
   LatexSyntax()
-    : super(
-        r'(\$\$[\s\S]+?\$\$)|(\$[^\$\n]+?\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])',
-      );
+    : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])');
 
   @override
   bool onMatch(m.InlineParser parser, Match match) {
@@ -1226,14 +1228,10 @@ class LatexSyntax extends m.InlineSyntax {
       // Inline math: \(...\)
       content = input.substring(2, input.length - 2).trim();
       isBlock = false;
-    } else if (input.startsWith(r'$$') && input.endsWith(r'$$')) {
-      // Block math: $$...$$
+    } else {
+      // Block math: $$...$$ (only remaining alternative the regex can emit)
       content = input.substring(2, input.length - 2).trim();
       isBlock = true;
-    } else {
-      // Inline math: $...$
-      content = input.substring(1, input.length - 1).trim();
-      isBlock = false;
     }
 
     final m.Element el = m.Element.text(_latexTag, content);
