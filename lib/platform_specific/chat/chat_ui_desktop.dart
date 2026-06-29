@@ -28,6 +28,9 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
+import 'package:chuk_chat/widgets/measure_size.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -127,12 +130,14 @@ class ChukChatUIDesktop extends StatefulWidget {
 }
 
 class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        ChatScrollMixin,
+        ModelProviderResolutionMixin {
   // RENAMED STATE
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
-  final ScrollController _scrollController = ScrollController();
   final ScrollController _composerScrollController = ScrollController();
   late ChatApiService _chatApiService;
   late final FocusNode _textFieldFocusNode;
@@ -141,6 +146,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late AnimationController _animCtrl;
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
+
+  // Bridge the private fields above to ModelProviderResolutionMixin.
+  @override
+  String get selectedModelId => _selectedModelId;
+  @override
+  String? get selectedProviderSlug => _selectedProviderSlug;
+  @override
+  set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
+
   bool _reasoningEnabled =
       true; // true = default (reasoning on for reasoning models)
   String? _systemPrompt;
@@ -178,8 +192,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// until the chat is created and linked in the database.
   String? _pendingWorkspaceId;
 
-  bool _showScrollToBottom = false;
-  bool _isStickyBottom = true;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
   final StreamingManager _streamingManager = StreamingManager();
@@ -221,10 +233,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       26.0; // Queued-message banner row height (icon + text + bottom padding)
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
-  static const double _kShowScrollButtonDistance = 260.0;
-  static const double _kHideScrollButtonDistance = 140.0;
   static const double _kMessageListBottomLift = 40.0;
-  static const double _kStreamingBottomScrollSlack = 180.0;
 
   Widget _buildComposerContextMenu(
     BuildContext context,
@@ -320,7 +329,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ..onUpdate = () {
         if (mounted) setState(() {});
       }
-      ..onScrollToBottom = () => _scrollChatToBottom(force: true);
+      ..onScrollToBottom = () => scrollChatToBottom(force: true);
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _fileHandler.handleFileUploadUpdate,
     );
@@ -328,7 +337,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _clipboardHandler = DesktopClipboardHandler(
       onProcessFilePaths: _fileHandler.processFilePaths,
     );
-    _scrollController.addListener(_onScrollChanged);
+    scrollController.addListener(onScrollChanged);
     _selectedWorkspaceId = widget.workspaceId;
     _loadChatById(widget.selectedChatId);
     unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
@@ -359,7 +368,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _selectedModelId = newModelId;
         });
       }
-      unawaited(_loadProviderSlugForModel(newModelId));
+      unawaited(loadProviderSlugForModel(newModelId));
     };
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _modelSelectionListener,
@@ -370,7 +379,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         .listen((_) {
           // Reload provider slug when settings are changed —
           // skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(_loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
+          unawaited(loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
         });
   }
 
@@ -484,9 +493,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioVisualizerTimer?.cancel();
     _audioHandler.onLevelsChanged = null;
     _providerRefreshSubscription?.cancel();
-    _scrollController.removeListener(_onScrollChanged);
+    scrollController.removeListener(onScrollChanged);
     _controller.dispose();
-    _scrollController.dispose();
+    scrollController.dispose();
     _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
@@ -687,7 +696,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ..addAll(mappedMessages);
       _isLoadingChat = false;
       _isSending = _isStreaming; // Reset sending state based on current chat
-      _showScrollToBottom = false;
+      showScrollToBottom = false;
     });
 
     // Instant visibility — no fade-in for cached chats.
@@ -697,7 +706,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _persistChatWithId(chatId);
     }
 
-    _scrollChatToBottom(animate: false, force: true);
+    scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
@@ -890,9 +899,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _isLoadingChat = false;
       _isSending = _isStreaming; // Reset sending state based on current chat
-      _showScrollToBottom = false;
+      showScrollToBottom = false;
     });
-    _scrollChatToBottom(animate: false, force: true);
+    scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     stopwatch.stop();
     unawaited(
@@ -1003,7 +1012,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Notify parent that we're now on a new chat (null ID)
     widget.onChatIdChanged(null);
-    _scrollChatToBottom(force: true);
+    scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
     // Persist old chat in background (don't await)
@@ -1049,89 +1058,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
-  Future<void> _loadProviderSlugForModel(String modelId, {bool forceFromPrefs = false}) async {
-    if (modelId.isEmpty) {
-      if (_selectedProviderSlug != null) {
-        setState(() {
-          _selectedProviderSlug = null;
-        });
-      }
-      return;
-    }
-
-    if (!forceFromPrefs) {
-      final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
-        modelId,
-      );
-      if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
-        if (_selectedProviderSlug != dropdownSlug) {
-          setState(() {
-            _selectedProviderSlug = dropdownSlug;
-          });
-        }
-        return;
-      }
-    }
-
-    final String? loadedSlug =
-        await UserPreferencesService.loadSelectedProvider(modelId);
-    if (!mounted) return;
-    if (_selectedProviderSlug != loadedSlug) {
-      setState(() {
-        _selectedProviderSlug = loadedSlug;
-      });
-    }
-  }
-
-  Future<String?> _ensureProviderSlugForCurrentModel() async {
-    if (_selectedModelId.isEmpty) return null;
-
-    String? slug =
-        (_selectedProviderSlug != null && _selectedProviderSlug!.isNotEmpty)
-            ? _selectedProviderSlug
-            : null;
-
-    if (slug == null) {
-      await _loadProviderSlugForModel(_selectedModelId);
-      slug = _selectedProviderSlug;
-    }
-
-    // Third fallback: dropdown + prefs lookups can both fail after a
-    // network glitch. Use the static in-memory providers list — it
-    // survives transient network issues because it was hydrated at startup.
-    if (slug == null || slug.isEmpty) {
-      final providers =
-          ModelSelectionDropdown.availableProvidersForModel(_selectedModelId);
-      if (providers.isNotEmpty) {
-        final fallback = providers.first.slug;
-        if (kDebugMode) {
-          debugPrint(
-            'Provider fallback: using $fallback for $_selectedModelId (cache miss)',
-          );
-        }
-        if (mounted && _selectedProviderSlug != fallback) {
-          setState(() {
-            _selectedProviderSlug = fallback;
-          });
-        }
-        slug = fallback;
-      }
-    }
-
-    if (slug == null || slug.isEmpty) return null;
-
-    // Resolve "auto" sentinel at send time so the cheapest current provider
-    // is used without overwriting the user's preference.
-    if (slug == kAutoCheapestProviderSlug) {
-      final resolved = ModelSelectionDropdown.resolveProviderSlugForSend(
-        _selectedModelId,
-        slug,
-      );
-      return (resolved != null && resolved.isNotEmpty) ? resolved : null;
-    }
-    return slug;
-  }
-
   /// Load the user's saved model preference
   Future<void> _loadSavedModelPreference() async {
     try {
@@ -1147,7 +1073,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
         // Update the global notifier so dropdown stays in sync
         ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
-        await _loadProviderSlugForModel(savedModelId);
+        await loadProviderSlugForModel(savedModelId);
       } else {
         // No model saved - keep empty, user must select one
         if (kDebugMode) {
@@ -1277,9 +1203,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     return resolvedPrompt;
   }
-
-  bool get _modelSupportsImageInput =>
-      ChatUiHelpers.modelSupportsImageInput(_selectedModelId);
 
   // State for drag and drop
   bool _isDraggingFiles = false;
@@ -1608,7 +1531,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       actions: <Type, Action<Intent>>{
         PasteTextIntent: CallbackAction<PasteTextIntent>(
           onInvoke: (PasteTextIntent intent) {
-            _fileHandler.modelSupportsImageInput = _modelSupportsImageInput;
+            _fileHandler.modelSupportsImageInput = modelSupportsImageInput;
             unawaited(_clipboardHandler.handleSmartPaste(_controller));
             return null;
           },
@@ -1700,122 +1623,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxImageCacheSize = 10;
 
-  void _onScrollChanged() {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final distanceToBottom = position.maxScrollExtent - position.pixels;
-    // If the whole chat fits on screen (nothing to scroll) the button is
-    // always useless — hide it unconditionally. Without this guard, a short
-    // chat whose maxScrollExtent briefly grows during layout (e.g. when an
-    // AI message finishes streaming and the input shifts) can leave the
-    // button stuck visible even though the user is already at the end.
-    final hasScrollableContent = position.maxScrollExtent > 0;
-
-    bool nextShowScrollButton = _showScrollToBottom;
-    if (!hasScrollableContent) {
-      nextShowScrollButton = false;
-    } else if (!_showScrollToBottom &&
-        distanceToBottom > _kShowScrollButtonDistance) {
-      nextShowScrollButton = true;
-    } else if (_showScrollToBottom &&
-        distanceToBottom < _kHideScrollButtonDistance) {
-      nextShowScrollButton = false;
-    }
-
-    bool nextStickyBottom = _isStickyBottom;
-    if (distanceToBottom > 100) {
-      nextStickyBottom = false;
-    } else if (distanceToBottom < 8) {
-      nextStickyBottom = true;
-    }
-
-    final buttonChanged = nextShowScrollButton != _showScrollToBottom;
-    final stickyChanged = nextStickyBottom != _isStickyBottom;
-    if (!buttonChanged && !stickyChanged) return;
-
-    if (buttonChanged) {
-      setState(() {
-        _showScrollToBottom = nextShowScrollButton;
-      });
-      unawaited(
-        DiagnosticsLogService.info(
-          'chat_ui',
-          'Scroll threshold toggled',
-          data: {
-            'show_scroll_button': nextShowScrollButton,
-            'distance_to_bottom': distanceToBottom.round(),
-            'pixels': position.pixels.round(),
-            'max_scroll_extent': position.maxScrollExtent.round(),
-            'show_threshold': _kShowScrollButtonDistance.round(),
-            'hide_threshold': _kHideScrollButtonDistance.round(),
-          },
-        ),
-      );
-    }
-    if (stickyChanged) {
-      _isStickyBottom = nextStickyBottom;
-    }
-  }
-
-  void _scrollChatToBottom({bool animate = true, bool force = false}) {
-    if (!mounted) return;
-    if (!force && !_isStickyBottom) return;
-
-    // Instant jump (e.g. opening an existing chat): ListView.builder only
-    // reports an *estimated* maxScrollExtent from the items laid out so far,
-    // and async-sized content (images, code blocks) can grow it over several
-    // frames. A single post-frame jump lands short of the real bottom, so
-    // settle across a few frames until the extent stops growing.
-    if (force && !animate) {
-      _settleScrollToBottom();
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      // Honour an in-progress scroll only for passive (non-forced) calls; a
-      // forced scroll-to-bottom (button press, chat open) must win regardless.
-      if (!force && _scrollController.position.isScrollingNotifier.value) return;
-
-      final position = _scrollController.position;
-      final isNearBottom = position.maxScrollExtent - position.pixels < 100;
-
-      if (force || isNearBottom) {
-        if (animate) {
-          _scrollController.animateTo(
-            position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-        } else {
-          _scrollController.jumpTo(position.maxScrollExtent);
-        }
-      }
-    });
-  }
-
-  /// Jump to the bottom, then keep re-jumping on subsequent frames until the
-  /// scroll extent stabilises. ListView.builder grows its *estimated*
-  /// maxScrollExtent as it lays out more items / async-sized content, so a
-  /// single jump on chat open often stops short of the real bottom.
-  void _settleScrollToBottom({double lastExtent = -1, int attempt = 0}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      final position = _scrollController.position;
-      final target = position.maxScrollExtent;
-
-      if ((target - position.pixels).abs() > 0.5) {
-        _scrollController.jumpTo(target);
-      }
-
-      // Stop once the extent stops growing (or after a bounded number of
-      // frames, to avoid looping forever on pathological layouts).
-      final bool stable = (target - lastExtent).abs() < 0.5;
-      if (stable || attempt >= 10) return;
-      _settleScrollToBottom(lastExtent: target, attempt: attempt + 1);
-    });
-  }
-
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     await _persistenceHandler.persistChat(
@@ -1905,10 +1712,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (_pendingMessageText != null) {
       inputAreaVisualHeight += _kQueuedBannerHeight;
     }
-    double inputAreaTotalHeight =
-        inputAreaVisualHeight +
-        (2 *
-            effectiveHorizontalPadding); // accounting for total vertical padding around the searchbar container
+    // Reserve the composer's real measured height when available (it grows as
+    // the text field wraps to multiple lines); fall back to the constant-based
+    // estimate for the first frame before MeasureSize reports. The composer is
+    // offset `effectiveHorizontalPadding` from the bottom edge, plus a small
+    // gap above so the last message isn't flush against the input box.
+    final double inputAreaEstimate =
+        inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
+    double inputAreaTotalHeight = composerHeight > 0
+        ? composerHeight + effectiveHorizontalPadding + 8
+        : inputAreaEstimate;
 
     // Determine if the chat is currently empty (no messages, no attached files)
     final bool isChatEmpty = _messages
@@ -1938,7 +1751,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     .toList();
                 if (filePaths.isNotEmpty) {
                   _fileHandler.modelSupportsImageInput =
-                      _modelSupportsImageInput;
+                      modelSupportsImageInput;
                   _fileHandler.handleDroppedFiles(filePaths);
                 }
               },
@@ -1956,10 +1769,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 builder: (context) {
                   final Color accent = Theme.of(context).colorScheme.primary;
                   final Color bg = Theme.of(context).scaffoldBackgroundColor;
-                  final bool isMessageSendActive = _isStreaming || _isSending;
-                  final double messageListBottomPadding =
-                      _kMessageListBottomLift +
-                      (isMessageSendActive ? _kStreamingBottomScrollSlack : 0);
+                  // The composer's real height is reserved via the list's
+                  // Positioned `bottom: inputAreaTotalHeight`, and streaming now
+                  // actively follows tokens via pinToBottomDuringStream, so the
+                  // old streaming slack is no longer needed (it only added a big
+                  // empty gap above the composer mid-stream). Keep a small lift.
+                  final double messageListBottomPadding = _kMessageListBottomLift;
 
                   return Stack(
                     children: [
@@ -2066,11 +1881,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       ScrollMetricsNotification
                                     >(
                                       onNotification: (_) {
-                                        _onScrollChanged();
+                                        onScrollChanged();
                                         return false;
                                       },
                                       child: ListView.builder(
-                                        controller: _scrollController,
+                                        controller: scrollController,
                                       padding: EdgeInsets.only(
                                         left: effectiveHorizontalPadding,
                                         right: effectiveHorizontalPadding,
@@ -2186,7 +2001,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         ),
                       // Scroll-to-bottom button (centered above input)
-                      if (_showScrollToBottom && !isChatEmpty)
+                      if (showScrollToBottom && !isChatEmpty)
                         Positioned(
                           key: const ValueKey<String>(
                             'desktop-chat-scroll-to-bottom',
@@ -2205,7 +2020,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   child: InkWell(
                                     customBorder: const CircleBorder(),
                                     onTap: () =>
-                                        _scrollChatToBottom(force: true),
+                                        scrollChatToBottom(force: true),
                                     child: Padding(
                                       padding: const EdgeInsets.all(8),
                                       child: Icon(
@@ -2234,24 +2049,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           child: SizedBox(
                             width:
                                 targetInputWidth, // Dynamically changes width
-                            child: Column(
-                              mainAxisSize: MainAxisSize
-                                  .min, // Crucial for column inside AnimatedPositioned/Center
-                              children: [
-                                // Search Bar (attachment bar is now inside)
-                                _buildSearchBar(
-                                  isCompactMode: widget.isCompactMode,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  AppLocalizations.of(context)!.aiDisclaimer,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.7),
-                                    fontSize: 11,
+                            child: MeasureSize(
+                              onChange: onComposerHeightChanged,
+                              child: Column(
+                                mainAxisSize: MainAxisSize
+                                    .min, // Crucial for column inside AnimatedPositioned/Center
+                                children: [
+                                  // Search Bar (attachment bar is now inside)
+                                  _buildSearchBar(
+                                    isCompactMode: widget.isCompactMode,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    AppLocalizations.of(context)!.aiDisclaimer,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: iconFg.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -2471,7 +2289,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   iconSize: 24,
                                   onTap: () {
                                     _fileHandler.modelSupportsImageInput =
-                                        _modelSupportsImageInput;
+                                        modelSupportsImageInput;
                                     _fileHandler.uploadFiles();
                                   },
                                   isActive: false,

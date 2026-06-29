@@ -273,7 +273,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Don't persist "Thinking..." placeholder - wait for actual response
       // _persistChat(); // Removed - will persist after streaming completes
-      _scrollChatToBottom(force: true);
+      scrollChatToBottom(force: true);
 
       final session =
           await SupabaseService.refreshSession() ??
@@ -508,6 +508,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 _messages[placeholderIndex]['text'] = fullDisplay;
                 _messages[placeholderIndex]['reasoning'] = reasoning;
               });
+              // Follow the answer as it streams in, but only while pinned.
+              pinToBottomDuringStream();
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
@@ -1197,7 +1199,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         selectedModelId: _selectedModelId,
         apiHistory: apiHistory,
         systemPrompt: resolvedSystemPrompt,
-        getProviderSlug: _ensureProviderSlugForCurrentModel,
+        getProviderSlug: ensureProviderSlugForCurrentModel,
       );
 
       if (!result.isValid) {
@@ -1478,7 +1480,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       if (firstMessageInChat) _animCtrl.forward();
-      _scrollChatToBottom(force: true);
+      scrollChatToBottom(force: true);
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
       // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
@@ -2468,7 +2470,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
 
     if (mounted) {
-      _scrollChatToBottom();
+      scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       _persistChat();
 
