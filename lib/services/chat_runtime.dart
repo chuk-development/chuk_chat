@@ -1,5 +1,41 @@
 import 'package:flutter/foundation.dart';
 
+/// Immutable snapshot of the assistant placeholder's live streaming body,
+/// pushed on every coalesced (~30fps) token flush during a send.
+///
+/// The chat list wraps ONLY the streaming bubble in a
+/// `ValueListenableBuilder<StreamingLive?>` on [ChatRuntime.streamingLive], so
+/// per-token updates rebuild just that one bubble instead of running a
+/// screen-wide `setState` (which previously rebuilt every visible bubble, the
+/// composer, and the overlays ~30 times per second).
+@immutable
+class StreamingLive {
+  const StreamingLive({
+    required this.index,
+    required this.text,
+    required this.reasoning,
+  });
+
+  /// Index of the placeholder message in the runtime's message list.
+  final int index;
+
+  /// Current accumulated display text for the answer body.
+  final String text;
+
+  /// Current accumulated reasoning text.
+  final String reasoning;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StreamingLive &&
+      other.index == index &&
+      other.text == text &&
+      other.reasoning == reasoning;
+
+  @override
+  int get hashCode => Object.hash(index, text, reasoning);
+}
+
 /// Per-chat in-memory live state.
 ///
 /// Each open chat in the UI owns one [ChatRuntime]. The widget tree binds
@@ -33,6 +69,13 @@ class ChatRuntime {
   /// Strict subset of [isSending] in time: send turns on first; stream
   /// turns on after the request handshake; both turn off on completion.
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
+
+  /// Live body of the streaming placeholder, updated per token flush. The
+  /// chat list scopes per-token rebuilds to the single streaming bubble by
+  /// listening to this instead of calling `setState` on the whole screen.
+  /// Null when no token has been pushed for the current turn.
+  final ValueNotifier<StreamingLive?> streamingLive =
+      ValueNotifier<StreamingLive?>(null);
 
   /// Index of the assistant placeholder message currently being filled
   /// by the active stream. Null when no stream is in flight.
@@ -113,12 +156,29 @@ class ChatRuntime {
     touch();
   }
 
+  /// Push the latest streamed body for the placeholder at [index]. Scoped
+  /// per-token updates read this via a `ValueListenableBuilder`; the
+  /// notifier only fires when the value actually changed (see [StreamingLive]
+  /// equality), so identical re-flushes are free.
+  void pushStreamingText({
+    required int index,
+    required String text,
+    required String reasoning,
+  }) {
+    streamingLive.value = StreamingLive(
+      index: index,
+      text: text,
+      reasoning: reasoning,
+    );
+  }
+
   /// Mark the end of a send (any outcome: complete, error, cancel).
   void endStream() {
     placeholderIndex = null;
     cancelHandler = null;
     isSending.value = false;
     isStreaming.value = false;
+    streamingLive.value = null;
     touch();
   }
 
@@ -126,5 +186,6 @@ class ChatRuntime {
     messages.dispose();
     isSending.dispose();
     isStreaming.dispose();
+    streamingLive.dispose();
   }
 }
