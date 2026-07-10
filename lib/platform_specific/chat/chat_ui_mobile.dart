@@ -112,21 +112,6 @@ class ChukChatUIMobile extends StatefulWidget {
 /// the chat message map (kept in sync with the values consumed by the
 /// inline parser further down). `null` returns `null` so historic
 /// messages stay status-less on disk.
-String? _statusToRawString(ChatMessageStatus? status) {
-  switch (status) {
-    case null:
-      return null;
-    case ChatMessageStatus.sent:
-      return 'sent';
-    case ChatMessageStatus.pending:
-      return 'pending';
-    case ChatMessageStatus.failed:
-      return 'failed';
-    case ChatMessageStatus.interrupted:
-      return 'interrupted';
-  }
-}
-
 class ChukChatUIMobileState extends State<ChukChatUIMobile>
     with ChatScrollMixin, ModelProviderResolutionMixin {
   // Controllers and basic state
@@ -886,12 +871,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       // Preserve local delivery status (pending/failed/interrupted).
       // Without this an assistant message that was cut off mid-stream
       // loses its "Continue generation" affordance on reload.
-      final statusStr = _statusToRawString(message.status);
+      final statusStr = message.statusString;
       if (statusStr != null) {
         map['status'] = statusStr;
       }
       if (message.queueId != null && message.queueId!.isNotEmpty) {
         map['queueId'] = message.queueId!;
+      }
+      // Preserve the stable messageId so assistant bubbles keep their identity
+      // (ListView key + decode/markdown caches) across reload, and the artifact
+      // rollback path can still match `artifact_versions.message_id` rows.
+      if (message.messageId != null && message.messageId!.isNotEmpty) {
+        map['messageId'] = message.messageId!;
       }
       return map;
     }).toList();

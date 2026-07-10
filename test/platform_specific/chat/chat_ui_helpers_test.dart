@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -205,6 +206,43 @@ void main() {
         ChatUiHelpers.stableUiKey(a, uuid),
         isNot(ChatUiHelpers.stableUiKey(b, uuid)),
       );
+    });
+  });
+
+  group('ChatUiHelpers.messageToRawMap', () {
+    test('preserves messageId, status and queueId across the bridge', () {
+      final message = ChatMessage(
+        role: 'assistant',
+        text: 'partial',
+        status: ChatMessageStatus.interrupted,
+        queueId: 'q-9',
+        messageId: 'm-1',
+      );
+      final raw = ChatUiHelpers.messageToRawMap(message);
+      expect(raw['messageId'], 'm-1');
+      expect(raw['status'], 'interrupted');
+      expect(raw['queueId'], 'q-9');
+    });
+
+    test('omits status/queueId when unset', () {
+      final raw = ChatUiHelpers.messageToRawMap(
+        ChatMessage(role: 'user', text: 'hi'),
+      );
+      expect(raw.containsKey('status'), isFalse);
+      expect(raw.containsKey('queueId'), isFalse);
+    });
+  });
+
+  group('ChatMessage.statusString', () {
+    test('round-trips every status value', () {
+      for (final s in ChatMessageStatus.values) {
+        final msg = ChatMessage(role: 'user', text: 't', status: s);
+        expect(ChatMessage.fromJson(msg.toJson()).status, s);
+      }
+    });
+
+    test('is null when status is unset', () {
+      expect(ChatMessage(role: 'user', text: 't').statusString, isNull);
     });
   });
 }

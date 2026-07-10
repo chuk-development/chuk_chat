@@ -132,6 +132,11 @@ class ChatMessage {
   ChatMessageStatus get effectiveStatus =>
       status ?? ChatMessageStatus.sent;
 
+  /// Wire string for [status] (`null` when unset), matching the persisted
+  /// `status` field so raw-map bridges can round-trip it without duplicating
+  /// the enum switch.
+  String? get statusString => _statusToString(status);
+
   ChatMessage copyWith({
     String? role,
     String? text,

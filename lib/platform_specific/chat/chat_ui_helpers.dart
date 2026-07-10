@@ -321,6 +321,16 @@ class ChatUiHelpers {
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
     }
+    // Preserve local delivery status + offline-queue id so a message that was
+    // pending/failed/interrupted keeps its state (and "Continue generation"
+    // affordance) across reload instead of silently reverting to "sent".
+    final String? statusStr = message.statusString;
+    if (statusStr != null) {
+      map['status'] = statusStr;
+    }
+    if (message.queueId != null && message.queueId!.isNotEmpty) {
+      map['queueId'] = message.queueId!;
+    }
     return map;
   }
 
