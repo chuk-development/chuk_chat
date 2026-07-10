@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -141,8 +142,10 @@ Future<void> main() async {
   // Initialize core services (Supabase, etc.) in background
   unawaited(AppInitializationService.instance.initializeCoreServices());
 
-  // Use default theme immediately - load preferences async after first frame
-  runApp(const ChukChatApp());
+  // Use default theme immediately - load preferences async after first frame.
+  // ProviderScope hosts the Riverpod container for the chat runtime / streaming
+  // state introduced by the chat-UI performance re-architecture.
+  runApp(const ProviderScope(child: ChukChatApp()));
 }
 
 class ChukChatApp extends StatefulWidget {
