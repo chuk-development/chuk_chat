@@ -159,4 +159,52 @@ void main() {
       expect(docs.single['markdownContent'], '# Notes');
     });
   });
+
+  group('ChatUiHelpers.stableUiKey', () {
+    final uuid = const Uuid();
+
+    test('prefers messageId when present', () {
+      final message = <String, String>{
+        'sender': 'ai',
+        'text': 'hi',
+        'messageId': 'assistant-123',
+      };
+      final key = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(key, 'assistant-123');
+      // Backfilled into the map so it stays constant.
+      expect(message[ChatUiHelpers.kUiKeyField], 'assistant-123');
+    });
+
+    test('assigns a fresh uuid when no messageId', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final key = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(key, isNotEmpty);
+      expect(key, message[ChatUiHelpers.kUiKeyField]);
+    });
+
+    test('is idempotent — repeated calls return the same key', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final first = ChatUiHelpers.stableUiKey(message, uuid);
+      final second = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(first, second);
+    });
+
+    test('keeps an already-assigned key even if messageId changes later', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final first = ChatUiHelpers.stableUiKey(message, uuid);
+      message['messageId'] = 'late-id';
+      final second = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(second, first);
+      expect(second, isNot('late-id'));
+    });
+
+    test('distinct messages without ids get distinct keys', () {
+      final a = <String, String>{'sender': 'user', 'text': 'a'};
+      final b = <String, String>{'sender': 'user', 'text': 'b'};
+      expect(
+        ChatUiHelpers.stableUiKey(a, uuid),
+        isNot(ChatUiHelpers.stableUiKey(b, uuid)),
+      );
+    });
+  });
 }

@@ -3380,7 +3380,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     String msgText,
                                     String? msgReasoning,
                                   ) => MessageBubble(
-                                    key: ValueKey('msg_$i'),
+                                    key: ValueKey(
+                                      ChatUiHelpers.stableUiKey(
+                                        _messages[i],
+                                        _uuid,
+                                      ),
+                                    ),
                                     message: msgText,
                                     reasoning: msgReasoning,
                                     isUser: isUser,
