@@ -54,9 +54,15 @@ green at every step. Same pixels, ~10× fewer rebuilds.
       in that 4.6k-line file is higher risk than the remaining benefit. Tests green, analyze clean.
 - [ ] **P4. Mobile scroll-back.** Keep-alive for markdown-heavy mobile bubbles; re-tune
       cacheExtent. (reverse:true list = higher risk; only if time + tests allow.)
-- [ ] **P5. Mobile composer redesign.** Replace 3-pill 46px layout with one unified tall (~2×)
-      rounded container mirroring desktop: TextField on top, persistent bottom toolbar row,
-      send button pinned top-right, merged model/reasoning pill. Reuse AttachmentPreviewBar.
+- [x] **P5. Mobile composer redesign.** DONE. Replaced the three 46px pills with ONE unified
+      rounded box (~2× taller, minHeight 88, radius 24, 2px border) mirroring desktop: TextField
+      on top (maxLines null + 140px cap, grows then scrolls), a persistent bottom toolbar row
+      (`+` attach, reasoning toggle, model picker, mic, fullscreen), and the send/stop/voice
+      button pinned top-right. Recording state shows the indicator+visualizer with a stop button.
+      All handlers/sub-widgets preserved (attach, mic, model dropdown, editing/queued banners,
+      fullscreen, audio send). Taller height auto-reflows the list via the existing MeasureSize.
+      analyze back to 4 baseline issues, 799 tests green. NOTE: compile+test verified only — no
+      emulator/device in this env, so final visual look must be checked on-device.
 - [ ] **P6. Riverpod adoption at the seam.** Promote ChatRuntime → NotifierProvider.family;
       bind message list + streaming flags to providers. Keep race guards.
 

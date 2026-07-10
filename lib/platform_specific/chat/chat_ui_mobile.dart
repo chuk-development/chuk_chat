@@ -3588,35 +3588,327 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ? Colors.red.withValues(alpha: 0.4)
         : iconFg.withValues(alpha: 0.25);
 
-    // Uniform pill height for all three groups.
-    const double pillHeight = 46;
+    // ── Unified tall composer (desktop-style) ──
+    // One rounded box instead of three separate pills: the TextField sits on
+    // top with a persistent bottom toolbar row (+, reasoning, model, mic), and
+    // the send / stop button floats in the top-right corner exactly like the
+    // desktop composer. Roughly twice the height of the old single-line pill so
+    // it reads as a canvas rather than a search bar.
+    final bool isRecording = _audioHandler.isMicActive;
+    const double kComposerRadius = 24;
+    const double kComposerMinHeight = 88;
+    const double kSendButtonWidth = 46;
+    const double kFieldMaxHeight = 140;
 
-    // Shared pill decoration for all three groups.
-    BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
+    final BoxDecoration boxDecoration = BoxDecoration(
       color: bg.withValues(alpha: 0.98),
-      borderRadius: BorderRadius.circular(pillHeight / 2),
-      border: Border.all(
-        color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
-        width: 2,
-      ),
+      borderRadius: BorderRadius.circular(kComposerRadius),
+      border: Border.all(color: borderColor, width: 2),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10,
+          blurRadius: 12,
           offset: const Offset(0, 2),
         ),
       ],
     );
 
-    // Whether to show the mic inside the text field pill.
-    // Shown when: typed text is empty, not recording, not streaming.
-    // Attachments must not hide the mic (user can dictate with images attached).
-    final bool showInlineMic =
-        !hasTypedText && !_audioHandler.isMicActive && !showStopAction;
-    final bool rightPillHasMultipleActions = _audioHandler.isMicActive;
+    // Send / Stop / Voice / send-audio button — pinned top-right like desktop.
+    final Widget sendButton = buildTinyActionButton(
+      icon: isRecording
+          ? Icons.north_rounded
+          : (showStopAction
+                ? Icons.stop_rounded
+                : (showVoiceModeAction
+                      ? Icons.graphic_eq_rounded
+                      : Icons.north_rounded)),
+      buttonSize: 36,
+      iconSize: 16,
+      onTap: isRecording
+          ? _handleAudioSend
+          : (showStopAction
+                ? _cancelCurrentOperation
+                : (showVoiceModeAction
+                      ? () => _openComingSoonFeature('Voice Mode')
+                      : _sendOrSubmitEdit)),
+      color: (showStopAction && !isRecording) ? Colors.red : accent,
+      isLoading: _audioHandler.isTranscribingAudio,
+      semanticsId: 'send_button',
+    );
 
-    // Three-part layout: [+]  [TextField + mic]  [Send]
-    // With optional attachment previews and editing indicator above.
+    // Bottom toolbar row: attach / reasoning / model on the left, mic (and
+    // fullscreen) on the right. While recording it collapses to a stop button.
+    final Widget toolbar = Row(
+      children: isRecording
+          ? <Widget>[
+              buildTinyIconButton(
+                icon: Icons.stop_rounded,
+                iconSize: 20,
+                onTap: _handleMicTap,
+                isActive: true,
+                color: Colors.red,
+                semanticsId: 'mic_button',
+              ),
+              const Spacer(),
+            ]
+          : <Widget>[
+              buildTinyIconButton(
+                icon: Icons.add_rounded,
+                iconSize: 22,
+                onTap: _handleAddAttachmentTap,
+                isActive: hasAttachments,
+                color: iconFg,
+              ),
+              if (ModelSelectionDropdown.modelSupportsReasoning(
+                _selectedModelId,
+              ))
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _reasoningEnabled = !_reasoningEnabled;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.psychology,
+                      size: 20,
+                      color: _reasoningEnabled
+                          ? accent
+                          : iconFg.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+              // Model picker takes the remaining middle space (left-aligned),
+              // pushing the mic / fullscreen controls to the right edge.
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: KeyedSubtree(
+                    key: TourKeyRegistry.instance.keyFor(
+                      TourSlots.modelDropdown,
+                    ),
+                    child: ModelSelectionDropdown(
+                      key: const ValueKey<String>(
+                        'mobile-model-selection-dropdown',
+                      ),
+                      initialSelectedModelId: _selectedModelId,
+                      onModelSelected: (newModelId) {
+                        setState(() {
+                          _selectedModelId = newModelId;
+                        });
+                      },
+                      textFieldFocusNode: _textFieldFocusNode,
+                      isCompactMode: isCompactMode,
+                      transparentStyle: true,
+                    ),
+                  ),
+                ),
+              ),
+              if (_showFullscreenButton)
+                GestureDetector(
+                  onTap: _openFullscreenEditor,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(
+                      Icons.open_in_full_rounded,
+                      size: 18,
+                      color: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              if (!showStopAction)
+                buildTinyIconButton(
+                  icon: Icons.mic,
+                  iconSize: 22,
+                  onTap: _handleMicTap,
+                  isActive: false,
+                  color: iconFg,
+                  semanticsId: 'mic_button',
+                ),
+            ],
+    );
+
+    // Main content area: the growing TextField, or the recording visualizer.
+    final Widget mainArea = isRecording
+        ? SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                buildRecordingIndicator(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: buildAudioVisualizer(
+                    audioLevels: _audioHandler.audioLevels,
+                    accentColor: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : Padding(
+            // Keep the text clear of the floating top-right send button.
+            padding: const EdgeInsets.only(right: kSendButtonWidth),
+            child: buildKeyboardListener(
+              focusNode: _rawKeyboardListenerFocusNode,
+              controller: _controller,
+              onSend: _sendOrSubmitEdit,
+              child: KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: kFieldMaxHeight),
+                  child: Scrollbar(
+                    controller: _composerScrollController,
+                    child: Semantics(
+                      identifier: 'message_input',
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        scrollController: _composerScrollController,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface,
+                          fontSize: 15,
+                          height: 1.35,
+                        ),
+                        minLines: 1,
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          hintText: _messageActionsHandler.isEditing
+                              ? AppLocalizations.of(context)!.editYourMessage
+                              : AppLocalizations.of(context)!.askMeAnything,
+                          hintStyle: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                            fontSize: 15,
+                          ),
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 0,
+                            vertical: 4,
+                          ),
+                          isDense: true,
+                        ),
+                        cursorColor: accent,
+                        cursorWidth: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+    // Editing / queued banners shown above the text field, inside the box.
+    final Widget? banner = _messageActionsHandler.isEditing
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit,
+                  size: 12,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Editing message',
+                  style: TextStyle(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _cancelEditMessage,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : (_pendingMessageText != null
+              ? Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 12,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${AppLocalizations.of(context)!.queuedLabel}: '
+                          '"${_pendingMessageText!}"',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.7,
+                            ),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _cancelPendingMessage,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            AppLocalizations.of(context)!.cancel,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : null);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3628,383 +3920,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               onRemove: _removeComposerAttachment,
             ),
           ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // ── Left pill: +, Model selector ──
-            // When collapsed (only +), minWidth == pillHeight keeps it circular.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: pillHeight,
-                constraints: const BoxConstraints(minWidth: pillHeight),
-                decoration: pillDecoration(),
-                padding: EdgeInsets.symmetric(
-                  horizontal: _controller.text.isNotEmpty ? 7 : 4,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    buildTinyIconButton(
-                      icon: Icons.add_rounded,
-                      iconSize: 22,
-                      onTap: _handleAddAttachmentTap,
-                      isActive: hasAttachments,
-                      color: iconFg,
-                    ),
-                    Offstage(
-                      offstage: _controller.text.isNotEmpty,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(width: 1),
-                          if (ModelSelectionDropdown.modelSupportsReasoning(
-                            _selectedModelId,
-                          ))
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _reasoningEnabled = !_reasoningEnabled;
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: Icon(
-                                  Icons.psychology,
-                                  size: 20,
-                                  color: _reasoningEnabled
-                                      ? Theme.of(context).colorScheme.primary
-                                      : iconFg.withValues(alpha: 0.3),
-                                ),
-                              ),
-                            ),
-                          KeyedSubtree(
-                            key: TourKeyRegistry.instance.keyFor(
-                              TourSlots.modelDropdown,
-                            ),
-                            child: ModelSelectionDropdown(
-                              key: const ValueKey<String>(
-                                'mobile-model-selection-dropdown',
-                              ),
-                              initialSelectedModelId: _selectedModelId,
-                              onModelSelected: (newModelId) {
-                                setState(() {
-                                  _selectedModelId = newModelId;
-                                });
-                              },
-                              textFieldFocusNode: _textFieldFocusNode,
-                              isCompactMode: isCompactMode,
-                              transparentStyle: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // ── Middle: TextField + inline mic (grows upward for multi-line) ──
-            Expanded(
-              child: Container(
-                height: _audioHandler.isMicActive ? pillHeight : null,
-                constraints: _audioHandler.isMicActive
-                    ? null
-                    : const BoxConstraints(minHeight: pillHeight),
-                decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: _audioHandler.isMicActive
-                    ? SizedBox(
-                        height: pillHeight - 6, // minus border + padding
-                        child: Row(
-                          children: [
-                            buildRecordingIndicator(),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: buildAudioVisualizer(
-                                audioLevels: _audioHandler.audioLevels,
-                                accentColor: Colors.red,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // ── Editing indicator (inside the pill) ──
-                          if (_messageActionsHandler.isEditing)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.edit,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Editing message',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary
-                                          .withValues(alpha: 0.7),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelEditMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        'Cancel',
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── Queued message indicator ──
-                          // Shown when the user sent while the AI was still
-                          // streaming; it auto-sends on completion.
-                          if (_pendingMessageText != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.schedule,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      '${AppLocalizations.of(context)!.queuedLabel}: '
-                                      '"${_pendingMessageText!}"',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: theme.colorScheme.primary
-                                            .withValues(alpha: 0.7),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelPendingMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(context)!.cancel,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── TextField ──
-                          buildKeyboardListener(
-                            focusNode: _rawKeyboardListenerFocusNode,
-                            controller: _controller,
-                            onSend: _sendOrSubmitEdit,
-                            child: KeyedSubtree(
-                              key: TourKeyRegistry.instance.keyFor(
-                                TourSlots.chatInput,
-                              ),
-                              child: Scrollbar(
-                                controller: _composerScrollController,
-                                child: Semantics(
-                                  identifier: 'message_input',
-                                  child: TextField(
-                                  controller: _controller,
-                                  focusNode: _textFieldFocusNode,
-                                  autofocus: false,
-                                  keyboardType: TextInputType.multiline,
-                                  textInputAction: TextInputAction.newline,
-                                  scrollController: _composerScrollController,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
-                                    fontSize: 15,
-                                    height: 1.3,
-                                  ),
-                                  minLines: 1,
-                                  maxLines: 6,
-                                  decoration: InputDecoration(
-                                    hintText: _messageActionsHandler.isEditing
-                                        ? AppLocalizations.of(
-                                            context,
-                                          )!.editYourMessage
-                                        : AppLocalizations.of(
-                                            context,
-                                          )!.askMeAnything,
-                                    hintStyle: TextStyle(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.5),
-                                      fontSize: 15,
-                                    ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 0,
-                                      vertical: 10,
-                                    ),
-                                    isDense: true,
-                                    // Mic or fullscreen button as suffix icon.
-                                    // Mic shown when text is empty; fullscreen
-                                    // shown when text is long; otherwise nothing.
-                                    suffixIcon: showInlineMic
-                                        ? GestureDetector(
-                                            onTap: _handleMicTap,
-                                            child: Semantics(
-                                              identifier: 'mic_button',
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  left: 4,
-                                                ),
-                                                child: Icon(
-                                                  Icons.mic,
-                                                  size: 20,
-                                                  color: iconFg.withValues(
-                                                    alpha: 0.6,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : _showFullscreenButton
-                                        ? GestureDetector(
-                                            onTap: _openFullscreenEditor,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 4,
-                                              ),
-                                              child: Icon(
-                                                Icons.open_in_full_rounded,
-                                                size: 14,
-                                                color: iconFg.withValues(
-                                                  alpha: 0.4,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : null,
-                                    suffixIconConstraints: const BoxConstraints(
-                                      minWidth: 24,
-                                      minHeight: 24,
-                                    ),
-                                  ),
-                                  cursorColor: accent,
-                                  cursorWidth: 1.5,
-                                ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // ── Right pill: Send / Stop / Voice Mode ──
-            Container(
-              height: pillHeight,
-              width: rightPillHasMultipleActions ? null : pillHeight,
-              decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-              padding: rightPillHasMultipleActions
-                  ? const EdgeInsets.symmetric(horizontal: 5)
-                  : EdgeInsets.zero,
-              alignment: Alignment.center,
-              child: Row(
+        Container(
+          constraints: const BoxConstraints(minHeight: kComposerMinHeight),
+          decoration: boxDecoration,
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+          child: Stack(
+            children: [
+              Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // When mic is recording: stop + send buttons
-                  if (_audioHandler.isMicActive) ...[
-                    buildTinyIconButton(
-                      icon: Icons.stop_rounded,
-                      iconSize: 20,
-                      onTap: _handleMicTap,
-                      isActive: true,
-                      color: Colors.red,
-                      semanticsId: 'mic_button',
-                    ),
-                    const SizedBox(width: 3),
-                  ],
-                  buildTinyActionButton(
-                    icon: _audioHandler.isMicActive
-                        ? Icons.north_rounded
-                        : (showStopAction
-                              ? Icons.stop_rounded
-                              : (showVoiceModeAction
-                                    ? Icons.graphic_eq_rounded
-                                    : Icons.north_rounded)),
-                    buttonSize: 36,
-                    iconSize: 16,
-                    onTap: _audioHandler.isMicActive
-                        ? _handleAudioSend
-                        : (showStopAction
-                              ? _cancelCurrentOperation
-                              : (showVoiceModeAction
-                                    ? () => _openComingSoonFeature('Voice Mode')
-                                    : _sendOrSubmitEdit)),
-                    color: _audioHandler.isMicActive
-                        ? accent
-                        : (showStopAction ? Colors.red : accent),
-                    isLoading: _audioHandler.isTranscribingAudio,
-                    semanticsId: 'send_button',
-                  ),
+                  ?banner,
+                  mainArea,
+                  const SizedBox(height: 8),
+                  toolbar,
                 ],
               ),
-            ),
-          ],
+              Positioned(top: 0, right: 0, child: sendButton),
+            ],
+          ),
         ),
       ],
     );
