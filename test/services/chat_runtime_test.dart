@@ -59,6 +59,53 @@ void main() {
       expect(r.placeholderIndex, isNull);
       r.dispose();
     });
+
+    test('pushStreamingText updates streamingLive and notifies', () {
+      final r = ChatRuntime(chatId: 'c1');
+      expect(r.streamingLive.value, isNull);
+      var fires = 0;
+      r.streamingLive.addListener(() => fires++);
+
+      r.pushStreamingText(index: 1, text: 'Hel', reasoning: '');
+      expect(fires, 1);
+      expect(r.streamingLive.value?.index, 1);
+      expect(r.streamingLive.value?.text, 'Hel');
+
+      r.pushStreamingText(index: 1, text: 'Hello', reasoning: 'because');
+      expect(fires, 2);
+      expect(r.streamingLive.value?.text, 'Hello');
+      expect(r.streamingLive.value?.reasoning, 'because');
+      r.dispose();
+    });
+
+    test('identical pushStreamingText does not re-notify (value equality)', () {
+      final r = ChatRuntime(chatId: 'c1');
+      var fires = 0;
+      r.streamingLive.addListener(() => fires++);
+      r.pushStreamingText(index: 0, text: 'same', reasoning: 'r');
+      r.pushStreamingText(index: 0, text: 'same', reasoning: 'r');
+      // ValueNotifier suppresses notification when the value is == the old one.
+      expect(fires, 1);
+      r.dispose();
+    });
+
+    test('endStream clears streamingLive', () {
+      final r = ChatRuntime(chatId: 'c1');
+      r.pushStreamingText(index: 0, text: 'partial', reasoning: '');
+      expect(r.streamingLive.value, isNotNull);
+      r.endStream();
+      expect(r.streamingLive.value, isNull);
+      r.dispose();
+    });
+
+    test('StreamingLive equality is by (index, text, reasoning)', () {
+      const a = StreamingLive(index: 1, text: 't', reasoning: 'r');
+      const b = StreamingLive(index: 1, text: 't', reasoning: 'r');
+      const c = StreamingLive(index: 1, text: 't2', reasoning: 'r');
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+      expect(a, isNot(equals(c)));
+    });
   });
 
   group('ChatRuntimeRegistry', () {

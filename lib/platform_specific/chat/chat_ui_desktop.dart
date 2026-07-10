@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
@@ -1927,68 +1928,120 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             _messageActionsHandler
                                                 .editingMessageIndex ==
                                             i;
+                                        // Build the bubble from a (text,
+                                        // reasoning) pair so the streaming
+                                        // bubble can be fed live values from the
+                                        // runtime notifier without a
+                                        // screen-wide rebuild. Every other prop
+                                        // is stable for the stream's duration.
+                                        MessageBubble buildBubble(
+                                          String msgText,
+                                          String? msgReasoning,
+                                        ) => MessageBubble(
+                                          key: ValueKey('msg_$i'),
+                                          message: msgText,
+                                          reasoning: msgReasoning,
+                                          isUser: data.isUser,
+                                          startsNewGroup: startsNewGroup,
+                                          endsGroup: endsGroup,
+                                          maxWidth: data.isUser
+                                              ? expandedInputWidth *
+                                                    0.8 // User messages: 80%
+                                              : expandedInputWidth, // AI messages: 100%
+                                          isReasoningStreaming:
+                                              data.isReasoningStreaming,
+                                          modelLabel: data.modelLabel,
+                                          modelProvider: data.modelProvider,
+                                          tps: data.tps,
+                                          toolCalls: data.toolCalls,
+                                          showToolCalls: widget.showToolCalls,
+                                          contentBlocks: data.contentBlocks,
+                                          isStreamingMessage:
+                                              data.isStreamingMessage,
+                                          images: data.images,
+                                          imageMetas: data.imageMetas,
+                                          imageCostEur: data.imageCostEur,
+                                          imageGeneratedAt: data.imageGeneratedAt,
+                                          attachments: data.attachments,
+                                          actions: _buildMessageActionsForIndex(
+                                            i,
+                                            data,
+                                          ),
+                                          userMessageActions:
+                                              _buildUserMessageActionsForIndex(
+                                                i,
+                                                data,
+                                              ),
+                                          isEditing: isBeingEdited,
+                                          showReasoningTokens:
+                                              widget.showReasoningTokens,
+                                          showModelInfo: widget.showModelInfo,
+                                          showTps: widget.showTps,
+                                          onAskUserAnswer:
+                                              _askUserCallbackForIndex(i, data),
+                                          useSharedSelectionArea: true,
+                                          status: data.status,
+                                          lastError: data.lastError,
+                                          onRetryPending: data.isUser &&
+                                                  (data.status ==
+                                                          ChatMessageStatus
+                                                              .pending ||
+                                                      data.status ==
+                                                          ChatMessageStatus
+                                                              .failed)
+                                              ? () => OfflineRetryManager
+                                                  .instance
+                                                  .retryNow()
+                                              : null,
+                                        );
+
+                                        // The streaming bubble rebuilds itself
+                                        // per token via the runtime's
+                                        // streamingLive notifier — the rest of
+                                        // the screen stays put.
+                                        final ChatRuntime? runtime =
+                                            _activeChatId == null
+                                            ? null
+                                            : ChatRuntimeRegistry.instance
+                                                  .lookup(_activeChatId!);
+                                        if (data.isStreamingMessage &&
+                                            runtime != null) {
+                                          return RepaintBoundary(
+                                            child:
+                                                ValueListenableBuilder<
+                                                  StreamingLive?
+                                                >(
+                                                  valueListenable:
+                                                      runtime.streamingLive,
+                                                  builder: (context, live, _) {
+                                                    final bool match =
+                                                        live != null &&
+                                                        live.index == i;
+                                                    final String msgText = match
+                                                        ? live.text.trimRight()
+                                                        : data.displayText;
+                                                    final String reasoningRaw =
+                                                        match
+                                                        ? live.reasoning
+                                                        : data.reasoning;
+                                                    final String? msgReasoning =
+                                                        reasoningRaw
+                                                            .trim()
+                                                            .isEmpty
+                                                        ? null
+                                                        : reasoningRaw;
+                                                    return buildBubble(
+                                                      msgText,
+                                                      msgReasoning,
+                                                    );
+                                                  },
+                                                ),
+                                          );
+                                        }
                                         return RepaintBoundary(
-                                          child: MessageBubble(
-                                            key: ValueKey('msg_$i'),
-                                            message: data.displayText,
-                                            reasoning: reasoningText,
-                                            isUser: data.isUser,
-                                            startsNewGroup: startsNewGroup,
-                                            endsGroup: endsGroup,
-                                            maxWidth: data.isUser
-                                                ? expandedInputWidth *
-                                                      0.8 // User messages: 80%
-                                                : expandedInputWidth, // AI messages: 100%
-                                            isReasoningStreaming:
-                                                data.isReasoningStreaming,
-                                            modelLabel: data.modelLabel,
-                                            modelProvider: data.modelProvider,
-                                            tps: data.tps,
-                                            toolCalls: data.toolCalls,
-                                            showToolCalls: widget.showToolCalls,
-                                            contentBlocks: data.contentBlocks,
-                                            isStreamingMessage:
-                                                data.isStreamingMessage,
-                                            images: data.images,
-                                            imageMetas: data.imageMetas,
-                                            imageCostEur: data.imageCostEur,
-                                            imageGeneratedAt:
-                                                data.imageGeneratedAt,
-                                            attachments: data.attachments,
-                                            actions:
-                                                _buildMessageActionsForIndex(
-                                                  i,
-                                                  data,
-                                                ),
-                                            userMessageActions:
-                                                _buildUserMessageActionsForIndex(
-                                                  i,
-                                                  data,
-                                                ),
-                                            isEditing: isBeingEdited,
-                                            showReasoningTokens:
-                                                widget.showReasoningTokens,
-                                            showModelInfo: widget.showModelInfo,
-                                            showTps: widget.showTps,
-                                            onAskUserAnswer:
-                                                _askUserCallbackForIndex(
-                                                  i,
-                                                  data,
-                                                ),
-                                            useSharedSelectionArea: true,
-                                            status: data.status,
-                                            lastError: data.lastError,
-                                            onRetryPending: data.isUser &&
-                                                    (data.status ==
-                                                            ChatMessageStatus
-                                                                .pending ||
-                                                        data.status ==
-                                                            ChatMessageStatus
-                                                                .failed)
-                                                ? () => OfflineRetryManager
-                                                    .instance
-                                                    .retryNow()
-                                                : null,
+                                          child: buildBubble(
+                                            data.displayText,
+                                            reasoningText,
                                           ),
                                         );
                                       },

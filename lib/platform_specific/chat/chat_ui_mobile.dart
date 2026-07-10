@@ -10,6 +10,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -1568,14 +1569,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted || index < 0 || index >= _messages.length) return;
     if (_activeChatId != chatId) return;
 
-    setState(() {
-      final Map<String, String> message = Map<String, String>.from(
-        _messages[index],
-      );
-      message['text'] = content;
-      message['reasoning'] = reasoning;
-      _messages[index] = message;
-    });
+    // Keep the backing list in sync (for persistence + finalize) but WITHOUT a
+    // screen-wide setState. Per-token rebuilds are scoped to the single
+    // streaming bubble, which listens to the runtime's `streamingLive`
+    // notifier in the list itemBuilder. This replaces a ~30fps full-tree
+    // rebuild (every visible bubble + the composer + overlays) with a rebuild
+    // of just the streaming bubble's body.
+    final Map<String, String> message = Map<String, String>.from(
+      _messages[index],
+    );
+    message['text'] = content;
+    message['reasoning'] = reasoning;
+    _messages[index] = message;
+
+    final ChatRuntime runtime = ChatRuntimeRegistry.instance.get(chatId);
+    // First token of the turn: the placeholder bubble was first built before
+    // the stream manager flipped `isChatStreaming` true, so it isn't yet
+    // wrapped in its scoped ValueListenableBuilder. Do exactly one setState
+    // now (the chat is streaming by the time the first token arrives) to
+    // install the wrapper; every subsequent token updates only the notifier.
+    final bool firstToken = runtime.streamingLive.value == null;
+    runtime.pushStreamingText(
+      index: index,
+      text: content,
+      reasoning: reasoning,
+    );
+    if (firstToken) {
+      setState(() {});
+    }
+
     // Follow the answer as it streams in, but only while pinned to the bottom.
     pinToBottomDuringStream();
   }
@@ -1775,6 +1797,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     }
+
+    // Streaming ended: drop the per-token live snapshot so the finalized
+    // bubble renders from the persisted message text, not a stale live value.
+    ChatRuntimeRegistry.instance.lookup(chatId)?.streamingLive.value = null;
 
     // Check if this is the active chat (for UI updates)
     final bool isActiveChat = _activeChatId == chatId;
@@ -3308,82 +3334,128 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   }
                                   final lastError = raw['lastError'];
 
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: displayText,
-                                      reasoning: reasoningText,
+                                  // Build the bubble from a (text, reasoning)
+                                  // pair so the streaming bubble can be fed live
+                                  // values from the runtime notifier without a
+                                  // screen-wide rebuild. All other props are
+                                  // stable for the duration of a stream.
+                                  MessageBubble buildBubble(
+                                    String msgText,
+                                    String? msgReasoning,
+                                  ) => MessageBubble(
+                                    key: ValueKey('msg_$i'),
+                                    message: msgText,
+                                    reasoning: msgReasoning,
+                                    isUser: isUser,
+                                    startsNewGroup: startsNewGroup,
+                                    endsGroup: endsGroup,
+                                    maxWidth: isUser
+                                        ? expandedInputWidth * 0.8
+                                        : expandedInputWidth,
+                                    isReasoningStreaming: isStreamingMessage,
+                                    modelLabel: modelLabel,
+                                    modelProvider: modelProvider,
+                                    tps: tps,
+                                    toolCalls: toolCalls,
+                                    showToolCalls: widget.showToolCalls,
+                                    contentBlocks: parsedContentBlocks,
+                                    isStreamingMessage: isStreamingMessage,
+                                    images: images,
+                                    imageMetas: imageMetas,
+                                    attachments: attachments,
+                                    imageCostEur: imageCostEur,
+                                    imageGeneratedAt: imageGeneratedAt,
+                                    actions: _messageActionsHandler
+                                        .buildActionsForMessage(
+                                          index: i,
+                                          messageText: msgText,
+                                          isUser: isUser,
+                                          isStreaming: isStreamingMessage,
+                                          onEdit: _editMessageAt,
+                                          onResendMessage: _resendMessageAt,
+                                        ),
+                                    userMessageActions: isUser
+                                        ? _messageActionsHandler
+                                              .buildUserMessageActions(
+                                                index: i,
+                                                messageText: msgText,
+                                                onEdit: _editMessageAt,
+                                                onResendMessage:
+                                                    _resendMessageAt,
+                                              )
+                                        : const [],
+                                    isEditing: isBeingEdited,
+                                    showReasoningTokens:
+                                        widget.showReasoningTokens,
+                                    showModelInfo: widget.showModelInfo,
+                                    showTps: widget.showTps,
+                                    onAskUserAnswer: _askUserCallbackForMessage(
+                                      index: i,
                                       isUser: isUser,
-                                      startsNewGroup: startsNewGroup,
-                                      endsGroup: endsGroup,
-                                      maxWidth: isUser
-                                          ? expandedInputWidth * 0.8
-                                          : expandedInputWidth,
-                                      isReasoningStreaming: isStreamingMessage,
-                                      modelLabel: modelLabel,
-                                      modelProvider: modelProvider,
-                                      tps: tps,
+                                      isStreaming: isStreamingMessage,
                                       toolCalls: toolCalls,
-                                      showToolCalls: widget.showToolCalls,
                                       contentBlocks: parsedContentBlocks,
-                                      isStreamingMessage: isStreamingMessage,
-                                      images: images,
-                                      imageMetas: imageMetas,
-                                      attachments: attachments,
-                                      imageCostEur: imageCostEur,
-                                      imageGeneratedAt: imageGeneratedAt,
-                                      actions: _messageActionsHandler
-                                          .buildActionsForMessage(
-                                            index: i,
-                                            messageText: displayText,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            onEdit: _editMessageAt,
-                                            onResendMessage: _resendMessageAt,
+                                    ),
+                                    useSharedSelectionArea: true,
+                                    status: status,
+                                    lastError: lastError,
+                                    onRetryPending: isUser &&
+                                            (status ==
+                                                    ChatMessageStatus.pending ||
+                                                status ==
+                                                    ChatMessageStatus.failed)
+                                        ? () => OfflineRetryManager.instance
+                                            .retryNow()
+                                        : null,
+                                    onContinueGeneration: !isUser &&
+                                            status ==
+                                                ChatMessageStatus.interrupted &&
+                                            !_isCurrentChatStreaming
+                                        ? () => _continueGenerationAt(i)
+                                        : null,
+                                  );
+
+                                  // The streaming bubble rebuilds itself per
+                                  // token via the runtime's streamingLive
+                                  // notifier — the rest of the screen stays put.
+                                  final ChatRuntime? runtime =
+                                      _activeChatId == null
+                                      ? null
+                                      : ChatRuntimeRegistry.instance.lookup(
+                                          _activeChatId!,
+                                        );
+                                  if (isStreamingMessage && runtime != null) {
+                                    return RepaintBoundary(
+                                      child:
+                                          ValueListenableBuilder<StreamingLive?>(
+                                            valueListenable:
+                                                runtime.streamingLive,
+                                            builder: (context, live, _) {
+                                              final bool match =
+                                                  live != null &&
+                                                  live.index == i;
+                                              final String msgText = match
+                                                  ? live.text.trimRight()
+                                                  : displayText;
+                                              final String reasoningRaw = match
+                                                  ? live.reasoning
+                                                  : reasoning;
+                                              final String? msgReasoning =
+                                                  reasoningRaw.trim().isEmpty
+                                                  ? null
+                                                  : reasoningRaw;
+                                              return buildBubble(
+                                                msgText,
+                                                msgReasoning,
+                                              );
+                                            },
                                           ),
-                                      userMessageActions: isUser
-                                          ? _messageActionsHandler
-                                                .buildUserMessageActions(
-                                                  index: i,
-                                                  messageText: displayText,
-                                                  onEdit: _editMessageAt,
-                                                  onResendMessage:
-                                                      _resendMessageAt,
-                                                )
-                                          : const [],
-                                      isEditing: isBeingEdited,
-                                      showReasoningTokens:
-                                          widget.showReasoningTokens,
-                                      showModelInfo: widget.showModelInfo,
-                                      showTps: widget.showTps,
-                                      onAskUserAnswer:
-                                          _askUserCallbackForMessage(
-                                            index: i,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            toolCalls: toolCalls,
-                                            contentBlocks: parsedContentBlocks,
-                                          ),
-                                      useSharedSelectionArea: true,
-                                      status: status,
-                                      lastError: lastError,
-                                      onRetryPending: isUser &&
-                                              (status ==
-                                                      ChatMessageStatus
-                                                          .pending ||
-                                                  status ==
-                                                      ChatMessageStatus.failed)
-                                          ? () => OfflineRetryManager
-                                              .instance
-                                              .retryNow()
-                                          : null,
-                                      onContinueGeneration: !isUser &&
-                                              status ==
-                                                  ChatMessageStatus
-                                                      .interrupted &&
-                                              !_isCurrentChatStreaming
-                                          ? () => _continueGenerationAt(i)
-                                          : null,
+                                    );
+                                  }
+                                  return RepaintBoundary(
+                                    child: buildBubble(
+                                      displayText,
+                                      reasoningText,
                                     ),
                                   );
                                 },
