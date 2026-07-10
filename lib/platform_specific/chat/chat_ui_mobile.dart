@@ -131,6 +131,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // Controllers and basic state
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // Per-payload decode caches keyed by the raw JSON string. The list
+  // itemBuilder previously re-ran jsonDecode + model construction for images,
+  // attachments, tool calls and content blocks on every build — i.e. every
+  // frame a bubble scrolled into view. Caching by the exact JSON string makes
+  // scrolling a static chat allocation-free. Cleared on chat switch.
+  final Map<String, List<String>?> _decodedImagesCache = {};
+  final Map<String, List<DocumentAttachment>?> _decodedAttachmentsCache = {};
+  final Map<String, List<ToolCall>?> _decodedToolCallsCache = {};
+  final Map<String, List<ContentBlock>?> _decodedContentBlocksCache = {};
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
@@ -678,6 +688,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
       setState(() {
         _messages.clear();
+        _clearMessageDecodeCaches();
         _fileHandler.clearAll();
         _controller.clear();
         _messageActionsHandler.cancelEdit();
@@ -1005,6 +1016,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       setState(() {
         _messages.clear();
+        _clearMessageDecodeCaches();
         _fileHandler.clearAll();
         _messageActionsHandler.cancelEdit();
         _activeChatId = null;
@@ -1080,6 +1092,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted) return;
     setState(() {
       _messages.clear();
+      _clearMessageDecodeCaches();
       _fileHandler.clearAll();
       _messageActionsHandler.cancelEdit();
       _activeChatId = null;
@@ -1130,6 +1143,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
+      _clearMessageDecodeCaches();
       _activeChatId = null;
       _fileHandler.clearAll();
       _controller.clear();
@@ -1505,6 +1519,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _activeChatId = null;
       _messages.clear();
+      _clearMessageDecodeCaches();
       _messageActionsHandler.cancelEdit();
       _selectedWorkspaceId = workspaceId;
       _controller.clear();
@@ -1559,6 +1574,78 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   // --- MESSAGE HANDLERS ---
+
+  /// Drop all per-payload decode caches. Called when the visible chat's
+  /// message list is replaced so stale entries from other chats don't linger.
+  void _clearMessageDecodeCaches() {
+    _decodedImagesCache.clear();
+    _decodedAttachmentsCache.clear();
+    _decodedToolCallsCache.clear();
+    _decodedContentBlocksCache.clear();
+  }
+
+  List<String>? _decodeImages(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedImagesCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) return decoded.cast<String>();
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<DocumentAttachment>? _decodeAttachments(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedAttachmentsCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .map(
+                (item) =>
+                    DocumentAttachment.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<ToolCall>? _decodeToolCalls(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedToolCallsCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .whereType<Map>()
+              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<ContentBlock>? _decodeContentBlocks(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedContentBlocksCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .whereType<Map>()
+              .map(
+                (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
 
   void _updateAiMessage(
     int index,
@@ -3199,59 +3286,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       ((_messages[i + 1]['sender'] ?? 'ai') !=
                                           sender);
 
-                                  // Parse images from JSON
-                                  List<String>? images;
-                                  final String? imagesJson = raw['images'];
-                                  if (imagesJson != null &&
-                                      imagesJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(imagesJson);
-                                      if (decoded is List) {
-                                        images = decoded.cast<String>();
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          'Failed to decode images JSON: $e',
-                                        );
-                                      }
-                                    }
-                                  }
-
-                                  // Parse document attachments from JSON
-                                  List<DocumentAttachment>? attachments;
-                                  final String? attachmentsJson =
-                                      raw['attachments'];
-                                  if (attachmentsJson != null &&
-                                      attachmentsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        attachmentsJson,
-                                      );
-                                      if (decoded is List) {
-                                        attachments = decoded
-                                            .map(
-                                              (item) =>
-                                                  DocumentAttachment.fromJson(
-                                                    item
-                                                        as Map<String, dynamic>,
-                                                  ),
-                                            )
-                                            .toList();
-                                        if (kDebugMode) {
-                                          debugPrint(
-                                            '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
-                                          );
-                                        }
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
-                                        );
-                                      }
-                                    }
-                                  }
+                                  // Decode payloads via per-JSON-string caches
+                                  // so scrolling a static chat doesn't re-parse
+                                  // (see _decode* helpers).
+                                  final List<String>? images = _decodeImages(
+                                    raw['images'],
+                                  );
+                                  final List<DocumentAttachment>? attachments =
+                                      _decodeAttachments(raw['attachments']);
 
                                   // Parse TPS value from message
                                   final tpsStr = raw['tps'];
@@ -3260,49 +3302,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     tps = double.tryParse(tpsStr);
                                   }
 
-                                  List<ToolCall>? toolCalls;
-                                  final String? toolCallsJson =
-                                      raw['toolCalls'];
-                                  if (toolCallsJson != null &&
-                                      toolCallsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(toolCallsJson);
-                                      if (decoded is List) {
-                                        toolCalls = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ToolCall.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
+                                  final List<ToolCall>? toolCalls =
+                                      _decodeToolCalls(raw['toolCalls']);
 
-                                  // Parse content blocks for interleaved
-                                  // tool call / text display.
-                                  List<ContentBlock>? parsedContentBlocks;
-                                  final String? contentBlocksJson =
-                                      raw['contentBlocks'];
-                                  if (contentBlocksJson != null &&
-                                      contentBlocksJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        contentBlocksJson,
-                                      );
-                                      if (decoded is List) {
-                                        parsedContentBlocks = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ContentBlock.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
+                                  // Content blocks for interleaved tool
+                                  // call / text display.
+                                  final List<ContentBlock>? parsedContentBlocks =
+                                      _decodeContentBlocks(raw['contentBlocks']);
 
                                   final String? imageCostStr =
                                       raw['imageCostEur'];

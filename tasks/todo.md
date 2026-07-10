@@ -43,9 +43,19 @@ green at every step. Same pixels, ~10× fewer rebuilds.
       just that bubble. streamingLive cleared on finalize (both platforms). Result: ~30fps
       full-tree rebuild (all bubbles + composer + overlays) → one bubble body. Tests 799 green,
       analyze clean.
-- [ ] **P2. Kill per-frame decode + unstable identity.** Parse each message into a typed
-      model once (on add/mutate), not in build. Stable per-message-id keys. Memoize per-item
-      action lists / askUser closures so MessageBubble configs are stable.
+- [x] **P2 (lite). Kill per-frame JSON decode on mobile.** DONE. Added 4 per-payload decode
+      caches (images/attachments/toolCalls/contentBlocks) keyed by the raw JSON string + helper
+      methods, replacing the inline jsonDecode-every-build in the mobile itemBuilder (desktop
+      already had this). Scrolling a static chat is now decode-free. Caches cleared on chat
+      switch. Tests 799 green, analyze clean.
+      DEFERRED (bigger/riskier, not done): full typed immutable message model replacing
+      List<Map<String,String>>, and stable per-message-id keys (index keys are correct for the
+      append-only common case; changing them touches persistence identity).
+- [ ] **P4. Mobile scroll-back keep-alive.** DEFERRED intentionally. Mobile sets
+      addAutomaticKeepAlives:false — a deliberate memory choice for long chats on low-end
+      phones. Flipping to true (desktop's setting) trades markdown re-parse on scroll-back for
+      unbounded per-bubble state memory; not safe to change without on-device profiling. P1
+      already fixed the primary scroll-during-streaming jank.
 - [x] **P3. message_bubble memoization.** DONE (strip cache). Added `_strippedMessage` getter
       caching `stripToolCallBlocksForDisplay(widget.message)` per distinct message string;
       replaced all 4 per-build call sites. A rebuild that doesn't change the text is now free.
