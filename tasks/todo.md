@@ -46,9 +46,12 @@ green at every step. Same pixels, ~10× fewer rebuilds.
 - [ ] **P2. Kill per-frame decode + unstable identity.** Parse each message into a typed
       model once (on add/mutate), not in build. Stable per-message-id keys. Memoize per-item
       action lists / askUser closures so MessageBubble configs are stable.
-- [ ] **P3. message_bubble memoization.** Cache `stripToolCallBlocksForDisplay(message)` per
-      content; memoize `_RenderSegment`/timeline for finalized messages (no per-build ToolCall
-      deep-clone); cache visual-block JSON parse.
+- [x] **P3. message_bubble memoization.** DONE (strip cache). Added `_strippedMessage` getter
+      caching `stripToolCallBlocksForDisplay(widget.message)` per distinct message string;
+      replaced all 4 per-build call sites. A rebuild that doesn't change the text is now free.
+      Segment/timeline memoization intentionally SKIPPED: after P1 removed the 30fps rebuild it
+      only runs on scroll-into-view, and safely caching a `List<Widget>` (theme/colour-dependent)
+      in that 4.6k-line file is higher risk than the remaining benefit. Tests green, analyze clean.
 - [ ] **P4. Mobile scroll-back.** Keep-alive for markdown-heavy mobile bubbles; re-tune
       cacheExtent. (reverse:true list = higher risk; only if time + tests allow.)
 - [ ] **P5. Mobile composer redesign.** Replace 3-pill 46px layout with one unified tall (~2×)
