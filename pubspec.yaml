@@ -14,6 +14,7 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1  # State management for chat runtime / streaming (perf re-architecture)
   dynamic_color: ^1.7.0  # Material You / system accent colour (Android 12+, some desktops)
   web: ^1.1.1
   shared_preferences: ^2.5.3
