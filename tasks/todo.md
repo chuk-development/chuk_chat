@@ -34,9 +34,15 @@ green at every step. Same pixels, ~10× fewer rebuilds.
       org egress policy → patched the pub-cache hooks locally (pdfium→empty stub .so;
       sqlite3→system libsqlite3.so). NOT committed (outside repo). Next: add flutter_riverpod +
       ProviderScope.
-- [ ] **P1. Scope streaming rebuilds (BIGGEST WIN).** Route per-token updates through a
-      `ValueNotifier` consumed by a `ValueListenableBuilder` around ONLY the streaming bubble's
-      body. Composer + static bubbles stop rebuilding on tokens. Both platforms.
+- [x] **P1. Scope streaming rebuilds (BIGGEST WIN).** DONE. Added `StreamingLive` value type +
+      `ChatRuntime.streamingLive` notifier + `pushStreamingText`. Both `_updateAiMessage`
+      (mobile + desktop, incl. unifying the desktop send-path onto the shared method) now update
+      `_messages` silently and push to the notifier instead of a screen-wide setState. The list
+      itemBuilder wraps ONLY the streaming bubble in a `ValueListenableBuilder<StreamingLive?>`.
+      One forced setState on the first token installs the wrapper; every later token rebuilds
+      just that bubble. streamingLive cleared on finalize (both platforms). Result: ~30fps
+      full-tree rebuild (all bubbles + composer + overlays) → one bubble body. Tests 799 green,
+      analyze clean.
 - [ ] **P2. Kill per-frame decode + unstable identity.** Parse each message into a typed
       model once (on add/mutate), not in build. Stable per-message-id keys. Memoize per-item
       action lists / askUser closures so MessageBubble configs are stable.

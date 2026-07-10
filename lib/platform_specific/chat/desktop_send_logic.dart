@@ -504,10 +504,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   ? displayContent
                   : '$prefix$displayContent';
 
-              setState(() {
-                _messages[placeholderIndex]['text'] = fullDisplay;
-                _messages[placeholderIndex]['reasoning'] = reasoning;
-              });
+              _updateAiMessage(placeholderIndex, fullDisplay, reasoning);
               // Follow the answer as it streams in, but only while pinned.
               pinToBottomDuringStream();
             }
@@ -2275,15 +2272,36 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   void _updateAiMessage(int index, String content, String reasoning) {
     if (!mounted || index < 0 || index >= _messages.length) return;
+    final String? chatId = _activeChatId;
+    if (chatId == null) return;
 
-    setState(() {
-      final Map<String, String> message = Map<String, String>.from(
-        _messages[index],
-      );
-      message['text'] = content;
-      message['reasoning'] = reasoning;
-      _messages[index] = message;
-    });
+    // Keep the backing list in sync (persistence + finalize) but WITHOUT a
+    // screen-wide setState per token. The single streaming bubble rebuilds
+    // itself by listening to the runtime's `streamingLive` notifier (see the
+    // list itemBuilder). This replaces a ~30fps rebuild of every visible
+    // bubble + the composer + overlays with a rebuild of just the streaming
+    // bubble's body.
+    final Map<String, String> message = Map<String, String>.from(
+      _messages[index],
+    );
+    message['text'] = content;
+    message['reasoning'] = reasoning;
+    _messages[index] = message;
+
+    final ChatRuntime runtime = ChatRuntimeRegistry.instance.get(chatId);
+    // First token of the turn: the placeholder was first built before the
+    // stream manager flipped streaming on, so it isn't yet wrapped in its
+    // scoped ValueListenableBuilder. Do exactly one setState now to install
+    // the wrapper; every subsequent token updates only the notifier.
+    final bool firstToken = runtime.streamingLive.value == null;
+    runtime.pushStreamingText(
+      index: index,
+      text: content,
+      reasoning: reasoning,
+    );
+    if (firstToken) {
+      setState(() {});
+    }
   }
 
   void _updateToolCallsForMessage(
@@ -2436,6 +2454,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     double? tps,
   }) {
     _autoSaveTimer?.cancel();
+    // Streaming ended: drop the per-token live snapshot so the finalized
+    // bubble renders from the persisted message text, not a stale live value.
+    final String? finalizingChatId = _activeChatId;
+    if (finalizingChatId != null) {
+      ChatRuntimeRegistry.instance.lookup(finalizingChatId)?.streamingLive
+          .value = null;
+    }
     if (index < 0 || index >= _messages.length) {
       if (mounted) {
         setState(() {
