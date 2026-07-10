@@ -3430,7 +3430,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       : ChatRuntimeRegistry.instance.lookup(
                                           _activeChatId!,
                                         );
-                                  if (isStreamingMessage && runtime != null) {
+                                  // Wrap the last AI bubble in the live notifier
+                                  // for the whole turn (isSending), not just
+                                  // while a stream is mid-flight: isStreaming
+                                  // briefly flips false between tool-loop passes,
+                                  // and we must not lose the live wrapper (and
+                                  // its per-token updates) during that gap.
+                                  final bool wrapForStream =
+                                      runtime != null &&
+                                      isAiMessage &&
+                                      i == _messages.length - 1 &&
+                                      (isStreamingMessage ||
+                                          runtime.isSending.value);
+                                  if (wrapForStream) {
                                     return RepaintBoundary(
                                       child:
                                           ValueListenableBuilder<StreamingLive?>(

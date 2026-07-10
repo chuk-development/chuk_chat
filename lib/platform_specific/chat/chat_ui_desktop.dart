@@ -2004,8 +2004,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             ? null
                                             : ChatRuntimeRegistry.instance
                                                   .lookup(_activeChatId!);
-                                        if (data.isStreamingMessage &&
-                                            runtime != null) {
+                                        // Wrap the last AI bubble for the whole
+                                        // turn (isSending), not just while a
+                                        // stream is mid-flight: isStreaming
+                                        // briefly flips false between tool-loop
+                                        // passes and we must keep the live
+                                        // wrapper across that gap.
+                                        final bool wrapForStream =
+                                            runtime != null &&
+                                            !data.isUser &&
+                                            i == _messages.length - 1 &&
+                                            (data.isStreamingMessage ||
+                                                runtime.isSending.value);
+                                        if (wrapForStream) {
                                           return RepaintBoundary(
                                             child:
                                                 ValueListenableBuilder<
