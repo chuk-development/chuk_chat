@@ -822,70 +822,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded) {
     if (!mounted) return;
 
-    final List<Map<String, String>> newMessages = chat.messages.map((message) {
-      final map = <String, String>{
-        'sender': message.sender,
-        'text': message.text,
-        'reasoning': message.reasoning ?? '',
-      };
-      if (message.modelId != null && message.modelId!.isNotEmpty) {
-        map['modelId'] = message.modelId!;
-      }
-      if (message.provider != null && message.provider!.isNotEmpty) {
-        map['provider'] = message.provider!;
-      }
-      // Include images if present
-      if (message.images != null && message.images!.isNotEmpty) {
-        map['images'] = message.images!;
-      }
-      if (message.imageMetas != null && message.imageMetas!.isNotEmpty) {
-        map['imageMetas'] = message.imageMetas!;
-      }
-      if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
-        map['imageCostEur'] = message.imageCostEur!;
-      }
-      if (message.imageGeneratedAt != null &&
-          message.imageGeneratedAt!.isNotEmpty) {
-        map['imageGeneratedAt'] = message.imageGeneratedAt!;
-      }
-      // Include attachments if present
-      if (message.attachments != null && message.attachments!.isNotEmpty) {
-        map['attachments'] = message.attachments!;
-        if (kDebugMode) {
-          debugPrint(
-            '📄 [AttachmentDebug] Loading message with attachments field',
-          );
-        }
-      }
-      // Include attachedFilesJson for retry/resend support
-      if (message.attachedFilesJson != null &&
-          message.attachedFilesJson!.isNotEmpty) {
-        map['attachedFilesJson'] = message.attachedFilesJson!;
-      }
-      if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
-        map['toolCalls'] = message.toolCalls!;
-      }
-      if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
-        map['contentBlocks'] = message.contentBlocks!;
-      }
-      // Preserve local delivery status (pending/failed/interrupted).
-      // Without this an assistant message that was cut off mid-stream
-      // loses its "Continue generation" affordance on reload.
-      final statusStr = message.statusString;
-      if (statusStr != null) {
-        map['status'] = statusStr;
-      }
-      if (message.queueId != null && message.queueId!.isNotEmpty) {
-        map['queueId'] = message.queueId!;
-      }
-      // Preserve the stable messageId so assistant bubbles keep their identity
-      // (ListView key + decode/markdown caches) across reload, and the artifact
-      // rollback path can still match `artifact_versions.message_id` rows.
-      if (message.messageId != null && message.messageId!.isNotEmpty) {
-        map['messageId'] = message.messageId!;
-      }
-      return map;
-    }).toList();
+    // Use the shared ChatMessage->raw-map bridge so mobile and desktop stay in
+    // lockstep (it carries modelId/provider/images/attachments/toolCalls/
+    // contentBlocks AND the local-only messageId/status/queueId needed to keep
+    // stable bubble identity + the "Continue generation" affordance on reload).
+    final List<Map<String, String>> newMessages = chat.messages
+        .map(ChatUiHelpers.messageToRawMap)
+        .toList();
 
     final String? activeChatId = _activeChatId;
 
@@ -3627,17 +3570,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   /// The model selector, merged with the reasoning toggle into a single
-  /// `[ 🧠 | # Model ]` pill (desktop parity) when the model supports reasoning
-  /// and we're not in compact mode. Otherwise a plain dropdown, or the legacy
-  /// separate-icon layout for compact reasoning models.
+  /// `[ 🧠 | # Model ]` pill (desktop parity) whenever the model supports
+  /// reasoning; a plain dropdown otherwise. The merged dropdown style is
+  /// self-contained (it ignores [isCompactMode]), and the mobile composer's
+  /// toolbar row always has room, so — unlike desktop — the merge is not gated
+  /// on compact mode.
   Widget _buildModelControl({
     required bool isCompactMode,
-    required Color accent,
     required Color iconFg,
   }) {
-    final bool supportsReasoning =
+    final bool merged =
         ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId);
-    final bool merged = supportsReasoning && !isCompactMode;
 
     final Widget dropdown = KeyedSubtree(
       key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
@@ -3656,29 +3599,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
     );
 
-    if (!merged) {
-      if (!supportsReasoning) return dropdown;
-      // Compact mode: keep the reasoning toggle as a separate icon beside it.
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: _toggleReasoning,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Icon(
-                Icons.psychology,
-                size: 20,
-                color: _reasoningEnabled
-                    ? accent
-                    : iconFg.withValues(alpha: 0.3),
-              ),
-            ),
-          ),
-          Flexible(child: dropdown),
-        ],
-      );
-    }
+    // Non-reasoning model: plain compact dropdown, no reasoning toggle.
+    if (!merged) return dropdown;
 
     // Merged pill: one outer oval (the model selector) with the reasoning
     // toggle laid on its left end, matching the desktop composer.
@@ -3798,15 +3720,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
               // Model picker takes the remaining middle space (left-aligned),
               // pushing the mic / fullscreen controls to the right edge. When
-              // the model supports reasoning (and we're not compact), the
-              // reasoning toggle merges into the model oval as the desktop-style
-              // [ 🧠 | # Model ] pill; otherwise it stays a separate icon.
+              // the model supports reasoning the toggle merges into the model
+              // oval as the desktop-style [ 🧠 | # Model ] pill; otherwise it's
+              // a plain model dropdown.
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: _buildModelControl(
                     isCompactMode: isCompactMode,
-                    accent: accent,
                     iconFg: iconFg,
                   ),
                 ),
