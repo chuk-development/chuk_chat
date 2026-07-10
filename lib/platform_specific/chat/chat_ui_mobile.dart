@@ -10,6 +10,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -130,6 +131,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // Controllers and basic state
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // Per-payload decode caches keyed by the raw JSON string. The list
+  // itemBuilder previously re-ran jsonDecode + model construction for images,
+  // attachments, tool calls and content blocks on every build — i.e. every
+  // frame a bubble scrolled into view. Caching by the exact JSON string makes
+  // scrolling a static chat allocation-free. Cleared on chat switch.
+  final Map<String, List<String>?> _decodedImagesCache = {};
+  final Map<String, List<DocumentAttachment>?> _decodedAttachmentsCache = {};
+  final Map<String, List<ToolCall>?> _decodedToolCallsCache = {};
+  final Map<String, List<ContentBlock>?> _decodedContentBlocksCache = {};
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
@@ -677,6 +688,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
       setState(() {
         _messages.clear();
+        _clearMessageDecodeCaches();
         _fileHandler.clearAll();
         _controller.clear();
         _messageActionsHandler.cancelEdit();
@@ -1004,6 +1016,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       setState(() {
         _messages.clear();
+        _clearMessageDecodeCaches();
         _fileHandler.clearAll();
         _messageActionsHandler.cancelEdit();
         _activeChatId = null;
@@ -1079,6 +1092,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted) return;
     setState(() {
       _messages.clear();
+      _clearMessageDecodeCaches();
       _fileHandler.clearAll();
       _messageActionsHandler.cancelEdit();
       _activeChatId = null;
@@ -1129,6 +1143,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
+      _clearMessageDecodeCaches();
       _activeChatId = null;
       _fileHandler.clearAll();
       _controller.clear();
@@ -1504,6 +1519,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _activeChatId = null;
       _messages.clear();
+      _clearMessageDecodeCaches();
       _messageActionsHandler.cancelEdit();
       _selectedWorkspaceId = workspaceId;
       _controller.clear();
@@ -1559,6 +1575,78 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   // --- MESSAGE HANDLERS ---
 
+  /// Drop all per-payload decode caches. Called when the visible chat's
+  /// message list is replaced so stale entries from other chats don't linger.
+  void _clearMessageDecodeCaches() {
+    _decodedImagesCache.clear();
+    _decodedAttachmentsCache.clear();
+    _decodedToolCallsCache.clear();
+    _decodedContentBlocksCache.clear();
+  }
+
+  List<String>? _decodeImages(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedImagesCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) return decoded.cast<String>();
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<DocumentAttachment>? _decodeAttachments(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedAttachmentsCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .map(
+                (item) =>
+                    DocumentAttachment.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<ToolCall>? _decodeToolCalls(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedToolCallsCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .whereType<Map>()
+              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
+
+  List<ContentBlock>? _decodeContentBlocks(String? json) {
+    if (json == null || json.isEmpty) return null;
+    return _decodedContentBlocksCache.putIfAbsent(json, () {
+      try {
+        final decoded = jsonDecode(json);
+        if (decoded is List) {
+          return decoded
+              .whereType<Map>()
+              .map(
+                (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+        }
+      } catch (_) {}
+      return null;
+    });
+  }
+
   void _updateAiMessage(
     int index,
     String content,
@@ -1568,14 +1656,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted || index < 0 || index >= _messages.length) return;
     if (_activeChatId != chatId) return;
 
-    setState(() {
-      final Map<String, String> message = Map<String, String>.from(
-        _messages[index],
-      );
-      message['text'] = content;
-      message['reasoning'] = reasoning;
-      _messages[index] = message;
-    });
+    // Keep the backing list in sync (for persistence + finalize) but WITHOUT a
+    // screen-wide setState. Per-token rebuilds are scoped to the single
+    // streaming bubble, which listens to the runtime's `streamingLive`
+    // notifier in the list itemBuilder. This replaces a ~30fps full-tree
+    // rebuild (every visible bubble + the composer + overlays) with a rebuild
+    // of just the streaming bubble's body.
+    final Map<String, String> message = Map<String, String>.from(
+      _messages[index],
+    );
+    message['text'] = content;
+    message['reasoning'] = reasoning;
+    _messages[index] = message;
+
+    final ChatRuntime runtime = ChatRuntimeRegistry.instance.get(chatId);
+    // First token of the turn: the placeholder bubble was first built before
+    // the stream manager flipped `isChatStreaming` true, so it isn't yet
+    // wrapped in its scoped ValueListenableBuilder. Do exactly one setState
+    // now (the chat is streaming by the time the first token arrives) to
+    // install the wrapper; every subsequent token updates only the notifier.
+    final bool firstToken = runtime.streamingLive.value == null;
+    runtime.pushStreamingText(
+      index: index,
+      text: content,
+      reasoning: reasoning,
+    );
+    if (firstToken) {
+      setState(() {});
+    }
+
     // Follow the answer as it streams in, but only while pinned to the bottom.
     pinToBottomDuringStream();
   }
@@ -1775,6 +1884,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     }
+
+    // Streaming ended: drop the per-token live snapshot so the finalized
+    // bubble renders from the persisted message text, not a stale live value.
+    ChatRuntimeRegistry.instance.lookup(chatId)?.streamingLive.value = null;
 
     // Check if this is the active chat (for UI updates)
     final bool isActiveChat = _activeChatId == chatId;
@@ -3173,59 +3286,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       ((_messages[i + 1]['sender'] ?? 'ai') !=
                                           sender);
 
-                                  // Parse images from JSON
-                                  List<String>? images;
-                                  final String? imagesJson = raw['images'];
-                                  if (imagesJson != null &&
-                                      imagesJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(imagesJson);
-                                      if (decoded is List) {
-                                        images = decoded.cast<String>();
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          'Failed to decode images JSON: $e',
-                                        );
-                                      }
-                                    }
-                                  }
-
-                                  // Parse document attachments from JSON
-                                  List<DocumentAttachment>? attachments;
-                                  final String? attachmentsJson =
-                                      raw['attachments'];
-                                  if (attachmentsJson != null &&
-                                      attachmentsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        attachmentsJson,
-                                      );
-                                      if (decoded is List) {
-                                        attachments = decoded
-                                            .map(
-                                              (item) =>
-                                                  DocumentAttachment.fromJson(
-                                                    item
-                                                        as Map<String, dynamic>,
-                                                  ),
-                                            )
-                                            .toList();
-                                        if (kDebugMode) {
-                                          debugPrint(
-                                            '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
-                                          );
-                                        }
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
-                                        );
-                                      }
-                                    }
-                                  }
+                                  // Decode payloads via per-JSON-string caches
+                                  // so scrolling a static chat doesn't re-parse
+                                  // (see _decode* helpers).
+                                  final List<String>? images = _decodeImages(
+                                    raw['images'],
+                                  );
+                                  final List<DocumentAttachment>? attachments =
+                                      _decodeAttachments(raw['attachments']);
 
                                   // Parse TPS value from message
                                   final tpsStr = raw['tps'];
@@ -3234,49 +3302,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     tps = double.tryParse(tpsStr);
                                   }
 
-                                  List<ToolCall>? toolCalls;
-                                  final String? toolCallsJson =
-                                      raw['toolCalls'];
-                                  if (toolCallsJson != null &&
-                                      toolCallsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(toolCallsJson);
-                                      if (decoded is List) {
-                                        toolCalls = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ToolCall.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
+                                  final List<ToolCall>? toolCalls =
+                                      _decodeToolCalls(raw['toolCalls']);
 
-                                  // Parse content blocks for interleaved
-                                  // tool call / text display.
-                                  List<ContentBlock>? parsedContentBlocks;
-                                  final String? contentBlocksJson =
-                                      raw['contentBlocks'];
-                                  if (contentBlocksJson != null &&
-                                      contentBlocksJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        contentBlocksJson,
-                                      );
-                                      if (decoded is List) {
-                                        parsedContentBlocks = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ContentBlock.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
+                                  // Content blocks for interleaved tool
+                                  // call / text display.
+                                  final List<ContentBlock>? parsedContentBlocks =
+                                      _decodeContentBlocks(raw['contentBlocks']);
 
                                   final String? imageCostStr =
                                       raw['imageCostEur'];
@@ -3308,82 +3340,140 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   }
                                   final lastError = raw['lastError'];
 
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: displayText,
-                                      reasoning: reasoningText,
+                                  // Build the bubble from a (text, reasoning)
+                                  // pair so the streaming bubble can be fed live
+                                  // values from the runtime notifier without a
+                                  // screen-wide rebuild. All other props are
+                                  // stable for the duration of a stream.
+                                  MessageBubble buildBubble(
+                                    String msgText,
+                                    String? msgReasoning,
+                                  ) => MessageBubble(
+                                    key: ValueKey('msg_$i'),
+                                    message: msgText,
+                                    reasoning: msgReasoning,
+                                    isUser: isUser,
+                                    startsNewGroup: startsNewGroup,
+                                    endsGroup: endsGroup,
+                                    maxWidth: isUser
+                                        ? expandedInputWidth * 0.8
+                                        : expandedInputWidth,
+                                    isReasoningStreaming: isStreamingMessage,
+                                    modelLabel: modelLabel,
+                                    modelProvider: modelProvider,
+                                    tps: tps,
+                                    toolCalls: toolCalls,
+                                    showToolCalls: widget.showToolCalls,
+                                    contentBlocks: parsedContentBlocks,
+                                    isStreamingMessage: isStreamingMessage,
+                                    images: images,
+                                    imageMetas: imageMetas,
+                                    attachments: attachments,
+                                    imageCostEur: imageCostEur,
+                                    imageGeneratedAt: imageGeneratedAt,
+                                    actions: _messageActionsHandler
+                                        .buildActionsForMessage(
+                                          index: i,
+                                          messageText: msgText,
+                                          isUser: isUser,
+                                          isStreaming: isStreamingMessage,
+                                          onEdit: _editMessageAt,
+                                          onResendMessage: _resendMessageAt,
+                                        ),
+                                    userMessageActions: isUser
+                                        ? _messageActionsHandler
+                                              .buildUserMessageActions(
+                                                index: i,
+                                                messageText: msgText,
+                                                onEdit: _editMessageAt,
+                                                onResendMessage:
+                                                    _resendMessageAt,
+                                              )
+                                        : const [],
+                                    isEditing: isBeingEdited,
+                                    showReasoningTokens:
+                                        widget.showReasoningTokens,
+                                    showModelInfo: widget.showModelInfo,
+                                    showTps: widget.showTps,
+                                    onAskUserAnswer: _askUserCallbackForMessage(
+                                      index: i,
                                       isUser: isUser,
-                                      startsNewGroup: startsNewGroup,
-                                      endsGroup: endsGroup,
-                                      maxWidth: isUser
-                                          ? expandedInputWidth * 0.8
-                                          : expandedInputWidth,
-                                      isReasoningStreaming: isStreamingMessage,
-                                      modelLabel: modelLabel,
-                                      modelProvider: modelProvider,
-                                      tps: tps,
+                                      isStreaming: isStreamingMessage,
                                       toolCalls: toolCalls,
-                                      showToolCalls: widget.showToolCalls,
                                       contentBlocks: parsedContentBlocks,
-                                      isStreamingMessage: isStreamingMessage,
-                                      images: images,
-                                      imageMetas: imageMetas,
-                                      attachments: attachments,
-                                      imageCostEur: imageCostEur,
-                                      imageGeneratedAt: imageGeneratedAt,
-                                      actions: _messageActionsHandler
-                                          .buildActionsForMessage(
-                                            index: i,
-                                            messageText: displayText,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            onEdit: _editMessageAt,
-                                            onResendMessage: _resendMessageAt,
+                                    ),
+                                    useSharedSelectionArea: true,
+                                    status: status,
+                                    lastError: lastError,
+                                    onRetryPending: isUser &&
+                                            (status ==
+                                                    ChatMessageStatus.pending ||
+                                                status ==
+                                                    ChatMessageStatus.failed)
+                                        ? () => OfflineRetryManager.instance
+                                            .retryNow()
+                                        : null,
+                                    onContinueGeneration: !isUser &&
+                                            status ==
+                                                ChatMessageStatus.interrupted &&
+                                            !_isCurrentChatStreaming
+                                        ? () => _continueGenerationAt(i)
+                                        : null,
+                                  );
+
+                                  // The streaming bubble rebuilds itself per
+                                  // token via the runtime's streamingLive
+                                  // notifier — the rest of the screen stays put.
+                                  final ChatRuntime? runtime =
+                                      _activeChatId == null
+                                      ? null
+                                      : ChatRuntimeRegistry.instance.lookup(
+                                          _activeChatId!,
+                                        );
+                                  // Wrap the last AI bubble in the live notifier
+                                  // for the whole turn (isSending), not just
+                                  // while a stream is mid-flight: isStreaming
+                                  // briefly flips false between tool-loop passes,
+                                  // and we must not lose the live wrapper (and
+                                  // its per-token updates) during that gap.
+                                  final bool wrapForStream =
+                                      runtime != null &&
+                                      isAiMessage &&
+                                      i == _messages.length - 1 &&
+                                      (isStreamingMessage ||
+                                          runtime.isSending.value);
+                                  if (wrapForStream) {
+                                    return RepaintBoundary(
+                                      child:
+                                          ValueListenableBuilder<StreamingLive?>(
+                                            valueListenable:
+                                                runtime.streamingLive,
+                                            builder: (context, live, _) {
+                                              final bool match =
+                                                  live != null &&
+                                                  live.index == i;
+                                              final String msgText = match
+                                                  ? live.text.trimRight()
+                                                  : displayText;
+                                              final String reasoningRaw = match
+                                                  ? live.reasoning
+                                                  : reasoning;
+                                              final String? msgReasoning =
+                                                  reasoningRaw.trim().isEmpty
+                                                  ? null
+                                                  : reasoningRaw;
+                                              return buildBubble(
+                                                msgText,
+                                                msgReasoning,
+                                              );
+                                            },
                                           ),
-                                      userMessageActions: isUser
-                                          ? _messageActionsHandler
-                                                .buildUserMessageActions(
-                                                  index: i,
-                                                  messageText: displayText,
-                                                  onEdit: _editMessageAt,
-                                                  onResendMessage:
-                                                      _resendMessageAt,
-                                                )
-                                          : const [],
-                                      isEditing: isBeingEdited,
-                                      showReasoningTokens:
-                                          widget.showReasoningTokens,
-                                      showModelInfo: widget.showModelInfo,
-                                      showTps: widget.showTps,
-                                      onAskUserAnswer:
-                                          _askUserCallbackForMessage(
-                                            index: i,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            toolCalls: toolCalls,
-                                            contentBlocks: parsedContentBlocks,
-                                          ),
-                                      useSharedSelectionArea: true,
-                                      status: status,
-                                      lastError: lastError,
-                                      onRetryPending: isUser &&
-                                              (status ==
-                                                      ChatMessageStatus
-                                                          .pending ||
-                                                  status ==
-                                                      ChatMessageStatus.failed)
-                                          ? () => OfflineRetryManager
-                                              .instance
-                                              .retryNow()
-                                          : null,
-                                      onContinueGeneration: !isUser &&
-                                              status ==
-                                                  ChatMessageStatus
-                                                      .interrupted &&
-                                              !_isCurrentChatStreaming
-                                          ? () => _continueGenerationAt(i)
-                                          : null,
+                                    );
+                                  }
+                                  return RepaintBoundary(
+                                    child: buildBubble(
+                                      displayText,
+                                      reasoningText,
                                     ),
                                   );
                                 },
@@ -3516,35 +3606,327 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ? Colors.red.withValues(alpha: 0.4)
         : iconFg.withValues(alpha: 0.25);
 
-    // Uniform pill height for all three groups.
-    const double pillHeight = 46;
+    // ── Unified tall composer (desktop-style) ──
+    // One rounded box instead of three separate pills: the TextField sits on
+    // top with a persistent bottom toolbar row (+, reasoning, model, mic), and
+    // the send / stop button floats in the top-right corner exactly like the
+    // desktop composer. Roughly twice the height of the old single-line pill so
+    // it reads as a canvas rather than a search bar.
+    final bool isRecording = _audioHandler.isMicActive;
+    const double kComposerRadius = 24;
+    const double kComposerMinHeight = 88;
+    const double kSendButtonWidth = 46;
+    const double kFieldMaxHeight = 140;
 
-    // Shared pill decoration for all three groups.
-    BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
+    final BoxDecoration boxDecoration = BoxDecoration(
       color: bg.withValues(alpha: 0.98),
-      borderRadius: BorderRadius.circular(pillHeight / 2),
-      border: Border.all(
-        color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
-        width: 2,
-      ),
+      borderRadius: BorderRadius.circular(kComposerRadius),
+      border: Border.all(color: borderColor, width: 2),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10,
+          blurRadius: 12,
           offset: const Offset(0, 2),
         ),
       ],
     );
 
-    // Whether to show the mic inside the text field pill.
-    // Shown when: typed text is empty, not recording, not streaming.
-    // Attachments must not hide the mic (user can dictate with images attached).
-    final bool showInlineMic =
-        !hasTypedText && !_audioHandler.isMicActive && !showStopAction;
-    final bool rightPillHasMultipleActions = _audioHandler.isMicActive;
+    // Send / Stop / Voice / send-audio button — pinned top-right like desktop.
+    final Widget sendButton = buildTinyActionButton(
+      icon: isRecording
+          ? Icons.north_rounded
+          : (showStopAction
+                ? Icons.stop_rounded
+                : (showVoiceModeAction
+                      ? Icons.graphic_eq_rounded
+                      : Icons.north_rounded)),
+      buttonSize: 36,
+      iconSize: 16,
+      onTap: isRecording
+          ? _handleAudioSend
+          : (showStopAction
+                ? _cancelCurrentOperation
+                : (showVoiceModeAction
+                      ? () => _openComingSoonFeature('Voice Mode')
+                      : _sendOrSubmitEdit)),
+      color: (showStopAction && !isRecording) ? Colors.red : accent,
+      isLoading: _audioHandler.isTranscribingAudio,
+      semanticsId: 'send_button',
+    );
 
-    // Three-part layout: [+]  [TextField + mic]  [Send]
-    // With optional attachment previews and editing indicator above.
+    // Bottom toolbar row: attach / reasoning / model on the left, mic (and
+    // fullscreen) on the right. While recording it collapses to a stop button.
+    final Widget toolbar = Row(
+      children: isRecording
+          ? <Widget>[
+              buildTinyIconButton(
+                icon: Icons.stop_rounded,
+                iconSize: 20,
+                onTap: _handleMicTap,
+                isActive: true,
+                color: Colors.red,
+                semanticsId: 'mic_button',
+              ),
+              const Spacer(),
+            ]
+          : <Widget>[
+              buildTinyIconButton(
+                icon: Icons.add_rounded,
+                iconSize: 22,
+                onTap: _handleAddAttachmentTap,
+                isActive: hasAttachments,
+                color: iconFg,
+              ),
+              if (ModelSelectionDropdown.modelSupportsReasoning(
+                _selectedModelId,
+              ))
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _reasoningEnabled = !_reasoningEnabled;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.psychology,
+                      size: 20,
+                      color: _reasoningEnabled
+                          ? accent
+                          : iconFg.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+              // Model picker takes the remaining middle space (left-aligned),
+              // pushing the mic / fullscreen controls to the right edge.
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: KeyedSubtree(
+                    key: TourKeyRegistry.instance.keyFor(
+                      TourSlots.modelDropdown,
+                    ),
+                    child: ModelSelectionDropdown(
+                      key: const ValueKey<String>(
+                        'mobile-model-selection-dropdown',
+                      ),
+                      initialSelectedModelId: _selectedModelId,
+                      onModelSelected: (newModelId) {
+                        setState(() {
+                          _selectedModelId = newModelId;
+                        });
+                      },
+                      textFieldFocusNode: _textFieldFocusNode,
+                      isCompactMode: isCompactMode,
+                      transparentStyle: true,
+                    ),
+                  ),
+                ),
+              ),
+              if (_showFullscreenButton)
+                GestureDetector(
+                  onTap: _openFullscreenEditor,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(
+                      Icons.open_in_full_rounded,
+                      size: 18,
+                      color: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              if (!showStopAction)
+                buildTinyIconButton(
+                  icon: Icons.mic,
+                  iconSize: 22,
+                  onTap: _handleMicTap,
+                  isActive: false,
+                  color: iconFg,
+                  semanticsId: 'mic_button',
+                ),
+            ],
+    );
+
+    // Main content area: the growing TextField, or the recording visualizer.
+    final Widget mainArea = isRecording
+        ? SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                buildRecordingIndicator(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: buildAudioVisualizer(
+                    audioLevels: _audioHandler.audioLevels,
+                    accentColor: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : Padding(
+            // Keep the text clear of the floating top-right send button.
+            padding: const EdgeInsets.only(right: kSendButtonWidth),
+            child: buildKeyboardListener(
+              focusNode: _rawKeyboardListenerFocusNode,
+              controller: _controller,
+              onSend: _sendOrSubmitEdit,
+              child: KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: kFieldMaxHeight),
+                  child: Scrollbar(
+                    controller: _composerScrollController,
+                    child: Semantics(
+                      identifier: 'message_input',
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        scrollController: _composerScrollController,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface,
+                          fontSize: 15,
+                          height: 1.35,
+                        ),
+                        minLines: 1,
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          hintText: _messageActionsHandler.isEditing
+                              ? AppLocalizations.of(context)!.editYourMessage
+                              : AppLocalizations.of(context)!.askMeAnything,
+                          hintStyle: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                            fontSize: 15,
+                          ),
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 0,
+                            vertical: 4,
+                          ),
+                          isDense: true,
+                        ),
+                        cursorColor: accent,
+                        cursorWidth: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+    // Editing / queued banners shown above the text field, inside the box.
+    final Widget? banner = _messageActionsHandler.isEditing
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit,
+                  size: 12,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Editing message',
+                  style: TextStyle(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _cancelEditMessage,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : (_pendingMessageText != null
+              ? Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 12,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${AppLocalizations.of(context)!.queuedLabel}: '
+                          '"${_pendingMessageText!}"',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.7,
+                            ),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _cancelPendingMessage,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            AppLocalizations.of(context)!.cancel,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : null);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3556,383 +3938,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               onRemove: _removeComposerAttachment,
             ),
           ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // ── Left pill: +, Model selector ──
-            // When collapsed (only +), minWidth == pillHeight keeps it circular.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: pillHeight,
-                constraints: const BoxConstraints(minWidth: pillHeight),
-                decoration: pillDecoration(),
-                padding: EdgeInsets.symmetric(
-                  horizontal: _controller.text.isNotEmpty ? 7 : 4,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    buildTinyIconButton(
-                      icon: Icons.add_rounded,
-                      iconSize: 22,
-                      onTap: _handleAddAttachmentTap,
-                      isActive: hasAttachments,
-                      color: iconFg,
-                    ),
-                    Offstage(
-                      offstage: _controller.text.isNotEmpty,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(width: 1),
-                          if (ModelSelectionDropdown.modelSupportsReasoning(
-                            _selectedModelId,
-                          ))
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _reasoningEnabled = !_reasoningEnabled;
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: Icon(
-                                  Icons.psychology,
-                                  size: 20,
-                                  color: _reasoningEnabled
-                                      ? Theme.of(context).colorScheme.primary
-                                      : iconFg.withValues(alpha: 0.3),
-                                ),
-                              ),
-                            ),
-                          KeyedSubtree(
-                            key: TourKeyRegistry.instance.keyFor(
-                              TourSlots.modelDropdown,
-                            ),
-                            child: ModelSelectionDropdown(
-                              key: const ValueKey<String>(
-                                'mobile-model-selection-dropdown',
-                              ),
-                              initialSelectedModelId: _selectedModelId,
-                              onModelSelected: (newModelId) {
-                                setState(() {
-                                  _selectedModelId = newModelId;
-                                });
-                              },
-                              textFieldFocusNode: _textFieldFocusNode,
-                              isCompactMode: isCompactMode,
-                              transparentStyle: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // ── Middle: TextField + inline mic (grows upward for multi-line) ──
-            Expanded(
-              child: Container(
-                height: _audioHandler.isMicActive ? pillHeight : null,
-                constraints: _audioHandler.isMicActive
-                    ? null
-                    : const BoxConstraints(minHeight: pillHeight),
-                decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: _audioHandler.isMicActive
-                    ? SizedBox(
-                        height: pillHeight - 6, // minus border + padding
-                        child: Row(
-                          children: [
-                            buildRecordingIndicator(),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: buildAudioVisualizer(
-                                audioLevels: _audioHandler.audioLevels,
-                                accentColor: Colors.red,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // ── Editing indicator (inside the pill) ──
-                          if (_messageActionsHandler.isEditing)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.edit,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Editing message',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary
-                                          .withValues(alpha: 0.7),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelEditMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        'Cancel',
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── Queued message indicator ──
-                          // Shown when the user sent while the AI was still
-                          // streaming; it auto-sends on completion.
-                          if (_pendingMessageText != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.schedule,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      '${AppLocalizations.of(context)!.queuedLabel}: '
-                                      '"${_pendingMessageText!}"',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: theme.colorScheme.primary
-                                            .withValues(alpha: 0.7),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelPendingMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(context)!.cancel,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── TextField ──
-                          buildKeyboardListener(
-                            focusNode: _rawKeyboardListenerFocusNode,
-                            controller: _controller,
-                            onSend: _sendOrSubmitEdit,
-                            child: KeyedSubtree(
-                              key: TourKeyRegistry.instance.keyFor(
-                                TourSlots.chatInput,
-                              ),
-                              child: Scrollbar(
-                                controller: _composerScrollController,
-                                child: Semantics(
-                                  identifier: 'message_input',
-                                  child: TextField(
-                                  controller: _controller,
-                                  focusNode: _textFieldFocusNode,
-                                  autofocus: false,
-                                  keyboardType: TextInputType.multiline,
-                                  textInputAction: TextInputAction.newline,
-                                  scrollController: _composerScrollController,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
-                                    fontSize: 15,
-                                    height: 1.3,
-                                  ),
-                                  minLines: 1,
-                                  maxLines: 6,
-                                  decoration: InputDecoration(
-                                    hintText: _messageActionsHandler.isEditing
-                                        ? AppLocalizations.of(
-                                            context,
-                                          )!.editYourMessage
-                                        : AppLocalizations.of(
-                                            context,
-                                          )!.askMeAnything,
-                                    hintStyle: TextStyle(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.5),
-                                      fontSize: 15,
-                                    ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 0,
-                                      vertical: 10,
-                                    ),
-                                    isDense: true,
-                                    // Mic or fullscreen button as suffix icon.
-                                    // Mic shown when text is empty; fullscreen
-                                    // shown when text is long; otherwise nothing.
-                                    suffixIcon: showInlineMic
-                                        ? GestureDetector(
-                                            onTap: _handleMicTap,
-                                            child: Semantics(
-                                              identifier: 'mic_button',
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  left: 4,
-                                                ),
-                                                child: Icon(
-                                                  Icons.mic,
-                                                  size: 20,
-                                                  color: iconFg.withValues(
-                                                    alpha: 0.6,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : _showFullscreenButton
-                                        ? GestureDetector(
-                                            onTap: _openFullscreenEditor,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 4,
-                                              ),
-                                              child: Icon(
-                                                Icons.open_in_full_rounded,
-                                                size: 14,
-                                                color: iconFg.withValues(
-                                                  alpha: 0.4,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : null,
-                                    suffixIconConstraints: const BoxConstraints(
-                                      minWidth: 24,
-                                      minHeight: 24,
-                                    ),
-                                  ),
-                                  cursorColor: accent,
-                                  cursorWidth: 1.5,
-                                ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // ── Right pill: Send / Stop / Voice Mode ──
-            Container(
-              height: pillHeight,
-              width: rightPillHasMultipleActions ? null : pillHeight,
-              decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-              padding: rightPillHasMultipleActions
-                  ? const EdgeInsets.symmetric(horizontal: 5)
-                  : EdgeInsets.zero,
-              alignment: Alignment.center,
-              child: Row(
+        Container(
+          constraints: const BoxConstraints(minHeight: kComposerMinHeight),
+          decoration: boxDecoration,
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+          child: Stack(
+            children: [
+              Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // When mic is recording: stop + send buttons
-                  if (_audioHandler.isMicActive) ...[
-                    buildTinyIconButton(
-                      icon: Icons.stop_rounded,
-                      iconSize: 20,
-                      onTap: _handleMicTap,
-                      isActive: true,
-                      color: Colors.red,
-                      semanticsId: 'mic_button',
-                    ),
-                    const SizedBox(width: 3),
-                  ],
-                  buildTinyActionButton(
-                    icon: _audioHandler.isMicActive
-                        ? Icons.north_rounded
-                        : (showStopAction
-                              ? Icons.stop_rounded
-                              : (showVoiceModeAction
-                                    ? Icons.graphic_eq_rounded
-                                    : Icons.north_rounded)),
-                    buttonSize: 36,
-                    iconSize: 16,
-                    onTap: _audioHandler.isMicActive
-                        ? _handleAudioSend
-                        : (showStopAction
-                              ? _cancelCurrentOperation
-                              : (showVoiceModeAction
-                                    ? () => _openComingSoonFeature('Voice Mode')
-                                    : _sendOrSubmitEdit)),
-                    color: _audioHandler.isMicActive
-                        ? accent
-                        : (showStopAction ? Colors.red : accent),
-                    isLoading: _audioHandler.isTranscribingAudio,
-                    semanticsId: 'send_button',
-                  ),
+                  ?banner,
+                  mainArea,
+                  const SizedBox(height: 8),
+                  toolbar,
                 ],
               ),
-            ),
-          ],
+              Positioned(top: 0, right: 0, child: sendButton),
+            ],
+          ),
         ),
       ],
     );

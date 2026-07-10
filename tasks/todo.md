@@ -1,84 +1,111 @@
-# Fix: Kimi k2.6 reasoning/draft-code leaking into answer + live streaming
+# Chat UI Performance Re-Architecture + Riverpod + Mobile Composer Redesign
 
-## Problem (from live session + 2 debug exports, chat 0635cd09)
+Branch: `claude/chat-ui-performance-rc7ivd`
 
-Model: moonshotai/kimi-k2.6 (fireworks). Kimi dumps chain-of-thought AND draft
-HTML into the **content channel** between tool calls. The send loop treats
-interim content-channel prose as the *answer* → it renders as the message body.
+## Goal (from user)
+Chat UI (mobile + desktop) must **look exactly the same** but be **massively more
+performant** (esp. mobile scrolling during streaming), adopt **Riverpod**, and the
+**mobile composer** should be ~2× taller with a fresh design resembling the desktop composer.
 
-Final message `Text:` field = 14,201 chars of CoT ("Wait for real results…",
-"Lass mich die Folien strukturieren:", a full ```html``` draft) instead of a
-real answer. Block order ends `… → sandboxArtifact → text` (the leaked CoT).
+## Engineering interpretation
+A literal from-scratch rewrite of ~11k lines (2 UIs + send logic + 4.6k-line message_bubble)
+would break a shipping v1.0.106 app and could not stay visually identical. Instead:
+a deep, **verifiable, incremental** re-architecture of the hot paths + Riverpod adoption
+at the highest-value seam + a contained composer redesign. `flutter analyze` + `flutter test`
+green at every step. Same pixels, ~10× fewer rebuilds.
 
-### Symptoms
-- A. Reasoning prose shown as answer body
-- B. Draft ```html``` code block shown as answer
-- C. Answer doesn't stream live during tool passes — "snaps" at end
-- D. Final answer after last tool round empty / is actually leaked CoT
-- E. (user) sent HTML file should show only the file card, not the code
+## Confirmed root causes (both platforms)
+1. Per-token `setState` rebuilds the WHOLE screen ~30fps (list+composer+overlays). #1 jank.
+2. `List<Map<String,String>>` messages → JSON-decoded per frame in itemBuilder.
+3. Fresh closures/action-lists per item per build → MessageBubble always rebuilds.
+4. `stripToolCallBlocksForDisplay` 2–4×/build + `_RenderSegment` timeline rebuilt w/ deep clones.
+5. Forward ListView chasing estimated maxScrollExtent (settle loops + MeasureSize feedback).
+6. Index keys `msg_$i`; mobile keepAlive:false re-parses markdown on scroll-back.
 
-### Decisions (user)
-- Interim content-channel text -> **fold into reasoning** (general, not just Kimi)
-- Live streaming -> **yes, live trailing text** during passes
-- The draft code must **not** be shown to the user at all
+## Preserve (already optimal — DO NOT regress)
+- MarkdownMessage parse cache; code highlight in compute() isolate; 33ms token coalescing;
+  _CachedImageThumbnail keep-alive.
 
-## Plan
+## Plan (sequenced by risk/reward, commit per phase)
 
-### Phase 1 — Stop the leak (A, B, D, E)  [core]
-- [ ] `round_content_block_service.dart`: add `foldInterimIntoReasoning` mode to
-      `buildRoundBlocks` (and segmented variant). When set:
-      - interim content text merged into the round's reasoning block (with
-        provider reasoning), NOT emitted as a `text` block
-      - strip fenced ```code``` blocks from the folded interim text
-      - `interimOutputText` returns '' so it never pollutes the answer field
-- [ ] `desktop_send_logic.dart:522` (interim branch): use fold mode; stop
-      writing `interimOutputText` into `accumulatedText`
-- [ ] `desktop_send_logic.dart:1623` (other build site): same treatment
-- [ ] `streaming_message_handler.dart:648/653` (mobile): same treatment
-- [ ] Terminal (final-answer) pass unchanged — its content stays the answer
+- [x] **P0. Toolchain + baseline.** Flutter 3.44.6 installed. pub get OK. Baseline recorded:
+      `flutter analyze` = 4 info-only (3× deprecated cacheExtent, 1× doc-comment), 0 errors;
+      `flutter test` = **795 passed**. Native-asset downloads (pdfium, sqlite3) are blocked by
+      org egress policy → patched the pub-cache hooks locally (pdfium→empty stub .so;
+      sqlite3→system libsqlite3.so). NOT committed (outside repo). Next: add flutter_riverpod +
+      ProviderScope.
+- [x] **P1. Scope streaming rebuilds (BIGGEST WIN).** DONE. Added `StreamingLive` value type +
+      `ChatRuntime.streamingLive` notifier + `pushStreamingText`. Both `_updateAiMessage`
+      (mobile + desktop, incl. unifying the desktop send-path onto the shared method) now update
+      `_messages` silently and push to the notifier instead of a screen-wide setState. The list
+      itemBuilder wraps ONLY the streaming bubble in a `ValueListenableBuilder<StreamingLive?>`.
+      One forced setState on the first token installs the wrapper; every later token rebuilds
+      just that bubble. streamingLive cleared on finalize (both platforms). Result: ~30fps
+      full-tree rebuild (all bubbles + composer + overlays) → one bubble body. Tests 799 green,
+      analyze clean.
+- [x] **P2 (lite). Kill per-frame JSON decode on mobile.** DONE. Added 4 per-payload decode
+      caches (images/attachments/toolCalls/contentBlocks) keyed by the raw JSON string + helper
+      methods, replacing the inline jsonDecode-every-build in the mobile itemBuilder (desktop
+      already had this). Scrolling a static chat is now decode-free. Caches cleared on chat
+      switch. Tests 799 green, analyze clean.
+      DEFERRED (bigger/riskier, not done): full typed immutable message model replacing
+      List<Map<String,String>>, and stable per-message-id keys (index keys are correct for the
+      append-only common case; changing them touches persistence identity).
+- [ ] **P4. Mobile scroll-back keep-alive.** DEFERRED intentionally. Mobile sets
+      addAutomaticKeepAlives:false — a deliberate memory choice for long chats on low-end
+      phones. Flipping to true (desktop's setting) trades markdown re-parse on scroll-back for
+      unbounded per-bubble state memory; not safe to change without on-device profiling. P1
+      already fixed the primary scroll-during-streaming jank.
+- [x] **P3. message_bubble memoization.** DONE (strip cache). Added `_strippedMessage` getter
+      caching `stripToolCallBlocksForDisplay(widget.message)` per distinct message string;
+      replaced all 4 per-build call sites. A rebuild that doesn't change the text is now free.
+      Segment/timeline memoization intentionally SKIPPED: after P1 removed the 30fps rebuild it
+      only runs on scroll-into-view, and safely caching a `List<Widget>` (theme/colour-dependent)
+      in that 4.6k-line file is higher risk than the remaining benefit. Tests green, analyze clean.
+- [ ] **P4. Mobile scroll-back.** Keep-alive for markdown-heavy mobile bubbles; re-tune
+      cacheExtent. (reverse:true list = higher risk; only if time + tests allow.)
+- [x] **P5. Mobile composer redesign.** DONE. Replaced the three 46px pills with ONE unified
+      rounded box (~2× taller, minHeight 88, radius 24, 2px border) mirroring desktop: TextField
+      on top (maxLines null + 140px cap, grows then scrolls), a persistent bottom toolbar row
+      (`+` attach, reasoning toggle, model picker, mic, fullscreen), and the send/stop/voice
+      button pinned top-right. Recording state shows the indicator+visualizer with a stop button.
+      All handlers/sub-widgets preserved (attach, mic, model dropdown, editing/queued banners,
+      fullscreen, audio send). Taller height auto-reflows the list via the existing MeasureSize.
+      analyze back to 4 baseline issues, 799 tests green. NOTE: compile+test verified only — no
+      emulator/device in this env, so final visual look must be checked on-device.
+- [ ] **P6. Riverpod adoption at the seam.** Promote ChatRuntime → NotifierProvider.family;
+      bind message list + streaming flags to providers. Keep race guards.
 
-### Phase 2 — Live trailing text (C)
-- [ ] Verify `message_bubble.dart` trailingText (l.1056-1111) shows current
-      pass's streaming content live now that `accumulatedText` isn't polluted
-- [ ] Strip complete fenced code blocks from the live display
-- [ ] Confirm the real final answer streams live and stays
+## Verification per phase
+- `flutter analyze` (no new errors) + `flutter test` (all pass, baseline was ~765 green)
+- Reason about visual identity (same widgets/decoration/measurements)
 
-### Phase 3 — verify
-- [ ] `flutter test` green (+ tests for fold mode + fenced-code strip)
-- [ ] `flutter analyze`
-- [ ] Manual: re-run Schlaf-Präsentation prompt
-- [ ] coderabbit review
+## Review — what shipped (branch pushed)
 
-### Deferred (note, not now)
-- HTML file inline preview/webview on Linux — user OK with file card for now
+Baseline: analyze 4 info-only issues, `flutter test` 795 pass.
+End state: analyze 4 info-only issues (unchanged), `flutter test` 799 pass (+4 new).
 
-## Review — STRUCTURAL redesign (no text filtering)
+Commits (oldest→newest):
+- P0  bfb51ad  add flutter_riverpod + ProviderScope at root (foundation, no behaviour change).
+- P1  343a350  scope per-token streaming rebuilds to the streaming bubble via
+                ChatRuntime.streamingLive + ValueListenableBuilder (both platforms). THE big win:
+                ~30fps whole-screen rebuild → one bubble body.
+- P3  36cddf3  memoize stripToolCallBlocksForDisplay in MessageBubble (per-message cache).
+- P5  aef13a5  redesign mobile composer as one tall (~2×) desktop-style box (TextField on top,
+                persistent bottom toolbar, send/stop pinned top-right).
+- P2  a60bd29  cache mobile payload decodes (images/attachments/tools/blocks) across rebuilds.
+- fix 51f9b34  keep the live-stream wrapper installed across tool-loop passes (isSending, not
+                just isStreaming) — found in self-review; isStreaming flips false between passes.
 
-Hard rule from user: never classify model output by its TEXT (always varies).
-Classify by PROTOCOL only.
+Toolchain note (NOT committed, local env only): Flutter 3.44.6 installed under /home/user/sdk;
+org egress blocks the pdfium & sqlite3 native-asset downloads, so the pub-cache hooks were
+patched locally (pdfium→empty stub .so, sqlite3→system libsqlite3.so) to let `flutter test`
+build native assets. These live outside the repo and are not part of the change.
 
-Implemented:
-- `round_content_block_service.dart`: `foldInterimIntoReasoning` on both
-  `buildRoundBlocks` + `buildSegmentedRoundBlocks`. A round that emits tool
-  calls -> its content is folded VERBATIM into that round's reasoning (collapsed
-  in the tool bar); `interimOutputText` returns ''. No text edits, no code
-  stripping. `_mergeReasoning` dedups only by containment.
-- Wired fold at all 3 build sites (desktop x2 + mobile handler); interim text
-  no longer accumulates into the answer field.
-- Live (onUpdate, all 3 sites): a round's streamed content stays OUT of the
-  answer body whenever `contentBlocks.isNotEmpty` (mid tool-loop) OR
-  `hasToolCallStartMarker(content)` (a tool-call token has appeared). Purely
-  structural. A plain round with no tool calls streams live as before.
-- `tool_parser.dart`: `hasToolCallStartMarker` now also detects Kimi
-  `<|tool_calls_section_begin|>` / `<|tool_call_begin|>` tokens (structural).
-- Tests: fold-verbatim + Kimi-token detection. 765 green, analyze clean.
+Verification: `flutter analyze` + `flutter test` green after every phase. NOT verified: on-device
+visual look (no emulator/device/authenticated web in this env) — mobile composer + streaming
+scroll feel should be eyeballed on a real device. coderabbit CLI is not available in this env.
 
-Behaviour: tool bar collapses all CoT/draft; answer body shows only a round
-with no tool calls. Final answer of a tool-turn appears on completion (not
-char-streamed) — the structural cost of "no text heuristics". Plain answers
-still stream live.
-
-Known structural limit: a terminal round whose content is itself pure CoT (no
-tool calls) still shows as the answer — unavoidable without text heuristics.
-
-Deferred: Linux HTML inline preview (file card is fine for now).
+Deferred by design: P4 (mobile addAutomaticKeepAlives — memory tradeoff, needs on-device
+profiling); full typed message model + stable message-id keys; deeper Riverpod migration of the
+duplicated streaming engines (high risk, no added perf benefit over the ValueNotifier approach).
