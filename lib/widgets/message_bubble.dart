@@ -398,6 +398,22 @@ class _MessageBubbleState extends State<MessageBubble> {
     return false;
   }
 
+  // Memoized display text: stripToolCallBlocksForDisplay(widget.message) runs a
+  // chain of regexes over the whole message and was previously called 4× per
+  // build (and on every scroll/stream rebuild). Cache the result per distinct
+  // message string so a rebuild that doesn't change the text is free.
+  String? _strippedMessageCache;
+  String? _strippedMessageSource;
+
+  String get _strippedMessage {
+    if (_strippedMessageCache == null ||
+        _strippedMessageSource != widget.message) {
+      _strippedMessageSource = widget.message;
+      _strippedMessageCache = stripToolCallBlocksForDisplay(widget.message);
+    }
+    return _strippedMessageCache!;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -929,7 +945,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final bool streamingTextBeforeTools =
         hasVisibleToolCalls &&
         widget.isStreamingMessage &&
-        stripToolCallBlocksForDisplay(widget.message).trim().isNotEmpty &&
+        _strippedMessage.trim().isNotEmpty &&
         widget.toolCalls!.any(
           (t) =>
               t.status == ToolCallStatus.pending ||
@@ -1083,7 +1099,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Trailing widget.message (streaming or finalized tail like an error)
     // computed up front so we know whether trailing text "ends" the last
     // round before live tools or appears after.
-    var trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+    var trailingText = _strippedMessage.trim();
     if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
       if (trailingText == finalizedTextPrefix) {
         trailingText = '';
@@ -2226,7 +2242,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     List<_ToolTimelineEntry>? contentBlockTimeline,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final renderedAssistantText = stripToolCallBlocksForDisplay(widget.message);
+    final renderedAssistantText = _strippedMessage;
     // If the message is finalized (not streaming), tool calls should not
     // remain in running/pending — treat any stale ones as completed for
     // display purposes so the spinner doesn't hang indefinitely.
@@ -3725,7 +3741,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }) {
     final displayText = isUserMessage
         ? _stripAttachmentHeaderForUser(widget.message)
-        : stripToolCallBlocksForDisplay(widget.message);
+        : _strippedMessage;
 
     if (!isUserMessage &&
         (displayText.trim().isEmpty || displayText == 'Thinking...')) {
