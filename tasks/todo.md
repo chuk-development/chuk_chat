@@ -80,5 +80,32 @@ green at every step. Same pixels, ~10× fewer rebuilds.
 - `flutter analyze` (no new errors) + `flutter test` (all pass, baseline was ~765 green)
 - Reason about visual identity (same widgets/decoration/measurements)
 
-## Review (filled in as work completes)
-- (P0 baseline numbers go here)
+## Review — what shipped (branch pushed)
+
+Baseline: analyze 4 info-only issues, `flutter test` 795 pass.
+End state: analyze 4 info-only issues (unchanged), `flutter test` 799 pass (+4 new).
+
+Commits (oldest→newest):
+- P0  bfb51ad  add flutter_riverpod + ProviderScope at root (foundation, no behaviour change).
+- P1  343a350  scope per-token streaming rebuilds to the streaming bubble via
+                ChatRuntime.streamingLive + ValueListenableBuilder (both platforms). THE big win:
+                ~30fps whole-screen rebuild → one bubble body.
+- P3  36cddf3  memoize stripToolCallBlocksForDisplay in MessageBubble (per-message cache).
+- P5  aef13a5  redesign mobile composer as one tall (~2×) desktop-style box (TextField on top,
+                persistent bottom toolbar, send/stop pinned top-right).
+- P2  a60bd29  cache mobile payload decodes (images/attachments/tools/blocks) across rebuilds.
+- fix 51f9b34  keep the live-stream wrapper installed across tool-loop passes (isSending, not
+                just isStreaming) — found in self-review; isStreaming flips false between passes.
+
+Toolchain note (NOT committed, local env only): Flutter 3.44.6 installed under /home/user/sdk;
+org egress blocks the pdfium & sqlite3 native-asset downloads, so the pub-cache hooks were
+patched locally (pdfium→empty stub .so, sqlite3→system libsqlite3.so) to let `flutter test`
+build native assets. These live outside the repo and are not part of the change.
+
+Verification: `flutter analyze` + `flutter test` green after every phase. NOT verified: on-device
+visual look (no emulator/device/authenticated web in this env) — mobile composer + streaming
+scroll feel should be eyeballed on a real device. coderabbit CLI is not available in this env.
+
+Deferred by design: P4 (mobile addAutomaticKeepAlives — memory tradeoff, needs on-device
+profiling); full typed message model + stable message-id keys; deeper Riverpod migration of the
+duplicated streaming engines (high risk, no added perf benefit over the ValueNotifier approach).
