@@ -1939,7 +1939,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           String msgText,
                                           String? msgReasoning,
                                         ) => MessageBubble(
-                                          key: ValueKey('msg_$i'),
+                                          key: ValueKey(
+                                            ChatUiHelpers.stableUiKey(
+                                              _messages[i],
+                                              _uuid,
+                                            ),
+                                          ),
                                           message: msgText,
                                           reasoning: msgReasoning,
                                           isUser: data.isUser,
