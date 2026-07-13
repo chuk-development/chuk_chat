@@ -2205,7 +2205,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               // Editing indicator
               if (_messageActionsHandler.isEditing)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                  // Clear the floating top-right send button so the "Cancel"
+                  // action isn't hidden underneath it.
+                  padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
                       Icon(
@@ -2241,7 +2243,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               // while the AI was still streaming. It auto-sends on completion.
               if (_pendingMessageText != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                  // Clear the floating top-right send/stop button.
+                  padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
                       Icon(
