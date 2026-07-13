@@ -2,11 +2,12 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-
-
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
+import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
@@ -51,6 +52,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
+  AppMode _mode = AppMode.chat;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
@@ -336,8 +338,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     Navigator.of(context)
                       ..pop()
                       ..pop();
-                    _chatUIMobileKey.currentState
-                        ?.startNewChatWithWorkspace(wsId);
+                    _chatUIMobileKey.currentState?.startNewChatWithWorkspace(
+                      wsId,
+                    );
                   },
                 ),
               ),
@@ -507,12 +510,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       'Chat ID': chatId ?? '',
       'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',
       'Chat Fully Loaded': (chat?.isFullyLoaded ?? false).toString(),
-      'Chat Pending Save': chatId != null &&
-              ChatStorageState.pendingSaves.containsKey(chatId)
+      'Chat Pending Save':
+          chatId != null && ChatStorageState.pendingSaves.containsKey(chatId)
           ? 'true'
           : 'false',
-      'Chat Saving': chatId != null &&
-              ChatStorageState.savingChats.contains(chatId)
+      'Chat Saving':
+          chatId != null && ChatStorageState.savingChats.contains(chatId)
           ? 'true'
           : 'false',
       'Sync Enabled': ChatSyncService.isEnabled.toString(),
@@ -579,7 +582,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     padding: const EdgeInsets.only(left: 4.0),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: BrandWordmark(color: iconFg),
+                      child: kFeatureCoWork
+                          ? CoWorkModeSwitcher(
+                              mode: _mode,
+                              onChanged: (m) => setState(() => _mode = m),
+                            )
+                          : BrandWordmark(color: iconFg),
                     ),
                   ),
                 ),
@@ -607,50 +615,54 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               ],
             ),
             Expanded(
-              child: ChukChatUIMobile(
-                key: _chatUIMobileKey,
-                onToggleSidebar: _toggleSidebar,
-                selectedChatId: ChatStorageService.selectedChatId,
-                onChatIdChanged: (newId) {
-                  // Update the global state when chat UI creates/changes a chat
-                  // Use setState to ensure parent rebuilds with new ID
-                  setState(() {
-                    ChatStorageService.selectedChatId = newId;
-                  });
-                  if (kFeatureArtifacts) {
-                    unawaited(
-                      ArtifactStorageService.setActiveChat(
-                        newId,
-                        forceRefresh: false,
-                      ),
-                    );
-                  }
-                },
-                isSidebarExpanded: _isSidebarExpanded,
-                showReasoningTokens: widget.config.showReasoningTokens,
-                showModelInfo: widget.config.showModelInfo,
-                showTps: widget.config.showTps,
-                autoSendVoiceTranscription:
-                    widget.config.autoSendVoiceTranscription,
-                // Image generation settings
-                imageGenEnabled: widget.config.imageGenEnabled,
-                imageGenDefaultSize: widget.config.imageGenDefaultSize,
-                imageGenCustomWidth: widget.config.imageGenCustomWidth,
-                imageGenCustomHeight: widget.config.imageGenCustomHeight,
-                imageGenUseCustomSize: widget.config.imageGenUseCustomSize,
-                includeRecentImagesInHistory:
-                    widget.config.includeRecentImagesInHistory,
-                includeAllImagesInHistory:
-                    widget.config.includeAllImagesInHistory,
-                includeReasoningInHistory:
-                    widget.config.includeReasoningInHistory,
-                includeToolResultsInHistory:
-                    widget.config.includeToolResultsInHistory,
-                toolCallingEnabled: widget.config.toolCallingEnabled,
-                toolDiscoveryMode: widget.config.toolDiscoveryMode,
-                showToolCalls: widget.config.showToolCalls,
-                allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
-              ),
+              child: (kFeatureCoWork && _mode == AppMode.cowork)
+                  ? const CoWorkSurface()
+                  : ChukChatUIMobile(
+                      key: _chatUIMobileKey,
+                      onToggleSidebar: _toggleSidebar,
+                      selectedChatId: ChatStorageService.selectedChatId,
+                      onChatIdChanged: (newId) {
+                        // Update the global state when chat UI creates/changes a chat
+                        // Use setState to ensure parent rebuilds with new ID
+                        setState(() {
+                          ChatStorageService.selectedChatId = newId;
+                        });
+                        if (kFeatureArtifacts) {
+                          unawaited(
+                            ArtifactStorageService.setActiveChat(
+                              newId,
+                              forceRefresh: false,
+                            ),
+                          );
+                        }
+                      },
+                      isSidebarExpanded: _isSidebarExpanded,
+                      showReasoningTokens: widget.config.showReasoningTokens,
+                      showModelInfo: widget.config.showModelInfo,
+                      showTps: widget.config.showTps,
+                      autoSendVoiceTranscription:
+                          widget.config.autoSendVoiceTranscription,
+                      // Image generation settings
+                      imageGenEnabled: widget.config.imageGenEnabled,
+                      imageGenDefaultSize: widget.config.imageGenDefaultSize,
+                      imageGenCustomWidth: widget.config.imageGenCustomWidth,
+                      imageGenCustomHeight: widget.config.imageGenCustomHeight,
+                      imageGenUseCustomSize:
+                          widget.config.imageGenUseCustomSize,
+                      includeRecentImagesInHistory:
+                          widget.config.includeRecentImagesInHistory,
+                      includeAllImagesInHistory:
+                          widget.config.includeAllImagesInHistory,
+                      includeReasoningInHistory:
+                          widget.config.includeReasoningInHistory,
+                      includeToolResultsInHistory:
+                          widget.config.includeToolResultsInHistory,
+                      toolCallingEnabled: widget.config.toolCallingEnabled,
+                      toolDiscoveryMode: widget.config.toolDiscoveryMode,
+                      showToolCalls: widget.config.showToolCalls,
+                      allowMarkdownToolCalls:
+                          widget.config.allowMarkdownToolCalls,
+                    ),
             ),
           ],
         ),

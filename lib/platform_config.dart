@@ -73,6 +73,16 @@ const bool kFeatureSystemTray = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// CoWork mode — a phone-driven agent that runs on the user's laptop with real
+/// system/CLI access, sandboxed execution and a persistent tray daemon. Lives in
+/// the SAME app as Chat; a top-left switcher toggles between Chat and CoWork.
+/// Disabled by default; enable via --dart-define=FEATURE_COWORK=true.
+/// See docs/COWORK_BUILD_PLAN.md.
+const bool kFeatureCoWork = bool.fromEnvironment(
+  'FEATURE_COWORK',
+  defaultValue: false,
+);
+
 /// Linux secure storage backend for encryption keys.
 /// When disabled, Linux falls back to SharedPreferences instead of keyring.
 const bool kFeatureLinuxKeyring = bool.fromEnvironment(

@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
+import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -39,10 +42,12 @@ class RootWrapperDesktop extends StatefulWidget {
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
+  AppMode _mode = AppMode.chat;
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
   ArtifactDocument? _activeArtifact;
   bool _panelOpen = true;
+
   /// User-preferred artifact panel width. Null = default 50%.
   double? _userArtifactPanelWidth;
 
@@ -356,12 +361,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       'Chat ID': chatId ?? '',
       'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',
       'Chat Fully Loaded': (chat?.isFullyLoaded ?? false).toString(),
-      'Chat Pending Save': chatId != null &&
-              ChatStorageState.pendingSaves.containsKey(chatId)
+      'Chat Pending Save':
+          chatId != null && ChatStorageState.pendingSaves.containsKey(chatId)
           ? 'true'
           : 'false',
-      'Chat Saving': chatId != null &&
-              ChatStorageState.savingChats.contains(chatId)
+      'Chat Saving':
+          chatId != null && ChatStorageState.savingChats.contains(chatId)
           ? 'true'
           : 'false',
       'Sync Enabled': ChatSyncService.isEnabled.toString(),
@@ -384,7 +389,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       required String tooltip,
       required VoidCallback onPressed,
     }) {
-      final double top = kTopInitialSpacing +
+      final double top =
+          kTopInitialSpacing +
           kMenuButtonHeight +
           rowIndex * kButtonVisualHeight;
       rowIndex++;
@@ -409,24 +415,30 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       );
     }
 
-    items.add(railIcon(
-      icon: Icons.edit_square,
-      tooltip: l.newChat,
-      onPressed: _handleNewChatFromSidebar,
-    ));
+    items.add(
+      railIcon(
+        icon: Icons.edit_square,
+        tooltip: l.newChat,
+        onPressed: _handleNewChatFromSidebar,
+      ),
+    );
     if (kFeatureWorkspaces) {
-      items.add(railIcon(
-        icon: Icons.folder_rounded,
-        tooltip: l.workspaces,
-        onPressed: _openWorkspacesPage,
-      ));
+      items.add(
+        railIcon(
+          icon: Icons.folder_rounded,
+          tooltip: l.workspaces,
+          onPressed: _openWorkspacesPage,
+        ),
+      );
     }
     if (kFeatureMediaManager) {
-      items.add(railIcon(
-        icon: Icons.image_rounded,
-        tooltip: l.media,
-        onPressed: _openMediaPage,
-      ));
+      items.add(
+        railIcon(
+          icon: Icons.image_rounded,
+          tooltip: l.media,
+          onPressed: _openMediaPage,
+        ),
+      );
     }
     return items;
   }
@@ -434,9 +446,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _handleNewChatFromSidebar() {
     if (ChatStorageService.isLoadingChat) {
       if (kDebugMode) {
-        debugPrint(
-          '🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading',
-        );
+        debugPrint('🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading');
       }
       return;
     }
@@ -449,9 +459,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     });
     _chatUIKey.currentState?.newChat();
     if (kFeatureArtifacts) {
-      unawaited(
-        ArtifactStorageService.setActiveChat(null, forceRefresh: true),
-      );
+      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
     }
     if (_isSidebarExpanded) _toggleSidebar();
   }
@@ -489,8 +497,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     );
 
     final bool isWorkspacesFullPage = _activePanel == 'workspaces';
+    // CoWork runtime mode — same app, swaps the chat area for the CoWork
+    // surface. See docs/COWORK_BUILD_PLAN.md.
+    final bool isCoWork = kFeatureCoWork && _mode == AppMode.cowork;
     final bool showContent =
-        (!isCompactMode || !_isSidebarExpanded) && !isWorkspacesFullPage;
+        (!isCompactMode || !_isSidebarExpanded) &&
+        !isWorkspacesFullPage &&
+        !isCoWork;
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
@@ -600,6 +613,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
+          // Full-page CoWork surface (replaces chat area in CoWork mode)
+          if (isCoWork)
+            Positioned.fill(
+              left: _isSidebarExpanded ? effectiveSidebarWidth : 48,
+              child: const CoWorkSurface(),
+            ),
+
           // Right Panel (Projects/Media/Artifact)
           if (showPanel)
             Positioned(
@@ -692,7 +712,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     setState(() {
                       final newW =
                           (_userArtifactPanelWidth ?? panelWidth) -
-                              details.delta.dx;
+                          details.delta.dx;
                       _userArtifactPanelWidth = newW.clamp(
                         minPanelWidth,
                         math.max(minPanelWidth, contentWidth - minChatWidth),
@@ -744,7 +764,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // shaped ellipse the rail icons have, and the two wouldn't
           // match visually when the sidebar is collapsed.
           Positioned(
-            top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
+            top:
+                kTopInitialSpacing +
+                (kMenuButtonHeight - kButtonVisualHeight) / 2,
             left: kFixedLeftPadding,
             child: KeyedSubtree(
               key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
@@ -764,6 +786,19 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
           ),
+
+          // CoWork mode switcher — top-left, just right of the hamburger.
+          // Shown only when the sidebar is collapsed (mirrors the mini-rail),
+          // to avoid overlapping the expanded sidebar. Same app, runtime mode.
+          if (kFeatureCoWork && !_isSidebarExpanded)
+            Positioned(
+              top: kTopInitialSpacing + 3,
+              left: kFixedLeftPadding + kMenuButtonHeight + 4,
+              child: CoWorkModeSwitcher(
+                mode: _mode,
+                onChanged: (m) => setState(() => _mode = m),
+              ),
+            ),
 
           // Mini rail — visible only when sidebar is collapsed. Each icon's
           // visual centre lines up *exactly* with the matching SbRailRow in
