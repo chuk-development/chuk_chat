@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -157,6 +158,91 @@ void main() {
       final docs = (jsonDecode(message['attachments']!) as List).cast<Map>();
       expect(docs.single['fileName'], 'notes.md');
       expect(docs.single['markdownContent'], '# Notes');
+    });
+  });
+
+  group('ChatUiHelpers.stableUiKey', () {
+    final uuid = const Uuid();
+
+    test('prefers messageId when present', () {
+      final message = <String, String>{
+        'sender': 'ai',
+        'text': 'hi',
+        'messageId': 'assistant-123',
+      };
+      final key = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(key, 'assistant-123');
+      // Backfilled into the map so it stays constant.
+      expect(message[ChatUiHelpers.kUiKeyField], 'assistant-123');
+    });
+
+    test('assigns a fresh uuid when no messageId', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final key = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(key, isNotEmpty);
+      expect(key, message[ChatUiHelpers.kUiKeyField]);
+    });
+
+    test('is idempotent — repeated calls return the same key', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final first = ChatUiHelpers.stableUiKey(message, uuid);
+      final second = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(first, second);
+    });
+
+    test('keeps an already-assigned key even if messageId changes later', () {
+      final message = <String, String>{'sender': 'user', 'text': 'hi'};
+      final first = ChatUiHelpers.stableUiKey(message, uuid);
+      message['messageId'] = 'late-id';
+      final second = ChatUiHelpers.stableUiKey(message, uuid);
+      expect(second, first);
+      expect(second, isNot('late-id'));
+    });
+
+    test('distinct messages without ids get distinct keys', () {
+      final a = <String, String>{'sender': 'user', 'text': 'a'};
+      final b = <String, String>{'sender': 'user', 'text': 'b'};
+      expect(
+        ChatUiHelpers.stableUiKey(a, uuid),
+        isNot(ChatUiHelpers.stableUiKey(b, uuid)),
+      );
+    });
+  });
+
+  group('ChatUiHelpers.messageToRawMap', () {
+    test('preserves messageId, status and queueId across the bridge', () {
+      final message = ChatMessage(
+        role: 'assistant',
+        text: 'partial',
+        status: ChatMessageStatus.interrupted,
+        queueId: 'q-9',
+        messageId: 'm-1',
+      );
+      final raw = ChatUiHelpers.messageToRawMap(message);
+      expect(raw['messageId'], 'm-1');
+      expect(raw['status'], 'interrupted');
+      expect(raw['queueId'], 'q-9');
+    });
+
+    test('omits status/queueId when unset', () {
+      final raw = ChatUiHelpers.messageToRawMap(
+        ChatMessage(role: 'user', text: 'hi'),
+      );
+      expect(raw.containsKey('status'), isFalse);
+      expect(raw.containsKey('queueId'), isFalse);
+    });
+  });
+
+  group('ChatMessage.statusString', () {
+    test('round-trips every status value', () {
+      for (final s in ChatMessageStatus.values) {
+        final msg = ChatMessage(role: 'user', text: 't', status: s);
+        expect(ChatMessage.fromJson(msg.toJson()).status, s);
+      }
+    });
+
+    test('is null when status is unset', () {
+      expect(ChatMessage(role: 'user', text: 't').statusString, isNull);
     });
   });
 }
