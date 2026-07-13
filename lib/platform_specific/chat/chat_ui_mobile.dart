@@ -28,6 +28,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/widgets/reasoning_segment_button.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -111,21 +112,6 @@ class ChukChatUIMobile extends StatefulWidget {
 /// the chat message map (kept in sync with the values consumed by the
 /// inline parser further down). `null` returns `null` so historic
 /// messages stay status-less on disk.
-String? _statusToRawString(ChatMessageStatus? status) {
-  switch (status) {
-    case null:
-      return null;
-    case ChatMessageStatus.sent:
-      return 'sent';
-    case ChatMessageStatus.pending:
-      return 'pending';
-    case ChatMessageStatus.failed:
-      return 'failed';
-    case ChatMessageStatus.interrupted:
-      return 'interrupted';
-  }
-}
-
 class ChukChatUIMobileState extends State<ChukChatUIMobile>
     with ChatScrollMixin, ModelProviderResolutionMixin {
   // Controllers and basic state
@@ -836,64 +822,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded) {
     if (!mounted) return;
 
-    final List<Map<String, String>> newMessages = chat.messages.map((message) {
-      final map = <String, String>{
-        'sender': message.sender,
-        'text': message.text,
-        'reasoning': message.reasoning ?? '',
-      };
-      if (message.modelId != null && message.modelId!.isNotEmpty) {
-        map['modelId'] = message.modelId!;
-      }
-      if (message.provider != null && message.provider!.isNotEmpty) {
-        map['provider'] = message.provider!;
-      }
-      // Include images if present
-      if (message.images != null && message.images!.isNotEmpty) {
-        map['images'] = message.images!;
-      }
-      if (message.imageMetas != null && message.imageMetas!.isNotEmpty) {
-        map['imageMetas'] = message.imageMetas!;
-      }
-      if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
-        map['imageCostEur'] = message.imageCostEur!;
-      }
-      if (message.imageGeneratedAt != null &&
-          message.imageGeneratedAt!.isNotEmpty) {
-        map['imageGeneratedAt'] = message.imageGeneratedAt!;
-      }
-      // Include attachments if present
-      if (message.attachments != null && message.attachments!.isNotEmpty) {
-        map['attachments'] = message.attachments!;
-        if (kDebugMode) {
-          debugPrint(
-            '📄 [AttachmentDebug] Loading message with attachments field',
-          );
-        }
-      }
-      // Include attachedFilesJson for retry/resend support
-      if (message.attachedFilesJson != null &&
-          message.attachedFilesJson!.isNotEmpty) {
-        map['attachedFilesJson'] = message.attachedFilesJson!;
-      }
-      if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
-        map['toolCalls'] = message.toolCalls!;
-      }
-      if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
-        map['contentBlocks'] = message.contentBlocks!;
-      }
-      // Preserve local delivery status (pending/failed/interrupted).
-      // Without this an assistant message that was cut off mid-stream
-      // loses its "Continue generation" affordance on reload.
-      final statusStr = _statusToRawString(message.status);
-      if (statusStr != null) {
-        map['status'] = statusStr;
-      }
-      if (message.queueId != null && message.queueId!.isNotEmpty) {
-        map['queueId'] = message.queueId!;
-      }
-      return map;
-    }).toList();
+    // Use the shared ChatMessage->raw-map bridge so mobile and desktop stay in
+    // lockstep (it carries modelId/provider/images/attachments/toolCalls/
+    // contentBlocks AND the local-only messageId/status/queueId needed to keep
+    // stable bubble identity + the "Continue generation" affordance on reload).
+    final List<Map<String, String>> newMessages = chat.messages
+        .map(ChatUiHelpers.messageToRawMap)
+        .toList();
 
     final String? activeChatId = _activeChatId;
 
@@ -3379,7 +3314,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     String msgText,
                                     String? msgReasoning,
                                   ) => MessageBubble(
-                                    key: ValueKey('msg_$i'),
+                                    key: ValueKey(
+                                      ChatUiHelpers.stableUiKey(
+                                        _messages[i],
+                                        _uuid,
+                                      ),
+                                    ),
                                     message: msgText,
                                     reasoning: msgReasoning,
                                     isUser: isUser,
@@ -3619,6 +3559,77 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  String get _reasoningTooltip => _reasoningEnabled
+      ? 'Reasoning on — tap to disable for faster responses'
+      : 'Reasoning off — tap to enable deeper thinking';
+
+  void _toggleReasoning() {
+    setState(() {
+      _reasoningEnabled = !_reasoningEnabled;
+    });
+  }
+
+  /// The model selector, merged with the reasoning toggle into a single
+  /// `[ 🧠 | # Model ]` pill (desktop parity) whenever the model supports
+  /// reasoning; a plain dropdown otherwise. The merged dropdown style is
+  /// self-contained (it ignores [isCompactMode]), and the mobile composer's
+  /// toolbar row always has room, so — unlike desktop — the merge is not gated
+  /// on compact mode.
+  Widget _buildModelControl({
+    required bool isCompactMode,
+    required Color iconFg,
+  }) {
+    final bool merged =
+        ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId);
+
+    final Widget dropdown = KeyedSubtree(
+      key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+      child: ModelSelectionDropdown(
+        key: const ValueKey<String>('mobile-model-selection-dropdown'),
+        initialSelectedModelId: _selectedModelId,
+        onModelSelected: (newModelId) {
+          setState(() {
+            _selectedModelId = newModelId;
+          });
+        },
+        textFieldFocusNode: _textFieldFocusNode,
+        isCompactMode: isCompactMode,
+        transparentStyle: true,
+        mergedSegmentStyle: merged,
+      ),
+    );
+
+    // Non-reasoning model: plain compact dropdown, no reasoning toggle.
+    if (!merged) return dropdown;
+
+    // Merged pill: one outer oval (the model selector) with the reasoning
+    // toggle laid on its left end, matching the desktop composer.
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        Container(
+          height: 36,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: iconFg.withValues(alpha: 0.3),
+              width: 1.8,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(left: ReasoningSegmentButton.width),
+            child: dropdown,
+          ),
+        ),
+        ReasoningSegmentButton(
+          isActive: _reasoningEnabled,
+          tooltip: _reasoningTooltip,
+          onTap: _toggleReasoning,
+        ),
+      ],
+    );
+  }
+
   Widget _buildSearchBar({
     required bool isCompactMode,
     required ThemeData theme,
@@ -3707,49 +3718,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 isActive: hasAttachments,
                 color: iconFg,
               ),
-              if (ModelSelectionDropdown.modelSupportsReasoning(
-                _selectedModelId,
-              ))
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _reasoningEnabled = !_reasoningEnabled;
-                    });
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      Icons.psychology,
-                      size: 20,
-                      color: _reasoningEnabled
-                          ? accent
-                          : iconFg.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ),
               // Model picker takes the remaining middle space (left-aligned),
-              // pushing the mic / fullscreen controls to the right edge.
+              // pushing the mic / fullscreen controls to the right edge. When
+              // the model supports reasoning the toggle merges into the model
+              // oval as the desktop-style [ 🧠 | # Model ] pill; otherwise it's
+              // a plain model dropdown.
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: KeyedSubtree(
-                    key: TourKeyRegistry.instance.keyFor(
-                      TourSlots.modelDropdown,
-                    ),
-                    child: ModelSelectionDropdown(
-                      key: const ValueKey<String>(
-                        'mobile-model-selection-dropdown',
-                      ),
-                      initialSelectedModelId: _selectedModelId,
-                      onModelSelected: (newModelId) {
-                        setState(() {
-                          _selectedModelId = newModelId;
-                        });
-                      },
-                      textFieldFocusNode: _textFieldFocusNode,
-                      isCompactMode: isCompactMode,
-                      transparentStyle: true,
-                    ),
+                  child: _buildModelControl(
+                    isCompactMode: isCompactMode,
+                    iconFg: iconFg,
                   ),
                 ),
               ),

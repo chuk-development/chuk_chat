@@ -86,6 +86,34 @@ class MessageRenderData {
 class ChatUiHelpers {
   const ChatUiHelpers._();
 
+  /// Ephemeral, UI-only field holding a stable per-message identity key for
+  /// `ListView` item keys. Never persisted (the raw-map -> [ChatMessage]
+  /// conversion reads only known keys) and never sent to the API.
+  static const String kUiKeyField = '_uiKey';
+
+  /// Returns a stable per-message key for `ListView` identity, assigning one
+  /// lazily (idempotent) if absent.
+  ///
+  /// Index-based keys (`ValueKey('msg_$i')`) make Flutter discard and rebuild
+  /// bubble element state (and its decode/markdown caches) whenever a message
+  /// is edited, resent, or inserted and the indices shift. A stable per-message
+  /// key keeps each bubble's state attached to its message.
+  ///
+  /// Prefers the persisted [ChatMessage.messageId] so the key survives reloads
+  /// for assistant messages; falls back to a fresh UUID for user/legacy
+  /// messages. The assigned value is stored back into the (mutable, by-ref)
+  /// message map so it stays constant for the message's lifetime in the list.
+  static String stableUiKey(Map<String, String> raw, Uuid uuid) {
+    final String? existing = raw[kUiKeyField];
+    if (existing != null && existing.isNotEmpty) return existing;
+    final String? messageId = raw['messageId'];
+    final String id = (messageId != null && messageId.isNotEmpty)
+        ? messageId
+        : uuid.v4();
+    raw[kUiKeyField] = id;
+    return id;
+  }
+
   /// Format model info for display in message bubble.
   static String? formatModelInfo(String? modelId, String? provider) {
     final String normalizedModel = (modelId ?? '').trim();
@@ -292,6 +320,16 @@ class ChatUiHelpers {
     }
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
+    }
+    // Preserve local delivery status + offline-queue id so a message that was
+    // pending/failed/interrupted keeps its state (and "Continue generation"
+    // affordance) across reload instead of silently reverting to "sent".
+    final String? statusStr = message.statusString;
+    if (statusStr != null) {
+      map['status'] = statusStr;
+    }
+    if (message.queueId != null && message.queueId!.isNotEmpty) {
+      map['queueId'] = message.queueId!;
     }
     return map;
   }
