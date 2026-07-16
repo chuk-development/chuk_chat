@@ -44,6 +44,13 @@ void main() {
       expect(msg, contains('Server response timeout'));
     });
 
+    test('transformTimeout', () {
+      final msg = ServiceErrorHandler.handleDioException(
+        makeDioException(DioExceptionType.transformTimeout),
+      );
+      expect(msg, contains('took too long to process'));
+    });
+
     test('badCertificate', () {
       final msg = ServiceErrorHandler.handleDioException(
         makeDioException(DioExceptionType.badCertificate),

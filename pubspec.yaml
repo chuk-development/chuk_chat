@@ -7,6 +7,21 @@ version: 1.0.106
 environment:
   sdk: ^3.9.2
 
+# SDK ceiling — why several deps are held back
+# ---------------------------------------------
+# CI pins Flutter 3.41.4 (Dart 3.11.1) for every platform except the Android job,
+# which pins 3.38.7 (Dart 3.10.7). The ceiling exists because re_editor 0.8.0
+# (pulled in by vendor/markdraw) breaks on Flutter >= 3.44. Do not float CI on `stable`.
+#
+# Consequence: anything needing Dart >= 3.12 / Flutter >= 3.44 is unreachable —
+# pdf 3.13, printing 5.15, sqflite 2.4.3, sqflite_common_ffi 2.4.2, record 7.
+# These unblock together once re_editor is resolved; they are not individually broken.
+#
+# Also: keep constraint FLOORS low. The Android job (Dart 3.10.7) ignores pubspec.lock
+# and re-resolves, downgrading anything needing Dart 3.11 (e.g. add_2_calendar 3.1.1 ->
+# 3.0.1, pdfrx -> the ^2.2.24 floor). Raising a floor to a Dart-3.11-only version makes
+# that job unsolvable, since pub cannot downgrade below a declared floor.
+
 dependencies:
   flutter:
     sdk: flutter
@@ -31,7 +46,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   share_plus: ^12.0.1  # 13.x blocked by file_picker 11 → win32 5 conflict
   package_info_plus: ^9.0.0  # 10.x blocked by file_picker 11 → win32 5 conflict
-  record: ^6.1.2
+  record: ^6.1.2  # 7.x needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
   markdown_widget: ^2.3.2+8
@@ -48,22 +63,26 @@ dependencies:
   image: ^4.8.0  # 4.9.x needs xml ^7; blocked by enough_mail (xml ^6)
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
   pdfrx: ^2.2.24  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
-  pdf: ^3.11.0  # PDF generation (export markdown responses)
-  printing: ^5.13.0  # Cross-platform PDF share/print/save
-  flutter_foreground_task: ^9.2.1  # Keep streaming alive when app backgrounded
+  pdf: ^3.11.0  # PDF generation (export markdown responses). 3.13.0 needs Dart >=3.12 — see SDK ceiling note above.
+  printing: ^5.13.0  # Cross-platform PDF share/print/save. 5.15.0 needs Dart >=3.12 / Flutter >=3.41 — see SDK ceiling note above.
+  flutter_foreground_task: ^10.0.0  # Keep streaming alive when app backgrounded
+  # 10.0.0 is a floor-only major: no Dart API changes, no migration steps.
+  # Needs Flutter >=3.38.0 — satisfied by both CI pins (android 3.38.7, rest 3.41.4).
   flutter_local_notifications: ^22.0.0  # Completion notifications with deep linking
   pasteboard: ^0.5.0
   flutter_map: ^8.3.0          # Map widget for displaying locations/routes
   maplibre: ^0.3.2             # 3D-capable interactive maps
-  latlong2: ^0.9.1              # Coordinate math (LatLng type) — flutter_map pins 0.9.x
+  latlong2: ^0.10.1             # Coordinate math (LatLng type) — flutter_map 8.3.1 widened to >=0.9.1 <0.11.0
   fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
-  geolocator: ^14.0.2           # 14.0.3 needs package_info_plus ^10 (win32 6) — blocked by file_picker 11
+  # 14.0.3 -> geolocator_linux ^0.2.6 -> package_info_plus ^10 -> win32 ^6,
+  # but file_picker 11.0.2 (latest) pins win32 ^5.9.0. Unblocks only when file_picker ships win32 6.
+  geolocator: ^14.0.2
   add_2_calendar: ^3.0.1        # Native calendar event creation
   enough_mail: ^2.1.6           # IMAP/SMTP email
   timezone: ^0.11.0             # Timezone data for notifications
   pretty_qr_code: ^3.6.0
-  sqflite: ^2.4.2
-  sqflite_common_ffi: ^2.4.0+2
+  sqflite: ^2.4.2  # 2.4.3 needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.
+  sqflite_common_ffi: ^2.4.0+2  # 2.4.2 needs Dart ^3.12 — see SDK ceiling note above.
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
   # System-WebView renderer for HTML artifacts on
