@@ -10,6 +10,33 @@ const Map<String, String> stringsEn = {
   'customizationSubtitle': 'Configure app behavior and preferences',
   'toolCalling': 'Tool Calling',
   'toolCallingSubtitle': 'Control tool usage, discovery, and tool-call display',
+  'skills': 'Skills',
+  'skillsSubtitle': 'Procedures the AI loads on demand',
+  'skillsExplainer':
+      'A skill is a procedure the AI loads when it needs it. Only its name and '
+      'description sit in every message; the instructions are added once the AI '
+      'picks it up. Skills stay in the conversation after that.',
+  'skillsYours': 'Your skills',
+  'skillsYoursEmpty':
+      'You have no skills yet. Add one to teach the AI a procedure it should '
+      'follow — a format to output, a checklist to work through, house rules '
+      'for a recurring task.',
+  'skillsBuiltin': 'Built in',
+  'skillNew': 'New skill',
+  'skillEdit': 'Edit skill',
+  'skillDeleteTitle': 'Delete skill?',
+  'skillDeleteBody':
+      'The skill "{name}" will be deleted from all your devices. This cannot '
+      'be undone.',
+  'skillEditorHint':
+      'Write the SKILL.md source: YAML frontmatter between --- lines, then the '
+      'instructions as markdown. Required: name (lowercase, hyphens) and '
+      'description. Keep the description short — it is charged to every '
+      'message. Optional: allowed-tools, license, compatibility, metadata.',
+  'skillSaveFailed': 'Could not save the skill',
+  'skillPickerTitle': 'Load a skill',
+  'skillPickerEmpty': 'No skills available',
+  'skillRemove': 'Remove skill',
   'developerOptions': 'Developer Options',
   'developerOptionsSubtitle': 'Diagnostics logs and debug tools',
   'modelSelection': 'Model Selection',

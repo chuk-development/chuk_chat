@@ -294,6 +294,12 @@ class ToolCallHandler {
     registerBuiltinTools(_toolExecutor);
     unawaited(_toolExecutor.loadPreferences());
     unawaited(platform_tools.initPlatformServices());
+    if (kFeatureSkills) {
+      // Fire-and-forget: until it lands only built-ins are in the catalog,
+      // which costs a capability, never correctness. Signed-out or key-less
+      // starts resolve to an empty list rather than throwing.
+      unawaited(SkillRegistry.refreshUserSkills());
+    }
   }
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();
@@ -357,6 +363,7 @@ class ToolCallHandler {
     bool discoveryMode = true,
     bool allowMarkdownToolCalls = true,
     bool skipIdentity = false,
+    List<String> forcedSkillNames = const [],
   }) {
     // Pin the chat id on the executor for the duration of this send. The
     // `discoveryContextKey` carries the active chat id from the send
@@ -397,6 +404,17 @@ class ToolCallHandler {
     // there is nothing stored.
     if (toolCallingEnabled) {
       _restoreDiscoveryContext(session);
+    }
+
+    // Skills the user attached to this message in the composer. Applied after
+    // the restore so an explicit pick always wins the LRU's most-recent slot,
+    // and skipped silently when a name no longer resolves — a deleted skill
+    // must not break a send.
+    if (toolCallingEnabled && kFeatureSkills) {
+      for (final name in forcedSkillNames) {
+        final skill = SkillRegistry.byName(name);
+        if (skill != null) _activateSkill(session, skill);
+      }
     }
 
     return session;
@@ -1156,6 +1174,17 @@ class ToolCallHandler {
     final skill = SkillRegistry.byName(name);
     if (skill == null) return;
 
+    _activateSkill(session, skill);
+  }
+
+  /// Makes [skill]'s body part of every subsequent system prompt for [session].
+  ///
+  /// Shared by the model-driven path ([_updateActiveSkills], via the `skill`
+  /// tool) and the user-driven one ([createSession]'s `forcedSkillNames`, via
+  /// the composer's skill picker) so both produce identical state — a picked
+  /// skill and a model-loaded skill are the same thing to everything
+  /// downstream.
+  void _activateSkill(ToolLoopSession session, Skill skill) {
     // Re-activating an already-active skill moves it to most-recent rather
     // than duplicating it.
     session.activeSkillNames

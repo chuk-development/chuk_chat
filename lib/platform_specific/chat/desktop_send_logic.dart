@@ -403,6 +403,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final String? systemPrompt = await _resolveSystemPromptForSend();
       final assistant = _resolveWorkspaceForCurrentChat();
       final skipIdentity = assistant != null && !assistant.memoryEnabled;
+      final forcedSkills = _consumePendingSkills();
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -419,6 +420,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
+        forcedSkillNames: forcedSkills,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -1109,9 +1111,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           if (mounted) {
             setState(() {
               _pendingMessageText = text;
+              _queuedSkillNames = _pendingSkillNames;
+              _pendingSkillNames = const [];
             });
           } else {
             _pendingMessageText = text;
+            _queuedSkillNames = _pendingSkillNames;
+            _pendingSkillNames = const [];
           }
           _controller.clear();
           if (kDebugMode) {
@@ -1515,6 +1521,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
       });
 
+      // Consumed here, not earlier: the offline short-circuit above bails out
+      // before any session exists, and its replay path streams directly
+      // without a tool loop (offline_send_executor). Consuming before that
+      // check would clear the chips and silently drop the user's pick.
+      final forcedSkills = _consumePendingSkills();
       var toolSession = _toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
         history: apiHistory,
@@ -1526,6 +1537,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
+        forcedSkillNames: forcedSkills,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -1748,6 +1760,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       discoveryMode: widget.toolDiscoveryMode,
                       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
                       skipIdentity: skipIdentity,
+                      // Re-forced: the per-chat restore only carries the pick
+                      // when discoveryContextKey is set, so a retry in a fresh
+                      // chat would otherwise run without the user's skill.
+                      forcedSkillNames: forcedSkills,
                     );
                     final retryPrompt = await _toolCallHandler
                         .buildInitialSystemPrompt(toolSession);
@@ -2511,12 +2527,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   void _cancelPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
+    final restoreSkills = _controller.text.trim().isEmpty;
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
+        if (restoreSkills) _pendingSkillNames = _queuedSkillNames;
+        _queuedSkillNames = const [];
       });
     } else {
       _pendingMessageText = null;
+      if (restoreSkills) _pendingSkillNames = _queuedSkillNames;
+      _queuedSkillNames = const [];
     }
     if (_controller.text.trim().isEmpty) {
       _controller.text = pending;
@@ -2531,9 +2552,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
+        _pendingSkillNames = _queuedSkillNames;
+        _queuedSkillNames = const [];
       });
     } else {
       _pendingMessageText = null;
+      _pendingSkillNames = _queuedSkillNames;
+      _queuedSkillNames = const [];
     }
 
     if (kDebugMode) {

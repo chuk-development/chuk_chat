@@ -10,6 +10,34 @@ const Map<String, String> stringsDe = {
   'customizationSubtitle': 'App-Verhalten und Einstellungen konfigurieren',
   'toolCalling': 'Tool-Aufrufe',
   'toolCallingSubtitle': 'Tool-Nutzung, Erkennung und Anzeige steuern',
+  'skills': 'Skills',
+  'skillsSubtitle': 'Anleitungen, die die KI bei Bedarf lädt',
+  'skillsExplainer':
+      'Ein Skill ist eine Anleitung, die die KI lädt, wenn sie sie braucht. In '
+      'jeder Nachricht stehen nur Name und Beschreibung; die Anleitung kommt '
+      'erst dazu, wenn die KI den Skill aufgreift. Danach bleibt sie im '
+      'Gespräch.',
+  'skillsYours': 'Deine Skills',
+  'skillsYoursEmpty':
+      'Du hast noch keine Skills. Leg einen an, um der KI eine Anleitung '
+      'beizubringen — ein Ausgabeformat, eine Checkliste, feste Regeln für '
+      'eine wiederkehrende Aufgabe.',
+  'skillsBuiltin': 'Eingebaut',
+  'skillNew': 'Neuer Skill',
+  'skillEdit': 'Skill bearbeiten',
+  'skillDeleteTitle': 'Skill löschen?',
+  'skillDeleteBody':
+      'Der Skill "{name}" wird auf allen deinen Geräten gelöscht. Das lässt '
+      'sich nicht rückgängig machen.',
+  'skillEditorHint':
+      'Schreib die SKILL.md: YAML-Frontmatter zwischen ---Zeilen, danach die '
+      'Anleitung als Markdown. Pflicht: name (klein, mit Bindestrichen) und '
+      'description. Halt die Beschreibung kurz — sie kostet in jeder '
+      'Nachricht. Optional: allowed-tools, license, compatibility, metadata.',
+  'skillSaveFailed': 'Skill konnte nicht gespeichert werden',
+  'skillPickerTitle': 'Skill laden',
+  'skillPickerEmpty': 'Keine Skills verfügbar',
+  'skillRemove': 'Skill entfernen',
   'developerOptions': 'Entwickleroptionen',
   'developerOptionsSubtitle': 'Diagnose-Logs und Debug-Werkzeuge',
   'modelSelection': 'Modellauswahl',

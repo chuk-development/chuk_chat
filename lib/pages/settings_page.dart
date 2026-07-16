@@ -17,6 +17,8 @@ import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/sandbox_management_page.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
@@ -218,6 +220,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
+              if (kFeatureSkills)
+                _SettingsRow(
+                  icon: Icons.auto_awesome_outlined,
+                  title: l.skills,
+                  subtitle: l.skillsSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SkillsSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
               // Fix C: the standalone GitHub entry was removed and the
               // GitHub connection now lives inside SandboxManagementPage —
               // the GitHub token is only ever used by `git`/`gh` inside the

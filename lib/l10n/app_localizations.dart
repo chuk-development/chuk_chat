@@ -80,6 +80,22 @@ class AppLocalizations {
   String get customizationSubtitle => _get('customizationSubtitle');
   String get toolCalling => _get('toolCalling');
   String get toolCallingSubtitle => _get('toolCallingSubtitle');
+  String get skills => _get('skills');
+  String get skillsSubtitle => _get('skillsSubtitle');
+  String get skillsExplainer => _get('skillsExplainer');
+  String get skillsYours => _get('skillsYours');
+  String get skillsYoursEmpty => _get('skillsYoursEmpty');
+  String get skillsBuiltin => _get('skillsBuiltin');
+  String get skillNew => _get('skillNew');
+  String get skillEdit => _get('skillEdit');
+  String get skillDeleteTitle => _get('skillDeleteTitle');
+  String skillDeleteBody(String name) =>
+      _get('skillDeleteBody').replaceAll('{name}', name);
+  String get skillEditorHint => _get('skillEditorHint');
+  String get skillSaveFailed => _get('skillSaveFailed');
+  String get skillPickerTitle => _get('skillPickerTitle');
+  String get skillPickerEmpty => _get('skillPickerEmpty');
+  String get skillRemove => _get('skillRemove');
   String get developerOptions => _get('developerOptions');
   String get developerOptionsSubtitle => _get('developerOptionsSubtitle');
   String get modelSelection => _get('modelSelection');
