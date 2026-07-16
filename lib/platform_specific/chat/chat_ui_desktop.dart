@@ -30,7 +30,6 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/measure_size.dart';
-import 'package:chuk_chat/widgets/skill_picker.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -190,32 +189,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
-
-  /// Skills the user attached to the next message via the composer's picker.
-  ///
-  /// Cleared on send: the pick applies to the message it was made on. The
-  /// skill itself then stays active for the conversation, because forcing it
-  /// runs the same activation path as the model loading it via `skill`.
-  List<String> _pendingSkillNames = const [];
-
-  /// Skills belonging to a message that was queued while the AI was still
-  /// streaming. Snapshotted at queue time and held here, mirroring
-  /// [_pendingMessageText]: without this the chips stay editable and the
-  /// already-queued message would fire with whatever the user picked after
-  /// queueing it.
-  List<String> _queuedSkillNames = const [];
-
-  /// Takes the composer's attached skills and clears the chips.
-  List<String> _consumePendingSkills() {
-    if (_pendingSkillNames.isEmpty) return const [];
-    final names = _pendingSkillNames;
-    if (mounted) {
-      setState(() => _pendingSkillNames = const []);
-    } else {
-      _pendingSkillNames = const [];
-    }
-    return names;
-  }
 
   /// When a new chat is started from a workspace, this holds the assistant ID
   /// until the chat is created and linked in the database.
@@ -2266,18 +2239,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     ],
                   ),
                 ),
-              // Skills attached to the next message. Sits with the queued
-              // and editing banners, above the field and clear of the send
-              // button.
-              if (kFeatureSkills)
-                SkillChipsRow(
-                  selected: _pendingSkillNames,
-                  onRemove: (name) => setState(() {
-                    _pendingSkillNames = [..._pendingSkillNames]..remove(name);
-                  }),
-                  iconColor: iconFg,
-                  rightPadding: btnW + 8,
-                ),
               // Queued message indicator — shown when the user sent a message
               // while the AI was still streaming. It auto-sends on completion.
               if (_pendingMessageText != null)
@@ -2436,15 +2397,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const Spacer(),
-                                      if (kFeatureSkills)
-                                        SkillPickerButton(
-                                          selected: _pendingSkillNames,
-                                          onChanged: (names) => setState(
-                                            () => _pendingSkillNames = names,
-                                          ),
-                                          iconColor: iconFg,
-                                          accent: accent,
-                                        ),
                                       // Active assistant indicator
                                       Builder(
                                         builder: (context) {

@@ -157,7 +157,6 @@ class StreamingMessageHandler {
     String? reasoningEffort,
     String? continuePriorText,
     String? continuePriorContentBlocksJson,
-    List<String> forcedSkillNames = const [],
   }) async {
     if (_isDisposed) return;
 
@@ -284,7 +283,6 @@ class StreamingMessageHandler {
         toolCallingEnabled: toolCallingEnabled,
         discoveryMode: toolDiscoveryMode,
         allowMarkdownToolCalls: allowMarkdownToolCalls,
-        forcedSkillNames: forcedSkillNames,
       );
       initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
         toolSession,
@@ -826,10 +824,6 @@ class StreamingMessageHandler {
                   toolCallingEnabled: toolCallingEnabled,
                   discoveryMode: toolDiscoveryMode,
                   allowMarkdownToolCalls: allowMarkdownToolCalls,
-                  // Re-forced: the per-chat restore only carries the pick when
-                  // chatId is set, so a retry in a fresh chat would otherwise
-                  // run without the user's skill.
-                  forcedSkillNames: forcedSkillNames,
                 );
                 final retryPrompt = await _toolCallHandler
                     .buildInitialSystemPrompt(retrySession);

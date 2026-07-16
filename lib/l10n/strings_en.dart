@@ -34,9 +34,6 @@ const Map<String, String> stringsEn = {
       'description. Keep the description short — it is charged to every '
       'message. Optional: allowed-tools, license, compatibility, metadata.',
   'skillSaveFailed': 'Could not save the skill',
-  'skillPickerTitle': 'Load a skill',
-  'skillPickerEmpty': 'No skills available',
-  'skillRemove': 'Remove skill',
   'developerOptions': 'Developer Options',
   'developerOptionsSubtitle': 'Diagnostics logs and debug tools',
   'modelSelection': 'Model Selection',

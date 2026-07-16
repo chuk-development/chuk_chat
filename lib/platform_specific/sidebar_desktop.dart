@@ -18,6 +18,8 @@ import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:flutter/foundation.dart';
 
@@ -32,6 +34,11 @@ class SidebarDesktop extends StatefulWidget {
   final bool isCompactMode;
   final bool showWorkspacesButton;
 
+  /// Current app mode and its setter — only used to render the CoWork
+  /// switcher under the New chat row when [kFeatureCoWork] is on.
+  final AppMode mode;
+  final ValueChanged<AppMode> onModeChanged;
+
   const SidebarDesktop({
     super.key,
     required this.onChatSelected,
@@ -43,6 +50,8 @@ class SidebarDesktop extends StatefulWidget {
     required this.selectedChatId,
     required this.isCompactMode,
     required this.showWorkspacesButton,
+    required this.mode,
+    required this.onModeChanged,
   });
 
   @override
@@ -413,10 +422,12 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             ),
           ),
 
-          // All four rail rows share a uniform pill width = the widest
-          // label's intrinsic width. IntrinsicWidth measures the longest
-          // child Row, then Column(stretch) forces every row to that width
-          // so the hover pills look consistent rather than ragged.
+          // The rail rows share a uniform pill width = the widest child's
+          // intrinsic width. IntrinsicWidth measures the longest child,
+          // then Column(stretch) forces every row to that width so the
+          // hover pills look consistent rather than ragged. The CoWork
+          // switcher is measured with them but Align-wrapped, so it keeps
+          // its own natural width instead of being stretched.
           Align(
             alignment: Alignment.centerLeft,
             child: IntrinsicWidth(
@@ -428,6 +439,17 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     label: 'New chat',
                     onTap: widget.onNewChatTapped,
                   ),
+                  if (kFeatureCoWork)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: CoWorkModeSwitcher(
+                          mode: widget.mode,
+                          onChanged: widget.onModeChanged,
+                        ),
+                      ),
+                    ),
                   if (kFeatureWorkspaces && widget.showWorkspacesButton)
                     SbRailRow(
                       icon: Icons.folder_rounded,
