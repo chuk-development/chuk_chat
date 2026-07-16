@@ -26,6 +26,10 @@ class ServiceErrorHandler {
         return 'Request timeout. Please try again.';
       case DioExceptionType.receiveTimeout:
         return 'Server response timeout. Please try again.';
+      case DioExceptionType.transformTimeout:
+        // dio 5.10.0+: response transformation (e.g. background JSON decoding)
+        // exceeded RequestOptions.transformTimeout.
+        return 'Server response took too long to process. Please try again.';
       case DioExceptionType.badCertificate:
         return 'Security error: Invalid SSL certificate. Please ensure you are on a trusted network.';
       case DioExceptionType.badResponse:
