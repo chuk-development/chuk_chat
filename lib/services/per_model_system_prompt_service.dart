@@ -119,7 +119,19 @@ String? mergeModelPrompt({
 class PerModelSystemPromptService {
   const PerModelSystemPromptService._();
 
-  static const String _localKey = 'cached_model_system_prompts';
+  /// SharedPreferences key holding [userId]'s per-model prompt blob.
+  ///
+  /// Namespaced by user id so a second user in the same install cannot read the
+  /// first user's entries. See [_syncCacheToCurrentUser] for why this is keyed
+  /// rather than cleared from a sign-out hook.
+  static String _localKey(String userId) =>
+      'cached_model_system_prompts_$userId';
+
+  /// The pre-namespacing key. Deleted rather than migrated: its contents cannot
+  /// be attributed to a user, and a dropped cache re-fetches while a
+  /// mis-attributed one leaks.
+  static const String _legacyLocalKey = 'cached_model_system_prompts';
+
   static const String _remotePreferencesColumn = 'preferences';
   static const String _remoteKey = 'model_system_prompts';
   static const String _selectedModelColumn = 'selected_model_id';
@@ -129,12 +141,66 @@ class PerModelSystemPromptService {
   static Map<String, ModelPromptConfig>? _decryptedCache;
   static Future<Map<String, ModelPromptConfig>>? _loadInFlight;
 
+  /// The user [_decryptedCache] belongs to.
+  ///
+  /// Keyed by user id and re-checked on every access, rather than cleared by a
+  /// logout hook: this class had a `clearAll()` written to be exactly that hook
+  /// and it never had a single caller (it has since been deleted), and
+  /// `chat_ui_mobile` signs out through `SupabaseService.signOut()` without
+  /// going near `AuthService`. Mirrors `_resetIdentityCacheForUser` in
+  /// `notes_tools.dart`.
+  static String? _cacheOwnerUserId;
+
+  static void _syncCacheToCurrentUser(String? userId) {
+    if (_cacheOwnerUserId == userId) return;
+    _cacheOwnerUserId = userId;
+    _decryptedCache = null;
+    _loadInFlight = null;
+  }
+
+  /// The active user id, or null when signed out or before Supabase is up.
+  static String? _currentUserId() {
+    // Gated on kDebugMode so the override is tree-shaken out of release
+    // builds: it is a mutable static that decides ownership, and
+    // @visibleForTesting is a lint, not a runtime guard. Tests run in debug.
+    if (kDebugMode) {
+      final override = debugCurrentUserIdOverride;
+      if (override != null) return override();
+    }
+    try {
+      return SupabaseService.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True while [userId] is *still the live signed-in user*.
+  ///
+  /// Consults live auth, not just [_cacheOwnerUserId]: the latter only advances
+  /// when a public entry point runs [_syncCacheToCurrentUser], so between a
+  /// sign-out and the next entry point it still names the previous user and
+  /// would wave their data through.
+  static bool _stillOwns(String? userId) =>
+      userId != null &&
+      _cacheOwnerUserId == userId &&
+      _currentUserId() == userId;
+
+  static Future<void> _dropLegacyLocalCache(SharedPreferences prefs) async {
+    if (prefs.containsKey(_legacyLocalKey)) {
+      await prefs.remove(_legacyLocalKey);
+    }
+  }
+
   /// Best-effort load of all per-model configs, decrypted.
   ///
   /// Pulls from local SharedPreferences first; in the background tries to
   /// pull remote and update. Returns an empty map when the key is not yet
   /// available or no entries exist.
   static Future<Map<String, ModelPromptConfig>> loadAll() async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return <String, ModelPromptConfig>{};
+
     if (_decryptedCache != null) {
       // Refresh in background so cross-device edits propagate.
       unawaited(_syncFromRemote());
@@ -145,7 +211,12 @@ class PerModelSystemPromptService {
     }
 
     Future<Map<String, ModelPromptConfig>> run() async {
-      final local = await _loadFromLocal();
+      final local = await _loadFromLocal(userId);
+      // The user changed while the local read was in flight. Return an empty
+      // map, never `local`: these are decrypted per-model prompts, and handing
+      // them back leaks them to the new user through the return value even
+      // with the cache left untouched.
+      if (!_stillOwns(userId)) return <String, ModelPromptConfig>{};
       _decryptedCache = local;
       // Trigger remote sync in background — don't block first paint.
       unawaited(_syncFromRemote());
@@ -163,6 +234,7 @@ class PerModelSystemPromptService {
   /// Get a config for [modelId] (or `null` if none exists). Backed by the
   /// in-memory cache; calls [loadAll] on first access.
   static Future<ModelPromptConfig?> get(String modelId) async {
+    _syncCacheToCurrentUser(_currentUserId());
     if (_decryptedCache == null) {
       await loadAll();
     }
@@ -172,17 +244,22 @@ class PerModelSystemPromptService {
   /// Save (upsert) a per-model config. Re-encrypts before persisting.
   /// Returns true on a successful local write (remote is best-effort).
   static Future<bool> save(String modelId, ModelPromptConfig config) async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
     final trimmedId = modelId.trim();
     if (trimmedId.isEmpty) return false;
+    // Entries are encrypted with the signed-in user's key; without one there is
+    // no correct namespace to write into.
+    if (userId == null) return false;
 
     try {
-      _decryptedCache ??= await _loadFromLocal();
+      _decryptedCache ??= await _loadFromLocal(userId);
       final hadPrevious = _decryptedCache!.containsKey(trimmedId);
       final previous = _decryptedCache![trimmedId];
       _decryptedCache![trimmedId] = config;
 
       try {
-        await _persistAll();
+        await _persistAll(userId);
       } catch (_) {
         if (hadPrevious) {
           _decryptedCache![trimmedId] = previous!;
@@ -192,7 +269,7 @@ class PerModelSystemPromptService {
         rethrow;
       }
       // Best-effort remote upsert — don't block UI.
-      unawaited(_saveRemote());
+      unawaited(_saveRemote(userId));
       if (kDebugMode) {
         debugPrint(
           '[PerModelPrompt] saved modelId=$trimmedId '
@@ -210,14 +287,17 @@ class PerModelSystemPromptService {
 
   /// Remove the per-model config for [modelId].
   static Future<bool> delete(String modelId) async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
     final trimmedId = modelId.trim();
     if (trimmedId.isEmpty) return false;
+    if (userId == null) return false;
     try {
-      _decryptedCache ??= await _loadFromLocal();
+      _decryptedCache ??= await _loadFromLocal(userId);
       if (!_decryptedCache!.containsKey(trimmedId)) return false;
       _decryptedCache!.remove(trimmedId);
-      await _persistAll();
-      unawaited(_saveRemote());
+      await _persistAll(userId);
+      unawaited(_saveRemote(userId));
       if (kDebugMode) {
         debugPrint('[PerModelPrompt] deleted modelId=$trimmedId');
       }
@@ -230,20 +310,14 @@ class PerModelSystemPromptService {
     }
   }
 
-  /// Clear all per-model configs (used on sign-out / password change).
-  static Future<void> clearAll() async {
-    _decryptedCache = null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_localKey);
-    } catch (_) {}
-  }
-
   // ─── Internal: load from local SharedPreferences ─────────────────────────
-  static Future<Map<String, ModelPromptConfig>> _loadFromLocal() async {
+  static Future<Map<String, ModelPromptConfig>> _loadFromLocal(
+    String userId,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_localKey);
+      await _dropLegacyLocalCache(prefs);
+      final raw = prefs.getString(_localKey(userId));
       if (raw == null || raw.isEmpty) return <String, ModelPromptConfig>{};
 
       final decoded = jsonDecode(raw);
@@ -293,7 +367,7 @@ class PerModelSystemPromptService {
   }
 
   /// Encrypt the in-memory map and write it to SharedPreferences.
-  static Future<void> _persistAll() async {
+  static Future<void> _persistAll(String userId) async {
     final cache = _decryptedCache ?? <String, ModelPromptConfig>{};
     final encryptedMap = <String, Map<String, dynamic>>{};
     for (final entry in cache.entries) {
@@ -308,14 +382,17 @@ class PerModelSystemPromptService {
       };
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_localKey, jsonEncode(encryptedMap));
+    await _dropLegacyLocalCache(prefs);
+    await prefs.setString(_localKey(userId), jsonEncode(encryptedMap));
   }
 
   // ─── Internal: remote sync (best-effort) ─────────────────────────────────
   static Future<void> _syncFromRemote() async {
-    final session = SupabaseService.auth.currentSession;
-    if (session == null) return;
-    final userId = session.user.id;
+    // Safe lookup: this runs unawaited, so a raw `SupabaseService.auth` read
+    // would surface as an unhandled async error before Supabase is up.
+    final userId = _currentUserId();
+    if (userId == null) return;
+    _syncCacheToCurrentUser(userId);
 
     try {
       final row = await SupabaseService.client
@@ -342,13 +419,16 @@ class PerModelSystemPromptService {
       // Merge remote entries into the existing cache so a concurrent local
       // save isn't clobbered by stale remote data. Local cache wins for any
       // key already present locally (last-writer-wins per key).
+      // A background sync must never resurrect the previous user's entries
+      // after a sign-out.
+      if (!_stillOwns(userId)) return;
       final merged = <String, ModelPromptConfig>{...decrypted};
       final existing = _decryptedCache;
       if (existing != null) {
         merged.addAll(existing);
       }
       _decryptedCache = merged;
-      await _persistAll();
+      await _persistAll(userId);
       if (kDebugMode) {
         debugPrint(
           '[PerModelPrompt] synced ${decrypted.length} entries from remote',
@@ -371,12 +451,17 @@ class PerModelSystemPromptService {
     }
   }
 
-  /// Re-encrypt the current cache and upsert into the JSONB preferences
+  /// Re-encrypt [ownerUserId]'s cache and upsert it into the JSONB preferences
   /// column. Best-effort — failures are logged in debug only.
-  static Future<void> _saveRemote() async {
-    final session = SupabaseService.auth.currentSession;
-    if (session == null) return;
-    final userId = session.user.id;
+  ///
+  /// [ownerUserId] is the user the cache belonged to when the save was started.
+  /// It is required, and verified against live auth, because this runs
+  /// unawaited: reading the *current* session here instead would upsert the
+  /// previous user's decrypted prompts into whichever row is active by the time
+  /// it resumes — writing A's data into B's account.
+  static Future<void> _saveRemote(String ownerUserId) async {
+    if (!_stillOwns(ownerUserId)) return;
+    final userId = ownerUserId;
     final cache = _decryptedCache;
     if (cache == null) return;
 
@@ -430,6 +515,12 @@ class PerModelSystemPromptService {
         upsertData[_selectedModelColumn] = existingModelId;
       }
 
+      // Re-check after the select/encrypt awaits: `EncryptionService.encrypt`
+      // uses the *live* user's key, so a switch mid-flight would have sealed
+      // this user's prompts with the next user's key. Dropping the write costs
+      // one best-effort sync; landing it would corrupt the row.
+      if (!_stillOwns(ownerUserId)) return;
+
       await SupabaseService.client
           .from('user_preferences')
           .upsert(upsertData, onConflict: 'user_id');
@@ -464,5 +555,39 @@ class PerModelSystemPromptService {
   static void debugReset() {
     _decryptedCache = null;
     _loadInFlight = null;
+    _cacheOwnerUserId = null;
   }
+
+  // The real entry points read the user id from `SupabaseService.auth`, which
+  // needs a live backend; these seams drive the user-change path directly.
+
+  /// Replaces the live auth lookup used by [_currentUserId] and [_stillOwns],
+  /// so a test can flip the signed-in user while an async load is suspended.
+  @visibleForTesting
+  static String? Function()? debugCurrentUserIdOverride;
+
+  @visibleForTesting
+  static bool debugStillOwns(String? userId) => _stillOwns(userId);
+
+  @visibleForTesting
+  static void debugPrimeCacheForUser(
+    String? userId,
+    Map<String, ModelPromptConfig>? cache,
+  ) {
+    _cacheOwnerUserId = userId;
+    _decryptedCache = cache;
+  }
+
+  @visibleForTesting
+  static void debugSyncCacheToUser(String? userId) =>
+      _syncCacheToCurrentUser(userId);
+
+  @visibleForTesting
+  static Map<String, ModelPromptConfig>? get debugCache => _decryptedCache;
+
+  @visibleForTesting
+  static String localCacheKeyForUser(String userId) => _localKey(userId);
+
+  @visibleForTesting
+  static const String legacyLocalCacheKey = _legacyLocalKey;
 }

@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -17,7 +16,6 @@ import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
-import 'package:chuk_chat/services/user_preferences_service.dart';
 
 /// Callback for initialization events
 typedef InitProgressCallback = void Function(String stage, int progressPercent);
@@ -398,16 +396,13 @@ class AppInitializationService {
     return false;
   }
 
-  /// Reset all services (call on logout)
-  Future<void> resetServices() async {
-    ChatSyncService.stop();
-    ChatPreloadService.reset();
-    UserPreferencesService.resetCache();
-    // Clear encryption key first, then reset storage services in parallel
-    await EncryptionService.clearKey();
-    await Future.wait([
-      ChatStorageService.reset(),
-      WorkspaceStorageService.reset(),
-    ]);
-  }
+  // `resetServices()` used to live here as the logout hook that dropped the
+  // per-user static caches. It was deleted, not wired up: nothing had called it
+  // for as long as the history shows, so it protected nothing while reading
+  // like a safety net. Wiring it could not have been the fix either — sign-out
+  // happens from six places, and `chat_ui_mobile` calls
+  // `SupabaseService.signOut()` directly, bypassing `AuthService` (and any hook
+  // in it) entirely. The caches it named now invalidate themselves by comparing
+  // the active user id on every access; `AuthService.signOut()` already owns
+  // the rest of the teardown (socket, sandbox ids, encryption key).
 }

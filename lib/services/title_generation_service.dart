@@ -26,9 +26,22 @@ class TitleGenerationService {
   // Cached provider slug for [_titleModel], resolved once per session.
   static String? _resolvedTitleProvider;
 
-  // Settings keys
-  static const String _settingsKey = 'auto_generate_titles';
-  static const String _systemPromptKey = 'title_gen_system_prompt';
+  // Settings keys, namespaced by user id.
+  //
+  // The prompt is cached here as **plaintext** (it is only encrypted on the way
+  // to Supabase), so unlike `cached_system_prompt` there was never even an
+  // accidental encryption-key mismatch standing between one user's prompt and
+  // the next user's read. Namespacing is the only thing separating them.
+  static String _settingsKey(String userId) => 'auto_generate_titles_$userId';
+  static String _systemPromptKey(String userId) =>
+      'title_gen_system_prompt_$userId';
+
+  /// Pre-namespacing keys. Dropped rather than migrated — their values cannot
+  /// be attributed to a user, and both re-populate from Supabase on the next
+  /// [syncSettingsFromSupabase].
+  static const String _legacySettingsKey = 'auto_generate_titles';
+  static const String _legacySystemPromptKey = 'title_gen_system_prompt';
+
   static const String _decryptFailedSentinel = '__decrypt_failed__';
   static const String _remoteEnabledColumn = 'auto_generate_titles';
   static const String _remotePromptColumn = 'title_gen_system_prompt';
@@ -48,6 +61,63 @@ Rules:
   static String? _customSystemPrompt;
   static DateTime? _lastRemoteSyncAt;
   static Future<void>? _remoteSyncInFlight;
+
+  /// The user the cached settings above belong to.
+  ///
+  /// Keyed by user id and re-checked on every access rather than cleared from a
+  /// sign-out hook: the repo's one such hook
+  /// (`AppInitializationService.resetServices()`) was dead code, and
+  /// `chat_ui_mobile` signs out via `SupabaseService.signOut()` without going
+  /// through `AuthService` at all. Mirrors `_resetIdentityCacheForUser` in
+  /// `notes_tools.dart`.
+  static String? _cacheOwnerUserId;
+
+  static void _syncCacheToCurrentUser(String? userId) {
+    if (_cacheOwnerUserId == userId) return;
+    _cacheOwnerUserId = userId;
+    _autoGenerateTitlesEnabled = null;
+    _customSystemPrompt = null;
+    _lastRemoteSyncAt = null;
+    _remoteSyncInFlight = null;
+  }
+
+  /// The active user id, or null when signed out or before Supabase is up.
+  static String? _currentUserId() {
+    // Gated on kDebugMode so the override is tree-shaken out of release
+    // builds: it is a mutable static that decides ownership, and
+    // @visibleForTesting is a lint, not a runtime guard. Tests run in debug.
+    if (kDebugMode) {
+      final override = debugCurrentUserIdOverride;
+      if (override != null) return override();
+    }
+    try {
+      return SupabaseService.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True while [userId] is *still the live signed-in user*.
+  ///
+  /// Consults live auth, not just [_cacheOwnerUserId]: the latter only advances
+  /// when a public entry point runs [_syncCacheToCurrentUser], so between a
+  /// sign-out and the next entry point it still names the previous user.
+  /// Gating the remote upserts below on this is what stops one user's setting
+  /// from being written into the next user's Supabase row.
+  static bool _stillOwns(String? userId) =>
+      userId != null &&
+      _cacheOwnerUserId == userId &&
+      _currentUserId() == userId;
+
+  static Future<void> _dropLegacyKeys(SharedPreferences prefs) async {
+    if (prefs.containsKey(_legacySettingsKey)) {
+      await prefs.remove(_legacySettingsKey);
+    }
+    if (prefs.containsKey(_legacySystemPromptKey)) {
+      await prefs.remove(_legacySystemPromptKey);
+    }
+  }
+
   static Duration get _remoteSyncTtl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
       return const Duration(minutes: 2);
@@ -62,9 +132,15 @@ Rules:
 
   /// Check if auto title generation is enabled
   static Future<bool> isEnabled() async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
-      _autoGenerateTitlesEnabled ??= prefs.getBool(_settingsKey) ?? false;
+      await _dropLegacyKeys(prefs);
+      if (!_stillOwns(userId)) return false;
+      _autoGenerateTitlesEnabled ??=
+          prefs.getBool(_settingsKey(userId)) ?? false;
 
       // Keep local settings synced from Supabase in the background.
       unawaited(syncSettingsFromSupabase());
@@ -80,15 +156,24 @@ Rules:
 
   /// Enable or disable auto title generation
   static Future<void> setEnabled(bool enabled) async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_settingsKey, enabled);
-    _autoGenerateTitlesEnabled = enabled;
+    await _dropLegacyKeys(prefs);
+    await prefs.setBool(_settingsKey(userId), enabled);
+    if (_stillOwns(userId)) _autoGenerateTitlesEnabled = enabled;
 
     try {
+      // Gate on the user who started this call, and address the row by their
+      // id. Reading the live session's user id here instead would upsert this
+      // user's setting into whoever is signed in by the time the local write
+      // above finished — a write into another account, not just a stale read.
+      if (!_stillOwns(userId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         await SupabaseService.client.from('customization_preferences').upsert({
-          'user_id': session.user.id,
+          'user_id': userId,
           _remoteEnabledColumn: enabled,
         }, onConflict: 'user_id');
       }
@@ -108,9 +193,14 @@ Rules:
 
   /// Get the current system prompt (custom or default)
   static Future<String> getSystemPrompt() async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return defaultSystemPrompt;
     try {
       final prefs = await SharedPreferences.getInstance();
-      _customSystemPrompt ??= prefs.getString(_systemPromptKey);
+      await _dropLegacyKeys(prefs);
+      if (!_stillOwns(userId)) return defaultSystemPrompt;
+      _customSystemPrompt ??= prefs.getString(_systemPromptKey(userId));
 
       // Keep local settings synced from Supabase in the background.
       unawaited(syncSettingsFromSupabase());
@@ -126,27 +216,36 @@ Rules:
 
   /// Set a custom system prompt
   static Future<void> setSystemPrompt(String prompt) async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
+    await _dropLegacyKeys(prefs);
     final useDefault =
         prompt.trim().isEmpty || prompt.trim() == defaultSystemPrompt.trim();
 
     if (useDefault) {
-      await prefs.remove(_systemPromptKey);
-      _customSystemPrompt = null;
+      await prefs.remove(_systemPromptKey(userId));
+      if (_stillOwns(userId)) _customSystemPrompt = null;
     } else {
-      await prefs.setString(_systemPromptKey, prompt);
-      _customSystemPrompt = prompt;
+      await prefs.setString(_systemPromptKey(userId), prompt);
+      if (_stillOwns(userId)) _customSystemPrompt = prompt;
     }
 
     try {
+      // See setEnabled: gate on the originating user, address their row.
+      if (!_stillOwns(userId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         String? encryptedPrompt;
         if (!useDefault) {
           encryptedPrompt = await EncryptionService.encrypt(prompt);
         }
+        // Re-check: `encrypt` uses the live user's key, so a switch during it
+        // would seal this prompt with the next user's key.
+        if (!_stillOwns(userId)) return;
         await SupabaseService.client.from('customization_preferences').upsert({
-          'user_id': session.user.id,
+          'user_id': userId,
           _remotePromptColumn: encryptedPrompt,
         }, onConflict: 'user_id');
       }
@@ -171,15 +270,21 @@ Rules:
 
   /// Reset system prompt to default
   static Future<void> resetSystemPrompt() async {
+    final userId = _currentUserId();
+    _syncCacheToCurrentUser(userId);
+    if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_systemPromptKey);
-    _customSystemPrompt = null;
+    await _dropLegacyKeys(prefs);
+    await prefs.remove(_systemPromptKey(userId));
+    if (_stillOwns(userId)) _customSystemPrompt = null;
 
     try {
+      // See setEnabled: gate on the originating user, address their row.
+      if (!_stillOwns(userId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         await SupabaseService.client.from('customization_preferences').upsert({
-          'user_id': session.user.id,
+          'user_id': userId,
           _remotePromptColumn: null,
         }, onConflict: 'user_id');
       }
@@ -200,6 +305,7 @@ Rules:
 
   /// Refresh title settings from Supabase and cache them locally.
   static Future<void> syncSettingsFromSupabase({bool forceRefresh = false}) {
+    _syncCacheToCurrentUser(_currentUserId());
     if (!forceRefresh &&
         _lastRemoteSyncAt != null &&
         DateTime.now().difference(_lastRemoteSyncAt!) < _remoteSyncTtl) {
@@ -212,26 +318,32 @@ Rules:
 
     Future<void> run() async {
       try {
-        final user = SupabaseService.auth.currentUser;
-        if (user == null) return;
+        // Safe lookup: this runs unawaited from isEnabled()/getSystemPrompt().
+        final userId = _currentUserId();
+        if (userId == null) return;
 
         final row = await SupabaseService.client
             .from('customization_preferences')
             .select('$_remoteEnabledColumn,$_remotePromptColumn')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .maybeSingle();
 
         if (row == null) {
-          _lastRemoteSyncAt = DateTime.now();
+          if (_stillOwns(userId)) _lastRemoteSyncAt = DateTime.now();
           return;
         }
 
         final prefs = await SharedPreferences.getInstance();
+        await _dropLegacyKeys(prefs);
+
+        // The user may have signed out (or swapped) during the request; a late
+        // response must not land in the next user's cache or prefs namespace.
+        if (!_stillOwns(userId)) return;
 
         final remoteEnabled = row[_remoteEnabledColumn] as bool?;
         if (remoteEnabled != null) {
           _autoGenerateTitlesEnabled = remoteEnabled;
-          await prefs.setBool(_settingsKey, remoteEnabled);
+          await prefs.setBool(_settingsKey(userId), remoteEnabled);
         }
 
         if (row.containsKey(_remotePromptColumn)) {
@@ -239,21 +351,25 @@ Rules:
           if (remotePromptRaw == null ||
               remotePromptRaw.toString().trim().isEmpty) {
             _customSystemPrompt = null;
-            await prefs.remove(_systemPromptKey);
+            await prefs.remove(_systemPromptKey(userId));
           } else {
             final remotePrompt = await _decryptRemotePrompt(
               remotePromptRaw.toString(),
             );
+            if (!_stillOwns(userId)) return;
             if (remotePrompt == _decryptFailedSentinel) {
               // Keep local prompt when remote decryption fails.
             } else if (remotePrompt != null && remotePrompt.isNotEmpty) {
               _customSystemPrompt = remotePrompt;
-              await prefs.setString(_systemPromptKey, remotePrompt);
+              await prefs.setString(_systemPromptKey(userId), remotePrompt);
             }
           }
         }
 
-        _lastRemoteSyncAt = DateTime.now();
+        // Guarded like every other post-await write: A's late sync must not
+        // refresh the throttle timestamp for B, which would suppress B's own
+        // first sync.
+        if (_stillOwns(userId)) _lastRemoteSyncAt = DateTime.now();
       } on PostgrestException catch (e) {
         if (kDebugMode && !_isMissingTitleColumnsError(e)) {
           debugPrint('Failed to sync title settings from Supabase: $e');
@@ -265,9 +381,13 @@ Rules:
       }
     }
 
-    _remoteSyncInFlight = run();
-    return _remoteSyncInFlight!.whenComplete(() {
-      _remoteSyncInFlight = null;
+    final inFlight = run();
+    _remoteSyncInFlight = inFlight;
+    return inFlight.whenComplete(() {
+      // Only clear the slot if it still holds THIS future: a user switch
+      // nulls it and B may already have started its own, which A's
+      // completion would otherwise wipe — duplicating or dropping a sync.
+      if (identical(_remoteSyncInFlight, inFlight)) _remoteSyncInFlight = null;
     });
   }
 
@@ -680,4 +800,55 @@ Rules:
 
     return false;
   }
+
+  // ─── Test seams ──────────────────────────────────────────────────────────
+  // The real entry points read the user id from `SupabaseService.auth`, which
+  // needs a live backend; these drive the user-change path directly.
+
+  /// Replaces the live auth lookup used by [_currentUserId] and [_stillOwns],
+  /// so a test can flip the signed-in user while an async call is suspended.
+  @visibleForTesting
+  static String? Function()? debugCurrentUserIdOverride;
+
+  @visibleForTesting
+  static bool debugStillOwns(String? userId) => _stillOwns(userId);
+
+  @visibleForTesting
+  static void debugPrimeCachesForUser(
+    String? userId, {
+    bool? autoGenerateTitles,
+    String? customSystemPrompt,
+  }) {
+    _cacheOwnerUserId = userId;
+    _autoGenerateTitlesEnabled = autoGenerateTitles;
+    _customSystemPrompt = customSystemPrompt;
+    _lastRemoteSyncAt = userId == null ? null : DateTime.now();
+  }
+
+  @visibleForTesting
+  static void debugSyncCacheToUser(String? userId) =>
+      _syncCacheToCurrentUser(userId);
+
+  @visibleForTesting
+  static String? get debugCustomSystemPrompt => _customSystemPrompt;
+
+  @visibleForTesting
+  static bool? get debugAutoGenerateTitlesEnabled => _autoGenerateTitlesEnabled;
+
+  @visibleForTesting
+  static String settingsKeyForUser(String userId) => _settingsKey(userId);
+
+  @visibleForTesting
+  static String systemPromptKeyForUser(String userId) =>
+      _systemPromptKey(userId);
+
+  @visibleForTesting
+  static const String legacySettingsKey = _legacySettingsKey;
+
+  @visibleForTesting
+  static const String legacySystemPromptKey = _legacySystemPromptKey;
+
+  @visibleForTesting
+  static Future<void> debugDropLegacyKeys(SharedPreferences prefs) =>
+      _dropLegacyKeys(prefs);
 }
