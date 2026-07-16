@@ -45,7 +45,21 @@ class Skill {
     this.metadata = const {},
     this.allowedTools = const [],
     this.source = SkillSource.builtin,
-  });
+    this.id,
+  }) : assert(
+         source == SkillSource.user || id == null,
+         'Only user skills have a storage identity; a built-in with a row id '
+         'is a bug in whatever constructed it.',
+       );
+
+  /// Supabase row id, for [SkillSource.user] skills only — null for built-ins,
+  /// which have no storage identity.
+  ///
+  /// This is NOT the identifier the model uses; that is [name]. It exists
+  /// because an edit or a delete has to address a row, and [name] cannot: it
+  /// lives inside the encrypted blob, so the server cannot index or constrain
+  /// it. Name uniqueness is enforced client-side instead.
+  final String? id;
 
   /// Spec: 1-64 chars, `[a-z0-9-]` only, no leading/trailing/double hyphen.
   /// Must equal the containing directory name.
@@ -102,6 +116,28 @@ class Skill {
   /// `metadata.version`, or null. There is no top-level `version` in the spec.
   String? get version => metadata['version'];
 
+  bool get isBuiltin => source == SkillSource.builtin;
+
+  /// Returns a copy with a different storage identity.
+  ///
+  /// Moving a skill back to [SkillSource.builtin] drops the row id rather than
+  /// carrying it over: a built-in has no row to address, and keeping a stale id
+  /// would let an edit or a delete target someone's stored skill.
+  Skill copyWith({String? id, SkillSource? source}) {
+    final nextSource = source ?? this.source;
+    return Skill(
+      name: name,
+      description: description,
+      body: body,
+      license: license,
+      compatibility: compatibility,
+      metadata: metadata,
+      allowedTools: allowedTools,
+      source: nextSource,
+      id: nextSource == SkillSource.builtin ? null : (id ?? this.id),
+    );
+  }
+
   @override
   String toString() => 'Skill($name, ${body.length} body chars)';
 
@@ -116,7 +152,8 @@ class Skill {
           other.compatibility == compatibility &&
           _mapEquals(other.metadata, metadata) &&
           _listEquals(other.allowedTools, allowedTools) &&
-          other.source == source;
+          other.source == source &&
+          other.id == id;
 
   @override
   int get hashCode => Object.hash(
@@ -128,6 +165,7 @@ class Skill {
     Object.hashAllUnordered(metadata.entries.map((e) => '${e.key}=${e.value}')),
     Object.hashAll(allowedTools),
     source,
+    id,
   );
 }
 
