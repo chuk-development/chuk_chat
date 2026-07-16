@@ -751,6 +751,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
+                    mode: _mode,
+                    onModeChanged: (m) => setState(() => _mode = m),
                   ),
                 ),
               ),
@@ -787,9 +789,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
           ),
 
-          // CoWork mode switcher — top-left, just right of the hamburger.
-          // Shown only when the sidebar is collapsed (mirrors the mini-rail),
-          // to avoid overlapping the expanded sidebar. Same app, runtime mode.
+          // CoWork mode switcher — collapsed-sidebar fallback only. When the
+          // sidebar is open the switcher lives inside it, under the New chat
+          // row; here it sits next to the hamburger so the mini-rail keeps
+          // access to it. Same app, runtime mode.
           if (kFeatureCoWork && !_isSidebarExpanded)
             Positioned(
               top: kTopInitialSpacing + 3,

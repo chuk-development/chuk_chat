@@ -27,7 +27,6 @@ import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
-import 'package:chuk_chat/widgets/skill_picker.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/widgets/reasoning_segment_button.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -182,32 +181,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
-
-  /// Skills the user attached to the next message via the composer's picker.
-  ///
-  /// Cleared on send: the pick applies to the message it was made on. The
-  /// skill itself then stays active for the conversation, because forcing it
-  /// runs the same activation path as the model loading it via `skill`.
-  List<String> _pendingSkillNames = const [];
-
-  /// Skills belonging to a message that was queued while the AI was still
-  /// streaming. Snapshotted at queue time and held here, mirroring
-  /// [_pendingMessageText]: without this the chips stay editable and the
-  /// already-queued message would fire with whatever the user picked after
-  /// queueing it.
-  List<String> _queuedSkillNames = const [];
-
-  /// Takes the composer's attached skills and clears the chips.
-  List<String> _consumePendingSkills() {
-    if (_pendingSkillNames.isEmpty) return const [];
-    final names = _pendingSkillNames;
-    if (mounted) {
-      setState(() => _pendingSkillNames = const []);
-    } else {
-      _pendingSkillNames = const [];
-    }
-    return names;
-  }
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
@@ -2002,17 +1975,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       setState(() {
         _pendingMessageText = null;
         if (restore) {
-          _pendingSkillNames = _queuedSkillNames;
           _controller.text = pending;
           _controller.selection = TextSelection.collapsed(
             offset: pending.length,
           );
         }
-        _queuedSkillNames = const [];
       });
     } else {
       _pendingMessageText = null;
-      _queuedSkillNames = const [];
     }
   }
 
@@ -2030,8 +2000,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     setState(() {
       _pendingMessageText = null;
-      _pendingSkillNames = _queuedSkillNames;
-      _queuedSkillNames = const [];
       _controller.text = pending;
       _controller.selection = TextSelection.collapsed(offset: pending.length);
     });
@@ -2056,13 +2024,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (mounted) {
           setState(() {
             _pendingMessageText = text;
-            _queuedSkillNames = _pendingSkillNames;
-            _pendingSkillNames = const [];
           });
         } else {
           _pendingMessageText = text;
-          _queuedSkillNames = _pendingSkillNames;
-          _pendingSkillNames = const [];
         }
         _controller.clear();
         if (kDebugMode) {
@@ -2453,8 +2417,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
-    // Consumed before the await so the chips clear as the message leaves.
-    final forcedSkills = _consumePendingSkills();
     await _streamingHandler.sendMessage(
       userInput: originalUserInput,
       attachedFiles: attachedFilesForApi,
@@ -2474,7 +2436,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
       reasoningEffort: _reasoningEnabled ? null : 'none',
-      forcedSkillNames: forcedSkills,
     );
   }
 
@@ -3771,13 +3732,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   ),
                 ),
               ),
-              if (kFeatureSkills)
-                SkillPickerButton(
-                  selected: _pendingSkillNames,
-                  onChanged: (names) =>
-                      setState(() => _pendingSkillNames = names),
-                  iconColor: iconFg,
-                ),
               if (_showFullscreenButton)
                 GestureDetector(
                   onTap: _openFullscreenEditor,
@@ -3992,16 +3946,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               files: _fileHandler.attachedFiles,
               onRemove: _removeComposerAttachment,
             ),
-          ),
-        // Skills attached to the next message. Above the box, where mobile
-        // already puts its attachment previews.
-        if (kFeatureSkills)
-          SkillChipsRow(
-            selected: _pendingSkillNames,
-            onRemove: (name) => setState(() {
-              _pendingSkillNames = [..._pendingSkillNames]..remove(name);
-            }),
-            iconColor: iconFg,
           ),
         Container(
           constraints: const BoxConstraints(minHeight: kComposerMinHeight),

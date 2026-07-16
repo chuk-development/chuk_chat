@@ -35,9 +35,6 @@ const Map<String, String> stringsDe = {
       'description. Halt die Beschreibung kurz — sie kostet in jeder '
       'Nachricht. Optional: allowed-tools, license, compatibility, metadata.',
   'skillSaveFailed': 'Skill konnte nicht gespeichert werden',
-  'skillPickerTitle': 'Skill laden',
-  'skillPickerEmpty': 'Keine Skills verfügbar',
-  'skillRemove': 'Skill entfernen',
   'developerOptions': 'Entwickleroptionen',
   'developerOptionsSubtitle': 'Diagnose-Logs und Debug-Werkzeuge',
   'modelSelection': 'Modellauswahl',

@@ -7,7 +7,6 @@ import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
-import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
@@ -582,12 +581,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     padding: const EdgeInsets.only(left: 4.0),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: kFeatureCoWork
-                          ? CoWorkModeSwitcher(
-                              mode: _mode,
-                              onChanged: (m) => setState(() => _mode = m),
-                            )
-                          : BrandWordmark(color: iconFg),
+                      // The CoWork switcher used to replace the wordmark here.
+                      // It now lives in the sidebar under the New chat pill,
+                      // so the app bar keeps the brand.
+                      child: BrandWordmark(color: iconFg),
                     ),
                   ),
                 ),
@@ -711,6 +708,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     onChatDeleted: _handleChatDeleted,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: true,
+                    mode: _mode,
+                    onModeChanged: (m) => setState(() => _mode = m),
                   ),
                 ),
               ),

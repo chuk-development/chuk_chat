@@ -93,9 +93,6 @@ class AppLocalizations {
       _get('skillDeleteBody').replaceAll('{name}', name);
   String get skillEditorHint => _get('skillEditorHint');
   String get skillSaveFailed => _get('skillSaveFailed');
-  String get skillPickerTitle => _get('skillPickerTitle');
-  String get skillPickerEmpty => _get('skillPickerEmpty');
-  String get skillRemove => _get('skillRemove');
   String get developerOptions => _get('developerOptions');
   String get developerOptionsSubtitle => _get('developerOptionsSubtitle');
   String get modelSelection => _get('modelSelection');
