@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
+import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -51,6 +53,13 @@ class ToolLoopSession {
 
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
+
+  /// Skills activated via the `skill` tool, oldest first. Their bodies are
+  /// injected under `## ACTIVE SKILL` on every system prompt rebuild for the
+  /// rest of the conversation. Ordered (not a Set) so eviction can drop the
+  /// least-recently activated one.
+  final List<String> activeSkillNames = [];
+
   final List<ToolCall> toolCalls = [];
 
   /// Content blocks produced as side-effects of tool calls in this loop
@@ -319,9 +328,19 @@ class ToolCallHandler {
     'calculate',
     'generate_image',
     'fetch_image',
+    // `skill` returns an acknowledgement, not facts. Without this entry a
+    // turn whose only tool call was `skill()` would trigger a full [VERIFY]
+    // round-trip that fact-checks an ack against nothing.
+    'skill',
   };
 
   static const int _maxDiscoveryContexts = 200;
+
+  /// Ceiling on skills active in one chat. Every active skill's body is
+  /// re-injected into the system prompt each round, and the tool protocol is
+  /// invisible to `_calculateTokenLimits`, so this bounds the worst case.
+  /// Activating a fourth skill evicts the least-recently activated one.
+  static const int _maxActiveSkillsPerChat = 3;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};
 
@@ -373,7 +392,10 @@ class ToolCallHandler {
       skipIdentity: skipIdentity,
     );
 
-    if (toolCallingEnabled && discoveryMode) {
+    // Not gated on discoveryMode: skills must survive across user turns even
+    // when tool discovery is switched off, and the restore is a no-op when
+    // there is nothing stored.
+    if (toolCallingEnabled) {
       _restoreDiscoveryContext(session);
     }
 
@@ -397,6 +419,7 @@ class ToolCallHandler {
       isToolResult: false,
       discoveryMode: session.discoveryMode,
       discoveredTools: session.discoveredTools,
+      activeSkillNames: session.activeSkillNames,
       skipIdentity: session.skipIdentity,
       modelId: session.modelId,
     );
@@ -522,6 +545,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -554,6 +578,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -588,6 +613,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -641,6 +667,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -678,6 +705,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -753,6 +781,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
               modelId: session.modelId,
             ),
@@ -863,6 +892,7 @@ class ToolCallHandler {
             isToolResult: true,
             discoveryMode: session.discoveryMode,
             discoveredTools: session.discoveredTools,
+            activeSkillNames: session.activeSkillNames,
             skipIdentity: session.skipIdentity,
             modelId: session.modelId,
           ),
@@ -917,6 +947,9 @@ class ToolCallHandler {
       if (call.name == 'find_tools' && !isError) {
         _updateDiscoveredTools(session, rawResult);
       }
+      if (call.name == 'skill' && !isError) {
+        _updateActiveSkills(session, rawResult);
+      }
 
       uiCall.result = rawResult;
       uiCall.completedAt = DateTime.now();
@@ -954,6 +987,7 @@ class ToolCallHandler {
           isToolResult: true,
           discoveryMode: session.discoveryMode,
           discoveredTools: session.discoveredTools,
+          activeSkillNames: session.activeSkillNames,
           skipIdentity: session.skipIdentity,
           modelId: session.modelId,
         ),
@@ -1105,11 +1139,64 @@ class ToolCallHandler {
     }
   }
 
+  /// Records a skill activation from the `skill` tool's acknowledgement.
+  ///
+  /// Scrapes the `SKILL: <name>` first line, mirroring how
+  /// [_updateDiscoveredTools] scrapes `TOOL: <name>` out of find_tools. The
+  /// marker only appears on success, so an error acknowledgement is ignored
+  /// without needing the executor to flag it.
+  void _updateActiveSkills(ToolLoopSession session, String skillResult) {
+    final match = RegExp(
+      r'^SKILL:\s*(\S+)',
+      multiLine: true,
+    ).firstMatch(skillResult);
+    final name = match?.group(1);
+    if (name == null) return;
+
+    final skill = SkillRegistry.byName(name);
+    if (skill == null) return;
+
+    // Re-activating an already-active skill moves it to most-recent rather
+    // than duplicating it.
+    session.activeSkillNames
+      ..remove(skill.name)
+      ..add(skill.name);
+    while (session.activeSkillNames.length > _maxActiveSkillsPerChat) {
+      session.activeSkillNames.removeAt(0);
+    }
+
+    // `allowed-tools` pre-approves tools: mark them discovered so their full
+    // definitions land in the same prompt rebuild that carries the body.
+    // Filtered against the enabled set — a skill must never resurrect a tool
+    // the user switched off.
+    final enabledToolNames = _toolExecutor.allTools
+        .map((tool) => tool.name)
+        .toSet();
+    var hasNewTool = false;
+    for (final toolName in skill.allowedTools) {
+      if (toolName == 'find_tools') continue;
+      if (!enabledToolNames.contains(toolName)) continue;
+      if (session.discoveredToolNames.add(toolName)) {
+        hasNewTool = true;
+      }
+    }
+    if (hasNewTool) {
+      _refreshDiscoveredToolDefinitions(session);
+    }
+
+    _storeDiscoveryContext(session);
+
+    if (kDebugMode) {
+      debugPrint('[Skills] Active: ${session.activeSkillNames.join(', ')}');
+    }
+  }
+
   Future<String> _buildSystemPrompt({
     required String? baseSystemPrompt,
     required bool isToolResult,
     required bool discoveryMode,
     required List<Map<String, dynamic>> discoveredTools,
+    List<String> activeSkillNames = const [],
     bool skipIdentity = false,
     String? modelId,
   }) async {
@@ -1189,6 +1276,25 @@ class ToolCallHandler {
           .firstOrNull;
     }
 
+    // Skills. The `skill` tool only registers when kFeatureSkills is on, so
+    // its presence is the single source of truth: flag off => no tool, no
+    // catalog, no gating, and a byte-identical prompt.
+    final skillsEnabled = _toolExecutor.allTools.any((t) => t.name == 'skill');
+    Map<String, dynamic>? skillToolDef;
+    List<Skill> skillCatalog = const [];
+    List<Skill> activeSkills = const [];
+    if (skillsEnabled) {
+      skillToolDef = _toolExecutor.allTools
+          .where((t) => t.name == 'skill')
+          .map((t) => t.toJson())
+          .firstOrNull;
+      skillCatalog = SkillRegistry.all;
+      activeSkills = activeSkillNames
+          .map(SkillRegistry.byName)
+          .whereType<Skill>()
+          .toList();
+    }
+
     // When memory is disabled (skipIdentity), exclude the `notes` tool from
     // the prompt's tool list so the assistant can't invoke it to
     // overwrite/delete memory. Identity text injection is already gated above.
@@ -1213,6 +1319,9 @@ class ToolCallHandler {
           projectToolDef: projectToolDef,
           artifactToolDef: artifactToolDef,
           artifactSchemaToolDef: artifactSchemaToolDef,
+          skillToolDef: skillToolDef,
+          skillCatalog: skillCatalog,
+          activeSkills: activeSkills,
           includeMapVisualOutput: _toolExecutor.mapVisualOutputEnabled,
           includeChartVisualOutput: _toolExecutor.chartVisualOutputEnabled,
         )
@@ -1373,7 +1482,6 @@ class ToolCallHandler {
   static bool looksLikeDeferredActionWithoutToolCall(String content) =>
       _looksLikeDeferredActionWithoutToolCall(content);
 
-
   static bool _looksLikeDeferredActionWithoutToolCall(String content) {
     final text = content.trim();
     if (text.isEmpty || text.length > 280) {
@@ -1428,12 +1536,20 @@ class ToolCallHandler {
     }
 
     final stored = _discoveryContextStates[contextKey];
-    if (stored == null || stored.discoveredToolNames.isEmpty) {
+    // Check both collections: a skill with no `allowed-tools` — the common
+    // case — leaves discoveredToolNames empty, and an early return on that
+    // alone would silently drop the activation.
+    if (stored == null ||
+        (stored.discoveredToolNames.isEmpty &&
+            stored.activeSkillNames.isEmpty)) {
       return;
     }
 
     stored.lastUsedAt = DateTime.now();
     session.discoveredToolNames.addAll(stored.discoveredToolNames);
+    session.activeSkillNames
+      ..clear()
+      ..addAll(stored.activeSkillNames);
     _refreshDiscoveredToolDefinitions(session);
   }
 
@@ -1442,7 +1558,8 @@ class ToolCallHandler {
     if (contextKey == null || contextKey.isEmpty) {
       return;
     }
-    if (session.discoveredToolNames.isEmpty) {
+    if (session.discoveredToolNames.isEmpty &&
+        session.activeSkillNames.isEmpty) {
       return;
     }
 
@@ -1454,6 +1571,9 @@ class ToolCallHandler {
     state.discoveredToolNames
       ..clear()
       ..addAll(session.discoveredToolNames);
+    state.activeSkillNames
+      ..clear()
+      ..addAll(session.activeSkillNames);
 
     _pruneDiscoveryContextsIfNeeded();
   }
@@ -1488,9 +1608,17 @@ class ToolCallHandler {
   }
 }
 
+/// Per-chat context that survives across user turns (in memory only — it does
+/// not survive an app restart, and neither does tool discovery).
+///
+/// Skills live here rather than in a parallel map on purpose: a skill's
+/// `allowed-tools` marks tools as discovered, so the two are coupled. Two LRU
+/// maps would evict independently and leave a skill active whose tools had
+/// been forgotten.
 class _DiscoveryContextState {
   _DiscoveryContextState();
 
   DateTime lastUsedAt = DateTime.now();
   final Set<String> discoveredToolNames = <String>{};
+  final List<String> activeSkillNames = <String>[];
 }

@@ -30,9 +30,14 @@ class ToolEnforcer {
   /// Tools discovered via find_tools (names only). Updated externally.
   Set<String> discoveredToolNames = {};
 
-  /// Tools that bypass discovery (always available without find_tools).
-  /// Populated by the handler based on prompt configuration.
-  Set<String> _alwaysAllowedTools = const {
+  /// Tools that always bypass discovery, regardless of prompt configuration.
+  ///
+  /// Single source of truth. This list used to be spelled out three times —
+  /// here, in the [alwaysAllowedTools] setter and in [reset] — and the setter
+  /// is only invoked conditionally (`createSession` calls it just when a
+  /// bypass set is non-empty), so forgetting one copy produced a rejection
+  /// that reproduced only in some sessions.
+  static const Set<String> _kBaseAlwaysAllowedTools = {
     'notes',
     'ask_user',
     'web_search',
@@ -53,30 +58,21 @@ class ToolEnforcer {
     // typst_compile is the documented follow-up for artifact_schema
     // type="typst"; gating it behind find_tools wastes a pass.
     'typst_compile',
+    // `skill` must be callable on the FIRST attempt. Soft discovery would
+    // auto-allow it on a retry, but the first call is the one that matters.
+    'skill',
   };
+
+  /// Tools that bypass discovery (always available without find_tools).
+  /// Populated by the handler based on prompt configuration.
+  Set<String> _alwaysAllowedTools = _kBaseAlwaysAllowedTools;
 
   ToolEnforcer({this.maxIterations = 100});
 
   /// Set the tools that bypass discovery mode (always callable).
+  /// Additive: the base set above is always included.
   set alwaysAllowedTools(Set<String> tools) {
-    _alwaysAllowedTools = {
-      'notes',
-      'ask_user',
-      'web_search',
-      'web_crawl',
-      'generate_image',
-      'fetch_image',
-      'view_chat_images',
-      'search_places',
-      'search_restaurants',
-      'geocode',
-      'get_route',
-      'weather',
-      'artifact_schema',
-      'artifact_manager',
-      'typst_compile',
-      ...tools,
-    };
+    _alwaysAllowedTools = {..._kBaseAlwaysAllowedTools, ...tools};
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -114,23 +110,7 @@ class ToolEnforcer {
     _toolSchemas = {};
     discoveryMode = false;
     discoveredToolNames = {};
-    _alwaysAllowedTools = const {
-      'notes',
-      'ask_user',
-      'web_search',
-      'web_crawl',
-      'generate_image',
-      'fetch_image',
-      'view_chat_images',
-      'search_places',
-      'search_restaurants',
-      'geocode',
-      'get_route',
-      'weather',
-      'artifact_schema',
-      'artifact_manager',
-      'typst_compile',
-    };
+    _alwaysAllowedTools = _kBaseAlwaysAllowedTools;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
@@ -87,6 +88,10 @@ class ToolExecutor {
     'notes',
     'generate_qr',
     'ask_user',
+    // Unconditional despite kFeatureSkills: this set asserts "an executor
+    // exists for this name", it is not a feature gate. registerTool() throws
+    // if a registered tool is missing here. Gating happens in tool_registry.
+    'skill',
     'web_search',
     'web_crawl',
     'generate_image',
@@ -771,6 +776,8 @@ class ToolExecutor {
         return _wrapOutput(await _executeArtifactManager(args));
       case 'artifact_schema':
         return _wrapOutput(_executeArtifactSchema(args));
+      case 'skill':
+        return _wrapOutput(_executeSkill(args));
       case 'update_project':
         return _wrapOutput(await _executeUpdateProject(args));
 
@@ -779,9 +786,10 @@ class ToolExecutor {
         return _wrapOutput(
           await sandbox_tools.executeCodeRun(
             accessToken: accessToken,
-            chatId: currentChatId
-                ?? ChatStorageService.selectedChatId
-                ?? ChatStorageService.activeMessageChatId,
+            chatId:
+                currentChatId ??
+                ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
             args: args,
           ),
         );
@@ -789,9 +797,10 @@ class ToolExecutor {
         return _wrapOutput(
           await sandbox_tools.executeSandboxListFiles(
             accessToken: accessToken,
-            chatId: currentChatId
-                ?? ChatStorageService.selectedChatId
-                ?? ChatStorageService.activeMessageChatId,
+            chatId:
+                currentChatId ??
+                ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
             args: args,
           ),
         );
@@ -799,9 +808,10 @@ class ToolExecutor {
         return _wrapOutput(
           await sandbox_tools.executeSandboxReadFile(
             accessToken: accessToken,
-            chatId: currentChatId
-                ?? ChatStorageService.selectedChatId
-                ?? ChatStorageService.activeMessageChatId,
+            chatId:
+                currentChatId ??
+                ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
             args: args,
           ),
         );
@@ -809,9 +819,10 @@ class ToolExecutor {
         return _wrapOutput(
           await sandbox_tools.executeSandboxWriteFile(
             accessToken: accessToken,
-            chatId: currentChatId
-                ?? ChatStorageService.selectedChatId
-                ?? ChatStorageService.activeMessageChatId,
+            chatId:
+                currentChatId ??
+                ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
             args: args,
           ),
         );
@@ -819,9 +830,10 @@ class ToolExecutor {
         return _wrapOutput(
           await sandbox_tools.executeSandboxReset(
             accessToken: accessToken,
-            chatId: currentChatId
-                ?? ChatStorageService.selectedChatId
-                ?? ChatStorageService.activeMessageChatId,
+            chatId:
+                currentChatId ??
+                ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
             args: args,
           ),
         );
@@ -832,9 +844,10 @@ class ToolExecutor {
       case 'send_file_to_user':
         return sandbox_tools.executeSandboxSendFileToUser(
           accessToken: accessToken,
-          chatId: currentChatId
-              ?? ChatStorageService.selectedChatId
-              ?? ChatStorageService.activeMessageChatId,
+          chatId:
+              currentChatId ??
+              ChatStorageService.selectedChatId ??
+              ChatStorageService.activeMessageChatId,
           args: args,
         );
 
@@ -1105,6 +1118,63 @@ class ToolExecutor {
         return 'Error: Unknown artifact type "$type". Supported: '
             'excalidraw, technical_drawing, typst, mermaid, svg.';
     }
+  }
+
+  /// Activates a skill.
+  ///
+  /// Deliberately returns a short acknowledgement rather than the skill body.
+  /// The body is injected into the NEXT system prompt rebuild (which the tool
+  /// loop performs every round anyway) under `## ACTIVE SKILL`. Returning it
+  /// here instead would look simpler but is broken: tool results are truncated
+  /// to 4000 chars when they are replayed into the next user turn
+  /// (`tool_history_formatter.dart`), so a skill would silently lose most of
+  /// itself as soon as the user sent another message.
+  ///
+  /// This mirrors `find_tools`, which also returns names and lets the prompt
+  /// rebuild carry the full payload.
+  String _executeSkill(Map<String, dynamic> args) {
+    final requested = (args['name'] as String? ?? '').trim();
+    if (requested.isEmpty) {
+      return 'Error: "name" is required. Available skills: '
+          '${SkillRegistry.names.join(', ')}.';
+    }
+
+    final skill = SkillRegistry.byName(requested);
+    if (skill == null) {
+      return 'Error: Unknown skill "$requested". Available skills: '
+          '${SkillRegistry.names.join(', ')}. Use the exact name from the '
+          'SKILLS catalog.';
+    }
+
+    // A skill pre-approves tools; it must never resurrect one the user turned
+    // off. Filtering here keeps disabled tools out of the activation state.
+    final enabled = allTools.map((t) => t.name).toSet();
+    final preApproved = skill.allowedTools
+        .where(enabled.contains)
+        .toList(growable: false);
+
+    final buffer = StringBuffer()
+      // First line is the scrape target, mirroring find_tools' `TOOL: <name>`.
+      ..writeln('SKILL: ${skill.name}')
+      ..writeln(
+        'Loaded. Full instructions are now in your system prompt under '
+        '"## ACTIVE SKILL: ${skill.name}".',
+      )
+      // The CONTINUATION block tells the model to give a final answer once
+      // tool results satisfy the request. After a bare ack a model can read
+      // that as "done" and skip the work the skill describes, so break that
+      // reading explicitly.
+      ..writeln(
+        'This was a SETUP step, not the answer — follow those instructions '
+        'now to complete the user\'s request.',
+      );
+    if (preApproved.isNotEmpty) {
+      buffer.writeln(
+        'Pre-approved tools (call directly, no find_tools): '
+        '${preApproved.join(', ')}',
+      );
+    }
+    return buffer.toString().trimRight();
   }
 
   /// Update the active workspace's instructions, name, or description.

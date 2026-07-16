@@ -3,6 +3,7 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureServerTools,
+        kFeatureSkills,
         kFeatureSpotify,
         kFeatureWhoop,
         kPlatformDesktop,
@@ -42,6 +43,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'notes': ToolCategory.basic,
   'generate_qr': ToolCategory.basic,
   'ask_user': ToolCategory.basic,
+  'skill': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
@@ -235,8 +237,7 @@ final List<ClientTool> builtinTools = [
       'action':
           'string (REQUIRED — one of: "update_memory" | "update_user" | '
           '"update_soul" | "patch_memory" | "patch_user" | "patch_soul")',
-      'content':
-          'string (full replacement text — use with update_* actions)',
+      'content': 'string (full replacement text — use with update_* actions)',
       'edits':
           'list of {old_str, new_str} objects — use with patch_* actions. '
           'Each old_str must appear exactly once in the current content.',
@@ -352,6 +353,24 @@ final List<ClientTool> builtinTools = [
       'bestätigen',
     ],
   ),
+  ClientTool(
+    name: 'skill',
+    description:
+        'Load a skill. Its full instructions are added to your system '
+        'prompt under "## ACTIVE SKILL" and stay there for the rest of the '
+        'conversation. Call this BEFORE doing the work the skill describes '
+        '— loading is cheap, guessing the format is not. Valid names come '
+        'from the SKILLS catalog; never invent one.',
+    parameters: {
+      'name':
+          'string (required: exact skill name from the SKILLS catalog, '
+          'e.g. "weather-cards")',
+    },
+    type: ToolType.builtin,
+    // No tags on purpose: `skill` bypasses discovery and is always shown in
+    // full, so it must never be a find_tools search hit.
+    tags: [],
+  ),
 
   // -- Web --
   ClientTool(
@@ -401,8 +420,7 @@ final List<ClientTool> builtinTools = [
       'safesearch':
           'string (optional: "off", "moderate" (web default) or "strict" '
           '(images default))',
-      'units':
-          'string (optional, web: "metric" or "imperial")',
+      'units': 'string (optional, web: "metric" or "imperial")',
       'spellcheck':
           'bool (optional, web: run spell correction on the query, default true)',
       'goggles_id':
@@ -494,8 +512,7 @@ final List<ClientTool> builtinTools = [
         'be seen by the operator, and is NOT end-to-end encrypted like chat '
         'messages.',
     parameters: {
-      'model':
-          'string (required: turbo | hunyuan | flux | ideogram | edit)',
+      'model': 'string (required: turbo | hunyuan | flux | ideogram | edit)',
       'prompt':
           'string (required: descriptive image prompt, or edit instruction '
           'when model=edit)',
@@ -1163,7 +1180,8 @@ final List<ClientTool> builtinTools = [
       'action': 'string (required: create | update | rewrite)',
       'artifact_id':
           'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens only. Bad: "doc", "test", "output". Good: "quantum-mechanics-intro", "invoice-acme-2026-04")',
-      'title': 'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
+      'title':
+          'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
       'type':
           'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing|excalidraw). '
           'For excalidraw|technical_drawing|typst|mermaid|svg call artifact_schema(type) FIRST to get the precise content shape.',
@@ -1260,11 +1278,11 @@ final List<ClientTool> builtinTools = [
         '(`#set par(leading: 0.55em)`), or trim filler. Reuse the same '
         '`artifact_id` so the version updates in place.',
     parameters: {
-      'source':
-          'string (required: full Typst document source, max ~256KB)',
+      'source': 'string (required: full Typst document source, max ~256KB)',
       'artifact_id':
           'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens. Bad: "pdf", "test", "document". Good: "invoice-2026-04", "lecture-notes-linalg")',
-      'title': 'string (optional: human-readable title describing the CONTENT, not the format)',
+      'title':
+          'string (optional: human-readable title describing the CONTENT, not the format)',
       'message_id':
           'string (optional: associate artifact with a specific message)',
     },
@@ -1437,8 +1455,15 @@ final List<ClientTool> builtinTools = [
     },
     type: ToolType.builtin,
     tags: [
-      'sandbox', 'send', 'attach', 'attachment', 'download', 'share',
-      'file', 'deliver', 'artifact',
+      'sandbox',
+      'send',
+      'attach',
+      'attachment',
+      'download',
+      'share',
+      'file',
+      'deliver',
+      'artifact',
     ],
   ),
 ];
@@ -1463,6 +1488,11 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
+    // Skills: when off, the tool never registers, so the prompt never emits
+    // the catalog and the feature costs exactly zero tokens.
+    if (!kFeatureSkills && tool.name == 'skill') {
       continue;
     }
     // Spotify / WHOOP: integration removed. Tool definitions stay in the
