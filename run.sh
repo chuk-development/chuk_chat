@@ -391,27 +391,96 @@ configure_android_local_api_access "$DEVICE"
 BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY --dart-define=BUILD_TIMESTAMP=$BUILD_TIMESTAMP"
 
-# Override the local API server URL (debug builds use http://localhost:8000 by default).
+# Point debug builds at the production API instead of the local dev server.
+# Debug builds default to http://localhost:8000; PRODUCTION_API_URL overrides
+# that (it sits at the top of the resolution order in api_config_base.dart).
+# Override with PRODUCTION_API_URL in .env or the shell to target a different
+# backend (set it empty to fall back to the local dev server):
+#   PRODUCTION_API_URL=  ./run.sh linux       # use http://localhost:8000
+PRODUCTION_API_URL="${PRODUCTION_API_URL-https://api.chuk.chat}"
+if [ -n "$PRODUCTION_API_URL" ]; then
+  DART_DEFINES="$DART_DEFINES --dart-define=PRODUCTION_API_URL=$PRODUCTION_API_URL"
+fi
+
+# Override the local API server URL (only used when PRODUCTION_API_URL is empty).
 # Set LOCAL_API_URL in .env or export it to change:
 #   LOCAL_API_URL=http://192.168.1.10:8000  ./run.sh linux
 if [ -n "$LOCAL_API_URL" ]; then
   DART_DEFINES="$DART_DEFINES --dart-define=LOCAL_API_URL=$LOCAL_API_URL"
 fi
 
-# Add any additional dart-defines for features
-if [ -n "$FEATURE_PROJECTS" ]; then
-  DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_PROJECTS=$FEATURE_PROJECTS"
-fi
-if [ -n "$FEATURE_IMAGE_GEN" ]; then
-  DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_IMAGE_GEN=$FEATURE_IMAGE_GEN"
-fi
-if [ -n "$FEATURE_VOICE_MODE" ]; then
-  DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_VOICE_MODE=$FEATURE_VOICE_MODE"
-fi
-if [ -n "$FEATURE_SERVER_TOOLS" ]; then
-  DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_SERVER_TOOLS=$FEATURE_SERVER_TOOLS"
-fi
+# ── Feature flags ────────────────────────────────────────────────────────
+# run.sh is the dev entry point: flags are ON here regardless of the
+# production defaults in lib/platform_config.dart.
+#
+# Override any of them from .env or the shell, e.g.:
+#   FEATURE_SKILLS=false ./run.sh linux
+#
+# NOTE: FEATURE_PROJECTS used to be passed here and is a no-op — nothing in
+# lib/ reads it. The flag that exists is FEATURE_WORKSPACES.
+
+# On by default.
+FEATURE_VOICE_MODE="${FEATURE_VOICE_MODE:-true}"
+FEATURE_WORKSPACES="${FEATURE_WORKSPACES:-true}"
+FEATURE_ARTIFACTS="${FEATURE_ARTIFACTS:-true}"
+FEATURE_SERVER_TOOLS="${FEATURE_SERVER_TOOLS:-true}"
+FEATURE_SKILLS="${FEATURE_SKILLS:-true}"
+FEATURE_PAYMENTS_DIRECT="${FEATURE_PAYMENTS_DIRECT:-true}"
+
+# On, but NOT a working feature yet: today this only reveals the mode switcher
+# and an M0 "coming soon" placeholder (lib/platform_specific/cowork/ is 64
+# lines). It is on so the surface is visible while it gets built out — see
+# docs/COWORK_EXECUTION_PLAN.md. Turn it off if the dead screen is in the way.
+FEATURE_COWORK="${FEATURE_COWORK:-true}"
+
+# Off by default on purpose — turning these on makes the app worse, not
+# more complete. Set them explicitly if you actually want them:
+#   FEATURE_LINUX_KEYRING  costs 10s+ of startup stall on every single run
+#   FEATURE_SPOTIFY        the API server no longer exposes its OAuth route,
+#                          so the tool registers and then fails at call time
+#   FEATURE_WHOOP          same — the integration was removed server-side
+# A registered-but-broken tool is worse than an absent one: the model reaches
+# for it and the turn dies.
+FEATURE_LINUX_KEYRING="${FEATURE_LINUX_KEYRING:-false}"
+FEATURE_SPOTIFY="${FEATURE_SPOTIFY:-false}"
+FEATURE_WHOOP="${FEATURE_WHOOP:-false}"
+
+# Desktop-only; the tray plugin has nothing to attach to on Android/iOS.
+case "$TARGET" in
+  android*|ios*)
+    FEATURE_SYSTEM_TRAY="${FEATURE_SYSTEM_TRAY:-false}"
+    ;;
+  *)
+    FEATURE_SYSTEM_TRAY="${FEATURE_SYSTEM_TRAY:-true}"
+    ;;
+esac
+
+# One list, used for both the defines and the startup log — two lists drift,
+# and a log that disagrees with what was actually passed is worse than none.
+ALL_FEATURE_FLAGS=(
+  FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
+  FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK
+  FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
+  FEATURE_LINUX_KEYRING FEATURE_SPOTIFY FEATURE_WHOOP
+)
+
+for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
+  DART_DEFINES="$DART_DEFINES --dart-define=$_flag=${!_flag}"
+done
+
+# PLATFORM_MOBILE / PLATFORM_DESKTOP are deliberately not set: with neither
+# defined, kAutoDetectPlatform picks the right layout from the runtime device.
+# Setting one here would force the wrong UI on the other target.
+
+# FEATURE_IMAGE_GEN and FEATURE_MEDIA_MANAGER are hardcoded true in
+# platform_config.dart — no define to pass.
 
 # Run Flutter
 echo "Running flutter in debug mode with device: $DEVICE"
+echo "Features on:  $(for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
+  [ "${!_flag}" = "true" ] && printf '%s ' "${_flag#FEATURE_}"
+done)"
+echo "Features off: $(for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
+  [ "${!_flag}" != "true" ] && printf '%s ' "${_flag#FEATURE_}"
+done)"
 flutter run -d "$DEVICE" $DART_DEFINES

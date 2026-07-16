@@ -2,6 +2,20 @@
 
 **chuk_chat** — Cross-platform Flutter chat app with E2E encryption, Supabase backend, AI chat.
 
+## ▶ Active plan: CoWork
+
+**`docs/COWORK_EXECUTION_PLAN.md`** is the live, ordered build plan for CoWork
+(phone drives an agent running on the user's own laptop).
+
+When the user says **"führe den CoWork-Plan aus"** — read that file, take the
+first milestone whose box is unchecked, and dispatch the subagents listed under
+it. It carries the verified state of the world, the per-milestone subagent
+breakdown, and the traps. **One milestone per session**, ending in green tests,
+a clean CodeRabbit and a commit — then tick the box.
+
+`docs/COWORK_BUILD_PLAN.md` stays the architectural reference (system diagram,
+threat model, decisions). The execution plan is the order of work.
+
 ## Workflow Rules
 
 **After completing any task, ALWAYS do this in order:**
@@ -87,14 +101,30 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 
 | Flag | Default | Notes |
 |------|---------|-------|
-| `PLATFORM_MOBILE` | `false` | Mobile UI layout (set `true` for Android) |
-| `FEATURE_PROJECTS` | `false` | Project workspaces |
-| `FEATURE_VOICE_MODE` | `false` | Voice mode button |
+| `PLATFORM_MOBILE` | `false` | Mobile UI layout (set `true` for Android). Leave BOTH platform flags unset to let `kAutoDetectPlatform` pick from the device |
+| `PLATFORM_DESKTOP` | `false` | Desktop UI layout |
+| `FEATURE_WORKSPACES` | **`true`** | Workspaces (custom AI personas + files + memory) |
+| `FEATURE_ARTIFACTS` | **`true`** | Editable code/markdown/HTML/drawing panels |
+| `FEATURE_PAYMENTS_DIRECT` | **`true`** | Stripe. MUST be false for Play Store builds |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
+| `FEATURE_MEDIA_MANAGER` | **always on** | Hardcoded, no flag needed |
+| `FEATURE_VOICE_MODE` | `false` | Voice mode button |
 | `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
-| `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
-| `FEATURE_SYSTEM_TRAY` | `false` | System tray integration on desktop |
 | `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
+| `FEATURE_COWORK` | `false` | Chat↔CoWork switcher (M0 placeholder) |
+| `FEATURE_SYSTEM_TRAY` | `false` | System tray on desktop. **Also suppresses `window_close_service`** — with it on, closing the window minimises to tray instead of quitting |
+| `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
+| `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
+| `FEATURE_WHOOP` | `false` | Leave off — integration removed server-side, same failure |
+
+**There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
+`FEATURE_WORKSPACES`, and it already defaults to `true`. `build.sh`,
+`codemagic.yaml` and `AGENTS.md` still pass `--dart-define=FEATURE_PROJECTS=…`,
+which does nothing.
+
+`./run.sh` turns on everything that works (skills, cowork, voice, server tools,
+tray) and deliberately leaves the three broken/costly ones off. Override any of
+them per-run: `FEATURE_SKILLS=false ./run.sh linux`.
 
 ## Agent Skills
 
