@@ -1,3 +1,5 @@
+import 'package:chuk_chat/models/skill.dart';
+
 /// Builds system prompts with tool calling protocol for LLM.
 ///
 /// This is used by the tool call handler to inject tool definitions
@@ -10,6 +12,20 @@ class ToolPromptBuilder {
   bool discoveryMode;
 
   ToolPromptBuilder({this.discoveryMode = true});
+
+  /// Names of the skills in the catalog for the prompt currently being built.
+  ///
+  /// Several protocol blocks below have been migrated into skills. When the
+  /// skill that replaces a block is in the catalog, the block is omitted and
+  /// the model loads it on demand instead — that is the whole point of the
+  /// feature, and it is what makes the catalog pay for itself. Keyed by skill
+  /// name so adding or removing a skill needs no change here.
+  Set<String> _catalogSkillNames = const {};
+
+  /// True when [skillName] is available, i.e. the protocol block it replaces
+  /// should not be inlined into the prompt.
+  bool _migratedToSkill(String skillName) =>
+      _catalogSkillNames.contains(skillName);
 
   /// Build the tool protocol section to append to the existing system prompt.
   ///
@@ -38,10 +54,14 @@ class ToolPromptBuilder {
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
     Map<String, dynamic>? artifactSchemaToolDef,
+    Map<String, dynamic>? skillToolDef,
+    List<Skill> skillCatalog = const [],
+    List<Skill> activeSkills = const [],
     List<Map<String, dynamic>> extraAlwaysAvailableTools = const [],
     bool includeMapVisualOutput = true,
     bool includeChartVisualOutput = true,
   }) {
+    _catalogSkillNames = skillCatalog.map((s) => s.name).toSet();
     final buffer = StringBuffer();
 
     // Current date
@@ -109,6 +129,9 @@ class ToolPromptBuilder {
       }
       if (artifactSchemaToolDef != null) {
         alwaysAvailableTools.add(artifactSchemaToolDef);
+      }
+      if (skillToolDef != null) {
+        alwaysAvailableTools.add(skillToolDef);
       }
       if (extraAlwaysAvailableTools.isNotEmpty) {
         alwaysAvailableTools.addAll(extraAlwaysAvailableTools);
@@ -212,6 +235,17 @@ class ToolPromptBuilder {
       }
     }
 
+    // Skills, emitted once after the three-branch dispatch above rather than
+    // inside each branch. Catalog first (level 1: name + description), then
+    // the bodies of whatever is active (level 2) — last, so they sit closest
+    // to the model's answer.
+    if (skillCatalog.isNotEmpty) {
+      buffer.writeln(_buildSkillsCatalog(skillCatalog));
+    }
+    for (final skill in activeSkills) {
+      buffer.writeln(_buildActiveSkillSection(skill));
+    }
+
     // After tool results come back the model is prompted again to continue.
     // Without guidance it re-runs the full discovery protocol and narrates the
     // plan a second time ("I'll generate…" → tool runs → "Done, shown above"),
@@ -233,6 +267,55 @@ class ToolPromptBuilder {
     }
 
     return buffer.toString();
+  }
+
+  /// Level 1 of progressive disclosure: every skill's name + description.
+  ///
+  /// This is the only signal the model has for choosing a skill, and it is
+  /// charged to every prompt — which is why built-in descriptions are capped
+  /// well below the spec's 1024-char ceiling.
+  ///
+  /// The framing has to fight the discovery prompt, which tells the model it
+  /// can see tool names but does NOT know what they do and MUST call
+  /// find_tools first. A catalog that shows names *with* descriptions
+  /// contradicts that, and the model will try `find_tools("weather-cards")`
+  /// or put a skill name in a tool_call. Same failure the visual output tags
+  /// already hit, so use the same fix: say plainly what these are not.
+  String _buildSkillsCatalog(List<Skill> skills) {
+    final buffer = StringBuffer()
+      ..writeln()
+      ..writeln('## SKILLS')
+      ..writeln()
+      ..writeln(
+        'Skills are procedures, not tools. A skill name is NEVER a tool name '
+        '— never put a skill name in the "name" field of a tool_call, and '
+        'never call find_tools for a skill. To load one, call the `skill` '
+        'tool (always available, no find_tools needed):',
+      )
+      ..writeln()
+      ..writeln(toolCallStart)
+      ..writeln(
+        '{"name": "skill", "arguments": {"name": "${skills.first.name}"}}',
+      )
+      ..writeln(toolCallEnd)
+      ..writeln()
+      ..writeln(
+        'Load a skill BEFORE doing the work it describes, not after. Loading '
+        'is cheap; guessing a format is not. The full instructions appear in '
+        'your next system prompt under "## ACTIVE SKILL" and stay there for '
+        'the rest of the conversation. Loading a skill is a SETUP step — it '
+        'is never the answer by itself.',
+      )
+      ..writeln();
+    for (final skill in skills) {
+      buffer.writeln('- ${skill.name}: ${skill.description}');
+    }
+    return buffer.toString();
+  }
+
+  /// Level 2: the body of an activated skill, injected verbatim.
+  String _buildActiveSkillSection(Skill skill) {
+    return '\n## ACTIVE SKILL: ${skill.name}\n\n${skill.body}\n';
   }
 
   /// Build the full identity section: Soul, User, Memory.
@@ -421,6 +504,53 @@ ${discoverableNames.map((n) => '- $n').join('\n')}
 '''
         : '';
 
+    // Migrated to the `deep-research` skill. The unconditional
+    // "OUTDATED KNOWLEDGE / SEARCH THE WEB FIRST" reflex above deliberately
+    // stays — it must fire without loading anything. What moves is the
+    // step-by-step method and the primary-source list.
+    final researchSection = _migratedToSkill('deep-research')
+        ? ''
+        : '''
+RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multiple steps:
+1) Discover relevant tools with find_tools
+2) Use a search-style tool to find relevant sources
+3) Use a page-reading/crawl-style tool on 1-3 of the best results
+4) If coverage is still incomplete, run another discovery/search pass from a different angle
+5) Only then compile your final answer from real tool outputs
+
+FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
+- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
+- GitHub org pages and release pages
+- Official blogs and announcement pages
+If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
+
+''';
+
+    final newsSection = _migratedToSkill('news-cards')
+        ? ''
+        : '''
+NEWS QUERIES:
+- For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or other time-sensitive questions -> call `web_search` with `type: "news"` and the matching `freshness` (pd/pw/pm/py). You get publisher, age and thumbnail without a separate crawl. Follow up with web_crawl only when the user asks for full article detail.
+
+''';
+
+    // Search tuning is covered by both migrated skills; only drop it once
+    // whichever of them the model would reach for is actually available.
+    final searchTuningSection =
+        _migratedToSkill('deep-research') && _migratedToSkill('news-cards')
+        ? ''
+        : '''
+WEB SEARCH TUNING:
+- When the user writes in German or asks about DE-specific facts (prices in EUR, DE laws, local events), pass `country: "DE"` and `search_lang: "de"` to web_search so Brave localizes the SERP.
+- `extra_snippets: true` is the default — read those bullet points before deciding whether you need web_crawl. Only crawl when a single source needs the full article.
+- Use `freshness` for web-mode too, not just news, when recency matters ("latest release notes", "current version").
+
+''';
+
+    final weatherNote = _migratedToSkill('weather-cards')
+        ? '- For weather questions, call the weather tool first, then load the `weather-cards` skill and emit a <weather> block.\n'
+        : '- For weather questions, call the weather tool first, then emit a <weather> block with the structured data so the app renders a nice weather card.\n';
+
     return '''
 ALWAYS respond in the user's language.
 
@@ -451,19 +581,7 @@ The query must be 1-3 SHORT keywords for the TYPE of tool (e.g. "restaurant", "w
 FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls in Markdown code fences.
 NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <web_search>...</web_search>. Only use $toolCallStart...$toolCallEnd.
 
-RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multiple steps:
-1) Discover relevant tools with find_tools
-2) Use a search-style tool to find relevant sources
-3) Use a page-reading/crawl-style tool on 1-3 of the best results
-4) If coverage is still incomplete, run another discovery/search pass from a different angle
-5) Only then compile your final answer from real tool outputs
-
-FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
-- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
-- GitHub org pages and release pages
-- Official blogs and announcement pages
-If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
-
+$researchSection
 After find_tools returns the tool descriptions and parameters, you can use those discovered tools. If no tool is needed, just answer directly.
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
@@ -472,8 +590,7 @@ VISUAL OUTPUT NOTE:
 - Never call find_tools for "chart", "graph", "plot", "map", "email", or "weather".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
 - To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
-- For weather questions, call the weather tool first, then emit a <weather> block with the structured data so the app renders a nice weather card.
-- For render-only pictures in your final answer, emit an <image> block with a URL (no tool call needed for rendering).
+$weatherNote- For render-only pictures in your final answer, emit an <image> block with a URL (no tool call needed for rendering).
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
 REAL PHOTOS vs AI ART — HARD RULE:
@@ -482,14 +599,7 @@ REAL PHOTOS vs AI ART — HARD RULE:
 - NEVER fall back to generate_image just because image search returned nothing useful. Retry web_search with type="images" and a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
 - `fetch_image` is for fetch/store/vision flows (e.g. user asks to attach/store/analyze an image), not for display-only rendering.
 
-NEWS QUERIES:
-- For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or other time-sensitive questions -> call `web_search` with `type: "news"` and the matching `freshness` (pd/pw/pm/py). You get publisher, age and thumbnail without a separate crawl. Follow up with web_crawl only when the user asks for full article detail.
-
-WEB SEARCH TUNING:
-- When the user writes in German or asks about DE-specific facts (prices in EUR, DE laws, local events), pass `country: "DE"` and `search_lang: "de"` to web_search so Brave localizes the SERP.
-- `extra_snippets: true` is the default — read those bullet points before deciding whether you need web_crawl. Only crawl when a single source needs the full article.
-- Use `freshness` for web-mode too, not just news, when recency matters ("latest release notes", "current version").
-
+$newsSection$searchTuningSection
 VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
 - map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
@@ -610,6 +720,49 @@ ${undiscoveredToolNames.map((n) => '- $n').join('\n')}
 '''
         : '';
 
+    // Migrated to the `deep-research` skill — same split as in the discovery
+    // prompt: the "search first" reflex stays, the method moves.
+    final freshReleasesSection = _migratedToSkill('deep-research')
+        ? ''
+        : '''
+
+FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
+- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
+- GitHub org pages and release pages
+- Official blogs and announcement pages
+If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
+''';
+
+    final researchDepthSection = _migratedToSkill('deep-research')
+        ? ''
+        : '''
+
+### Research depth:
+Do NOT give shallow one-search answers. For any factual question:
+1) web_search -> find sources
+2) web_crawl on 1-3 best results -> get full details and context
+3) If gaps remain, do another web_search from a different angle
+4) Compile final answer from crawled content, not just search snippets
+''';
+
+    // Rules 10 and 11 are numbered literals in the list below, so they are
+    // built here and appended rather than gated in place.
+    final trailingRules = <String>[
+      if (!_migratedToSkill('news-cards'))
+        '10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). Then emit a `<news>` block with the structured results — the app renders polished cards. Do NOT also list the same articles as markdown. Follow up with `web_crawl` only when the user asks for full article detail.',
+      if (!(_migratedToSkill('deep-research') &&
+          _migratedToSkill('news-cards')))
+        'WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.',
+    ];
+    // Renumber so the list never has a gap when a rule is migrated away.
+    var trailingRuleNumber = 10;
+    final trailingRulesText = trailingRules
+        .map((rule) {
+          final body = rule.startsWith('10. ') ? rule.substring(4) : rule;
+          return '${trailingRuleNumber++}. $body';
+        })
+        .join('\n');
+
     return '''
 ALWAYS respond in the user's language. Never mix languages.
 
@@ -619,13 +772,7 @@ CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
 RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
 
 USER-CLAIMED RECENCY IS A HARD TRIGGER: If the user says something is "new", "just released", "brand new", "from today", "from yesterday", or otherwise recent — you MUST web_search + web_crawl before answering, even if you "know" the topic from training data. Your training knowledge is ALWAYS stale against these claims. Never contradict a recency claim from memory alone. If the claimed thing does not exist, the search will prove that — but you still must search.
-
-FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
-- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
-- GitHub org pages and release pages
-- Official blogs and announcement pages
-If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
-
+$freshReleasesSection
 PRIOR-CONVERSATION REFERENCE IS A HARD TRIGGER: Whenever the user's message presupposes shared history that is NOT present in the CURRENT chat — they treat a subject as already known, point back to an earlier discussion, or use a definite/deictic reference whose antecedent you cannot find in the messages above — you MUST call `search_chats` (action="find_chats") to recover the real subject from past chats BEFORE answering. This is about meaning, not specific words: if you cannot fully resolve what the user is referring to from the current chat alone, search first. Do NOT guess the subject's identity from training data or from Memory — Memory may note that a topic was discussed without recording the specifics, and your training data does not contain this user's chats. Resolve the real subject from chat history first; only then web_search/web_crawl for facts about it. If find_chats returns nothing relevant, say you could not find the prior chat and ask the user to clarify — never substitute a plausible-but-unverified guess.
 
 ## TOOLS
@@ -653,16 +800,8 @@ NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <w
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
 9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
    IMAGE CAPTIONS: When you call fetch_image or generate_image and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
-10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). Then emit a `<news>` block with the structured results — the app renders polished cards. Do NOT also list the same articles as markdown. Follow up with `web_crawl` only when the user asks for full article detail.
-11. WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.
-
-### Research depth:
-Do NOT give shallow one-search answers. For any factual question:
-1) web_search -> find sources
-2) web_crawl on 1-3 best results -> get full details and context
-3) If gaps remain, do another web_search from a different angle
-4) Compile final answer from crawled content, not just search snippets
-
+$trailingRulesText
+$researchDepthSection
 ${hasArtifactTool ? _artifactToolProtocol() : ''}
 
 ${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
@@ -810,6 +949,18 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
     buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
 
+    // Weather and News below are migrated to the `weather-cards` /
+    // `news-cards` skills. When those are in the catalog, the schemas are
+    // loaded on demand instead of riding in every prompt.
+    if (!_migratedToSkill('weather-cards')) {
+      _appendWeatherProtocol(buffer);
+    }
+    if (!_migratedToSkill('news-cards')) {
+      _appendNewsProtocol(buffer);
+    }
+  }
+
+  void _appendWeatherProtocol(StringBuffer buffer) {
     buffer.writeln();
     buffer.writeln('### Weather');
     buffer.writeln(
@@ -838,7 +989,9 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln(
       '**Weather rules:** Only include fields from weather tool results. Never fabricate temperatures, codes, or forecasts. Emit at most one <weather> block per response. Do NOT also dump the raw tool text — the card contains everything.',
     );
+  }
 
+  void _appendNewsProtocol(StringBuffer buffer) {
     buffer.writeln();
     buffer.writeln('### News');
     buffer.writeln(
@@ -909,7 +1062,9 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
       );
     }
 
-    if (includeCharts) {
+    // The chart schema is migrated to the `chart-authoring` skill; the
+    // catalog entry points the model at it.
+    if (includeCharts && !_migratedToSkill('chart-authoring')) {
       buffer.writeln();
       buffer.writeln('### Charts');
       buffer.writeln('<chart>');
@@ -985,6 +1140,20 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln(
       '${ruleNumber++}. Never call find_tools for chart/map rendering. They are output tags, not tools.',
     );
+    final skillGatedTags = <String>[
+      if (includeCharts && _migratedToSkill('chart-authoring'))
+        '<chart> -> `chart-authoring`',
+      if (_migratedToSkill('weather-cards')) '<weather> -> `weather-cards`',
+      if (_migratedToSkill('news-cards')) '<news> -> `news-cards`',
+    ];
+    if (skillGatedTags.isNotEmpty) {
+      buffer.writeln(
+        '${ruleNumber++}. These tags have their exact JSON schema in a skill: '
+        '${skillGatedTags.join(', ')}. Load the skill with the `skill` tool '
+        'BEFORE emitting the tag. Never write one from memory — a malformed '
+        'block renders as nothing.',
+      );
+    }
     buffer.writeln(
       '${ruleNumber++}. Write your FULL text answer FIRST, then $tagLabel at the very END.',
     );
@@ -1027,9 +1196,11 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     }
 
     if (includeCharts) {
-      buffer.writeln(
-        '${ruleNumber++}. For stock/financial time series, include full history points in <chart> output; do not downsample data.',
-      );
+      if (!_migratedToSkill('chart-authoring')) {
+        buffer.writeln(
+          '${ruleNumber++}. For stock/financial time series, include full history points in <chart> output; do not downsample data.',
+        );
+      }
       if (includeMaps) {
         buffer.writeln(
           '${ruleNumber++}. Never use scatter for geographic data — use <map>.',
