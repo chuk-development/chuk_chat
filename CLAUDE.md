@@ -13,6 +13,46 @@
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+## Multi-Agent Worktrees
+
+When several agents work this repo at once, **each agent gets its own git worktree** so they never touch the same working directory. A worktree is a second checkout of the same repo on its own branch, sharing one `.git` — parallel-safe because `.dart_tool/` and `build/` are per-directory.
+
+**Each agent, on start:**
+
+```bash
+# 1. Create an isolated worktree + branch (name it after the task)
+git worktree add ../chuk_chat-<task> -b agent/<task> master
+
+# 2. Copy the gitignored .env — it is NOT carried into a fresh worktree
+cp .env ../chuk_chat-<task>/.env
+
+# 3. Work only inside that directory
+cd ../chuk_chat-<task>
+```
+
+**Each agent, on finish** (follow the normal Workflow Rules first — `flutter test`, CodeRabbit, commit):
+
+```bash
+# From inside the worktree: commit on the agent/<task> branch, then
+git push -u origin agent/<task>          # push branch, OR merge to master below
+```
+
+**Integrating branches** (one agent, or you, does this after all are done):
+
+```bash
+cd /home/user/git/chuk_chat              # main worktree on master
+git merge --no-ff agent/<task>           # merge each branch in turn, resolve conflicts
+git push
+git worktree remove ../chuk_chat-<task>  # clean up finished worktree
+git branch -d agent/<task>
+```
+
+**Rules:**
+- One worktree per agent — never two agents in the same directory.
+- Always `cp .env` into a new worktree; a build without it shows "Supabase credentials are not configured".
+- `git worktree list` shows all active worktrees. `git worktree prune` removes stale entries.
+- Branch names: `agent/<short-task>`. Keep changes on the branch; integrate to master via merge, not by editing master directly while agents run.
+
 ## Build Rules
 
 - **ALWAYS** `--release` for Android (debug = unusable performance)
@@ -54,6 +94,34 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray integration on desktop |
+| `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
+
+## Agent Skills
+
+Named procedures the AI loads on demand, following the open spec at
+[agentskills.io](https://agentskills.io/specification). Progressive disclosure:
+only `name` + `description` sit in every prompt; the body is injected under
+`## ACTIVE SKILL` after the model calls the `skill` tool, and stays for the rest
+of the conversation.
+
+Authored as `assets/skills/<name>/SKILL.md`, validated and compiled into the
+binary by `dart run tool/gen_skills.dart` → `lib/services/skills/builtin_skills.g.dart`.
+**Nothing is fetched from a marketplace or URL at runtime** — 36.8% of publicly
+shared skills carry a security flaw and 84% of those live in the SKILL.md prose
+itself, which is processed with operator-level authority on activation.
+
+**After editing any SKILL.md, re-run the generator.** `builtin_skills_freshness_test.dart`
+fails if you forget.
+
+Four built-ins migrate blocks that used to be injected unconditionally
+(`weather-cards`, `news-cards`, `chart-authoring`, `deep-research`) — net
+**−1145 tokens per round**. When adding a skill, keep `description` ≤300 chars:
+it is level-1 weight charged to every prompt.
+
+Adding the `skill` tool took four registration edits, not three — `builtinTools`,
+`toolCategoryMap`, `_builtinExecutableToolNames`, and **`_nonFactualToolNames`**
+(`tool_call_handler.dart`). Omitting the last makes every skill-only turn trigger
+a spurious `[VERIFY]` fact-check round.
 
 ## Building Android
 
