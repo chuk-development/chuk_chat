@@ -8,13 +8,53 @@ box is unchecked, and dispatches the subagents listed under it.
 CodeRabbit, and a commit. Do not start the next milestone in the same session —
 the review step is the point, not a formality.
 
-**What CoWork is** (from `docs/COWORK_BUILD_PLAN.md`, which stays the
-architectural reference — this file is only the execution order): a personal
-agent the user drives *from their phone* while it runs *on their own laptop*
-with real filesystem/CLI access. The laptop runs a tray-resident daemon that IS
-the agent — it runs chuk_chat's existing tool loop headlessly. The phone is a
-thin remote control. `api.chuk.chat` is a blind store-and-forward relay that
-only ever sees signed, E2E-encrypted blobs.
+**What CoWork is** (corrected 2026-07-17 by the product owner — this supersedes
+`docs/COWORK_BUILD_PLAN.md` wherever they disagree; that file stays the
+reference for the threat model and decisions, not for this shape):
+
+The desktop runs **the normal chuk_chat app**, holding its normal chat
+WebSocket to `api.chuk.chat` exactly as today. **In addition** it opens a
+**second WebSocket** that mirrors the session to the phone. The phone is a
+**mirror plus an input**: it watches the desktop's session and can inject
+messages into it. The relay is blind — it only ever carries signed,
+E2E-encrypted blobs, and it stores nothing.
+
+**The desktop runs with its window open, or tray-resident and invisible, and
+the two must behave identically.** What is *not* optional is that **the program
+is running on the laptop at all** — if nothing runs there, CoWork is
+unavailable, full stop. The tool loop runs where it always ran: inside the app,
+in both cases.
+
+**"Invisible" means tray-resident, NOT a UI-less build** — the distinction is
+worth money:
+
+- **Tray icon, app running, nothing visible: already built and free.**
+  `system_tray_service_io.dart` exists, `kFeatureSystemTray` gates it, and
+  `window_close_service_io.dart:22` deliberately bails out when the tray is on
+  so that closing the window minimises instead of quitting. The Dart isolate
+  keeps running either way: the WebSocket and the tool loop are async Dart and
+  are **not tied to rendering**, so a hidden window may stop pumping frames
+  while timers, futures and sockets carry on untouched.
+- **A truly headless, UI-less entrypoint: out of scope.** It is real work and
+  buys nothing the line above does not already give.
+
+**This is only free as long as the mirror and the queue read the session state,
+not widgets.** Touch `BuildContext` or the widget tree and "minimised" becomes
+a special case — at which point the app is forced to stay visible. The state
+discipline above is not purism; it is what makes the tray cost nothing.
+
+**What that forces — read this before writing the mirror.** "Mirror what the
+chat UI displays" and "works headless" are in direct tension: **in headless
+mode there is no UI displaying anything.** A mirror that scrapes rendered
+widget state cannot work in the mode that matters most.
+
+So the mirrored source of truth is the **session / message state model**, not
+the widget tree. The desktop UI renders *from* that state; the mirror
+serialises *the same* state. One source, two consumers. Headless then needs no
+special case at all — the state is there, nothing renders it locally. Any
+design where the UI path and the mirror path each compute "what the user sees"
+is a fork with two answers, and it will drift. If the mirror ever needs the UI
+to be open, that is the design error: stop and re-plan.
 
 ---
 
@@ -53,18 +93,44 @@ The model is:
    compromised backend to flip**, so the attack is eliminated rather than
    mitigated. The server provides the WebSocket and presence. Nothing else.
 
+   **Server-side approval was never even possible** (verified 2026-07-17, and
+   the reason to never revisit this): **RLS authenticates the account, not the
+   device.** Every device of one user carries a JWT with the same `auth.uid()`,
+   so Postgres cannot tell the desktop from the phone. Any `status` column
+   meant to gate the phone would have been writable to `'approved'` **by that
+   very phone**. Client-side approval does not merely shrink that attack
+   surface — it replaces a control that could not have worked.
+
 6. **Approval binds to the public key, not the device id.** Approving a
    `device_id` alone would let an attacker re-register that id with a fresh
    `public_key` and inherit the approval. The desktop approves *keys*; an
    unknown key is an unknown device, full stop.
 
 7. **What a hacked relay can and cannot do.** It cannot decrypt — it never has
-   the account key. It cannot forge a frame — it cannot sign over a key the
-   desktop locally trusts. It cannot grant itself access — approval never
-   touches the server. It *can* deny service and observe metadata (which device
-   ids talk, when, how much). That is the accepted boundary. If a milestone
-   finds itself putting trust in something the server asserts, that is a design
-   error: stop and re-plan.
+   the account key. It cannot forge or inject a frame — an altered or injected
+   frame fails the AES-256-GCM auth tag and arrives as nonsense, so it is
+   rejected; it also cannot sign over a key the desktop locally trusts. It
+   cannot grant itself access — approval never touches the server. It *can*
+   deny service and observe routing metadata. That is the accepted boundary. If
+   a milestone finds itself putting trust in something the server asserts, that
+   is a design error: stop and re-plan.
+
+8. **The two layers stop two different attackers — do not collapse them.**
+   The account key is **per account, not per device**: every device the user is
+   logged into holds it. So E2E encryption stops *the server* but cannot stop
+   *another device of the same account*, which can encrypt perfectly validly.
+   That is what per-device Ed25519 + local approval is for. E2E stops the
+   relay; the signature stops the un-approved device. Anyone who argues one
+   layer is redundant has not noticed they defend against different attackers.
+
+9. **The routing envelope cannot be E2E, and that is the honest limit.** The
+   relay must read `device_id` in cleartext or it cannot route — unavoidable.
+   Everything else must be encrypted. **Known gap (2026-07-17):** the presence
+   map also holds `device_name` in cleartext, i.e. the user's own label
+   ("Dietrich's MacBook"). Routing does not need it. Under "we are only a
+   relay, we see nothing", the label belongs inside the encrypted payload and
+   `device_id` must stay an opaque random id that says nothing about the
+   machine. M0 fixes this rather than shipping it.
 
 ---
 
@@ -76,7 +142,7 @@ The model is:
 | `lib/models/app_mode.dart` | 3 lines: `enum AppMode { chat, cowork }` |
 | Mode switcher | Works — `cowork_mode_switcher.dart`, wired into both root wrappers |
 | `kFeatureCoWork` | `platform_config.dart`, default **false**. `./run.sh` forces it **true**, so the switcher and the dead screen are visible while this gets built |
-| `api_server/routers/cowork_relay.py` | **261 lines, written, and NOT MOUNTED.** `main.py` has no `include_router(cowork_relay_router)` — grep it and see. It is dead code on the server too. |
+| `api_server/routers/cowork_relay.py` | **LIVE as of `625d53a`** (verified on `/health`, 2026-07-17). Earlier drafts of this table said "written and NOT MOUNTED, `main.py` has no `include_router(cowork_relay_router)`" — that was **wrong**: the file has **no `APIRouter` at all**. It is a registry/forwarding helper imported by `routers/multiplex.py`, whose `multiplex_router` was already mounted. It was dead only because the `multiplex.py` wiring sat **uncommitted**. Committing and deploying *was* the mount. |
 | Devices table | **Does not exist, and may never need to.** See M0 — with approval client-side and offline desktops unusable by definition, the relay's presence map may be the entire device list. |
 | `multiplex_connection.dart`, `encryption_service.dart` | Present, reusable |
 | `pretty_qr_code` | In pubspec. **Not needed for CoWork** — there is no QR pairing. Leave it alone; other features may use it. |
@@ -137,18 +203,118 @@ frame. Nothing else works without this.
 
 **Subagents (parallel where marked):**
 
-- **`relay-mount`** (server, `/home/user/git/api_server`) — mount the existing
-  `cowork_relay.py`: `app.include_router(cowork_relay_router)` in `main.py`
-  next to the other four. Read the router first and report what it already
-  handles vs. what is stubbed, specifically: (a) any **pairing/approval/
-  handshake** logic, which is now wrong and must be flagged rather than
-  silently mounted; (b) the **executor presence map** — how presence registers,
-  how disconnect is detected, and whether the phone can ask *"is my desktop
-  online right now?"*, which is what gates CoWork being available at all;
-  (c) whether it is a pure blind store-and-forward relay, and whether it can
-  see or log any plaintext (a critical finding if so). Verify against a
-  deployed `/health` `git_sha`; the backend must deploy before client code
-  lands.
+- ~~**`relay-mount`**~~ — **DONE, `625d53a`, live on `api.chuk.chat`**
+  (independently verified: `/health` `git_sha` matches local HEAD; `/v2/ws`
+  answers a real handshake). No `include_router` was needed — see the state
+  table. Shipped two call-time bugs found by CodeRabbit on the way: the relay
+  bypassed the documented 1 MB cap for 20 MB and fanned it out N× unmetered
+  (**major**), and an uppercase `target_device_id` missed the canonical key,
+  producing a **false "laptop offline"**. 40 tests pass.
+
+  **What it already does:** `role` handshake (`controller`/`executor`) on the
+  existing Supabase-JWT `auth` frame; uuid `device_id` canonicalisation;
+  presence map `user_id → device_id → ExecutorEntry`; `executor_status`
+  broadcast on register/close plus a snapshot to new controllers;
+  reconnect-safe unregister; verbatim opaque forwarding; `cowork_error`
+  frames; user-scoped routing (cross-account is impossible — verified).
+  "Store-and-forward" was a **misnomer**: it stores nothing.
+
+- **`relay-split`** (server, after `relay-hardening` — decided 2026-07-17) —
+  the relay becomes **its own process with its own WebSocket endpoint**, so a
+  relay fault cannot take the chat API down with it.
+
+  **Why this is not optional:** today the relay is not a separate component at
+  all — it is a *frame type on the chat socket*. `/v2/ws` (`multiplex.py:1271`)
+  is one multiplexed connection carrying `chat`, `tool`, `cancel` **and**
+  `cowork_relay`. One process, one event loop, one heap. The 20 MB fan-out bug
+  CodeRabbit caught at `625d53a` would have OOM'd that process and **taken chat
+  down for every user** — the failure mode is demonstrated, not hypothetical.
+  A blocking relay call stalls every chat request on the same loop.
+
+  **Why it is cheap here:** `cowork_relay.py` imports `uuid`, `dataclasses`,
+  `typing` — no DB, no Supabase client, no shared state. It is pure in-memory
+  pubsub behind a JWT check. Almost all of the work is wiring.
+
+  **A sub-app mount does not count.** Same process, same loop, same heap — it
+  buys nothing. Separate process or it is theatre.
+
+  Known costs and traps, in order of how much they will hurt:
+  1. **The relay must validate the Supabase JWT itself.** Today `multiplex.py`
+     does the auth before the relay ever sees a frame. This is the one real
+     coupling — the new service needs the JWT secret/JWKS in its own env. Get
+     this wrong and the relay is an open door.
+  2. **Both clients open a second socket.** Phone and laptop each connect to
+     chat *and* relay. Accepted cost: extra battery and a second auth, bought
+     with a CoWork lifecycle that is independent of chat — which matches the
+     product model ("phone app closed → connection closed") rather than fighting
+     it.
+  3. **The relay stays at 1 replica, and that must be enforced, not assumed.**
+     Its presence map is in-memory; at >1 replica a controller and its executor
+     land on different instances and simply never see each other. Splitting it
+     out is what *lets* chat scale without dragging this constraint along.
+     Document it at the deployment, not just in code. (Note: the deploy is
+     Swarm with a rolling update — an old replica drains for a while and will
+     briefly serve the previous `git_sha`. Sample `/health` more than once
+     before concluding a deploy failed.)
+
+  **The seams, mapped at `5338d87`** — `cowork_relay.py` itself is still clean
+  (imports only `logging`, `uuid`, `dataclasses`, `typing`; no DB, no globals,
+  no `multiplex` internals), so the work is these hooks in `multiplex.py`:
+  the docstring contract (~9–48); the imports (94–105); connection state
+  `role`/`executor_entry`/`is_controller` (1309–1314); the handshake `role` +
+  `device_id` parse (1446–1470); registration + snapshot (1479–1513); the
+  `handle_cowork_presence_frame` hook (~1557); the `cowork_relay` branch and
+  its 1 MB cap; and the `finally` unregister/broadcast.
+
+  **`routers/ws_control.py` is shared on purpose — do not "clean it up".**
+  `ping`/`pong` is a property of *the socket*, not of chat or CoWork, so both
+  processes import it and neither imports the other to answer a ping. Its
+  liveness does not depend on chat keeping the socket warm: uvicorn's PING is
+  transport-level and the client's timer is unconditional, so it survives the
+  split unchanged.
+
+- ~~**`relay-hardening`**~~ — **DONE, `5338d87`, live** (verified on `/health`).
+  Tests **40 → 57**.
+  1. **`device_name` cleartext leak — removed.** Gone from the wire contract,
+     `ExecutorEntry`, `executor_status_frame`, `register_executor`, the
+     handshake parse and both docstrings. `ExecutorEntry` is now
+     `{device_id, send}` — the relay cannot leak what it never holds.
+  2. **`device_id` opacity — uuid4 enforced.** Rejects v1/v3/v5/nil through the
+     existing invalid-handshake path. **Honest limit, recorded in the code:**
+     it reads the version nibble, so it stops *our own client* accidentally
+     calling `uuid.uuid1()` and publishing hardware identity; it cannot stop a
+     device stamping v4 over a MAC — which is not the threat model.
+     Same-account `device_id` squatting is still possible (silently replaces
+     the socket): self-inflicted, own account only, accepted.
+  3. **Heartbeat — NOT built, and the reason matters more than the fix.**
+     The premise in this plan was **wrong**, verified empirically rather than
+     by reading code: uvicorn 0.47 resolves `ws="auto"` to the websockets impl
+     with **`ws_ping_interval=20` / `ws_ping_timeout=20`**, stock defaults that
+     neither `main.py` nor the Dockerfile CMD overrides. A silent peer's
+     `receive()` raises after a **measured 50.0 s** with `code=1006`, running
+     the existing `finally` → `unregister_executor` → `executor_status
+     online=false`. **A closed lid does not strand an executor as online.**
+     An app-level timer would have to beat ~50 s to change any outcome, and
+     cannot safely: the client pings every 25 s, so any threshold under ~50 s
+     evicts a live phone that missed one ping on a flaky network — a regression
+     at a useful threshold, dead code at a safe one. The ~50 s is irreducible;
+     a silent TCP peer cannot be told from an idle one without a timeout.
+
+     **The trap to remember: reading application code cannot reveal
+     transport-level keepalive.** Two passes over `cowork_relay.py` "confirmed"
+     a missing heartbeat that the server had all along.
+
+     What *was* real: the client pings on an unconditional 25 s timer, and the
+     server answered **`{"code":"invalid_req_id"}`** — ping carries no `req_id`
+     and fell past the `req_id` gate. Every client traded an error frame every
+     25 s for its whole connection. Now answered with `{"type":"pong"}`, and
+     the client's long-vestigial `pong` branch
+     (`multiplex_connection.dart:290`) finally means something.
+  4. **On-demand presence — done.** Controllers always get a `cowork_presence`
+     snapshot at connect, **empty list included** (an empty loop previously
+     sent literally nothing, so "none online" and "snapshot pending" were
+     indistinguishable) and can re-query any time. `executor_status` stays the
+     single-device delta.
 - **`envelope-crypto`** (parallel, client) — the frame format
   `{seq, ts, nonce, ciphertext, sig}`: AES-256-GCM with the account key
   (`encryption_service.dart`, reuse it) + **per-device Ed25519** signing.
@@ -158,13 +324,27 @@ frame. Nothing else works without this.
   unknown key → reject, empty set → reject everything. Default deny, with no
   convenience overload that skips the check. Pure Dart, fully unit-testable:
   this subagent's output is mostly tests.
-- **`device-list-decision`** (parallel, blocked on `relay-mount`'s report) —
-  settle whether a Supabase devices table is needed **at all**. With approval
-  client-side, public keys travelling in-band inside the account-key-encrypted
-  channel, and offline desktops unusable by definition, the relay presence map
-  may already be the whole device list. Ship a table only if something
-  genuinely needs durable server-side storage — name it, or drop the migration
-  and save a prod schema change, an RLS surface, and a deploy-ordering risk.
+- ~~**`device-list-decision`**~~ — **DONE, 2026-07-17: there is no table, and
+  M0 ships none.** Independently verified, not merely reported:
+  `cowork_relay.py` imports only `uuid`, `dataclasses`, `typing` — no DB
+  client, no persistence; `self._executors: Dict[str, Dict[str, ExecutorEntry]]`
+  is the entire state, and it already carries `device_id` + `device_name`
+  in-band from the handshake. So the presence map *is* the device list.
+  `platform` rides the same handshake frame. Public keys travel in-band inside
+  the account-key-encrypted channel the server has no key for — and trust comes
+  from the desktop's local approval of a key, never from transport.
+  `last_seen_at` would be the highest-write column in the schema, storing a
+  value stale the moment it is read, to describe offline devices that are
+  un-drivable by definition; the socket alone can express "the socket is open",
+  and a phone-side cache covers "last connected 3 days ago". A `paired_devices`
+  table applied under the old brief was **dropped, 0 rows lost**; prod re-checked
+  clean for anything matching `%device%`/`%pair%` — no table, no policy, no
+  leftover function.
+
+  **The one thing that will genuinely need durable storage is M3's push
+  tokens** — waking a device that is *by definition not connected* is the one
+  fact an in-memory presence map provably cannot hold. That is one `fcm_token`
+  column, three milestones out. Do not pre-build it here.
 - **`approval-ui`** (after `envelope-crypto`) — desktop Settings lists the
   user's devices and approves/revokes them; approved keys persist in **local**
   storage on the desktop, never server-side. Phone Settings shows its devices
@@ -179,28 +359,80 @@ sig → reject, unapproved key → reject, empty approval set → reject all.
 
 ---
 
-## M1 — Headless agent daemon  ·  ~4–6 d  ·  [ ]
+## M1 — Session mirror + message queue  ·  ~4–6 d  ·  [ ]
 
-Goal: the laptop runs the tool loop with no UI, driven by relay frames.
+Goal: the phone sees the desktop's live chat session and can put messages into
+it — identically whether the desktop window is open or tray-resident/headless.
 
-- **`remote-agent-service`** — `lib/services/cowork/remote_agent_service.dart`:
-  a headless while-loop that calls the **unchanged** `ToolCallHandler`. Read
-  `desktop_send_logic.dart` and `streaming_message_handler.dart` first — they
-  are the two existing loop drivers; this is a third, minus UI. Configurable
-  `maxIterations`. Persist `ToolLoopSession` to `kv_cache` so a restart resumes.
-- **`daemon-lifecycle`** (parallel) — start-hidden, `launch_at_startup`,
-  single-instance guard, tray-resident. `system_tray_service_io.dart` exists
-  and `kFeatureSystemTray` already gates it. **Note:** with the tray on,
-  `window_close_service_io.dart:22` bails out, so closing the window minimises
-  instead of quitting — that is the intended daemon behaviour, not a bug.
-- **`progress-streaming`** (after `remote-agent-service`) — stream loop progress
-  back through the relay as encrypted frames. Reuse the existing streaming
-  machinery; do not invent a second protocol.
+- **`session-mirror`** — the second WebSocket: serialise the **session state
+  model** and mirror it to the phone as encrypted frames. Read
+  `streaming_message_handler.dart` and `desktop_send_logic.dart` first. Reuse
+  the existing streaming machinery — **do not invent a second protocol**, and
+  do not fork the tool loop.
 
-**Done when:** the phone dispatches a task, the laptop runs a real multi-round
-tool loop headlessly, and progress streams back. **Skills must work end-to-end
-here for free** — if they do not, the loop was forked. That is the M1
-acceptance test.
+  **This is not a screen mirror.** The phone renders the same session in its
+  own mobile UI; the repo already has two renderers over one chat state
+  (`chat_ui_desktop.dart`, `chat_ui_mobile.dart`), and the mirror simply feeds
+  a third consumer. Mirroring *rendered* state would both look wrong on the
+  phone and break outright in headless mode, where nothing renders. Mirror the
+  state; let each end draw it.
+- **`tray-lifecycle`** (parallel, small) — tray-resident mode: start-hidden,
+  `launch_at_startup`, single-instance guard. Most of this exists —
+  `system_tray_service_io.dart` (10.5 KB) is written, `kFeatureSystemTray`
+  gates it, and `window_close_service_io.dart:22` already bails out so that
+  closing the window minimises rather than quits. Verify and finish it; do not
+  rewrite it, and **do not build a UI-less entrypoint** (see above — out of
+  scope, no gain). **Visible and tray must be the same product**: if anything
+  in the mirror or the queue only works with a window open, that is the bug.
+- **`message-queue`** (the load-bearing one — see the section below) — queued
+  message injection from **both** phone and desktop, delivered between tool-loop
+  rounds, with force-send, and **never silently dropped**.
+
+**Done when:** the phone mirrors a live desktop session, a message queued from
+the phone lands in the loop at the next round boundary, force-send lands
+immediately, and a queued message survives a reconnect — **and all of it works
+with the desktop window closed to the tray**, which is the acceptance test that
+catches a UI-coupled mirror. **Skills must work end-to-end here for free** — if
+they do not, the loop was forked.
+
+---
+
+## The message queue (product owner, 2026-07-17)
+
+Messages can be composed on **the phone or the desktop** while the AI is
+working. They do not interrupt a tool call. When the model finishes its current
+tool call(s), the queued message is injected **between rounds** of the tool
+loop, as further instruction. The user can also **force** a message to be sent
+immediately instead of waiting for the boundary.
+
+**The requirement that outranks the rest: a queued message must ALWAYS actually
+be delivered.** The product owner named the failure mode explicitly, from
+Claude Code (the tool this plan was written with): messages sent while the agent
+is working can silently vanish. That is the thing this must not do. Design
+consequences:
+
+- **Never drop, never silently.** Not on reconnect, not on a round that ends
+  early, not on an error path, not when the loop finishes before the boundary
+  arrives. If a message cannot be delivered, that must be *visible* — an
+  explicit state in the UI, never a `debugPrint`-and-return. (See `.claude`
+  memory `feedback_silent_failure`: this repo has a standing rule against
+  swallowing failures in a catch block.)
+- **Ack, don't hope.** Queued → sent → accepted-by-the-loop is a state machine
+  the sender can observe, not fire-and-forget. The user must be able to tell
+  "it's waiting for the round to end" from "it's gone".
+- **Survive a reconnect.** The phone's socket dies on app close by design, and
+  the user's network changes (see `.claude` memory `feedback_user_mobile_use` —
+  mobile use with changing networks is a real requirement here, not
+  theoretical). A message queued just before a drop must still land.
+- **Both directions.** The desktop can queue too — it is not a phone-only
+  feature.
+- **Ordering.** Two messages queued in order arrive in order. Force-send is the
+  deliberate exception and must be obvious in the UI, not a silent queue-jump.
+
+**Where it hooks in:** the round boundary of the existing tool loop
+(`desktop_send_logic.dart`, `streaming_message_handler.dart`). **Do not fork the
+loop to get this** — an injection point is a hook, not a second driver. If it
+starts looking like a fork, stop and re-plan.
 
 ---
 
@@ -260,8 +492,12 @@ denies on timeout.
 
 ## Traps
 
-- **The relay is written but unmounted.** Anything that assumes M0 infra is
-  live is wrong until M0 ships.
+- **A relay fault must never reach the chat API.** This is a product
+  requirement, not a nice-to-have: if the CoWork part crashes, everything else
+  keeps running. It is also why `relay-split` exists. Any change that puts
+  relay code back on the chat process — "just for now", "it's only a small
+  handler" — reintroduces the exact failure the split paid to remove. The 20 MB
+  fan-out bug is the standing proof that in-process relay bugs kill chat.
 - **Pairing is dead — do not resurrect it.** An earlier draft of this file
   specced QR pairing, `mobile_scanner`, a `paired_devices` table and a
   server-side approved flag. All of it was a misreading of the product. The
