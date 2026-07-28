@@ -21,7 +21,11 @@ threat model, decisions). The execution plan is the order of work.
 **After completing any task, ALWAYS do this in order:**
 
 1. `flutter test` — all must pass
-2. `coderabbit review --plain --type uncommitted` (timeout 300s) — fix any findings
+2. `coderabbit review --uncommitted --include-untracked` — fix any findings.
+   Plain text is the default now; `--plain` and `--type` were removed from the
+   CLI. **`--include-untracked` matters**: a newly added file is invisible to
+   the review without it. Runs take 10–20 min, so start it in the background
+   rather than under a short timeout.
 3. Commit with descriptive message
 4. `git push`
 
