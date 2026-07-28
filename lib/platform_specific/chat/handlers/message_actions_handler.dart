@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/services/pdf_export_service.dart';
 import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
@@ -20,8 +21,18 @@ class MessageActionsHandler {
   int? get editingMessageIndex => _editingMessageIndex;
   bool get isEditing => _editingMessageIndex != null;
 
+  /// Strips tool-call protocol from text that is about to leave the app.
+  ///
+  /// The chat view renders through [stripToolCallBlocksForDisplay], but copy,
+  /// PDF export and print all read the raw `text` field. Anything the UI hides
+  /// — `<tool_call>` blocks, `<artifact>` blocks, provider special tokens —
+  /// was therefore pasted into other apps and printed into documents.
+  static String _forExport(String text) =>
+      stripToolCallBlocksForDisplay(text);
+
   /// Copy text to clipboard
-  Future<void> copyToClipboard(String text, {String? label}) async {
+  Future<void> copyToClipboard(String rawText, {String? label}) async {
+    final text = _forExport(rawText);
     if (text.trim().isEmpty) {
       onShowSnackBar?.call('Nothing to copy');
       return;
@@ -149,7 +160,8 @@ class MessageActionsHandler {
   }
 
   /// Export the given assistant text as a PDF and trigger the share/save flow.
-  Future<void> exportAsPdf(String messageText, {String? title}) async {
+  Future<void> exportAsPdf(String rawMessageText, {String? title}) async {
+    final messageText = _forExport(rawMessageText);
     if (messageText.trim().isEmpty) {
       onShowSnackBar?.call('Nothing to export');
       return;
@@ -164,7 +176,8 @@ class MessageActionsHandler {
   }
 
   /// Open the native print dialog for the given assistant text.
-  Future<void> printMessage(String messageText, {String? title}) async {
+  Future<void> printMessage(String rawMessageText, {String? title}) async {
+    final messageText = _forExport(rawMessageText);
     if (messageText.trim().isEmpty) {
       onShowSnackBar?.call('Nothing to print');
       return;

@@ -2805,7 +2805,12 @@ class _MessageBubbleState extends State<MessageBubble> {
           if (seenUrls.add(urls[i])) {
             sources.add({
               'url': urls[i],
-              'title': i < titles.length ? titles[i] : Uri.parse(urls[i]).host,
+              // tryParse, not parse: this runs inside build(), so one malformed
+              // URL in a search result would throw and replace the entire
+              // message with a red error box.
+              'title': i < titles.length
+                  ? titles[i]
+                  : (Uri.tryParse(urls[i])?.host ?? urls[i]),
               'host': Uri.tryParse(urls[i])?.host ?? urls[i],
             });
           }

@@ -631,26 +631,26 @@ Future<String> executeNotes(Map<String, dynamic> args) async {
   try {
     switch (action) {
       case 'update_memory':
-        return _updateMemory(args);
+        return await _updateMemory(args);
       case 'update_user':
-        return _updateUserInfo(args);
+        return await _updateUserInfo(args);
       case 'update_soul':
-        return _updateSoul(args);
+        return await _updateSoul(args);
       case 'patch_memory':
-        return _patchMemory(args);
+        return await _patchMemory(args);
       case 'patch_user':
-        return _patchUserInfo(args);
+        return await _patchUserInfo(args);
       case 'patch_soul':
-        return _patchSoul(args);
+        return await _patchSoul(args);
       // Legacy key-value actions (still supported).
       case 'save':
-        return _saveNote(args);
+        return await _saveNote(args);
       case 'get':
-        return _getNote(args);
+        return await _getNote(args);
       case 'list':
         return _listNotes();
       case 'delete':
-        return _deleteNote(args);
+        return await _deleteNote(args);
       case 'clear':
         return _clearNotes();
       default:

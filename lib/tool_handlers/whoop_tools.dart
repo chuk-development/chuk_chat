@@ -41,11 +41,11 @@ Future<String> executeWhoop(
   try {
     switch (action) {
       case 'status':
-        return _fetchData(baseUrl, headers, accessToken, 'status');
+        return await _fetchData(baseUrl, headers, accessToken, 'status');
       case 'week':
-        return _fetchData(baseUrl, headers, accessToken, 'week');
+        return await _fetchData(baseUrl, headers, accessToken, 'week');
       case 'days':
-        return _fetchData(
+        return await _fetchData(
           baseUrl,
           headers,
           accessToken,
@@ -53,7 +53,7 @@ Future<String> executeWhoop(
           queryParams: {'days': days.toString()},
         );
       case 'sleep':
-        return _fetchData(
+        return await _fetchData(
           baseUrl,
           headers,
           accessToken,
@@ -61,7 +61,7 @@ Future<String> executeWhoop(
           queryParams: {'days': days.toString()},
         );
       case 'recovery':
-        return _fetchData(
+        return await _fetchData(
           baseUrl,
           headers,
           accessToken,
@@ -69,7 +69,7 @@ Future<String> executeWhoop(
           queryParams: {'days': days.toString()},
         );
       case 'strain':
-        return _fetchData(
+        return await _fetchData(
           baseUrl,
           headers,
           accessToken,
@@ -77,7 +77,7 @@ Future<String> executeWhoop(
           queryParams: {'days': days.toString()},
         );
       case 'workouts':
-        return _fetchData(
+        return await _fetchData(
           baseUrl,
           headers,
           accessToken,

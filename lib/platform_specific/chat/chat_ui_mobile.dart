@@ -2562,7 +2562,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           final currentText = lastMessage['text'] ?? '';
           if (currentText.isEmpty || currentText == 'Thinking...') {
             lastMessage['text'] = '[Cancelled]';
-          } else {
+          } else if (!currentText.contains('[Response cancelled]')) {
+            // Idempotent, as on desktop: cancelling twice (or cancelling a
+            // resend of an already-cancelled turn) used to stack the marker.
             lastMessage['text'] = '$currentText\n\n[Response cancelled]';
           }
           _messages[_messages.length - 1] = lastMessage;

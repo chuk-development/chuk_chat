@@ -323,78 +323,24 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         return;
       }
 
-      // Build conversation history up to the edited message (with images/reasoning support)
-      final List<Map<String, dynamic>> conversationHistory = [];
-      final bool shouldIncludeImages =
-          widget.includeRecentImagesInHistory ||
-          widget.includeAllImagesInHistory;
-      final int imgWindow = widget.includeAllImagesInHistory ? index : 10;
-      final Set<int> imgEligible = {};
-      var remainingHistoryImageCount = 10;
-      var remainingHistoryImageChars = 1500000;
-      if (shouldIncludeImages) {
-        int uCount = 0;
-        for (int j = index - 1; j >= 0; j--) {
-          if (_messages[j]['sender'] == 'user') {
-            uCount++;
-            if (uCount <= imgWindow) imgEligible.add(j);
-          }
-        }
-      }
-      for (int i = 0; i < index; i++) {
-        final msg = _messages[i];
-        final sender = msg['sender'];
-        final text = msg['text'] ?? '';
-        if (sender == 'user') {
-          final bool hasImages =
-              msg['images'] != null && msg['images']!.isNotEmpty;
-          if (shouldIncludeImages && hasImages && imgEligible.contains(i)) {
-            final content = <Map<String, dynamic>>[];
-            if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
-            final urls = await _resolveHistoryImages(msg['images']!);
-            var addedHistoryImages = 0;
-            for (final u in urls) {
-              if (remainingHistoryImageCount <= 0) break;
-              final urlChars = u.length;
-              if (urlChars > remainingHistoryImageChars) break;
-              content.add({
-                'type': 'image_url',
-                'image_url': {'url': u},
-              });
-              remainingHistoryImageCount--;
-              remainingHistoryImageChars -= urlChars;
-              addedHistoryImages++;
-            }
-            final skippedImages = urls.length - addedHistoryImages;
-            if (skippedImages > 0) {
-              content.add({
-                'type': 'text',
-                'text':
-                    '[$skippedImages image(s) omitted from history due request size limits.]',
-              });
-            }
-            if (content.isNotEmpty) {
-              conversationHistory.add({'role': 'user', 'content': content});
-            }
-          } else if (text.isNotEmpty) {
-            conversationHistory.add({'role': 'user', 'content': text});
-          }
-        } else if (sender == 'ai') {
-          if (text.isEmpty) continue;
-          String assistantContent = text;
-          if (widget.includeReasoningInHistory) {
-            final reasoning = msg['reasoning'] ?? '';
-            if (reasoning.isNotEmpty) {
-              assistantContent =
-                  '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
-            }
-          }
-          conversationHistory.add({
-            'role': 'assistant',
-            'content': assistantContent,
-          });
-        }
-      }
+      // Build conversation history up to the edited message.
+      //
+      // This was a third hand-rolled copy of the history builder, and it had
+      // drifted: its assistant branch inlined only `text` + reasoning, so
+      // every prior tool result was stripped from history on an edit/resend
+      // and the model re-ran searches it had already done. It also dropped
+      // `sender == 'assistant'` rows entirely.
+      final List<Map<String, dynamic>> conversationHistory =
+          await ChatHistoryBuilder.build(
+            messages: _messages.sublist(0, index),
+            // The edited turn is passed separately as `message`; the slice
+            // above already excludes it, so nothing needs dropping here.
+            pendingUserText: '',
+            includeRecentImages: widget.includeRecentImagesInHistory,
+            includeAllImages: widget.includeAllImagesInHistory,
+            includeReasoning: widget.includeReasoningInHistory,
+            includeToolResults: widget.includeToolResultsInHistory,
+          );
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -407,6 +353,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
       }
+
+      // Same budget the normal send path uses. Hardcoding 4096 here overshot
+      // any model with a lower completion cap (provider 400) and ignored how
+      // much of the window the history had already eaten.
+      final resendBudget = MessageCompositionService.resolveResponseTokenBudget(
+        selectedModelId: modelIdToUse,
+        apiHistory: conversationHistory,
+        aiPromptContent: messageForSend,
+        systemPrompt: systemPrompt,
+      );
+      if (resendBudget.error != null) {
+        _showSnackBar(resendBudget.error!);
+        return;
+      }
+      final int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
 
       var toolSession = _toolCallHandler.createSession(
         initialUserMessage: messageForSend,
@@ -471,8 +432,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           providerSlug: providerToUse ?? 'openai',
           history: history,
           systemPrompt: passSystemPrompt,
-          maxTokens: 4096,
-          temperature: 0.7,
+          maxTokens: resendMaxTokens,
           images: passImages,
           reasoningEffort: _reasoningEnabled ? null : 'none',
           // Pin the chat id so MultiplexSession enforces single-stream-
@@ -805,7 +765,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }),
             );
           },
-          onError: (errorMessage) {
+          onError: (errorMessage, {String? code}) {
             if (errorMessage == '__PAYMENT_REQUIRED__') {
               final paymentMessage =
                   'You have used all free messages. Please subscribe to continue chatting.';
@@ -1927,7 +1887,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }),
             );
           },
-          onError: (errorMessage) async {
+          onError: (errorMessage, {String? code}) async {
             if (kDebugMode) {
               debugPrint(
                 'Stream error for chat $chatIdForStream: $errorMessage',
@@ -2129,146 +2089,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   String _detectImageMimeType(Uint8List bytes) =>
       ChatUiHelpers.detectImageMimeType(bytes);
 
+  /// Delegates to [ChatHistoryBuilder] — see that file for why this must not
+  /// be reimplemented per platform.
   Future<List<Map<String, dynamic>>> _buildApiHistoryWithPendingMessage(
     String pendingUserText,
-  ) async {
-    final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
-    final bool shouldIncludeImages =
-        widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
-    final int imageWindow = widget.includeAllImagesInHistory
-        ? _messages.length
-        : 10;
-    var remainingHistoryImageCount = 10;
-    var remainingHistoryImageChars = 1500000;
-
-    // Determine which user messages are within the image window
-    final Set<int> imageEligibleIndices = {};
-    if (shouldIncludeImages) {
-      int userMsgCount = 0;
-      for (int i = _messages.length - 1; i >= 0; i--) {
-        if (_messages[i]['sender'] == 'user') {
-          userMsgCount++;
-          if (userMsgCount <= imageWindow) {
-            imageEligibleIndices.add(i);
-          }
-        }
-      }
-    }
-
-    for (int i = 0; i < _messages.length; i++) {
-      final message = _messages[i];
-      final String? sender = message['sender'];
-      final String? text = message['text'];
-
-      if (sender == 'user') {
-        final bool hasImages =
-            message['images'] != null && message['images']!.isNotEmpty;
-        final bool shouldAddImages =
-            shouldIncludeImages &&
-            hasImages &&
-            imageEligibleIndices.contains(i);
-
-        if (shouldAddImages) {
-          final content = <Map<String, dynamic>>[];
-          if (text != null && text.trim().isNotEmpty) {
-            content.add({'type': 'text', 'text': text});
-          }
-          final imageDataUrls = await _resolveHistoryImages(message['images']!);
-          var addedHistoryImages = 0;
-          for (final dataUrl in imageDataUrls) {
-            if (remainingHistoryImageCount <= 0) break;
-            final urlChars = dataUrl.length;
-            if (urlChars > remainingHistoryImageChars) break;
-            content.add({
-              'type': 'image_url',
-              'image_url': {'url': dataUrl},
-            });
-            remainingHistoryImageCount--;
-            remainingHistoryImageChars -= urlChars;
-            addedHistoryImages++;
-          }
-          final skippedImages = imageDataUrls.length - addedHistoryImages;
-          if (skippedImages > 0) {
-            content.add({
-              'type': 'text',
-              'text':
-                  '[$skippedImages image(s) omitted from history due request size limits.]',
-            });
-          }
-          if (content.isNotEmpty) {
-            history.add({'role': 'user', 'content': content});
-          }
-        } else if (text != null && text.trim().isNotEmpty) {
-          history.add({'role': 'user', 'content': text});
-        }
-      } else if (sender == 'ai' || sender == 'assistant') {
-        // Include prior tool calls + results so the model can reuse data
-        // it already fetched on a follow-up question.
-        final assistantContent = formatAssistantContent(
-          message,
-          includeReasoning: widget.includeReasoningInHistory,
-          includeToolResults: widget.includeToolResultsInHistory,
-        );
-        if (assistantContent == null) continue;
-        history.add({'role': 'assistant', 'content': assistantContent});
-      }
-    }
-
-    // Don't add pendingUserText here - the server adds the current message
-    // from the 'message' parameter. Adding it here causes duplicate user
-    // messages which makes AI models think the user sent the message twice.
-
-    return history;
-  }
+  ) => ChatHistoryBuilder.build(
+    messages: _messages,
+    pendingUserText: pendingUserText,
+    includeRecentImages: widget.includeRecentImagesInHistory,
+    includeAllImages: widget.includeAllImagesInHistory,
+    includeReasoning: widget.includeReasoningInHistory,
+    includeToolResults: widget.includeToolResultsInHistory,
+  );
 
   /// Resolve image storage paths from a JSON-encoded list to Base64 data URLs
-  Future<List<String>> _resolveHistoryImages(String imagesJson) async {
-    final List<String> dataUrls = [];
-    try {
-      final decoded = jsonDecode(imagesJson);
-      if (decoded is! List) return dataUrls;
-
-      for (final img in decoded) {
-        final path = img.toString();
-        if (path.isEmpty) continue;
-
-        if (path.startsWith('data:image/')) {
-          dataUrls.add(path);
-          continue;
-        }
-
-        if (ChukChatUIDesktopState._imageBase64Cache.containsKey(path)) {
-          dataUrls.add(ChukChatUIDesktopState._imageBase64Cache[path]!);
-          continue;
-        }
-
-        try {
-          final bytes = await ImageStorageService.downloadAndDecryptImage(path);
-          final base64 = base64Encode(bytes);
-          final mimeType = _detectImageMimeType(bytes);
-          final dataUrl = 'data:$mimeType;base64,$base64';
-
-          if (ChukChatUIDesktopState._imageBase64Cache.length >=
-              ChukChatUIDesktopState._maxImageCacheSize) {
-            ChukChatUIDesktopState._imageBase64Cache.remove(
-              ChukChatUIDesktopState._imageBase64Cache.keys.first,
-            );
-          }
-          ChukChatUIDesktopState._imageBase64Cache[path] = dataUrl;
-          dataUrls.add(dataUrl);
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint('⚠️ [Desktop] Failed to resolve history image: $e');
-          }
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [Desktop] Failed to parse images JSON: $e');
-      }
-    }
-    return dataUrls;
-  }
 
   void _updateAiMessage(int index, String content, String reasoning) {
     if (!mounted || index < 0 || index >= _messages.length) return;
@@ -2302,6 +2136,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (firstToken) {
       setState(() {});
     }
+
+    // Follow the answer as it streams in, but only while the user is pinned to
+    // the bottom. The edit/resend path did this and the normal send path did
+    // not, so a fresh answer grew off-screen while resending the same message
+    // tracked correctly. The layout's streaming slack was removed on the
+    // assumption that this runs.
+    pinToBottomDuringStream();
   }
 
   void _updateToolCallsForMessage(

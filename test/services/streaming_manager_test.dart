@@ -47,7 +47,7 @@ void main() {
         lastTps = tps;
         completed = true;
       },
-      onError: (error) {
+      onError: (error, {String? code}) {
         errorMsg = error;
       },
     );

@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -50,7 +51,6 @@ import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
-import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -1622,8 +1622,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
-  static final Map<String, String> _imageBase64Cache = {};
-  static const int _maxImageCacheSize = 10;
 
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
