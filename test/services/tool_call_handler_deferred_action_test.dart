@@ -71,6 +71,86 @@ void main() {
       );
     });
 
+    test('detects German "Lass mich ... erstellen" after a filler sentence', () {
+      // Regression: Kimi ended a 4-search turn with only this promise, so the
+      // user got no summary at all.
+      const content =
+          'Ich habe jetzt ausreichend Informationen gesammelt. Lass mich dir '
+          'eine detaillierte Zusammenfassung erstellen.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isTrue,
+      );
+    });
+
+    test('detects English "Let me write ..." after a filler sentence', () {
+      const content =
+          'I have gathered enough information. Let me write the summary for '
+          'you now.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isTrue,
+      );
+    });
+
+    test('does not flag a multi-line answer that opens with intent', () {
+      const content =
+          'Let me summarize the findings:\n\n- Magellan left in 1519\n'
+          '- Only 18 men returned in 1522';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isFalse,
+      );
+    });
+
+    test('does not flag an answer delivered after a colon on one line', () {
+      const content = 'Let me summarize the findings: Magellan left in 1519.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isFalse,
+      );
+    });
+
+    test('detects "Ich werde ... prüfen"', () {
+      const content = 'Ich werde die aktuellen Preise für beide Anbieter '
+          'prüfen.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isTrue,
+      );
+    });
+
+    test('detects Italian and Dutch intent prefixes with matching verbs', () {
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(
+          'Vado a cercare i dettagli della spedizione.',
+        ),
+        isTrue,
+      );
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(
+          'Wij gaan de laatste cijfers opzoeken.',
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not flag a final sentence without an action verb', () {
+      const content =
+          'The expedition lasted three years. Let me know if you want more '
+          'detail on the ships.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isFalse,
+      );
+    });
+
     test(
       'retries when stream signals tool use but no parseable tool call',
       () async {
