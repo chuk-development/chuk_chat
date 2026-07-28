@@ -48,6 +48,89 @@ final RegExp _previousToolResultsStartPattern = RegExp(
   r'<+\s*previous_tool_results\b',
   caseSensitive: false,
 );
+// ---------------------------------------------------------------------------
+// Foreign tool-call protocols.
+//
+// This app speaks exactly one wire format: `<tool_call>{json}</tool_call>`.
+// Providers do not agree on how a model's native tool call is serialised into
+// the text stream, so the same model behaves differently per provider — one
+// passes the native tokens straight through, another rewrites them, a third
+// emits an entirely different XML dialect. Anything we neither parse nor
+// recognise used to render verbatim in the chat.
+//
+// These patterns are deliberately DETECTION-ONLY: the payload is removed from
+// the visible text and `hasToolCallStartMarker` reports a tool round, which
+// makes the malformed-protocol recovery in ToolCallHandler re-prompt for the
+// canonical form. Guessing at the arguments and executing them would be worse
+// than asking the model again.
+//
+// Every match is ignored inside fenced/inline code so a conversation *about*
+// these formats is never mangled.
+
+// Tag names of the dialects seen in the wild. The `s?` covers singular and
+// plural (`<tool_call>` vs `<tool_calls>`).
+const String _foreignToolTagNames =
+    r'(?:tool_calls?|toolcalls?|function_calls?|invoke)';
+
+// Optional `minimax:` style prefix, on the opener and independently on the
+// closer — emitters are usually symmetric, but nothing guarantees it.
+const String _foreignToolTagNamespace = r'(?:[a-zA-Z][a-zA-Z0-9_.-]*\s*:\s*)?';
+
+// Keeps the bare, un-namespaced `<tool_call>` out of the foreign matcher —
+// that is this app's own canonical format, handled by the patterns above.
+// `<minimax:tool_call>` and `<tool_calls>` are unaffected.
+const String _notCanonicalToolCallTag = r'(?!tool_call\b)(?!toolcall\b)';
+
+// `<tool_calls>`, `<minimax:tool_call>`, `<function_call>`, `<invoke …>` …
+// with the matching close tag. Group 1 is the bare tag name, so the closer
+// matches with or without a namespace.
+final RegExp _foreignToolProtocolBlockPattern = RegExp(
+  '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace'
+  '($_foreignToolTagNames)\\b[^>]*>'
+  r'[\s\S]*?'
+  '<\\s*/\\s*$_foreignToolTagNamespace\\1\\s*>',
+  caseSensitive: false,
+);
+
+// `<invoke name="x">…</invoke>` with `<parameter name="k">v</parameter>`
+// children — MiniMax-M2's documented native format, usually wrapped in
+// `<minimax:tool_call>`. Unlike the dialects above this one is unambiguous, so
+// it is parsed into real calls instead of triggering a re-prompt.
+//
+// Known limit (vllm-project/vllm#44060): a `</parameter>` sequence inside an
+// argument value truncates that value, because the closer is matched
+// non-greedily. The format has no escaping for it.
+final RegExp _invokeToolCallPattern = RegExp(
+  '<\\s*$_foreignToolTagNamespace'
+  // `\b` before `name`: without it the non-greedy scan happily matches the
+  // tail of an unrelated attribute such as `displayname="…"` and captures the
+  // wrong tool name — which would then be executed.
+  r'''invoke\b[^>]*?\bname\s*=\s*["']([^"']+)["'][^>]*>'''
+  r'([\s\S]*?)'
+  '<\\s*/\\s*$_foreignToolTagNamespace'
+  r'invoke\s*>',
+  caseSensitive: false,
+);
+final RegExp _invokeParameterPattern = RegExp(
+  '<\\s*$_foreignToolTagNamespace'
+  r'''parameter\b[^>]*?\bname\s*=\s*["']([^"']+)["'][^>]*>'''
+  r'([\s\S]*?)'
+  '<\\s*/\\s*$_foreignToolTagNamespace'
+  r'parameter\s*>',
+  caseSensitive: false,
+);
+
+// Opener of any of the above, plus provider-specific plain-text markers:
+// Mistral `[TOOL_CALLS]`, Llama `<|python_tag|>`, DeepSeek's full-width
+// `<｜tool▁calls▁begin｜>` (U+FF5C pipes, U+2581 separators).
+final RegExp _foreignToolProtocolStartPattern = RegExp(
+  '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace'
+  '$_foreignToolTagNames\\b'
+  r'|\[TOOL_CALLS\]'
+  r'|<[|｜]\s*(?:python_tag|tool[▁_ ]?calls?)',
+  caseSensitive: false,
+);
+
 const Set<String> _knownDirectXmlToolNames = <String>{
   'ask_user',
   'web_search',
@@ -311,7 +394,108 @@ bool hasToolCallStartMarker(String content) {
   return _xmlToolCallStartPattern.hasMatch(content) ||
       _markdownToolCallStartPattern.hasMatch(content) ||
       _kimiToolCallStartPattern.hasMatch(content) ||
-      _earliestDirectXmlToolStart(content) != -1;
+      _earliestDirectXmlToolStart(content) != -1 ||
+      hasForeignToolProtocolMarker(content);
+}
+
+/// True when the text carries a tool-call protocol this app does not parse
+/// (another provider's dialect). Code spans are excluded, so prose *about*
+/// these formats does not count.
+bool hasForeignToolProtocolMarker(String content) {
+  final codeRanges = _codeSpanRanges(content);
+  return _firstMatchOutsideCode(
+        _foreignToolProtocolStartPattern,
+        content,
+        codeRanges,
+      ) !=
+      null;
+}
+
+/// Start/end offsets of fenced blocks and inline code spans.
+///
+/// An unterminated fence extends to end-of-string: mid-stream, a half-arrived
+/// code block must stay protected until its closer shows up.
+List<({int start, int end})> _codeSpanRanges(String content) {
+  final ranges = <({int start, int end})>[];
+
+  var search = 0;
+  while (true) {
+    final open = content.indexOf('```', search);
+    if (open == -1) break;
+    final close = content.indexOf('```', open + 3);
+    if (close == -1) {
+      ranges.add((start: open, end: content.length));
+      // `break`, not `return`: inline spans *before* this still-open fence
+      // must be collected too. Mid-stream this is a common state — prose
+      // mentioning `<tool_calls>` inline, then a code block still arriving.
+      break;
+    }
+    ranges.add((start: open, end: close + 3));
+    search = close + 3;
+  }
+
+  for (final match in RegExp(r'`[^`\n]*`').allMatches(content)) {
+    if (ranges.any((r) => match.start >= r.start && match.start < r.end)) {
+      continue;
+    }
+    ranges.add((start: match.start, end: match.end));
+  }
+
+  return ranges;
+}
+
+bool _isInsideCode(int index, List<({int start, int end})> codeRanges) {
+  for (final range in codeRanges) {
+    if (index >= range.start && index < range.end) return true;
+  }
+  return false;
+}
+
+Match? _firstMatchOutsideCode(
+  RegExp pattern,
+  String content,
+  List<({int start, int end})> codeRanges,
+) {
+  for (final match in pattern.allMatches(content)) {
+    if (!_isInsideCode(match.start, codeRanges)) return match;
+  }
+  return null;
+}
+
+/// Removes foreign tool-call protocol text so it never reaches the user.
+///
+/// Complete blocks are cut out; with [stripIncomplete] an unterminated opener
+/// truncates the rest, exactly like the canonical `<tool_call>` handling.
+String _stripForeignToolProtocol(
+  String content, {
+  required bool stripIncomplete,
+}) {
+  var cleaned = content;
+
+  // Blocks are removed one at a time: every removal shifts the offsets, so the
+  // code-span ranges have to be recomputed against the current string.
+  while (true) {
+    final match = _firstMatchOutsideCode(
+      _foreignToolProtocolBlockPattern,
+      cleaned,
+      _codeSpanRanges(cleaned),
+    );
+    if (match == null) break;
+    cleaned = cleaned.replaceRange(match.start, match.end, '');
+  }
+
+  if (stripIncomplete) {
+    final opener = _firstMatchOutsideCode(
+      _foreignToolProtocolStartPattern,
+      cleaned,
+      _codeSpanRanges(cleaned),
+    );
+    if (opener != null) {
+      cleaned = cleaned.substring(0, opener.start);
+    }
+  }
+
+  return cleaned;
 }
 
 /// Removes tool-call XML/markdown blocks from user-visible text.
@@ -339,6 +523,15 @@ String stripToolCallBlocksForDisplay(
   // artifact cards (mirroring artifact_manager tool-call output), not as
   // raw text. Keeping them in view would show the protocol XML.
   cleaned = stripArtifactTagsForDisplay(
+    cleaned,
+    stripIncomplete: stripIncomplete,
+  );
+
+  // Deny-by-default: a tool-call dialect we cannot parse is still protocol,
+  // never prose. Removing it here keeps it out of the UI; the matching marker
+  // in `hasToolCallStartMarker` makes ToolCallHandler re-prompt for the
+  // canonical `<tool_call>` form instead of leaving the user an empty turn.
+  cleaned = _stripForeignToolProtocol(
     cleaned,
     stripIncomplete: stripIncomplete,
   );
@@ -383,8 +576,9 @@ String stripToolCallBlocksForDisplay(
     // complete special-token blocks, any trailing partial token, and a bare
     // dangling `<` so it never renders as a stray `<` text block above the
     // tool-call bar.
-    cleaned = cleaned.replaceAll(RegExp(r'<\|[^>]*\|>'), '');
-    cleaned = cleaned.replaceFirst(RegExp(r'<\|[^>]*$'), '');
+    // Full-width pipes (U+FF5C) included: DeepSeek writes `<｜tool▁calls▁begin｜>`.
+    cleaned = cleaned.replaceAll(RegExp(r'<[|｜][^>]*[|｜]>'), '');
+    cleaned = cleaned.replaceFirst(RegExp(r'<[|｜][^>]*$'), '');
     // One or more `<` left dangling at the very end are tag-opener fragments
     // (start of `<tool_call>` / `<|…|>` that were split or server-stripped),
     // never real prose. A multiplex with several tool-call sections can leak
@@ -522,8 +716,55 @@ List<Map<String, dynamic>> parseToolCalls(
     ));
   }
 
+  // Code spans are excluded here, not just in the display strip: an example
+  // of the format inside a fence must never be executed as a real call.
+  final codeRanges = _codeSpanRanges(content);
+  for (final match in _invokeToolCallPattern.allMatches(content)) {
+    if (_isInsideCode(match.start, codeRanges)) continue;
+
+    final name = (match.group(1) ?? '').trim();
+    if (name.isEmpty) continue;
+
+    final args = <String, dynamic>{};
+    for (final param in _invokeParameterPattern.allMatches(
+      match.group(2) ?? '',
+    )) {
+      final key = (param.group(1) ?? '').trim();
+      if (key.isEmpty) continue;
+      args[key] = _decodeInvokeParameterValue(param.group(2) ?? '');
+    }
+
+    indexedCalls.add((
+      index: match.start,
+      call: <String, dynamic>{'name': name, 'arguments': args},
+    ));
+  }
+
   indexedCalls.sort((a, b) => a.index.compareTo(b.index));
   return indexedCalls.map((entry) => entry.call).toList();
+}
+
+/// `<parameter>` bodies are untyped text. Only unambiguous JSON shapes are
+/// decoded — an object, an array, a bare number, or a literal true/false/null.
+/// Everything else stays a string, so a query like `null and void` or a
+/// house number is not silently retyped.
+dynamic _decodeInvokeParameterValue(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+
+  final looksStructural = value.startsWith('{') || value.startsWith('[');
+  final looksLiteral =
+      value == 'true' ||
+      value == 'false' ||
+      value == 'null' ||
+      RegExp(r'^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$').hasMatch(value);
+  if (!looksStructural && !looksLiteral) return value;
+
+  try {
+    return jsonDecode(value);
+  } catch (_) {
+    return value;
+  }
 }
 
 /// Check if the content contains any tool call tags.
@@ -543,7 +784,13 @@ bool hasToolCalls(String content) {
     return true;
   }
 
-  return _markdownToolCallBlockPattern.hasMatch(content);
+  if (_markdownToolCallBlockPattern.hasMatch(content)) {
+    return true;
+  }
+
+  final codeRanges = _codeSpanRanges(content);
+  return _firstMatchOutsideCode(_invokeToolCallPattern, content, codeRanges) !=
+      null;
 }
 
 bool _isKnownDirectXmlToolName(String tagName) {
