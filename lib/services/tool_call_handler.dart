@@ -1495,36 +1495,78 @@ class ToolCallHandler {
     }
 
     final normalized = text.toLowerCase();
+
+    // Multi-line / fenced output is a real answer, not a promise of one.
+    if (normalized.contains('\n') || normalized.contains('```')) {
+      return false;
+    }
+
+    // "Let me summarize: Magellan left in 1519." — the answer is delivered in
+    // the same breath as the announcement, so this is not a deferred action.
+    // A bare trailing colon ("Let me search for X:") still counts as deferred.
+    final colonIndex = normalized.indexOf(':');
+    if (colonIndex >= 0 &&
+        normalized.substring(colonIndex + 1).trim().isNotEmpty) {
+      return false;
+    }
+
+    // The promise is often preceded by a filler sentence ("I have enough
+    // information now. Let me write the summary."), so the last sentence is
+    // checked as well as the whole text.
+    return _isDeferredIntentSentence(normalized) ||
+        _isDeferredIntentSentence(_lastSentence(normalized));
+  }
+
+  /// Last sentence of [normalized], or the whole string when it has only one.
+  static String _lastSentence(String normalized) {
+    final parts = normalized
+        .split(RegExp(r'(?<=[.!?:])\s+'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return parts.isEmpty ? normalized : parts.last;
+  }
+
+  static bool _isDeferredIntentSentence(String sentence) {
     final startsWithIntent = RegExp(
-      r"^(ok[,\s]+|sure[,\s]+|alright[,\s]+)?"
+      r"^(ok[,\s]+|sure[,\s]+|alright[,\s]+|now[,\s]+)?"
       r"(first[,\s]+)?"
       r"(i\s*(?:will|'ll)|let me|i(?:’|')m going to|i need to|i should)\b",
-    ).hasMatch(normalized);
+    ).hasMatch(sentence);
     final startsWithIntentIntl = RegExp(
-      r'^(ich\s+(?:suche|werde)|'
+      r'^(jetzt\s+)?'
+      r"(ich\s+(?:suche|werde|erstelle|schreibe|fasse|recherchiere)|"
+      r'lass(?:en\s+sie)?\s+mich|'
       r'je\s+vais|'
       r'voy\s+a|'
       r'vado\s+a|'
       r'eu\s+vou|'
       r'wij\s+gaan|'
       r'we\s+will)\b',
-    ).hasMatch(normalized);
+    ).hasMatch(sentence);
     if (!startsWithIntent && !startsWithIntentIntl) {
       return false;
     }
 
-    final hasDeferredActionVerb = RegExp(
+    // Verbs that name work the model still owes the user — either a tool call
+    // (search/check) or the answer itself (write/summarize).
+    return RegExp(
       r'\b(search|check|look up|lookup|verify|find|fetch|browse|compare|research|pull|'
-      r'suche|recherchiere|chercher|rechercher|buscar|investigar|procurar|onderzoek)\b',
-    ).hasMatch(normalized);
-    if (!hasDeferredActionVerb) {
-      return false;
-    }
-
-    final hasAnswerLikeStructure =
-        normalized.contains('\n') || normalized.contains('```');
-
-    return !hasAnswerLikeStructure;
+      r'write|create|draft|compile|prepare|put together|summari[sz]e|summary|'
+      // de
+      r'suche|recherchiere|erstelle[nr]?|schreibe[nr]?|verfasse[nr]?|'
+      r'zusammenfass\w*|pr(?:ü|ue)fe[nr]?|nachschauen|nachsehen|'
+      // fr
+      r'chercher|rechercher|v(?:é|e)rifier|consulter|r(?:é|e)diger|r(?:é|e)sumer|'
+      // es
+      r'buscar|investigar|revisar|verificar|escribir|resumir|'
+      // pt
+      r'procurar|pesquisar|escrever|resumir|'
+      // it
+      r'cercare|verificare|controllare|scrivere|riassumere|'
+      // nl
+      r'onderzoek|zoeken|opzoeken|nakijken|schrijven|samenvatten)\b',
+    ).hasMatch(sentence);
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {
