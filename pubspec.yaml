@@ -2,7 +2,7 @@ name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
 publish_to: 'none'
 
-version: 1.0.106
+version: 1.0.107
 
 environment:
   sdk: ^3.9.2
