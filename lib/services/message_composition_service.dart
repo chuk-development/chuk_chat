@@ -288,6 +288,30 @@ class MessageCompositionService {
   }
 
   /// Calculate token limits and validate context length
+  /// Public view of the token budget, for send paths that do not go through
+  /// [prepareMessage].
+  ///
+  /// The desktop edit/resend path used to hardcode `maxTokens: 4096`, which
+  /// overshoots any model whose completion cap is lower (provider 400) and
+  /// ignores how much context the history has already consumed.
+  static ({int? maxResponseTokens, String? error}) resolveResponseTokenBudget({
+    required String selectedModelId,
+    required List<Map<String, dynamic>> apiHistory,
+    required String aiPromptContent,
+    String? systemPrompt,
+  }) {
+    final limits = _calculateTokenLimits(
+      selectedModelId: selectedModelId,
+      apiHistory: apiHistory,
+      aiPromptContent: aiPromptContent,
+      systemPrompt: systemPrompt,
+    );
+    return (
+      maxResponseTokens: limits.maxResponseTokens,
+      error: limits.isValid ? null : limits.errorMessage,
+    );
+  }
+
   static _TokenLimits _calculateTokenLimits({
     required String selectedModelId,
     required List<Map<String, dynamic>> apiHistory,

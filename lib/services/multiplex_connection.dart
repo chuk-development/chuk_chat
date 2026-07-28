@@ -353,7 +353,7 @@ class MultiplexConnection {
         final message = code == kCacheMissErrorCode
             ? '$kCacheMissErrorCode: $detail'
             : detail;
-        ctrl.add(ChatStreamEvent.error(message));
+        ctrl.add(ChatStreamEvent.error(message, code: code));
         // Don't close yet — server still owes us `done`. If it never
         // arrives the transport-failure path will close us.
         break;
@@ -564,7 +564,12 @@ class MultiplexConnection {
 
     for (final ctrl in controllers) {
       try {
-        ctrl.add(ChatStreamEvent.error(detail));
+        ctrl.add(
+          ChatStreamEvent.error(
+            detail,
+            code: StreamErrorCodes.connectionLost,
+          ),
+        );
         ctrl.add(const ChatStreamEvent.done());
       } catch (_) {}
       unawaited(ctrl.close());

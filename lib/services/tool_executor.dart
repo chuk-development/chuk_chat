@@ -805,7 +805,10 @@ class ToolExecutor {
           ),
         );
       case 'sandbox_read':
+        // Raw file contents: a file whose first line starts with "Error"
+        // must not be reported as a failed tool call.
         return _wrapOutput(
+          sniff: false,
           await sandbox_tools.executeSandboxReadFile(
             accessToken: accessToken,
             chatId:
@@ -1271,12 +1274,53 @@ class ToolExecutor {
     return buf.toString().trimRight();
   }
 
-  ToolExecutionResult _wrapOutput(String output) {
+  /// Wraps a handler's string output, inferring whether it reports a failure.
+  ///
+  /// The old rule was `output.startsWith('Error:')` — exact prefix, colon
+  /// required. Around a hundred handler failure paths do not match it
+  /// (`'Error getting route: …'`, `'Spotify error: …'`, `'Weather error: …'`,
+  /// `'Failed to get Spotify access token.'`, …), so every one of them was
+  /// reported to the user with a green success check AND handed to the model
+  /// as a successful tool result — the model then answered from an error
+  /// string as if it were data.
+  ///
+  /// This is still inference over prose and it is a stopgap. The real fix is
+  /// for handlers to return `({String output, bool isError})` so the failure
+  /// is stated rather than guessed; see [toolFailureSniffPattern] for what the
+  /// stopgap actually matches. Handlers that return arbitrary upstream content
+  /// (a file body, a raw API response) must pass `sniff: false`, otherwise a
+  /// file that merely begins with the word "Error" is reported as a failure.
+  ToolExecutionResult _wrapOutput(String output, {bool sniff = true}) {
     return ToolExecutionResult(
       output: output,
-      isError: output.startsWith('Error:'),
+      isError: sniff && looksLikeToolFailure(output),
     );
   }
+
+  /// Leading phrases the handlers actually use to report failure.
+  ///
+  /// Anchored at the start and deliberately narrow: `<Thing> error:` matches
+  /// `Spotify error:` / `Weather error:` / `Web search error:` but not a
+  /// sentence that merely mentions an error later on.
+  static final RegExp toolFailureSniffPattern = RegExp(
+    r'^\s*('
+    r'Error\b'
+    r'|Failed\b'
+    r'|Unable to\b'
+    r'|Unknown [A-Za-z_]+ (?:action|operation)\b'
+    r'|Unknown operation\b'
+    r'|Unsupported [A-Za-z]+ (?:method|action)\b'
+    // "<Thing> error:" with at most three words before it, so a prose
+    // sentence that merely reaches an "error:" later does not match.
+    r'|[A-Z][A-Za-z0-9]*(?: [A-Za-z0-9]+){0,2} error(?: \(\d+\))?:'
+    r'|[A-Za-z ]{0,20}not authenticated\b'
+    r'|[A-Za-z ]{0,20}(?:token )?expired\b'
+    r')',
+  );
+
+  @visibleForTesting
+  static bool looksLikeToolFailure(String output) =>
+      toolFailureSniffPattern.hasMatch(output);
 
   int _coerceInt(dynamic value, {required int fallback}) {
     if (value == null) return fallback;

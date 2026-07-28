@@ -62,7 +62,7 @@ Future<String> executeSearchChats(Map<String, dynamic> args) async {
         return 'Error: "role" must be one of: user, assistant, ai, all';
       }
 
-      return _recentMessages(chatId: effectiveChatId, limit: limit, role: role);
+      return await _recentMessages(chatId: effectiveChatId, limit: limit, role: role);
     }
 
     final query = (args['query'] as String? ?? '').trim();
@@ -80,7 +80,7 @@ Future<String> executeSearchChats(Map<String, dynamic> args) async {
         fallback: _defaultMessageLimit,
       ).clamp(1, _maxMessageLimit).toInt();
 
-      return _searchInChat(
+      return await _searchInChat(
         query: query,
         chatId: chatId,
         messageLimit: messageLimit,
@@ -92,7 +92,7 @@ Future<String> executeSearchChats(Map<String, dynamic> args) async {
       fallback: _defaultChatLimit,
     ).clamp(1, _maxChatLimit).toInt();
 
-    return _findChats(query: query, limit: chatLimit);
+    return await _findChats(query: query, limit: chatLimit);
   } catch (error) {
     return 'Error: search_chats failed: $error';
   }

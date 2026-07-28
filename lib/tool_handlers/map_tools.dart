@@ -5,6 +5,11 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
 
+/// These endpoints are called straight from the device, so a stalled
+/// request would otherwise wedge the whole tool loop — which is exactly
+/// what happens when the phone loses its network mid-turn.
+const Duration _networkTimeout = Duration(seconds: 20);
+
 const String _nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
 const String _osrmBaseUrl = 'https://router.workspace-osrm.org';
 const Map<String, String> _defaultHeaders = {
@@ -146,10 +151,9 @@ Future<String> executeGeocode(
         '$_nominatimBaseUrl/reverse'
         '?format=jsonv2&lat=$lat&lon=$lon',
       );
-      final response = await effectiveClient.get(
-        reverseUri,
-        headers: _defaultHeaders,
-      );
+      final response = await effectiveClient
+          .get(reverseUri, headers: _defaultHeaders)
+          .timeout(_networkTimeout);
       if (response.statusCode != 200) {
         return 'Error: reverse geocoding failed (${response.statusCode})';
       }
@@ -224,7 +228,9 @@ Future<String> executeGetRoute(
       '?overview=false&steps=true&alternatives=false',
     );
 
-    final response = await effectiveClient.get(uri, headers: _defaultHeaders);
+    final response = await effectiveClient
+        .get(uri, headers: _defaultHeaders)
+        .timeout(_networkTimeout);
     if (response.statusCode != 200) {
       return 'Error: route lookup failed (${response.statusCode})';
     }
@@ -398,7 +404,9 @@ Future<List<Map<String, dynamic>>> _searchNominatim({
 
   final uri = Uri.parse(url);
 
-  final response = await client.get(uri, headers: _defaultHeaders);
+  final response = await client
+      .get(uri, headers: _defaultHeaders)
+      .timeout(_networkTimeout);
   if (response.statusCode != 200) {
     throw StateError('Nominatim returned ${response.statusCode}');
   }

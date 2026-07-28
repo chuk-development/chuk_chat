@@ -15,7 +15,8 @@ sealed class ChatStreamEvent {
   const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
   const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
   const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent;
-  const factory ChatStreamEvent.error(String message) = ErrorEvent;
+  const factory ChatStreamEvent.error(String message, {String? code}) =
+      ErrorEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
 }
 
@@ -51,11 +52,73 @@ class TpsEvent extends ChatStreamEvent {
 
 /// Event indicating an error occurred.
 class ErrorEvent extends ChatStreamEvent {
+  /// Human-readable text. Safe to show, useless to branch on — the server
+  /// sends the same sentence for several unrelated failure classes.
   final String message;
-  const ErrorEvent(this.message);
+
+  /// Machine-readable failure class from the server (`upstream_network`,
+  /// `upstream_status`, `upstream_no_stream`, `cache_miss`, …).
+  ///
+  /// This is what retry decisions must key off. Classifying by [message]
+  /// substrings breaks the moment the wording or the language changes, and
+  /// it cannot tell a transient stall from a flat rejection. Null for errors
+  /// raised locally rather than by the server.
+  final String? code;
+
+  const ErrorEvent(this.message, {this.code});
 }
 
 /// Event indicating the stream has completed.
 class DoneEvent extends ChatStreamEvent {
   const DoneEvent();
+}
+
+/// Signature for stream error callbacks.
+///
+/// [code] is [ErrorEvent.code] where the failure came from the server, and
+/// null for locally raised errors. Retry logic must branch on it rather than
+/// on the text of [error].
+typedef StreamErrorCallback = void Function(String error, {String? code});
+
+/// Failure classes carried on [ErrorEvent.code].
+///
+/// The server emits the first group; the client raises the second. Both exist
+/// so a retry decision is a set lookup instead of a guess at what English
+/// sentence the backend happened to send.
+abstract final class StreamErrorCodes {
+  /// Server ⇄ provider network failure. The server already retried with
+  /// backoff and provider fallback before giving up.
+  static const String upstreamNetwork = 'upstream_network';
+
+  /// The provider *rejected* the request (e.g. 400/413 on an oversized
+  /// payload). Deterministic — the identical request fails the same way.
+  static const String upstreamStatus = 'upstream_status';
+
+  /// Provider returned 200 headers and then never sent a body token.
+  static const String upstreamNoStream = 'upstream_no_stream';
+  static const String upstreamFirstByteTimeout = 'upstream_first_byte_timeout';
+
+  /// The WebSocket died with the request in flight.
+  static const String connectionLost = 'connection_lost';
+
+  /// No event arrived within the client's idle window.
+  static const String idleTimeout = 'idle_timeout';
+
+  /// The event stream itself raised.
+  static const String streamFailure = 'stream_failure';
+
+  /// Failures worth re-issuing the pass for.
+  ///
+  /// [upstreamStatus] is deliberately absent: a rejection is not transient,
+  /// so retrying burns tokens and the user's time for a guaranteed repeat.
+  /// The stall and network classes are in — the server exhausted *its*
+  /// options against one provider pin, and a fresh request is routed anew.
+  static const Set<String> retryable = <String>{
+    upstreamNetwork,
+    upstreamNoStream,
+    upstreamFirstByteTimeout,
+    connectionLost,
+    idleTimeout,
+    streamFailure,
+  };
 }

@@ -87,7 +87,7 @@ class StreamingManager {
     required Stream<ChatStreamEvent> stream,
     required Function(String content, String reasoning) onUpdate,
     required Function(String content, String reasoning, double? tps) onComplete,
-    required Function(String error) onError,
+    required StreamErrorCallback onError,
     String? chatTitle,
   }) async {
     // Cancel existing stream for this chat if any
@@ -117,7 +117,10 @@ class StreamingManager {
         if (error is StreamingChatException && error.statusCode == 402) {
           onError('__PAYMENT_REQUIRED__');
         } else {
-          onError('Error: ${_sanitizeStreamError(error)}');
+          onError(
+            'Error: ${_sanitizeStreamError(error)}',
+            code: StreamErrorCodes.streamFailure,
+          );
         }
         _cleanupStream(chatId);
       },
@@ -152,6 +155,7 @@ class StreamingManager {
         onError(
           'No response received — the server may be overloaded. '
           'Please try again.',
+          code: StreamErrorCodes.idleTimeout,
         );
       } else {
         // We already have partial content — complete with what we have
@@ -281,7 +285,7 @@ class StreamingManager {
     required ChatStreamEvent event,
     required Function(String content, String reasoning) onUpdate,
     required Function(String content, String reasoning, double? tps) onComplete,
-    required Function(String error) onError,
+    required StreamErrorCallback onError,
   }) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
@@ -350,7 +354,7 @@ class StreamingManager {
       // even after the error message is shown.
       activeStream.isActive = false;
       _cleanupStream(chatId);
-      onError(event.message);
+      onError(event.message, code: event.code);
     } else if (event is DoneEvent) {
       // Handle done events from the stream (successful completion)
       if (kDebugMode) {

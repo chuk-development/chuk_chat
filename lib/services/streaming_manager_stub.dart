@@ -39,7 +39,7 @@ class StreamingManager {
     required Stream<ChatStreamEvent> stream,
     required Function(String content, String reasoning) onUpdate,
     required Function(String content, String reasoning, double? tps) onComplete,
-    required Function(String error) onError,
+    required StreamErrorCallback onError,
     String? chatTitle,
   }) async {
     // Cancel existing stream for this chat if any
@@ -168,7 +168,7 @@ class StreamingManager {
     required ChatStreamEvent event,
     required Function(String content, String reasoning) onUpdate,
     required Function(String content, String reasoning, double? tps) onComplete,
-    required Function(String error) onError,
+    required StreamErrorCallback onError,
   }) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
@@ -196,7 +196,7 @@ class StreamingManager {
       // returns true, which leaves the UI stuck on the streaming spinner
       // even after the error message is shown.
       _cleanupStream(chatId);
-      onError(event.message);
+      onError(event.message, code: event.code);
     } else if (event is DoneEvent) {
       if (kDebugMode) {
         debugPrint('Stream DoneEvent for chat $chatId');

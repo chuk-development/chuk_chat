@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
@@ -14,11 +16,9 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
-import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
-import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
@@ -130,10 +130,6 @@ class StreamingMessageHandler {
   Future<void>? get activeToolLoopFuture => _activeToolLoopFuture;
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
-  static final Map<String, String> _imageBase64Cache = {};
-  static const int _maxCacheSize = 10;
-  static const int _maxHistoryImageCount = 10;
-  static const int _maxHistoryImageDataChars = 1500000;
 
   /// Send a message with streaming response
   Future<void> sendMessage({
@@ -989,13 +985,14 @@ class StreamingMessageHandler {
           _activeToolLoopFuture = completionFuture;
           unawaited(completionFuture);
         },
-        onError: (errorMessage) {
+        onError: (errorMessage, {String? code}) {
           if (_isDisposed) return;
 
           // A referenced tool result is no longer cached server-side. Drop the
           // registry so the replay uploads full content, then retry this pass
           // once. Refs can't miss again after the clear.
-          if (errorMessage.contains(kCacheMissErrorCode) &&
+          if ((code == kCacheMissErrorCode ||
+                  errorMessage.contains(kCacheMissErrorCode)) &&
               cacheMissRetries < kMaxCacheMissRetries &&
               !_isDisposed) {
             ToolResultCacheRegistry.instance.handleMiss();
@@ -1014,15 +1011,31 @@ class StreamingMessageHandler {
             return;
           }
 
+          // Retryability is a property of the failure, not of the sentence
+          // describing it. The server sends the SAME user-facing text
+          // ("AI service temporarily unavailable. Please try again.") for a
+          // transient upstream stall and for a flat rejection, and tags them
+          // apart with `code`. Sniffing the text got that wrong in both
+          // directions: it treated every one of those as terminal, so a turn
+          // that had already run five tool calls died outright.
+          //
+          // The keyword pass survives only as a fallback for errors raised
+          // somewhere that does not (yet) attach a code.
           final normalizedError = errorMessage.toLowerCase();
-          final isReconnectable =
-              errorMessage != '__PAYMENT_REQUIRED__' &&
-              (normalizedError.contains('connection') ||
-                  normalizedError.contains('websocket') ||
-                  normalizedError.contains('socket') ||
-                  normalizedError.contains('timed out') ||
-                  normalizedError.contains('server may be overloaded') ||
-                  normalizedError.contains('no response received'));
+          final bool isReconnectable;
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            isReconnectable = false;
+          } else if (code != null) {
+            isReconnectable = StreamErrorCodes.retryable.contains(code);
+          } else {
+            isReconnectable =
+                normalizedError.contains('connection') ||
+                normalizedError.contains('websocket') ||
+                normalizedError.contains('socket') ||
+                normalizedError.contains('timed out') ||
+                normalizedError.contains('server may be overloaded') ||
+                normalizedError.contains('no response received');
+          }
           if (isReconnectable &&
               reconnectRetries < kMaxPassReconnectRetries &&
               !_isDisposed) {
@@ -1075,16 +1088,36 @@ class StreamingMessageHandler {
             return;
           }
 
+          // Keep whatever this turn already produced. Finalizing with the bare
+          // error string overwrote the message body, so a turn that had run
+          // five tool calls and streamed half an answer was reduced to one
+          // sentence — the work was gone and there was nothing to continue
+          // from. The error is appended as a trailing note instead.
+          final salvaged = mergeAccumulatedWithFinal(
+            accumulated: accumulatedText.toString(),
+            finalText: '',
+          );
+          final finalizedText = salvaged.isEmpty
+              ? errorMessage
+              : '$salvaged\n\n$errorMessage';
+
           if (onMessageFinalize != null) {
             onMessageFinalize!(
               placeholderIndex,
-              errorMessage,
+              finalizedText,
               '',
               chatId,
               null,
             );
           }
           onShowSnackBar?.call(errorMessage);
+
+          // Mark the turn continuable. Previously `interrupted` was set only
+          // on user cancel / teardown, so after an error the Continue button
+          // never appeared — the one affordance that could have rescued the
+          // turn was hidden exactly when it was needed. This runs AFTER
+          // onMessageFinalize, which clears the status.
+          onStreamInterrupted?.call(chatId, placeholderIndex);
 
           _markStreamFinalized();
           _isStreaming = false;
@@ -1330,7 +1363,8 @@ class StreamingMessageHandler {
     return _streamingManager.hasBackgroundMessages(chatId);
   }
 
-  /// Build API history from messages, optionally including images and reasoning
+  /// Delegates to [ChatHistoryBuilder] — see that file for why this must not
+  /// be reimplemented per platform.
   Future<List<Map<String, dynamic>>> _buildApiHistory(
     List<Map<String, String>> messages,
     String pendingUserText, {
@@ -1338,150 +1372,16 @@ class StreamingMessageHandler {
     bool includeAllImages = false,
     bool includeReasoning = false,
     bool includeToolResults = true,
-  }) async {
-    final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
+  }) => ChatHistoryBuilder.build(
+    messages: messages,
+    pendingUserText: pendingUserText,
+    includeRecentImages: includeRecentImages,
+    includeAllImages: includeAllImages,
+    includeReasoning: includeReasoning,
+    includeToolResults: includeToolResults,
+  );
 
-    // Determine image window: count user messages with images from end
-    final bool shouldIncludeImages = includeRecentImages || includeAllImages;
-    final int imageWindow = includeAllImages ? messages.length : 10;
 
-    // Find which user messages (by index) are within the image window
-    final Set<int> imageEligibleIndices = {};
-    var remainingHistoryImageCount = _maxHistoryImageCount;
-    var remainingHistoryImageChars = _maxHistoryImageDataChars;
-    if (shouldIncludeImages) {
-      int userMsgCount = 0;
-      for (int i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]['sender'] == 'user') {
-          userMsgCount++;
-          if (userMsgCount <= imageWindow) {
-            imageEligibleIndices.add(i);
-          }
-        }
-      }
-    }
-
-    for (int i = 0; i < messages.length; i++) {
-      final message = messages[i];
-      final String? sender = message['sender'];
-      final String? text = message['text'];
-
-      if (sender == 'user') {
-        final bool hasImages =
-            message['images'] != null && message['images']!.isNotEmpty;
-        final bool shouldAddImages =
-            shouldIncludeImages &&
-            hasImages &&
-            imageEligibleIndices.contains(i);
-
-        if (shouldAddImages) {
-          // Build multimodal content with text + images
-          final content = <Map<String, dynamic>>[];
-          if (text != null && text.trim().isNotEmpty) {
-            content.add({'type': 'text', 'text': text});
-          }
-          // Resolve image storage paths to Base64
-          final imageDataUrls = await _resolveHistoryImages(message['images']!);
-          var addedHistoryImages = 0;
-          for (final dataUrl in imageDataUrls) {
-            if (remainingHistoryImageCount <= 0) break;
-            final dataUrlChars = dataUrl.length;
-            if (dataUrlChars > remainingHistoryImageChars) break;
-            content.add({
-              'type': 'image_url',
-              'image_url': {'url': dataUrl},
-            });
-            remainingHistoryImageCount--;
-            remainingHistoryImageChars -= dataUrlChars;
-            addedHistoryImages++;
-          }
-          final skippedImages = imageDataUrls.length - addedHistoryImages;
-          if (skippedImages > 0) {
-            content.add({
-              'type': 'text',
-              'text':
-                  '[$skippedImages image(s) omitted from history due request size limits.]',
-            });
-          }
-          if (content.isNotEmpty) {
-            history.add({'role': 'user', 'content': content});
-          }
-        } else if (text != null && text.trim().isNotEmpty) {
-          history.add({'role': 'user', 'content': text});
-        }
-      } else if (sender == 'ai' || sender == 'assistant') {
-        // Include prior tool calls + results so a follow-up question that
-        // depends on the same data doesn't force the model to re-run the
-        // tools (web searches, etc).
-        final assistantContent = formatAssistantContent(
-          message,
-          includeReasoning: includeReasoning,
-          includeToolResults: includeToolResults,
-        );
-        if (assistantContent == null) {
-          continue;
-        }
-        history.add({'role': 'assistant', 'content': assistantContent});
-      }
-    }
-
-    // Don't add pendingUserText here - the server adds the current message
-    // from the 'message' parameter. Adding it here causes duplicate user
-    // messages which makes AI models think the user sent the message twice.
-
-    return history;
-  }
-
-  /// Resolve image storage paths from a JSON-encoded list to Base64 data URLs
-  Future<List<String>> _resolveHistoryImages(String imagesJson) async {
-    final List<String> dataUrls = [];
-    try {
-      final decoded = jsonDecode(imagesJson);
-      if (decoded is! List) return dataUrls;
-
-      for (final img in decoded) {
-        final path = img.toString();
-        if (path.isEmpty) continue;
-
-        // Check if already a data URL
-        if (path.startsWith('data:image/')) {
-          dataUrls.add(path);
-          continue;
-        }
-
-        // Check cache
-        if (_imageBase64Cache.containsKey(path)) {
-          dataUrls.add(_imageBase64Cache[path]!);
-          continue;
-        }
-
-        // Download, decrypt, convert to Base64
-        try {
-          final bytes = await ImageStorageService.downloadAndDecryptImage(path);
-          final base64 = base64Encode(bytes);
-          final dataUrl = 'data:image/jpeg;base64,$base64';
-
-          // Cache with eviction
-          if (_imageBase64Cache.length >= _maxCacheSize) {
-            _imageBase64Cache.remove(_imageBase64Cache.keys.first);
-          }
-          _imageBase64Cache[path] = dataUrl;
-          dataUrls.add(dataUrl);
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint(
-              '⚠️ [StreamingHandler] Failed to resolve history image: $e',
-            );
-          }
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
-      }
-    }
-    return dataUrls;
-  }
 
   /// Get session safely with network error handling
   Future<dynamic> getSessionSafely() async {
