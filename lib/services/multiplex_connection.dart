@@ -498,6 +498,10 @@ class MultiplexConnection {
         controller.add(
           ChatStreamEvent.error(
             e is MultiplexException ? e.detail : e.toString(),
+            // Handshake failure before the request went out — nothing was
+            // consumed upstream, so re-issuing the pass is exactly right.
+            code: (e is MultiplexException ? e.code : null) ??
+                StreamErrorCodes.connectionLost,
           ),
         );
         controller.add(const ChatStreamEvent.done());
@@ -520,7 +524,12 @@ class MultiplexConnection {
       _toolCompleters.remove(reqId);
       const detail = 'connection unavailable';
       if (controller != null) {
-        controller.add(const ChatStreamEvent.error(detail));
+        controller.add(
+          const ChatStreamEvent.error(
+            detail,
+            code: StreamErrorCodes.connectionLost,
+          ),
+        );
         controller.add(const ChatStreamEvent.done());
         await controller.close();
       }
@@ -539,7 +548,12 @@ class MultiplexConnection {
       _chatControllers.remove(reqId);
       _toolCompleters.remove(reqId);
       if (controller != null) {
-        controller.add(ChatStreamEvent.error('send failed: $e'));
+        controller.add(
+          ChatStreamEvent.error(
+            'send failed: $e',
+            code: StreamErrorCodes.connectionLost,
+          ),
+        );
         controller.add(const ChatStreamEvent.done());
         await controller.close();
       }

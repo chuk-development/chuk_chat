@@ -215,15 +215,17 @@ class ChatHistoryBuilder {
           }
           _imageBase64Cache[path] = dataUrl;
           dataUrls.add(dataUrl);
-        } catch (e) {
+        } catch (_) {
+          // Non-critical: the image is skipped. The exception text can carry
+          // the storage path, so it is not echoed into the log.
           if (kDebugMode) {
-            debugPrint('⚠️ [ChatHistoryBuilder] image resolve failed: $e');
+            debugPrint('⚠️ [ChatHistoryBuilder] image resolve failed');
           }
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ChatHistoryBuilder] images JSON parse failed: $e');
+        debugPrint('⚠️ [ChatHistoryBuilder] images JSON parse failed');
       }
     }
     return dataUrls;

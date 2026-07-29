@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 
 /// Manages multiple concurrent chat streams across different chats
@@ -65,7 +66,10 @@ class StreamingManager {
         if (error is StreamingChatException && error.statusCode == 402) {
           onError('__PAYMENT_REQUIRED__');
         } else {
-          onError('Error: $error');
+          onError(
+            'Error: ${sanitizeStreamError(error)}',
+            code: StreamErrorCodes.streamFailure,
+          );
         }
         _cleanupStream(chatId);
       },
