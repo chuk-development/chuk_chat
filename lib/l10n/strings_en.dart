@@ -184,7 +184,7 @@ const Map<String, String> stringsEn = {
   'searchWorkspacesHint': 'Search workspaces...',
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
-  'aiDisclaimer': 'AI/LLMs can make mistakes — double-check important info.',
+  'aiDisclaimer': 'You\'re chatting with an AI — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────

@@ -503,6 +503,7 @@ const Map<String, String> stringsEs = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '¡Pregúntame lo que quieras!',
+  'aiDisclaimer': 'Estás chateando con una IA: puede equivocarse. Verifica lo importante.',
   'queuedLabel': 'En cola',
   'editYourMessage': 'Edita tu mensaje...',
   'addMessageOrDocs': 'Añade un mensaje o envía documentos',

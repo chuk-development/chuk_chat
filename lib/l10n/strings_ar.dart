@@ -503,6 +503,7 @@ const Map<String, String> stringsAr = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'اسألني أي شيء!',
+  'aiDisclaimer': 'أنت تتحدث مع ذكاء اصطناعي — قد يخطئ. تحقق من المعلومات المهمة.',
   'queuedLabel': 'في قائمة الانتظار',
   'editYourMessage': 'عدّل رسالتك...',
   'addMessageOrDocs': 'أضف رسالة أو أرسل مستندات',

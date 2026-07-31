@@ -589,6 +589,7 @@ const Map<String, String> stringsFr = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Posez-moi n\'importe quelle question !',
+  'aiDisclaimer': 'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
   'queuedLabel': 'En file d\'attente',
   'editYourMessage': 'Modifier votre message...',
   'addMessageOrDocs':

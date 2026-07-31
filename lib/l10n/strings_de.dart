@@ -190,7 +190,7 @@ const Map<String, String> stringsDe = {
   'searchWorkspacesHint': 'Arbeitsbereiche suchen...',
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
-  'aiDisclaimer': 'KI/LLMs können Fehler machen — wichtige Infos bitte prüfen.',
+  'aiDisclaimer': 'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
