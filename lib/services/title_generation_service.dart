@@ -15,13 +15,36 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 
 /// Service for automatically generating chat titles using AI.
-/// Uses qwen/qwen3.5-9b model for title generation over WebSocket.
+/// Uses google/gemma-4-31b-it for title generation over WebSocket.
 class TitleGenerationService {
   // Model for title generation. The provider is resolved at call time from
   // the cached model list (see [_resolveTitleProvider]) — hardcoding an empty
   // provider made the server reject every title request with a generic
   // "An error occurred" because `provider_slug` is always sent on the wire.
-  static const String _titleModel = 'qwen/qwen3.5-9b';
+  //
+  // Was `qwen/qwen3.5-9b`, which is not in the server's curated catalog: the
+  // server rejected every title request with 400 "not available" and titles
+  // silently never generated. Picked by measuring, not guessing — 3 runs over
+  // 5 conversations (DE/EN/FR), each provider pinned:
+  //
+  //   gemma-4-31b-it @ cerebras/fp16   242ms   8 output tokens
+  //   gpt-oss-20b    @ groq            171ms  56 output tokens (reasoning)
+  //   gemma-4-31b-it @ deepinfra/turbo 620ms
+  //   qwen3.5-9b     @ any            >740ms
+  //
+  // gpt-oss on Groq is nominally the fastest, but reasoning is *mandatory* on
+  // that endpoint (OpenRouter 400s on `reasoning: {enabled: false}`) and its
+  // reasoning tokens count against [maxTokens] — a longer first message eats
+  // the 32-token budget and returns an empty title. Gemma takes ~8 tokens with
+  // reasoning off, so the budget cannot be blown, for ~70ms on a background
+  // task nobody is waiting on.
+  static const String _titleModel = 'google/gemma-4-31b-it';
+
+  // Preferred provider for [_titleModel] — the fastest one measured. Not a
+  // hard requirement: [_resolveTitleProvider] falls back to whatever the
+  // catalog offers, and the server re-pins to an equal-or-cheaper provider on
+  // a 429/404, so a Cerebras outage degrades to slower titles, not to none.
+  static const String _preferredTitleProvider = 'cerebras/fp16';
 
   // Cached provider slug for [_titleModel], resolved once per session.
   static String? _resolvedTitleProvider;
@@ -449,14 +472,21 @@ Rules:
         if (model['id'] != _titleModel) continue;
         final providers = model['providers'];
         if (providers is List) {
-          for (final provider in providers) {
-            if (provider is Map<String, dynamic>) {
-              final slug = provider['slug'] as String?;
-              if (slug != null && slug.isNotEmpty) {
-                _resolvedTitleProvider = slug;
-                return slug;
-              }
-            }
+          final slugs = <String>[
+            for (final provider in providers)
+              if (provider is Map<String, dynamic>)
+                if (provider['slug'] case final String slug when slug.isNotEmpty)
+                  slug,
+          ];
+          // Prefer the fastest measured provider; otherwise take whatever the
+          // catalog lists first. The catalog is ZDR-filtered server-side, so
+          // any entry here is a legitimate choice.
+          final chosen = slugs.contains(_preferredTitleProvider)
+              ? _preferredTitleProvider
+              : (slugs.isNotEmpty ? slugs.first : null);
+          if (chosen != null) {
+            _resolvedTitleProvider = chosen;
+            return chosen;
           }
         }
         break;
