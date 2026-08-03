@@ -566,18 +566,27 @@ Rules:
         modelId: _titleModel,
         providerSlug: titleProvider,
         systemPrompt: systemPrompt,
-        // 200, not 32, and that is load-bearing. Reasoning is *mandatory* on
-        // the gpt-oss endpoints — OpenRouter 400s on `reasoning: {enabled:
-        // false}` — and reasoning tokens count against maxTokens. At 32 the
-        // model spends the budget thinking and returns empty content: measured
-        // 1/12 empty titles at 32, 0/12 at 200, and the failures cluster on
-        // longer first messages, i.e. exactly the chats worth titling. The
-        // reply itself is still ~8 words; this is headroom, not output length.
+        // NOTE: the backend currently parses `max_tokens` and `temperature`
+        // and then forwards neither upstream (routers/multiplex.py), so both
+        // of these are advisory today. They are still sent, and set to what
+        // this request actually wants, so the moment the backend honours them
+        // nothing here has to change.
+        //
+        // 200 rather than 32 because reasoning is *mandatory* on the gpt-oss
+        // endpoints — OpenRouter 400s on `reasoning: {enabled: false}` — and
+        // reasoning tokens count against the budget. Measured at 32: 1/12
+        // titles came back empty, clustered on long first messages, i.e. the
+        // chats most worth titling. At 200: 12/12. Uncapped (what the wire
+        // carries today): 16/16, longest response 90 tokens, so the model
+        // stops on its own and there is no runaway to cap.
         maxTokens: 200,
         temperature: 0.3, // Lower temperature for more focused output
-        // 'low', not 'none': see above, this endpoint cannot disable
-        // reasoning. Reasoning deltas arrive as ReasoningEvent and are never
-        // written to the title buffer, so they cost tokens, not correctness.
+        // 'low', not 'none': this endpoint cannot disable reasoning at all
+        // (measured: 14/14 rejected with 400). 'low' is also the fastest —
+        // 139ms, against 185ms for 'minimal' and 242ms for the model default.
+        // The reasoning deltas arrive as ReasoningEvent and are dropped in the
+        // switch below, so they never reach the title; they cost tokens, not
+        // correctness, and 38 tokens is $0.018 per 1000 titles.
         reasoningEffort: 'low',
         // Explicitly do NOT pin a chat id — title generation must
         // never share the per-chatId in-flight slot with the main
