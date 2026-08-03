@@ -15,7 +15,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 
 /// Service for automatically generating chat titles using AI.
-/// Uses google/gemma-4-31b-it for title generation over WebSocket.
+/// Uses openai/gpt-oss-20b on Groq for title generation over WebSocket.
 class TitleGenerationService {
   // Model for title generation. The provider is resolved at call time from
   // the cached model list (see [_resolveTitleProvider]) — hardcoding an empty
@@ -24,27 +24,29 @@ class TitleGenerationService {
   //
   // Was `qwen/qwen3.5-9b`, which is not in the server's curated catalog: the
   // server rejected every title request with 400 "not available" and titles
-  // silently never generated. Picked by measuring, not guessing — 3 runs over
-  // 5 conversations (DE/EN/FR), each provider pinned:
+  // silently never generated.
   //
-  //   gemma-4-31b-it @ cerebras/fp16   242ms   8 output tokens
-  //   gpt-oss-20b    @ groq            171ms  56 output tokens (reasoning)
-  //   gemma-4-31b-it @ deepinfra/turbo 620ms
-  //   qwen3.5-9b     @ any            >740ms
+  // Picked by measuring every ZDR-approved model/provider pair in the small
+  // model class — 12 runs each (6 conversations DE/EN/FR incl. one very long
+  // message), with exactly the parameters below:
   //
-  // gpt-oss on Groq is nominally the fastest, but reasoning is *mandatory* on
-  // that endpoint (OpenRouter 400s on `reasoning: {enabled: false}`) and its
-  // reasoning tokens count against [maxTokens] — a longer first message eats
-  // the 32-token budget and returns an empty title. Gemma takes ~8 tokens with
-  // reasoning off, so the budget cannot be blown, for ~70ms on a background
-  // task nobody is waiting on.
-  static const String _titleModel = 'google/gemma-4-31b-it';
+  //   gpt-oss-20b    @ groq            136ms  12/12   $0.018 / 1000 titles
+  //   gpt-oss-120b   @ groq            188ms  12/12   $0.033
+  //   qwen3.6-35b-a3b@ coreweave/fp8   279ms  12/12   $0.025
+  //   gemma-4-31b-it @ cerebras/fp16   301ms  12/12   $0.072
+  //   qwen3.5-9b     @ together        333ms  10/10   $0.013
+  //   qwen3-32b      @ groq            — 404 on every call (dead upstream)
+  //
+  // Cost is noise at any of these: 10k titles on the fastest is ~$0.18, so
+  // the choice is purely about latency and reliability.
+  static const String _titleModel = 'openai/gpt-oss-20b';
 
-  // Preferred provider for [_titleModel] — the fastest one measured. Not a
-  // hard requirement: [_resolveTitleProvider] falls back to whatever the
-  // catalog offers, and the server re-pins to an equal-or-cheaper provider on
-  // a 429/404, so a Cerebras outage degrades to slower titles, not to none.
-  static const String _preferredTitleProvider = 'cerebras/fp16';
+  // Preferred provider for [_titleModel] — the fastest measured. Not a hard
+  // requirement: [_resolveTitleProvider] falls back to whatever the catalog
+  // offers, and the server re-pins to an equal-or-cheaper provider on a
+  // 429/404. Groq is the dearest provider for this model, so every fallback
+  // is cheaper — a Groq outage means slower titles, never no titles.
+  static const String _preferredTitleProvider = 'groq';
 
   // Cached provider slug for [_titleModel], resolved once per session.
   static String? _resolvedTitleProvider;
@@ -564,9 +566,19 @@ Rules:
         modelId: _titleModel,
         providerSlug: titleProvider,
         systemPrompt: systemPrompt,
-        maxTokens: 32, // Very short for titles
+        // 200, not 32, and that is load-bearing. Reasoning is *mandatory* on
+        // the gpt-oss endpoints — OpenRouter 400s on `reasoning: {enabled:
+        // false}` — and reasoning tokens count against maxTokens. At 32 the
+        // model spends the budget thinking and returns empty content: measured
+        // 1/12 empty titles at 32, 0/12 at 200, and the failures cluster on
+        // longer first messages, i.e. exactly the chats worth titling. The
+        // reply itself is still ~8 words; this is headroom, not output length.
+        maxTokens: 200,
         temperature: 0.3, // Lower temperature for more focused output
-        reasoningEffort: 'none', // No reasoning for title generation
+        // 'low', not 'none': see above, this endpoint cannot disable
+        // reasoning. Reasoning deltas arrive as ReasoningEvent and are never
+        // written to the title buffer, so they cost tokens, not correctness.
+        reasoningEffort: 'low',
         // Explicitly do NOT pin a chat id — title generation must
         // never share the per-chatId in-flight slot with the main
         // response. The serialization happens in
