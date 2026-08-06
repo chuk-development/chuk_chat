@@ -1505,10 +1505,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     String fileId,
     String? markdownContent,
     bool isUploading,
-    String? snackBarMessage,
-  ) {
+    String? snackBarMessage, {
+    List<String>? pageImages,
+  }) {
     if (!mounted) return;
-    _fileHandler.handleUploadStatusUpdate(fileId, markdownContent, isUploading);
+    _fileHandler.handleUploadStatusUpdate(
+      fileId,
+      markdownContent,
+      isUploading,
+      pageImages: pageImages,
+    );
     if (snackBarMessage != null) {
       _showSnackBar(snackBarMessage);
     }

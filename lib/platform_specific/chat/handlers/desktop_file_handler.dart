@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/handlers/desktop_file_handler.dart
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -363,16 +364,30 @@ class DesktopFileHandler {
     String fileId,
     String? markdownContent,
     bool isUploading,
-    String? snackBarMessage,
-  ) {
+    String? snackBarMessage, {
+    List<String>? pageImages,
+  }) {
     int index = attachedFiles.indexWhere((f) => f.id == fileId);
     if (index != -1) {
       if (markdownContent != null) {
-        // File successfully uploaded and content received
+        // File successfully uploaded and content received. A scanned PDF
+        // also carries page images: stay in the uploading state until they
+        // are in encrypted storage so sending cannot race ahead of them.
+        final bool hasPages = pageImages != null && pageImages.isNotEmpty;
         attachedFiles[index] = attachedFiles[index].copyWith(
           markdownContent: markdownContent,
-          isUploading: false,
+          isUploading: hasPages,
         );
+        if (hasPages) {
+          unawaited(
+            _replaceWithScannedPages(
+              pageImages,
+              fileId,
+              attachedFiles[index].fileName,
+              markdownContent,
+            ),
+          );
+        }
       } else if (!isUploading) {
         // Upload failed or file was removed by service, remove from list
         attachedFiles.removeAt(index);
@@ -388,6 +403,74 @@ class DesktopFileHandler {
       onShowSnackBar?.call(snackBarMessage);
     }
     onScrollToBottom?.call();
+  }
+
+  /// Replace a scanned PDF with its rendered pages.
+  ///
+  /// The PDF has no text layer, so leaving it in the tray would show the
+  /// user a document nobody can read. The pages take its place as ordinary
+  /// image attachments, and the note explaining that this is a scan rides
+  /// on the first one so it still reaches the model.
+  Future<void> _replaceWithScannedPages(
+    List<String> dataUrls,
+    String fileId,
+    String fileName,
+    String? note,
+  ) async {
+    final paths = <String>[];
+    try {
+      for (final dataUrl in dataUrls) {
+        final comma = dataUrl.indexOf(',');
+        if (comma < 0) continue;
+        final bytes = base64Decode(dataUrl.substring(comma + 1));
+        paths.add(await ImageStorageService.uploadEncryptedImage(bytes));
+      }
+    } catch (error) {
+      _discardPages(paths);
+      final index = attachedFiles.indexWhere((f) => f.id == fileId);
+      if (index != -1) {
+        attachedFiles.removeAt(index);
+        onUpdate?.call();
+      }
+      onShowSnackBar?.call(
+        'Failed to prepare the scanned pages of "$fileName": $error',
+      );
+      return;
+    }
+
+    final index = attachedFiles.indexWhere((f) => f.id == fileId);
+    if (index == -1) {
+      _discardPages(paths);
+      return;
+    }
+    if (paths.isEmpty) {
+      attachedFiles.removeAt(index);
+      onUpdate?.call();
+      onShowSnackBar?.call('No readable pages found in "$fileName".');
+      return;
+    }
+
+    const uuid = Uuid();
+    final pageFiles = <AttachedFile>[
+      for (int i = 0; i < paths.length; i++)
+        AttachedFile(
+          id: uuid.v4(),
+          fileName: '$fileName — page ${i + 1}',
+          encryptedImagePath: paths[i],
+          isImage: true,
+          markdownContent: i == 0 ? note : null,
+        ),
+    ];
+    attachedFiles.replaceRange(index, index + 1, pageFiles);
+    onUpdate?.call();
+  }
+
+  void _discardPages(List<String> paths) {
+    for (final path in paths) {
+      unawaited(
+        ImageStorageService.deleteEncryptedImage(path).catchError((_) {}),
+      );
+    }
   }
 
   /// Clear all attachments.

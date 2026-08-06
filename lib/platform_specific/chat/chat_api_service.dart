@@ -19,12 +19,15 @@ class ChatApiService {
   static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   // Callback for UI updates: (fileId, markdownContent, isUploading, snackBarMessage)
+  // `pageImages` carries the rendered pages of a scanned PDF as image data
+  // URLs — the document has no text layer, so the model reads the pages.
   final void Function(
     String fileId,
     String? markdownContent,
     bool isUploading,
-    String? snackBarMessage,
-  )?
+    String? snackBarMessage, {
+    List<String>? pageImages,
+  })?
   onUploadStatusUpdate;
 
   ChatApiService({this.onUploadStatusUpdate}) {
@@ -92,7 +95,13 @@ class ChatApiService {
       );
 
       if (result['success'] == true) {
-        onUploadStatusUpdate?.call(fileId, result['markdown'], false, null);
+        onUploadStatusUpdate?.call(
+          fileId,
+          result['markdown'],
+          false,
+          null,
+          pageImages: (result['pageImages'] as List?)?.cast<String>(),
+        );
         if (kDebugMode) {
           debugPrint(
             'File "$fileName" conversion successful. Markdown content received.',
@@ -169,7 +178,13 @@ class ChatApiService {
       );
 
       if (result['success'] == true) {
-        onUploadStatusUpdate?.call(fileId, result['markdown'], false, null);
+        onUploadStatusUpdate?.call(
+          fileId,
+          result['markdown'],
+          false,
+          null,
+          pageImages: (result['pageImages'] as List?)?.cast<String>(),
+        );
         if (kDebugMode) {
           debugPrint('File "$fileName" conversion successful.');
         }

@@ -25,12 +25,32 @@ class FileConversionService {
   static const int maxTokensPerFile = 40000;
   static const int maxCharsPerFile = 160000; // ~4 chars per token
 
+  /// Page images returned for a scanned PDF, as `data:image/...` URLs.
+  ///
+  /// Anything that is not a non-empty string is dropped: this data goes
+  /// straight into a chat message, so a malformed entry must not travel
+  /// any further than this method.
+  @visibleForTesting
+  static List<String>? extractPageImages(dynamic responseData) {
+    if (responseData is! Map) return null;
+    final raw = responseData['images'];
+    if (raw is! List || raw.isEmpty) return null;
+    final urls = raw
+        .whereType<String>()
+        .where((s) => s.startsWith('data:image/'))
+        .toList();
+    return urls.isEmpty ? null : urls;
+  }
+
   /// Convert a file to markdown using the /v1/ai/convert-file endpoint.
   ///
   /// Returns a map with:
   /// - 'markdown': The markdown content string
   /// - 'success': Boolean indicating if conversion succeeded
   /// - 'error': Error message if conversion failed (null on success)
+  /// - 'pageImages': For a scanned PDF, the rendered pages as image data
+  ///   URLs (null otherwise) — the server sends these instead of text
+  ///   because the document has no text layer.
   static Future<Map<String, dynamic>> convertFile({
     required String filePath,
     required String accessToken,
@@ -237,7 +257,15 @@ class FileConversionService {
         };
       }
 
-      return {'success': true, 'error': null, 'markdown': markdown};
+      return {
+        'success': true,
+        'error': null,
+        'markdown': markdown,
+        // Scanned PDF: the server found no text layer and rasterised the
+        // pages instead. These are data URLs to attach to the message so
+        // the vision model can read the scan.
+        'pageImages': extractPageImages(response.data),
+      };
     } on DioException catch (e) {
       String errorMessage = 'File conversion failed';
 
@@ -362,7 +390,15 @@ class FileConversionService {
         };
       }
 
-      return {'success': true, 'error': null, 'markdown': markdown};
+      return {
+        'success': true,
+        'error': null,
+        'markdown': markdown,
+        // Scanned PDF: the server found no text layer and rasterised the
+        // pages instead. These are data URLs to attach to the message so
+        // the vision model can read the scan.
+        'pageImages': extractPageImages(response.data),
+      };
     } on DioException catch (e) {
       String errorMessage = 'File conversion failed';
       if (e.response?.statusCode == 413) {
