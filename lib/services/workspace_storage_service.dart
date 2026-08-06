@@ -713,7 +713,19 @@ class WorkspaceStorageService {
               userId: user.id,
             );
             if (result['success'] == true && result['markdown'] != null) {
-              markdownSummary = result['markdown'] as String;
+              final pageImages = result['pageImages'] as List?;
+              if (pageImages != null && pageImages.isNotEmpty) {
+                // Scanned PDF: the API returns page images for a chat
+                // message to attach. A workspace file holds text only, so
+                // say what the file is instead of repeating a note that
+                // promises images nobody attached here.
+                markdownSummary =
+                    '**$fileName** is a scanned document (${pageImages.length} '
+                    'page images, no text layer). Attach it to a chat message '
+                    'to have its pages read.';
+              } else {
+                markdownSummary = result['markdown'] as String;
+              }
               if (kDebugMode) {
                 debugPrint(
                   '✅ [ProjectStorage] Markdown generated successfully',

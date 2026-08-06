@@ -185,8 +185,11 @@ class MessageCompositionService {
       final imageFiles = attachedFiles
           .where((f) => f.isImage && f.encryptedImagePath != null)
           .toList();
+      // Keyed on markdown, not on "not an image": a scanned PDF is replaced
+      // by its page images, and the note explaining that it is a scan (and
+      // how many pages are missing) rides on the first of them.
       final documentFiles = attachedFiles
-          .where((f) => !f.isImage && f.markdownContent != null)
+          .where((f) => f.markdownContent != null)
           .toList();
 
       if (kDebugMode) {
@@ -246,6 +249,7 @@ class MessageCompositionService {
           );
         }
       }
+
 
       // Add documents with markdown content
       if (documentFiles.isNotEmpty) {
