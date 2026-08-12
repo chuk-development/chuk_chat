@@ -1,0 +1,34 @@
+[project]
+name = "cowork-executor"
+version = "0.1.0"
+description = "CoWork executor vertical: agent loop + sandbox + encrypted frames, wired over a loopback transport behind the Manager's supervisor."
+readme = "README.md"
+authors = [
+    { name = "chukfinley", email = "chuk@chuk.dev" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cowork-agent",
+    "cowork-sandbox",
+    "cowork-crypto",
+    "cowork-manager",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv.sources]
+cowork-agent = { path = "../agent", editable = true }
+cowork-sandbox = { path = "../sandbox", editable = true }
+cowork-crypto = { path = "../common/cowork_crypto", editable = true }
+cowork-manager = { path = "../manager", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
