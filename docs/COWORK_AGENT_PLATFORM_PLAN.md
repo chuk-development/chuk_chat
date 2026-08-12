@@ -195,6 +195,16 @@ capability. Flutter is only the UI.
   - **media** — ffmpeg / ffprobe (ffmpeg via host passthrough, section 10),
   - **yt-dlp**, research / web fetch,
   - MCP tools (as the chat client already exposes them),
+  - **send-file-to-user** — push any produced file into the chat thread: CSV,
+    PDF, image, generated document, or a **browser screenshot** when it opened a
+    browser. Reuse the existing `send_file_to_user` → `sandboxArtifact` block, so
+    it renders as a download/preview card. (Opening a *desktop* is explicitly
+    out — §8a — but a browser screenshot as output is fine.)
+  - **search-chats** — cross-session recall: search the user's past chats for a
+    topic ("we discussed this last time" — but it is not in this session). Every
+    chat is persisted as a **read-only markdown transcript, live-linked**, so the
+    agent can find and read prior threads. chuk_chat already has a comparable
+    chat-search tool to port.
   - the agent's memory tools (section 6/9).
 - **Streaming:** every round streams into the controller thread as encrypted
   frames — text + collapsible tool-activity chips. **Stop** cancels the run.
@@ -343,7 +353,9 @@ inefficient):**
   client-side approval model; the laptop-native tools *as a concept* (they move
   to Python); **Agent Skills** (`SKILL.md` / `FEATURE_SKILLS` — the agent's
   skill system); **`FEATURE_SERVER_TOOLS` OAuth connections** (GitHub, Gmail,
-  Calendar, Slack, …) as the revocable-credential model (§8b).
+  Calendar, Slack, …) as the revocable-credential model (§8b); the
+  **`send_file_to_user` → `sandboxArtifact`** mechanism for the agent to send
+  files (CSV/PDF/image/doc/browser screenshot) into the chat.
 - **Dies:** the local demo `CoworkDemoServer` + the localhost bridge
   (`cowork_executor_bridge.dart`) + the served HTML phone page — wrong transport
   (there is no web UI, ever; remote control is only the official Flutter app).
@@ -381,6 +393,9 @@ inefficient):**
   at pairing), not the chat account key.
 - Flutter is **UI only**; existing basic bash-in-chat stays.
 - UI is a **messenger/roster**, Hermes-style streaming run + Stop.
+- **The moat is the owned pipeline + a real GUI control surface** (skills toggle,
+  connect/disconnect, model + token + session + cron all visible in-UI) — not a
+  CLI/slash-command bot like Hermes Agent. (§15)
 
 ## 13. Open questions (not yet decided)
 
@@ -416,3 +431,40 @@ inefficient):**
    ffmpeg passthrough.
 7. Scheduler / cron + push wake + autonomy.
 8. Memory sync, GPU, hardening.
+
+---
+
+## 15. Positioning: owned pipeline + GUI control surface (vs Hermes Agent)
+
+Reference: **Hermes Agent** (Nous Research,
+https://github.com/nousresearch/hermes-agent) — Python, runs in Docker / SSH /
+cloud VMs, with 40+ tools, an autonomous **skills** system, a **memory** layer,
+**cron** scheduling, **MCP**, and **subagent delegation** for parallel work.
+
+**This validates our stack almost 1:1** — Python executor, container sandbox,
+markdown skills, cron, MCP, multi-agent (their "subagent delegation" ≈ our §8d
+collaboration), agent memory. We are not inventing an unproven shape.
+
+Where we deliberately win:
+
+- **We own the whole pipeline, front to back** — the Flutter app, the backend,
+  the relay, the sandbox, and model routing through the backend proxy. Hermes is
+  a bring-your-own-provider CLI plus messaging gateways. Owning the pipeline
+  means one integrated account, billing, and experience, and control over every
+  layer.
+- **A real GUI control surface, not a CLI / slash-command bot.** Hermes is
+  driven from a terminal/TUI and messaging platforms (Telegram/Discord/…),
+  configured with CLI commands and slash-commands. Ours is a full app UI where
+  the user can, *in the UI*:
+  - activate / deactivate **skills**,
+  - **connect / disconnect** integrations (the revocable OAuth doors, §8b),
+  - pick and see the **model**,
+  - watch **live token usage**, **session runtime**, and the **cron schedule /
+    next runs**,
+  - start, watch, and **Stop** runs.
+  Slash-commands can still exist as a shortcut, but the user is never *bound* to
+  a command line. This is the "real app" vs "bot bolted onto Telegram"
+  difference, and it is the moat.
+- **API-first over browser, and no VNC credential handoff** (§8a/§8b) — a
+  cleaner, safer, more efficient interaction model than driving UIs or handing a
+  user a remote desktop to paste passwords into.
