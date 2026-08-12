@@ -92,7 +92,8 @@ memory). It carries:
 - **Job / persona** — its onboarding brief: the standing system prompt + what it
   should do. Onboarding is by **text** *or* by **video demonstration** — you
   record yourself doing a task, send the clip, the agent analyses it
-  (multimodal, via the backend vision model) and takes the task over. "Show,
+  (multimodal, via the backend video model — default `qwen/qwen3.6-35b-a3b`, §9)
+  and takes the task over. "Show,
   don't tell." A demonstrated task can be distilled into a Skill (§11).
 - **Files** — documents/links/context you hand it.
 - **Memory** — its own persistent notebook (§12).
@@ -432,9 +433,16 @@ toolset ships preinstalled so the agent has tools ready without a cold install.
   One dependency (`pip install firecrawl-anydoc`) replacing pandoc + python-docx
   + LibreOffice + pypdf for ingestion of doc/docx, ppt/pptx, xls/xlsx, odt, rtf,
   epub, csv, and **text-based** PDF; ~250× faster than LibreOffice. Gap: no OCR,
-  no standalone images → route those to a **vision model via the backend** (no
-  Tesseract). Pattern: try `anydoc.to_markdown(...)`, on `UnsupportedError` →
+  no standalone images → route those to a **vision/video model via the backend**
+  (no Tesseract). Pattern: try `anydoc.to_markdown(...)`, on `UnsupportedError` →
   vision path.
+- **Vision / video model (open-weight only):** default **`qwen/qwen3.6-35b-a3b`**
+  (MoE, ~3B active — cheap + fast, does image *and* video, fully open); harder
+  cases **`qwen/qwen3.5-397b-a17b`**; alternatives **MiniMax M3**, **Kimi K3**.
+  These are the only models in our catalog that accept **video** input (verified
+  against `/v1/models_info` ∩ OpenRouter modalities). Serves both the image/OCR
+  route here and the **video-onboarding** of §4. (No Gemini/proprietary — we run
+  open-weight only. IDs churn; keep the choice at "cheap Qwen MoE default.")
 - **Media:** `ffmpeg`/`ffprobe` (ffmpeg via host passthrough, below), **yt-dlp**.
 - **Docs out:** `python-docx`/`openpyxl`/`python-pptx` where the agent must
   *write* office files (anydoc only reads).
@@ -692,7 +700,8 @@ Where we win:
   routing table); frozen-snapshot memory + FTS5 search; background-review
   self-improvement fork; LLM-emits-schedule cron + no_agent/hash-diff cost
   levers; JSON-RPC-over-transport-seam + relay frame contract.
-- **File→md = anydoc**; OCR/images = vision model via backend (no Tesseract).
+- **File→md = anydoc**; OCR/images/video = **open-weight** vision/video model via
+  backend, default **`qwen/qwen3.6-35b-a3b`** (no Tesseract, no Gemini). §9.
 - **Tools built on Python + `uv`.**
 - **Git-versioned workspace** (§7.7): the sandbox home is a git repo, mutating
   actions auto-commit, the UI offers undo/time-travel — with the honest limit
