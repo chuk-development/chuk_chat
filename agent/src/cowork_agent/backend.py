@@ -57,8 +57,30 @@ from .model import ModelClient, ModelResponse, extract_tool_calls
 
 # The single default backend. Callers may override.
 DEFAULT_BASE_URL = "https://api.chuk.chat"
-# An open-weight, cheap default. Overridable per-run.
-DEFAULT_MODEL_ID = "openai/gpt-oss-20b"
+# The default model. It MUST be one whose tool calls survive the backend, which
+# streams only `content` + `reasoning` and drops anything the provider parsed
+# into structured `tool_calls`. Measured live (tests/live_sweep.py):
+#
+#   works: deepseek-v4-flash, qwen3-32b, kimi-k2.6, minimax-m2.7,
+#          llama-3.3-70b, mistral-small-2603
+#   silent: gpt-oss-20b/120b (Harmony channels), qwen3.5/3.6-35b-a3b (content
+#           comes back empty), glm-5.1 (its own arg-key format)
+#
+# gpt-oss-20b was the old default and is exactly the failure the user hit: the
+# model says "I'll use write_file" in its reasoning and then prints the file.
+# Cheapest of the working set, and it emits the block reliably.
+DEFAULT_MODEL_ID = "deepseek/deepseek-v4-flash"
+
+# Models proven to emit a parseable `<tool_call>` block, cheapest first. Kept as
+# data so a fallback chain can walk it when the preferred model is unavailable.
+TOOL_CALL_CAPABLE_MODELS = (
+    "deepseek/deepseek-v4-flash",
+    "meta-llama/llama-3.3-70b-instruct",
+    "qwen/qwen3-32b",
+    "mistralai/mistral-small-2603",
+    "minimax/minimax-m2.7",
+    "moonshotai/kimi-k2.6",
+)
 
 
 class SupabaseAuthError(Exception):

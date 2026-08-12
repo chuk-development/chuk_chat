@@ -17,6 +17,7 @@ app/build/
 app/.flutter-plugins*
 app/pubspec.lock
 .env
+.env.live
 
 # SQLite runtime
 *.db
