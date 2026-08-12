@@ -274,6 +274,46 @@ Borrowed from Hermes `tools/delegate_tool.py` + `agent/subagent_lifecycle.py`:
   collaboration (§4): agents addressing each other is delegation + a shared
   group thread. (Group-thread model beyond delegation: open, §20.)
 
+### 7.7 Git-versioned workspace (time-travel & undo)
+
+Concept: everything the agent does that is **text** — file edits, memory/skill
+changes, generated documents, and a record of each action — is **auto-committed
+to git**, so any step is **revertible** and the whole run is a browsable history.
+Large binaries are excluded (gitignore / git-lfs boundary).
+
+**Prior art (honest):** a known *pattern*, not a standard protocol. **Aider**
+auto-commits every AI code edit to git with generated messages and supports undo;
+coding agents (Claude Code, Cursor, Devin) use branches/worktrees; chuk_chat's own
+CLAUDE.md already prescribes one git worktree per agent. What is differentiated
+here is making it **first-class and total** — not just code edits but the agent's
+whole workspace + action log — surfaced as an **undo / time-travel UI** in a
+pipeline we own end to end.
+
+**Design:**
+- **The agent's workspace (sandbox home) is a git repo.** Auto-commit after each
+  mutating action (write_file, mutating run_command, memory/skill writes); commit
+  message = the round/action summary the streaming feed already produces.
+- **Two layers, not one.** The append-only SQLite session store (§7.5) is the
+  *conversation transcript*; git is the *workspace filesystem history*. Keep both.
+- **Undo / rollback in the UI:** roll the workspace back to any commit ("undo the
+  last 3 actions"). Directly de-risks the passwordless-sudo concern (§6, §17) —
+  workspace changes become reversible. A real trust/safety feature and a selling
+  point.
+- **Subagents on branches:** each subagent (§7.6) works on its own branch/
+  worktree, merged back — maps onto chuk_chat's existing worktree model.
+- **Versioned memory & skills:** MEMORY.md/USER.md/SKILL.md are markdown → git
+  gives revertible, diffable memory, a better version of Hermes's `.bak.<ts>`
+  snapshots.
+- **Binaries:** gitignore / git-lfs boundary; text is committed, large media is
+  not (disk-cost guard).
+
+**Honest boundary (like §14's E2E note):** git undoes the **workspace**, not the
+**outside world**. A sent email, an API call, a `sudo` on the host are not
+reverted by git. The undo UI must say so rather than imply total rollback.
+
+Open: commit granularity (per-action vs per-round), gitignore-vs-lfs policy, and
+how far "undo" is presented given irreversible external side effects. (§20)
+
 ---
 
 ## 8. Capability model — structured tools, not a machine to drive
@@ -561,6 +601,9 @@ Where we win:
   levers; JSON-RPC-over-transport-seam + relay frame contract.
 - **File→md = anydoc**; OCR/images = vision model via backend (no Tesseract).
 - **Tools built on Python + `uv`.**
+- **Git-versioned workspace** (§7.7): the sandbox home is a git repo, mutating
+  actions auto-commit, the UI offers undo/time-travel — with the honest limit
+  that git undoes files, not external side effects.
 
 ---
 
