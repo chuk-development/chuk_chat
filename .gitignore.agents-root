@@ -28,3 +28,6 @@ app/pubspec.lock
 .DS_Store
 .idea/
 .vscode/
+
+# Local verification scratch (host workspaces, trust files)
+_scratch/

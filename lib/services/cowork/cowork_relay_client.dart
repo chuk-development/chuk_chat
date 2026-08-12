@@ -36,6 +36,8 @@ import 'package:cowork/services/cowork/cowork_approved_devices.dart';
 import 'package:cowork/services/cowork/cowork_frame.dart';
 import 'package:cowork/services/cowork/cowork_frame_codec.dart';
 import 'package:cowork/services/cowork/cowork_pairing.dart';
+import 'package:cowork/services/cowork/cowork_pairing_store.dart';
+import 'package:cowork/services/cowork/cowork_reconnect.dart';
 import 'package:cowork/services/executor_provisioning.dart';
 import 'package:cowork/services/websocket_connector.dart' as ws_connector;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -190,6 +192,19 @@ abstract interface class CoworkRelayController {
   /// pairing failure.
   Future<void> connect({required Uri hostUrl, required String pairingCode});
 
+  /// Reconnects to an already-paired host with NO code, running the mutual
+  /// signed-nonce reconnect handshake against the host and resuming the sealed
+  /// channel from the stored channel key. Throws (and moves to
+  /// [CoworkRelayPhase.error]) if the handshake fails (e.g. an imposter host).
+  Future<void> reconnect({
+    required Uri hostUrl,
+    required CoworkStoredPairing pairing,
+  });
+
+  /// The trust established by the last successful [connect] / [reconnect], for
+  /// the caller to persist. Null until paired.
+  CoworkStoredPairing? get establishedTrust;
+
   /// Hands the executor the account token over the sealed channel.
   Future<void> provisionAccount(AccountSession session);
 
@@ -238,6 +253,14 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   RelaySocket? _socket;
   StreamSubscription<dynamic>? _sub;
   CoworkPairing? _pairing;
+  CoworkReconnect? _reconnect;
+  CoworkStoredPairing? _establishedTrust;
+
+  /// The authenticated host device, set by BOTH the first pairing and a code-free
+  /// reconnect. Reading it off `_pairing` alone was a bug: after a reconnect
+  /// there is no pairing session, so provisioning threw "Cannot provision before
+  /// pairing completes" and every auto-reconnect died before serving a task.
+  String? _peerDeviceId;
   Completer<void>? _pairingDone;
 
   /// Serialises inbound pairing steps so awaited transitions never overlap.
@@ -251,6 +274,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
 
   @override
   Stream<CoworkRelayInbound> get inbound => _inbound.stream;
+
+  @override
+  CoworkStoredPairing? get establishedTrust => _establishedTrust;
 
   /// The channel id is everything before the last '-' in the pairing code.
   static String channelIdOf(String pairingCode) {
@@ -348,6 +374,21 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       keyVersion: _keyVersion,
       approvedDevices: pairing.approvedDevices,
     );
+    // Capture the trust the caller persists so the next launch reconnects with
+    // no code: the host's device key + the established channel key.
+    final peerDeviceId = pairing.peerDeviceId;
+    _peerDeviceId = peerDeviceId;
+    final peerPublicKey =
+        peerDeviceId == null ? null : pairing.approvedDevices.lookup(peerDeviceId);
+    if (peerDeviceId != null && peerPublicKey != null) {
+      _establishedTrust = CoworkStoredPairing(
+        hostUrl: hostUrl,
+        channelId: channelId,
+        channelKey: channelKey,
+        peerDeviceId: peerDeviceId,
+        peerPublicKey: peerPublicKey,
+      );
+    }
     _set(
       CoworkRelayState(
         phase: CoworkRelayPhase.paired,
@@ -359,9 +400,98 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   }
 
   @override
+  Future<void> reconnect({
+    required Uri hostUrl,
+    required CoworkStoredPairing pairing,
+  }) async {
+    if (_disposed) throw StateError('CoworkRelayClient is disposed');
+    if (_socket != null) throw StateError('Already connected');
+
+    _set(const CoworkRelayState(phase: CoworkRelayPhase.connecting));
+
+    final RelaySocket socket;
+    try {
+      socket = await _connector(hostUrl);
+    } catch (e) {
+      _fail('Could not reach host: $e');
+      rethrow;
+    }
+    _socket = socket;
+    if (kDebugMode) {
+      debugPrint('[cowork-relay] reconnecting to $hostUrl (no code)');
+    }
+
+    // Build the reconnect joiner BEFORE listening so the host's reconnect-hello
+    // can never race an unset session.
+    _reconnect = CoworkReconnect.joiner(
+      deviceId: _deviceId,
+      deviceKeyPair: _signingKeyPair,
+      peerDeviceId: pairing.peerDeviceId,
+      peerPublicKey: pairing.peerPublicKey,
+      channelId: pairing.channelId,
+    );
+
+    final done = Completer<void>();
+    _pairingDone = done;
+    _sub = socket.incoming.listen(
+      _onData,
+      onError: (Object e, StackTrace _) => _failPairing(e),
+      onDone: _onSocketDone,
+      cancelOnError: false,
+    );
+
+    socket.send(
+      jsonEncode(<String, dynamic>{
+        'type': 'join',
+        'channel': pairing.channelId,
+        'role': 'controller',
+      }),
+    );
+    _set(
+      const CoworkRelayState(
+        phase: CoworkRelayPhase.pairing,
+        detail: 'Reconnecting…',
+      ),
+    );
+
+    try {
+      await done.future.timeout(_pairingTimeout);
+    } catch (e) {
+      _fail(_pairingErrorText(e));
+      await _closeSocket();
+      rethrow;
+    }
+
+    // Authenticated: resume the sealed channel from the STORED channel key.
+    final approved = CoworkApprovedDevices.empty()
+      ..approve(pairing.peerDeviceId, pairing.peerPublicKey);
+    _sealer = CoworkFrameSealer.withChannelKey(
+      channelKey: pairing.channelKey,
+      keyVersion: _keyVersion,
+      deviceId: _deviceId,
+      signingKeyPair: _signingKeyPair,
+    );
+    _opener = CoworkFrameOpener.withChannelKey(
+      channelKey: pairing.channelKey,
+      keyVersion: _keyVersion,
+      approvedDevices: approved,
+    );
+    _establishedTrust = pairing;
+    _peerDeviceId = pairing.peerDeviceId;
+    _set(
+      CoworkRelayState(
+        phase: CoworkRelayPhase.paired,
+        peerDeviceId: pairing.peerDeviceId,
+        detail: 'Reconnected',
+      ),
+    );
+  }
+
+  @override
   Future<void> provisionAccount(AccountSession session) {
-    final peerDeviceId = _pairing?.peerDeviceId;
-    if (peerDeviceId == null) {
+    // Works after a first pairing AND after a code-free reconnect.
+    final peerDeviceId = _peerDeviceId;
+    if (peerDeviceId == null || !_state.value.isPaired) {
       throw StateError('Cannot provision before pairing completes');
     }
     // Route the token through ExecutorProvisioning, which shapes the payload
@@ -416,8 +546,33 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       // the state to `confirmed`, throwing wrongState. Chain each step after
       // the previous one completes.
       _pairingQueue = _pairingQueue
-          .then((_) => _handlePairing(env))
+          .then((_) => _reconnect != null
+              ? _handleReconnect(env)
+              : _handlePairing(env))
           .catchError(_failPairing);
+    }
+  }
+
+  Future<void> _handleReconnect(Map<String, dynamic> env) async {
+    final reconnect = _reconnect;
+    if (reconnect == null) return;
+    final step = env['step'];
+    final data = env['data'];
+    if (step is! String || data is! Map) return;
+    final msg = data.cast<String, dynamic>();
+    if (kDebugMode) debugPrint('[cowork-relay] recv reconnect step=$step');
+
+    switch (step) {
+      case 'reconnect-hello':
+        _sendPairing('reconnect-response', await reconnect.onHello(msg));
+      case 'reconnect-confirm':
+        await reconnect.onConfirm(msg);
+        if (reconnect.authenticated) {
+          final done = _pairingDone;
+          if (done != null && !done.isCompleted) done.complete();
+        }
+      default:
+        break;
     }
   }
 

@@ -43,32 +43,48 @@ merged later). Git on `master`. Plan is canonical HERE (a stale copy sits in
    a queue. `92851d9`.
 4. **Host missing supabase creds** → app sends them in the token. `92851d9`.
 
-## IN PROGRESS — a subagent is RUNNING (do not duplicate)
+## DONE — persistent pairing (Task #24, `agent/pairing-persist`)
 
-**Task #24, agent `a7e1adc1b308e916d`: persistent pairing + auto-reconnect.**
-Building: persist trust on BOTH sides after the first pairing; a **reconnect
-handshake** (mutual signed-nonce auth against the STORED Ed25519 keys, then resume
-with the STORED channel key — no code); auto-connect on startup + auto-reconnect
-on drop; **Disconnect** (keep pairing) + **Un-pair/Forget** (delete trust)
-buttons; the code is shown only for the FIRST pairing.
+"One code, then never again" is landed and **live-verified** (see §15.1 of the
+plan for the design):
 
-When it returns: **review hard — it is security-sensitive** (verify the
-imposter/forged-signature rejection is real; run its tests + a live reconnect
-loop), then integrate + commit. Continue it via SendMessage to
-`a7e1adc1b308e916d` if it needs a fix. Do NOT trust the report — re-run proofs.
+- Trust persists on both sides (`paired.json` 0600 / `flutter_secure_storage`).
+- **The code is single-use, enforced by the host.** It is burned the moment a
+  pairing completes; a host with stored trust mints no code at all. Recovery is
+  `cowork-host --pair` (drops the trust, mints ONE fresh code).
+- Code-free reconnect = mutual signed-nonce challenge against the stored Ed25519
+  keys. Imposter / replay / reflection / wrong-channel / wrong-peer all abort
+  with no channel, proven in Python, Dart, and against the live host.
+- The app auto-reconnects with capped backoff; the code form appears only before
+  the first pairing; **Forget** is the only connection control.
+
+Two release-class bugs were found and fixed while landing it:
+
+1. `provisionAccount` read the peer device id off `_pairing`, which is null after
+   a reconnect → every auto-reconnect threw "Cannot provision before pairing
+   completes" and served no task. Now tracked on both paths, with a regression
+   test that was proven to fail before the fix.
+2. `_rebuildController` awaited `StreamSubscription.cancel()`, which returns
+   Dart's root-zone `Future._nullFuture`. A `flutter_test` FakeAsync zone never
+   drains root-zone microtasks, so the auto-reconnect only ran after the test
+   ended. Cancel without awaiting.
 
 ## How to run / test
 
 - Host: `cd host && uv run cowork-host` (real; creds ride the token) or
-  `uv run cowork-host --mock-model` (offline, no credits). Prints a code +
-  `ws://127.0.0.1:8787`.
+  `uv run cowork-host --mock-model` (offline, no credits). Prints a **single-use**
+  code + `ws://127.0.0.1:8787` — but only until the first pairing; after that it
+  prints "Already paired" and no code. `--pair` forces a fresh code.
 - Client (debug, shows `[cowork-relay]` logs): `cd app && flutter run -d linux
   --dart-define-from-file=.env`. Release: `cd app && flutter build linux --release
   --dart-define-from-file=.env` → `./build/linux/x64/release/bundle/cowork`.
 - In the app: log in → chat → **Connect** (`ws://127.0.0.1:8787` prefilled) → type
   the code → chat.
-- Live interop test: `app/test/interop_smoke_test.dart`, env-gated by
-  `COWORK_HOST_URL` + `COWORK_PAIRING_CODE` (skipped otherwise).
+- Live interop test: `app/test/interop_smoke_test.dart`, env-gated, three halves.
+  Pair: `COWORK_HOST_URL` + `COWORK_PAIRING_CODE` + `COWORK_TRUST_FILE`. Then
+  restart the host and drop the code var: the same file drives a **cold-start
+  reconnect** and an **imposter rejection** against the live host. Each run is a
+  fresh Dart VM, so it is a real app restart, not a simulated one.
 
 ## Gotchas (these cost hours)
 
@@ -96,10 +112,10 @@ loop), then integrate + commit. Continue it via SendMessage to
 
 ## Next steps (in order)
 
-1. Land Task #24 (persistent pairing + auto-reconnect): verify (imposter
-   rejection + a live reconnect-with-no-code loop), integrate, commit, rebuild the
-   release client, and confirm with the user: pair once → task → close both →
-   auto-reconnect no code → task again.
+1. Rebuild the RELEASE client and confirm the loop with the user by hand: pair
+   once → task → close both → auto-reconnect with no code → task again. The
+   headless proof is done (`_scratch/host{1,2,3}.log`), but the release build has
+   burned us twice before, so it still needs one real pass.
 2. Confirm a REAL task runs against the user's account (needs the user logged in;
    spends real credits — one small task).
 3. Then continue the platform per plan §21: the tool set (browser-use, anydoc for

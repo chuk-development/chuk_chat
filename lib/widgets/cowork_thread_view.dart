@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 
@@ -24,6 +25,7 @@ class CoworkThreadView extends StatefulWidget {
     super.key,
     required this.controllerBuilder,
     required this.sessionSource,
+    this.pairingStore,
     this.defaultHostUrl = 'ws://127.0.0.1:8787',
   });
 
@@ -34,6 +36,12 @@ class CoworkThreadView extends StatefulWidget {
 
   /// Supplies the account session that gets provisioned once paired.
   final AccountSessionSource sessionSource;
+
+  /// Persistent trust store. When provided and a pairing is stored, the view
+  /// auto-reconnects with no code and offers a separate "Forget" action. When
+  /// null the view has no persistence: it always shows the code connect form
+  /// (the legacy behaviour, used by widget tests that inject a fake controller).
+  final CoworkPairingStore? pairingStore;
 
   /// Prefilled host URL for a local run.
   final String defaultHostUrl;
@@ -57,15 +65,31 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   String? _localError;
   bool _busy = false;
 
+  /// The persisted trust, loaded once at startup. Non-null means "already
+  /// paired": auto-reconnect, hide the code form, offer Forget.
+  CoworkStoredPairing? _storedPairing;
+
+  /// The user tapped Disconnect: stay down until they act, no auto-reconnect.
+  bool _manuallyDisconnected = false;
+
+  Timer? _autoReconnectTimer;
+  int _reconnectAttempts = 0;
+
+  /// Capped exponential backoff for auto-reconnect after an unexpected drop.
+  static const Duration _baseBackoff = Duration(seconds: 1);
+  static const Duration _maxBackoff = Duration(seconds: 30);
+
   @override
   void initState() {
     super.initState();
     _hostController = TextEditingController(text: widget.defaultHostUrl);
-    _buildController();
+    _bootstrap();
   }
 
   @override
   void dispose() {
+    _autoReconnectTimer?.cancel();
+    _controller?.state.removeListener(_onStateChanged);
     _inboundSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
@@ -75,16 +99,127 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     super.dispose();
   }
 
+  /// Load any stored pairing first, then build the controller. If a pairing is
+  /// stored, auto-reconnect with no code; otherwise show the connect form.
+  Future<void> _bootstrap() async {
+    final store = widget.pairingStore;
+    if (store != null) {
+      try {
+        _storedPairing = await store.loadPairing();
+      } catch (_) {
+        // A storage failure (locked keystore, missing plugin in a test) simply
+        // means "not paired yet" — fall back to the code connect form.
+        _storedPairing = null;
+      }
+      if (_storedPairing != null && mounted) {
+        _hostController.text = _storedPairing!.hostUrl.toString();
+      }
+    }
+    await _buildController();
+    if (_storedPairing != null) {
+      await _reconnect();
+    }
+  }
+
   Future<void> _buildController() async {
     final controller = await widget.controllerBuilder();
     if (!mounted) {
       controller.dispose();
       return;
     }
+    controller.state.addListener(_onStateChanged);
     setState(() {
       _controller = controller;
       _inboundSub = controller.inbound.listen(_onInbound);
     });
+  }
+
+  /// Watches the transport state for an unexpected drop after being paired, and
+  /// schedules a capped-backoff auto-reconnect when a pairing is stored.
+  void _onStateChanged() {
+    final controller = _controller;
+    if (controller == null) return;
+    final phase = controller.state.value.phase;
+    if (phase == CoworkRelayPhase.paired) {
+      _reconnectAttempts = 0;
+      return;
+    }
+    if (phase == CoworkRelayPhase.closed &&
+        _storedPairing != null &&
+        !_manuallyDisconnected) {
+      _scheduleAutoReconnect();
+    }
+  }
+
+  void _scheduleAutoReconnect() {
+    if (_autoReconnectTimer != null || widget.pairingStore == null) return;
+    final exponent = _reconnectAttempts.clamp(0, 5);
+    final delayMs =
+        (_baseBackoff.inMilliseconds * (1 << exponent)).clamp(0, _maxBackoff.inMilliseconds);
+    _reconnectAttempts++;
+    _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
+      _autoReconnectTimer = null;
+      if (!mounted || _storedPairing == null || _manuallyDisconnected) return;
+      // A fresh controller per attempt: the client is single-shot per socket.
+      await _rebuildController();
+      await _reconnect();
+    });
+  }
+
+  /// Reconnects the current controller to the stored host with no code, then
+  /// re-provisions the account token so tasks can run again.
+  Future<void> _reconnect() async {
+    final controller = _controller;
+    final stored = _storedPairing;
+    if (controller == null || stored == null || _busy) return;
+    setState(() {
+      _localError = null;
+      _busy = true;
+      _manuallyDisconnected = false;
+    });
+    try {
+      await controller.reconnect(hostUrl: stored.hostUrl, pairing: stored);
+      final session = widget.sessionSource.current();
+      if (session != null) {
+        await controller.provisionAccount(session);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _localError = '$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Tears down the live controller and spins up a fresh one, without touching
+  /// the stored pairing or the conversation.
+  Future<void> _rebuildController() async {
+    final old = _controller;
+    final oldSub = _inboundSub;
+    // Build the replacement FIRST, then swap it in with a single setState. This
+    // never leaves the tree pointing at a controller whose state notifier we are
+    // about to dispose — repointing and disposing in the wrong order tears the
+    // ValueListenableBuilder off a disposed notifier and unmounts the view.
+    final controller = await widget.controllerBuilder();
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    old?.state.removeListener(_onStateChanged);
+    // Cancel, but never AWAIT the old subscription. `StreamSubscription.cancel()`
+    // on a broadcast stream returns Dart's shared `Future._nullFuture`, which is
+    // owned by the ROOT zone: awaiting it parks the rest of this method on the
+    // root microtask queue, which a `flutter_test` FakeAsync zone never drains.
+    // The reconnect then only ran after the test ended. Cancelling already stops
+    // delivery synchronously, so there is nothing to wait for.
+    unawaited(oldSub?.cancel() ?? Future<void>.value());
+    controller.state.addListener(_onStateChanged);
+    setState(() {
+      _controller = controller;
+      _currentAssistant = null;
+      _inboundSub = controller.inbound.listen(_onInbound);
+    });
+    // Tear the old transport down in the background: it is fully detached now.
+    if (old != null) unawaited(old.dispose());
   }
 
   void _onInbound(CoworkRelayInbound event) {
@@ -144,6 +279,8 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       if (session != null) {
         await controller.provisionAccount(session);
       }
+      // Persist the trust so the next launch reconnects with no code.
+      await _persistTrust(controller);
     } catch (error) {
       // The pairing failure is already reflected in controller.state; a
       // provisioning failure is surfaced here.
@@ -153,21 +290,33 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
-  /// Drops the current session and spins up a fresh controller, returning to
-  /// the connect affordance. The conversation stays on screen.
-  Future<void> _disconnect() async {
-    final old = _controller;
-    await _inboundSub?.cancel();
-    _inboundSub = null;
-    setState(() {
-      _controller = null;
-      _currentAssistant = null;
-      _localError = null;
-      _busy = false;
-    });
-    await old?.dispose();
+  Future<void> _persistTrust(CoworkRelayController controller) async {
+    final store = widget.pairingStore;
+    final trust = controller.establishedTrust;
+    if (store == null || trust == null) return;
+    await store.savePairing(trust);
+    if (mounted) setState(() => _storedPairing = trust);
+  }
+
+  /// Deletes the stored trust — the next connection needs a fresh code again —
+  /// and drops the live connection.
+  Future<void> _forget() async {
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+    _manuallyDisconnected = false;
+    _reconnectAttempts = 0;
+    await widget.pairingStore?.clearPairing();
     _codeController.clear();
-    await _buildController();
+    // Drop the trust from the UI in the same frame the store loses it, so the
+    // reconnect bar cannot outlive the pairing it belongs to.
+    if (mounted) {
+      setState(() {
+        _storedPairing = null;
+        _localError = null;
+        _busy = false;
+      });
+    }
+    await _rebuildController();
   }
 
   void _send() {
@@ -216,68 +365,18 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
   // --- top status strip ------------------------------------------------------
 
+  /// The connection is not something the user manages. Once paired the socket
+  /// is simply up, and it comes back on its own after a drop — so nothing sits
+  /// on top of the chat: no "connected to" line, no host URL, no SAS digits, no
+  /// disconnect button. An in-flight connect gets a hairline progress bar, and
+  /// it carries no text either. Re-pairing lives in the bottom bar, and only
+  /// when the connection is actually down.
   Widget _buildStatusStrip(BuildContext context, CoworkRelayState state) {
-    final theme = Theme.of(context);
     switch (state.phase) {
-      case CoworkRelayPhase.paired:
-        return Material(
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Connected to ${_hostController.text.trim()}',
-                    style: theme.textTheme.bodySmall,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (state.sas != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Text('SAS ${state.sas}',
-                        style: theme.textTheme.bodySmall),
-                  ),
-                IconButton(
-                  tooltip: 'Disconnect',
-                  icon: const Icon(Icons.link_off, size: 18),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _disconnect,
-                ),
-              ],
-            ),
-          ),
-        );
       case CoworkRelayPhase.connecting:
       case CoworkRelayPhase.pairing:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const LinearProgressIndicator(minHeight: 2),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      state.detail ??
-                          (state.phase == CoworkRelayPhase.pairing
-                              ? 'Pairing…'
-                              : 'Connecting…'),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                  if (state.sas != null)
-                    Text('SAS ${state.sas}', style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        );
+        return const LinearProgressIndicator(minHeight: 2);
+      case CoworkRelayPhase.paired:
       case CoworkRelayPhase.idle:
       case CoworkRelayPhase.error:
       case CoworkRelayPhase.closed:
@@ -351,6 +450,10 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
         (state.phase == CoworkRelayPhase.closed
             ? (state.detail ?? 'Disconnected')
             : null);
+    // Already paired once: no code form. A compact reconnect + forget bar.
+    if (widget.pairingStore != null && _storedPairing != null) {
+      return _buildReconnectBar(context, banner);
+    }
     return SafeArea(
       top: false,
       child: Padding(
@@ -419,6 +522,52 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
                       : const Text('Connect'),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The bottom bar shown when the app is paired but not currently connected:
+  /// a status line plus Reconnect (keeps the pairing) and Forget (deletes it).
+  Widget _buildReconnectBar(BuildContext context, String? banner) {
+    final theme = Theme.of(context);
+    final reconnecting = _busy;
+    final status = banner ??
+        (reconnecting
+            ? 'Reconnecting…'
+            : 'Paired with ${_storedPairing!.peerDeviceId}. Not connected.');
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                status,
+                style: banner != null
+                    ? TextStyle(color: theme.colorScheme.error)
+                    : theme.textTheme.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: reconnecting ? null : _forget,
+              child: const Text('Forget'),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: reconnecting ? null : _reconnect,
+              child: reconnecting
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Reconnect'),
             ),
           ],
         ),
