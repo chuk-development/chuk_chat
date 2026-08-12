@@ -153,23 +153,6 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
-  /// Drops the current session and spins up a fresh controller, returning to
-  /// the connect affordance. The conversation stays on screen.
-  Future<void> _disconnect() async {
-    final old = _controller;
-    await _inboundSub?.cancel();
-    _inboundSub = null;
-    setState(() {
-      _controller = null;
-      _currentAssistant = null;
-      _localError = null;
-      _busy = false;
-    });
-    await old?.dispose();
-    _codeController.clear();
-    await _buildController();
-  }
-
   void _send() {
     final controller = _controller;
     if (controller == null || !controller.state.value.isPaired) return;
@@ -216,68 +199,16 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
   // --- top status strip ------------------------------------------------------
 
+  /// The connection is not a thing the user manages. Once paired, the socket is
+  /// simply up — so the chat shows nothing at the top: no "connected to" line,
+  /// no host URL, no SAS, no disconnect button. Only an in-flight connect gets
+  /// a hairline progress bar, and it carries no text either.
   Widget _buildStatusStrip(BuildContext context, CoworkRelayState state) {
-    final theme = Theme.of(context);
     switch (state.phase) {
-      case CoworkRelayPhase.paired:
-        return Material(
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Connected to ${_hostController.text.trim()}',
-                    style: theme.textTheme.bodySmall,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (state.sas != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Text('SAS ${state.sas}',
-                        style: theme.textTheme.bodySmall),
-                  ),
-                IconButton(
-                  tooltip: 'Disconnect',
-                  icon: const Icon(Icons.link_off, size: 18),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _disconnect,
-                ),
-              ],
-            ),
-          ),
-        );
       case CoworkRelayPhase.connecting:
       case CoworkRelayPhase.pairing:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const LinearProgressIndicator(minHeight: 2),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      state.detail ??
-                          (state.phase == CoworkRelayPhase.pairing
-                              ? 'Pairing…'
-                              : 'Connecting…'),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                  if (state.sas != null)
-                    Text('SAS ${state.sas}', style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        );
+        return const LinearProgressIndicator(minHeight: 2);
+      case CoworkRelayPhase.paired:
       case CoworkRelayPhase.idle:
       case CoworkRelayPhase.error:
       case CoworkRelayPhase.closed:

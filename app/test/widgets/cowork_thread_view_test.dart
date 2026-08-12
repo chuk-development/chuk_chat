@@ -104,7 +104,7 @@ void main() {
     expect(find.byIcon(Icons.send), findsNothing);
   });
 
-  testWidgets('connecting phase shows a progress bar and label',
+  testWidgets('connecting phase shows only a hairline progress bar',
       (tester) async {
     final controller = await pumpView(tester);
     controller.set(
@@ -115,8 +115,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Connecting…'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    // No status text while connecting: the connection is not the user's job.
+    expect(find.text('Connecting…'), findsNothing);
   });
 
   testWidgets('error phase surfaces the failure detail on the connect bar',
@@ -134,7 +135,7 @@ void main() {
     expect(find.text('Pairing failed (macMismatch)'), findsOneWidget);
   });
 
-  testWidgets('paired phase shows the chat: connected chip and composer',
+  testWidgets('paired phase shows the chat: bare thread and composer, no status strip',
       (tester) async {
     final controller = await pumpView(tester);
     controller.set(
@@ -146,11 +147,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.textContaining('Connected to'), findsOneWidget);
     expect(find.text('Send a task to the agent'), findsOneWidget);
     expect(find.byIcon(Icons.send), findsOneWidget);
     // The connect affordance is gone once connected.
     expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
+    // Nothing sits on top of the chat: no status line, no host, no SAS, and
+    // no disconnect button — the socket is not something the user manages.
+    expect(find.textContaining('Connected to'), findsNothing);
+    expect(find.textContaining('SAS'), findsNothing);
+    expect(find.byIcon(Icons.link_off), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   testWidgets('received delta / tool / done frames render into the thread',
@@ -183,8 +189,8 @@ void main() {
 
     expect(controller.connectCalls, 1);
     expect(controller.provisioned, isTrue);
-    expect(find.textContaining('Connected to'), findsOneWidget);
     expect(find.byIcon(Icons.send), findsOneWidget);
+    expect(find.textContaining('Connected to'), findsNothing);
   });
 
   testWidgets('sending a message adds a bubble and calls sendTask',
