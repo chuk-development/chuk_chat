@@ -1,0 +1,23 @@
+{
+  "_comment": "Cross-language byte-compat vector for CoWork frame crypto. The Dart CoworkFrameSealer, fed these exact inputs, MUST produce byte-identical header_b64, signed_b64 and frame_json, and open it back to plaintext_utf8. AES-GCM uses the header as AAD; Ed25519 signs signed_b64; ciphertext = cipher||16-byte tag.",
+  "inputs": {
+    "ed25519_seed_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "ed25519_public_b64": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+    "fingerprint": "5647-5AA7-5463-474C-0285",
+    "channel_key_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
+    "nonce_b64": "oKGio6Slpqeoqaqr",
+    "device_id": "executor-laptop-01",
+    "key_version": 1,
+    "seq": 7,
+    "ts": 1723478400000,
+    "plaintext_utf8": "{\"jsonrpc\":\"2.0\",\"method\":\"run\",\"id\":\"42\"}"
+  },
+  "expected": {
+    "header_b64": "AAAAEWNodWsuY293b3JrLmZyYW1lAAAAATEAAAABMQAAABJleGVjdXRvci1sYXB0b3AtMDEAAAABNwAAAA0xNzIzNDc4NDAwMDAw",
+    "signed_b64": "AAAAEWNodWsuY293b3JrLmZyYW1lAAAAATEAAAABMQAAABJleGVjdXRvci1sYXB0b3AtMDEAAAABNwAAAA0xNzIzNDc4NDAwMDAwAAAADKChoqOkpaanqKmqqwAAADqsrWxMjYXuXRpNe9y7kgDUwzWYopgH6knA5szonKxc1Hj+FmH6chCTyicLaopTZSPhoV0CzOV36tKv",
+    "nonce_b64": "oKGio6Slpqeoqaqr",
+    "ciphertext_b64": "rK1sTI2F7l0aTXvcu5IA1MM1mKKYB+pJwObM6JysXNR4/hZh+nIQk8onC2qKU2Uj4aFdAszld+rSrw==",
+    "sig_b64": "imxolDb+8CoHPrVh8LHeJwAMO/d1HxvEmM2BGWNaEcYc+QWfD7t1JDKU6FCkT2l3EWw8KrTqvhbv10YN+tS+CQ==",
+    "frame_json": "{\"v\":\"1\",\"kv\":1,\"device_id\":\"executor-laptop-01\",\"seq\":7,\"ts\":1723478400000,\"nonce\":\"oKGio6Slpqeoqaqr\",\"ciphertext\":\"rK1sTI2F7l0aTXvcu5IA1MM1mKKYB+pJwObM6JysXNR4/hZh+nIQk8onC2qKU2Uj4aFdAszld+rSrw==\",\"sig\":\"imxolDb+8CoHPrVh8LHeJwAMO/d1HxvEmM2BGWNaEcYc+QWfD7t1JDKU6FCkT2l3EWw8KrTqvhbv10YN+tS+CQ==\"}"
+  }
+}
