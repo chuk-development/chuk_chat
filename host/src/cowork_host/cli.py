@@ -72,6 +72,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Supabase anon key (or env SUPABASE_ANON_KEY)",
     )
     parser.add_argument(
+        "--pair",
+        action="store_true",
+        help="forget the stored pairing and print one fresh, single-use code — "
+        "the deliberate way to pair a new device (the old device stops working)",
+    )
+    parser.add_argument(
         "--mock-model",
         action="store_true",
         help="offline/dev: no account needed; a canned agent runs one demo "
@@ -94,11 +100,32 @@ def _print_banner(host: LocalHost) -> None:
     )
     print(f"    Device:    {host.device_id}", flush=True)
     print("", flush=True)
-    print(
-        f"  Open the CoWork app, Connect to  {host.url}  and enter code:  "
-        f"{host.pairing_code}",
-        flush=True,
-    )
+    code = host.pairing_code
+    if host.has_stored_pairing or code is None:
+        # Already paired: reconnect authenticates with the stored device keys —
+        # no code exists, so there is nothing to print and nothing to replay.
+        print(
+            f"  Already paired. Waiting for the CoWork app to reconnect on  "
+            f"{host.url}  (no code needed).",
+            flush=True,
+        )
+        print(
+            "  To pair a different device, restart with  cowork-host --pair "
+            "(or delete paired.json in the workspace). That mints one fresh "
+            "code and stops the current device.",
+            flush=True,
+        )
+    else:
+        print(
+            f"  Open the CoWork app, Connect to  {host.url}  and enter code:  "
+            f"{code}",
+            flush=True,
+        )
+        print(
+            "  This code works EXACTLY ONCE. After pairing it is destroyed and "
+            "the app reconnects on its own, with no code, forever.",
+            flush=True,
+        )
     print("", flush=True)
 
 
@@ -113,9 +140,12 @@ def main(argv: list[str] | None = None) -> int:
         agent_name=args.agent_name,
         supabase_url=args.supabase_url,
         anon_key=args.anon_key,
+        force_repair=args.pair,
         model_factory_override=_mock_model_factory if args.mock_model else None,
         logger=_log,
     )
+    if args.pair:
+        _log("--pair: the stored pairing was dropped; a fresh single-use code follows.")
     if args.mock_model:
         _log("MOCK MODEL mode: no account, canned agent — transport test only.")
     host.start()

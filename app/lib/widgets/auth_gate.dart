@@ -19,7 +19,7 @@ class AuthGate extends StatelessWidget {
         final session =
             snapshot.data?.session ?? SupabaseService.auth.currentSession;
         if (session != null) {
-          return const MessengerShell();
+          return MessengerShell();
         }
         return const LoginPage();
       },

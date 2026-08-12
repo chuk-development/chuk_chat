@@ -661,6 +661,39 @@ accounts; constant-time compares throughout; the channel key comes from ECDH, no
 from the low-entropy code alone. Implemented in Python (client) + Dart (desktop)
 with shared cross-language test vectors and explicit MITM/abort tests.
 
+### 15.1 Persistent trust — one code, then never again
+
+The code is entered **exactly once, ever**. Both sides persist a trust record at
+the end of step 6 (host: `paired.json`, `0600`, next to the `0600` device seed;
+app: `flutter_secure_storage` — never SharedPreferences, the channel key and the
+device seed are key material). Each record holds the stable `channel_id`, the
+channel key, and the peer's `device_id` + approved Ed25519 public key. The
+records are keyed per peer device, so more than one device can be paired later
+without a format change.
+
+**The code is single-use and the host enforces it.** A completed pairing burns
+it in-process before anything else can fail; a host that starts with a stored
+trust never mints one at all, so there is nothing to print, type, or replay. A
+stolen code meets a reconnect challenge it cannot answer. The deliberate way
+back is `cowork-host --pair` (or deleting `paired.json`), which drops the trust
+and mints **one** fresh code — the previously paired device stops working.
+
+**Reconnect** (`cowork_crypto.reconnect` / `cowork_reconnect.dart`) replaces the
+ceremony from then on: a mutual signed-nonce challenge against the *stored*
+long-term Ed25519 keys, over `RT = N_i ‖ N_j` bound to the `channel_id`, with a
+different label per role. No code, no SAS, no ECDH — the channel key is the
+stored one. Identity is what counts, not the address: either side may change IP
+and reconnect. An imposter without the peer's private key cannot produce a
+proof, so the handshake aborts and **no frame codec is ever built** — sealed
+frames from an unauthenticated device are dropped even if the channel key leaked.
+Replay (old nonces) and reflection (one role's proof presented as the other's)
+both fail, and Python/Dart are byte-identical against shared vectors.
+
+The UI follows: the code form appears only before the first pairing. After that
+the app auto-connects on launch and re-dials with capped backoff after a drop —
+no status strip, no disconnect button, only a **Forget** action that deletes the
+trust and brings the code form back.
+
 ---
 
 ## 16. The Flutter app (control surface)
