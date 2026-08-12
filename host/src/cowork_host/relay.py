@@ -15,6 +15,7 @@ never looks inside them.
 
 from __future__ import annotations
 
+import itertools
 import json
 import threading
 from typing import Any, Callable
@@ -23,6 +24,16 @@ from websockets.exceptions import ConnectionClosed
 from websockets.sync.server import ServerConnection, serve
 
 from .protocol import ROLE_CONTROLLER, ROLE_EXECUTOR, ROLES, TYPE_JOIN
+
+# A peer lifecycle callback: ``(channel, role, event, token)`` where ``event`` is
+# ``"join"`` or ``"leave"`` and ``token`` is a per-connection identity. The token
+# lets a listener tell one controller connection from the next so a reconnect —
+# even one whose ``leave`` and the next ``join`` race across threads — is never
+# confused for the same session.
+PeerEvent = Callable[[str, str, str, int], None]
+
+EVENT_JOIN = "join"
+EVENT_LEAVE = "leave"
 
 
 def _peer_role(role: str) -> str:
@@ -38,15 +49,20 @@ class LocalRelay:
         port: int = 8787,
         *,
         logger: Callable[[str], None] | None = None,
+        on_peer_event: PeerEvent | None = None,
     ) -> None:
         self._host = host
         self._port = port
         self._log = logger or (lambda _msg: None)
+        self._on_peer_event = on_peer_event
         self._server = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._conn_ids = itertools.count(1)
         # channel_id -> {role -> connection}
         self._channels: dict[str, dict[str, ServerConnection]] = {}
+        # channel_id -> {role -> per-connection token}
+        self._tokens: dict[str, dict[str, int]] = {}
         # channel_id -> {target_role -> [raw messages held until it joins]}
         self._buffers: dict[str, dict[str, list[Any]]] = {}
 
@@ -77,7 +93,15 @@ class LocalRelay:
             self._thread = None
         with self._lock:
             self._channels.clear()
+            self._tokens.clear()
             self._buffers.clear()
+
+    def current_peer_token(self, channel: str, role: str) -> int | None:
+        """The token of the connection currently holding ``role`` on ``channel``,
+        or ``None`` if nobody holds it. Lets a late joiner (e.g. the host's own
+        executor connection coming up) discover a peer that is already present."""
+        with self._lock:
+            return self._tokens.get(channel, {}).get(role)
 
     # -- connection handler ----------------------------------------------
 
@@ -92,32 +116,65 @@ class LocalRelay:
             self._log("relay: dropped a connection with no valid join")
             return
         channel, role = join
-        self._register(channel, role, ws)
+        token = self._register(channel, role, ws)
         self._log(f"relay: {role} joined channel {channel}")
+        self._emit(channel, role, EVENT_JOIN, token)
         try:
             for message in ws:  # blocks; yields each inbound message
                 self._forward(channel, role, message)
         except ConnectionClosed:
             pass
         finally:
-            self._unregister(channel, role, ws)
-            self._log(f"relay: {role} left channel {channel}")
+            if self._unregister(channel, role, ws):
+                self._log(f"relay: {role} left channel {channel}")
+                self._emit(channel, role, EVENT_LEAVE, token)
 
-    def _register(self, channel: str, role: str, ws: ServerConnection) -> None:
+    def _register(self, channel: str, role: str, ws: ServerConnection) -> int:
         with self._lock:
+            token = next(self._conn_ids)
             self._channels.setdefault(channel, {})[role] = ws
+            self._tokens.setdefault(channel, {})[role] = token
             buffered = self._buffers.get(channel, {}).pop(role, [])
         # Flush outside the lock: sending can block.
         for message in buffered:
             _safe_send(ws, message)
+        return token
 
-    def _unregister(self, channel: str, role: str, ws: ServerConnection) -> None:
+    def _unregister(self, channel: str, role: str, ws: ServerConnection) -> bool:
+        """Drop this connection if it still owns ``role``. Returns ``True`` when it
+        did — i.e. this exact connection left and was not already superseded by a
+        reconnect. A superseded connection returns ``False`` and stays silent, so a
+        reconnect's ``leave`` never cancels the live session that replaced it."""
         with self._lock:
             peers = self._channels.get(channel)
-            if peers is not None and peers.get(role) is ws:
-                del peers[role]
-                if not peers:
-                    del self._channels[channel]
+            if peers is None or peers.get(role) is not ws:
+                return False
+            del peers[role]
+            if not peers:
+                del self._channels[channel]
+            tokens = self._tokens.get(channel)
+            if tokens is not None:
+                tokens.pop(role, None)
+                if not tokens:
+                    del self._tokens[channel]
+            # Drop anything still buffered for the departed role: it belongs to a
+            # session that is over and must not leak into the next connection.
+            role_buffers = self._buffers.get(channel)
+            if role_buffers is not None:
+                role_buffers.pop(role, None)
+                if not role_buffers:
+                    del self._buffers[channel]
+            return True
+
+    def _emit(self, channel: str, role: str, event: str, token: int) -> None:
+        """Fire the peer-lifecycle callback, outside every lock. A listener
+        failure must never take the relay down."""
+        if self._on_peer_event is None:
+            return
+        try:
+            self._on_peer_event(channel, role, event, token)
+        except Exception as exc:  # noqa: BLE001 - a listener must not kill the relay
+            self._log(f"relay: peer-event listener failed: {type(exc).__name__}: {exc}")
 
     def _forward(self, channel: str, role: str, message: Any) -> None:
         """Hand ``message`` to the peer verbatim, or buffer it until the peer joins."""

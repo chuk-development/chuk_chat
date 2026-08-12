@@ -27,7 +27,8 @@ from cowork_executor import ModelFactory, resolve_backend_model_factory
 
 from .identity import HOST_DEVICE_ID, load_or_create_identity
 from .party import HostParty
-from .relay import LocalRelay
+from .protocol import ROLE_CONTROLLER
+from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .serve import TaskServer
 
 DEFAULT_WORKSPACE = "~/.cowork"
@@ -77,17 +78,52 @@ class LocalHost:
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
         self._device_id = HOST_DEVICE_ID
 
-        self._pairing = Pairing.initiator(
+        # The printed pairing code is STABLE for the host's lifetime: the same
+        # channel id + digits are shown once and reused for every connection. A
+        # throwaway session normalises and validates them (and generates random
+        # ones when not pinned) so the exact rules live in one place — ``Pairing``.
+        probe = Pairing.initiator(
             device_id=self._device_id,
             device_identity=self._identity,
             sas_digits=sas_digits,
             channel_id=channel_id,
             digits=digits,
         )
+        self._sas_digits = sas_digits
+        self._channel_id = probe.channel_id
+        self._pairing_code = probe.pairing_code
+        self._digits = self._pairing_code.rpartition("-")[2]
 
-        self._relay = LocalRelay(host_addr, port, logger=self._log)
+        self._relay = LocalRelay(
+            host_addr, port, logger=self._log, on_peer_event=self._on_peer_event
+        )
         self._party: HostParty | None = None
         self._port = port
+
+    def _pairing_factory(self) -> Pairing:
+        """Mint a fresh initiator session — new ephemeral keys, new expiry, new
+        (empty) trust store — reusing the stable printed code. One per controller
+        connection, so a reconnect never meets an expired or consumed session."""
+        return Pairing.initiator(
+            device_id=self._device_id,
+            device_identity=self._identity,
+            sas_digits=self._sas_digits,
+            channel_id=self._channel_id,
+            digits=self._digits,
+        )
+
+    def _on_peer_event(self, channel: str, role: str, event: str, token: int) -> None:
+        """Relay callback: route controller join/leave to the party so it can
+        mint a fresh session per connection and reset on disconnect."""
+        if role != ROLE_CONTROLLER:
+            return
+        party = self._party
+        if party is None:
+            return
+        if event == EVENT_JOIN:
+            party.on_controller_joined(token)
+        elif event == EVENT_LEAVE:
+            party.on_controller_left(token)
 
     # -- setup helpers ---------------------------------------------------
 
@@ -126,12 +162,16 @@ class LocalHost:
         self._port = self._relay.port
         self._party = HostParty(
             url=self.url,
-            pairing=self._pairing,
+            channel_id=self._channel_id,
+            pairing_factory=self._pairing_factory,
             device_id=self._device_id,
             device_identity=self._identity,
             key_version=KEY_VERSION,
             build_task_server=self._build_task_server,
             logger=self._log,
+            controller_token=lambda: self._relay.current_peer_token(
+                self._channel_id, ROLE_CONTROLLER
+            ),
         )
         self._party.start()
 
@@ -154,11 +194,11 @@ class LocalHost:
 
     @property
     def channel_id(self) -> str:
-        return self._pairing.channel_id
+        return self._channel_id
 
     @property
     def pairing_code(self) -> str:
-        return self._pairing.pairing_code
+        return self._pairing_code
 
     @property
     def agent(self) -> Agent:
