@@ -1,470 +1,650 @@
-# CoWork — Agent Platform Plan (fundamentals)
+# CoWork — Agent Platform Plan
 
-Status: **planning, no code yet.** Captured from a design discussion on
-2026-08-12. This supersedes the *shape* of `docs/COWORK_EXECUTION_PLAN.md`
-(which described a single-session desktop↔phone mirror). The relay, the crypto
-frame primitives, and the client-side approval model from that plan survive;
-its "mirror one desktop session" framing does not. This document is the new
-north star for what CoWork *is*.
+**Status:** planning, no product code yet (a throwaway local demo was built and is
+being discarded). **Last reworked:** 2026-08-12, after four subagents read the
+real source of Hermes Agent (Nous, MIT) and firecrawl/anydoc (MIT).
+
+This document supersedes the *shape* of `docs/COWORK_EXECUTION_PLAN.md` (a
+single-session desktop↔phone mirror). What survives from that plan: the relay,
+the `cowork_frame*` crypto primitives, and the client-side approval model.
+
+Sections are numbered so feedback can point at them (e.g. "§7.5, change the
+trigger threshold").
 
 ---
 
-## 1. The product, in one picture
+## 1. What this is
 
-The app has **two modes**:
+chuk_chat gains **two modes**:
 
 1. **Normal chat** — you talk to a model. Unchanged.
 2. **Agent chat (CoWork)** — a **messenger, like Slack**, whose contacts are
-   **agents that behave like coworkers**. You have a roster of them. You DM an
-   agent a task (with files, links, context). It goes off and *does the work*
-   on its own machine — shell, browser, APIs — and streams its run back into
-   the thread. It works when triggered and on a schedule, autonomously, like an
-   employee.
+   **AI agents that behave like coworkers**. You have a roster of them. You
+   message an agent a task (with files, links, context, or a screen recording);
+   it goes off and *does the work* on its own machine — shell, browser, APIs —
+   and streams its run back into the thread. It works when triggered and on a
+   schedule, autonomously, and keeps running when the app is closed.
 
-An agent does not "answer" you like a chatbot. It **works**, and you watch the
-work stream into the chat (Hermes / Claude-Code style): collapsible tool-call
-lines ("ran `ffmpeg …`"), not every detail, with a **Stop** button to abort the
-running task. The output is produced in the sandbox; you see it through the UI.
+An agent does not "answer" like a chatbot; it **works**, and you watch the work
+stream in (Hermes / Claude-Code style): collapsible tool-call lines, a **Stop**
+button, files and screenshots delivered as cards. You onboard an agent by
+telling it its standing job ("every week, fetch the crypto news and summarise
+it"); it gets a random name, runs on a weekly trigger, and posts results.
 
-Example: you onboard an agent — "every week, go fetch all the crypto news and
-summarise it." It gets a random name, runs on a weekly cron trigger, and posts
-results into its thread. You have several such agents (a crypto-news agent, a
-personal assistant agent, whatever), all living on one host.
+The essence: **you assemble a team of specialised, always-running AI coworkers,
+give them tasks and revocable access, and they do the work autonomously on your
+own machine.**
 
 ---
 
-## 2. What an agent is
+## 2. Glossary
 
-**An agent = a Workspace bound to a sandbox.** The app already has
-`FEATURE_WORKSPACES` = "custom AI personas + files + memory". That *is* the
-coworker abstraction. An agent carries:
+- **Host** — a Linux machine (a server or the user's laptop) the user owns and
+  sets up, running the platform. Single-user.
+- **Manager** — the control-plane process on the host: roster, sandbox
+  lifecycle, scheduler, relay bridge.
+- **Agent (coworker)** — a Workspace (persona + files + memory + skills + job +
+  schedule) bound to a sandbox. Identified by an auto-assigned name.
+- **Sandbox** — a per-agent container (Debian-like, isolated FS, sudo,
+  installable) where that agent's Python runtime executes.
+- **Controller** — the Flutter app (phone or desktop). UI only: the messenger,
+  roster, live run view, in-UI controls.
+- **Executor** — the Python agent runtime inside a sandbox.
+- **Relay** — `cowork_relay` on `api.chuk.chat`; a blind proxy of encrypted
+  frames between controller and executor.
+- **Session / thread** — one conversation with an agent (an agent can have
+  many).
+
+---
+
+## 3. Topology
+
+```
+ Flutter app (controller, UI only)          the user's Host (single-user)
+ ┌───────────────────────────┐              ┌──────────────────────────────────┐
+ │ messenger · roster        │   E2E over   │ Manager (control plane)          │
+ │ live run view · Stop      │◄── relay ───►│  roster · lifecycle · scheduler  │
+ │ skills/connect/model UI   │   (blind)    │  relay bridge                    │
+ └───────────────────────────┘              │   ├─ sandbox: agent "amber"      │
+            ▲                                │   │    Python runtime + tools    │
+            │ model I/O (not E2E)            │   ├─ sandbox: agent "cobalt"     │
+            ▼                                │   └─ sandbox: agent "…"          │
+   api.chuk.chat (backend)  ◄───────────────┘  each = a Debian container
+   model routing · relay · OAuth token vault    (browser, ffmpeg via host, …)
+```
+
+- **The relay carries only encrypted blobs** (§14). **Model I/O routes through
+  the backend** (§7.4) and is therefore visible to the backend — E2E covers the
+  control/mirror channel, not model calls. This distinction is deliberate and
+  must not be oversold.
+- **The Flutter app is UI only.** No agent logic runs in Dart. chuk_chat's
+  existing "run a few basic bash commands in normal chat" stays as-is, not
+  extended.
+
+---
+
+## 4. The agent (coworker) = a Workspace
+
+An agent reuses the existing `FEATURE_WORKSPACES` concept (persona + files +
+memory). It carries:
 
 - **Identity** — an auto-assigned random name.
-- **Persona / job** — its onboarding brief: the standing system prompt + what it
-  is supposed to do. This is the "onboarding" you write it.
-- **Files** — documents, links, context you hand it.
-- **Memory** — its own persistent notebook (section 6).
-- **Skills** — markdown `SKILL.md` procedures it loads on demand, exactly like
-  Claude's Agent Skills (reuse `FEATURE_SKILLS`; see §8a).
-- **Schedule** — optional recurring triggers (cron), e.g. weekly.
-- **Credentials / access** — revocable OAuth/API doors, never raw secrets in the
-  box (see §8b).
+- **Job / persona** — its onboarding brief: the standing system prompt + what it
+  should do. Onboarding is by **text** *or* by **video demonstration** — you
+  record yourself doing a task, send the clip, the agent analyses it
+  (multimodal, via the backend vision model) and takes the task over. "Show,
+  don't tell." A demonstrated task can be distilled into a Skill (§11).
+- **Files** — documents/links/context you hand it.
+- **Memory** — its own persistent notebook (§12).
+- **Skills** — markdown `SKILL.md` procedures it loads on demand (§11).
+- **Schedule** — optional recurring triggers (§13).
+- **Credentials** — revocable OAuth/API doors, never raw secrets in the box
+  (§10).
 
-Agents are the user's own coworkers, not mutually adversarial — but they hold
-*different* credentials, so isolation is about **credential compartmentalisation**,
-not defending against a malicious tenant.
+**Multiple chats per agent** (same sandbox, separate threads) and
+**multi-agent collaboration** — several agents in one thread, talking to each
+other like teammates while you assign targeted tasks (§7.6).
 
-**Onboarding by demonstration (video).** Besides writing an agent its brief, you
-can **record yourself doing a task and send the agent the video**; it analyses
-the recording (multimodal) and can then take the task over. "Show, don't tell."
-This fits the API-first stance (§8a): the agent learns *what* you are trying to
-achieve and then does it the efficient way (an API call), rather than mimicking
-your clicks in a browser. A demonstrated task can also be distilled into a Skill
-(§8a) for reuse. Mechanism (how the video is analysed into a repeatable
-procedure) is an open item (§13).
+Open decision: reuse the Workspace entity directly, or a thin "Agent" entity
+that *wraps* a Workspace. (§20)
 
 ---
 
-## 3. Topology: one host, many agents
+## 5. Host & Manager
 
-- **Host** = a machine with Docker/virtualisation — a server (e.g. 64 GB RAM) or
-  the user's own laptop. You install the platform on it; it brings the runtime,
-  browser, ffmpeg, and everything else.
-- **Many agents live on one host.** The host is the office; agents are the people
-  in it. **Not** one host per agent.
-- Each agent gets its **own container sandbox** on the host (section 4) —
-  container-grade isolation, enough because the host is single-user.
+- **One host, many agents.** The host is the office; agents are the people in
+  it. On a server (e.g. 64 GB) or the user's own laptop.
+- **Single-user.** Everything on the host is one user's. Isolation between
+  agents is for **credential compartmentalisation and clean disposable
+  environments**, not defending against a hostile tenant.
+- **Install = one shell script + `connect`.** The script installs/checks the
+  container runtime, pulls the base image, installs the Manager as a **systemd
+  service**; `connect` does the device-login/pairing once (§15). From then on it
+  runs automatically. The user sets up their own OS, NVIDIA drivers, etc. — not
+  the platform's concern.
+- **No KVM required** (§6).
 
-The host runs a **Manager / control plane** (installed by the setup script) that:
-
-- holds the agent roster,
-- starts / stops / supervises the per-agent sandbox containers,
-- runs the **cron scheduler** and fires trigger events (even with no phone
-  connected),
-- bridges to the relay (section 5),
-- sends push notifications when an agent finishes or needs approval.
-
----
-
-## 4. The sandbox: one container per agent (container-grade, no KVM)
-
-**Decision (settled 2026-08-12): each agent runs in its own container-grade
-sandbox — NOT a microVM, NOT native-on-host.**
-
-- A sandbox is a **container** — a Debian-like environment with its **own
-  isolated filesystem**, **passwordless sudo**, and the ability to **install
-  software** (`apt install`, pip, whatever). The agent treats it like its own
-  little Debian box.
-- **Not a real VM.** No Firecracker, so **no KVM required** — that is the whole
-  reason microVMs were dropped. Plain containers (Docker or an equivalent OCI
-  runtime) are the mechanism.
-- **Many sandboxes on one host = many agents.** This sandbox layer does not
-  exist in the repo yet; it is new.
-
-**Why a sandbox at all, if the host is single-user?** Isolation *between* agents
-is not a hard security requirement — everything on the host is one user's. But
-each agent still needs a **fresh, disposable Debian environment it can install
-into and trash** without wrecking the host base or the other agents. That is
-what the container gives: container-grade isolation, which is enough here —
-VM-grade (Firecracker) is overkill and costs the KVM dependency.
-
-**Install = one shell script + a `connect`.** The user runs a script on their
-host; it sets up the container runtime + the Manager, `connect` does the
-device-login/pairing once, and from then on it runs automatically.
-
-**Accepted risk:** the sandbox has passwordless sudo and the host is the user's
-own box; a runaway agent can still cost real work. Single-user, self-installed,
-opted into — accepted. Worth remembering only because an agent that trashes a
-user's environment is a support/reputation cost, not a design driver.
+The **Manager** (Python) holds the roster (SQLite), starts/stops/supervises the
+per-agent sandbox containers, runs the **scheduler** (§13), bridges the
+**relay** (§14), and sends push notifications on completion/approval.
 
 ---
 
-## 5. Transport & connection
+## 6. Sandbox: one container per agent
 
-- **Controller** = the Flutter app (phone or desktop). **UI only.** The
-  messenger, the roster, the thread view, the Stop button. The existing "run a
-  few basic bash commands in normal chat" capability stays as-is — it is not
-  extended into a second agent loop.
-- **Executor** = the Python agent, running inside its own container sandbox on
-  the host (section 4).
-- **Relay** = `cowork_relay` on `api.chuk.chat`. A **blind proxy**: it forwards
-  encrypted frames between controller and executor and stores nothing. Already
-  live. Still needs the **cross-replica fix** (prod runs 2 replicas with an
-  in-RAM presence map; peer-to-peer between replicas over Swarm DNS — see the
-  old execution plan's `relay-crossreplica`). This is a careful prod deploy and
-  a real prerequisite for connections to land reliably.
+- **Container-grade, not a VM.** Each agent runs in its own **container**
+  (Debian-like, own isolated filesystem, **passwordless sudo**, can
+  `apt install` / install anything — its own little Debian box). **No
+  Firecracker, no KVM.** Container-grade isolation is enough for a single-user
+  host; VM-grade would only add the KVM dependency for no gain here.
+- **Why a sandbox at all, single-user?** Each agent needs a fresh disposable
+  Debian it can install into and trash without wrecking the host base or other
+  agents.
 
-**Pairing:** the host/agent connects to `api.chuk.chat`, does a device-login
-(code flow, so a headless server is easy), gets an account token, and registers
-as an executor on the relay, publishing an Ed25519 identity. It appears in the
-user's device list; the phone **approves it locally** (client-side approval —
-the server never holds an approval flag).
+**Borrowed design — the sandbox abstraction (Hermes, MIT):**
 
----
+- **`BaseEnvironment` ABC with a 2-method surface** (`tools/environments/base.py`):
+  subclasses implement only `_run_bash(cmd, login, timeout, stdin) ->
+  ProcessHandle` and `cleanup()`; everything else (execute, timeout, bounded
+  output, cwd tracking) lives in the base. Our container is one subclass; local
+  / SSH / E2B slot in the same way, chosen by a factory keyed off an env var.
+  `ProcessHandle` is a `Protocol` so an async cloud SDK can masquerade as a
+  local subprocess.
+- **Snapshot-file session persistence instead of a long-lived shell** — the
+  single highest-value steal. Every command runs a *fresh* bash wrapped as
+  `source <snap>; cd <cwd>; <cmd>; re-dump env to <snap>; emit cwd marker`,
+  snapshot rewritten atomically (`mktemp`+`mv`). Env/aliases/functions/cwd
+  survive between tool calls with **no PTY to babysit** — backend-agnostic and
+  crash-safe.
+- **Container lifecycle:** session-scoped container per agent (Hermes keys reuse
+  off Docker labels + a `task_id`; `task_id != default` → torn down at session
+  close). Orphan reaper for containers left by a killed prior run.
 
-## 6. Crypto
-
-- **Fresh CoWork channel key, established at pairing — NOT the chat account
-  key.** Controller and executor each hold an X25519/Ed25519 identity; at
-  approval they do an ECDH to derive a shared channel key that only the two
-  know. The mirror/control channel is encrypted with this key.
-  - Avoids reproducing the `encryption_service` account-key derivation in
-    Python, avoids putting the account password on a headless host, and
-    decouples CoWork crypto from chat crypto (a leak on one side does not sink
-    the other).
-  - The Dart `cowork_frame*` primitives (already built) get repointed from the
-    account key to this channel key — cheap, since they are not wired anywhere
-    yet — and get a **byte-identical Python twin** so Dart controller ↔ Python
-    executor interoperate. Shared test vectors across both.
-- **Honesty about the E2E boundary:** the model call itself routes **through the
-  backend proxy** (section 7), so the backend sees that traffic. E2E here means
-  *"the relay/control channel is blind"*, **not** *"the backend sees nothing"*.
-  Do not oversell it.
-- The host holds the channel key on disk. Whoever roots the host can drive the
-  agents — inherent to any executor that can *do* things. It is the user's own
-  machine; accepted.
+**Tools: inside the sandbox vs passed through from the host (§9).** Most tools
+run inside; a few host binaries (ffmpeg) are passed through where in-sandbox is
+inefficient.
 
 ---
 
-## 7. Model routing
+## 7. The Python agent runtime
 
-**Through `api.chuk.chat` (backend proxy), with the account token.** Billing and
-account stay centralised, no provider keys scattered on every host, one auth.
-This matches the existing `SandboxService` pattern (client → multiplex → backend
-→ sandbox). The Python agent calls the model via the backend rather than holding
-provider keys.
+Written in **Python** because the tool ecosystem (browser-use, document
+handling, research) is far richer there than in Flutter. Built on **`uv`**.
 
----
+### 7.1 The loop
 
-## 8. The agent runtime (Python)
+- Claude-Code-style: system prompt (onboarding brief) + tool loop + tool
+  registry, many rounds, autonomous.
+- **Continue-vs-finish is structural**: did the model emit tool calls? Tool
+  calls → execute, append results, continue. Bare text → final answer, break.
+  (No text-pattern heuristics — matches chuk_chat's existing rule.)
+- **Dual-counter termination** (Hermes `iteration_budget.py`, ~62 lines,
+  MIT): a hard `max_iterations` ceiling **plus** a refundable budget —
+  housekeeping/preflight rounds `.refund()` so they don't burn the model's real
+  thinking budget while termination stays guaranteed.
+- **Two-tier kill switch**: a fail-safe **file-sentinel ESTOP** (pauses *new*
+  work; a stat error is treated as engaged) + a **thread-flag interrupt**
+  polled at loop top (cancels in-flight). Powers the app's **Stop** button.
+- **Stop-guard-as-nudge**: pure-policy modules that, when the model narrates
+  completion without doing the required terminal action, inject a synthetic
+  nudge and loop 1–2 more times.
 
-Written in Python because the tool ecosystem (browser-use, document generation,
-research) is far richer there than in Flutter — and the whole point is
-capability. Flutter is only the UI.
+### 7.2 Tools
 
-- **Loop:** a Claude-Code-style agentic loop — system prompt (the agent's
-  onboarding brief) + tool loop + tool registry, running many rounds
-  autonomously.
-- **Tools (preinstalled in the sandbox base image; see section 10 for the
-  inside-vs-passthrough split):**
-  - shell / process execution (as a normal user with passwordless sudo),
-  - **browser** — Chromium + a browser-use driver
-    (https://github.com/browser-use/browser-use),
-  - filesystem,
-  - **document generation** — LibreOffice (Word/Excel), pandoc,
-  - **media** — ffmpeg / ffprobe (ffmpeg via host passthrough, section 10),
-  - **yt-dlp**, research / web fetch,
-  - MCP tools (as the chat client already exposes them),
-  - **send-file-to-user** — push any produced file into the chat thread: CSV,
-    PDF, image, generated document, or a **browser screenshot** when it opened a
-    browser. Reuse the existing `send_file_to_user` → `sandboxArtifact` block, so
-    it renders as a download/preview card. (Opening a *desktop* is explicitly
-    out — §8a — but a browser screenshot as output is fine.)
-  - **search-chats** — cross-session recall: search the user's past chats for a
-    topic ("we discussed this last time" — but it is not in this session). Every
-    chat is persisted as a **read-only markdown transcript, live-linked**, so the
-    agent can find and read prior threads. chuk_chat already has a comparable
-    chat-search tool to port.
-  - the agent's memory tools (section 6/9).
-- **Streaming:** every round streams into the controller thread as encrypted
-  frames — text + collapsible tool-activity chips. **Stop** cancels the run.
-- **Autonomy + cron:** the host scheduler fires trigger events on schedule; the
-  agent runs with no phone attached and notifies on completion / approval. The
-  whole app can be closed while a run continues in the sandbox; reopening shows
-  the result. (This matches how competing agents-in-a-VM behave; see §8a for
-  where we deliberately differ.)
+- **Self-registering registry** (Hermes `tools/registry.py`): each tool calls
+  `register(name, toolset, schema, handler, check_fn, is_async)` at import; a
+  `dispatch()` bridges async, normalises results, and **bounds/sanitizes errors**
+  (2048-char cap) so a tool can't stack an unbounded error body across retries.
+  Schema-driven **arg coercion** (`"42"→42`) because models send stringy args.
+  `check_fn` is a per-tool availability probe with a **TTL + grace cache** (a
+  flaky `docker version` doesn't strip a whole toolset).
+- **Tool Search / progressive disclosure** (Hermes `tools/tool_search.py`):
+  when the deferrable tool surface exceeds ~10% of the context window, MCP/plugin
+  tools are replaced in the prompt by three bridge tools (`tool_search` /
+  `tool_describe` / `tool_call`); core tools are never deferred. Saves tens of
+  thousands of prompt tokens once there are many tools. Mirrors chuk_chat's
+  existing skills progressive-disclosure instinct.
 
-### 8a. Capability model: structured tools, not a full VM to drive
+### 7.3 Context / long-run cost ladder (the money lever)
 
-Reference point: recent "agent in a VM" products (xAI/Grok, Cursor background
-agents, and similar) hand the agent a **full machine** and, in some demos, hand
-the *user* the VM over **VNC** to type credentials into (e.g. logging into
-Salesforce), then give the agent the VM back. **We deliberately do not do this.**
-Handing a human a remote desktop to paste a password is clumsy and unsafe when
-the same platform exposes an API.
+The whole cost story for long autonomous runs. Borrowed from Hermes
+`agent/context_compressor.py` (NOTE: root `trajectory_compressor.py` is a decoy
+— an offline training tool, not the runtime compressor).
 
-Our stance:
+- **Trigger on a fraction of the *effective* input budget** (`context_length −
+  reserved_output`), counting **prompt_tokens only** (so thinking models don't
+  over-trigger). Tool-schema tokens count toward pressure.
+- **Tiered escalation:**
+  1. **Deterministic, no-LLM pre-pass** on a low threshold: dedup byte-identical
+     tool results and back-reference them (lossless), truncate oversized
+     non-tail tool outputs and bloated tool-call args. Reclaims most waste
+     before spending a cent.
+  2. **Cheap aux-model summarization of the middle** at ~50%, into a fixed
+     template (Goal / Constraints / Completed / Active / Blocked / Decisions /
+     Files / Critical), "summarize don't answer" preamble, forced secret
+     redaction, **past-tense anchoring** so a resumed run doesn't re-issue
+     finished actions.
+  3. **Iterative re-summarization**: later passes *update* the prior summary
+     rather than regenerate.
+- Head verbatim; **tail by token budget, not message count** (never split a
+  tool_call/result pair). **Anti-thrashing guard**: skip if the last two passes
+  each saved <10%.
+- **`think_scrubber`**: a streaming state machine that strips
+  `<think>/<reasoning>` from deltas before any consumer sees them, and replays
+  only the newest turn's reasoning (older stripped at send).
 
-- The agent does **not** get "a whole computer to click around in." The
-  container sandbox is only the *runtime*. The agent acts through **defined
-  tools, Skills, and (fallback) MCP** — the way this very assistant has
-  Playwright/MCP.
-- **Capability hierarchy, best to worst:**
-  1. **First-class API tools** (hand-built, §8c) — the primary path.
-  2. **browser-use** (https://github.com/browser-use/browser-use) — the
-     *fallback* for services with no usable API, or official scraping.
-  3. **Graphical computer-use / VNC control** — essentially never; a possible
-     far-later add-on, not the design.
-  Most apps people use (LinkedIn, etc.) have an API; an agent over the API is
-  ~10× more efficient than driving the same site in a browser. Browser-first is
-  what competitors do and it is the wrong default — agents are not built to
-  click through UIs when a door exists.
-- **Skills = markdown, exactly like Claude's Agent Skills** (`SKILL.md`).
-  chuk_chat already has this (`FEATURE_SKILLS`, `assets/skills/`). The Python
-  agent reads the relevant skills on demand and executes — reuse the concept
-  and, where possible, the same skill files. "Check the crypto data" → it loads
-  a crypto skill + a crypto tool and runs.
+### 7.4 Model routing & provider abstraction
 
-### 8b. Credentials: revocable API/OAuth doors, never raw secrets in the box
+- **Model calls route through `api.chuk.chat` (backend proxy) with the account
+  token.** Centralised billing/account, no provider keys in sandboxes, one auth.
+- **Two-axis abstraction** (Hermes): declarative **ProviderProfile**
+  (auth/quirks, declares an `api_mode`) × **ProviderTransport** (wire format per
+  API family) × the agent (owns client/streaming/retry). For us the **backend is
+  the agent layer** and provider profiles are config rows — but the split is
+  worth mirroring server-side.
 
-- The agent reaches third-party services (GitHub, Google, Slack, a crypto
-  source, …) through **revocable OAuth tokens / API keys obtained via the app's
-  existing connection flow** — the same mechanism as chuk_chat's
-  `FEATURE_SERVER_TOOLS` GitHub/Gmail/Calendar connections today. The user
-  connects the service once on the app/website side; the token lives
-  server-side; the agent calls a tool that acts with it.
-- **The raw secret never enters the sandbox**, and access is **revocable at any
-  time** without touching the agent. No VNC, no pasting passwords into a VM.
-- Open item (deferred — "later"): confirm this connect-and-delegate flow works
-  when the executor is a sandbox rather than the Flutter client. It likely does,
-  because the tokens are already server-side and the agent invokes tools the
-  backend executes — but it must be verified. See §13.
+### 7.5 State persistence (survives the app closing)
 
-### 8c. Integration strategy: hand-built API tools first, MCP as fallback
+Borrowed from Hermes `hermes_state.py` (SQLite, MIT):
 
-- **Build our own first-class tools for the top ~100 services**, tailored for
-  the open-source agent so they are simpler and better than a generic
-  integration. These are API-first (REST/GraphQL/official SDKs), and they are
-  where **revocable credential delegation** (§8b) is wired in — a reason to own
-  them rather than trust third-party glue.
-- **MCP is a fallback, not the primary protocol.** Treat it as "use it if a
-  decent server exists and we have not built the native tool yet," and replace
-  it with a native tool when the MCP server is poor. The bar is: does the native
-  tool serve the agent better?
-- **MCP transport problem to solve:** MCP servers commonly use a **localhost
-  callback** (OAuth redirect / local port). From inside a per-agent sandbox that
-  will not just work — the callback has to be **proxied** back to the right
-  sandbox. Auto-connecting an agent to an MCP server therefore needs a
-  proxy/broker for the localhost callback. Flagged as an open technical item
-  (§13).
-- **Base image built on Python + `uv`.** Tooling and dependencies are installed
-  with `uv`; a broad default toolset ships preinstalled so the agent has "lots
-  of tools it can already use" without a cold install on every task.
+- **Single WAL SQLite file**, append-only `messages` rows; `sessions` carries
+  lineage/token/cost counters; an FTS5 mirror kept synced by triggers.
+- **Resume by `WHERE session_id=? ORDER BY id`** — autoincrement id, **never a
+  wall-clock timestamp** (mobile clocks jump on sleep/NTP and would reorder
+  tool-call/response pairs).
+- **`session_key → session_id` routing table** so an app relaunch finds the
+  right run with no server state — the piece chuk_chat doesn't have yet.
+- `BEGIN IMMEDIATE` + jittered retry on "database is locked"; JSON-in-columns
+  (no pickle). A killed process loses at most the last uncommitted turn.
 
-### 8d. Multiple chats & multi-agent collaboration
+### 7.6 Subagents / multi-agent collaboration
 
-- **Multiple chats per agent.** You can open a **new chat with the same agent in
-  the same sandbox** — separate threads, one persistent worker/environment.
-- **Agents that collaborate.** Several agents can share **one chat and talk to
-  each other**, like people in a group thread — you drop in and give targeted
-  tasks, they coordinate. It should feel like messaging human teammates, not
-  operating a tool.
-- Implication (open): agents addressing/messaging each other needs an
-  inter-agent bus (via the relay/backend) and a group-thread model where several
-  executors and the user share one conversation. Mechanism TBD (§13).
+Borrowed from Hermes `tools/delegate_tool.py` + `agent/subagent_lifecycle.py`:
+
+- A `delegate_task` tool spawns isolated child agents, single or **batch/
+  parallel**. Each child gets its **own `task_id` → its own sandbox** — so
+  parallel subagents = parallel sandboxes for free. We **promote Hermes's
+  in-process threads to one child container per subagent** since we already have
+  the container layer.
+- Serializable **handle + registry** (surface subagents in the Flutter app),
+  **live streaming** of child output up to the parent, a **parent-activity
+  heartbeat** (so a parent blocked waiting on children isn't timeout-killed),
+  **steer/interrupt** of running children, and depth/concurrency/pause caps.
+- This is also the substrate for the product's **multi-agent-in-one-thread**
+  collaboration (§4): agents addressing each other is delegation + a shared
+  group thread. (Group-thread model beyond delegation: open, §20.)
 
 ---
 
-## 9. Memory / notebook (the agent's brain)
+## 8. Capability model — structured tools, not a machine to drive
 
-Long autonomous runs blow the context window; the agent must externalise state.
-This mirrors what this repo already makes Claude do (`tasks/todo.md`,
-`tasks/lessons.md`, the `memory/` + `MEMORY.md` index).
+Reference: "agent in a VM" products (xAI/Grok, Cursor background agents) hand the
+agent a full machine and, in some demos, hand the *user* the VM over **VNC** to
+type credentials into. **We deliberately do not.**
 
-- **Session notebook** (task-scoped): `todo.md` (checkboxed plan), `notes.md`,
-  intermediate findings. The agent writes to itself and reads back. Lives for
-  the task. This is the answer to "the chat gets long."
-- **Global memory** (cross-session): learned facts, preferences, project
-  knowledge, as markdown files + a `MEMORY.md` index (one line per entry). Only
-  the index loads at start; entries load on demand (progressive disclosure).
-- **Location:** per agent, on the host — the host is the persistent home, so a
-  sync problem does not arise on day one.
-- **Sync (later):** global memory *could* sync across a user's hosts, encrypted
-  under the channel key. Deferred: an agent must think and remember on one host
-  first.
+**Capability hierarchy, best to worst:**
 
----
+1. **First-class API tools** (hand-built, §9) — the primary path.
+2. **browser-use** — the *fallback* for services with no usable API (or official
+   scraping).
+3. **Graphical computer-use / VNC / desktop control** — essentially never; a
+   far-later add-on at most. Starting a desktop is explicitly rejected.
 
-## 10. Tools: inside the sandbox vs passed through from the host
-
-Two classes of tools, split by whether running them *inside* the container
-sandbox is good enough.
-
-**Inside the sandbox (the default — most tools):** preinstalled in the base
-image, and the agent can install more with sudo.
-
-- Chromium + a **browser-use** driver (https://github.com/browser-use/browser-use),
-- **yt-dlp** (runs fine inside — CPU/network bound, no reason to pass through),
-- LibreOffice (Word/Excel), pandoc, python data libs, research tooling.
-
-**Passed through from the host (the exception — only where in-sandbox is
-inefficient):**
-
-- **`ffmpeg` is the example.** Running ffmpeg *inside* the container is
-  inefficient — no GPU, CPU-only transcoding is slow. So the agent's ffmpeg work
-  uses the **host's** ffmpeg, which is GPU-accelerated because the user set up
-  their own NVIDIA/Linux box. The host binary operates on the agent's workspace
-  files (shared with the host). This is **not** GPU passthrough into a VM — it is
-  a host-side binary acting on the sandbox's files.
-- Only heavy/accelerated binaries get this treatment; anything that runs fine
-  inside (yt-dlp) stays inside.
-- **Open implementation detail:** the exact passthrough mechanism — host-executes
-  ffmpeg against a shared workspace mount, vs exposing the GPU device into the
-  container (`--gpus` / nvidia-container-toolkit). To be chosen when built; the
-  host-executes-on-shared-mount route is the simpler default.
+Most apps people use (LinkedIn, etc.) have an API; an agent over the API is ~10×
+more efficient than driving the same site in a browser. Browser-first is what
+competitors do and it is the wrong default.
 
 ---
 
-## 11. What of the current code survives / dies
+## 9. Tools & the stack
 
-- **Survives / gets reused:** the Flutter chat UI and its existing basic
-  bash-in-chat commands (kept, not extended); the relay; the `cowork_frame*`
-  crypto primitives (repointed to the channel key + given a Python twin); the
-  client-side approval model; the laptop-native tools *as a concept* (they move
-  to Python); **Agent Skills** (`SKILL.md` / `FEATURE_SKILLS` — the agent's
-  skill system); **`FEATURE_SERVER_TOOLS` OAuth connections** (GitHub, Gmail,
-  Calendar, Slack, …) as the revocable-credential model (§8b); the
-  **`send_file_to_user` → `sandboxArtifact`** mechanism for the agent to send
-  files (CSV/PDF/image/doc/browser screenshot) into the chat.
-- **Dies:** the local demo `CoworkDemoServer` + the localhost bridge
-  (`cowork_executor_bridge.dart`) + the served HTML phone page — wrong transport
-  (there is no web UI, ever; remote control is only the official Flutter app).
-  The Dart headless-executor idea dies; the executor is the Python sandbox.
+**Runtime:** Python 3.12, deps via **`uv`**. HTTP: `httpx`. A broad default
+toolset ships preinstalled so the agent has tools ready without a cold install.
+
+**Inside the sandbox (default):**
+- **Browser:** **browser-use** (MIT, self-hosted) + Playwright + Chromium. Free;
+  we pay only LLM tokens (which route through the backend). Not the Playwright
+  MCP server — a higher-level agent-browser library.
+- **File → markdown:** **anydoc** (firecrawl, MIT, fully offline, no API key).
+  One dependency (`pip install firecrawl-anydoc`) replacing pandoc + python-docx
+  + LibreOffice + pypdf for ingestion of doc/docx, ppt/pptx, xls/xlsx, odt, rtf,
+  epub, csv, and **text-based** PDF; ~250× faster than LibreOffice. Gap: no OCR,
+  no standalone images → route those to a **vision model via the backend** (no
+  Tesseract). Pattern: try `anydoc.to_markdown(...)`, on `UnsupportedError` →
+  vision path.
+- **Media:** `ffmpeg`/`ffprobe` (ffmpeg via host passthrough, below), **yt-dlp**.
+- **Docs out:** `python-docx`/`openpyxl`/`python-pptx` where the agent must
+  *write* office files (anydoc only reads).
+- **send-file-to-user:** push any produced file (CSV/PDF/image/generated
+  doc/**browser screenshot**) into the chat thread. Reuse chuk_chat's existing
+  `send_file_to_user` → `sandboxArtifact` block (renders as a download/preview
+  card).
+- **search-chats:** cross-session recall (§12) — every chat is a read-only,
+  live-linked markdown transcript searchable via SQLite FTS5.
+
+**Passed through from the host (the exception):**
+- **ffmpeg** — running it inside the container is inefficient (CPU-only). The
+  agent's ffmpeg work uses the **host's** GPU-accelerated ffmpeg (the user set up
+  their NVIDIA box) operating on the sandbox's workspace files. This is *not* GPU
+  passthrough into a VM — a host-side binary acting on the sandbox's files.
+  Implementation detail (host-executes-on-shared-mount vs `--gpus` into the
+  container): open, §20.
+
+**Integration strategy — hand-built API tools first, MCP as fallback:**
+- **Build our own first-class tools for the top ~100 services** (REST/GraphQL/
+  official SDKs), tailored for the agent, with **revocable credential delegation
+  (§10)** wired in — a reason to own them rather than trust third-party glue.
+- **MCP is a fallback, not the primary protocol.** Client = the official `mcp`
+  python SDK (all three transports, persistent transport thread). Replace an MCP
+  server with a native tool when it serves the agent better.
 
 ---
 
-## 12. Decisions locked (2026-08-12)
+## 10. Credentials — revocable API doors, never raw secrets
 
-- Executor is a **Python** agent running in its **own container sandbox**
-  (Debian-like, isolated filesystem, passwordless sudo, installable) — **no
-  microVM, no KVM**. Container-grade isolation, enough for a single-user host.
-  Install = a shell script + `connect`.
-- **One host, many agents; one container sandbox per agent.**
-- **Most tools run inside the sandbox** (browser-use, yt-dlp, LibreOffice, …).
-  **A few host binaries are passed through** where in-sandbox is inefficient —
-  `ffmpeg` uses the host's GPU-accelerated binary on the agent's files.
-- **Capability hierarchy: hand-built API tools first → browser-use as fallback →
-  computer-use/VNC essentially never.** No VNC credential handoff. Most apps
-  have APIs; API beats browser ~10×. (§8a)
-- **Own first-class tools for the top ~100 services; MCP is a fallback**, not the
-  primary protocol. (§8c)
-- **Base image built on Python + `uv`**, broad toolset preinstalled. (§8c)
-- **Multiple chats per agent** (same sandbox) and **multi-agent collaboration**
-  (several agents in one chat, talking to each other like teammates). (§8d)
-- **Onboarding by demonstration**: record a task as video → agent analyses it →
-  takes it over. (§2)
-- **Skills reuse the existing Agent Skills** (`SKILL.md`, `FEATURE_SKILLS`).
-- **Credentials = revocable OAuth/API doors via the app's connection flow**
-  (like `FEATURE_SERVER_TOOLS` today); raw secrets never enter the sandbox.
-  Detailed flow deferred. (§8b)
-- **Agent = Workspace** (persona + files + memory + job + schedule).
-- Model routing **through the backend proxy**.
-- **Full E2E** on the control channel via a **fresh CoWork channel key** (ECDH
-  at pairing), not the chat account key.
-- Flutter is **UI only**; existing basic bash-in-chat stays.
-- UI is a **messenger/roster**, Hermes-style streaming run + Stop.
-- **The moat is the owned pipeline + a real GUI control surface** (skills toggle,
-  connect/disconnect, model + token + session + cron all visible in-UI) — not a
-  CLI/slash-command bot like Hermes Agent. (§15)
+- Third-party access (GitHub, Google, Slack, a crypto source, …) goes through
+  **revocable OAuth tokens / API keys obtained via the app's existing connection
+  flow** — chuk_chat's `FEATURE_SERVER_TOOLS` today. The user connects a service
+  once on the app side; the token lives **server-side**; the agent calls a tool
+  the backend executes with it. **The raw secret never enters the sandbox** and
+  access is revocable anytime. No VNC, no passwords typed into a box.
+- **MCP OAuth callback — solved (Hermes dashboard-mediated bridge,
+  `tools/mcp_dashboard_oauth.py`).** Our open problem (an MCP server's localhost
+  callback is unreachable inside a sandbox) dissolves: **do not proxy into the
+  sandbox.** Terminate the OAuth redirect at the **relay/backend public URL**
+  (`/oauth/callback/{server}`), correlate the pending flow by a **constant-time
+  `state` compare**, and hand only the `code` to the sandboxed agent via an
+  Event-gated wait. The sandbox needs no inbound port and no tunnel. Our app +
+  blind-relay topology fits this better than Hermes's does.
+- Open: verify the connect-and-delegate flow with a sandbox executor; per-agent
+  scoping of connections. (§20)
 
-## 13. Open questions (not yet decided)
+---
 
-- Agent = reuse the Workspace entity directly, or a new "Agent" entity that
-  *wraps* a Workspace? (reuse vs clean separation)
-- Global-memory cross-host sync: when, and exactly how, encrypted.
+## 11. Skills
+
+- **Format = markdown `SKILL.md` + YAML frontmatter**, the same shape as Claude /
+  agentskills.io / chuk_chat's `FEATURE_SKILLS`. `name` + `description` sit in
+  the always-on prompt; the body loads on demand (progressive disclosure).
+  Confirmed identical in Hermes (`skills/**/SKILL.md`).
+- **Background-review self-improvement fork** (Hermes `agent/background_review.py`
+  — the crown jewel). After a qualifying turn, fork a **whitelisted (memory +
+  skill tools only)** agent that replays the transcript, **inherits the parent's
+  runtime to reuse the prefix cache** (near-free), and writes/updates
+  skills+memory **without touching the live conversation** (prompt cache
+  preserved). Steal near-verbatim:
+  - the review prompt + its **negative-capture list** (do NOT record
+    env-specific failures, "X is broken" claims that harden into refusals,
+    transient errors, one-off task narratives, dead-ends dressed as best
+    practice),
+  - **class-level umbrella skills** (not one-session-one-skill),
+  - **provenance / protected-skills** boundary (the curator only edits skills it
+    itself created),
+  - a **read-before-write guard** (may only patch content it actually read).
+  - Trigger: a tool-iteration interval (default 10).
+
+---
+
+## 12. Memory / notebook
+
+Two stores (Hermes `tools/memory_tool.py` + `hermes_state_search.py`):
+
+- **(A) Curated declarative markdown** — `MEMORY.md` (agent's own notes) +
+  `USER.md` (about the user). Injected as a **frozen snapshot at session start**;
+  mid-session writes persist to disk immediately but **do NOT mutate the system
+  prompt**, so the prefix cache survives the whole session (snapshot refreshes
+  next session). Single `memory` tool with `add/replace/remove` matching on a
+  **short unique substring** (cheap for the model), **character** limits
+  (model-independent), and an **injection/exfil scan** before content enters the
+  prompt.
+- **(B) Full-text session search, no LLM** — SQLite **FTS5** over the message
+  store: three virtual tables (main / CJK / trigram), BM25, sanitized MATCH,
+  lineage-aware dedup, returning **±5 anchored messages + bookends**. Powers
+  **search-chats** (§9) and cross-session recall. (Hermes's README claims "LLM
+  summarization" but the code removed it — raw anchored windows beat an
+  embeddings/summarizer pipeline for cost and determinism.)
+- **Every chat is persisted as a read-only, live-linked markdown transcript**
+  the agent can find and read.
+- Memory lives **per agent, on the host**. Cross-host sync (encrypted under the
+  channel key) is deferred (§20).
+
+---
+
+## 13. Scheduling, cron & autonomy
+
+Borrowed from Hermes `cron/` (MIT):
+
+- **The model emits the schedule string; a tiny deterministic parser** handles
+  four forms: `every 30m` (interval), `0 9 * * *` (cron, validated by
+  `croniter`), ISO `2026-02-03T14:00` (one-shot, **timezone-anchored** to avoid
+  drift), `30m/2h/1d` (one-shot from now). NL understanding is the model's job;
+  the parser stays small and deterministic.
+- **At-most-once firing:** advance-next-runs **before** execution under a lock,
+  plus a claim/heartbeat so a long run isn't re-dispatched. A ticker runs every
+  60 s.
+- **Unattended run:** a fired job builds a fresh agent with `skip_memory` +
+  `skip_background_review` (no human present), an **inactivity (not wall-clock)
+  timeout** (a job can work for hours but a hung API call is killed), and
+  **auto-delivers its final response to the origin chat**; a `[SILENT]` marker
+  suppresses empty deliveries. `attach_to_session` makes a job continuable (you
+  can reply into it).
+- **Cost levers:** `no_agent` mode runs a bare script on schedule (zero tokens);
+  **hash-diff monitor** mode hashes a source each tick and **wakes the LLM only
+  when the bytes change** (injects a unified diff) — turning N polling LLM calls
+  into ~0.
+- **App-closed persistence + push wake:** the run continues in the sandbox with
+  the app closed; the Manager pushes a notification on completion or when
+  approval is needed; reopening shows the result.
+- Open: scheduler on the host vs backend-driven (what fires a weekly job if the
+  host is off?). §20.
+
+---
+
+## 14. Transport & crypto
+
+- **Relay = blind proxy** on `api.chuk.chat`; forwards encrypted frames, stores
+  nothing. Needs the **cross-replica fix** (prod runs 2 replicas with an in-RAM
+  presence map → controller and executor can land on different replicas and
+  never meet; fix = peer-to-peer between replicas over Swarm DNS, no DB — see the
+  old execution plan's `relay-crossreplica`). A careful prod deploy and a real
+  prerequisite.
+- **Frame contract & transport patterns** (Hermes `gateway/relay/` +
+  `tui_gateway/`): one **JSON-RPC dispatch behind a `Transport(Protocol)` seam**
+  — never fork handler logic per transport; **Bearer-token auth on the WS
+  upgrade**; **newline-delimited JSON frames** correlated by `requestId`; a
+  **capability-descriptor handshake** (the app declares what it can render); a
+  **reconnect supervisor** one layer above a dumb read-loop (backoff, re-dial,
+  re-handshake). We're already aligned (relay + WebSocket); adopt these
+  specifics.
+- **E2E** on the control/mirror channel via a **fresh CoWork channel key**
+  established at pairing (X25519 ECDH between controller and executor), **not**
+  the chat account key — avoids reproducing the account-key derivation in Python
+  and putting a password on a headless host, and decouples CoWork crypto from
+  chat crypto. The Dart `cowork_frame*` primitives get repointed from the account
+  key to this channel key (cheap, not yet wired) and gain a **byte-identical
+  Python twin** (`cryptography`: AES-GCM, Ed25519, X25519) with shared test
+  vectors.
+- **Honest boundary:** model I/O routes through the backend (§7.4), so E2E means
+  "relay/control channel is blind," not "backend sees nothing."
+
+---
+
+## 15. Pairing / `connect`
+
+- **The account login is the authentication.** The host/agent connects to
+  `api.chuk.chat`, does a **device-login code flow** (so a headless server is
+  easy), gets an account token, and registers as an executor on the relay,
+  publishing an Ed25519 identity. It appears in the user's device list.
+- **The phone approves it locally** — client-side approval, the server never
+  holds an approval flag. Approval is also where the **channel-key ECDH** is
+  stamped (§14).
+- Exact flow and where the ECDH lands: open (§20).
+
+---
+
+## 16. The Flutter app (control surface)
+
+- **A new, separate Flutter app**, not grafted onto chuk_chat — less legacy, a
+  clean messenger UI, fewer merge problems; the two codebases merge later.
+- **Copy only the basic security stack** from chuk_chat (~28 files; the port
+  manifest is Appendix A): Supabase auth/session/token, `encryption_service`,
+  the multiplex WebSocket transport, and the `cowork/` crypto primitives. Cut the
+  chat UI, workspaces, tools, and the discarded loopback demo; trim
+  `AuthService.signOut` so sandbox/cache/chat deps fall out; reimplement the
+  auth gate + login minimally.
+- **UI:** a messenger — roster of agents, one thread per conversation,
+  Hermes-style streaming run with collapsible tool lines and **Stop**, file/
+  screenshot cards.
+- **In-UI control surface (the moat, §17):** activate/deactivate skills,
+  connect/disconnect integrations, pick/see the model, live **token usage**,
+  **session runtime**, and the **cron schedule / next runs** — all in the GUI,
+  not a CLI. Slash-commands optional, never the boundary.
+
+---
+
+## 17. Positioning & moat (vs Hermes Agent)
+
+Hermes Agent (Nous, MIT) validates the stack almost 1:1 — Python, container
+sandbox, `SKILL.md` skills, cron, MCP, subagent delegation, agent memory. We are
+not inventing an unproven shape; we are **borrowing a proven one under a
+permissive licence** (§18).
+
+Where we win:
+
+- **We own the whole pipeline front to back** — the app, the backend, the relay,
+  the sandbox, model routing. Hermes is a bring-your-own-provider CLI plus
+  messaging gateways. Owning the pipeline = one integrated account, billing, and
+  experience, and control over every layer.
+- **A real GUI control surface, not a CLI/slash-command bot** (§16). Hermes is a
+  terminal/TUI + messaging platforms configured with CLI commands. Ours is a full
+  app. This is the "real app" vs "bot bolted onto Telegram" difference.
+- **API-first over browser, and no VNC credential handoff** (§8, §10).
+
+---
+
+## 18. Licensing & provenance
+
+- **Hermes Agent — MIT** (Copyright 2025 Nous Research). We may lift code
+  verbatim, modify, and ship closed-source, **provided the MIT notice travels
+  with substantial copied portions**. Reimplementing the design from these notes
+  carries no obligation. (Two skill bodies under `skills/productivity/pdf|
+  powerpoint/` are Anthropic-derived with their own LICENSE — check those
+  individually; the engine code is all MIT.)
+- **anydoc — MIT** (Sideguide Technologies). Free self-host, commercial use OK.
+- **browser-use — MIT.** Free self-host; optional paid cloud we don't use.
+- **Discipline:** whether we copy code or reimplement, keep a NOTICE for
+  verbatim files. Prefer reimplementing the *design* where the Hermes code is
+  tangled with their gateway/kanban/codex specifics.
+
+---
+
+## 19. Decisions locked (2026-08-12)
+
+- Executor = **Python** agent in a **per-agent container** (Debian, sudo,
+  installable), **no microVM/KVM**; sandbox modelled on the `BaseEnvironment` ABC
+  + snapshot-file persistence.
+- **One host, many agents; one container per agent.** Install = shell script +
+  `connect`. Single-user; container-grade isolation.
+- **Agent = Workspace** (persona + files + memory + skills + job + schedule).
+- **Capability hierarchy:** hand-built API tools → browser-use fallback →
+  computer-use/VNC never. MCP is a fallback protocol.
+- **Model routing through the backend proxy.** **Full E2E** on the control
+  channel via a fresh channel key (not the account key).
+- **Flutter = UI only**, a **new app** copying the security stack; existing basic
+  bash-in-chat stays. The moat is the owned pipeline + GUI control surface.
+- **Borrow from Hermes (MIT):** sandbox ABC + snapshot persistence; MCP
+  dashboard-OAuth callback bridge; subagents as task_id-scoped containers;
+  dual-counter loop + kill switches; self-registering tool registry + Tool
+  Search; cost-tiered context ladder; append-only SQLite state (ORDER BY id +
+  routing table); frozen-snapshot memory + FTS5 search; background-review
+  self-improvement fork; LLM-emits-schedule cron + no_agent/hash-diff cost
+  levers; JSON-RPC-over-transport-seam + relay frame contract.
+- **File→md = anydoc**; OCR/images = vision model via backend (no Tesseract).
+- **Tools built on Python + `uv`.**
+
+---
+
+## 20. Open questions
+
+- Agent = reuse the Workspace entity directly, or a thin "Agent" wrapper?
+- Multi-agent group-thread model beyond delegation: how several executors + the
+  user share one conversation and address each other.
+- Global-memory cross-host sync: when and exactly how (encrypted under the
+  channel key).
 - Pairing/device-login exact flow and where the channel-key ECDH is stamped.
-- Scheduler: host-local cron vs a backend-driven schedule (offline hosts?).
-- Credential model (§8b): confirm the connect-and-delegate OAuth flow works with
-  a sandbox executor (tokens server-side, agent calls backend-executed tools);
-  what, if anything, an agent needs locally; per-agent scoping of connections.
-- Relay cross-replica fix: do it before or alongside the first Python executor.
-- **MCP localhost-callback proxy** (§8c): how to broker an MCP server's local
-  OAuth/callback back into the right per-agent sandbox.
-- **Inter-agent bus + group-thread model** (§8d): how agents address and message
-  each other, and how several executors + the user share one conversation.
-- **Video → repeatable procedure** (§2): how a demonstration recording is
-  analysed into something the agent can reproduce (and optionally distil into a
-  Skill).
-- **Top-~100 API tool catalogue** (§8c): a large workstream — which services
-  first, and the shared tool/credential shape they follow.
-
-## 14. Rough build order (to be turned into milestones later)
-
-1. Relay cross-replica fix (prod, careful) — unblocks reliable connect.
-2. Repoint crypto to a channel key + Python twin + shared test vectors.
-3. Pairing / device-login / local approval for a Python executor.
-4. Minimal Python agent runtime (loop + shell + memory) inside one container
-   sandbox, driven from the Flutter messenger, streaming back.
-5. The setup shell script + `connect` + the Manager (roster, per-agent sandbox
-   containers, lifecycle).
-6. The tool set — inside the sandbox (browser-use, yt-dlp, documents) + host
-   ffmpeg passthrough.
-7. Scheduler / cron + push wake + autonomy.
-8. Memory sync, GPU, hardening.
+- Scheduler: host-local vs backend-driven (offline-host case).
+- Credential flow: verify connect-and-delegate with a sandbox executor; per-agent
+  connection scoping.
+- ffmpeg host passthrough mechanism: host-executes-on-shared-mount vs GPU device
+  into the container.
+- Relay cross-replica fix: before or alongside the first Python executor.
+- Top-~100 API tool catalogue: which services first; the shared tool/credential
+  shape.
+- Own thin loop vs a graph framework for multi-agent (leaning: own thin loop).
+- Manager as FastAPI vs a bare async process.
 
 ---
 
-## 15. Positioning: owned pipeline + GUI control surface (vs Hermes Agent)
+## 21. Build order (to become milestones)
 
-Reference: **Hermes Agent** (Nous Research,
-https://github.com/nousresearch/hermes-agent) — Python, runs in Docker / SSH /
-cloud VMs, with 40+ tools, an autonomous **skills** system, a **memory** layer,
-**cron** scheduling, **MCP**, and **subagent delegation** for parallel work.
+1. **Relay cross-replica fix** (prod, careful) — unblocks reliable connect.
+2. **Crypto:** repoint the Dart frames to a channel key + Python twin + shared
+   test vectors.
+3. **Pairing / device-login / local approval** for a Python executor.
+4. **Minimal Python runtime** (loop + self-registering tools + shell +
+   append-only SQLite state) in one container, driven from a minimal Flutter
+   messenger, streaming back — end to end.
+5. **Manager**: shell-script install + `connect`, roster, per-agent container
+   lifecycle (BaseEnvironment subclass + snapshot persistence).
+6. **Memory + skills**: frozen-snapshot MEMORY.md/USER.md, FTS5 search,
+   `SKILL.md` loading, then the background-review fork.
+7. **Tool set**: browser-use, anydoc, host-ffmpeg passthrough, send-file,
+   search-chats; the first native API tools; MCP client + dashboard-OAuth bridge.
+8. **Context cost ladder** (dedup pre-pass → aux-model summary).
+9. **Scheduler / cron** (LLM-emits-schedule + parser, unattended runner, no_agent
+   + hash-diff monitor) + push wake.
+10. **Subagents / multi-agent** collaboration (child containers, handles).
+11. **New Flutter app UI**: full messenger + the in-UI control surface (skills,
+    connect, model/token/session/cron).
+12. Hardening, memory cross-host sync, GPU, the wider API-tool catalogue.
 
-**This validates our stack almost 1:1** — Python executor, container sandbox,
-markdown skills, cron, MCP, multi-agent (their "subagent delegation" ≈ our §8d
-collaboration), agent memory. We are not inventing an unproven shape.
+---
 
-Where we deliberately win:
+## Appendix A — security-stack port manifest
 
-- **We own the whole pipeline, front to back** — the Flutter app, the backend,
-  the relay, the sandbox, and model routing through the backend proxy. Hermes is
-  a bring-your-own-provider CLI plus messaging gateways. Owning the pipeline
-  means one integrated account, billing, and experience, and control over every
-  layer.
-- **A real GUI control surface, not a CLI / slash-command bot.** Hermes is
-  driven from a terminal/TUI and messaging platforms (Telegram/Discord/…),
-  configured with CLI commands and slash-commands. Ours is a full app UI where
-  the user can, *in the UI*:
-  - activate / deactivate **skills**,
-  - **connect / disconnect** integrations (the revocable OAuth doors, §8b),
-  - pick and see the **model**,
-  - watch **live token usage**, **session runtime**, and the **cron schedule /
-    next runs**,
-  - start, watch, and **Stop** runs.
-  Slash-commands can still exist as a shortcut, but the user is never *bound* to
-  a command line. This is the "real app" vs "bot bolted onto Telegram"
-  difference, and it is the moat.
-- **API-first over browser, and no VNC credential handoff** (§8a/§8b) — a
-  cleaner, safer, more efficient interaction model than driving UIs or handing a
-  user a remote desktop to paste passwords into.
+The exact `lib/` files to copy from chuk_chat into the new app, leaf-first (from
+the inventory pass). Cut the demo/loopback files; trim `signOut`; reimplement the
+auth gate + login.
+
+```
+lib/web_env.dart
+lib/platform_config.dart
+lib/utils/io_helper_stub.dart · io_helper_io.dart · io_helper.dart
+lib/env_loader.dart
+lib/supabase_config.dart
+lib/services/api_config_base.dart · api_config_service_io.dart ·
+  api_config_service_stub.dart · api_config_service.dart
+lib/services/network_status_service.dart
+lib/services/supabase_service.dart
+lib/utils/certificate_pinning.dart · certificate_pinning_io.dart   (rotate pins)
+lib/services/websocket_connector_web.dart · websocket_connector_io.dart ·
+  websocket_connector.dart
+lib/models/chat_stream_event.dart
+lib/services/tool_result_cache_registry.dart
+lib/services/multiplex_connection.dart · multiplex_session.dart
+lib/services/encryption_service.dart
+lib/services/auth_service.dart            (trim signOut → drop sandbox/cache deps)
+lib/services/cowork/cowork_frame.dart · cowork_replay_guard.dart ·
+  cowork_device_keys.dart · cowork_approved_devices.dart · cowork_frame_codec.dart
+```
+
+pubspec subset: `supabase_flutter, cryptography, crypto, flutter_secure_storage,
+shared_preferences, web_socket_channel, uuid, http` (+ `dio` only if cert
+pinning stays). Required env: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (+ optional API
+routing + `FEATURE_LINUX_KEYRING`).
+
+Do NOT copy: `widgets/auth_gate.dart` (drags full app bootstrap),
+`pages/login_page.dart` (reference only), `websocket_chat_service.dart` (drags
+image storage — port only if wanted, cut the image branch), and all of
+`cowork/cowork_executor_bridge.dart` + `cowork_demo_server*.dart` (the discarded
+demo).
