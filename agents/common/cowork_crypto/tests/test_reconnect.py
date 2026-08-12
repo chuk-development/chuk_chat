@@ -194,6 +194,74 @@ def test_replayed_proof_from_another_session_is_rejected():
     assert exc.value.rejection is ReconnectRejection.BAD_SIGNATURE
 
 
+def test_reflection_the_peers_own_proof_cannot_stand_in_for_the_other_role():
+    """Reflection attack. An imposter host holds no private key, so it cannot
+    produce ``proof_i``. All it has is the ``proof_j`` the app just sent it, over
+    the very same transcript. Bouncing that straight back as the confirm must
+    fail: the two roles sign under DIFFERENT labels, so a signature made as the
+    joiner never verifies as the initiator."""
+    initiator, joiner = _make_pair()
+    hello = initiator.create_hello()
+    response = joiner.on_hello(hello)
+
+    reflected = {"type": "reconnect-confirm", "sig": response["sig"]}
+    with pytest.raises(ReconnectError) as exc:
+        joiner.on_confirm(reflected)
+    assert exc.value.rejection is ReconnectRejection.BAD_SIGNATURE
+    assert joiner.state is ReconnectState.ABORTED
+    assert not joiner.authenticated
+
+
+def test_reflection_the_initiators_proof_cannot_stand_in_for_the_joiners():
+    """The mirror image: the host's genuine ``proof_i``, replayed by an imposter
+    app as its ``proof_j`` on the same transcript, is refused as well. Neither
+    label can be swapped for the other in either direction."""
+    host_identity = DeviceIdentity.generate()
+    app_identity = DeviceIdentity.generate()
+
+    def fresh_initiator():
+        return ReconnectHandshake.initiator(
+            device_id=HOST_ID,
+            device_identity=host_identity,
+            peer_device_id=APP_ID,
+            peer_public_key=app_identity.public_key,
+            channel_id=CHANNEL,
+        )
+
+    # Session 1: run it through so we hold a genuine proof_i for a known
+    # transcript, plus the joiner nonce that produced it.
+    init1 = fresh_initiator()
+    joiner1 = ReconnectHandshake.joiner(
+        device_id=APP_ID,
+        device_identity=app_identity,
+        peer_device_id=HOST_ID,
+        peer_public_key=host_identity.public_key,
+        channel_id=CHANNEL,
+    )
+    hello1 = init1.create_hello()
+    response1 = joiner1.on_hello(hello1)
+    confirm1 = init1.on_response(response1)
+
+    # A second host session that happens to reuse the SAME nonce — the strongest
+    # form of the attack, where the transcript matches exactly. Presenting the
+    # host's own proof_i as the app's proof_j still fails on the label.
+    init2 = ReconnectHandshake.initiator(
+        device_id=HOST_ID,
+        device_identity=host_identity,
+        peer_device_id=APP_ID,
+        peer_public_key=app_identity.public_key,
+        channel_id=CHANNEL,
+        nonce=base64.b64decode(hello1["nonce"]),
+    )
+    init2.create_hello()
+    forged = dict(response1)
+    forged["sig"] = confirm1["sig"]
+    with pytest.raises(ReconnectError) as exc:
+        init2.on_response(forged)
+    assert exc.value.rejection is ReconnectRejection.BAD_SIGNATURE
+    assert init2.state is ReconnectState.ABORTED
+
+
 # --- structural rejections ---------------------------------------------------
 
 

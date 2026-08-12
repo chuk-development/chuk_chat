@@ -205,7 +205,13 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       return;
     }
     old?.state.removeListener(_onStateChanged);
-    await oldSub?.cancel();
+    // Cancel, but never AWAIT the old subscription. `StreamSubscription.cancel()`
+    // on a broadcast stream returns Dart's shared `Future._nullFuture`, which is
+    // owned by the ROOT zone: awaiting it parks the rest of this method on the
+    // root microtask queue, which a `flutter_test` FakeAsync zone never drains.
+    // The reconnect then only ran after the test ended. Cancelling already stops
+    // delivery synchronously, so there is nothing to wait for.
+    unawaited(oldSub?.cancel() ?? Future<void>.value());
     controller.state.addListener(_onStateChanged);
     setState(() {
       _controller = controller;

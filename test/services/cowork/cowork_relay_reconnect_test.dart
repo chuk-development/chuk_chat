@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/cowork_approved_devices.dart';
 import 'package:cowork/services/cowork/cowork_device_keys.dart';
 import 'package:cowork/services/cowork/cowork_frame.dart';
@@ -187,6 +188,24 @@ void main() {
     expect(client.state.value.phase, CoworkRelayPhase.paired);
     expect(client.state.value.peerDeviceId, hostDeviceId);
     expect(client.establishedTrust, isNotNull);
+
+    // Provisioning must work after a code-free reconnect too. It used to read
+    // the peer device id off the (now absent) pairing session and threw
+    // "Cannot provision before pairing completes", which killed every
+    // auto-reconnect before a single task could run.
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      host.received.where((m) => m['type'] == 'account_authentication'),
+      hasLength(1),
+      reason: 'the account token must reach the host after a reconnect',
+    );
 
     // A task the app seals opens on the host over the resumed channel.
     await client.sendTask('do the thing');

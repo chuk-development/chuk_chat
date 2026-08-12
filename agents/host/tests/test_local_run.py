@@ -427,6 +427,244 @@ def test_first_pair_then_both_restart_and_reconnect_no_code(tmp_path):
         host2.stop()
 
 
+def _hello_or_none(url: str, channel_id: str, timeout: float = 5.0):
+    """Join a host's channel as a bare controller and return the first pairing
+    envelope's ``data`` (or ``None`` if the host offers nothing)."""
+    with connect(url, open_timeout=10.0) as ws:
+        ws.send(json.dumps(join_message(channel_id, "controller")))
+        try:
+            msg = json.loads(ws.recv(timeout=timeout))
+        except TimeoutError:
+            return None
+    return msg.get("data") if msg.get("type") == "pairing" else None
+
+
+def test_a_used_pairing_code_is_dead_forever(tmp_path):
+    """SINGLE USE. A code buys exactly one pairing. Afterwards the host destroys
+    it: it is no longer readable, no commit is ever published again, and a thief
+    who copied the code off the screen gets nothing but a reconnect challenge it
+    cannot answer."""
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="single-use-worker",
+        channel_id="singleusechan",
+        digits="428913",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        code = host.pairing_code
+        assert code == "singleusechan-428913"
+
+        first = ControllerDouble(host.url, host.channel_id, code)
+        _assert_ran(first.run("run `echo hi > f.txt` then say done", timeout=15.0))
+        assert host.has_stored_pairing
+
+        # The code no longer exists — not even the host can hand it out.
+        assert host.pairing_code is None
+        # ...and no session can be minted from it any more.
+        assert host._pairing_factory() is None
+
+        time.sleep(0.3)  # let the host observe the drop and reset the session
+
+        # A second device typing the SAME code is met with a reconnect challenge,
+        # never a pairing commit. There is no ceremony left to join.
+        data = _hello_or_none(host.url, host.channel_id)
+        assert data is not None
+        assert data["type"] == "reconnect-hello", (
+            f"host offered {data['type']!r} — a used code must never re-open"
+        )
+
+        time.sleep(0.3)
+        # And the thief, driving the full joiner ceremony from the stolen code,
+        # completes nothing and receives no frames.
+        thief = ControllerDouble(host.url, host.channel_id, code)
+        assert thief.run("take over the machine", timeout=6.0) == []
+    finally:
+        host.stop()
+
+
+def test_burning_the_code_is_idempotent_and_stops_new_sessions(tmp_path):
+    """The burn is a one-way door at the unit level: once consumed, no further
+    initiator session is ever minted, and burning again is a no-op."""
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="burn-worker",
+        channel_id="burnchannel00",
+        digits="111111",
+        model_factory_override=_scripted_model,
+    )
+    assert host.pairing_code == "burnchannel00-111111"
+    assert host._pairing_factory() is not None
+    assert host._burn_pairing_code() is True
+    assert host.pairing_code is None
+    assert host._pairing_factory() is None
+    assert host._burn_pairing_code() is False
+
+
+def test_an_already_paired_host_never_mints_a_code(tmp_path):
+    """A host that starts with a stored trust has no code at all — nothing is
+    generated, printed, or accepted. The only way in is the signed reconnect."""
+    workspace = str(tmp_path)
+    host = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="nocode-worker",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        assert host.pairing_code is not None
+        first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        _assert_ran(first.run("run `echo hi > f.txt` then say done", timeout=15.0))
+        assert host.has_stored_pairing
+    finally:
+        host.stop()
+
+    host2 = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="nocode-worker",
+        model_factory_override=_scripted_model,
+    )
+    assert host2.has_stored_pairing
+    assert host2.pairing_code is None
+    assert host2._pairing_factory() is None
+
+
+def test_force_repair_mints_one_fresh_code_and_the_old_one_stays_dead(tmp_path):
+    """`cowork-host --pair` is the deliberate way back to a code. It drops the
+    stored trust and mints ONE new code; the old code is not reinstated."""
+    workspace = str(tmp_path)
+    host = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="repair-worker",
+        channel_id="repairchannel",
+        digits="222222",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        old_code = host.pairing_code
+        first = ControllerDouble(host.url, host.channel_id, old_code)
+        _assert_ran(first.run("run `echo hi > f.txt` then say done", timeout=15.0))
+        assert host.pairing_code is None
+    finally:
+        host.stop()
+
+    host2 = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="repair-worker",
+        channel_id="repairchannel",
+        force_repair=True,
+        model_factory_override=_scripted_model,
+    )
+    host2.start()
+    try:
+        assert not host2.has_stored_pairing
+        assert not (tmp_path / "paired.json").exists()
+        new_code = host2.pairing_code
+        assert new_code is not None
+        assert new_code != old_code, "--pair must not reinstate the burned code"
+        # A brand-new device pairs on the new code.
+        second = ControllerDouble(host2.url, host2.channel_id, new_code)
+        _assert_ran(second.run("run `echo hi > f.txt` then say done", timeout=15.0))
+        assert host2.pairing_code is None, "the new code is single-use too"
+    finally:
+        host2.stop()
+
+
+def test_an_imposter_device_cannot_reconnect_and_gets_no_channel(tmp_path):
+    """IDENTITY, NOT ADDRESS. After pairing, an attacker who knows the channel id
+    AND has stolen the channel key still cannot get in: the reconnect verifies a
+    signature against the app's stored Ed25519 key, and the host builds no frame
+    codec until it does. Sealed frames sent without authenticating are dropped —
+    and the genuine device still reconnects afterwards."""
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="imposter-worker",
+        channel_id="imposterchan",
+        digits="428913",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        _assert_ran(first.run("run `echo hi > f.txt` then say done", timeout=15.0))
+        trust = first.trust()
+        time.sleep(0.3)
+
+        # 1. Forged identity: the real channel + the real host key + the STOLEN
+        #    channel key, but the attacker's own device key. The handshake dies.
+        forged = AppTrust(
+            identity=DeviceIdentity.generate(),
+            host_device_id=trust.host_device_id,
+            host_public_key=trust.host_public_key,
+            channel_id=trust.channel_id,
+            channel_key=trust.channel_key,
+        )
+        imposter = ControllerDouble(
+            host.url, host.channel_id, reconnect_trust=forged
+        )
+        assert imposter.run("exfiltrate everything", timeout=6.0) == []
+        time.sleep(0.3)
+
+        # 2. Skip the handshake entirely and just push sealed frames with the
+        #    stolen channel key. Without an authenticated session the host has no
+        #    opener, so nothing is served and nothing comes back.
+        rogue_identity = DeviceIdentity.generate()
+        sealer = CoworkFrameSealer(
+            channel_key=trust.channel_key,
+            key_version=KEY_VERSION,
+            device_id=APP_DEVICE_ID,
+            signing_identity=rogue_identity,
+        )
+
+        def seal(payload: dict) -> str:
+            sealed = sealer.seal(json.dumps(payload, separators=(",", ":")).encode())
+            return frame_to_b64(sealed.to_bytes())
+
+        received: list[str] = []
+        with connect(host.url, open_timeout=10.0) as ws:
+            ws.send(json.dumps(join_message(host.channel_id, "controller")))
+            ws.send(
+                json.dumps(
+                    frame_envelope(
+                        seal(
+                            {
+                                "type": "account_authentication",
+                                "access_token": "stolen",
+                                "refresh_token": "stolen",
+                                "user_id": "attacker",
+                            }
+                        )
+                    )
+                )
+            )
+            ws.send(json.dumps(frame_envelope(seal(task_payload("rm -rf /", "t")))))
+            deadline = time.monotonic() + 4.0
+            while time.monotonic() < deadline:
+                try:
+                    msg = json.loads(ws.recv(timeout=1.0))
+                except TimeoutError:
+                    continue
+                if msg.get("type") == "frame":
+                    received.append(msg["frame"])
+        assert received == [], "an unauthenticated device was served frames"
+        time.sleep(0.3)
+
+        # 3. The genuine device is unaffected and still reconnects with no code.
+        again = ControllerDouble(host.url, host.channel_id, reconnect_trust=trust)
+        _assert_ran(again.run("run `echo hi > f.txt` then say done", timeout=15.0))
+    finally:
+        host.stop()
+
+
 def test_reconnect_after_a_dropped_attempt_still_pairs(tmp_path):
     """A controller connects, takes the commit, then drops WITHOUT pairing. A new
     controller on the same host must still pair cleanly — the stable code is
