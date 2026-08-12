@@ -15,6 +15,10 @@
   holds for the whole run (§7.9). The next session resolves it afresh.
 - **Context providers** append messages after a tool round — the seam a skill
   body uses to enter the conversation without touching the system prompt (§11).
+- **Context ladder** (§7.3): the stored history is the source of truth, but what
+  goes on the wire passes through :class:`~cowork_agent.context.ContextLadder`
+  first — stale reasoning stripped, then dedup/truncate and (under real pressure,
+  with an aux model configured) a summary of the middle.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
+from .context import ContextLadder
 from .model import ModelClient, ModelResponse
 from .registry import ToolRegistry
 from .state import StateStore
@@ -126,6 +131,7 @@ class AgentLoop:
         kill_switch: KillSwitch | None = None,
         system_prompt: str | Callable[[], str] | None = None,
         context_providers: Sequence[Callable[[], list[dict]]] | None = None,
+        context_ladder: ContextLadder | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
@@ -135,6 +141,7 @@ class AgentLoop:
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
         self._context_providers = list(context_providers or [])
+        self._ladder = context_ladder
 
     @property
     def budget(self) -> IterationBudget:
@@ -151,6 +158,18 @@ class AgentLoop:
     @property
     def store(self) -> StateStore:
         return self._store
+
+    @property
+    def context_ladder(self) -> ContextLadder | None:
+        return self._ladder
+
+    def _outbound_messages(self, session_id: int) -> list[dict]:
+        """The payload for one model call: the full stored history, run through
+        the context ladder. Without a ladder this is the history verbatim."""
+        messages = _to_model_messages(self._store, session_id)
+        if self._ladder is None:
+            return messages
+        return self._ladder.prepare(messages)
 
     def run(self, session_key: str, user_message: str) -> LoopResult:
         store = self._store
@@ -198,8 +217,13 @@ class AgentLoop:
             self._budget.consume()
 
             response: ModelResponse = self._model.complete(
-                _to_model_messages(store, session_id)
+                self._outbound_messages(session_id)
             )
+
+            # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
+            # prompt tokens are read — reasoning tokens must not move pressure.
+            if self._ladder is not None:
+                self._ladder.record_usage(response.raw.get("usage"))
 
             # A housekeeping/preflight round is refunded so it does not eat the
             # model's real thinking budget (§7.1).

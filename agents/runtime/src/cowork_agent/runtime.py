@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .loop import AgentLoop, IterationBudget, KillSwitch
 from .memory import MemoryStore, register_memory_tool
@@ -50,6 +51,9 @@ def build_runtime(
     enable_memory: bool = True,
     enable_skills: bool = True,
     enable_chat_search: bool = True,
+    context_ladder: bool = True,
+    context_config: LadderConfig | None = None,
+    aux_model: ModelClient | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -59,10 +63,24 @@ def build_runtime(
 
     ``session`` is the account session. Pass it and ``web_search`` joins the
     tool set (it bills the account through our backend); leave it out and only
-    the local tools — including ``web_fetch`` — are registered."""
+    the local tools — including ``web_fetch`` — are registered.
+
+    The context ladder (§7.3) is **on by default**. Without ``aux_model`` it runs
+    tier 1 only — deterministic dedup/truncation, no LLM call, no spend — which
+    is the tier that reclaims most of the waste anyway. Pass a cheap
+    ``aux_model`` to enable the tier-2/3 summary of the middle, or
+    ``context_ladder=False`` to send the raw history.
+    """
     env = environment or LocalEnvironment()
     registry = ToolRegistry()
     register_builtin_tools(registry, env, session=session, base_url=base_url)
+
+    ladder: ContextLadder | None = None
+    if context_ladder:
+        ladder = ContextLadder(
+            config=context_config or LadderConfig(),
+            summarizer=AuxSummarizer(aux_model) if aux_model is not None else None,
+        )
 
     store = StateStore(db_path)
     if enable_chat_search:
@@ -112,4 +130,5 @@ def build_runtime(
         kill_switch=KillSwitch(estop_path),
         system_prompt=prompt,
         context_providers=[library.pending_context],
+        context_ladder=ladder,
     )
