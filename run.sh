@@ -433,6 +433,13 @@ FEATURE_PAYMENTS_DIRECT="${FEATURE_PAYMENTS_DIRECT:-true}"
 # docs/COWORK_EXECUTION_PLAN.md. Turn it off if the dead screen is in the way.
 FEATURE_COWORK="${FEATURE_COWORK:-true}"
 
+# Off by default. Turns the CoWork surface into the LOCAL demo: a 127.0.0.1
+# loopback server + a phone-style web page that injects tasks into THIS
+# machine's real agent loop, which can run laptop-native tools (run_command,
+# read_file, …) here. Enable with FEATURE_COWORK_DEMO=true ./run.sh linux.
+# See docs/COWORK_DEMO.md.
+FEATURE_COWORK_DEMO="${FEATURE_COWORK_DEMO:-false}"
+
 # Off by default on purpose — turning these on makes the app worse, not
 # more complete. Set them explicitly if you actually want them:
 #   FEATURE_LINUX_KEYRING  costs 10s+ of startup stall on every single run
@@ -459,7 +466,7 @@ esac
 # and a log that disagrees with what was actually passed is worse than none.
 ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
-  FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK
+  FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK FEATURE_COWORK_DEMO
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
   FEATURE_LINUX_KEYRING FEATURE_SPOTIFY FEATURE_WHOOP
 )

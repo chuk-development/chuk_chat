@@ -31,6 +31,7 @@ import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
     as nextcloud_tools;
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
+import 'package:chuk_chat/tool_handlers/cowork_tools.dart' as cowork_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
@@ -126,6 +127,13 @@ class ToolExecutor {
     'sandbox_write',
     'sandbox_reset',
     'send_file_to_user',
+    // CoWork laptop-native tools (gated in tool_registry by kFeatureCoworkDemo).
+    // Listed here unconditionally: this set asserts an executor exists for the
+    // name, it is not the feature gate. registerTool() throws without it.
+    'run_command',
+    'read_file',
+    'write_file',
+    'list_directory',
   };
 
   static const Set<String> _defaultDisabledTools = {'whoop'};
@@ -867,6 +875,21 @@ class ToolExecutor {
             args: args,
           ),
         );
+
+      // -- CoWork laptop-native tools (gated by kFeatureCoworkDemo) --
+      case 'run_command':
+        return _wrapOutput(await cowork_tools.executeRunCommand(args));
+      case 'read_file':
+        // Raw file contents: a file whose first line starts with "Error"
+        // must not be reported as a failed tool call.
+        return _wrapOutput(
+          sniff: false,
+          await cowork_tools.executeReadFile(args),
+        );
+      case 'write_file':
+        return _wrapOutput(await cowork_tools.executeWriteFile(args));
+      case 'list_directory':
+        return _wrapOutput(await cowork_tools.executeListDirectory(args));
 
       default:
         return ToolExecutionResult(

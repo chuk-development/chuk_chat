@@ -338,6 +338,14 @@ class ToolCallHandler {
     // turn whose only tool call was `skill()` would trigger a full [VERIFY]
     // round-trip that fact-checks an ack against nothing.
     'skill',
+    // CoWork laptop-native tools return local machine state (command output,
+    // file contents, directory listings), not verifiable real-world facts.
+    // Without these entries every turn that touches the local machine would
+    // fire a spurious [VERIFY] fact-check round against nothing.
+    'run_command',
+    'read_file',
+    'write_file',
+    'list_directory',
   };
 
   static const int _maxDiscoveryContexts = 200;
