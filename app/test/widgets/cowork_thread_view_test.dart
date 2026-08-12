@@ -92,15 +92,20 @@ void main() {
     return controller;
   }
 
-  testWidgets('shows the connect form with a default host URL', (tester) async {
+  testWidgets('shows the connect affordance when disconnected', (tester) async {
     await pumpView(tester);
 
-    expect(find.text('Connect to host'), findsOneWidget);
+    // A compact connect bar, not a dominating form: default host prefilled,
+    // a pairing-code field, and a Connect button.
     expect(find.text('ws://127.0.0.1:8787'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
+    expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
+    // No composer while disconnected.
+    expect(find.byIcon(Icons.send), findsNothing);
   });
 
-  testWidgets('connecting phase shows a spinner and label', (tester) async {
+  testWidgets('connecting phase shows a progress bar and label',
+      (tester) async {
     final controller = await pumpView(tester);
     controller.set(
       const CoworkRelayState(
@@ -111,10 +116,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Connecting…'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
-  testWidgets('error phase surfaces the failure detail on the form',
+  testWidgets('error phase surfaces the failure detail on the connect bar',
       (tester) async {
     final controller = await pumpView(tester);
     controller.set(
@@ -125,11 +130,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Connect to host'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
     expect(find.text('Pairing failed (macMismatch)'), findsOneWidget);
   });
 
-  testWidgets('paired phase shows the composer and header', (tester) async {
+  testWidgets('paired phase shows the chat: connected chip and composer',
+      (tester) async {
     final controller = await pumpView(tester);
     controller.set(
       const CoworkRelayState(
@@ -140,9 +146,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Paired with host-laptop-1'), findsOneWidget);
+    expect(find.textContaining('Connected to'), findsOneWidget);
     expect(find.text('Send a task to the agent'), findsOneWidget);
     expect(find.byIcon(Icons.send), findsOneWidget);
+    // The connect affordance is gone once connected.
+    expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
   });
 
   testWidgets('received delta / tool / done frames render into the thread',
@@ -160,24 +168,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello'), findsOneWidget);
-    expect(find.text('shell · running'), findsOneWidget);
+    expect(find.text('ran shell · running'), findsOneWidget);
     expect(find.text('done'), findsOneWidget);
   });
 
-  testWidgets('tapping Connect runs connect, provisions, and shows the thread',
+  testWidgets('tapping Connect runs connect, provisions, and shows the chat',
       (tester) async {
     final controller = await pumpView(tester);
 
+    // Fields: host at 0, pairing code at 1.
     await tester.enterText(find.byType(TextField).at(1), 'chan1234-428913');
     await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
     await tester.pumpAndSettle();
 
     expect(controller.connectCalls, 1);
     expect(controller.provisioned, isTrue);
-    expect(find.text('Paired with host-laptop-1'), findsOneWidget);
+    expect(find.textContaining('Connected to'), findsOneWidget);
+    expect(find.byIcon(Icons.send), findsOneWidget);
   });
 
-  testWidgets('sending a task adds a user bubble and calls sendTask',
+  testWidgets('sending a message adds a bubble and calls sendTask',
       (tester) async {
     final controller = await pumpView(tester);
     controller.set(
@@ -185,6 +195,7 @@ void main() {
     );
     await tester.pump();
 
+    // The composer is the only TextField once paired.
     await tester.enterText(find.byType(TextField).first, 'do the thing');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
