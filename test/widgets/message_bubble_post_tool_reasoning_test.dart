@@ -45,19 +45,17 @@ void main() {
       ),
     );
 
-    // Collapsed: only the single tool bar (header = 'web_search') and the
-    // answer are visible. The trailing reasoning lives INSIDE the collapsed
-    // bar, so its 'Reasoning' card is not in the tree yet. Structural check —
-    // we never assert the reasoning prose (blocks are classified by
-    // ContentBlockType, never by text content).
-    expect(find.text('web_search'), findsOneWidget);
-    expect(find.text('Reasoning'), findsNothing);
+    // Collapsed: one folded activity line plus the answer. The trailing
+    // reasoning is a step inside that timeline, so it is not in the tree yet.
+    expect(find.textContaining('Worked for'), findsOneWidget);
+    expect(find.textContaining('Synthesizing the search findings'), findsNothing);
     expect(find.textContaining('Here is the final answer.'), findsOneWidget);
 
-    // Expand the bar — the folded-in final reasoning card now appears inside it.
-    await tester.tap(find.text('web_search'));
+    // Expanded: the folded-in final reasoning shows as its own step, and it
+    // is not a standalone card outside the timeline.
+    await tester.tap(find.textContaining('Worked for'));
     await tester.pumpAndSettle();
-    expect(find.text('Reasoning'), findsOneWidget);
+    expect(find.text('Synthesizing the search findings'), findsOneWidget);
   });
 
   // Sanity contrast: with no post-tool reasoning block, no standalone
