@@ -261,6 +261,7 @@ class HostParty:
         if not isinstance(msg, dict):
             return
         kind = msg.get("type")
+        self._log(f"recv msg type={kind!r}")
         if kind == TYPE_PAIRING:
             self._handle_pairing(msg.get("data") or {})
         elif kind == TYPE_FRAME:
@@ -278,10 +279,12 @@ class HostParty:
             # dropped between frames). Nothing to drive; ignore it.
             return
         step = data.get("type")
+        self._log(f"pairing step in: {step!r} (state={pairing.state.value})")
         try:
             if step == "pubkey":
                 reveal = pairing.on_pubkey(data)
                 self._send(pairing_envelope(STEP_REVEAL, reveal))
+                self._log("pairing: sent reveal")
             elif step == "confirm-d":
                 confirm_c = pairing.on_confirm_d(data)
                 self._send(pairing_envelope(STEP_CONFIRM_C, confirm_c))
@@ -296,6 +299,8 @@ class HostParty:
                 self._log(f"pairing: ignoring unexpected step {step!r}")
         except PairingError as exc:
             self._log(f"pairing aborted: {exc.rejection.value}")
+        except Exception as exc:  # noqa: BLE001 - diagnostic logging
+            self._log(f"pairing UNEXPECTED error: {type(exc).__name__}: {exc}")
 
     def _on_paired(self, pairing: Pairing) -> None:
         channel_key = pairing.channel_key

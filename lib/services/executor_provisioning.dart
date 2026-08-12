@@ -1,4 +1,5 @@
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/supabase_config.dart';
 
 /// Identifies one executor the app can hand its session to.
 ///
@@ -70,6 +71,11 @@ class ExecutorProvisioning {
       'access_token': session.accessToken,
       'refresh_token': session.refreshToken,
       'user_id': session.userId,
+      // The host needs these to refresh the token; the anon key is public and
+      // travels inside the E2E channel. Provided in the token so any host works
+      // without being pre-configured with Supabase credentials.
+      'supabase_url': SupabaseConfig.supabaseUrl,
+      'anon_key': SupabaseConfig.supabaseAnonKey,
     };
     return _transport.sendAuthentication(target, payload);
   }

@@ -239,6 +239,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   StreamSubscription<dynamic>? _sub;
   CoworkPairing? _pairing;
   Completer<void>? _pairingDone;
+
+  /// Serialises inbound pairing steps so awaited transitions never overlap.
+  Future<void> _pairingQueue = Future<void>.value();
   CoworkFrameSealer? _sealer;
   CoworkFrameOpener? _opener;
   bool _disposed = false;
@@ -284,6 +287,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       rethrow;
     }
     _socket = socket;
+    if (kDebugMode) {
+      debugPrint('[cowork-relay] socket connected to $hostUrl');
+    }
 
     // 1. Build the joiner BEFORE listening, so the first inbound envelope
     //    (the host's commit) can never race an unset pairing session.
@@ -404,7 +410,14 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       return;
     }
     if (type == 'pairing' && !(_state.value.isPaired)) {
-      _handlePairing(env).catchError(_failPairing);
+      // Serialise pairing steps. The host sends confirm-c and device-c
+      // back-to-back; handling them concurrently would run onPeerDeviceKey
+      // (device-c) before the awaited onConfirmC (confirm-c) has transitioned
+      // the state to `confirmed`, throwing wrongState. Chain each step after
+      // the previous one completes.
+      _pairingQueue = _pairingQueue
+          .then((_) => _handlePairing(env))
+          .catchError(_failPairing);
     }
   }
 
@@ -415,6 +428,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     final data = env['data'];
     if (step is! String || data is! Map) return;
     final msg = data.cast<String, dynamic>();
+    if (kDebugMode) debugPrint('[cowork-relay] recv pairing step=$step');
 
     switch (step) {
       case 'commit':
@@ -444,6 +458,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   }
 
   void _sendPairing(String step, Map<String, dynamic> data) {
+    if (kDebugMode) debugPrint('[cowork-relay] send pairing step=$step');
     _socket?.send(
       jsonEncode(<String, dynamic>{
         'type': 'pairing',
@@ -525,6 +540,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   }
 
   void _onSocketDone() {
+    if (kDebugMode) {
+      debugPrint('[cowork-relay] socket closed (paired=${_state.value.isPaired})');
+    }
     final done = _pairingDone;
     if (done != null && !done.isCompleted) {
       done.completeError(StateError('Host closed the connection during pairing'));
@@ -541,6 +559,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   }
 
   void _failPairing(Object error) {
+    if (kDebugMode) debugPrint('[cowork-relay] PAIRING FAILED: $error');
     final done = _pairingDone;
     if (done != null && !done.isCompleted) done.completeError(error);
   }

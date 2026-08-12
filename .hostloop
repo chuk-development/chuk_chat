@@ -1,0 +1,46 @@
+[cowork-host] MOCK MODEL mode: no account, canned agent — transport test only.
+
+  CoWork host is ready.
+    Relay:     ws://127.0.0.1:8798
+    Agent:     cobalt-wombat  (workspace: /home/user/.cowork/loop/agents/cobalt-wombat)
+    Device:    cowork-host
+
+  Open the CoWork app, Connect to  ws://127.0.0.1:8798  and enter code:  5e4a97ca8b510775-272374
+
+[cowork-host] waiting for the app to pair...
+[cowork-host] relay: executor joined channel 5e4a97ca8b510775
+[cowork-host] relay: controller joined channel 5e4a97ca8b510775
+[cowork-host] controller connected; publishing a fresh pairing commit
+[cowork-host] paired with app device smoke-desktop
+[cowork-host] using injected model factory (no backend, no credits)
+[cowork-host] token provisioned; ready to serve tasks
+[cowork-host] relay: controller left channel 5e4a97ca8b510775
+[cowork-host] controller disconnected; pairing session reset
+[cowork-host] relay: controller joined channel 5e4a97ca8b510775
+[cowork-host] controller connected; publishing a fresh pairing commit
+[cowork-host] paired with app device smoke-desktop
+[cowork-host] using injected model factory (no backend, no credits)
+[cowork-host] token provisioned; ready to serve tasks
+[cowork-host] relay: controller left channel 5e4a97ca8b510775
+[cowork-host] controller disconnected; pairing session reset
+[cowork-host] relay: controller joined channel 5e4a97ca8b510775
+[cowork-host] controller connected; publishing a fresh pairing commit
+[cowork-host] paired with app device smoke-desktop
+[cowork-host] using injected model factory (no backend, no credits)
+[cowork-host] token provisioned; ready to serve tasks
+[cowork-host] relay: controller left channel 5e4a97ca8b510775
+[cowork-host] controller disconnected; pairing session reset
+[cowork-host] relay: controller joined channel 5e4a97ca8b510775
+[cowork-host] controller connected; publishing a fresh pairing commit
+[cowork-host] paired with app device smoke-desktop
+[cowork-host] using injected model factory (no backend, no credits)
+[cowork-host] token provisioned; ready to serve tasks
+[cowork-host] relay: controller left channel 5e4a97ca8b510775
+[cowork-host] controller disconnected; pairing session reset
+[cowork-host] relay: controller joined channel 5e4a97ca8b510775
+[cowork-host] controller connected; publishing a fresh pairing commit
+[cowork-host] paired with app device smoke-desktop
+[cowork-host] using injected model factory (no backend, no credits)
+[cowork-host] token provisioned; ready to serve tasks
+[cowork-host] relay: controller left channel 5e4a97ca8b510775
+[cowork-host] controller disconnected; pairing session reset
