@@ -5,10 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 
-/// The thread surface: connect to a local host, run the pairing ceremony,
-/// provision the account token, then compose tasks and watch the streamed
-/// result. All transport lives behind [CoworkRelayController], so the UI is the
-/// same whether it drives a real socket or a fake in a widget test.
+/// The CoWork chat surface: one scrolling conversation with the agent running
+/// on the user's own host.
+///
+/// It reads like any messenger — the user's messages, the agent's reply
+/// streaming in as deltas arrive, tool activity as compact inline chips, a
+/// subtle done marker — with the message input pinned at the bottom. The
+/// connection is a small, out-of-the-way affordance: while disconnected the
+/// input row is a compact host + pairing-code connect bar; once paired it is
+/// the composer, and a tiny "connected" chip with a disconnect button sits at
+/// the top.
+///
+/// All transport lives behind [CoworkRelayController], so the UI is the same
+/// whether it drives a real socket or a fake in a widget test.
 class CoworkThreadView extends StatefulWidget {
   const CoworkThreadView({
     super.key,
@@ -18,7 +27,8 @@ class CoworkThreadView extends StatefulWidget {
   });
 
   /// Builds the transport controller. Async because a real client generates a
-  /// device signing key first. Widget tests return a fake synchronously.
+  /// device signing key first. Widget tests return a fake synchronously. Called
+  /// again to get a fresh controller after a disconnect.
   final Future<CoworkRelayController> Function() controllerBuilder;
 
   /// Supplies the account session that gets provisioned once paired.
@@ -35,6 +45,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   late final TextEditingController _hostController;
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _composerController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   CoworkRelayController? _controller;
   StreamSubscription<CoworkRelayInbound>? _inboundSub;
@@ -49,16 +60,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   void initState() {
     super.initState();
     _hostController = TextEditingController(text: widget.defaultHostUrl);
-    widget.controllerBuilder().then((controller) {
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
-      setState(() {
-        _controller = controller;
-        _inboundSub = controller.inbound.listen(_onInbound);
-      });
-    });
+    _buildController();
   }
 
   @override
@@ -68,7 +70,20 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     _hostController.dispose();
     _codeController.dispose();
     _composerController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _buildController() async {
+    final controller = await widget.controllerBuilder();
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    setState(() {
+      _controller = controller;
+      _inboundSub = controller.inbound.listen(_onInbound);
+    });
   }
 
   void _onInbound(CoworkRelayInbound event) {
@@ -88,6 +103,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           _currentAssistant = null;
       }
     });
+    _scrollToBottom();
   }
 
   _AssistantEntry _startAssistant() {
@@ -96,9 +112,20 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     return entry;
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   Future<void> _connect() async {
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null || _busy) return;
     final host = _hostController.text.trim();
     final code = _codeController.text.trim();
     if (host.isEmpty || code.isEmpty) {
@@ -125,9 +152,26 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
+  /// Drops the current session and spins up a fresh controller, returning to
+  /// the connect affordance. The conversation stays on screen.
+  Future<void> _disconnect() async {
+    final old = _controller;
+    await _inboundSub?.cancel();
+    _inboundSub = null;
+    setState(() {
+      _controller = null;
+      _currentAssistant = null;
+      _localError = null;
+      _busy = false;
+    });
+    await old?.dispose();
+    _codeController.clear();
+    await _buildController();
+  }
+
   void _send() {
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null || !controller.state.value.isPaired) return;
     final text = _composerController.text.trim();
     if (text.isEmpty) return;
     setState(() {
@@ -135,8 +179,12 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       _currentAssistant = null;
     });
     _composerController.clear();
+    _scrollToBottom();
     controller.sendTask(text).catchError((Object error) {
-      if (mounted) setState(() => _entries.add(_ErrorEntry('$error')));
+      if (mounted) {
+        setState(() => _entries.add(_ErrorEntry('$error')));
+        _scrollToBottom();
+      }
     });
   }
 
@@ -149,177 +197,230 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     return ValueListenableBuilder<CoworkRelayState>(
       valueListenable: controller.state,
       builder: (context, state, _) {
-        switch (state.phase) {
-          case CoworkRelayPhase.connecting:
-            return _Busy(label: state.detail ?? 'Connecting…');
-          case CoworkRelayPhase.pairing:
-            return _Busy(label: state.detail ?? 'Pairing…', sas: state.sas);
-          case CoworkRelayPhase.paired:
-            return _buildThread(context, state);
-          case CoworkRelayPhase.idle:
-          case CoworkRelayPhase.error:
-          case CoworkRelayPhase.closed:
-            return _buildConnectForm(context, state);
-        }
+        final connected = state.phase == CoworkRelayPhase.paired;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildStatusStrip(context, state),
+            Expanded(child: _buildConversation(context, connected)),
+            const Divider(height: 1),
+            connected
+                ? _buildComposer(context)
+                : _buildConnectBar(context, state),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildConnectForm(BuildContext context, CoworkRelayState state) {
+  // --- top status strip ------------------------------------------------------
+
+  Widget _buildStatusStrip(BuildContext context, CoworkRelayState state) {
     final theme = Theme.of(context);
-    final bannerText = _localError ??
-        (state.phase == CoworkRelayPhase.error ? state.detail : null) ??
-        (state.phase == CoworkRelayPhase.closed
-            ? (state.detail ?? 'Disconnected')
-            : null);
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Connect to host', style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                'Enter the host URL and the pairing code it printed.',
-                style: TextStyle(color: theme.hintColor),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _hostController,
-                decoration: const InputDecoration(
-                  labelText: 'Host URL',
-                  border: OutlineInputBorder(),
+    switch (state.phase) {
+      case CoworkRelayPhase.paired:
+        return Material(
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle,
+                    size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Connected to ${_hostController.text.trim()}',
+                    style: theme.textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _codeController,
-                decoration: const InputDecoration(
-                  labelText: 'Pairing code',
-                  hintText: 'chan1234-428913',
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => _connect(),
-              ),
-              if (bannerText != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  bannerText,
-                  style: TextStyle(color: theme.colorScheme.error),
+                if (state.sas != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text('SAS ${state.sas}',
+                        style: theme.textTheme.bodySmall),
+                  ),
+                IconButton(
+                  tooltip: 'Disconnect',
+                  icon: const Icon(Icons.link_off, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _disconnect,
                 ),
               ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _busy ? null : _connect,
-                child: _busy
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Connect'),
-              ),
-            ],
+            ),
           ),
+        );
+      case CoworkRelayPhase.connecting:
+      case CoworkRelayPhase.pairing:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const LinearProgressIndicator(minHeight: 2),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      state.detail ??
+                          (state.phase == CoworkRelayPhase.pairing
+                              ? 'Pairing…'
+                              : 'Connecting…'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  if (state.sas != null)
+                    Text('SAS ${state.sas}', style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        );
+      case CoworkRelayPhase.idle:
+      case CoworkRelayPhase.error:
+      case CoworkRelayPhase.closed:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // --- conversation ----------------------------------------------------------
+
+  Widget _buildConversation(BuildContext context, bool connected) {
+    final theme = Theme.of(context);
+    if (_entries.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            connected
+                ? 'Send a task to the agent'
+                : 'Connect to a host to start chatting.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.hintColor),
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: _entries.length,
+      itemBuilder: (context, index) => _entries[index].build(context),
+    );
+  }
+
+  // --- bottom bar: composer or connect affordance ----------------------------
+
+  Widget _buildComposer(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _composerController,
+                textInputAction: TextInputAction.send,
+                decoration: const InputDecoration(
+                  hintText: 'Message the agent…',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _send(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Send',
+              icon: const Icon(Icons.send),
+              onPressed: _send,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildThread(BuildContext context, CoworkRelayState state) {
+  Widget _buildConnectBar(BuildContext context, CoworkRelayState state) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Row(
-            children: [
-              Icon(Icons.link, size: 16, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Paired with ${state.peerDeviceId ?? 'host'}',
-                  style: theme.textTheme.bodySmall,
+    final banner = _localError ??
+        (state.phase == CoworkRelayPhase.error ? state.detail : null) ??
+        (state.phase == CoworkRelayPhase.closed
+            ? (state.detail ?? 'Disconnected')
+            : null);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (banner != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline,
+                        size: 16, color: theme.colorScheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        banner,
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (state.sas != null)
-                Text('SAS ${state.sas}', style: theme.textTheme.bodySmall),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _entries.isEmpty
-              ? Center(
-                  child: Text(
-                    'Send a task to the agent',
-                    style: TextStyle(color: theme.hintColor),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: TextField(
+                    controller: _hostController,
+                    enabled: !_busy,
+                    decoration: const InputDecoration(
+                      labelText: 'Host',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _entries.length,
-                  itemBuilder: (context, index) => _entries[index].build(context),
                 ),
-        ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _composerController,
-                  decoration: const InputDecoration(
-                    hintText: 'Describe a task…',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 4,
+                  child: TextField(
+                    controller: _codeController,
+                    enabled: !_busy,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Pairing code',
+                      hintText: 'chan1234-428913',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _connect(),
                   ),
-                  onSubmitted: (_) => _send(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                tooltip: 'Send',
-                icon: const Icon(Icons.send),
-                onPressed: _send,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Busy extends StatelessWidget {
-  const _Busy({required this.label, this.sas});
-
-  final String label;
-  final String? sas;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(label),
-          if (sas != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'SAS $sas',
-              style: Theme.of(context).textTheme.bodySmall,
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _busy ? null : _connect,
+                  child: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Connect'),
+                ),
+              ],
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -383,7 +484,7 @@ class _ToolEntry extends _ThreadEntry {
         alignment: Alignment.centerLeft,
         child: Chip(
           avatar: const Icon(Icons.build, size: 16),
-          label: Text(status == null ? name : '$name · $status'),
+          label: Text(status == null ? 'ran $name' : 'ran $name · $status'),
           visualDensity: VisualDensity.compact,
         ),
       ),
