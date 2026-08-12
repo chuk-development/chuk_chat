@@ -10,9 +10,10 @@ from __future__ import annotations
 from .environment import Environment, LocalEnvironment
 from .loop import AgentLoop, IterationBudget, KillSwitch
 from .model import ModelClient
+from .prompt import build_system_prompt
 from .registry import ToolRegistry
 from .state import StateStore
-from .tools import register_run_command
+from .tools import register_builtin_tools
 
 
 def build_runtime(
@@ -24,10 +25,23 @@ def build_runtime(
     budget: int | None = None,
     estop_path: str | None = None,
     system_prompt: str | None = None,
+    workspace: str | None = None,
+    include_tool_docs: bool = True,
 ) -> AgentLoop:
+    """Assemble the loop. ``system_prompt`` is the operator *persona*: the
+    behaviour contract, the ``<tool_call>`` wire format and the live tool list
+    are prepended from :mod:`cowork_agent.prompt`, so a tool can never be
+    registered without being documented to the model. Pass
+    ``include_tool_docs=False`` to use ``system_prompt`` verbatim (tests)."""
     env = environment or LocalEnvironment()
     registry = ToolRegistry()
-    register_run_command(registry, env)
+    register_builtin_tools(registry, env)
+
+    prompt = (
+        build_system_prompt(registry, persona=system_prompt, workspace=workspace)
+        if include_tool_docs
+        else system_prompt
+    )
 
     store = StateStore(db_path)
     return AgentLoop(
@@ -37,5 +51,5 @@ def build_runtime(
         max_iterations=max_iterations,
         budget=IterationBudget(budget if budget is not None else max_iterations),
         kill_switch=KillSwitch(estop_path),
-        system_prompt=system_prompt,
+        system_prompt=prompt,
     )

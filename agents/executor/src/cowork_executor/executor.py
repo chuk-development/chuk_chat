@@ -95,6 +95,7 @@ class Executor:
         db_path: str,
         model_factory: ModelFactory,
         system_prompt: str | None = None,
+        workspace: str | None = None,
         max_iterations: int = 50,
         poll_interval: float = 0.1,
     ) -> None:
@@ -107,6 +108,7 @@ class Executor:
         self._db_path = db_path
         self._model_factory = model_factory
         self._system_prompt = system_prompt
+        self._workspace = workspace
         self._max_iterations = max_iterations
         self._poll = poll_interval
 
@@ -212,6 +214,7 @@ class Executor:
             environment=self._env_shim,
             max_iterations=self._max_iterations,
             system_prompt=self._system_prompt,
+            workspace=self._workspace,
         )
 
         try:

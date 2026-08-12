@@ -55,6 +55,7 @@ class TaskServer:
         db_path: str,
         send_frame: FrameSink,
         system_prompt: str | None = None,
+        workspace: str | None = None,
         max_iterations: int = 50,
     ) -> None:
         self._roster = roster
@@ -72,6 +73,7 @@ class TaskServer:
                 db_path=db_path,
                 model_factory=model_factory,
                 system_prompt=system_prompt,
+                workspace=workspace or agent.workspace_dir or None,
                 max_iterations=max_iterations,
             )
 
