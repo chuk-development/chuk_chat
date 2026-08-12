@@ -255,6 +255,12 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   CoworkPairing? _pairing;
   CoworkReconnect? _reconnect;
   CoworkStoredPairing? _establishedTrust;
+
+  /// The authenticated host device, set by BOTH the first pairing and a code-free
+  /// reconnect. Reading it off `_pairing` alone was a bug: after a reconnect
+  /// there is no pairing session, so provisioning threw "Cannot provision before
+  /// pairing completes" and every auto-reconnect died before serving a task.
+  String? _peerDeviceId;
   Completer<void>? _pairingDone;
 
   /// Serialises inbound pairing steps so awaited transitions never overlap.
@@ -371,6 +377,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     // Capture the trust the caller persists so the next launch reconnects with
     // no code: the host's device key + the established channel key.
     final peerDeviceId = pairing.peerDeviceId;
+    _peerDeviceId = peerDeviceId;
     final peerPublicKey =
         peerDeviceId == null ? null : pairing.approvedDevices.lookup(peerDeviceId);
     if (peerDeviceId != null && peerPublicKey != null) {
@@ -470,6 +477,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       approvedDevices: approved,
     );
     _establishedTrust = pairing;
+    _peerDeviceId = pairing.peerDeviceId;
     _set(
       CoworkRelayState(
         phase: CoworkRelayPhase.paired,
@@ -481,8 +489,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
 
   @override
   Future<void> provisionAccount(AccountSession session) {
-    final peerDeviceId = _pairing?.peerDeviceId;
-    if (peerDeviceId == null) {
+    // Works after a first pairing AND after a code-free reconnect.
+    final peerDeviceId = _peerDeviceId;
+    if (peerDeviceId == null || !_state.value.isPaired) {
       throw StateError('Cannot provision before pairing completes');
     }
     // Route the token through ExecutorProvisioning, which shapes the payload

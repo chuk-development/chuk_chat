@@ -62,10 +62,11 @@ TaskServerBuilder = Callable[
 ]
 
 # Mints a fresh pairing *initiator* session — new ephemeral keys and a new
-# expiry, but the SAME printed channel id + digits. Called once per controller
-# connection so every pairing attempt (including a reconnect) is valid and
-# unconsumed, while the code the user reads off the screen never changes.
-PairingFactory = Callable[[], Pairing]
+# expiry — for the host's printed code. Called once per controller connection so
+# an interrupted attempt never leaves the next one facing an expired session.
+# Returns ``None`` when the code has already been CONSUMED by a successful
+# pairing (single use); the party then offers no ceremony at all.
+PairingFactory = Callable[[], "Pairing | None"]
 
 # Reports the token of a controller already on the channel, or ``None``. Lets the
 # party pick up a controller that connected before its own executor link came up.
@@ -253,13 +254,25 @@ class HostParty:
                 log = "controller connected; sending a reconnect hello (no code)"
             else:
                 pairing = self._pairing_factory()
-                self._pairing = pairing
-                step, envelope = STEP_COMMIT, pairing.create_commit()
                 self._started_token = token
-                log = "controller connected; publishing a fresh pairing commit"
+                if pairing is None:
+                    # The code has been used already and no trust is stored: this
+                    # host has nothing to offer. Stay silent — never re-open a
+                    # consumed code — and let the controller time out.
+                    log = (
+                        "controller connected but this host has no pairing code "
+                        "left (it was already used) and no stored trust; "
+                        "re-pair with `cowork-host --pair`"
+                    )
+                else:
+                    self._pairing = pairing
+                    step, envelope = STEP_COMMIT, pairing.create_commit()
+                    log = "controller connected; publishing a fresh pairing commit"
         if old_task_server is not None:
             old_task_server.stop()
         self._log(log)
+        if step is None or envelope is None:
+            return
         self._send(pairing_envelope(step, envelope))
 
     # -- run loop --------------------------------------------------------

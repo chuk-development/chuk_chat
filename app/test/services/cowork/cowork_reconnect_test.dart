@@ -182,6 +182,124 @@ void main() {
       expect(joiner.authenticated, isFalse);
     });
 
+    test('a proof recorded in an earlier session does not replay', () async {
+      // Same two long-term keys, two separate sessions. The nonces differ, so
+      // the transcript differs, so yesterday's genuine signature is worthless.
+      final hostKp = await CoworkDeviceKeys.generate();
+      final appKp = await CoworkDeviceKeys.generate();
+      final hostPub = await hostKp.extractPublicKey();
+      final appPub = await appKp.extractPublicKey();
+
+      CoworkReconnect freshInitiator() => CoworkReconnect.initiator(
+            deviceId: hostId,
+            deviceKeyPair: hostKp,
+            peerDeviceId: appId,
+            peerPublicKey: appPub,
+            channelId: channel,
+          );
+      CoworkReconnect freshJoiner() => CoworkReconnect.joiner(
+            deviceId: appId,
+            deviceKeyPair: appKp,
+            peerDeviceId: hostId,
+            peerPublicKey: hostPub,
+            channelId: channel,
+          );
+
+      // Session 1: record the app's genuine response off the wire.
+      final captured = await freshJoiner().onHello(freshInitiator().createHello());
+
+      // Session 2: a new challenge. Replaying the recording must not authenticate.
+      final initiator2 = freshInitiator();
+      initiator2.createHello();
+      await expectLater(
+        initiator2.onResponse(captured),
+        throwsA(
+          isA<CoworkReconnectException>().having(
+            (e) => e.rejection,
+            'rejection',
+            CoworkReconnectRejection.badSignature,
+          ),
+        ),
+      );
+      expect(initiator2.state, CoworkReconnectState.aborted);
+      expect(initiator2.authenticated, isFalse);
+    });
+
+    test('one role\'s proof cannot be reflected as the other role\'s', () async {
+      // An imposter host holds no private key. All it has is the proof_j the app
+      // just sent, over this very transcript. Bouncing it back as the confirm
+      // must fail: the roles sign under different labels.
+      final (initiator, joiner) = await makePair();
+      final hello = initiator.createHello();
+      final response = await joiner.onHello(hello);
+
+      await expectLater(
+        joiner.onConfirm(<String, dynamic>{
+          'type': 'reconnect-confirm',
+          'sig': response['sig'],
+        }),
+        throwsA(
+          isA<CoworkReconnectException>().having(
+            (e) => e.rejection,
+            'rejection',
+            CoworkReconnectRejection.badSignature,
+          ),
+        ),
+      );
+      expect(joiner.state, CoworkReconnectState.aborted);
+      expect(joiner.authenticated, isFalse);
+    });
+
+    test('the host\'s own proof cannot be reused as the app\'s', () async {
+      // The mirror image, with the nonce pinned so the transcript matches
+      // exactly — the strongest form of the swap. It still fails on the label.
+      final hostKp = await CoworkDeviceKeys.generate();
+      final appKp = await CoworkDeviceKeys.generate();
+      final hostPub = await hostKp.extractPublicKey();
+      final appPub = await appKp.extractPublicKey();
+
+      final initiator1 = CoworkReconnect.initiator(
+        deviceId: hostId,
+        deviceKeyPair: hostKp,
+        peerDeviceId: appId,
+        peerPublicKey: appPub,
+        channelId: channel,
+      );
+      final joiner1 = CoworkReconnect.joiner(
+        deviceId: appId,
+        deviceKeyPair: appKp,
+        peerDeviceId: hostId,
+        peerPublicKey: hostPub,
+        channelId: channel,
+      );
+      final hello1 = initiator1.createHello();
+      final response1 = await joiner1.onHello(hello1);
+      final confirm1 = await initiator1.onResponse(response1);
+
+      final initiator2 = CoworkReconnect.initiator(
+        deviceId: hostId,
+        deviceKeyPair: hostKp,
+        peerDeviceId: appId,
+        peerPublicKey: appPub,
+        channelId: channel,
+        nonce: base64Decode(hello1['nonce'] as String),
+      );
+      initiator2.createHello();
+      final forged = Map<String, dynamic>.from(response1)
+        ..['sig'] = confirm1['sig'];
+      await expectLater(
+        initiator2.onResponse(forged),
+        throwsA(
+          isA<CoworkReconnectException>().having(
+            (e) => e.rejection,
+            'rejection',
+            CoworkReconnectRejection.badSignature,
+          ),
+        ),
+      );
+      expect(initiator2.state, CoworkReconnectState.aborted);
+    });
+
     test('a channel-id mismatch is rejected', () async {
       final (initiator, _) = await makePair();
       final otherApp = await CoworkDeviceKeys.generate();

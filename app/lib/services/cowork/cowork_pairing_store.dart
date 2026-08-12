@@ -145,6 +145,12 @@ class CoworkPairingStore {
   final CoworkSecureKeyValueStore _store;
   final Uuid _uuid;
 
+  /// The backend everything is written to. Exposed so a test can assert that the
+  /// production default really is the OS keychain / libsecret — both the device
+  /// seed and the channel key are key material, and must never fall back to
+  /// SharedPreferences.
+  CoworkSecureKeyValueStore get backend => _store;
+
   /// Loads the stable device identity, creating and persisting a fresh one on
   /// first use. The same identity is returned on every later launch.
   Future<CoworkDeviceIdentity> loadOrCreateIdentity() async {

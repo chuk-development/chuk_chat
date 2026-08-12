@@ -15,6 +15,7 @@ For production the model factory is built from the provisioned Supabase token
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -61,6 +62,9 @@ class LocalHost:
         channel_id: str | None = None,
         digits: str | None = None,
         sas_digits: int = 6,
+        # Deliberate re-pair: drop any stored trust at startup and mint a fresh,
+        # single-use code (``cowork-host --pair``).
+        force_repair: bool = False,
         # Test seam: skip the real Supabase/backend and use this factory.
         model_factory_override: ModelFactory | None = None,
         logger: Callable[[str], None] | None = None,
@@ -89,7 +93,11 @@ class LocalHost:
         # channel, the channel key and the app's approved device key, so every
         # later connection reconnects with no code.
         self._store = HostPairingStore(self._workspace / "paired.json")
-        self._trust: HostTrust | None = self._store.load()
+        if force_repair:
+            self._store.clear()
+            self._trust: HostTrust | None = None
+        else:
+            self._trust = self._store.load()
 
         # The channel id is STABLE across restarts: an explicit override wins (for
         # tests), else the stored pairing's channel, else a deterministic value
@@ -100,22 +108,33 @@ class LocalHost:
             or (self._trust.channel_id if self._trust is not None else None)
             or derive_channel_id(self._identity)
         )
+        if not resolved_channel_id or "-" in resolved_channel_id:
+            raise ValueError("channel_id must be non-empty and must not contain '-'")
 
-        # The printed pairing code is STABLE for the host's lifetime: the same
-        # channel id + digits are shown once and reused for every connection. A
-        # throwaway session normalises and validates them (and generates random
-        # ones when not pinned) so the exact rules live in one place — ``Pairing``.
-        probe = Pairing.initiator(
-            device_id=self._device_id,
-            device_identity=self._identity,
-            sas_digits=sas_digits,
-            channel_id=resolved_channel_id,
-            digits=digits,
-        )
         self._sas_digits = sas_digits
-        self._channel_id = probe.channel_id
-        self._pairing_code = probe.pairing_code
-        self._digits = self._pairing_code.rpartition("-")[2]
+        self._channel_id = resolved_channel_id
+        # The pairing code is guarded because it is mutated from the party thread
+        # (the moment a pairing completes) and read from the relay's peer-event
+        # threads (when a controller joins).
+        self._code_lock = threading.Lock()
+        self._pairing_code: str | None = None
+        self._digits: str | None = None
+        if self._trust is None:
+            # Never paired: mint the ONE code this host will ever offer. A
+            # throwaway session normalises and validates the parts (and picks
+            # random digits when not pinned), so the rules live in one place.
+            probe = Pairing.initiator(
+                device_id=self._device_id,
+                device_identity=self._identity,
+                sas_digits=sas_digits,
+                channel_id=self._channel_id,
+                digits=digits,
+            )
+            self._pairing_code = probe.pairing_code
+            self._digits = probe.pairing_code.rpartition("-")[2]
+        # else: a trust record exists, so NO code is generated at all. There is
+        # nothing to print, nothing to type, and nothing an attacker can replay —
+        # the only way in is the signed reconnect handshake.
 
         self._relay = LocalRelay(
             host_addr, port, logger=self._log, on_peer_event=self._on_peer_event
@@ -123,17 +142,36 @@ class LocalHost:
         self._party: HostParty | None = None
         self._port = port
 
-    def _pairing_factory(self) -> Pairing:
+    def _pairing_factory(self) -> Pairing | None:
         """Mint a fresh initiator session — new ephemeral keys, new expiry, new
-        (empty) trust store — reusing the stable printed code. One per controller
-        connection, so a reconnect never meets an expired or consumed session."""
+        (empty) trust store — for the printed code. One per controller connection,
+        so an interrupted attempt never leaves the next one facing an expired
+        session.
+
+        Returns ``None`` once the code has been **consumed**: a code buys exactly
+        one successful pairing. After that this host only accepts the signed
+        reconnect handshake, and a new code needs ``cowork-host --pair``."""
+        with self._code_lock:
+            code = self._pairing_code
+            digits = self._digits
+        if code is None or digits is None:
+            return None
         return Pairing.initiator(
             device_id=self._device_id,
             device_identity=self._identity,
             sas_digits=self._sas_digits,
             channel_id=self._channel_id,
-            digits=self._digits,
+            digits=digits,
         )
+
+    def _burn_pairing_code(self) -> bool:
+        """Destroy the pairing code so it can never be used a second time.
+        Returns True if a live code was destroyed."""
+        with self._code_lock:
+            burned = self._pairing_code is not None
+            self._pairing_code = None
+            self._digits = None
+        return burned
 
     def _reconnect_factory(
         self,
@@ -155,12 +193,23 @@ class LocalHost:
     def _persist_pairing(self, pairing: Pairing) -> None:
         """Store the trust record from a freshly completed pairing so the next
         connection reconnects with no code. Also flips this host into reconnect
-        mode in-process, for the very next controller."""
+        mode in-process, for the very next controller.
+
+        The code is burned FIRST, before anything that could fail: a code that has
+        bought one pairing is dead even if persisting the trust then fails."""
+        if self._burn_pairing_code():
+            self._log("pairing code consumed — it will never be accepted again")
         peer_device_id = pairing.peer_device_id
-        if peer_device_id is None:
-            return
-        peer_public_key = pairing.approved_devices.lookup(peer_device_id)
-        if peer_public_key is None:
+        peer_public_key = (
+            None
+            if peer_device_id is None
+            else pairing.approved_devices.lookup(peer_device_id)
+        )
+        if peer_device_id is None or peer_public_key is None:
+            self._log(
+                "paired but the peer device key is missing; trust NOT stored — "
+                "re-pair with `cowork-host --pair`"
+            )
             return
         trust = HostTrust(
             channel_id=self._channel_id,
@@ -178,10 +227,20 @@ class LocalHost:
         return self._trust is not None
 
     def forget_pairing(self) -> bool:
-        """Delete the stored trust — the host will require a fresh code again.
-        Returns True if a record was removed."""
+        """Delete the stored trust and mint one fresh, single-use pairing code —
+        the deliberate "pair a new device" action behind ``cowork-host --pair``.
+        Returns True if a stored record was removed."""
         removed = self._store.clear()
         self._trust = None
+        probe = Pairing.initiator(
+            device_id=self._device_id,
+            device_identity=self._identity,
+            sas_digits=self._sas_digits,
+            channel_id=self._channel_id,
+        )
+        with self._code_lock:
+            self._pairing_code = probe.pairing_code
+            self._digits = probe.pairing_code.rpartition("-")[2]
         return removed
 
     def _on_peer_event(self, channel: str, role: str, event: str, token: int) -> None:
@@ -271,8 +330,11 @@ class LocalHost:
         return self._channel_id
 
     @property
-    def pairing_code(self) -> str:
-        return self._pairing_code
+    def pairing_code(self) -> str | None:
+        """The one code this host will accept, or ``None`` once it has been used
+        (or when a stored pairing means no code was ever minted)."""
+        with self._code_lock:
+            return self._pairing_code
 
     @property
     def agent(self) -> Agent:
