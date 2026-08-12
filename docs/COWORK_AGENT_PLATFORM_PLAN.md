@@ -276,10 +276,12 @@ Borrowed from Hermes `tools/delegate_tool.py` + `agent/subagent_lifecycle.py`:
 
 ### 7.7 Git-versioned workspace (time-travel & undo)
 
-Concept: everything the agent does that is **text** — file edits, memory/skill
-changes, generated documents, and a record of each action — is **auto-committed
-to git**, so any step is **revertible** and the whole run is a browsable history.
-Large binaries are excluded (gitignore / git-lfs boundary).
+Concept: this exists first for **safety / audit** — if the agent does something
+wrong, there is a complete, detailed record and a way back. **Every tool call is
+written down in detail, every time** (name, arguments, result), alongside the
+file edits, memory/skill changes, and generated documents — all **auto-committed
+to git**, so any step is **revertible** and the whole run is a browsable, forensic
+history. Large binaries are excluded (gitignore / git-lfs boundary).
 
 **Prior art (honest):** a known *pattern*, not a standard protocol. **Aider**
 auto-commits every AI code edit to git with generated messages and supports undo;
@@ -293,8 +295,18 @@ pipeline we own end to end.
 - **The agent's workspace (sandbox home) is a git repo.** Auto-commit after each
   mutating action (write_file, mutating run_command, memory/skill writes); commit
   message = the round/action summary the streaming feed already produces.
+- **A detailed action journal, not just file diffs.** Every tool call —
+  including read-only or external ones that mutate no local file — is recorded as
+  a structured entry (name, args, result summary) and committed, so the git log
+  is a full forensic trail of *what the agent did*, not only *what files
+  changed*.
 - **Two layers, not one.** The append-only SQLite session store (§7.5) is the
-  *conversation transcript*; git is the *workspace filesystem history*. Keep both.
+  *conversation transcript*; git is the *workspace filesystem + action-journal
+  history*. Keep both.
+- **Encrypted at rest.** The workspace/git repo lives inside the sandbox and is
+  encrypted at rest (the sandbox disk is encrypted; may be switched on later).
+  So the detailed history is not sitting in plaintext on the host disk. Tentative
+  — a "later" hardening, not a v1 blocker.
 - **Undo / rollback in the UI:** roll the workspace back to any commit ("undo the
   last 3 actions"). Directly de-risks the passwordless-sudo concern (§6, §17) —
   workspace changes become reversible. A real trust/safety feature and a selling
