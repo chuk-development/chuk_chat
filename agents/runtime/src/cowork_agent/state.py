@@ -11,6 +11,8 @@ Hard rules from the plan:
   right run with no server state.
 - ``BEGIN IMMEDIATE`` + jittered retry on "database is locked".
 - JSON in columns, never pickle.
+- An **FTS5 mirror kept in sync by triggers** (§12 B), so full-text recall never
+  needs a second store or a model call. See :mod:`cowork_agent.search`.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Any
+
+from .search import ensure_fts_schema, register_functions, search_messages
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -72,7 +76,7 @@ class StateStore:
         self._max_retries = max_retries
         self._local = threading.local()
         # Create the schema once up front on the constructing thread.
-        self._init_schema(self._conn())
+        self._has_fts = self._init_schema(self._conn())
 
     def _conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
@@ -84,12 +88,22 @@ class StateStore:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
             conn.execute("PRAGMA busy_timeout=5000;")
+            # The FTS sync trigger calls cowork_cjk_segment, so every connection
+            # that inserts a message must carry the function.
+            register_functions(conn)
             self._local.conn = conn
         return conn
 
+    @property
+    def has_fts(self) -> bool:
+        """False on a SQLite build without FTS5 — the store still works, only
+        :meth:`search_messages` is unavailable."""
+        return self._has_fts
+
     @staticmethod
-    def _init_schema(conn: sqlite3.Connection) -> None:
+    def _init_schema(conn: sqlite3.Connection) -> bool:
         conn.executescript(_SCHEMA)
+        return ensure_fts_schema(conn)
 
     def close(self) -> None:
         conn = getattr(self._local, "conn", None)
@@ -203,3 +217,26 @@ class StateStore:
             )
             for r in rows
         ]
+
+    # -- full-text search (§12 B) -----------------------------------------
+
+    def search_messages(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        window: int = 5,
+        session_id: int | None = None,
+    ) -> dict:
+        """Keyword search over every stored message. No model call: BM25 over
+        the FTS5 mirror, returning anchored windows (see
+        :func:`cowork_agent.search.search_messages`)."""
+        if not self._has_fts:
+            return {"ok": False, "error": "this SQLite build has no FTS5", "hits": []}
+        return search_messages(
+            self._conn(),
+            query,
+            limit=limit,
+            window=window,
+            session_id=session_id,
+        )

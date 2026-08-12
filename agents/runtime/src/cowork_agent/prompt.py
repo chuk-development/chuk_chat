@@ -124,10 +124,23 @@ def build_system_prompt(
     *,
     persona: str | None = None,
     workspace: str | None = None,
+    skills: str | None = None,
+    memory: str | None = None,
 ) -> str:
     """Compose the full system prompt: behaviour + wire format + live tools +
-    the operator persona (last, so it wins on any conflict)."""
+    the skill catalogue + the memory snapshot + the operator persona (last, so
+    it wins on any conflict).
+
+    ``skills`` carries names and descriptions only (§11); ``memory`` is the
+    frozen snapshot (§12) — both are read once, when a session is seeded, and
+    never rewritten mid-session, so the prefix cache survives the whole run.
+    Both are sanitized by their own module before they arrive here.
+    """
     parts = [BASE_INSTRUCTIONS, TOOL_PROTOCOL, render_tool_docs(registry)]
+    if skills and skills.strip():
+        parts.append(skills.strip())
+    if memory and memory.strip():
+        parts.append(memory.strip())
     if workspace:
         parts.append(
             "# Workspace\n\n"

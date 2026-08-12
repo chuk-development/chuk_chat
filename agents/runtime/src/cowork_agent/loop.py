@@ -9,12 +9,19 @@
   guaranteed.
 - **Two-tier kill switch**: a file-sentinel ESTOP that pauses new work (a stat
   error counts as engaged) plus a thread-flag interrupt polled at the loop top.
+- **The system prompt freezes once per session** (§12). It may be passed as a
+  callable, which is resolved when a session is seeded and never again — so a
+  mid-session memory write reaches disk but not the prompt, and the prefix cache
+  holds for the whole run (§7.9). The next session resolves it afresh.
+- **Context providers** append messages after a tool round — the seam a skill
+  body uses to enter the conversation without touching the system prompt (§11).
 """
 
 from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -117,7 +124,8 @@ class AgentLoop:
         max_iterations: int = 50,
         budget: IterationBudget | None = None,
         kill_switch: KillSwitch | None = None,
-        system_prompt: str | None = None,
+        system_prompt: str | Callable[[], str] | None = None,
+        context_providers: Sequence[Callable[[], list[dict]]] | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
@@ -126,6 +134,7 @@ class AgentLoop:
         self._budget = budget or IterationBudget(max_iterations)
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
+        self._context_providers = list(context_providers or [])
 
     @property
     def budget(self) -> IterationBudget:
@@ -135,18 +144,31 @@ class AgentLoop:
     def kill_switch(self) -> KillSwitch:
         return self._kill
 
+    @property
+    def registry(self) -> ToolRegistry:
+        return self._registry
+
+    @property
+    def store(self) -> StateStore:
+        return self._store
+
     def run(self, session_key: str, user_message: str) -> LoopResult:
         store = self._store
         session_id = store.route(session_key)
 
-        # Seed the system prompt once per fresh session.
+        # Seed the system prompt once per fresh session. A callable is resolved
+        # HERE and only here: that single read is what freezes the memory
+        # snapshot for the session (§12).
         conversation = store.get_conversation(session_id)
         if self._system_prompt and not any(
             m.content.get("role") == "system" for m in conversation
         ):
-            store.append_message(
-                session_id, "system", {"role": "system", "content": self._system_prompt}
-            )
+            prompt = self._system_prompt
+            resolved = prompt() if callable(prompt) else prompt
+            if resolved:
+                store.append_message(
+                    session_id, "system", {"role": "system", "content": resolved}
+                )
 
         store.append_message(
             session_id, "user", {"role": "user", "content": user_message}
@@ -200,6 +222,7 @@ class AgentLoop:
                             "content": result,
                         },
                     )
+                self._drain_context(session_id)
                 continue  # tool calls -> feed results back, loop again
 
             # bare text -> final answer, stop
@@ -213,6 +236,18 @@ class AgentLoop:
             iterations=iterations,
             session_id=session_id,
         )
+
+    def _drain_context(self, session_id: int) -> None:
+        """Append whatever a tool asked to add to the conversation — today, a
+        skill body (§11). The row role records where it came from; the wire role
+        inside the content stays a normal turn, because a mid-conversation
+        system message would overwrite the frozen system prompt."""
+        for provider in self._context_providers:
+            for message in provider():
+                self._store.append_message(
+                    session_id, message.get("role_tag", "context"),
+                    {k: v for k, v in message.items() if k != "role_tag"},
+                )
 
     def _persist_assistant(self, session_id: int, response: ModelResponse) -> None:
         content: dict = {"role": "assistant"}
