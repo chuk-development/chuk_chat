@@ -3,9 +3,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_storage_sync.dart'
+    show deserializePayloadAsync;
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -190,37 +193,58 @@ class ChatStorageMutations {
       await ChatStorageState.loadingCompleter!.future;
     }
 
-    // Ensure all chats are fully loaded (messages decrypted)
+    // Make sure every chat's payload is in the local cache.
     if (kDebugMode) {
-      debugPrint('📤 [Export] Ensuring all chats are preloaded...');
+      debugPrint('📤 [Export] Ensuring the local cache is complete...');
     }
     await ChatPreloadService.awaitPreload();
 
-    // Now all chats should be fully loaded
-    final chats = ChatStorageState.savedChats;
-    final fullyLoadedChats = chats.where((chat) => chat.isFullyLoaded).toList();
-
-    if (fullyLoadedChats.length < chats.length) {
-      if (kDebugMode) {
-        debugPrint(
-          '⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded',
-        );
-      }
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to export chats.');
     }
 
-    final exportPayload = fullyLoadedChats
-        .map(
-          (chat) => {
-            'id': chat.id,
-            'createdAt': chat.createdAt.toIso8601String(),
-            'messages': chat.messages.map((m) => m.toJson()).toList(),
-            if (chat.customName != null) 'customName': chat.customName,
-          },
-        )
-        .toList();
+    // Read each chat's messages one at a time. Chats are not held in
+    // memory any more — an export of a long history would otherwise mean
+    // hundreds of megabytes of parsed messages resident at once.
+    final chats = ChatStorageState.savedChats;
+    final exportPayload = <Map<String, dynamic>>[];
+    int missing = 0;
+
+    for (final chat in chats) {
+      List<ChatMessage>? messages;
+      String? customName = chat.customName;
+
+      if (chat.isFullyLoaded) {
+        messages = chat.messages;
+      } else {
+        final row = await LocalChatCacheService.loadById(user.id, chat.id);
+        final payload = row?['payload'];
+        if (payload is String && payload.isNotEmpty) {
+          final decoded = await deserializePayloadAsync(payload);
+          messages = decoded.messages;
+          customName ??= decoded.customName;
+        }
+      }
+
+      if (messages == null) {
+        missing++;
+        continue;
+      }
+
+      exportPayload.add({
+        'id': chat.id,
+        'createdAt': chat.createdAt.toIso8601String(),
+        'messages': messages.map((m) => m.toJson()).toList(),
+        'customName': ?customName,
+      });
+    }
 
     if (kDebugMode) {
-      debugPrint('📤 [Export] Exported ${exportPayload.length} chats');
+      debugPrint(
+        '📤 [Export] Exported ${exportPayload.length} chats'
+        '${missing > 0 ? ' ($missing without a cached payload)' : ''}',
+      );
     }
     return jsonEncode(exportPayload);
   }

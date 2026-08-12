@@ -11,11 +11,24 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:chuk_chat/services/chat_cache_search_text.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 4;
+
+  /// Payloads are gzipped before they hit the `payload` column.
+  ///
+  /// A chat is JSON with long, highly repetitive tool results, so it
+  /// compresses about 4x. That shrinks the file, the platform-channel
+  /// traffic and the memory each read allocates. Level 4 reaches within
+  /// 4% of level 9 at half the CPU time, which matters because the
+  /// one-time migration of an existing cache runs at app start.
+  static final GZipCodec _payloadCodec = GZipCodec(level: 4);
+
+  /// Below this size the gzip header costs more than it saves.
+  static const int _compressMinBytes = 512;
 
   /// Old SharedPreferences key prefixes (for migration).
   static const String _oldV2PrefsKey = 'cached_chats_v2-';
@@ -50,6 +63,8 @@ class LocalChatCacheService {
       debugPrint('🗄️ [CacheService] Opening SQLite DB at $dbPath');
     }
 
+    bool needsVacuum = false;
+
     _db = await openDatabase(
       dbPath,
       version: _dbVersion,
@@ -58,11 +73,12 @@ class LocalChatCacheService {
           CREATE TABLE chat_cache (
             id TEXT NOT NULL,
             user_id TEXT NOT NULL,
-            payload TEXT NOT NULL,
+            payload BLOB NOT NULL,
             title TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT,
             is_starred INTEGER NOT NULL DEFAULT 0,
+            search_text TEXT,
             PRIMARY KEY (user_id, id)
           )
         ''');
@@ -96,10 +112,102 @@ class LocalChatCacheService {
             'ON chat_cache (user_id, updated_at DESC, created_at DESC)',
           );
         }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE chat_cache ADD COLUMN search_text TEXT');
+          await _compressExistingPayloads(db);
+          needsVacuum = true;
+        }
       },
     );
 
+    // Compression frees a large part of the file, but SQLite keeps the
+    // pages. VACUUM has to run outside the upgrade transaction.
+    if (needsVacuum) {
+      try {
+        await _db!.execute('VACUUM');
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [CacheService] VACUUM after upgrade failed: $e');
+        }
+      }
+    }
+
     return _db!;
+  }
+
+  /// Rewrite every legacy plaintext payload as gzip and fill `search_text`.
+  ///
+  /// Reads in byte-bounded batches for the same reason [load] does: the
+  /// pre-migration cache can hold tens of megabytes, and one `SELECT`
+  /// over all of it exceeds what the platform channel can allocate.
+  static Future<void> _compressExistingPayloads(Database db) async {
+    final index = await db.rawQuery(
+      'SELECT rowid AS rid, LENGTH(payload) AS size FROM chat_cache',
+    );
+    if (index.isEmpty) return;
+
+    final stopwatch = Stopwatch()..start();
+    int migrated = 0;
+    final batch = <Object?>[];
+    int batchBytes = 0;
+
+    Future<void> flush() async {
+      if (batch.isEmpty) return;
+      final placeholders = List.filled(batch.length, '?').join(',');
+      final rows = await db.rawQuery(
+        'SELECT rowid AS rid, payload FROM chat_cache '
+        'WHERE rowid IN ($placeholders)',
+        List<Object?>.from(batch),
+      );
+      final writes = db.batch();
+      for (final row in rows) {
+        final raw = row['payload'];
+        // Already a BLOB (interrupted earlier run) — leave it alone.
+        if (raw is! String) continue;
+        writes.update(
+          'chat_cache',
+          {
+            'payload': _encodePayload(raw),
+            'search_text': buildChatSearchText(raw),
+          },
+          where: 'rowid = ?',
+          whereArgs: [row['rid']],
+        );
+        migrated++;
+      }
+      await writes.commit(noResult: true);
+      batch.clear();
+      batchBytes = 0;
+    }
+
+    for (final row in index) {
+      final size = (row['size'] as num?)?.toInt() ?? 0;
+      if (batch.isNotEmpty && batchBytes + size > _batchByteBudget) {
+        await flush();
+      }
+      batch.add(row['rid']);
+      batchBytes += size;
+    }
+    await flush();
+
+    if (kDebugMode) {
+      debugPrint(
+        '🗜️ [CacheService] Compressed $migrated payloads in '
+        '${stopwatch.elapsedMilliseconds}ms',
+      );
+    }
+  }
+
+  /// Close the cached handle and forget migration state.
+  ///
+  /// Tests point the application support directory at a fresh temp dir per
+  /// case. Without this the static handle would outlive that directory and
+  /// every later write would hit a deleted file.
+  @visibleForTesting
+  static Future<void> debugReset() async {
+    await _db?.close();
+    _db = null;
+    _migrationChecked.clear();
   }
 
   // ─── Generic KV cache (for projects, etc.) ─────────────────────────────
@@ -210,18 +318,79 @@ class LocalChatCacheService {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> load(String userId) async {
+  /// Byte budget for one sqflite result batch.
+  ///
+  /// Every query result crosses the platform method channel as a single
+  /// `ByteBuffer` allocated on the Java heap (256 MB growth limit on
+  /// Android). A full-table `SELECT` over a mature cache reaches tens of
+  /// megabytes and dies in `StandardMethodCodec.encodeSuccessEnvelope`
+  /// with an `OutOfMemoryError` before Dart ever sees a row. Batching by
+  /// payload bytes — not by row count — keeps every envelope small no
+  /// matter how the chats are sized.
+  static const int _batchByteBudget = 4 * 1024 * 1024;
+
+  /// Columns of `chat_cache` without the heavy `payload` blob.
+  static const String _metaColumns =
+      'id, title, created_at, updated_at, is_starred';
+
+  /// Load cached chats without their payloads.
+  ///
+  /// The sidebar only renders titles and timestamps. Reading the payload
+  /// column for that is what made startup allocate the whole cache at
+  /// once.
+  static Future<List<Map<String, dynamic>>> loadMeta(String userId) async {
     await _runMigrations(userId);
 
     final db = await _getDb();
-    final rows = await db.query(
-      'chat_cache',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'created_at DESC',
+    final rows = await db.rawQuery(
+      'SELECT $_metaColumns FROM chat_cache WHERE user_id = ? '
+      'ORDER BY created_at DESC',
+      [userId],
     );
 
-    return rows.map(_fromDbRow).toList();
+    return rows.map(_fromDbMetaRow).toList(growable: false);
+  }
+
+  /// Fetch full rows for an index of `{rid, size}` records, splitting the
+  /// reads so no single result batch exceeds [_batchByteBudget].
+  ///
+  /// [index] must already be in the wanted order; [orderBy] repeats that
+  /// order inside each batch so the concatenated result stays sorted.
+  static Future<List<Map<String, dynamic>>> _fetchBatched(
+    Database db,
+    List<Map<String, Object?>> index, {
+    required String orderBy,
+  }) async {
+    final results = <Map<String, dynamic>>[];
+    final batch = <Object?>[];
+    int batchBytes = 0;
+
+    Future<void> flush() async {
+      if (batch.isEmpty) return;
+      final placeholders = List.filled(batch.length, '?').join(',');
+      final rows = await db.rawQuery(
+        'SELECT * FROM chat_cache WHERE rowid IN ($placeholders) '
+        'ORDER BY $orderBy',
+        List<Object?>.from(batch),
+      );
+      results.addAll(rows.map(_fromDbRow));
+      batch.clear();
+      batchBytes = 0;
+    }
+
+    for (final row in index) {
+      final size = (row['size'] as num?)?.toInt() ?? 0;
+      // Flush before adding when this row would push the batch over
+      // budget, so a single oversized chat still travels on its own.
+      if (batch.isNotEmpty && batchBytes + size > _batchByteBudget) {
+        await flush();
+      }
+      batch.add(row['rid']);
+      batchBytes += size;
+    }
+    await flush();
+
+    return results;
   }
 
   /// Count cached chats for one user.
@@ -272,22 +441,29 @@ class LocalChatCacheService {
     final escaped = _escapeLikePattern(trimmed.toLowerCase());
     final pattern = '%$escaped%';
 
-    final rows = await db.rawQuery(
+    // Match inside SQLite and return only row ids plus payload sizes, then
+    // read the matching payloads in byte-bounded batches. Selecting the
+    // payloads directly can exceed the method-channel envelope limit —
+    // `cappedLimit` bounds the row count, not the bytes behind it.
+    const String orderBy = 'COALESCE(updated_at, created_at) DESC';
+    final index = await db.rawQuery(
       '''
-      SELECT id, payload, title, created_at, updated_at, is_starred
+      SELECT rowid AS rid, LENGTH(payload) AS size
       FROM chat_cache
       WHERE user_id = ?
         AND (
           LOWER(COALESCE(title, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(payload) LIKE ? ESCAPE '\\'
+          OR COALESCE(search_text, '') LIKE ? ESCAPE '\\'
         )
-      ORDER BY COALESCE(updated_at, created_at) DESC
+      ORDER BY $orderBy
       LIMIT ?
       ''',
       [userId, pattern, pattern, cappedLimit],
     );
+    if (index.isEmpty) return const <Map<String, dynamic>>[];
 
-    return rows.map(_fromDbRow).toList(growable: false);
+    final rows = await _fetchBatched(db, index, orderBy: orderBy);
+    return List<Map<String, dynamic>>.unmodifiable(rows);
   }
 
   /// Run all pending migrations (v1/v2/v3 → SQLite).
@@ -572,25 +748,59 @@ class LocalChatCacheService {
 
   // ─── Row conversion ───────────────────────────────────────────────────
 
+  /// Encode a payload for storage: gzip unless it is too small to gain.
+  static Object _encodePayload(String payload) {
+    final bytes = utf8.encode(payload);
+    if (bytes.length < _compressMinBytes) return payload;
+    return Uint8List.fromList(_payloadCodec.encode(bytes));
+  }
+
+  /// Decode a stored payload. Accepts gzipped BLOBs and legacy plain TEXT,
+  /// so a row written before the v4 upgrade still reads correctly.
+  static String _decodePayload(Object? stored) {
+    if (stored is String) return stored;
+    if (stored is List<int>) {
+      return utf8.decode(_payloadCodec.decode(stored));
+    }
+    throw StateError(
+      'Unsupported payload storage type: ${stored.runtimeType}',
+    );
+  }
+
   static Map<String, dynamic> _toDbRow(
     String userId,
     Map<String, dynamic> row,
   ) {
+    final payload = row['payload'] as String;
     return {
       'id': row['id'],
       'user_id': userId,
-      'payload': row['payload'],
+      'payload': _encodePayload(payload),
       'title': row['title'],
       'created_at': row['created_at'],
       'updated_at': row['updated_at'],
       'is_starred': row['is_starred'] == true ? 1 : 0,
+      'search_text': buildChatSearchText(payload),
+    };
+  }
+
+  /// Map a payload-less row (see [loadMeta]). The `payload` key is absent
+  /// rather than empty so a caller that needs it fails loudly instead of
+  /// silently treating a chat as having no messages.
+  static Map<String, dynamic> _fromDbMetaRow(Map<String, dynamic> row) {
+    return <String, dynamic>{
+      'id': row['id'] as String,
+      'created_at': row['created_at'] as String,
+      'is_starred': (row['is_starred'] as int?) == 1,
+      if (row['updated_at'] != null) 'updated_at': row['updated_at'],
+      if (row['title'] != null) 'title': row['title'],
     };
   }
 
   static Map<String, dynamic> _fromDbRow(Map<String, dynamic> row) {
     return <String, dynamic>{
       'id': row['id'] as String,
-      'payload': row['payload'] as String,
+      'payload': _decodePayload(row['payload']),
       'created_at': row['created_at'] as String,
       'is_starred': (row['is_starred'] as int?) == 1,
       if (row['updated_at'] != null) 'updated_at': row['updated_at'],

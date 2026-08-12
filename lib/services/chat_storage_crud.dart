@@ -414,7 +414,12 @@ class ChatStorageCrud {
         }
       }
 
-      final rows = await LocalChatCacheService.load(user.id);
+      // Metadata only. The sidebar needs a title, a date and a starred
+      // flag; the messages are read from the same cache when a chat is
+      // opened (see [loadFullChat]). Reading every payload here is what
+      // made startup pull the whole history into memory, and on Android
+      // it exceeded what a single platform-channel result can allocate.
+      final rows = await LocalChatCacheService.loadMeta(user.id);
       if (rows.isEmpty) {
         if (kDebugMode) {
           debugPrint('📦 [ChatStorage] Cache empty');
@@ -422,53 +427,21 @@ class ChatStorageCrud {
         return;
       }
 
-      if (kDebugMode) {
-        debugPrint(
-          '📦 [ChatStorage] Loading ${rows.length} chats from cache...',
-        );
-      }
-
-      // Progressive loading: first batch for fast UI, then rest in background
-      const int firstBatchSize = 15;
-      final firstBatch = rows.take(firstBatchSize).toList();
-      final remainingBatch = rows.skip(firstBatchSize).toList();
-
       ChatStorageState.chatsById.clear();
-
-      // Parse first 15 chats (plaintext — no decryption needed!)
-      final firstChats = await _parseChatRowsBatch(firstBatch);
-      for (final chat in firstChats) {
+      for (final row in rows) {
+        final chat = _sidebarChatFromCacheRow(row);
         if (chat != null) {
           ChatStorageState.chatsById[chat.id] = chat;
         }
       }
 
       ChatStorageState.cacheLoaded = true;
-
-      // Notify UI immediately with first batch
-      if (ChatStorageState.chatsById.isNotEmpty) {
-        ChatStorageState.notifyChanges();
-        if (kDebugMode) {
-          debugPrint(
-            '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats from cache (fast)',
-          );
-        }
-      }
-
-      // Parse remaining (also fast — no decryption)
-      if (remainingBatch.isNotEmpty) {
-        final remainingChats = await _parseChatRowsBatch(remainingBatch);
-        for (final chat in remainingChats) {
-          if (chat != null) {
-            ChatStorageState.chatsById[chat.id] = chat;
-          }
-        }
-        ChatStorageState.notifyChanges();
-      }
+      ChatStorageState.notifyChanges();
 
       if (kDebugMode) {
         debugPrint(
-          '✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache',
+          '⚡ [ChatStorage] ${ChatStorageState.chatsById.length} chats from '
+          'cache metadata',
         );
       }
     } catch (e) {
@@ -478,50 +451,26 @@ class ChatStorageCrud {
     }
   }
 
-  /// Parse plaintext cache rows into StoredChat objects (no decryption needed).
-  /// Uses a single isolate for batch JSON parsing.
-  static Future<List<StoredChat?>> _parseChatRowsBatch(
-    List<Map<String, dynamic>> rows,
-  ) async {
-    if (rows.isEmpty) return [];
+  /// Build a sidebar entry (no messages) from a cache metadata row.
+  ///
+  /// Returns null for a row without a usable id or timestamp rather than
+  /// throwing — one broken row must not take down the whole sidebar.
+  static StoredChat? _sidebarChatFromCacheRow(Map<String, dynamic> row) {
+    final id = row['id'];
+    if (id is! String || id.isEmpty) return null;
 
-    final results = List<StoredChat?>.filled(rows.length, null);
+    final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
+    if (createdAt == null) return null;
 
-    // Collect valid payloads for batch processing
-    final payloads = <String>[];
-    final validIndices = <int>[];
+    final updatedRaw = row['updated_at'];
 
-    for (int i = 0; i < rows.length; i++) {
-      final payload = rows[i]['payload'] as String?;
-      if (payload != null && payload.isNotEmpty) {
-        payloads.add(payload);
-        validIndices.add(i);
-      }
-    }
-
-    if (payloads.isEmpty) return results;
-
-    // Single isolate for all JSON parsing
-    final chatPayloads = await deserializePayloadBatchAsync(payloads);
-
-    for (int j = 0; j < validIndices.length; j++) {
-      final chatPayload = chatPayloads[j];
-      if (chatPayload == null) continue;
-
-      final i = validIndices[j];
-      final resolvedTitle = _resolveStoredTitle(
-        messages: chatPayload.messages,
-        customName: chatPayload.customName,
-      );
-      results[i] = StoredChat.fromRow(
-        rows[i],
-        chatPayload.messages,
-        customName: chatPayload.customName,
-        title: resolvedTitle,
-      );
-    }
-
-    return results;
+    return StoredChat.forSidebar(
+      id: id,
+      createdAt: createdAt,
+      isStarred: (row['is_starred'] as bool?) ?? false,
+      title: row['title'] as String?,
+      updatedAt: updatedRaw is String ? DateTime.tryParse(updatedRaw) : null,
+    );
   }
 
   /// Batch decrypt multiple Supabase chat rows in a single isolate.
@@ -637,7 +586,7 @@ class ChatStorageCrud {
 
           // Fall back to cache (plaintext)
           try {
-            rows = await LocalChatCacheService.load(user.id);
+            rows = await LocalChatCacheService.loadMeta(user.id);
             loadedFromCache = true;
             if (kDebugMode) {
               debugPrint(
@@ -658,7 +607,7 @@ class ChatStorageCrud {
           debugPrint('🌐 [ChatStorage] Network status: OFFLINE');
         }
         try {
-          rows = await LocalChatCacheService.load(user.id);
+          rows = await LocalChatCacheService.loadMeta(user.id);
           loadedFromCache = true;
           if (kDebugMode) {
             debugPrint(
@@ -676,16 +625,43 @@ class ChatStorageCrud {
       // Clear and rebuild the chats map
       ChatStorageState.chatsById.clear();
 
+      // Cache rows are metadata only: build sidebar entries and let each
+      // chat hydrate from the cache when it is opened.
+      if (loadedFromCache) {
+        for (final row in rows) {
+          final chat = _sidebarChatFromCacheRow(row);
+          if (chat != null) {
+            ChatStorageState.chatsById[chat.id] = chat;
+          }
+        }
+        ChatStorageState.notifyChanges();
+        if (kDebugMode) {
+          debugPrint(
+            '⚡ [ChatStorage] ${ChatStorageState.chatsById.length} chats from '
+            'cache metadata',
+          );
+        }
+        if (remoteError != null) {
+          if (kDebugMode) {
+            debugPrint(
+              'ChatStorageService loaded chats from offline cache: '
+              '$remoteError',
+            );
+            if (remoteStack != null) {
+              debugPrint('Stack trace: $remoteStack');
+            }
+          }
+        }
+        return;
+      }
+
       // Progressive loading: decrypt first batch immediately for fast UI,
       // then decrypt remaining chats in background
       const int firstBatchSize = 15;
       final firstBatch = rows.take(firstBatchSize).toList();
       final remainingBatch = rows.skip(firstBatchSize).toList();
 
-      // Use appropriate parser: cache rows are plaintext, Supabase rows need decryption
-      final firstChats = loadedFromCache
-          ? await _parseChatRowsBatch(firstBatch)
-          : await _decryptChatRowsBatch(firstBatch);
+      final firstChats = await _decryptChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
         if (chat != null) {
           ChatStorageState.chatsById[chat.id] = chat;
@@ -709,9 +685,7 @@ class ChatStorageCrud {
             '🔄 [ChatStorage] Processing ${remainingBatch.length} more chats in background...',
           );
         }
-        final remainingChats = loadedFromCache
-            ? await _parseChatRowsBatch(remainingBatch)
-            : await _decryptChatRowsBatch(remainingBatch);
+        final remainingChats = await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
             ChatStorageState.chatsById[chat.id] = chat;
@@ -742,7 +716,11 @@ class ChatStorageCrud {
         }
         for (final entry in ChatStorageState.chatsById.entries) {
           final chat = entry.value;
-          final firstUserMsg = chat.messages
+          // Sidebar entries carry no messages — reading `messages` on one
+          // throws, so skip them instead of taking down a debug build.
+          final loadedMessages = chat.messagesOrNull;
+          if (loadedMessages == null) continue;
+          final firstUserMsg = loadedMessages
               .where((m) => m.role == 'user')
               .firstOrNull;
           final title = (firstUserMsg?.text.length ?? 0) > 40
@@ -750,7 +728,8 @@ class ChatStorageCrud {
               : (firstUserMsg?.text ?? 'No user message');
           if (kDebugMode) {
             debugPrint(
-              '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)',
+              '   - ${entry.key.substring(0, 8)}... : "$title" '
+              '(${loadedMessages.length} msgs)',
             );
           }
         }

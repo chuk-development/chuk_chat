@@ -5,10 +5,16 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/chat_cache_search_text.dart';
+
 class LocalChatCacheService {
   static const String _storageKeyPrefix = 'cached_chats_v2-';
 
   const LocalChatCacheService._();
+
+  /// No-op on web: the cache lives in SharedPreferences and holds no
+  /// handle. Exists so both implementations expose the same API.
+  static Future<void> debugReset() async {}
 
   // ─── Generic KV cache ──────────────────────────────────────────────
 
@@ -100,8 +106,19 @@ class LocalChatCacheService {
     await _persist(userId, chats);
   }
 
-  static Future<List<Map<String, dynamic>>> load(String userId) async {
-    return _loadChats(userId);
+  /// Load cached chats without their payloads.
+  ///
+  /// Web keeps the cache in SharedPreferences and must decode the whole
+  /// blob anyway, so this only strips the payload from the result. It
+  /// exists to match the native API, where dropping the column is what
+  /// keeps startup off the platform-channel size limit.
+  static Future<List<Map<String, dynamic>>> loadMeta(String userId) async {
+    final chats = await _loadChats(userId);
+    return chats.map((chat) {
+      final meta = Map<String, dynamic>.from(chat);
+      meta.remove('payload');
+      return meta;
+    }).toList(growable: false);
   }
 
   /// Count cached chats for one user.
@@ -124,7 +141,12 @@ class LocalChatCacheService {
     return null;
   }
 
-  /// Case-insensitive search over title + plaintext payload.
+  /// Case-insensitive search over chat title and message text.
+  ///
+  /// Matches the same field set as the native cache — see
+  /// [buildChatSearchText]. Both back one public API, so a query has to
+  /// return the same chats on web as it does on the desktop and mobile
+  /// builds.
   static Future<List<Map<String, dynamic>>> search(
     String userId,
     String query, {
@@ -137,8 +159,11 @@ class LocalChatCacheService {
     final filtered = chats
         .where((chat) {
           final title = (chat['title'] as String? ?? '').toLowerCase();
-          final payload = (chat['payload'] as String? ?? '').toLowerCase();
-          return title.contains(trimmed) || payload.contains(trimmed);
+          if (title.contains(trimmed)) return true;
+          final payload = chat['payload'] as String?;
+          if (payload == null) return false;
+          final searchText = buildChatSearchText(payload);
+          return searchText != null && searchText.contains(trimmed);
         })
         .toList(growable: false);
 

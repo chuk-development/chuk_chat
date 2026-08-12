@@ -1778,12 +1778,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 builder: (context) {
                   final Color accent = Theme.of(context).colorScheme.primary;
                   final Color bg = Theme.of(context).scaffoldBackgroundColor;
-                  // The composer's real height is reserved via the list's
-                  // Positioned `bottom: inputAreaTotalHeight`, and streaming now
-                  // actively follows tokens via pinToBottomDuringStream, so the
-                  // old streaming slack is no longer needed (it only added a big
-                  // empty gap above the composer mid-stream). Keep a small lift.
-                  final double messageListBottomPadding = _kMessageListBottomLift;
+                  // The composer's height is reserved as list *padding*, not by
+                  // shortening the viewport. Ending the viewport above the
+                  // composer cut the last line in half against a hard edge —
+                  // the strip of background between the clipped text and the
+                  // composer's rounded top. With a full-height viewport the
+                  // content scrolls behind the composer and disappears under
+                  // its rounded corners, and the padding still lets every
+                  // message scroll clear of it.
+                  final double messageListBottomPadding =
+                      inputAreaTotalHeight + _kMessageListBottomLift;
 
                   return Stack(
                     children: [
@@ -1855,7 +1859,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             'desktop-chat-message-list',
                           ),
                           top: 0,
-                          bottom: inputAreaTotalHeight,
+                          bottom: 0,
                           left: 0,
                           right: 0,
                           child: Padding(
