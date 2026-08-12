@@ -38,6 +38,7 @@ import 'package:cowork/services/cowork/cowork_frame_codec.dart';
 import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/executor_provisioning.dart';
 import 'package:cowork/services/websocket_connector.dart' as ws_connector;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// A minimal duplex socket seam: an inbound stream of text frames and a way to
 /// send text. Injected so the relay client can run against a fake in tests.
@@ -57,19 +58,28 @@ abstract interface class RelaySocket {
 /// tests inject one that returns a fake.
 typedef RelaySocketConnector = Future<RelaySocket> Function(Uri url);
 
-/// Production connector: a real (optionally certificate-pinned) WebSocket.
+/// Production connector.
+///
+/// Certificate pinning is meaningful only for TLS (`wss://`) to our own
+/// backend; the CoWork host runs on a plain `ws://` (localhost / LAN), which
+/// has no certificate to pin. Using the pinned client for a plain `ws://`
+/// breaks the connection in release builds (the socket drops mid-pairing), so
+/// we branch: pinned connector for `wss://`, a plain WebSocket for `ws://`.
 Future<RelaySocket> defaultRelaySocketConnector(Uri url) async {
-  final channel = await ws_connector.connectWebSocket(url);
+  final WebSocketChannel channel = url.scheme == 'wss'
+      ? await ws_connector.connectWebSocket(url)
+      : WebSocketChannel.connect(url);
+  await channel.ready;
   return _WebSocketRelaySocket(channel);
 }
 
 class _WebSocketRelaySocket implements RelaySocket {
   _WebSocketRelaySocket(this._channel);
 
-  final dynamic _channel; // WebSocketChannel
+  final WebSocketChannel _channel;
 
   @override
-  Stream<dynamic> get incoming => _channel.stream as Stream<dynamic>;
+  Stream<dynamic> get incoming => _channel.stream;
 
   @override
   void send(String data) => _channel.sink.add(data);
