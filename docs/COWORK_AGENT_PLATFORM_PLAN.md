@@ -326,6 +326,37 @@ reverted by git. The undo UI must say so rather than imply total rollback.
 Open: commit granularity (per-action vs per-round), gitignore-vs-lfs policy, and
 how far "undo" is presented given irreversible external side effects. (§20)
 
+### 7.8 Interactive terminal (TUIs, menus, prompts)
+
+**Problem — a known agent limitation, and a current Claude Code limitation.** The
+fast path (one-shot `bash -c cmd` + snapshot file, §6) cannot drive
+**interactive** terminal programs. A command that opens a menu, a prompt, a TUI,
+a REPL, or an installer that asks questions will hang or fail — there is no TTY
+the agent can navigate and no way to read the on-screen menu. Hermes has the same
+limitation (no long-lived interactive shell); we go beyond it.
+
+**Design — a persistent interactive terminal per agent, alongside the one-shot
+tool:**
+- Backed by **tmux** inside the sandbox (or a raw PTY + a VT100 screen emulator
+  like `pyte`), so a session **persists across tool calls and loop rounds** —
+  "stay in the session."
+- `terminal_send_keys(keys)` — literal text or named keys (Enter, arrows, Tab,
+  Escape, C-c, …), so the agent can navigate a menu, answer a prompt, or type
+  into a REPL.
+- `terminal_read()` — **capture the current rendered screen** (`tmux
+  capture-pane`), so the agent *sees* the menu/prompt/cursor as text and picks
+  the next keystroke — the text analogue of looking at the screen.
+- optional `terminal_wait` (idle/pattern) to avoid racing a slow redraw.
+- Handles: interactive installers, `sudo`/password prompts, ncurses menus,
+  `git rebase -i`, package-manager prompts, vim/nano, python/node REPLs, ssh
+  sessions, long-running foreground processes.
+
+**Division of labour:** the **one-shot command tool** for scripted work (default,
+fast, snapshot-file model, §6); the **interactive terminal** only when a program
+needs navigation. The agent chooses. Interactive actions (keystrokes + captured
+screens) are journaled to the git action-log (§7.7) too. Open: tmux vs PTY+pyte
+as the backing mechanism (§20).
+
 ---
 
 ## 8. Capability model — structured tools, not a machine to drive
@@ -647,6 +678,7 @@ Where we win:
   shape.
 - Own thin loop vs a graph framework for multi-agent (leaning: own thin loop).
 - Manager as FastAPI vs a bare async process.
+- Interactive terminal backing (§7.8): tmux vs PTY + a `pyte` screen emulator.
 
 ---
 
