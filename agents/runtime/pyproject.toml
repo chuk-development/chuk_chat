@@ -24,3 +24,6 @@ packages = ["src/cowork_agent"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "live: hits the real account and spends credits; skipped unless the live env vars are set",
+]
