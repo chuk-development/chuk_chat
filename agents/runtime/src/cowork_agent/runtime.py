@@ -7,6 +7,7 @@ sandbox ``Environment`` for production.
 
 from __future__ import annotations
 
+from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .loop import AgentLoop, IterationBudget, KillSwitch
 from .model import ModelClient
@@ -27,12 +28,22 @@ def build_runtime(
     system_prompt: str | None = None,
     workspace: str | None = None,
     include_tool_docs: bool = True,
+    context_ladder: bool = True,
+    context_config: LadderConfig | None = None,
+    aux_model: ModelClient | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
     are prepended from :mod:`cowork_agent.prompt`, so a tool can never be
     registered without being documented to the model. Pass
-    ``include_tool_docs=False`` to use ``system_prompt`` verbatim (tests)."""
+    ``include_tool_docs=False`` to use ``system_prompt`` verbatim (tests).
+
+    The context ladder (§7.3) is **on by default**. Without ``aux_model`` it runs
+    tier 1 only — deterministic dedup/truncation, no LLM call, no spend — which
+    is the tier that reclaims most of the waste anyway. Pass a cheap
+    ``aux_model`` to enable the tier-2/3 summary of the middle, or
+    ``context_ladder=False`` to send the raw history.
+    """
     env = environment or LocalEnvironment()
     registry = ToolRegistry()
     register_builtin_tools(registry, env)
@@ -43,6 +54,13 @@ def build_runtime(
         else system_prompt
     )
 
+    ladder: ContextLadder | None = None
+    if context_ladder:
+        ladder = ContextLadder(
+            config=context_config or LadderConfig(),
+            summarizer=AuxSummarizer(aux_model) if aux_model is not None else None,
+        )
+
     store = StateStore(db_path)
     return AgentLoop(
         model,
@@ -52,4 +70,5 @@ def build_runtime(
         budget=IterationBudget(budget if budget is not None else max_iterations),
         kill_switch=KillSwitch(estop_path),
         system_prompt=prompt,
+        context_ladder=ladder,
     )
