@@ -434,6 +434,16 @@ toolset ships preinstalled so the agent has tools ready without a cold install.
     itself created),
   - a **read-before-write guard** (may only patch content it actually read).
   - Trigger: a tool-iteration interval (default 10).
+- **User-gated skill creation from a demonstration or completed task.** Beyond
+  the autonomous fork, the agent turns a task into a skill **with the user in the
+  loop** — the flow the xAI/Grok bot popularised, fed by our video onboarding
+  (§4). You show or ask for a task; from the recording, or when the task is done,
+  the agent **proactively asks "shall I save this as a skill?"**. On yes it writes
+  a `SKILL.md` that describes the procedure exactly, which becomes reusable and
+  directly executable next time. So there are **two paths to a skill** — autonomous
+  (background-review) and explicit user-confirmed — producing the same `SKILL.md`.
+  This is table-stakes parity (competitors ship it) and cheap for us because the
+  skill machinery already exists.
 
 ---
 
