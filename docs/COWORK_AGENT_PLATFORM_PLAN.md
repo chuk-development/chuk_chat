@@ -357,6 +357,46 @@ needs navigation. The agent chooses. Interactive actions (keystrokes + captured
 screens) are journaled to the git action-log (§7.7) too. Open: tmux vs PTY+pyte
 as the backing mechanism (§20).
 
+**Token cost & lifecycle — where tmux gets expensive if naive:**
+- **Bounded capture:** read only the **visible viewport** (bounded rows × cols),
+  never the full scrollback; trim trailing blank lines.
+- **Diff reads:** send only the **screen delta** since the last capture (the same
+  hash-diff idea as the cron monitor, §13) — "no change" when idle, changed lines
+  only when a menu updates. The big saver for redraw-heavy TUIs.
+- **Read on demand:** capture only after a keystroke that likely changed the
+  screen, not blindly every round.
+- **The context ladder does the rest:** captures are tool results, so §7.3's
+  deterministic dedup/truncate evicts old and duplicate screens automatically —
+  §7.8 and §7.3 compose.
+- **Lifecycle = fresh per task, close on done.** Terminals are **named and
+  task-scoped** (like the task_id-scoped container/subagent model, §7.6).
+  Default: a new task gets a **fresh terminal** (clean slate — no leftover
+  processes, no stuck TUI, no stale cwd); the agent **closes it when done** and an
+  **idle reaper** kills abandoned ones. Reuse the same terminal only when a task
+  **explicitly continues** a prior interactive session. Closing terminals also
+  bounds context, since their old captures leave and get compacted.
+
+### 7.9 Token efficiency (cross-cutting)
+
+Token cost is a first-class constraint everywhere, not an afterthought. The levers
+in this plan, in one place:
+- **Tool Search progressive disclosure** (§7.2) — defer rarely-used/MCP tools
+  behind three bridge tools.
+- **Cost-tiered context ladder** (§7.3) — deterministic dedup/truncate, then a
+  cheap-aux-model summary of the middle. The core long-run lever.
+- **Frozen-snapshot memory** (§12) — mid-session writes don't mutate the prompt,
+  preserving the prefix cache all session.
+- **Skills on demand** (§11) — only name + description in the always-on prompt;
+  bodies load when used.
+- **Cron cost modes** (§13) — `no_agent` (zero tokens) + hash-diff monitor (wake
+  the LLM only on change).
+- **Interactive terminal** (§7.8) — bounded viewport, diff-only reads, task-scoped
+  teardown.
+- **API-first over browser** (§8) — an API call is far fewer/cleaner tokens than
+  scraping a rendered page.
+- **General discipline:** read on demand, bound every tool output, diff instead of
+  re-dumping, defer/evict anything not needed this round.
+
 ---
 
 ## 8. Capability model — structured tools, not a machine to drive
