@@ -51,6 +51,18 @@ from .pairing import (
     derive_sas,
     transcript,
 )
+from .reconnect import (
+    RECONNECT_I_LABEL,
+    RECONNECT_J_LABEL,
+    RECONNECT_NONCE_LENGTH,
+    ReconnectError,
+    ReconnectHandshake,
+    ReconnectRejection,
+    ReconnectRole,
+    ReconnectState,
+    reconnect_signed_bytes,
+    reconnect_transcript,
+)
 from .replay_guard import DEFAULT_WINDOW_MS, ReplayGuard
 from .sealer import CoworkFrameOpener, CoworkFrameSealer, open, seal
 
@@ -83,6 +95,14 @@ __all__ = [
     "PairingRejection",
     "PairingRole",
     "PairingState",
+    "RECONNECT_I_LABEL",
+    "RECONNECT_J_LABEL",
+    "RECONNECT_NONCE_LENGTH",
+    "ReconnectError",
+    "ReconnectHandshake",
+    "ReconnectRejection",
+    "ReconnectRole",
+    "ReconnectState",
     "ReplayGuard",
     "SAS_LABEL",
     "SEED_LENGTH",
@@ -97,6 +117,8 @@ __all__ = [
     "generate_x25519_keypair",
     "open",
     "public_key_from_base64",
+    "reconnect_signed_bytes",
+    "reconnect_transcript",
     "seal",
     "transcript",
 ]

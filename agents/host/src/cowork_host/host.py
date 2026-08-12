@@ -19,13 +19,20 @@ from pathlib import Path
 from typing import Callable
 
 from cowork_agent import DEFAULT_MODEL_ID, SupabaseSession
-from cowork_crypto import CoworkFrameOpener, CoworkFrameSealer, Pairing
+from cowork_crypto import (
+    ApprovedDevices,
+    CoworkFrameOpener,
+    CoworkFrameSealer,
+    Pairing,
+    ReconnectHandshake,
+)
 from cowork_manager import Agent, RosterStore
 from cowork_sandbox import make_environment
 
 from cowork_executor import ModelFactory, resolve_backend_model_factory
 
-from .identity import HOST_DEVICE_ID, load_or_create_identity
+from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
+from .pairing_store import HostPairingStore, HostTrust
 from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
@@ -78,6 +85,22 @@ class LocalHost:
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
         self._device_id = HOST_DEVICE_ID
 
+        # Persistent trust: after the first §15 pairing this file holds the stable
+        # channel, the channel key and the app's approved device key, so every
+        # later connection reconnects with no code.
+        self._store = HostPairingStore(self._workspace / "paired.json")
+        self._trust: HostTrust | None = self._store.load()
+
+        # The channel id is STABLE across restarts: an explicit override wins (for
+        # tests), else the stored pairing's channel, else a deterministic value
+        # derived from the host's long-term key. A stable channel is what lets the
+        # app find this same host again after either side restarts.
+        resolved_channel_id = (
+            channel_id
+            or (self._trust.channel_id if self._trust is not None else None)
+            or derive_channel_id(self._identity)
+        )
+
         # The printed pairing code is STABLE for the host's lifetime: the same
         # channel id + digits are shown once and reused for every connection. A
         # throwaway session normalises and validates them (and generates random
@@ -86,7 +109,7 @@ class LocalHost:
             device_id=self._device_id,
             device_identity=self._identity,
             sas_digits=sas_digits,
-            channel_id=channel_id,
+            channel_id=resolved_channel_id,
             digits=digits,
         )
         self._sas_digits = sas_digits
@@ -111,6 +134,55 @@ class LocalHost:
             channel_id=self._channel_id,
             digits=self._digits,
         )
+
+    def _reconnect_factory(
+        self,
+    ) -> tuple[ReconnectHandshake, bytes, ApprovedDevices] | None:
+        """Mint a fresh reconnect initiator from the stored trust, or ``None`` when
+        no pairing is stored (so the party pairs from a code instead)."""
+        trust = self._trust
+        if trust is None:
+            return None
+        handshake = ReconnectHandshake.initiator(
+            device_id=self._device_id,
+            device_identity=self._identity,
+            peer_device_id=trust.peer_device_id,
+            peer_public_key=trust.peer_public_key,
+            channel_id=self._channel_id,
+        )
+        return handshake, trust.channel_key, trust.approved_devices()
+
+    def _persist_pairing(self, pairing: Pairing) -> None:
+        """Store the trust record from a freshly completed pairing so the next
+        connection reconnects with no code. Also flips this host into reconnect
+        mode in-process, for the very next controller."""
+        peer_device_id = pairing.peer_device_id
+        if peer_device_id is None:
+            return
+        peer_public_key = pairing.approved_devices.lookup(peer_device_id)
+        if peer_public_key is None:
+            return
+        trust = HostTrust(
+            channel_id=self._channel_id,
+            channel_key=pairing.channel_key,
+            peer_device_id=peer_device_id,
+            peer_public_key=peer_public_key,
+        )
+        self._store.save(trust)
+        self._trust = trust
+        self._log("pairing persisted; future connections reconnect with no code")
+
+    @property
+    def has_stored_pairing(self) -> bool:
+        """True when a trust record exists, so the host reconnects (no code)."""
+        return self._trust is not None
+
+    def forget_pairing(self) -> bool:
+        """Delete the stored trust — the host will require a fresh code again.
+        Returns True if a record was removed."""
+        removed = self._store.clear()
+        self._trust = None
+        return removed
 
     def _on_peer_event(self, channel: str, role: str, event: str, token: int) -> None:
         """Relay callback: route controller join/leave to the party so it can
@@ -172,6 +244,8 @@ class LocalHost:
             controller_token=lambda: self._relay.current_peer_token(
                 self._channel_id, ROLE_CONTROLLER
             ),
+            reconnect_factory=self._reconnect_factory,
+            on_pair_established=self._persist_pairing,
         )
         self._party.start()
 

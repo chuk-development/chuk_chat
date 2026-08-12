@@ -8,6 +8,7 @@ import 'package:cowork/pages/login_page.dart';
 import 'package:cowork/pages/messenger_shell.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 
 /// Auth service that always fails, so the login test can exercise the error
@@ -43,6 +44,21 @@ class _FakeSessionSource implements AccountSessionSource {
   );
 }
 
+/// In-memory secure backend so the shell's store never touches a platform
+/// channel in the test.
+class _MemoryStore implements CoworkSecureKeyValueStore {
+  final Map<String, String> map = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => map[key];
+
+  @override
+  Future<void> write(String key, String value) async => map[key] = value;
+
+  @override
+  Future<void> delete(String key) async => map.remove(key);
+}
+
 /// Minimal relay controller so the shell can be pumped without a socket.
 class _IdleRelayController implements CoworkRelayController {
   final ValueNotifier<CoworkRelayState> _state =
@@ -63,6 +79,15 @@ class _IdleRelayController implements CoworkRelayController {
     required Uri hostUrl,
     required String pairingCode,
   }) async {}
+
+  @override
+  Future<void> reconnect({
+    required Uri hostUrl,
+    required CoworkStoredPairing pairing,
+  }) async {}
+
+  @override
+  CoworkStoredPairing? get establishedTrust => null;
 
   @override
   Future<void> provisionAccount(AccountSession session) async {}
@@ -109,6 +134,7 @@ void main() {
           home: MessengerShell(
             relayControllerBuilder: () async => _IdleRelayController(),
             sessionSource: const _FakeSessionSource(),
+            pairingStore: CoworkPairingStore(backend: _MemoryStore()),
           ),
         ),
       );

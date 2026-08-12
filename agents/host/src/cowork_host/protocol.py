@@ -50,6 +50,13 @@ STEP_CONFIRM_C = "confirm-c"
 STEP_DEVICE_D = "device-d"  # the joiner's (app's) device key
 STEP_DEVICE_C = "device-c"  # the initiator's (host's) device key
 
+# Reconnect handshake steps (code-free resume of an already-paired session).
+# ``hello``/``confirm`` are sent by the initiator (host); ``response`` by the
+# joiner (app). The envelope ``step`` mirrors each message's own ``type``.
+STEP_RECONNECT_HELLO = "reconnect-hello"
+STEP_RECONNECT_RESPONSE = "reconnect-response"
+STEP_RECONNECT_CONFIRM = "reconnect-confirm"
+
 
 def join_message(channel: str, role: str) -> dict[str, Any]:
     """Build the join message a party sends first on a fresh connection."""
