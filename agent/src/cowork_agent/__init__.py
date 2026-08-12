@@ -32,12 +32,20 @@ from .model import (
     parse_openai_response,
     response_from_content,
 )
+from .prompt import (
+    BASE_INSTRUCTIONS,
+    TOOL_PROTOCOL,
+    build_system_prompt,
+    render_tool_docs,
+)
 from .registry import ToolRegistry, ToolSpec
 from .runtime import build_runtime
 from .state import Message, StateStore
-from .tools import register_run_command
+from .tools import register_builtin_tools, register_file_tools, register_run_command
 
 __all__ = [
+    "BASE_INSTRUCTIONS",
+    "TOOL_PROTOCOL",
     "AgentLoop",
     "BackendModelClient",
     "BackendModelError",
@@ -63,11 +71,15 @@ __all__ = [
     "ToolRegistry",
     "ToolSpec",
     "build_runtime",
+    "build_system_prompt",
     "extract_tool_calls",
     "fetch_models_info",
     "login",
     "parse_openai_response",
+    "register_builtin_tools",
+    "register_file_tools",
     "register_run_command",
+    "render_tool_docs",
     "resolve_model",
     "response_from_content",
 ]

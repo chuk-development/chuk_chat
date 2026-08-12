@@ -260,4 +260,5 @@ class LocalHost:
             db_path=self._db_path,
             send_frame=party.send_result_frame,
             system_prompt=self._agent.persona or DEFAULT_SYSTEM_PROMPT,
+            workspace=self._agent.workspace_dir or None,
         )

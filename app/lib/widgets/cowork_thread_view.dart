@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/widgets/agent_markdown.dart';
 
 /// The CoWork chat surface: one scrolling conversation with the agent running
 /// on the user's own host.
@@ -465,7 +466,10 @@ class _AssistantEntry extends _ThreadEntry {
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8, right: 40),
-        child: Text(text.isEmpty ? '…' : text),
+        width: double.infinity,
+        // The agent answers in Markdown; a half-streamed reply is still valid
+        // Markdown, so it renders the same on every delta.
+        child: text.isEmpty ? const Text('…') : AgentMarkdown(text),
       ),
     );
   }
