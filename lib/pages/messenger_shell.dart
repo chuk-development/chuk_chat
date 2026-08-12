@@ -1,20 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/services/cowork/cowork_device_keys.dart';
+import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/models_service.dart';
+import 'package:cowork/widgets/cowork_thread_view.dart';
+
+/// Builds the default production relay controller: a real [CoworkRelayClient]
+/// with a freshly generated device signing key and id. Persisting that key
+/// across launches is a later milestone; a fresh identity per session is fine
+/// for a local run.
+Future<CoworkRelayController> _defaultRelayControllerBuilder() async {
+  final keyPair = await CoworkDeviceKeys.generate();
+  return CoworkRelayClient(
+    deviceId: const Uuid().v4(),
+    signingKeyPair: keyPair,
+  );
+}
 
 /// Skeletal messenger layout: an account panel on the left (which proves the
 /// captured session token works by listing the account's models) and a thread
-/// view on the right. The real roster and streaming run come with the executor
-/// milestones.
+/// view on the right — the connect/pair/task control surface.
 class MessengerShell extends StatefulWidget {
-  const MessengerShell({super.key, this.modelsService});
+  const MessengerShell({
+    super.key,
+    this.modelsService,
+    this.relayControllerBuilder,
+    this.sessionSource = const SupabaseAccountSession(),
+  });
 
   /// Injectable so widget tests can supply a service backed by a mocked HTTP
   /// client instead of the live backend. Defaults to the real Supabase-backed
   /// service.
   final ModelsService? modelsService;
+
+  /// Builds the relay transport controller. Injectable so widget tests supply
+  /// a fake without a socket. Defaults to a real [CoworkRelayClient].
+  final Future<CoworkRelayController> Function()? relayControllerBuilder;
+
+  /// Account session provisioned to the executor once paired.
+  final AccountSessionSource sessionSource;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
@@ -61,7 +88,14 @@ class _MessengerShellState extends State<MessengerShell> {
             ),
           ),
           const VerticalDivider(width: 1),
-          const Expanded(child: _ThreadView()),
+          Expanded(
+            child: CoworkThreadView(
+              controllerBuilder:
+                  widget.relayControllerBuilder ??
+                  _defaultRelayControllerBuilder,
+              sessionSource: widget.sessionSource,
+            ),
+          ),
         ],
       ),
     );
@@ -153,16 +187,3 @@ class _AccountModelsPanel extends StatelessWidget {
   }
 }
 
-class _ThreadView extends StatelessWidget {
-  const _ThreadView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Select an agent to start a thread',
-        style: TextStyle(color: Theme.of(context).hintColor),
-      ),
-    );
-  }
-}
