@@ -222,3 +222,72 @@ def test_result_frames_are_sealed_and_authenticated(tmp_path):
     assert b"final_answer" not in sealed  # plaintext never on the wire
     with pytest.raises(CoworkFrameRejected):
         stranger.open(sealed)
+
+
+def _assert_ran(events: list[dict[str, Any]]) -> None:
+    types = [e["type"] for e in events]
+    assert types, "controller received no frames"
+    assert types[-1] == "done", f"stream did not end cleanly: {types}"
+    tools = [e for e in events if e["type"] == "tool"]
+    assert len(tools) == 1 and tools[0]["exit_code"] == 0
+
+
+def test_stress_every_connection_pairs_and_completes(tmp_path):
+    """One long-lived host, twenty fresh controllers back to back over the real
+    localhost relay. Each must pair from the stable code and run the task to a
+    clean ``done``. This is the regression net for the intermittent pairing
+    stall: a fresh initiator session is minted per connection, so 20/20 pass
+    deterministically instead of ~half stalling on a consumed one-shot session."""
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="stress-worker",
+        channel_id="stresschannel",
+        digits="428913",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        for i in range(20):
+            controller = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+            events = controller.run(
+                "run `echo hi > f.txt` then say done", timeout=15.0
+            )
+            assert events and events[-1]["type"] == "done", (
+                f"connection {i} did not pair+complete: {[e['type'] for e in events]}"
+            )
+            _assert_ran(events)
+    finally:
+        host.stop()
+
+
+def test_reconnect_after_a_dropped_attempt_still_pairs(tmp_path):
+    """A controller connects, takes the commit, then drops WITHOUT pairing. A new
+    controller on the same host must still pair cleanly — the stable code is
+    reused but a fresh, unconsumed, non-expired session is minted for it."""
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="reconnect-worker",
+        channel_id="reconnectchan",
+        digits="428913",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        # First controller: join, receive the host's commit, then vanish.
+        with connect(host.url, open_timeout=10.0) as ws:
+            ws.send(json.dumps(join_message(host.channel_id, "controller")))
+            first = json.loads(ws.recv(timeout=5.0))
+            assert first["type"] == "pairing"
+        time.sleep(0.2)  # let the host observe the drop and reset
+
+        # Second controller: a full, fresh pairing + task on the same host.
+        controller = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        events = controller.run("run `echo hi > f.txt` then say done", timeout=15.0)
+        assert events and events[-1]["type"] == "done", (
+            f"reconnect did not pair+complete: {[e['type'] for e in events]}"
+        )
+        _assert_ran(events)
+    finally:
+        host.stop()
