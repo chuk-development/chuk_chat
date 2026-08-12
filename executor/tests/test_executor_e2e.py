@@ -22,26 +22,20 @@ from cowork_executor import (
     ExecutorSupervisor,
     loopback_pair,
 )
-from cowork_agent import MockModelClient, ModelResponse, ToolCall
+from cowork_agent import MockModelClient
 
 from wiring import KEY_VERSION, paired_channel
 
 
 def _scripted_model() -> MockModelClient:
     """A fresh scripted model: first a run_command tool call, then a final answer.
-    Stands in for a real backend model — same shape a real one would produce."""
+    The tool call travels as a <tool_call> block in the assistant content — the
+    one wire format a real backend model produces."""
     return MockModelClient(
         [
-            ModelResponse(
-                tool_calls=[
-                    ToolCall(
-                        id="call-1",
-                        name="run_command",
-                        arguments={"command": "echo hello > f.txt"},
-                    )
-                ]
-            ),
-            ModelResponse(text="done"),
+            '<tool_call>{"name":"run_command",'
+            '"arguments":{"command":"echo hello > f.txt"}}</tool_call>',
+            "done",
         ]
     )
 

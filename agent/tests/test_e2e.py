@@ -4,9 +4,11 @@ The loop must execute the command via LocalEnvironment, append every message to
 SQLite, and return the final answer.
 """
 
+import json
+
 from cowork_agent.environment import LocalEnvironment
 from cowork_agent.loop import StopReason
-from cowork_agent.model import MockModelClient, ModelResponse, ToolCall
+from cowork_agent.model import MockModelClient
 from cowork_agent.runtime import build_runtime
 from cowork_agent.state import StateStore
 
@@ -15,24 +17,15 @@ def test_run_command_end_to_end(tmp_path):
     db = str(tmp_path / "run.db")
     marker = tmp_path / "made-by-agent.txt"
 
-    model = MockModelClient(
-        [
-            ModelResponse(
-                tool_calls=[
-                    ToolCall(
-                        id="c1",
-                        name="run_command",
-                        # stringy timeout to exercise coercion end-to-end
-                        arguments={
-                            "command": f"echo hello > {marker}",
-                            "timeout": "30",
-                        },
-                    )
-                ]
-            ),
-            ModelResponse(text="I created the file."),
-        ]
-    )
+    # The tool call travels as a <tool_call> block in the assistant content — the
+    # one wire format. A stringy timeout still exercises registry coercion.
+    run_call = "<tool_call>" + json.dumps(
+        {
+            "name": "run_command",
+            "arguments": {"command": f"echo hello > {marker}", "timeout": "30"},
+        }
+    ) + "</tool_call>"
+    model = MockModelClient([run_call, "I created the file."])
 
     loop = build_runtime(
         model,
@@ -69,16 +62,8 @@ def test_tool_error_is_captured_not_raised(tmp_path):
     # keeps going and still finishes cleanly.
     model = MockModelClient(
         [
-            ModelResponse(
-                tool_calls=[
-                    ToolCall(
-                        id="c1",
-                        name="run_command",
-                        arguments={"command": "exit 3"},
-                    )
-                ]
-            ),
-            ModelResponse(text="done anyway"),
+            '<tool_call>{"name":"run_command","arguments":{"command":"exit 3"}}</tool_call>',
+            "done anyway",
         ]
     )
     loop = build_runtime(model, db_path=str(tmp_path / "e.db"))
