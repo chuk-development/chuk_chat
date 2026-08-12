@@ -2027,19 +2027,43 @@ class _MessageBubbleState extends State<MessageBubble> {
     Widget? expandedWidget,
   }) {
     final bool cardExpanded = _expandedCards.contains(key);
+    final TextStyle expandedTextStyle = TextStyle(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+      fontSize: 12,
+      fontFamily: 'monospace',
+      height: 1.4,
+    );
 
-    return SelectionContainer.disabled(
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: accentColor.withValues(alpha: 0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
+    // With a shared SelectionArea the card body joins the one selection of the
+    // message list, so Ctrl+C copies it like any other message text. A nested
+    // SelectableText would be its own selection island instead — copyable only
+    // while it happens to hold the focus, which is why copying used to work for
+    // some blocks and not others. Without a shared area there is no outer
+    // region to join, so the island stays.
+    final Widget expandedBody =
+        expandedWidget ??
+        (widget.useSharedSelectionArea
+            ? Text(expandedContent, style: expandedTextStyle)
+            : SelectableText(expandedContent, style: expandedTextStyle));
+
+    final Widget expandedSection = Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: expandedBody,
+    );
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header chrome (label, preview, chevron) stays out of the selection.
+          SelectionContainer.disabled(
+            child: InkWell(
               onTap: () => setState(() {
                 if (_expandedCards.contains(key)) {
                   _expandedCards.remove(key);
@@ -2093,25 +2117,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
               ),
             ),
-            if (cardExpanded)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                child:
-                    expandedWidget ??
-                    SelectableText(
-                      expandedContent,
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                        height: 1.4,
-                      ),
-                    ),
-              ),
-          ],
-        ),
+          ),
+          if (cardExpanded)
+            widget.useSharedSelectionArea
+                ? expandedSection
+                : SelectionContainer.disabled(child: expandedSection),
+        ],
       ),
     );
   }
@@ -2623,6 +2634,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     final labelColor = colorScheme.onSurface.withValues(alpha: 0.7);
     final bodyColor = colorScheme.onSurface.withValues(alpha: 0.85);
 
+    // Same rule as _buildExpandableCard: with a shared SelectionArea the body
+    // is plain Text so it belongs to the one selection of the message list.
+    Widget bodyText(TextStyle style) => widget.useSharedSelectionArea
+        ? Text(body, style: style)
+        : SelectableText(body, style: style);
+
     final Widget bodyWidget = mono
         ? Container(
             width: double.infinity,
@@ -2635,9 +2652,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                 color: colorScheme.onSurface.withValues(alpha: 0.08),
               ),
             ),
-            child: SelectableText(
-              body,
-              style: TextStyle(
+            child: bodyText(
+              TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
                 height: 1.4,
@@ -2647,9 +2663,8 @@ class _MessageBubbleState extends State<MessageBubble> {
           )
         : Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: SelectableText(
-              body,
-              style: TextStyle(
+            child: bodyText(
+              TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
                 color: bodyColor,

@@ -143,20 +143,8 @@ class DesktopClipboardHandler {
 
   /// Reads the current clipboard text and, if it contains embedded base64 image
   /// data, replaces it with a sanitized version.
-  Future<void> sanitizeClipboardInPlace() async {
-    final clipData = await Clipboard.getData(Clipboard.kTextPlain);
-    final clipText = clipData?.text;
-    if (clipText == null || clipText.isEmpty) {
-      return;
-    }
-
-    if (!ClipboardTextSanitizer.containsImageData(clipText)) {
-      return;
-    }
-
-    final sanitized = ClipboardTextSanitizer.sanitize(clipText);
-    await Clipboard.setData(ClipboardData(text: sanitized));
-  }
+  Future<void> sanitizeClipboardInPlace() =>
+      ClipboardTextSanitizer.sanitizeClipboardInPlace();
 
   // ---------------------------------------------------------------------------
   // Smart paste (Ctrl+V)
