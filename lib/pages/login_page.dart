@@ -6,7 +6,11 @@ import 'package:cowork/services/auth_service.dart';
 /// and swaps to the messenger shell, so this screen has nothing to do after
 /// [AuthService.signInWithPassword] returns.
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.auth = const AuthService()});
+
+  /// The auth service used to sign in. Injectable so widget tests can supply
+  /// a fake that fails without a real Supabase backend.
+  final AuthService auth;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -16,7 +20,6 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _auth = const AuthService();
 
   bool _busy = false;
   String? _error;
@@ -35,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      await _auth.signInWithPassword(
+      await widget.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
