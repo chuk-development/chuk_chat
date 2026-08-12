@@ -24,6 +24,7 @@ import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
+import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -3210,7 +3211,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             constraints: BoxConstraints(
                               maxWidth: expandedInputWidth,
                             ),
-                            child: SelectionArea(
+                            child: SelectionCopyArea(
                               child: ListView.builder(
                                 controller: scrollController,
                                 padding: listPadding,

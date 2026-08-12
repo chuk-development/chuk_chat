@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/measure_size.dart';
+import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -144,6 +145,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late ChatApiService _chatApiService;
   late final FocusNode _textFieldFocusNode;
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
+
+  /// Focus of the message-list selection region. Held here so a pointer down on
+  /// the message list can hand the focus to the selection instead of leaving it
+  /// on the composer.
+  final FocusNode _messageSelectionFocusNode = FocusNode(
+    debugLabel: 'chat-message-selection',
+  );
 
   late AnimationController _animCtrl;
   String _selectedModelId = ''; // Will be loaded from user preferences
@@ -501,6 +509,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
+    _messageSelectionFocusNode.dispose();
     _animCtrl.dispose();
     unawaited(_audioHandler.dispose());
     _persistenceHandler.dispose();
@@ -1857,7 +1866,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 constraints: BoxConstraints(
                                   maxWidth: expandedInputWidth,
                                 ),
-                                child: SelectionArea(
+                                child: SelectionCopyArea(
+                                  focusNode: _messageSelectionFocusNode,
                                   contextMenuBuilder: _buildMessageContextMenu,
                                   // Listener (not GestureDetector) so this does
                                   // not enter the gesture arena. A competing tap
@@ -1867,9 +1877,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   child: Listener(
                                     behavior: HitTestBehavior.translucent,
                                     onPointerDown: (_) {
-                                      // Ensure keyboard shortcuts such as Ctrl+C
-                                      // target message selection instead of the composer.
-                                      FocusScope.of(context).unfocus();
+                                      // Move the focus to the selection region
+                                      // itself, so Flutter's own Ctrl+C path
+                                      // targets the messages instead of the
+                                      // composer. Plain `unfocus()` left the
+                                      // focus nowhere, which is exactly what
+                                      // broke copying. SelectionCopyArea copies
+                                      // even without focus — this is the second
+                                      // layer, not the only one.
+                                      _messageSelectionFocusNode.requestFocus();
                                     },
                                     // Re-evaluate the scroll-to-bottom button
                                     // when layout metrics change without a

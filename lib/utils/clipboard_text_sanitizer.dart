@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 class ClipboardTextSanitizer {
   const ClipboardTextSanitizer._();
 
@@ -41,5 +43,21 @@ class ClipboardTextSanitizer {
     );
 
     return sanitized;
+  }
+
+  /// Reads the current clipboard text and, if it contains embedded base64 image
+  /// data, writes a sanitized version back.
+  static Future<void> sanitizeClipboardInPlace() async {
+    final ClipboardData? clipData = await Clipboard.getData(
+      Clipboard.kTextPlain,
+    );
+    final String? clipText = clipData?.text;
+    if (clipText == null || clipText.isEmpty) {
+      return;
+    }
+    if (!containsImageData(clipText)) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: sanitize(clipText)));
   }
 }
