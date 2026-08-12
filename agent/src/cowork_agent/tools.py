@@ -11,6 +11,13 @@ filesystem path — a Docker sandbox stays a Docker sandbox.
   quotes, backticks and ``$`` in the content can never break the shell or be
   expanded by it. Models get shell heredocs wrong often enough that the file
   tools are what make "write me a script" actually land on disk.
+- ``web_search`` (:mod:`cowork_agent.web_search`) — search through our own
+  backend, so no provider key ever sits in the sandbox. Needs the account
+  session; without one it is not registered and not documented to the model.
+- ``web_fetch`` (:mod:`cowork_agent.web_fetch`) — read one page as Markdown,
+  locally, with the SSRF/size/type hardening that module documents.
+
+The web tools follow §8: an API call first, a browser only as a fallback.
 """
 
 from __future__ import annotations
@@ -18,8 +25,12 @@ from __future__ import annotations
 import base64
 import shlex
 
+import httpx
+
 from .environment import Environment
 from .registry import ToolRegistry
+from .web_fetch import Resolver, register_web_fetch
+from .web_search import DEFAULT_BASE_URL, TokenSession, register_web_search
 
 # The read cap. A tool result travels back into the prompt, so an unbounded read
 # would blow the context on one call.
@@ -186,7 +197,27 @@ def register_file_tools(registry: ToolRegistry, env: Environment) -> None:
     registry.register("list_dir", LIST_DIR_SCHEMA, make_list_dir_handler(env))
 
 
-def register_builtin_tools(registry: ToolRegistry, env: Environment) -> None:
-    """Register the whole built-in tool set against one environment."""
+def register_builtin_tools(
+    registry: ToolRegistry,
+    env: Environment,
+    *,
+    session: TokenSession | None = None,
+    base_url: str = DEFAULT_BASE_URL,
+    search_http_client: httpx.Client | None = None,
+    fetch_http_client: httpx.Client | None = None,
+    resolve: Resolver | None = None,
+) -> None:
+    """Register the whole built-in tool set against one environment.
+
+    ``session`` is the account session (:class:`~cowork_agent.backend.SupabaseSession`).
+    It is what pays for ``web_search``; leave it out and only the local tools
+    are registered. The two clients stay separate on purpose — one talks to our
+    backend, the other to whatever host the model picked. ``*_http_client`` and
+    ``resolve`` are the test injection points.
+    """
     register_run_command(registry, env)
     register_file_tools(registry, env)
+    register_web_search(
+        registry, session, base_url=base_url, http_client=search_http_client
+    )
+    register_web_fetch(registry, http_client=fetch_http_client, resolve=resolve)
