@@ -610,16 +610,56 @@ Borrowed from Hermes `cron/` (MIT):
 
 ---
 
-## 15. Pairing / `connect`
+## 15. Pairing / `connect` (secure, MITM-resistant)
 
-- **The account login is the authentication.** The host/agent connects to
-  `api.chuk.chat`, does a **device-login code flow** (so a headless server is
-  easy), gets an account token, and registers as an executor on the relay,
-  publishing an Ed25519 identity. It appears in the user's device list.
-- **The phone approves it locally** — client-side approval, the server never
-  holds an approval flag. Approval is also where the **channel-key ECDH** is
-  stamped (§14).
-- Exact flow and where the ECDH lands: open (§20).
+**Goal:** establish an E2E channel + mutual device trust between the desktop app
+(frontend, logged in) and the Python client, using a short human code, such that
+even a malicious relay/backend cannot MITM or spoof, and a stolen code cannot
+hijack the client.
+
+**Trust anchors already present:** both sides are logged into the **same
+account**; the relay routes only within the account (cross-account impossible);
+frames are Ed25519-signed + AES-GCM (§14). Pairing bootstraps the initial device
+trust **without trusting the relay/backend**.
+
+**Primitive — SAS-authenticated X25519 with a hash commitment** (the ZRTP /
+Signal-safety-number pattern), using only X25519 + HKDF-SHA256 + SHA-256 (present
+in both `cowork_crypto` (Python) and Dart `cryptography`). A PAKE (SPAKE2) was
+considered but has no maintained Dart implementation; SAS + commitment gives
+equivalent MITM resistance for a single-use short code and is buildable in both.
+
+**Flow:**
+1. **Client (Python)** starts a pairing session: ephemeral X25519 `(a, A)`, a
+   single-use **pairing code** `PC` = channel-id + 6–8 digits (or 3 words),
+   expiry ~2 min. Publishes a **commitment** `H(A)` to a pairing channel on the
+   relay. Displays `PC`.
+2. **User enters `PC`** into the desktop (already logged in). Desktop joins the
+   channel (by the id in `PC`), generates ephemeral `(b, B)`, sends `B`.
+3. Client reveals `A`; desktop checks `H(A) == commitment` — binds `A`, stops a
+   MITM from grinding `B` to hit a target SAS.
+4. Both derive `K = X25519(priv, peer_pub)` and transcript `T = A‖B` (canonical
+   order), then `SAS = trunc(HKDF(K, "cowork/pairing/sas", T ‖ PC))`. Folding
+   `PC` in binds the out-of-band human code to the exchange. **The E2E channel
+   now exists** (K) — before any confirmation is "sent".
+5. **Key confirmation (the "code returned"):** desktop sends
+   `MAC_d = HKDF(K, "cowork/pairing/confirm-d", T)`; client verifies
+   (constant-time). Client sends `MAC_c = …confirm-c…`; desktop verifies. A MITM
+   holds two different `K`s → MACs mismatch → **abort**.
+6. On success: `K` becomes the CoWork channel key (§14). Each side sends its
+   long-term Ed25519 **device pubkey** authenticated under `K`; each **locally
+   approves** the other (§8, default-deny). The pairing session is **single-use**
+   and expires.
+7. **Then** the desktop provisions the account session **token** (access+refresh,
+   from the frontend login, §16 seam) to the client over this now-authenticated
+   E2E channel — the client is authenticated in the account's name (token, never
+   credentials, revocable).
+
+**Security properties:** relay/backend MITM fails (commitment stops grinding,
+SAS/MAC mismatch → abort); a stolen code is single-use + short-lived + useless
+without live participation in the exchange; account-scoping blocks other
+accounts; constant-time compares throughout; the channel key comes from ECDH, not
+from the low-entropy code alone. Implemented in Python (client) + Dart (desktop)
+with shared cross-language test vectors and explicit MITM/abort tests.
 
 ---
 
