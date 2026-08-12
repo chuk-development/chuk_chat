@@ -94,11 +94,24 @@ def _print_banner(host: LocalHost) -> None:
     )
     print(f"    Device:    {host.device_id}", flush=True)
     print("", flush=True)
-    print(
-        f"  Open the CoWork app, Connect to  {host.url}  and enter code:  "
-        f"{host.pairing_code}",
-        flush=True,
-    )
+    if host.has_stored_pairing:
+        # Already paired: reconnect authenticates with the stored device keys —
+        # no code is printed, and the app auto-connects on its own.
+        print(
+            f"  Already paired. Waiting for the CoWork app to reconnect on  "
+            f"{host.url}  (no code needed).",
+            flush=True,
+        )
+        print(
+            "  To require a fresh code again, delete paired.json in the workspace.",
+            flush=True,
+        )
+    else:
+        print(
+            f"  Open the CoWork app, Connect to  {host.url}  and enter code:  "
+            f"{host.pairing_code}",
+            flush=True,
+        )
     print("", flush=True)
 
 

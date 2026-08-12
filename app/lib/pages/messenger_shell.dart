@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/cowork/cowork_device_keys.dart';
+import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 
 /// Builds the default production relay controller: a real [CoworkRelayClient]
-/// with a freshly generated device signing key and id. Persisting that key
-/// across launches is a later milestone; a fresh identity per session is fine
-/// for a local run.
-Future<CoworkRelayController> _defaultRelayControllerBuilder() async {
-  final keyPair = await CoworkDeviceKeys.generate();
+/// with the app's **stable** long-term device identity, loaded from (or created
+/// in) [store] on first use. A stable key is what lets the host's stored trust
+/// keep matching us across restarts, so the reconnect handshake authenticates
+/// with no code.
+Future<CoworkRelayController> _buildRelayController(
+  CoworkPairingStore store,
+) async {
+  final identity = await store.loadOrCreateIdentity();
   return CoworkRelayClient(
-    deviceId: const Uuid().v4(),
-    signingKeyPair: keyPair,
+    deviceId: identity.deviceId,
+    signingKeyPair: identity.keyPair,
   );
 }
 
@@ -25,18 +27,24 @@ Future<CoworkRelayController> _defaultRelayControllerBuilder() async {
 /// to the executor once paired), but nothing here fetches the account model
 /// list.
 class MessengerShell extends StatelessWidget {
-  const MessengerShell({
+  MessengerShell({
     super.key,
     this.relayControllerBuilder,
     this.sessionSource = const SupabaseAccountSession(),
-  });
+    CoworkPairingStore? pairingStore,
+  }) : pairingStore = pairingStore ?? CoworkPairingStore();
 
   /// Builds the relay transport controller. Injectable so widget tests supply
-  /// a fake without a socket. Defaults to a real [CoworkRelayClient].
+  /// a fake without a socket. Defaults to a real [CoworkRelayClient] with the
+  /// stable persisted identity.
   final Future<CoworkRelayController> Function()? relayControllerBuilder;
 
   /// Account session provisioned to the executor once paired.
   final AccountSessionSource sessionSource;
+
+  /// Persistent trust store: the stable device identity and the stored pairing
+  /// that drives code-free reconnect.
+  final CoworkPairingStore pairingStore;
 
   @override
   Widget build(BuildContext context) {
@@ -53,8 +61,9 @@ class MessengerShell extends StatelessWidget {
       ),
       body: CoworkThreadView(
         controllerBuilder:
-            relayControllerBuilder ?? _defaultRelayControllerBuilder,
+            relayControllerBuilder ?? () => _buildRelayController(pairingStore),
         sessionSource: sessionSource,
+        pairingStore: pairingStore,
       ),
     );
   }

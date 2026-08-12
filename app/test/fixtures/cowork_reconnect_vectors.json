@@ -1,0 +1,39 @@
+{
+  "_comment": "Cross-language reconnect vector. The Dart reconnect twin, fed these inputs, MUST reproduce every 'expected' value: the transcript RT=N_i||N_j (initiator nonce first), and both Ed25519 proofs signed over label||channel_id||RT with label=RECONNECT_I_LABEL (host) / RECONNECT_J_LABEL (app). Each side verifies the peer's proof against the STORED approved public key; an imposter without the peer's private key cannot forge a verifying proof.",
+  "labels": {
+    "proof_i": "cowork/reconnect/proof-i",
+    "proof_j": "cowork/reconnect/proof-j"
+  },
+  "inputs": {
+    "initiator_ed25519_seed_b64": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "joiner_ed25519_seed_b64": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8=",
+    "initiator_ed25519_public_b64": "Kay64UG8yvCyLhqU000LxzYeUm0L/hLIl5S8kyKWbdc=",
+    "joiner_ed25519_public_b64": "T9CZzNR9eJPf6ewkQU7LDZtUICMqrTDZHEZb4zy+ZcQ=",
+    "initiator_nonce_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+    "joiner_nonce_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
+    "initiator_device_id": "cowork-host",
+    "joiner_device_id": "desktop-flutter-01",
+    "channel_id": "cowork00deadbeef"
+  },
+  "expected": {
+    "transcript_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyBAQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eXw==",
+    "proof_i_b64": "smaVTN8y3cjk26iyKFz9qSyfk54YSa2kwdKvNChqIdzHJb/ncbAXoTbTfTh5M/hNisdHG5AlDGGvHeMzqf+WAQ==",
+    "proof_j_b64": "5JQJ2dxlfXF0/XeUaDf9a+jlTeDS9IF/oEt67QoicMeU1UtTWM4e7YGLgYN4RIFtUVMWrVY0pNsV4O5r6KNSAg==",
+    "hello_msg": {
+      "type": "reconnect-hello",
+      "channel_id": "cowork00deadbeef",
+      "device_id": "cowork-host",
+      "nonce": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+    },
+    "response_msg": {
+      "type": "reconnect-response",
+      "device_id": "desktop-flutter-01",
+      "nonce": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
+      "sig": "5JQJ2dxlfXF0/XeUaDf9a+jlTeDS9IF/oEt67QoicMeU1UtTWM4e7YGLgYN4RIFtUVMWrVY0pNsV4O5r6KNSAg=="
+    },
+    "confirm_msg": {
+      "type": "reconnect-confirm",
+      "sig": "smaVTN8y3cjk26iyKFz9qSyfk54YSa2kwdKvNChqIdzHJb/ncbAXoTbTfTh5M/hNisdHG5AlDGGvHeMzqf+WAQ=="
+    }
+  }
+}

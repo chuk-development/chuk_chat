@@ -20,11 +20,14 @@ from websockets.sync.client import connect
 
 from cowork_agent import MockModelClient
 from cowork_crypto import (
+    ApprovedDevices,
     CoworkFrameOpener,
     CoworkFrameSealer,
     DeviceIdentity,
     Pairing,
+    ReconnectHandshake,
 )
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from cowork_executor import frame_to_b64, task_payload
 from cowork_host import KEY_VERSION, LocalHost
@@ -32,12 +35,34 @@ from cowork_host.protocol import (
     STEP_CONFIRM_D,
     STEP_DEVICE_D,
     STEP_PUBKEY,
+    STEP_RECONNECT_RESPONSE,
     frame_envelope,
     join_message,
     pairing_envelope,
 )
 
 APP_DEVICE_ID = "cowork-app"
+
+
+class AppTrust:
+    """What the app persists after a first pairing, so it can reconnect with no
+    code: its own long-term identity, the host's device id + approved public key,
+    the stable channel id and the established channel key."""
+
+    def __init__(
+        self,
+        *,
+        identity: DeviceIdentity,
+        host_device_id: str,
+        host_public_key: Ed25519PublicKey,
+        channel_id: str,
+        channel_key: bytes,
+    ) -> None:
+        self.identity = identity
+        self.host_device_id = host_device_id
+        self.host_public_key = host_public_key
+        self.channel_id = channel_id
+        self.channel_key = channel_key
 
 
 def _scripted_model() -> MockModelClient:
@@ -53,20 +78,60 @@ def _scripted_model() -> MockModelClient:
 
 
 class ControllerDouble:
-    """Plays the CoWork app: joiner pairing, then a token + a task, over the relay."""
+    """Plays the CoWork app over the relay: either a first-time joiner pairing (a
+    code) or a code-free reconnect from a stored :class:`AppTrust`, then a token
+    + a task. After a fresh pairing it can hand back its own trust so the same
+    device can reconnect later."""
 
-    def __init__(self, url: str, channel_id: str, pairing_code: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        channel_id: str,
+        pairing_code: str | None = None,
+        *,
+        reconnect_trust: AppTrust | None = None,
+    ) -> None:
         self._url = url
         self._channel_id = channel_id
-        self._identity = DeviceIdentity.generate()
-        self._pairing = Pairing.joiner(
-            device_id=APP_DEVICE_ID,
-            device_identity=self._identity,
-            pairing_code=pairing_code,
-        )
+        self._reconnect_trust = reconnect_trust
+        if reconnect_trust is not None:
+            self._identity = reconnect_trust.identity
+            self._pairing = None
+            self._reconnect: ReconnectHandshake | None = ReconnectHandshake.joiner(
+                device_id=APP_DEVICE_ID,
+                device_identity=self._identity,
+                peer_device_id=reconnect_trust.host_device_id,
+                peer_public_key=reconnect_trust.host_public_key,
+                channel_id=channel_id,
+            )
+        else:
+            assert pairing_code is not None
+            self._identity = DeviceIdentity.generate()
+            self._pairing = Pairing.joiner(
+                device_id=APP_DEVICE_ID,
+                device_identity=self._identity,
+                pairing_code=pairing_code,
+            )
+            self._reconnect = None
         self._sealer: CoworkFrameSealer | None = None
         self._opener: CoworkFrameOpener | None = None
+        self._host_device_id: str | None = None
+        self._host_public_key: Ed25519PublicKey | None = None
+        self._channel_key: bytes | None = None
         self.raw_result_frames: list[str] = []
+
+    def trust(self) -> AppTrust:
+        """The trust record this device persists after a successful pairing."""
+        assert self._host_device_id is not None
+        assert self._host_public_key is not None
+        assert self._channel_key is not None
+        return AppTrust(
+            identity=self._identity,
+            host_device_id=self._host_device_id,
+            host_public_key=self._host_public_key,
+            channel_id=self._channel_id,
+            channel_key=self._channel_key,
+        )
 
     def run(self, prompt: str, *, timeout: float = 25.0) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
@@ -94,6 +159,17 @@ class ControllerDouble:
 
     def _on_pairing(self, ws, data: dict, prompt: str) -> None:
         step = data.get("type")
+        # Reconnect flow (code-free) when this device has a stored trust.
+        if self._reconnect is not None:
+            if step == "reconnect-hello":
+                response = self._reconnect.on_hello(data)
+                ws.send(json.dumps(pairing_envelope(STEP_RECONNECT_RESPONSE, response)))
+            elif step == "reconnect-confirm":
+                self._reconnect.on_confirm(data)
+                self._finish_reconnect()
+                self._provision_and_task(ws, prompt)
+            return
+        # First-pair flow (code).
         p = self._pairing
         if step == "commit":
             p.on_commit(data)
@@ -112,6 +188,25 @@ class ControllerDouble:
 
     def _finish_pairing(self) -> None:
         channel_key = self._pairing.channel_key
+        # Remember what the app would persist for a later reconnect.
+        self._host_device_id = self._pairing.peer_device_id
+        self._host_public_key = self._pairing.approved_devices.lookup(
+            self._host_device_id
+        )
+        self._channel_key = channel_key
+        self._build_codec(channel_key, self._pairing.approved_devices)
+
+    def _finish_reconnect(self) -> None:
+        trust = self._reconnect_trust
+        assert trust is not None
+        self._host_device_id = trust.host_device_id
+        self._host_public_key = trust.host_public_key
+        self._channel_key = trust.channel_key
+        approved = ApprovedDevices.empty()
+        approved.approve(trust.host_device_id, trust.host_public_key)
+        self._build_codec(trust.channel_key, approved)
+
+    def _build_codec(self, channel_key: bytes, approved: ApprovedDevices) -> None:
         self._sealer = CoworkFrameSealer(
             channel_key=channel_key,
             key_version=KEY_VERSION,
@@ -121,7 +216,7 @@ class ControllerDouble:
         self._opener = CoworkFrameOpener(
             channel_key=channel_key,
             key_version=KEY_VERSION,
-            approved_devices=self._pairing.approved_devices,
+            approved_devices=approved,
         )
 
     def _provision_and_task(self, ws, prompt: str) -> None:
@@ -232,12 +327,12 @@ def _assert_ran(events: list[dict[str, Any]]) -> None:
     assert len(tools) == 1 and tools[0]["exit_code"] == 0
 
 
-def test_stress_every_connection_pairs_and_completes(tmp_path):
-    """One long-lived host, twenty fresh controllers back to back over the real
-    localhost relay. Each must pair from the stable code and run the task to a
-    clean ``done``. This is the regression net for the intermittent pairing
-    stall: a fresh initiator session is minted per connection, so 20/20 pass
-    deterministically instead of ~half stalling on a consumed one-shot session."""
+def test_stress_first_pair_then_many_reconnects(tmp_path):
+    """One long-lived host: the first controller pairs from the code, then the
+    same device reconnects nineteen more times back to back with NO code. Each
+    reconnect must authenticate off the stored device keys and run the task to a
+    clean ``done``. Regression net for the reconnect session lifecycle: a fresh
+    reconnect session is minted per connection, so 20/20 pass deterministically."""
     host = LocalHost(
         port=0,
         workspace_dir=str(tmp_path),
@@ -248,17 +343,88 @@ def test_stress_every_connection_pairs_and_completes(tmp_path):
     )
     host.start()
     try:
-        for i in range(20):
-            controller = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        # First connection: a real pairing from the code. It persists trust.
+        first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        events = first.run("run `echo hi > f.txt` then say done", timeout=15.0)
+        assert events and events[-1]["type"] == "done", (
+            f"first pairing did not complete: {[e['type'] for e in events]}"
+        )
+        _assert_ran(events)
+        assert host.has_stored_pairing
+        trust = first.trust()
+
+        # Nineteen code-free reconnects of the SAME device.
+        for i in range(1, 20):
+            controller = ControllerDouble(
+                host.url, host.channel_id, reconnect_trust=trust
+            )
             events = controller.run(
                 "run `echo hi > f.txt` then say done", timeout=15.0
             )
             assert events and events[-1]["type"] == "done", (
-                f"connection {i} did not pair+complete: {[e['type'] for e in events]}"
+                f"reconnect {i} did not authenticate+complete: "
+                f"{[e['type'] for e in events]}"
             )
             _assert_ran(events)
     finally:
         host.stop()
+
+
+def test_first_pair_then_both_restart_and_reconnect_no_code(tmp_path):
+    """The whole persistent-pairing loop. A host + app pair from a code and run a
+    task. Then BOTH restart: a brand-new LocalHost on the same workspace (so it
+    loads the stored trust and prints no code) and a fresh controller built only
+    from the app's stored trust reconnect with NO code and run another task.
+
+    This is the end-to-end proof that pairing survives restarts of either side.
+    """
+    workspace = str(tmp_path)
+
+    # --- first pairing (a code) -------------------------------------------
+    host = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="persist-worker",
+        model_factory_override=_scripted_model,
+    )
+    host.start()
+    try:
+        assert not host.has_stored_pairing
+        first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        events = first.run("run `echo hi > f.txt` then say done", timeout=15.0)
+        _assert_ran(events)
+        assert host.has_stored_pairing, "host did not persist the pairing"
+        channel_id = host.channel_id
+        trust = first.trust()
+    finally:
+        host.stop()
+
+    # The trust file is really on disk under the workspace.
+    assert (tmp_path / "paired.json").exists()
+
+    # --- both restart, reconnect with no code -----------------------------
+    host2 = LocalHost(
+        port=0,
+        workspace_dir=workspace,
+        agent_name="persist-worker",
+        model_factory_override=_scripted_model,
+    )
+    host2.start()
+    try:
+        # Same host identity → same stable channel id, and it is in reconnect
+        # mode (a code is not printed / used).
+        assert host2.has_stored_pairing
+        assert host2.channel_id == channel_id
+        controller = ControllerDouble(
+            host2.url, host2.channel_id, reconnect_trust=trust
+        )
+        events = controller.run("run `echo hi > f.txt` then say done", timeout=15.0)
+        assert events and events[-1]["type"] == "done", (
+            f"reconnect did not complete: {[e['type'] for e in events]}"
+        )
+        _assert_ran(events)
+    finally:
+        host2.stop()
 
 
 def test_reconnect_after_a_dropped_attempt_still_pairs(tmp_path):
