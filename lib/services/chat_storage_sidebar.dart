@@ -447,9 +447,13 @@ class ChatStorageSidebar {
   /// This is used when the lightweight title cache is empty but
   /// LocalChatCacheService has plaintext payloads (e.g., from a
   /// previous session's preload/sync).
+  ///
+  /// Reads metadata only. The sidebar shows titles and timestamps, and
+  /// pulling the payload column here made startup move the entire cache
+  /// across the platform channel at once.
   static Future<void> _loadSidebarFromCache(String userId) async {
     try {
-      final rows = await LocalChatCacheService.load(userId);
+      final rows = await LocalChatCacheService.loadMeta(userId);
       if (rows.isEmpty) {
         if (kDebugMode) {
           debugPrint('📦 [ChatStorage] Cache also empty');
