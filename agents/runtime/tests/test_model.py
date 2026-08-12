@@ -1,7 +1,9 @@
 from cowork_agent.model import (
     MockModelClient,
     ModelResponse,
+    extract_tool_calls,
     parse_openai_response,
+    response_from_content,
 )
 
 
@@ -65,3 +67,63 @@ def test_mock_records_calls_and_replays_in_order():
     assert len(mock.calls) == 2
     # exhausted -> a graceful bare-text turn, not a crash
     assert mock.complete([]).text == "(mock exhausted)"
+
+
+# -- <tool_call>-in-content protocol (shared by mock and real backend) --------
+
+
+def test_extract_bare_text_has_no_calls():
+    clean, calls = extract_tool_calls("just an answer")
+    assert clean == "just an answer"
+    assert calls == []
+
+
+def test_extract_single_tool_call_strips_block():
+    content = (
+        'here goes <tool_call>{"name":"run_command",'
+        '"arguments":{"command":"ls"}}</tool_call>'
+    )
+    clean, calls = extract_tool_calls(content)
+    assert clean == "here goes"
+    assert len(calls) == 1
+    assert calls[0].name == "run_command"
+    assert calls[0].arguments == {"command": "ls"}
+    assert calls[0].id == "call_0"
+
+
+def test_extract_multiple_tool_calls():
+    content = (
+        '<tool_call>{"name":"a","arguments":{}}</tool_call>'
+        '<tool_call>{"name":"b","arguments":{"x":1}}</tool_call>'
+    )
+    clean, calls = extract_tool_calls(content)
+    assert clean == ""
+    assert [c.name for c in calls] == ["a", "b"]
+    assert calls[1].arguments == {"x": 1}
+
+
+def test_extract_repairs_missing_brace_and_trailing_comma():
+    # Missing closing brace.
+    _, calls = extract_tool_calls('<tool_call>{"name":"t","arguments":{"q":"y"}</tool_call>')
+    assert calls and calls[0].arguments == {"q": "y"}
+    # Trailing comma.
+    _, calls2 = extract_tool_calls('<tool_call>{"name":"t","arguments":{"q":"y"},}</tool_call>')
+    assert calls2 and calls2[0].name == "t"
+
+
+def test_extract_skips_nameless_or_unparseable():
+    _, calls = extract_tool_calls('<tool_call>{"arguments":{}}</tool_call>')
+    assert calls == []
+    _, calls2 = extract_tool_calls("<tool_call>not json at all</tool_call>")
+    assert calls2 == []
+
+
+def test_response_from_content_is_structural():
+    # A tool-only turn -> no visible text, has tool calls (loop continues).
+    resp = response_from_content('<tool_call>{"name":"x","arguments":{}}</tool_call>')
+    assert resp.text is None
+    assert resp.has_tool_calls
+    # A bare-text turn -> final answer, no calls (loop stops).
+    resp2 = response_from_content("the answer")
+    assert resp2.text == "the answer"
+    assert not resp2.has_tool_calls

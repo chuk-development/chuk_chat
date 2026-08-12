@@ -8,9 +8,18 @@ from cowork_agent.loop import (
     KillSwitch,
     StopReason,
 )
-from cowork_agent.model import MockModelClient, ModelResponse, ToolCall
+from cowork_agent.model import (
+    MockModelClient,
+    ModelResponse,
+    response_from_content,
+)
 from cowork_agent.registry import ToolRegistry
 from cowork_agent.state import StateStore
+
+# A tool call is written as a <tool_call> block in the assistant content — the one
+# wire format shared by the mock and the real backend.
+ECHO_CALL = '<tool_call>{"name":"echo","arguments":{"v":"hi"}}</tool_call>'
+ECHO_CALL_EMPTY = '<tool_call>{"name":"echo","arguments":{}}</tool_call>'
 
 
 def _store(tmp_path):
@@ -66,14 +75,7 @@ def test_loop_finishes_on_bare_text(tmp_path):
 
 
 def test_loop_continues_on_tool_call_then_finishes(tmp_path):
-    model = MockModelClient(
-        [
-            ModelResponse(
-                tool_calls=[ToolCall(id="c1", name="echo", arguments={"v": "hi"})]
-            ),
-            ModelResponse(text="finished"),
-        ]
-    )
+    model = MockModelClient([ECHO_CALL, "finished"])
     store = _store(tmp_path)
     loop = AgentLoop(model, _reg_with_echo(), store)
     result = loop.run("k2", "go")
@@ -88,12 +90,10 @@ def test_loop_continues_on_tool_call_then_finishes(tmp_path):
 
 
 def test_max_iterations_ceiling(tmp_path):
-    # Model never finishes — always emits a tool call.
+    # Model never finishes — always emits a tool call (via the content path).
     class Endless:
         def complete(self, messages):
-            return ModelResponse(
-                tool_calls=[ToolCall(id="c", name="echo", arguments={})]
-            )
+            return response_from_content(ECHO_CALL_EMPTY)
 
     loop = AgentLoop(Endless(), _reg_with_echo(), _store(tmp_path), max_iterations=4)
     result = loop.run("k3", "go")
@@ -104,9 +104,7 @@ def test_max_iterations_ceiling(tmp_path):
 def test_budget_exhausted_stops_before_ceiling(tmp_path):
     class Endless:
         def complete(self, messages):
-            return ModelResponse(
-                tool_calls=[ToolCall(id="c", name="echo", arguments={})]
-            )
+            return response_from_content(ECHO_CALL_EMPTY)
 
     loop = AgentLoop(
         Endless(),
@@ -125,18 +123,10 @@ def test_housekeeping_round_is_refunded(tmp_path):
     # Without refunds this would exhaust; with refunds it reaches the answer.
     model = MockModelClient(
         [
-            ModelResponse(
-                housekeeping=True,
-                tool_calls=[ToolCall(id="h1", name="echo", arguments={})],
-            ),
-            ModelResponse(
-                housekeeping=True,
-                tool_calls=[ToolCall(id="h2", name="echo", arguments={})],
-            ),
-            ModelResponse(
-                tool_calls=[ToolCall(id="c1", name="echo", arguments={})]
-            ),
-            ModelResponse(text="done"),
+            response_from_content(ECHO_CALL_EMPTY, housekeeping=True),
+            response_from_content(ECHO_CALL_EMPTY, housekeeping=True),
+            ECHO_CALL_EMPTY,
+            "done",
         ]
     )
     loop = AgentLoop(

@@ -14,6 +14,7 @@ Joins the four foundation packages into one fully local, encrypted path:
 
 from __future__ import annotations
 
+from .backend import make_backend_model_factory, resolve_backend_model_factory
 from .controller import ControllerSession
 from .environment import SandboxEnvironment
 from .executor import Executor, ModelFactory, StreamingModelClient
@@ -52,6 +53,8 @@ __all__ = [
     "error_payload",
     "frame_to_b64",
     "loopback_pair",
+    "make_backend_model_factory",
+    "resolve_backend_model_factory",
     "task_payload",
     "tool_payload",
 ]
