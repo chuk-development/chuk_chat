@@ -1,5 +1,6 @@
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,9 +10,9 @@ void main() {
   // between the passes (e.g. `reasoning → web_search → reasoning → notes`).
   // Each pass used to render as its OWN tool bar, so the message showed several
   // stacked boxes. Consecutive tool-call rounds must instead merge into ONE
-  // bar, and ALL reasoning — including the final-pass reasoning that trails the
-  // last tool — folds INTO that one bar (as ordered cards), so the collapsed
-  // turn reads as a single disclosure followed by the answer.
+  // activity timeline, and ALL reasoning — including the final-pass reasoning
+  // that trails the last tool — folds INTO that timeline as steps, so the
+  // collapsed turn reads as a single "Worked for …" line plus the answer.
   ToolCall tool(String id, String name) => ToolCall(
     id: id,
     name: name,
@@ -45,28 +46,26 @@ void main() {
       ),
     );
 
-    // Both tools collapse into a SINGLE bar whose head lists both names —
-    // not two separate `web_search` / `notes` bars.
-    expect(find.text('web_search, notes'), findsOneWidget);
-    expect(find.text('web_search'), findsNothing);
-    expect(find.text('notes'), findsNothing);
+    // Both rounds collapse into a SINGLE timeline, not one per round.
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
+    expect(find.textContaining('Worked for'), findsOneWidget);
 
-    // Collapsed: no standalone reasoning card — the final reasoning is folded
-    // inside the bar. Only the answer follows the bar.
-    expect(find.text('Reasoning'), findsNothing);
+    // Collapsed: the steps and the reasoning are hidden, the answer is not.
     expect(find.textContaining('Synthesizing the findings'), findsNothing);
     expect(find.textContaining('Here is the final answer.'), findsOneWidget);
 
-    // Expand the merged bar — structural check only: all three reasoning
-    // entries and both tool entries live inside the one bar. We assert the
-    // card COUNT, not the reasoning prose (the renderer never inspects text
-    // content — blocks are classified purely by ContentBlockType).
-    await tester.tap(find.text('web_search, notes'));
+    // Expanded: all three reasoning notes and both tool steps sit inside
+    // that one timeline, in the order they happened.
+    await tester.tap(find.textContaining('Worked for'));
     await tester.pumpAndSettle();
-    expect(find.text('Reasoning'), findsNWidgets(3));
+    expect(find.text('I should search the web'), findsOneWidget);
+    expect(find.text('Now I need my notes'), findsOneWidget);
+    expect(find.text('Synthesizing the findings'), findsOneWidget);
+    expect(find.byIcon(Icons.search), findsOneWidget);
+    expect(find.byIcon(Icons.bolt_outlined), findsOneWidget);
   });
 
-  testWidgets('two tool rounds with no text after still merge into one bar', (
+  testWidgets('two tool rounds with no text after still merge into one', (
     tester,
   ) async {
     final blocks = <ContentBlock>[
@@ -88,6 +87,6 @@ void main() {
       ),
     );
 
-    expect(find.text('web_search, notes'), findsOneWidget);
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
   });
 }

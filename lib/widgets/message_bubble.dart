@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
@@ -324,7 +326,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   );
 
   bool _isReasoningExpanded = false;
-  final Map<String, bool> _blockExpanded = {};
   final Set<String> _expandedCards = {};
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
@@ -967,7 +968,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildToolCallsBar(widget.toolCalls!),
+                  _buildActivityTimeline(widget.toolCalls!),
                   if (cards.isNotEmpty) ...[
                     const SizedBox(height: _kArtifactGap),
                     ..._stackArtifactCards(cards),
@@ -1213,9 +1214,8 @@ class _MessageBubbleState extends State<MessageBubble> {
         children.add(const SizedBox(height: _kBlockGap));
       }
       children.add(
-        _buildToolCallsBar(
+        _buildActivityTimeline(
           seg.toolCalls,
-          isContentBlock: true,
           contentBlockTimeline: timeline,
         ),
       );
@@ -1992,20 +1992,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   /// Stack expandable cards inside an expanded section, inserting
-  /// `_kCardStackGap` after every card. Used to be implicit via a baked
-  /// `margin: only(bottom: 6)` on each card; the explicit helper makes
-  /// the spacing live at the layout layer where it belongs and matches
-  /// the visual behavior of master HEAD (every card has a 6 px tail).
-  List<Widget> _stackCards(List<Widget> cards) {
-    if (cards.isEmpty) return cards;
-    final out = <Widget>[];
-    for (final card in cards) {
-      out.add(card);
-      out.add(const SizedBox(height: _kCardStackGap));
-    }
-    return out;
-  }
-
   /// Reusable expandable card matching function_calling client design.
   ///
   /// Renders NO external margin. When stacking multiple cards in a
@@ -2247,16 +2233,16 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// _kBlockGap)` (and `_kArtifactGap` for any attached artifact stack)
   /// for spacing relative to sibling blocks. Re-adding a hidden margin
   /// here was the bug fixed in commit b8e4414.
-  Widget _buildToolCallsBar(
+  /// The round's work as a plain timeline: every step while it runs, one
+  /// folded line ("Worked for 13s") once the answer is there.
+  ///
+  /// Tapping a step opens its arguments and result in a sheet — the raw
+  /// data the old expandable bar showed inline, without the box competing
+  /// with the answer for attention.
+  Widget _buildActivityTimeline(
     List<ToolCall> toolCalls, {
-    bool isContentBlock = false,
     List<_ToolTimelineEntry>? contentBlockTimeline,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final renderedAssistantText = _strippedMessage;
-    // If the message is finalized (not streaming), tool calls should not
-    // remain in running/pending — treat any stale ones as completed for
-    // display purposes so the spinner doesn't hang indefinitely.
     final bool isRunning =
         widget.isStreamingMessage &&
         toolCalls.any(
@@ -2264,286 +2250,63 @@ class _MessageBubbleState extends State<MessageBubble> {
               t.status == ToolCallStatus.running ||
               t.status == ToolCallStatus.pending,
         );
-    // Use a unique expand key per content block (based on first tool call ID)
-    // so multiple tool call bars in the same message have independent state.
-    final String expandKey = isContentBlock && toolCalls.isNotEmpty
-        ? 'tool_calls_block_${toolCalls.first.id}'
-        : 'tool_calls_bar';
-    final bool isExpanded = _blockExpanded[expandKey] ?? false;
-    final bool allDone =
-        toolCalls.isNotEmpty &&
-        toolCalls.every(
-          (t) =>
-              t.status == ToolCallStatus.completed ||
-              t.status == ToolCallStatus.error,
-        );
-    final bool isReasoning =
-        !isContentBlock &&
-        widget.isReasoningStreaming &&
-        allDone &&
-        (renderedAssistantText.trim().isEmpty ||
-            renderedAssistantText == 'Thinking...');
 
-    final effectiveTimeline = isContentBlock && contentBlockTimeline != null
-        ? contentBlockTimeline
-        : const <_ToolTimelineEntry>[];
+    final steps = contentBlockTimeline == null
+        ? null
+        : <AgentActivityStep>[
+            for (final entry in contentBlockTimeline)
+              if (entry.isReasoning)
+                AgentActivityStep.reasoning(entry.reasoning!)
+              else if (entry.toolCall != null)
+                AgentActivityStep.tool(entry.toolCall!),
+          ];
 
-    final String label;
-    final IconData icon;
-    final bool showSpinner;
-    if (isRunning) {
-      final runningTool = toolCalls.firstWhere(
-        (t) =>
-            t.status == ToolCallStatus.running ||
-            t.status == ToolCallStatus.pending,
-        orElse: () => toolCalls.last,
-      );
-      label = '${runningTool.name}...';
-      icon = Icons.build_circle_outlined;
-      showSpinner = true;
-    } else if (isReasoning) {
-      label = 'Reasoning...';
-      icon = Icons.psychology;
-      showSpinner = true;
-    } else {
-      final uniqueNames = toolCalls.map((t) => t.name).toList();
-      final distinct = uniqueNames.toSet();
-      if (toolCalls.length == 1) {
-        label = uniqueNames.first;
-      } else if (distinct.length == 1) {
-        label = '${uniqueNames.first} (${toolCalls.length}×)';
-      } else if (distinct.length <= 3) {
-        final counts = <String, int>{};
-        for (final n in uniqueNames) {
-          counts[n] = (counts[n] ?? 0) + 1;
-        }
-        label = counts.entries
-            .map((e) => e.value > 1 ? '${e.key} (${e.value}×)' : e.key)
-            .join(', ');
-      } else {
-        label = '${toolCalls.length} tool calls';
-      }
-      icon = Icons.build_circle_outlined;
-      showSpinner = false;
-    }
+    return AgentActivityTimeline(
+      toolCalls: toolCalls,
+      steps: steps,
+      isRunning: isRunning,
+      onStepTap: _showToolCallDetails,
+    );
+  }
 
-    final Color accentColor = isReasoning
-        ? colorScheme.primary
-        : isRunning
-        ? Colors.blue
-        : (toolCalls.any((t) => t.status == ToolCallStatus.error)
-              ? Colors.orange
-              : Colors.green);
-
-    final bar = SelectionContainer.disabled(
-      child: Container(
-        width: double.infinity,
-        // No baked-in margin — see the doc comment on
-        // `_buildToolCallsBar`. Callers own the gap below the bar.
-        decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: accentColor.withValues(alpha: 0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () {
-                setState(() {
-                  _blockExpanded[expandKey] = !isExpanded;
-                });
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    if (showSpinner)
-                      MorphSpinner(size: 14, color: accentColor)
-                    else
-                      Icon(icon, size: 14, color: accentColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: accentColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+  void _showToolCallDetails(ToolCall toolCall) {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    toolCall.name,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontFamily: 'monospace',
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildToolCallExpandedWidget(toolCall),
+                ],
               ),
             ),
-            if (isExpanded)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  // Each card carries no margin (see _buildExpandableCard);
-                  // _stackCards inserts a `_kCardStackGap` spacer after every
-                  // card, preserving the trailing 6 px below the last card
-                  // that the old per-card margin used to add (kept for
-                  // visual parity with master HEAD).
-                  children: _stackCards([
-                    if (isContentBlock && effectiveTimeline.isNotEmpty)
-                      for (int ti = 0; ti < effectiveTimeline.length; ti++) ...[
-                        if (effectiveTimeline[ti].isReasoning)
-                          _buildExpandableCard(
-                            key: 'timeline_reasoning_${expandKey}_$ti',
-                            icon: Icons.psychology,
-                            label: 'Reasoning',
-                            preview: effectiveTimeline[ti].reasoning!,
-                            expandedContent: effectiveTimeline[ti].reasoning!,
-                            accentColor: colorScheme.primary,
-                          )
-                        else
-                          _buildExpandableCard(
-                            key:
-                                'tool_${effectiveTimeline[ti].toolCall!.id}_$ti',
-                            icon: _toolCallIcon(
-                              effectiveTimeline[ti].toolCall!.status,
-                            ),
-                            label: effectiveTimeline[ti].toolCall!.name,
-                            preview:
-                                _toolCallSubtitle(
-                                  effectiveTimeline[ti].toolCall!,
-                                ) ??
-                                (effectiveTimeline[ti].toolCall!.result != null
-                                    ? _truncatePreview(
-                                        effectiveTimeline[ti].toolCall!.result!,
-                                        60,
-                                      )
-                                    : 'running...'),
-                            expandedContent: _formatToolCallDetails(
-                              effectiveTimeline[ti].toolCall!,
-                            ),
-                            expandedWidget: _buildToolCallExpandedWidget(
-                              effectiveTimeline[ti].toolCall!,
-                            ),
-                            accentColor: _toolCallColor(
-                              effectiveTimeline[ti].toolCall!.status,
-                            ),
-                            isRunning:
-                                effectiveTimeline[ti].toolCall!.status ==
-                                ToolCallStatus.running,
-                          ),
-                      ]
-                    else
-                      for (int i = 0; i < toolCalls.length; i++) ...[
-                        if (toolCalls[i].roundThinking != null &&
-                            toolCalls[i].roundThinking!.trim().isNotEmpty)
-                          _buildExpandableCard(
-                            key: 'thinking_round_${toolCalls[i].id}_$i',
-                            icon: Icons.psychology,
-                            label: 'Reasoning',
-                            preview: toolCalls[i].roundThinking!,
-                            expandedContent: toolCalls[i].roundThinking!,
-                            accentColor: colorScheme.primary,
-                          ),
-                        _buildExpandableCard(
-                          key: 'tool_${toolCalls[i].id}',
-                          icon: _toolCallIcon(toolCalls[i].status),
-                          label: toolCalls[i].name,
-                          preview:
-                              _toolCallSubtitle(toolCalls[i]) ??
-                              (toolCalls[i].result != null
-                                  ? _truncatePreview(toolCalls[i].result!, 60)
-                                  : 'running...'),
-                          expandedContent: _formatToolCallDetails(toolCalls[i]),
-                          expandedWidget: _buildToolCallExpandedWidget(
-                            toolCalls[i],
-                          ),
-                          accentColor: _toolCallColor(toolCalls[i].status),
-                          isRunning:
-                              toolCalls[i].status == ToolCallStatus.running,
-                        ),
-                      ],
-                    // Skip reasoning/model info in content block mode —
-                    // those are rendered as separate blocks.
-                    if (!isContentBlock && _hasReasoning)
-                      _buildExpandableCard(
-                        key: 'thinking_final',
-                        icon: Icons.psychology,
-                        label: 'Reasoning',
-                        preview: widget.reasoning!,
-                        expandedContent: widget.reasoning!,
-                        accentColor: colorScheme.primary,
-                      ),
-                    if (_hasModelInfo)
-                      _buildExpandableCard(
-                        key: 'model_info_$expandKey',
-                        icon: Icons.smart_toy_outlined,
-                        label: widget.modelLabel!,
-                        preview: _buildModelPreview(),
-                        expandedContent: _buildModelDetails(),
-                        accentColor: Colors.green,
-                      ),
-                  ]),
-                ),
-              ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
-
-    return bar;
   }
 
-  IconData _toolCallIcon(ToolCallStatus status) {
-    switch (status) {
-      case ToolCallStatus.pending:
-        return Icons.hourglass_empty;
-      case ToolCallStatus.running:
-        return Icons.sync;
-      case ToolCallStatus.completed:
-        return Icons.check_circle;
-      case ToolCallStatus.error:
-        return Icons.error;
-    }
-  }
-
-  Color _toolCallColor(ToolCallStatus status) {
-    switch (status) {
-      case ToolCallStatus.pending:
-        return Colors.orange;
-      case ToolCallStatus.running:
-        return Colors.blue;
-      case ToolCallStatus.completed:
-        return Colors.green;
-      case ToolCallStatus.error:
-        return Colors.red;
-    }
-  }
-
-  String _formatToolCallDetails(ToolCall toolCall) {
-    final buffer = StringBuffer();
-    if (toolCall.arguments.isNotEmpty) {
-      buffer.writeln('Args: ${jsonEncode(toolCall.arguments)}');
-    }
-    if (toolCall.result != null && toolCall.result!.isNotEmpty) {
-      if (buffer.isNotEmpty) {
-        buffer.writeln();
-      }
-      buffer.writeln('Result: ${toolCall.result}');
-    }
-    if (buffer.isEmpty) {
-      return 'No result yet.';
-    }
-    return buffer.toString().trimRight();
-  }
-
-  /// Builds a plain-formatted expanded view for a tool call. No syntax
-  /// highlighting — just labelled sections with monospace containers so
-  /// the raw `code` / stdout / stderr stay readable instead of showing
-  /// as a single escape-ridden line.
   Widget _buildToolCallExpandedWidget(ToolCall toolCall) {
     final sections = <Widget>[];
 
@@ -2759,40 +2522,6 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
           ];
     return [...textSections, ...diffWidgets];
-  }
-
-  String? _toolCallSubtitle(ToolCall toolCall) {
-    if (toolCall.status == ToolCallStatus.running ||
-        toolCall.status == ToolCallStatus.pending) {
-      return 'Running';
-    }
-    if (toolCall.status == ToolCallStatus.error) {
-      return toolCall.result == null
-          ? 'Failed'
-          : _truncatePreview(toolCall.result!, 70);
-    }
-
-    final result = toolCall.result;
-    if (result == null || result.trim().isEmpty) {
-      return null;
-    }
-
-    // Strip <diff> blocks so raw JSON doesn't appear in the collapsed preview.
-    final preview = result.replaceAll(_diffBlockRegex, '').trim();
-    if (preview.isNotEmpty) return _truncatePreview(preview, 70);
-
-    // Result was diff-only — derive a clean human summary from the diff
-    // title instead of leaking raw JSON into the collapsed preview.
-    final diffMatch = _diffBlockRegex.firstMatch(result);
-    if (diffMatch != null) {
-      try {
-        final data = jsonDecode(diffMatch.group(1)!) as Map<String, dynamic>;
-        final title = (data['title'] as String?)?.trim();
-        if (title != null && title.isNotEmpty) return title;
-      } catch (_) {}
-      return 'Updated';
-    }
-    return null;
   }
 
   // ─── Sources bar (web search / web crawl citations) ──────────────────

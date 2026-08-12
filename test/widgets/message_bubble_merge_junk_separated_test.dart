@@ -1,5 +1,6 @@
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,14 +46,16 @@ void main() {
     );
 
     // One merged bar, not four.
-    expect(find.text('web_search (4×)'), findsOneWidget);
-    expect(find.text('web_search'), findsNothing);
+    // All four rounds land in ONE timeline, whose folded header is the only
+    // thing visible.
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
+    expect(find.textContaining('Worked for'), findsOneWidget);
     // The junk `<` blocks never render as text.
     expect(find.text('<'), findsNothing);
   });
 
   // A real (non-empty) text block between tool rounds STILL separates them.
-  testWidgets('real text between tool rounds keeps them as separate bars', (
+  testWidgets('real text between tool rounds keeps them separate', (
     tester,
   ) async {
     ToolCall search(String id) => ToolCall(
@@ -83,7 +86,8 @@ void main() {
 
     expect(find.text('Some real prose between rounds.'), findsOneWidget);
     // Two single-call bars, not one merged `web_search (2×)`.
-    expect(find.text('web_search'), findsNWidgets(2));
-    expect(find.text('web_search (2×)'), findsNothing);
+    // Real prose between the rounds keeps them as two separate timelines.
+    expect(find.byType(AgentActivityTimeline), findsNWidgets(2));
+    expect(find.textContaining('Worked for'), findsNWidgets(2));
   });
 }
