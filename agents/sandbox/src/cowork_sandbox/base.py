@@ -129,8 +129,15 @@ class BaseEnvironment(ABC):
             timed_out=raw.timed_out,
         )
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> ProcessResult:
-        """Adapter that satisfies the agent runtime's ``Environment`` protocol."""
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> ProcessResult:
+        """Adapter that satisfies the agent runtime's ``Environment`` protocol.
+
+        ``internal`` marks plumbing the agent did not ask for (an availability
+        probe, a journal commit). The sandbox runs it identically; only
+        observers higher up use the flag to keep it out of the user's thread."""
+        del internal
         return self.run(cmd, timeout=timeout)
 
     # Context-manager sugar so callers can ``with make_environment(...) as env``.

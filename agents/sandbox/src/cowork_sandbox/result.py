@@ -47,4 +47,6 @@ class Environment(Protocol):
     backends add ``run``, ``cleanup`` and more, but this is the contract seam.
     """
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> ProcessResult: ...
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> ProcessResult: ...

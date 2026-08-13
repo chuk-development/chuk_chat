@@ -275,7 +275,9 @@ class TerminalManager:
         """Probe for tmux once and cache it. Used as the tool ``check_fn``, so
         it runs on every prompt render — it must not shell out every time."""
         if self._tmux_ok is None:
-            result = self.env.run_bash("command -v tmux >/dev/null 2>&1", timeout=15)
+            result = self.env.run_bash(
+                "command -v tmux >/dev/null 2>&1", timeout=15, internal=True
+            )
             self._tmux_ok = bool(result.ok)
         return self._tmux_ok
 
