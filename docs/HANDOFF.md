@@ -121,6 +121,48 @@ Two release-class bugs were found and fixed while landing it:
    drains root-zone microtasks, so the auto-reconnect only ran after the test
    ended. Cancel without awaiting.
 
+## DONE — the Stop button is really wired (`agent/wire-stop`)
+
+The app had a Stop button that sealed `{"type":"stop"}` and the executor ignored
+unknown payload types, so nothing happened: the run continued and the UI sat on
+"Stopping…" until the task finished on its own. What landed:
+
+- **`stop` is a first-class in-frame payload** (`executor/protocol.py`), sealed and
+  signed like every other frame — so only an **approved device** can end a run
+  (default deny is the whole authorisation story). It **names its target**:
+  `request_id` (exact, relay level) or `session_key` (what the app has). A stop
+  naming nothing stops nothing, because "abort whatever runs" races the next task.
+  Every stop is answered with `{"type":"stop_ack","stopping":[ids]}` — sent
+  *before* the interrupt fires, so it can never lose the race with the `done` it
+  causes.
+- **The executor got a second thread.** Tasks used to run on the serve thread, so
+  no frame could be read while a task ran — the stop physically could not arrive.
+  Now: serve thread parses frames, one worker thread runs tasks (serial, one
+  sandbox + one db), and a run registry maps `requestId`/`session_key` → the
+  task's `KillSwitch`.
+- **`KillSwitch` notifies listeners** (`on_interrupt`). That is what cancels work
+  *in flight*: the executor hangs the sandbox's new `cancel()` and the model
+  client's `cancel()` on it, and the subagent supervisor registers `cancel_all` on
+  its `parent_kill` — so one interrupt at the root walks the whole tree in a single
+  call, children nobody is waiting on included.
+- **`BaseEnvironment.cancel()`**: Local kills the process group, Docker kills the
+  exec client plus the tree inside the container. Not sticky — the shell still
+  works afterwards, because the journal commit after a stop needs it.
+- **`BackendModelClient.cancel()`** closes the socket and marks the turn cancelled
+  so the retry-once path does not spend credits on an answer nobody waits for. The
+  loop reports `INTERRUPTED` when a model call dies while the switch is set.
+- **The loop polls three places** now: loop top, right after the model turn (so a
+  stopped run cannot report `finished`), and before each tool call of a multi-call
+  turn (each skipped call still gets a result row).
+- **ESTOP** = `touch ~/.cowork/ESTOP` (the host prints the path and `cowork-host
+  status` shows it). Children inherit the parent's sentinel path, so an engaged
+  ESTOP also stops a child nobody is waiting on.
+
+Still not cancellable in flight: the §9 media/ffmpeg tools (they shell out beside
+the `Environment` seam, so they end at their own timeout — 600 s default, 3600 s
+max) and `web_fetch`/`web_search`/vision HTTP calls (bounded by their own 20–180 s
+timeouts).
+
 ## How to run / test
 
 - Host: `cd host && uv run cowork-host` (real; creds ride the token) or

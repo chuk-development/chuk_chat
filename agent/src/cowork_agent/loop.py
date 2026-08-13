@@ -8,7 +8,11 @@
   don't burn the model's real thinking budget while termination stays
   guaranteed.
 - **Two-tier kill switch**: a file-sentinel ESTOP that pauses new work (a stat
-  error counts as engaged) plus a thread-flag interrupt polled at the loop top.
+  error counts as engaged) plus a thread-flag interrupt. The interrupt is polled
+  at the loop top, again after the model turn returns, and again before each
+  tool call of a multi-call turn — and it also *notifies* registered cancellers
+  (:meth:`KillSwitch.on_interrupt`), which is how the work already in flight (a
+  running command, a whole subagent tree) is aborted instead of waited out.
 - **The system prompt freezes once per session** (§12). It may be passed as a
   callable, which is resolved when a session is seeded and never again — so a
   mid-session memory write reaches disk but not the prompt, and the prefix cache
@@ -33,6 +37,12 @@ from .context import ContextLadder
 from .model import ModelClient, ModelResponse
 from .registry import ToolRegistry
 from .state import StateStore
+
+
+#: Stands in for a tool result the run was stopped before reaching. The row has
+#: to exist — an assistant turn whose tool call has no result is a malformed
+#: conversation for the next session that reads it.
+INTERRUPTED_TOOL_RESULT = "not run: the run was stopped before this tool started"
 
 
 class IterationBudget:
@@ -69,21 +79,78 @@ class IterationBudget:
 
 class KillSwitch:
     """Two-tier stop. The file-sentinel ESTOP pauses *new* work; the thread flag
-    cancels the loop at the next top-of-loop poll."""
+    cancels the loop at the next top-of-loop poll.
+
+    The thread flag is also **observable**: :meth:`on_interrupt` registers a
+    cancel action that runs the moment :meth:`interrupt` fires. Polling alone
+    only ends the loop *between* rounds, so a run sitting in a ten-minute
+    ``run_command`` would keep the user waiting; a listener is what lets the
+    executor kill the process in flight and what makes one Stop reach a whole
+    subagent tree at once (§7.6) instead of one level per unwind.
+
+    The file-sentinel ESTOP has no listener by nature — nobody signals a file —
+    so it is only seen by the polls. That is the documented difference between
+    the two tiers: ESTOP pauses new work, the interrupt cancels work in flight.
+
+    **ESTOP without the app** (the second way to stop a run, §7.1): create the
+    sentinel file the executor was started with, e.g.
+    ``touch ~/.cowork/ESTOP``. Every loop in this process — the parent run and
+    every subagent — stops at its next top-of-loop poll and reports
+    ``StopReason.ESTOP``. Delete the file to allow new work again. It needs no
+    phone, no relay and no network: a shell on the machine is enough.
+    """
 
     def __init__(self, estop_path: str | os.PathLike | None = None) -> None:
         self._estop_path = os.fspath(estop_path) if estop_path is not None else None
         self._interrupt = threading.Event()
+        self._lock = threading.Lock()
+        self._listeners: list[Callable[[], None]] = []
+
+    @property
+    def estop_path(self) -> str | None:
+        return self._estop_path
 
     # thread-flag interrupt
     def interrupt(self) -> None:
-        self._interrupt.set()
+        """Set the flag and run every registered cancel action, once.
+
+        Listeners run on the calling thread — the one that pressed Stop — so the
+        cancel has already happened by the time this returns. A listener that
+        raises is swallowed: one broken canceller must not stop the others from
+        running, and the flag is set either way.
+        """
+        with self._lock:
+            if self._interrupt.is_set():
+                return  # already stopping; never fire the listeners twice
+            self._interrupt.set()
+            listeners = list(self._listeners)
+        for listener in listeners:
+            _fire(listener)
+
+    def on_interrupt(self, listener: Callable[[], None]) -> None:
+        """Register a cancel action for :meth:`interrupt`.
+
+        Registering after the interrupt already fired runs the listener
+        immediately — otherwise a child whose runtime was built one instant too
+        late would quietly keep running.
+        """
+        with self._lock:
+            already = self._interrupt.is_set()
+            if not already:
+                self._listeners.append(listener)
+        if already:
+            _fire(listener)
 
     def clear_interrupt(self) -> None:
-        self._interrupt.clear()
+        with self._lock:
+            self._interrupt.clear()
 
     def interrupted(self) -> bool:
         return self._interrupt.is_set()
+
+    def wait_interrupted(self, timeout: float | None = None) -> bool:
+        """Block until the interrupt fires. Returns False on timeout."""
+        return self._interrupt.wait(timeout)
 
     # file-sentinel ESTOP — fail-safe: a stat error is treated as engaged.
     def estop_engaged(self) -> bool:
@@ -96,6 +163,13 @@ class KillSwitch:
             return False
         except OSError:
             return True  # any other stat failure -> fail safe, engaged
+
+
+def _fire(listener: Callable[[], None]) -> None:
+    try:
+        listener()
+    except Exception:  # noqa: BLE001 — a broken canceller cannot block the stop
+        return
 
 
 class StopReason(str, Enum):
@@ -216,9 +290,19 @@ class AgentLoop:
             iterations += 1
             self._budget.consume()
 
-            response: ModelResponse = self._model.complete(
-                self._outbound_messages(session_id)
-            )
+            try:
+                response: ModelResponse = self._model.complete(
+                    self._outbound_messages(session_id)
+                )
+            except Exception:
+                # A model call that dies *while we are interrupting* died because
+                # of the interrupt: a cancelled socket, a closed stream. Report
+                # the stop, not a crash. Any other failure is a real error and
+                # still propagates.
+                if self._kill.interrupted():
+                    reason = StopReason.INTERRUPTED
+                    break
+                raise
 
             # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
             # prompt tokens are read — reasoning tokens must not move pressure.
@@ -232,10 +316,26 @@ class AgentLoop:
 
             self._persist_assistant(session_id, response)
 
+            # The interrupt may have landed while the model was working. It wins
+            # here rather than one round later: a run the user stopped must not
+            # report "finished" just because the turn in flight happened to be
+            # the last one. The turn itself is kept — it is real history.
+            if self._kill.interrupted():
+                reason = StopReason.INTERRUPTED
+                break
+
             # -- structural continue-vs-finish ------------------------
             if response.has_tool_calls:
                 for call in response.tool_calls:
-                    result = self._registry.dispatch(call.name, call.arguments)
+                    # One turn can carry several tool calls, and each one can be
+                    # a long command. Stop between them too, or a Stop would wait
+                    # out the whole batch. Every call still gets a result row, so
+                    # a resumed session has no assistant turn with a dangling
+                    # tool call in it.
+                    if self._kill.interrupted():
+                        result: object = INTERRUPTED_TOOL_RESULT
+                    else:
+                        result = self._registry.dispatch(call.name, call.arguments)
                     store.append_message(
                         session_id,
                         "tool",
@@ -246,6 +346,9 @@ class AgentLoop:
                             "content": result,
                         },
                     )
+                if self._kill.interrupted():
+                    reason = StopReason.INTERRUPTED
+                    break
                 self._drain_context(session_id)
                 continue  # tool calls -> feed results back, loop again
 

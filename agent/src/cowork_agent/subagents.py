@@ -33,6 +33,11 @@ Five properties, each enforced here rather than hoped for:
    catches everything, records it as that child's failure, and leaves the rest of
    the batch running. Each child owns a :class:`~cowork_agent.loop.KillSwitch`,
    so the §7.1 Stop button reaches one child, all children, or the whole tree.
+   The tree case is wired, not polled: a supervisor given a ``parent_kill``
+   registers on it (``KillSwitch.on_interrupt``), and because a child's own
+   switch is the ``parent_kill`` of *its* supervisor, one interrupt at the root
+   walks down to the last grandchild in a single call — even for children
+   nobody is waiting on.
 
 **Git (§7.7).** With a versioned workspace each child works in its own git
 worktree on its own branch, and a successful child is merged back into the
@@ -387,6 +392,16 @@ class SubagentSupervisor:
         # of leaving a handle that lies about work being in flight.
         self._reap_orphans()
 
+        # One Stop must reach the WHOLE tree, at once. Waiting for the parent's
+        # loop to unwind before cancelling children stops one level per unwind,
+        # and a parent that is not waiting on its children (``wait=false``) never
+        # unwinds into them at all. Listening on the parent's switch instead
+        # makes the cancel recursive by construction: each child's own switch is
+        # the ``parent_kill`` of its own supervisor, so the notification walks
+        # down to the last grandchild in one call.
+        if parent_kill is not None:
+            parent_kill.on_interrupt(self._on_parent_interrupt)
+
     # -- introspection ---------------------------------------------------
     @property
     def limits(self) -> SubagentLimits:
@@ -532,7 +547,17 @@ class SubagentSupervisor:
         )
         self._registry.put(record)
 
-        kill = KillSwitch()
+        # The child inherits the parent's file sentinel, so an engaged ESTOP stops
+        # it at its own next poll instead of only when the parent unwinds into it.
+        # Without that, a child nobody is waiting on outlives the ``touch``.
+        kill = KillSwitch(
+            self._parent_kill.estop_path if self._parent_kill is not None else None
+        )
+        if self._parent_stopped():
+            # Opened while the parent was already stopping (a queued batch, a
+            # racing delegate call): pre-interrupt it so ``_drive`` finishes it
+            # without ever building a sandbox or a model stream.
+            kill.interrupt()
         ctx = ChildContext(
             subagent_id=subagent_id,
             task_id=task_id,
@@ -724,6 +749,15 @@ class SubagentSupervisor:
             if record is not None:
                 out.append(record)
         return out
+
+    def _on_parent_interrupt(self) -> None:
+        """The parent was stopped: cancel every child of this node right now.
+
+        Idempotent, and safe to reach a supervisor that has no children yet —
+        a child started after this point sees the same flag through
+        :meth:`_drive`'s queued-cancel check and never opens a sandbox.
+        """
+        self.cancel_all(reason="parent stopped")
 
     def _parent_stopped(self) -> bool:
         kill = self._parent_kill

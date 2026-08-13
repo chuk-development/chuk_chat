@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
 from .result import ProcessResult
@@ -30,6 +31,10 @@ class LocalEnvironment(BaseEnvironment):
         work = workdir if workdir is not None else os.path.join(self._root, "workspace")
         os.makedirs(work, exist_ok=True)
         snapshot = os.path.join(self._root, "session.snap")
+        # The process this environment is blocked on, so ``cancel`` (§7.1) can
+        # kill it from the thread that pressed Stop.
+        self._proc: subprocess.Popen | None = None
+        self._proc_lock = threading.Lock()
         super().__init__(
             snapshot_path=snapshot,
             initial_cwd=work,
@@ -58,6 +63,8 @@ class LocalEnvironment(BaseEnvironment):
             text=True,
             start_new_session=True,
         )
+        with self._proc_lock:
+            self._proc = proc
         try:
             out, err = proc.communicate(input=stdin, timeout=timeout)
             return ProcessResult(out, err, proc.returncode)
@@ -65,6 +72,23 @@ class LocalEnvironment(BaseEnvironment):
             self._kill_group(proc)
             out, err = proc.communicate()
             return ProcessResult(out, err, -9, timed_out=True)
+        finally:
+            with self._proc_lock:
+                if self._proc is proc:
+                    self._proc = None
+
+    def cancel(self) -> None:
+        """Kill the process group of the command in flight (§7.1).
+
+        The group, not the process: ``start_new_session`` put the command in its
+        own process group precisely so a stop reaches the whole tree it spawned,
+        the way the timeout path does. ``communicate`` in :meth:`_run_bash` then
+        returns whatever the command had already written, with exit code -9.
+        """
+        with self._proc_lock:
+            proc = self._proc
+        if proc is not None and proc.poll() is None:
+            self._kill_group(proc)
 
     @staticmethod
     def _kill_group(proc: subprocess.Popen) -> None:

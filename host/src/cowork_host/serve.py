@@ -15,6 +15,12 @@ The Executor's own :class:`~cowork_crypto.CoworkFrameOpener` opens the task
 frames (default deny — only the paired app's device gets in) and its
 :class:`~cowork_crypto.CoworkFrameSealer` seals every result. Lifecycle is the
 real :class:`~cowork_executor.ExecutorSupervisor`.
+
+The app's **Stop** rides this same bridge unchanged: a stop is just another
+sealed frame, so :meth:`TaskServer.submit` forwards it exactly like a task and
+the Executor — the only side that can read it — matches it to the run it names
+(§7.1). Nothing here inspects, labels or routes on content; that is the point of
+a blind bridge.
 """
 
 from __future__ import annotations
@@ -57,6 +63,7 @@ class TaskServer:
         system_prompt: str | None = None,
         workspace: str | None = None,
         max_iterations: int = 50,
+        estop_path: str | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -75,15 +82,22 @@ class TaskServer:
                 system_prompt=system_prompt,
                 workspace=workspace or agent.workspace_dir or None,
                 max_iterations=max_iterations,
+                estop_path=estop_path,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)
         self._ids = itertools.count(1)
+        self._submitted: list[str] = []
         self._stop = threading.Event()
         self._pump: threading.Thread | None = None
         self._rx = b""
 
     # -- lifecycle -------------------------------------------------------
+
+    @property
+    def request_ids(self) -> list[str]:
+        """The relay request ids handed out so far (diagnostics/tests)."""
+        return list(self._submitted)
 
     def start(self) -> RuntimeState:
         """Start the Executor (via the supervisor) and the result pump."""
@@ -95,11 +109,21 @@ class TaskServer:
         return state
 
     def submit(self, frame_b64: str) -> str:
-        """Hand one sealed task frame to the Executor. Returns its request id."""
+        """Hand one sealed app frame to the Executor. Returns its request id.
+
+        A task and a Stop travel the same way, because this side cannot tell them
+        apart: the frame is sealed for the Executor, and the host is blind by
+        design (§14). It is the Executor that opens the frame and dispatches on
+        the payload type, so the ``run_task`` method here is a carrier, not a
+        claim about the content. Labelling frames would mean either opening them
+        (breaking end-to-end encryption) or trusting a cleartext hint the relay
+        could forge.
+        """
         request_id = f"task-{next(self._ids)}"
         envelope = make_request(
             METHOD_RUN_TASK, {"frame": frame_b64}, request_id
         )
+        self._submitted.append(request_id)
         self._controller_ep.send(encode_frame(envelope))
         return request_id
 

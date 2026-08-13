@@ -223,6 +223,9 @@ def _print_banner(host: LocalHost) -> None:
         flush=True,
     )
     print(f"    Device:    {host.device_id}", flush=True)
+    # The app-free stop (§7.1). Printed here because the moment you need it is
+    # the moment the app is the thing that is not working.
+    print(f"    Stop a run without the app:  touch {host.estop_path}", flush=True)
     print("", flush=True)
     code = host.pairing_code
     if host.has_stored_pairing or code is None:
@@ -389,6 +392,11 @@ def cmd_status(
     out(f"  Device:    {HOST_DEVICE_ID}")
     out(f"  Paired:    {'yes (reconnects with no code)' if paired else 'no'}")
     out(f"  Service:   {svc.state()}  ({user_unit_path(svc.unit)})")
+    estop = workspace / "ESTOP"
+    out(
+        f"  ESTOP:     {'ENGAGED — no new work runs' if estop.exists() else 'clear'}"
+        f"  ({estop})"
+    )
     if not paired:
         out("")
         out("  Pair the app once:   cowork-host connect")

@@ -464,7 +464,9 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     if (controller == null || _runPhase != _RunPhase.running) return;
     _setRunPhase(_RunPhase.stopping);
     final thread = _activeRunThread ?? widget.threadKey;
-    controller.requestStop().catchError((Object error) {
+    // The thread key IS the session key the task was sent with, so it is what
+    // names the run on the executor side.
+    controller.requestStop(sessionKey: thread).catchError((Object error) {
       if (!mounted) return;
       setState(
         () => _logFor(thread).add(_ErrorEntry('Could not stop the run: $error')),

@@ -875,3 +875,131 @@ def test_a_disabled_workspace_is_treated_as_no_git(tmp_path):
     out = supervisor.delegate("work")
     supervisor.shutdown()
     assert out["subagents"][0]["state"] == "succeeded"
+
+
+def test_a_stop_at_the_root_reaches_children_and_grandchildren(tmp_path):
+    """§7.1 × §7.6, recursively: one interrupt at the root stops the child AND the
+    grandchild, with nobody waiting on them and no unwinding in between.
+
+    The tree is real — each level goes through :func:`make_child_runner`, so each
+    child builds its own runtime and its own supervisor. What makes this work is
+    that a child's switch is the ``parent_kill`` of its own supervisor, so the
+    notification walks the whole depth in one call. The assertions right after
+    ``interrupt()`` need no waiting at all, which is the property being pinned:
+    the cancel is not a poll.
+    """
+    from cowork_agent.runtime import make_child_runner
+
+    root_kill = KillSwitch()
+    release = threading.Event()
+    kills: dict[int, KillSwitch] = {}
+    parked: list[str] = []
+    events: list[dict] = []
+
+    class _DelegatesThenParks:
+        """Turn 1 delegates one level deeper; after that it parks, so the whole
+        tree is provably alive when the stop lands. At the depth limit the
+        delegation is refused and it parks one turn earlier."""
+
+        def __init__(self) -> None:
+            self._turn = 0
+
+        def complete(self, messages):
+            self._turn += 1
+            if self._turn == 1:
+                return MockModelClient(
+                    [
+                        '<tool_call>{"name":"delegate_task","arguments":'
+                        '{"tasks":"go one deeper","wait":true}}</tool_call>'
+                    ]
+                ).complete(messages)
+            parked.append("parked")
+            release.wait(WAIT_S)
+            return MockModelClient(["stopped mid-flight"]).complete(messages)
+
+    config = SubagentConfig(
+        model_factory=_DelegatesThenParks,
+        env_factory=lambda _task_id: LocalEnvironment(),
+        task_id="root",
+        root=str(tmp_path / "kids"),
+        limits=SubagentLimits(max_depth=2, heartbeat_s=0.02),
+        version_workspace=False,
+        runtime_kwargs={"enable_terminal": False},
+        on_event=events.append,
+    )
+    real_runner = make_child_runner(config)
+
+    def runner(ctx: ChildContext) -> LoopResult:
+        # Record every level's switch as its driver thread starts.
+        kills[ctx.depth] = ctx.kill_switch
+        return real_runner(ctx)
+
+    config.runner = runner
+
+    supervisor = _supervisor(
+        tmp_path,
+        runner,
+        parent_kill=root_kill,
+        limits=config.limits,
+        on_event=events.append,
+        workspace=str(tmp_path / "ws"),
+    )
+    out = supervisor.delegate("fan out", wait=False)
+    child_id = out["subagents"][0]["subagent_id"]
+
+    # Barrier: child and grandchild both live, the grandchild parked in a turn.
+    assert _wait_until(lambda: set(kills) == {1, 2}), f"tree never formed: {kills}"
+    assert _wait_until(lambda: parked), "the grandchild never reached a turn"
+
+    root_kill.interrupt()
+
+    # No polling here on purpose: the interrupt propagates down the tree inside
+    # the call that fired it.
+    assert kills[1].interrupted() is True, "the child was not stopped"
+    assert kills[2].interrupted() is True, "the grandchild was not stopped"
+
+    release.set()
+    records = supervisor.wait_for([child_id], timeout=WAIT_S)
+    supervisor.shutdown()
+
+    assert records[0].state is SubagentState.CANCELLED
+    assert records[0].stop_reason == "interrupted"
+    # The grandchild's own cancellation bubbled up through the child's stream.
+    deep_states = [
+        event
+        for event in events
+        if event.get("type") == "subagent_output"
+        and (event.get("payload") or {}).get("type") == "subagent_state"
+    ]
+    assert any(
+        state["payload"]["state"] == "cancelled" for state in deep_states
+    ), f"no cancelled grandchild in the stream: {deep_states}"
+
+
+def test_an_engaged_estop_stops_a_child_nobody_is_waiting_on(tmp_path):
+    """The app-free stop (§7.1 tier 1) reaches the tree too: the child inherits
+    the parent's sentinel path, so ``touch ESTOP`` ends it at its own next poll
+    even with ``wait=false`` and no parent unwinding into it."""
+    sentinel = tmp_path / "ESTOP"
+    parent_kill = KillSwitch(str(sentinel))
+    entered = threading.Event()
+
+    def runner(ctx: ChildContext) -> LoopResult:
+        entered.set()
+        assert _wait_until(ctx.kill_switch.estop_engaged, WAIT_S), "sentinel unseen"
+        return LoopResult(
+            reason=StopReason.ESTOP, final_answer=None, iterations=1, session_id=1
+        )
+
+    supervisor = _supervisor(
+        tmp_path, runner, parent_kill=parent_kill, limits=SubagentLimits(heartbeat_s=0.02)
+    )
+    out = supervisor.delegate("long job", wait=False)
+    sid = out["subagents"][0]["subagent_id"]
+    assert entered.wait(WAIT_S)
+
+    sentinel.write_text("stop", encoding="utf-8")
+    records = supervisor.wait_for([sid], timeout=WAIT_S)
+    supervisor.shutdown()
+    assert records[0].state is SubagentState.CANCELLED
+    assert records[0].stop_reason == "estop"

@@ -113,6 +113,7 @@ class FakeHost:
         self.device_id = "cowork-host"
         self.pairing_code = "chan1-123456"
         self.agent = argparse.Namespace(name="ada", workspace_dir="/tmp/ada")
+        self.estop_path = "/tmp/ada/ESTOP"
 
     def start(self):
         self.started += 1
