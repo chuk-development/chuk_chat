@@ -32,8 +32,12 @@ with 5000 files (``tests/bench_workspace_git.py``) — under 2% of a model round
 and it is the *round*, not the commit, that a user waits for. Rounds that fire
 many cheap calls can still collapse into one commit with :meth:`GitWorkspace.batch`.
 
-One workspace belongs to one agent and records one action at a time; this class
-is not thread-safe, and neither is the git index it writes to.
+One workspace belongs to one agent and records one action at a time. The git
+index is not concurrent, so every mutating method here takes one coarse
+reentrant lock — enough for the one real case of contention (§7.6: a subagent
+thread merging its branch back while the parent journals its own round), and not
+a substitute for the fact that a *second process* on the same repo is still on
+its own.
 
 **Honest boundary** (§7.7): git undoes the *workspace*, not the *outside world*.
 A sent email, a POST to an API, a package installed on the host are recorded in
@@ -53,6 +57,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -87,6 +92,18 @@ DEFAULT_AUTHOR_NAME = "CoWork Agent"
 DEFAULT_AUTHOR_EMAIL = "agent@cowork.local"
 
 ROLLBACK_TOOL = "__rollback__"
+MERGE_TOOL = "__subagent_merge__"
+
+#: Where a subagent's worktree is checked out (§7.6/§7.7). Inside the git
+#: directory on purpose: git never scans its own directory, so the parent's
+#: ``git add -A`` cannot swallow a child's whole checkout, and the worktrees
+#: travel with the repo instead of littering the workspace's parent directory.
+WORKTREE_DIRNAME = "cowork-worktrees"
+
+#: Branch prefix for a subagent branch.
+SUBAGENT_BRANCH_PREFIX = "cowork"
+
+_BRANCH_UNSAFE = re.compile(r"[^A-Za-z0-9._/-]+")
 
 # Glob metacharacters that must be escaped when a literal path becomes a
 # gitignore line.
@@ -155,6 +172,18 @@ venv/
 
 
 @dataclass(frozen=True)
+class WorktreeInfo:
+    """One subagent's private checkout of the workspace repo (§7.6, §7.7)."""
+
+    branch: str
+    path: str
+    base: str
+
+    def as_dict(self) -> dict:
+        return {"branch": self.branch, "path": self.path, "base": self.base}
+
+
+@dataclass(frozen=True)
 class CommitInfo:
     """One entry of the workspace history."""
 
@@ -188,12 +217,22 @@ class GitWorkspace:
         max_blob_bytes: int = DEFAULT_MAX_BLOB_BYTES,
         author_name: str = DEFAULT_AUTHOR_NAME,
         author_email: str = DEFAULT_AUTHOR_EMAIL,
+        journal_path: str = JOURNAL_PATH,
     ) -> None:
         self.root = Path(root)
         self.max_blob_bytes = max_blob_bytes
+        # One journal file per agent (§7.6): a subagent working in a worktree of
+        # this repo writes its own, because two agents appending to one
+        # ``journal.jsonl`` would conflict on every merge back.
+        self.journal_path = journal_path or JOURNAL_PATH
         self._author = (author_name, author_email)
         self._enabled = False
         self._git_dir: Path | None = None
+        self._common_dir: Path | None = None
+        # Coarse, reentrant: the parent's own journaling and a subagent thread
+        # merging its branch back both write this repo's index, and git's index
+        # lock is not a queue — it is an error.
+        self._lock = threading.RLock()
         self._seq = 0
         self._batch: list[str] | None = None
         self._batch_summary: str | None = None
@@ -228,6 +267,7 @@ class GitWorkspace:
         max_blob_bytes: int = DEFAULT_MAX_BLOB_BYTES,
         author_name: str = DEFAULT_AUTHOR_NAME,
         author_email: str = DEFAULT_AUTHOR_EMAIL,
+        journal_path: str = JOURNAL_PATH,
     ) -> "GitWorkspace | None":
         """Initialise (or adopt) the repo at ``root``.
 
@@ -242,6 +282,7 @@ class GitWorkspace:
             max_blob_bytes=max_blob_bytes,
             author_name=author_name,
             author_email=author_email,
+            journal_path=journal_path,
         )
         ws._enabled = ws._bootstrap()
         return ws
@@ -255,6 +296,13 @@ class GitWorkspace:
     def _git(
         self, *args: str, timeout: int = GIT_TIMEOUT_S
     ) -> subprocess.CompletedProcess:
+        return self._git_in(self.root, *args, timeout=timeout)
+
+    def _git_in(
+        self, cwd: str | os.PathLike, *args: str, timeout: int = GIT_TIMEOUT_S
+    ) -> subprocess.CompletedProcess:
+        """The same git, run in another checkout of the same repo — a subagent's
+        worktree."""
         env = dict(os.environ)
         env.update(
             {
@@ -268,7 +316,7 @@ class GitWorkspace:
             }
         )
         return subprocess.run(
-            ["git", "-C", str(self.root), *self._config, *args],
+            ["git", "-C", str(cwd), *self._config, *args],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -300,12 +348,21 @@ class GitWorkspace:
             if git_dir.returncode != 0:
                 return False
             self._git_dir = Path(git_dir.stdout.strip())
+            # In a worktree the git dir is per-worktree but ``info/exclude`` is
+            # read from the *common* dir, so the size guard must write there or
+            # a subagent would quietly commit the blobs the parent excludes.
+            common = self._git("rev-parse", "--path-format=absolute", "--git-common-dir")
+            self._common_dir = (
+                Path(common.stdout.strip())
+                if common.returncode == 0 and common.stdout.strip()
+                else self._git_dir
+            )
 
             gitignore = self.root / ".gitignore"
             if not gitignore.exists():
                 gitignore.write_text(GITIGNORE_BODY, encoding="utf-8")
 
-            journal = self.root / JOURNAL_PATH
+            journal = self.root / self.journal_path
             journal.parent.mkdir(parents=True, exist_ok=True)
             journal.touch(exist_ok=True)
         except (OSError, subprocess.SubprocessError):
@@ -321,7 +378,9 @@ class GitWorkspace:
         """Resume numbering across process restarts: the journal is the record,
         so the next sequence number comes from it, not from a counter in RAM."""
         try:
-            lines = (self.root / JOURNAL_PATH).read_text(encoding="utf-8").splitlines()
+            lines = (
+                (self.root / self.journal_path).read_text(encoding="utf-8").splitlines()
+            )
         except OSError:
             return 0
         for line in reversed(lines):
@@ -351,7 +410,7 @@ class GitWorkspace:
         not."""
         skipped: list[str] = []
         for status, path in pending:
-            if path == JOURNAL_PATH:
+            if path == self.journal_path:
                 continue  # the record itself is never dropped for being long
             target = self.root / path
             try:
@@ -373,9 +432,10 @@ class GitWorkspace:
         """Exclude one path locally. ``.git/info/exclude`` is deliberate: it is
         not committed, so the ignore list stays a local disk-cost decision and
         never shows up as a diff."""
-        if self._git_dir is None:
+        base = self._common_dir or self._git_dir
+        if base is None:
             return
-        exclude_file = self._git_dir / "info" / "exclude"
+        exclude_file = base / "info" / "exclude"
         # A path is a literal here, a gitignore line is a glob — escape the
         # difference or `report[1].txt` silently keeps being committed.
         line = "/" + _GLOB_CHARS.sub(r"\\\1", path.rstrip("/"))
@@ -450,21 +510,22 @@ class GitWorkspace:
         if not self._enabled:
             return None
 
-        pending = self._pending()
-        changed = [p for _, p in pending if p != JOURNAL_PATH]
-        entry = self._build_entry(tool, args, result, duration_ms, changed)
-        self._append_journal(entry)
+        with self._lock:
+            pending = self._pending()
+            changed = [p for _, p in pending if p != self.journal_path]
+            entry = self._build_entry(tool, args, result, duration_ms, changed)
+            self._append_journal(entry)
 
-        body = [
-            f"tool: {tool}",
-            f"journal-seq: {entry['seq']}",
-            f"files-changed: {len(changed)}",
-        ]
-        subject = summary or _default_subject(tool, entry["args"], changed)
-        if self._batch is not None:
-            self._batch.extend(body)
-            return None
-        return self._commit(subject, body, pending)
+            body = [
+                f"tool: {tool}",
+                f"journal-seq: {entry['seq']}",
+                f"files-changed: {len(changed)}",
+            ]
+            subject = summary or _default_subject(tool, entry["args"], changed)
+            if self._batch is not None:
+                self._batch.extend(body)
+                return None
+            return self._commit(subject, body, pending)
 
     @contextmanager
     def batch(self, summary: str | None = None) -> Iterator[None]:
@@ -485,7 +546,8 @@ class GitWorkspace:
             body, self._batch = self._batch, None
             subject, self._batch_summary = self._batch_summary, None
             if body:
-                self._commit(subject or "round: batched actions", body)
+                with self._lock:
+                    self._commit(subject or "round: batched actions", body)
 
     def history(self, limit: int = 20) -> list[CommitInfo]:
         """Newest first. This is what an undo UI lists."""
@@ -522,7 +584,7 @@ class GitWorkspace:
     def journal_entries(self, limit: int | None = None) -> list[dict]:
         """The journal as parsed entries, oldest first."""
         try:
-            raw = (self.root / JOURNAL_PATH).read_text(encoding="utf-8")
+            raw = (self.root / self.journal_path).read_text(encoding="utf-8")
         except OSError:
             return []
         entries: list[dict] = []
@@ -553,7 +615,10 @@ class GitWorkspace:
             return {"ok": False, "error": "workspace versioning is not enabled"}
         if commit is None and actions is None:
             return {"ok": False, "error": "pass either commit or actions"}
+        with self._lock:
+            return self._rollback_locked(commit, actions)
 
+    def _rollback_locked(self, commit: str | None, actions: int | None) -> dict:
         ref = commit if commit is not None else f"HEAD~{int(actions)}"
         resolved = self._git("rev-parse", "--verify", "-q", f"{ref}^{{commit}}")
         if resolved.returncode != 0 or not resolved.stdout.strip():
@@ -579,7 +644,7 @@ class GitWorkspace:
             self._git("checkout", previous, "--", JOURNAL_DIRNAME)
 
         pending = self._pending()
-        restored = [path for _, path in pending if path != JOURNAL_PATH]
+        restored = [path for _, path in pending if path != self.journal_path]
         entry = self._build_entry(
             ROLLBACK_TOOL,
             {"target": target, "from": previous or "", "actions": actions},
@@ -608,6 +673,135 @@ class GitWorkspace:
             ),
         }
 
+    # -- subagent branches / worktrees (§7.6, §7.7) ------------------------
+
+    def create_worktree(self, name: str) -> "WorktreeInfo | None":
+        """Check the workspace out a second time, on a fresh branch.
+
+        This is what makes a parallel batch of subagents safe: each child edits
+        its own checkout and its own index, so two children can touch the same
+        file without racing, and the collision is resolved once, on merge, by
+        git — not silently, at write time, by whoever ran last.
+
+        Never raises. ``None`` means the caller runs unversioned (the child then
+        works in the parent's workspace), which is the documented fallback.
+        """
+        if not self._enabled:
+            return None
+        with self._lock:
+            head = self._git("rev-parse", "HEAD")
+            if head.returncode != 0:
+                return None
+            base = head.stdout.strip()
+            branch = self._free_branch(_branch_slug(name))
+            path = self._worktree_path(branch)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return None
+            added = self._git("worktree", "add", "--quiet", "-b", branch, str(path), base)
+            if added.returncode != 0:
+                return None
+            return WorktreeInfo(branch=branch, path=str(path), base=base)
+
+    def merge_worktree(
+        self, info: "WorktreeInfo", *, message: str | None = None
+    ) -> dict:
+        """Merge a subagent's branch back and clean its checkout up.
+
+        Anything the child left uncommitted is committed on its own branch first,
+        so nothing is thrown away by the cleanup. A conflict aborts the merge and
+        keeps the branch **and** the worktree: the parent is told which files
+        collided and can look at both sides, which is the whole reason the child
+        got a branch in the first place.
+        """
+        if not self._enabled:
+            return {"ok": False, "error": "workspace versioning is not enabled"}
+        with self._lock:
+            self._commit_in(info, "subagent: final state")
+            # The parent's own tree must be clean, or git refuses the merge for
+            # reasons that have nothing to do with the child.
+            self._commit("checkpoint: state before subagent merge", [f"tool: {MERGE_TOOL}"])
+            merged = self._git(
+                "merge", "--no-ff", "--no-edit", "-m",
+                message or f"subagent: merge {info.branch}", info.branch,
+            )
+            if merged.returncode != 0:
+                conflicts = self._conflicts()
+                self._git("merge", "--abort")
+                return {
+                    "ok": False,
+                    "error": _cap(
+                        (merged.stderr or merged.stdout or "merge failed").strip(), 400
+                    ),
+                    "conflicts": conflicts,
+                    "branch": info.branch,
+                    "worktree": info.path,
+                }
+            head = self._git("rev-parse", "HEAD")
+            self.release_worktree(info, keep_branch=False)
+            return {
+                "ok": True,
+                "branch": info.branch,
+                "commit": head.stdout.strip() if head.returncode == 0 else None,
+            }
+
+    def release_worktree(self, info: "WorktreeInfo", *, keep_branch: bool = True) -> dict:
+        """Drop a child's checkout. ``keep_branch`` keeps the commits reachable —
+        that is where an unmerged child's work lives, and losing it silently would
+        be the opposite of an audit trail."""
+        if not self._enabled:
+            return {"ok": False, "error": "workspace versioning is not enabled"}
+        with self._lock:
+            self._commit_in(info, "subagent: final state")
+            self._git("worktree", "remove", "--force", info.path)
+            self._git("worktree", "prune")
+            if not keep_branch:
+                self._git("branch", "-D", info.branch)
+            return {"ok": True, "branch": info.branch, "kept_branch": keep_branch}
+
+    def worktree_branches(self) -> list[str]:
+        """Every subagent branch this repo still carries."""
+        if not self._enabled:
+            return []
+        proc = self._git(
+            "for-each-ref", "--format=%(refname:short)",
+            f"refs/heads/{SUBAGENT_BRANCH_PREFIX}/",
+        )
+        if proc.returncode != 0:
+            return []
+        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    # -- worktree internals -----------------------------------------------
+
+    def _worktree_path(self, branch: str) -> Path:
+        base = self._common_dir or self._git_dir or (self.root / ".git")
+        return base / WORKTREE_DIRNAME / branch.replace("/", "_")
+
+    def _free_branch(self, slug: str) -> str:
+        """A branch name that does not exist yet. A retried task must not fail on
+        the name of the attempt before it."""
+        name = f"{SUBAGENT_BRANCH_PREFIX}/{slug}" if "/" not in slug else slug
+        candidate = name
+        suffix = 1
+        while self._git("rev-parse", "--verify", "-q", f"refs/heads/{candidate}").returncode == 0:
+            suffix += 1
+            candidate = f"{name}-{suffix}"
+        return candidate
+
+    def _commit_in(self, info: "WorktreeInfo", subject: str) -> None:
+        """Commit whatever is pending inside the child's checkout, on its branch."""
+        if not Path(info.path).is_dir():
+            return
+        self._git_in(info.path, "add", "-A", "--", ".")
+        self._git_in(info.path, "commit", "-q", "--no-verify", "-m", subject)
+
+    def _conflicts(self) -> list[str]:
+        proc = self._git("diff", "--name-only", "--diff-filter=U")
+        if proc.returncode != 0:
+            return []
+        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
     # -- journal writing ---------------------------------------------------
 
     def _build_entry(
@@ -635,7 +829,7 @@ class GitWorkspace:
         return entry
 
     def _append_journal(self, entry: dict) -> None:
-        path = self.root / JOURNAL_PATH
+        path = self.root / self.journal_path
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as handle:
@@ -704,6 +898,16 @@ def _default_subject(tool: str, args: dict, changed: list[str]) -> str:
     if not changed:
         return f"{tool}{hint} (journal only)"
     return f"{tool}{hint}"
+
+
+def _branch_slug(name: str) -> str:
+    """A git-legal branch component. Git rejects a surprising amount (``..``, a
+    trailing ``.lock``, control characters); this keeps to the safe alphabet."""
+    slug = _BRANCH_UNSAFE.sub("-", name).strip("-./")
+    slug = re.sub(r"\.\.+", ".", slug).strip("-./")
+    if slug.endswith(".lock"):
+        slug = slug[: -len(".lock")]
+    return slug or "subagent"
 
 
 def _now() -> str:

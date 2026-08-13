@@ -28,6 +28,8 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
     {"type": "file",  "name": "report.csv",               # a file for the user
      "mime_type": "text/csv", "size": 1234,
      "data": "<base64>"}
+    {"type": "subagent",                                  # a child agent (§7.6)
+     "event": {"type": "subagent_state", ...}}            #   state or streamed output
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3}
     {"type": "error", "message": "..."}                   # rejected / crashed
@@ -119,6 +121,17 @@ def file_payload(
         "size": size,
         "data": base64.b64encode(bytes(data)).decode("ascii"),
     }
+
+
+def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
+    """Wrap one supervisor event (§7.6) as an in-frame ``subagent`` event.
+
+    Nested rather than flattened: the supervisor's own events already carry a
+    ``type`` (``subagent_state`` / ``subagent_output``), and merging two type
+    fields into one dict is how a wire format starts lying about itself. The app
+    renders the subagent list from ``event``.
+    """
+    return {"type": "subagent", "event": event}
 
 
 def done_payload(
