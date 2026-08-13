@@ -34,6 +34,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import time
 import uuid
 
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
@@ -116,6 +117,9 @@ class DockerEnvironment(BaseEnvironment):
         self._image = resolve_image(image)
         self._agent_id = agent_id
         self._task_id = task_id or DEFAULT_TASK_ID
+        # How long to keep retrying `docker start` while a container is still
+        # mid-shutdown. Short: this is a transition, not a wait for work.
+        self._start_grace_s = 10.0
         self._session_id = session_id or uuid.uuid4().hex[:12]
         self._workspace = os.path.abspath(os.path.expanduser(workdir)) if workdir else None
         self._user: str | None = user
@@ -216,7 +220,7 @@ class DockerEnvironment(BaseEnvironment):
             remove_container(existing.id or existing.name, cli=self._cli)
             existing = None
         if existing is not None and not existing.running:
-            if not self._cli.run("start", existing.id, timeout=60).ok:
+            if not self._start_existing(existing):
                 remove_container(existing.id or existing.name, cli=self._cli)
                 existing = None
         if existing is not None:
@@ -234,6 +238,31 @@ class DockerEnvironment(BaseEnvironment):
         self._reused = False
         self._resolve_user()
         return self._container
+
+    def _start_existing(self, existing: ContainerInfo) -> bool:
+        """Start a stopped container back up, tolerating a transitional state.
+
+        ``docker stop`` returns as soon as the signal is delivered, so a
+        container can still be mid-shutdown when we look. ``start`` then fails
+        with "container is restarting"/"removal in progress", and the caller
+        used to replace the box — silently discarding the agent's filesystem
+        (an installed package, a checked-out repo, /tmp state) and handing back
+        an empty one. Retry briefly instead; only a container that will not come
+        back after that is genuinely broken.
+        """
+        deadline = time.monotonic() + self._start_grace_s
+        attempt = 0
+        while True:
+            result = self._cli.run("start", existing.id, timeout=60)
+            if result.ok:
+                return True
+            stderr = result.stderr.lower()
+            if "no such container" in stderr:
+                return False  # gone for good; a fresh one is the right answer
+            if time.monotonic() >= deadline:
+                return False
+            attempt += 1
+            time.sleep(min(0.1 * attempt, 0.5))
 
     def _matches(self, container: ContainerInfo) -> bool:
         """False when a found container's mount or image no longer fits."""
