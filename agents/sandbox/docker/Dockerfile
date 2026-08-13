@@ -9,9 +9,11 @@
 # release and verified against its published checksum. Two builds of this file
 # therefore install the same tool versions.
 #
-# Deliberately NOT here: the browser stack (Chromium + Playwright, ~1 GB). It
-# lands in a separate layer/image so an agent that never browses does not pay
-# for it, and so this image stays quick to build.
+# Deliberately NOT here: the browser stack (Chromium + its system libraries,
+# several hundred MB). It lands in a separate image built on top of this one —
+# `Dockerfile.browser`, tagged `cowork-browser:latest` — so an agent that never
+# browses does not pay for it, and so this image stays quick to build. §8 makes
+# that the normal case: API tools first, the browser only as the fallback.
 
 ARG DEBIAN_BASE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 FROM ${DEBIAN_BASE}

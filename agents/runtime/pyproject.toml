@@ -14,6 +14,18 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# The browser fallback (§8/§9) is deliberately NOT an extra of this project.
+#
+# browser-use 0.13.7 pins `mcp==1.26.0`; our MCP client (§9) needs `mcp>=2.0.0`
+# (1.x has a different server API and a `timedelta` timeout). The two cannot
+# resolve in one environment, and MCP plus tool search is the load-bearing one —
+# a browser run is the fallback path by design (§8).
+#
+# So browser-use lives in its own environment: `sandbox/docker/Dockerfile.browser`
+# installs it, and the driver reaches a browser over `COWORK_BROWSER_CDP_URL`.
+# `browser_task` gates itself on the import via `check_fn`, so the runtime is
+# complete and honest without it — the tool simply does not appear in the prompt.
+# Revisit when browser-use drops the hard `mcp` pin.
 
 [build-system]
 requires = ["hatchling"]
