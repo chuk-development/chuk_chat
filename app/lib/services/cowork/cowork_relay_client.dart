@@ -159,17 +159,157 @@ class CoworkRelayDelta extends CoworkRelayInbound {
   final String text;
 }
 
-/// A tool-call line (rendered as a chip).
-class CoworkRelayTool extends CoworkRelayInbound {
-  const CoworkRelayTool(this.name, {this.status, this.raw = const {}});
-  final String name;
-  final String? status;
-  final Map<String, dynamic> raw;
+/// A reasoning delta — the model's thinking, which is a separate channel from
+/// the answer and is rendered separately (never folded into the reply text).
+///
+/// The executor strips `<think>` blocks today and does not forward them, so
+/// nothing emits this yet on the real wire. It is dispatched from a
+/// `{"type":"reasoning"}` payload the moment the runtime starts sending one.
+class CoworkRelayReasoning extends CoworkRelayInbound {
+  const CoworkRelayReasoning(this.text);
+  final String text;
 }
 
-/// The run finished.
+/// One tool call that ran, as reported by the executor.
+///
+/// The executor's `tool` payload carries `name`, `command`, `exit_code`,
+/// `stdout`, `stderr` and `timed_out`. Those map onto a short argument form, a
+/// short result form, the full detail for the expanded view, and success vs
+/// failure. [duration] is only ever set when the host actually reports a
+/// `duration_ms` — it is never guessed.
+class CoworkRelayTool extends CoworkRelayInbound {
+  const CoworkRelayTool(
+    this.name, {
+    this.status,
+    this.arguments,
+    this.result,
+    this.detail,
+    this.exitCode,
+    this.timedOut = false,
+    this.duration,
+    this.failed = false,
+    this.raw = const {},
+  });
+
+  /// Builds a tool line from a decoded `tool` payload.
+  factory CoworkRelayTool.fromPayload(Map<String, dynamic> payload) {
+    final name = '${payload['name'] ?? payload['tool'] ?? 'tool'}';
+    final status = payload['status'];
+    final exitCode = _asInt(payload['exit_code']);
+    final timedOut = payload['timed_out'] == true;
+    final stdout = _asText(payload['stdout']);
+    final stderr = _asText(payload['stderr']);
+    final arguments = _asText(payload['command']) ?? _asText(payload['arguments']);
+    // Failure is read from the protocol, never from the text: a non-zero exit
+    // code, a timeout, or an explicit error field.
+    final failed =
+        timedOut || (exitCode != null && exitCode != 0) || payload['error'] != null;
+    final detailParts = <String>[
+      if (stdout != null && stdout.isNotEmpty) stdout,
+      if (stderr != null && stderr.isNotEmpty) stderr,
+    ];
+    final result = _asText(payload['error']) ??
+        (stderr != null && stderr.isNotEmpty && failed ? stderr : stdout);
+    return CoworkRelayTool(
+      name,
+      status: status is String ? status : null,
+      arguments: arguments,
+      result: result,
+      detail: detailParts.isEmpty ? null : detailParts.join('\n'),
+      exitCode: exitCode,
+      timedOut: timedOut,
+      duration: _asDuration(payload['duration_ms']),
+      failed: failed,
+      raw: payload,
+    );
+  }
+
+  final String name;
+  final String? status;
+
+  /// Short form of what the tool was called with (for `run_command`: the
+  /// command line).
+  final String? arguments;
+
+  /// Short form of what came back.
+  final String? result;
+
+  /// The full output, shown only when the line is expanded.
+  final String? detail;
+
+  final int? exitCode;
+  final bool timedOut;
+
+  /// Wall-clock duration, only when the host reported one.
+  final Duration? duration;
+
+  /// True when the protocol says the call failed (non-zero exit, timeout, or an
+  /// explicit error).
+  final bool failed;
+
+  final Map<String, dynamic> raw;
+
+  static String? _asText(Object? value) => value is String ? value : null;
+
+  static int? _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static Duration? _asDuration(Object? value) {
+    final ms = _asInt(value);
+    if (ms == null || ms < 0) return null;
+    return Duration(milliseconds: ms);
+  }
+}
+
+/// A file the agent produced and pushed into the thread (§9,
+/// `send_file_to_user`).
+///
+/// The base64 body is decoded exactly **once**, here in the transport, and only
+/// the resulting bytes travel on. The encoded string is never kept, so a big
+/// screenshot does not sit in memory twice. A body that does not decode, or
+/// whose length contradicts the declared [declaredSize], arrives with
+/// [bytes] null and [error] set, so the UI can show a failure card instead of
+/// crashing.
+class CoworkRelayFile extends CoworkRelayInbound {
+  const CoworkRelayFile({
+    required this.name,
+    required this.mimeType,
+    required this.declaredSize,
+    this.bytes,
+    this.error,
+  });
+
+  final String name;
+  final String mimeType;
+  final int? declaredSize;
+  final Uint8List? bytes;
+  final String? error;
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isValid => bytes != null && error == null;
+}
+
+/// The run finished. The executor reports why, and how many rounds it took.
 class CoworkRelayDone extends CoworkRelayInbound {
-  const CoworkRelayDone();
+  const CoworkRelayDone({this.finalAnswer, this.reason, this.iterations});
+
+  /// The loop's own final answer, when it sent one.
+  final String? finalAnswer;
+
+  /// The termination reason the runtime reported (`finished`, `estop`,
+  /// `interrupted`, …).
+  final String? reason;
+
+  /// How many rounds the loop ran.
+  final int? iterations;
+
+  /// True when the run ended because the kill switch fired, not because the
+  /// agent finished. Read from the protocol's reason, never from text.
+  bool get wasStopped => reason == 'estop' || reason == 'interrupted';
 }
 
 /// The executor reported an error.
@@ -208,8 +348,17 @@ abstract interface class CoworkRelayController {
   /// Hands the executor the account token over the sealed channel.
   Future<void> provisionAccount(AccountSession session);
 
-  /// Seals and sends a task prompt.
-  Future<void> sendTask(String prompt);
+  /// Seals and sends a task prompt. [sessionKey] selects the thread on the
+  /// executor side: one agent, many threads (§4). The executor resumes the
+  /// append-only session that key routes to.
+  Future<void> sendTask(String prompt, {String sessionKey});
+
+  /// Asks the executor to abort the current run — the controller side of the
+  /// two-tier kill switch (§7.1).
+  ///
+  /// The UI must not treat this as "stopped": it is a request. The run is only
+  /// over when a `done` or `error` event arrives.
+  Future<void> requestStop();
 
   /// Tears the client down.
   Future<void> dispose();
@@ -508,8 +657,16 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       _sendFramePayload(payload);
 
   @override
-  Future<void> sendTask(String prompt) =>
-      _sendFramePayload(<String, dynamic>{'type': 'task', 'prompt': prompt});
+  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'task',
+        'prompt': prompt,
+        'session_key': sessionKey,
+      });
+
+  @override
+  Future<void> requestStop() =>
+      _sendFramePayload(<String, dynamic>{'type': 'stop'});
 
   @override
   Future<void> dispose() async {
@@ -661,18 +818,26 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
         _inbound.add(CoworkRelayDelta('$text'));
+      case 'reasoning':
+        final text = payload['text'] ?? payload['reasoning'] ?? '';
+        _inbound.add(CoworkRelayReasoning('$text'));
       case 'tool':
-        final name = '${payload['name'] ?? payload['tool'] ?? 'tool'}';
-        final status = payload['status'];
+        _inbound.add(CoworkRelayTool.fromPayload(payload));
+      case 'file':
+        _inbound.add(_fileFromPayload(payload));
+      case 'done':
+        final iterations = payload['iterations'];
+        final finalAnswer = payload['final_answer'];
+        final reason = payload['reason'];
         _inbound.add(
-          CoworkRelayTool(
-            name,
-            status: status is String ? status : null,
-            raw: payload,
+          CoworkRelayDone(
+            finalAnswer: finalAnswer is String ? finalAnswer : null,
+            reason: reason is String ? reason : null,
+            iterations: iterations is int
+                ? iterations
+                : (iterations is num ? iterations.toInt() : null),
           ),
         );
-      case 'done':
-        _inbound.add(const CoworkRelayDone());
       case 'error':
         _inbound.add(
           CoworkRelayRunError('${payload['message'] ?? 'Unknown error'}'),
@@ -680,6 +845,68 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       default:
         break;
     }
+  }
+
+  /// Turns a `file` payload into a [CoworkRelayFile], decoding the base64 body
+  /// exactly once and never keeping the encoded copy. A body that does not
+  /// decode, is empty, or contradicts the declared size comes back as an error
+  /// card instead of throwing into the socket read loop.
+  static CoworkRelayFile _fileFromPayload(Map<String, dynamic> payload) {
+    final rawName = payload['name'];
+    final name = rawName is String && rawName.trim().isNotEmpty
+        ? rawName.trim()
+        : 'unnamed file';
+    final rawMime = payload['mime_type'] ?? payload['mimeType'];
+    final mimeType = rawMime is String && rawMime.isNotEmpty
+        ? rawMime
+        : 'application/octet-stream';
+    final rawSize = payload['size'];
+    final declaredSize = rawSize is int
+        ? rawSize
+        : (rawSize is num ? rawSize.toInt() : null);
+    final data = payload['data'];
+    if (data is! String || data.isEmpty) {
+      return CoworkRelayFile(
+        name: name,
+        mimeType: mimeType,
+        declaredSize: declaredSize,
+        error: 'The file arrived without a body.',
+      );
+    }
+    Uint8List bytes;
+    try {
+      bytes = base64.decode(data);
+    } on FormatException {
+      return CoworkRelayFile(
+        name: name,
+        mimeType: mimeType,
+        declaredSize: declaredSize,
+        error: 'The file body is not valid base64.',
+      );
+    }
+    if (bytes.isEmpty) {
+      return CoworkRelayFile(
+        name: name,
+        mimeType: mimeType,
+        declaredSize: declaredSize,
+        error: 'The file is empty.',
+      );
+    }
+    if (declaredSize != null && declaredSize != bytes.length) {
+      return CoworkRelayFile(
+        name: name,
+        mimeType: mimeType,
+        declaredSize: declaredSize,
+        error: 'The file body does not match the declared size '
+            '($declaredSize bytes declared, ${bytes.length} received).',
+      );
+    }
+    return CoworkRelayFile(
+      name: name,
+      mimeType: mimeType,
+      declaredSize: declaredSize,
+      bytes: bytes,
+    );
   }
 
   Future<void> _sendFramePayload(Map<String, dynamic> payload) async {
