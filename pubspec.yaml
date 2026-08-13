@@ -49,6 +49,9 @@ dependencies:
   # Markdown rendering for agent replies (same renderer as chuk_chat).
   markdown_widget: ^2.3.2+8
 
+  # Where a file the agent produced is written when the user saves it.
+  path_provider: ^2.1.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

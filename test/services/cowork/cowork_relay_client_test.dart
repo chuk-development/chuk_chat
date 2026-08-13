@@ -377,4 +377,159 @@ void main() {
     await expectLater(client.sendTask('hi'), throwsStateError);
     await client.dispose();
   });
+
+  test('sendTask carries the session_key so an agent can hold many threads',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.sendTask('read the log', sessionKey: 'amber-otter-2');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task['prompt'], 'read the log');
+    expect(task['session_key'], 'amber-otter-2');
+
+    await client.dispose();
+  });
+
+  test('requestStop seals {type:stop}', () async {
+    final (client, host, _) = await paired();
+
+    await client.requestStop();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(host.received.where((m) => m['type'] == 'stop'), hasLength(1));
+
+    await client.dispose();
+  });
+
+  test('a run_command tool payload becomes arguments, result and a failure flag',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'tool',
+      'name': 'run_command',
+      'command': 'ls /nope',
+      'exit_code': 2,
+      'stdout': '',
+      'stderr': 'ls: /nope: No such file or directory',
+      'timed_out': false,
+      'duration_ms': 1500,
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'tool',
+      'name': 'run_command',
+      'command': 'echo hi',
+      'exit_code': 0,
+      'stdout': 'hi\n',
+      'stderr': '',
+      'timed_out': false,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final tools = events.whereType<CoworkRelayTool>().toList();
+    expect(tools, hasLength(2));
+    expect(tools[0].failed, isTrue);
+    expect(tools[0].exitCode, 2);
+    expect(tools[0].arguments, 'ls /nope');
+    expect(tools[0].result, contains('No such file'));
+    expect(tools[0].duration, const Duration(milliseconds: 1500));
+    expect(tools[1].failed, isFalse);
+    expect(tools[1].result, 'hi\n');
+    // A host that reports no duration must not get an invented one.
+    expect(tools[1].duration, isNull);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('a file event is decoded once into bytes', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    final body = utf8.encode('name,value\na,1\n');
+    await host.emit(<String, dynamic>{
+      'type': 'file',
+      'name': 'report.csv',
+      'mime_type': 'text/csv',
+      'size': body.length,
+      'data': base64.encode(body),
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final file = events.whereType<CoworkRelayFile>().single;
+    expect(file.name, 'report.csv');
+    expect(file.mimeType, 'text/csv');
+    expect(file.isValid, isTrue);
+    expect(file.isImage, isFalse);
+    expect(utf8.decode(file.bytes!), 'name,value\na,1\n');
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('a file event with a broken body arrives as an error, never a crash',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'file',
+      'name': 'shot.png',
+      'mime_type': 'image/png',
+      'size': 12,
+      'data': 'not base64 at all !!',
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'file',
+      'name': 'short.bin',
+      'mime_type': 'application/octet-stream',
+      'size': 999,
+      'data': base64.encode(<int>[1, 2, 3]),
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final files = events.whereType<CoworkRelayFile>().toList();
+    expect(files, hasLength(2));
+    expect(files[0].isValid, isFalse);
+    expect(files[0].bytes, isNull);
+    expect(files[0].error, contains('base64'));
+    // A body that contradicts the declared size is refused too.
+    expect(files[1].isValid, isFalse);
+    expect(files[1].error, contains('declared size'));
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('reasoning is its own event, and done carries the runtime reason',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{'type': 'reasoning', 'text': 'thinking…'});
+    await host.emit(<String, dynamic>{
+      'type': 'done',
+      'final_answer': 'all set',
+      'reason': 'interrupted',
+      'iterations': 4,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    expect(events.whereType<CoworkRelayReasoning>().single.text, 'thinking…');
+    final done = events.whereType<CoworkRelayDone>().single;
+    expect(done.reason, 'interrupted');
+    expect(done.iterations, 4);
+    expect(done.finalAnswer, 'all set');
+    expect(done.wasStopped, isTrue);
+
+    await sub.cancel();
+    await client.dispose();
+  });
 }
