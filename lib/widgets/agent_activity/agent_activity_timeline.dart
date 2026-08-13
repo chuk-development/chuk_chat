@@ -1,9 +1,9 @@
 // lib/widgets/agent_activity/agent_activity_timeline.dart
 //
-// The agent's work, shown the way a reader wants it: every step visible
-// while it happens, folded into one line ("Worked for 13s") once the
-// answer is there. No box, no chrome — a thin rail and muted text, so the
-// answer stays the loudest thing on screen.
+// The agent's work as a rail: one step per line, a thin line connecting
+// them, and under each search the pages it found as chips. Folded to a
+// single "Worked for 13s" once the answer is there, so a finished turn
+// reads as answer-first and the work is one tap away.
 
 import 'dart:async';
 
@@ -21,6 +21,7 @@ class AgentActivityTimeline extends StatefulWidget {
     this.clock,
     this.initiallyExpanded,
     this.onStepTap,
+    this.onSourceTap,
   });
 
   /// The round's calls, in the order the model made them. Drives the
@@ -43,10 +44,12 @@ class AgentActivityTimeline extends StatefulWidget {
   /// once finished).
   final bool? initiallyExpanded;
 
-  /// Called when a reader taps a single step, to show its arguments and
-  /// result. Group headers and thinking notes are not tappable — they
-  /// stand for several calls or none. Leave null to make steps inert.
+  /// Called when a reader taps a step, to show its arguments and result.
+  /// Thinking notes are not tappable — they stand for no call.
   final void Function(ToolCall toolCall)? onStepTap;
+
+  /// Called when a reader taps a source chip.
+  final void Function(AgentActivitySource source)? onSourceTap;
 
   @override
   State<AgentActivityTimeline> createState() => _AgentActivityTimelineState();
@@ -57,6 +60,12 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   bool? _expandedOverride;
 
   Timer? _ticker;
+
+  /// Diameter of the icon badge sitting on the rail.
+  static const double _badgeSize = 26;
+
+  /// Where the rail runs, measured from the left edge of the timeline.
+  static const double _railCenter = _badgeSize / 2;
 
   @override
   void initState() {
@@ -69,8 +78,6 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   void didUpdateWidget(AgentActivityTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isRunning != widget.isRunning) {
-      // Finishing a round returns to the default (folded), unless the
-      // reader already made a choice.
       _syncTicker();
     }
   }
@@ -116,8 +123,15 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
         children: [
           _buildHeader(theme, muted, duration),
           if (_isExpanded) ...[
-            const SizedBox(height: 6),
-            ...entries.map((entry) => _buildEntry(theme, muted, entry)),
+            const SizedBox(height: 4),
+            for (int i = 0; i < entries.length; i++)
+              _buildEntry(
+                theme,
+                muted,
+                entries[i],
+                isFirst: i == 0,
+                isLast: i == entries.length - 1,
+              ),
           ],
         ],
       ),
@@ -151,9 +165,6 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                 ),
               ),
               const SizedBox(width: 4),
-              // Points down when open, right when folded — the same
-              // affordance Grok uses, and it survives a text-only reading
-              // through the Semantics `expanded` flag above.
               Icon(
                 _isExpanded
                     ? Icons.keyboard_arrow_down
@@ -168,49 +179,58 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     );
   }
 
+  /// One step: the rail with its badge on the left, the line and the
+  /// source chips on the right.
   Widget _buildEntry(
     ThemeData theme,
     Color muted,
     AgentActivityEntry entry, {
-    bool isChild = false,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(left: isChild ? 22 : 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildEntryRow(theme, muted, entry, isChild: isChild),
-          ...entry.children.map(
-            (child) => _buildEntry(theme, muted, child, isChild: true),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEntryRow(
-    ThemeData theme,
-    Color muted,
-    AgentActivityEntry entry, {
-    required bool isChild,
+    required bool isFirst,
+    required bool isLast,
   }) {
     final Color color = entry.hasError
-        ? theme.colorScheme.error.withValues(alpha: 0.8)
+        ? theme.colorScheme.error.withValues(alpha: 0.85)
         : muted;
+    final Color railColor = theme.colorScheme.onSurface.withValues(
+      alpha: 0.15,
+    );
 
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: _badgeSize,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildEntryText(theme, entry, color),
+          ),
+        ),
+        if (entry.sources.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _buildSourceChips(theme, entry.sources),
+        ],
+        SizedBox(height: isLast ? 2 : 8),
+      ],
+    );
+
+    final row = IntrinsicHeight(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(_iconFor(entry), size: 14, color: color),
+          SizedBox(
+            width: _badgeSize,
+            child: _buildRail(
+              theme,
+              entry,
+              color: color,
+              railColor: railColor,
+              isFirst: isFirst,
+              isLast: isLast,
+            ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildEntryText(theme, entry, color, isChild: isChild),
-          ),
+          const SizedBox(width: 10),
+          Expanded(child: content),
         ],
       ),
     );
@@ -221,41 +241,151 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
     return InkWell(
       onTap: () => onTap(call),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: row,
+    );
+  }
+
+  /// The badge plus the line above and below it, so the steps read as one
+  /// continuous thread rather than a stack of unrelated rows.
+  Widget _buildRail(
+    ThemeData theme,
+    AgentActivityEntry entry, {
+    required Color color,
+    required Color railColor,
+    required bool isFirst,
+    required bool isLast,
+  }) {
+    return Stack(
+      children: [
+        Positioned(
+          left: _railCenter - 0.5,
+          top: 0,
+          bottom: 0,
+          child: Column(
+            children: [
+              SizedBox(
+                height: _railCenter,
+                child: isFirst
+                    ? const SizedBox.shrink()
+                    : Container(width: 1, color: railColor),
+              ),
+              SizedBox(
+                height: _badgeSize - _railCenter,
+                child: Container(width: 1, color: railColor),
+              ),
+              if (!isLast)
+                Expanded(child: Container(width: 1, color: railColor)),
+            ],
+          ),
+        ),
+        Container(
+          width: _badgeSize,
+          height: _badgeSize,
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            shape: BoxShape.circle,
+            border: Border.all(color: railColor),
+          ),
+          child: Icon(_iconFor(entry), size: 14, color: color),
+        ),
+      ],
     );
   }
 
   Widget _buildEntryText(
     ThemeData theme,
     AgentActivityEntry entry,
-    Color color, {
-    required bool isChild,
-  }) {
+    Color color,
+  ) {
     final baseStyle = theme.textTheme.bodySmall?.copyWith(color: color);
     final detail = entry.detail;
 
     if (detail == null) {
-      return Text(entry.label, style: baseStyle);
+      return Text(entry.label, style: baseStyle, overflow: TextOverflow.ellipsis);
     }
 
-    // The query or URL is the part worth reading, so it gets a monospace
-    // face and a touch more contrast than the verb in front of it.
+    // The query or URL is the part worth reading, so it carries more
+    // contrast than the verb in front of it.
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: '${entry.label} ', style: baseStyle),
+          TextSpan(text: '${entry.label}  ', style: baseStyle),
           TextSpan(
             text: detail,
             style: baseStyle?.copyWith(
-              fontFamily: 'monospace',
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
-      maxLines: 2,
+      maxLines: 1,
       overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  /// The pages a step found, as chips that scroll sideways — the row must
+  /// never push the message wider than the bubble.
+  Widget _buildSourceChips(
+    ThemeData theme,
+    List<AgentActivitySource> sources,
+  ) {
+    return SizedBox(
+      height: 30,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: sources.length,
+        padding: EdgeInsets.zero,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) =>
+            _buildSourceChip(theme, sources[index]),
+      ),
+    );
+  }
+
+  Widget _buildSourceChip(ThemeData theme, AgentActivitySource source) {
+    final onSurface = theme.colorScheme.onSurface;
+
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: onSurface.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipOval(
+            child: Image.network(
+              'https://www.google.com/s2/favicons?domain=${source.host}&sz=32',
+              width: 16,
+              height: 16,
+              errorBuilder: (_, _, _) => Icon(
+                Icons.public,
+                size: 14,
+                color: onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            source.host,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final onTap = widget.onSourceTap;
+    if (onTap == null) return chip;
+
+    return InkWell(
+      onTap: () => onTap(source),
+      borderRadius: BorderRadius.circular(15),
+      child: chip,
     );
   }
 

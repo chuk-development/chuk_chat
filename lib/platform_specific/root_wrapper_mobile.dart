@@ -504,7 +504,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       'Model': state.debugModelId,
       'Provider': state.debugProviderSlug ?? '',
       'Workspace': state.debugWorkspaceId ?? '',
-      'Reasoning': state.debugReasoningEnabled.toString(),
+      'Reasoning': state.debugReasoningEffort,
       'Platform': 'mobile',
       'Chat ID': chatId ?? '',
       'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',

@@ -49,6 +49,7 @@ class ToolPromptBuilder {
     Map<String, dynamic>? notesToolDef,
     Map<String, dynamic>? askUserToolDef,
     Map<String, dynamic>? webSearchToolDef,
+    Map<String, dynamic>? searchPlacesToolDef,
     Map<String, dynamic>? webCrawlToolDef,
     Map<String, dynamic>? searchChatsToolDef,
     Map<String, dynamic>? projectToolDef,
@@ -114,6 +115,9 @@ class ToolPromptBuilder {
       }
       if (webSearchToolDef != null) {
         alwaysAvailableTools.add(webSearchToolDef);
+      }
+      if (searchPlacesToolDef != null) {
+        alwaysAvailableTools.add(searchPlacesToolDef);
       }
       if (webCrawlToolDef != null) {
         alwaysAvailableTools.add(webCrawlToolDef);
@@ -484,12 +488,17 @@ class ToolPromptBuilder {
     final webToolNames = [
       if (hasWebSearch) '`web_search`',
       if (hasWebCrawl) '`web_crawl`',
+      if (alwaysAvailableNames.contains('search_places')) '`search_places`',
     ];
     final webToolsException = webToolNames.isEmpty
         ? ''
-        : 'Exception: ${webToolNames.join(' and ')} '
-              '${webToolNames.length == 1 ? 'is' : 'are'} always available '
-              'with full details below and can be used directly.\n';
+        : '**${webToolNames.join(' and ')} '
+              '${webToolNames.length == 1 ? 'is' : 'are'} NOT part of '
+              'discovery.** Full details are below; call '
+              '${webToolNames.length == 1 ? 'it' : 'them'} directly on the '
+              'first pass. NEVER call find_tools for web search, crawling, '
+              'or any question about real-world facts — that wastes a round '
+              'trip and delays the answer.\n';
 
     final catalogSection = discoverableNames.isNotEmpty
         ? '''
@@ -559,21 +568,25 @@ IMPORTANT: Never mention tool names, tool internals, or technical details to the
 CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
 RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
 
+PLACES ARE TWO LOOKUPS AT ONCE: When the question is about a real place — a shop, bank, restaurant, doctor, office: opening hours, address, phone, is-it-open-now — emit BOTH `web_search` AND `search_places` in the SAME response, as two tool calls in one turn. They answer different halves: the places lookup gives the exact branch, address and rating; the web search gives the hours and the source you can cite. Running them together costs one round trip instead of two, and two sources beat one. Do not wait for the first result before deciding on the second.
+
+NEVER CLAIM A LOOKUP YOU DID NOT DO: Do not write that you searched, checked, looked up or found nothing unless a tool result for that search is present in THIS turn. If you have not called the tool yet, call it now instead of describing it. Saying "I searched and found nothing" without a search is the single worst failure mode here — it looks like an answer and is a lie. Opening hours, addresses, phone numbers and prices of a named place are always a web_search, never an answer from memory.
+
 USER-CLAIMED RECENCY IS A HARD TRIGGER: If the user says something is "new", "just released", "brand new", "from today", "from yesterday", or otherwise recent — you MUST web_search + web_crawl before answering, even if you "know" the topic from training data. Your training knowledge is ALWAYS stale against these claims. Never contradict a recency claim from memory alone. If the claimed thing does not exist, the search will prove that — but you still must search.
 $catalogSection
 ## TOOL DISCOVERY
 
 You can see the tool names above but you do NOT have their descriptions or parameters yet.
-**You MUST call find_tools to get the full description of a tool before you can use it.**
-Do NOT guess what a tool does or what parameters it takes based on the name alone.
 $webToolsException
+For every OTHER tool: **you MUST call find_tools to get its full description before you can use it.**
+Do NOT guess what a tool does or what parameters it takes based on the name alone.
 
 $toolCallStart
 {"name": "find_tools", "arguments": {"query": "restaurant"}}
 $toolCallEnd
 
 $toolCallStart
-{"name": "find_tools", "arguments": {"query": "web search"}}
+{"name": "find_tools", "arguments": {"query": "email"}}
 $toolCallEnd
 
 The query must be 1-3 SHORT keywords for the TYPE of tool (e.g. "restaurant", "web search", "email", "rechnen", "route karte"). Never paste the user's full message.
@@ -770,6 +783,10 @@ IMPORTANT: Never mention tool names, tool internals, or technical details to the
 
 CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
 RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
+
+PLACES ARE TWO LOOKUPS AT ONCE: When the question is about a real place — a shop, bank, restaurant, doctor, office: opening hours, address, phone, is-it-open-now — emit BOTH `web_search` AND `search_places` in the SAME response, as two tool calls in one turn. They answer different halves: the places lookup gives the exact branch, address and rating; the web search gives the hours and the source you can cite. Running them together costs one round trip instead of two, and two sources beat one. Do not wait for the first result before deciding on the second.
+
+NEVER CLAIM A LOOKUP YOU DID NOT DO: Do not write that you searched, checked, looked up or found nothing unless a tool result for that search is present in THIS turn. If you have not called the tool yet, call it now instead of describing it. Saying "I searched and found nothing" without a search is the single worst failure mode here — it looks like an answer and is a lie. Opening hours, addresses, phone numbers and prices of a named place are always a web_search, never an answer from memory.
 
 USER-CLAIMED RECENCY IS A HARD TRIGGER: If the user says something is "new", "just released", "brand new", "from today", "from yesterday", or otherwise recent — you MUST web_search + web_crawl before answering, even if you "know" the topic from training data. Your training knowledge is ALWAYS stale against these claims. Never contradict a recency claim from memory alone. If the claimed thing does not exist, the search will prove that — but you still must search.
 $freshReleasesSection

@@ -35,6 +35,10 @@ import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
+import 'package:chuk_chat/model_selector_page.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
@@ -55,7 +59,6 @@ import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/reasoning_segment_button.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
@@ -165,8 +168,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
 
-  bool _reasoningEnabled =
-      true; // true = default (reasoning on for reasoning models)
+  ChatMode _chatMode = ChatModeService.fallbackMode;
+
+  /// Human name of the selected model, for the mode menu. Null until the
+  /// model list has been cached — the menu then shows the raw id.
+  String? _selectedModelName;
+
+  /// Models the reader picked on the model screen, shown one level deeper.
+  List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
   String? _systemPrompt;
   String? _selectedWorkspaceId;
   late final VoidCallback _modelSelectionListener;
@@ -260,6 +269,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void initState() {
     super.initState();
     initShiftKeyTracker();
+    unawaited(_restoreChatMode());
     _audioHandler = AudioRecordingHandler();
     _messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = _showSnackBar
@@ -378,6 +388,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _selectedModelId = newModelId;
         });
       }
+      unawaited(_refreshSelectedModelName(newModelId));
       unawaited(loadProviderSlugForModel(newModelId));
     };
     ModelSelectionDropdown.selectedModelListenable.addListener(
@@ -974,7 +985,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the current model. Debug only.
-  bool get debugReasoningEnabled => _reasoningEnabled;
+  bool get debugReasoningEnabled =>
+      ChatModeService.isDeepThinking(_chatMode);
+
+  /// Effort actually sent with each request — shown in the debug export,
+  /// where "true/false" hid which of the two modes was running.
+  String get debugReasoningEffort =>
+      ChatModeService.reasoningEffort(_chatMode);
 
   /// Current active chat id. Debug only.
   String? get debugActiveChatId => _activeChatId;
@@ -1085,12 +1102,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Update the global notifier so dropdown stays in sync
         ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
         await loadProviderSlugForModel(savedModelId);
+        await _refreshSelectedModelName();
+        await _refreshPickedModels();
       } else {
-        // No model saved - keep empty, user must select one
-        if (kDebugMode) {
-          debugPrint('No saved model preference - user must select a model');
+        // Nothing saved: take whatever the account carries, and fall back
+        // to the pinned default so a first-time reader can just type
+        // instead of having to pick a model first.
+        final defaultModelId = await ChatModeService.ensureModelSelected();
+        if (!mounted) return;
+        if (defaultModelId.isNotEmpty) {
+          setState(() {
+            _selectedModelId = defaultModelId;
+          });
+          ModelSelectionDropdown.selectedModelNotifier.value = defaultModelId;
+          await loadProviderSlugForModel(defaultModelId);
+        await _refreshSelectedModelName();
+        await _refreshPickedModels();
         }
-        // _selectedModelId stays empty
       }
     } catch (e) {
       if (kDebugMode) {
@@ -2553,93 +2581,118 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// The left segment toggles reasoning; the right opens the model dropdown.
   /// Falls back to a plain dropdown (no merge) for non-reasoning models, and
   /// to the legacy toggle-beside-dropdown layout in compact mode.
+  /// The composer's mode control: Fast or Thinking, with the model list
+  /// one level deeper inside its sheet. Same control as the mobile
+  /// composer, so a reader moving between the two finds the same thing.
   Widget _buildModelControlPill({required bool isCompactMode}) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    final bool supportsReasoning =
-        ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId);
-    final bool merged = supportsReasoning && !isCompactMode;
-
-    final Widget dropdown = KeyedSubtree(
+    return KeyedSubtree(
       key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
-      child: ModelSelectionDropdown(
-        key: const ValueKey<String>('desktop-model-selection-dropdown'),
-        initialSelectedModelId: _selectedModelId,
-        onModelSelected: (newModelId) {
-          setState(() {
-            _selectedModelId = newModelId;
-          });
-          if (kDebugMode) {
-            debugPrint('Selected model ID: $_selectedModelId');
-          }
-        },
-        textFieldFocusNode: _textFieldFocusNode,
-        isCompactMode: isCompactMode,
-        transparentStyle: true,
-        mergedSegmentStyle: merged,
+      child: ChatModeSelector(
+        mode: _chatMode,
+        selectedModelId: _selectedModelId,
+        modelLabel: _selectedModelName ??
+            (_selectedModelId.isEmpty ? null : _selectedModelId),
+        pickedModels: _pickedModels,
+        onModeChanged: _setChatMode,
+        onModelSelected: _applyModelSelection,
+        onOpenModelScreen: _openModelScreen,
       ),
-    );
-
-    if (!merged) {
-      if (!supportsReasoning) return dropdown;
-      // Compact mode: keep the toggle as its own button beside the dropdown.
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Tooltip(
-            message: _reasoningTooltip,
-            child: _buildIconBtn(
-              icon: Icons.psychology,
-              onTap: _toggleReasoning,
-              isActive: _reasoningEnabled,
-            ),
-          ),
-          const SizedBox(width: 6),
-          dropdown,
-        ],
-      );
-    }
-
-    // One outer rounded oval (the model selector), with the reasoning toggle
-    // as a full CIRCLE laid on top at the left end: its left half sits on the
-    // oval's left rounding (same line) and its right half is the divider toward
-    // the model name. Off → circle outline; on → filled bold.
-    return Stack(
-      alignment: Alignment.centerLeft,
-      children: [
-        Container(
-          height: 36,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: iconFg.withValues(alpha: 0.3),
-              width: 1.8,
-            ),
-          ),
-          // Left padding clears the overlaid oval so the model name never
-          // sits under it.
-          child: Padding(
-            padding: const EdgeInsets.only(
-              left: ReasoningSegmentButton.width,
-            ),
-            child: dropdown,
-          ),
-        ),
-        ReasoningSegmentButton(
-          isActive: _reasoningEnabled,
-          tooltip: _reasoningTooltip,
-          onTap: _toggleReasoning,
-        ),
-      ],
     );
   }
 
-  String get _reasoningTooltip => _reasoningEnabled
-      ? 'Reasoning on — click to disable for faster responses'
-      : 'Reasoning off — click to enable deeper thinking';
-
-  void _toggleReasoning() {
+  /// Resolve the selected model's human name for the mode sheet.
+  ///
+  /// Pass the id explicitly when reacting to a change, so a slow lookup for
+  /// a model the reader has already moved on from cannot overwrite the
+  /// name of the current one.
+  Future<void> _refreshSelectedModelName([String? modelId]) async {
+    final target = modelId ?? _selectedModelId;
+    final name = await ModelCacheService.displayNameFor(target);
+    if (!mounted || target != _selectedModelId || name == _selectedModelName) {
+      return;
+    }
     setState(() {
-      _reasoningEnabled = !_reasoningEnabled;
+      _selectedModelName = name;
+    });
+  }
+
+  /// The models this reader has picked, for the composer's second menu.
+  ///
+  /// Source of truth is `user_model_providers` in Supabase: a model lands
+  /// there as soon as a provider is pinned for it on the model screen, so
+  /// "picked" needs no second table. The mode default and the model in use
+  /// are always included — a menu that cannot show what is running would
+  /// be worse than useless.
+  Future<void> _refreshPickedModels() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    final prefs = await ModelCacheService.loadProviderPreferences(user.id);
+    final ids = <String>{
+      ChatModeService.defaultModelId,
+      if (_selectedModelId.isNotEmpty) _selectedModelId,
+      ...prefs.keys,
+    };
+
+    final catalogue = await ModelCacheService.loadAvailableModels();
+    final names = <String, String>{
+      for (final model in catalogue)
+        if (model['id'] is String && model['name'] is String)
+          model['id'] as String: model['name'] as String,
+    };
+
+    final picked = <ChatModelChoice>[
+      for (final id in ids)
+        ChatModelChoice(id: id, name: names[id] ?? id),
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    if (!mounted) return;
+    setState(() {
+      _pickedModels = picked;
+    });
+  }
+
+  /// The full model screen: add models, pin providers.
+  Future<void> _openModelScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()),
+    );
+    if (!mounted) return;
+    final selected = await UserPreferencesService.loadSelectedModel();
+    if (mounted && selected != null && selected.isNotEmpty) {
+      await _applyModelSelection(selected);
+    }
+    await _refreshPickedModels();
+  }
+
+  Future<void> _setChatMode(ChatMode mode) async {
+    setState(() {
+      _chatMode = mode;
+    });
+    await ChatModeService.save(mode);
+  }
+
+  /// Apply a model picked in the second dropdown: remember it, keep the
+  /// shared notifier in step, and reload the pinned provider so model and
+  /// provider cannot drift apart on the next send.
+  Future<void> _applyModelSelection(String modelId) async {
+    setState(() {
+      _selectedModelId = modelId;
+    });
+    ModelSelectionDropdown.selectedModelNotifier.value = modelId;
+    await UserPreferencesService.saveSelectedModel(modelId);
+    if (!mounted) return;
+    await loadProviderSlugForModel(modelId, forceFromPrefs: true);
+    await _refreshSelectedModelName(modelId);
+    await _refreshPickedModels();
+  }
+
+  /// Bring back the mode the reader last used.
+  Future<void> _restoreChatMode() async {
+    final mode = await ChatModeService.load();
+    if (!mounted || mode == _chatMode) return;
+    setState(() {
+      _chatMode = mode;
     });
   }
 

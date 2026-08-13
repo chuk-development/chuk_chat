@@ -39,6 +39,7 @@ Future<void> _pumpTimeline(
   DateTime? now,
   bool? initiallyExpanded,
   void Function(ToolCall)? onStepTap,
+  void Function(AgentActivitySource)? onSourceTap,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -48,6 +49,7 @@ Future<void> _pumpTimeline(
           isRunning: isRunning,
           initiallyExpanded: initiallyExpanded,
           onStepTap: onStepTap,
+          onSourceTap: onSourceTap,
           clock: now == null ? null : () => now,
         ),
       ),
@@ -59,13 +61,13 @@ void main() {
   group('entry wording', () {
     test('a search names what was searched for', () {
       final entries = buildAgentActivityEntries([
-        _call('web_search', arguments: {'query': 'VR Bank Selent'}),
+        _call('web_search', arguments: {'query': 'quarterly report'}),
       ]);
 
       expect(entries, hasLength(1));
       expect(entries.single.kind, AgentActivityKind.search);
-      expect(entries.single.label, 'Searched for');
-      expect(entries.single.detail, 'VR Bank Selent');
+      expect(entries.single.label, 'Searched');
+      expect(entries.single.detail, 'quarterly report');
     });
 
     test('an opened page drops scheme and www', () {
@@ -104,8 +106,8 @@ void main() {
     });
   });
 
-  group('grouping', () {
-    test('consecutive searches fold into one group with children', () {
+  group('one line per step', () {
+    test('four searches read as four searches, each with its query', () {
       final entries = buildAgentActivityEntries([
         _call('web_search', arguments: {'query': 'a'}),
         _call('web_search', arguments: {'query': 'b'}),
@@ -113,22 +115,12 @@ void main() {
         _call('web_search', arguments: {'query': 'd'}),
       ]);
 
-      expect(entries, hasLength(1));
-      expect(entries.single.label, 'Ran 4 searches');
-      expect(entries.single.isGroup, isTrue);
-      expect(entries.single.children, hasLength(4));
-      expect(entries.single.children.first.detail, 'a');
+      expect(entries, hasLength(4));
+      expect(entries.map((e) => e.detail), ['a', 'b', 'c', 'd']);
+      expect(entries.every((e) => e.kind == AgentActivityKind.search), isTrue);
     });
 
-    test('a single step is not turned into a group', () {
-      final entries = buildAgentActivityEntries([
-        _call('web_search', arguments: {'query': 'a'}),
-      ]);
-
-      expect(entries.single.isGroup, isFalse);
-    });
-
-    test('different kinds stay separate lines in order', () {
+    test('kinds keep their order', () {
       final entries = buildAgentActivityEntries([
         _call('web_search', arguments: {'query': 'a'}),
         _call('web_search', arguments: {'query': 'b'}),
@@ -137,21 +129,21 @@ void main() {
       ]);
 
       expect(entries.map((e) => e.label), [
-        'Ran 2 searches',
+        'Searched',
+        'Searched',
         'Opened page',
-        'Searched for',
+        'Searched',
       ]);
     });
 
-    test('a group inherits the error of any child', () {
+    test('a failed step is marked on its own line', () {
       final entries = buildAgentActivityEntries([
         _call('web_search', arguments: {'query': 'a'}),
         _call('web_search', arguments: {'query': 'b'},
             status: ToolCallStatus.error),
       ]);
 
-      expect(entries.single.isGroup, isTrue);
-      expect(entries.single.hasError, isTrue);
+      expect(entries.map((e) => e.hasError), [false, true]);
     });
 
     test('a thinking note becomes its own line before its step', () {
@@ -169,19 +161,81 @@ void main() {
       expect(entries.last.kind, AgentActivityKind.search);
     });
 
-    test('a thinking note breaks a run so it stays next to its step', () {
+    test('a thinking note sits directly above the step that carries it', () {
       final entries = buildAgentActivityEntries([
         _call('web_search', arguments: {'query': 'a'}),
         _call('web_search', arguments: {'query': 'b'}),
-        _call('web_search', arguments: {'query': 'c'}, roundThinking: 'Now b.'),
-        _call('web_search', arguments: {'query': 'd'}),
+        _call('web_search', arguments: {'query': 'c'}, roundThinking: 'Now c.'),
       ]);
 
       expect(entries.map((e) => e.label), [
-        'Ran 2 searches',
-        'Now b.',
-        'Ran 2 searches',
+        'Searched',
+        'Searched',
+        'Now c.',
+        'Searched',
       ]);
+      expect(entries.last.detail, 'c');
+    });
+  });
+
+  group('sources per step', () {
+    test('a search result becomes chips with host and title', () {
+      final call = _call('web_search', arguments: {'query': 'annual report'});
+      call.result =
+          'Search results for "annual report":\n\n'
+          '1. Annual report 2025\n'
+          '   https://www.example.com/reports/2025\n'
+          '   Summary of the year\n\n'
+          '2. Investor relations\n'
+          '   https://ir.example.org/overview\n'
+          '   Overview page\n';
+
+      final sources = extractSourcesFor(call);
+      expect(sources, hasLength(2));
+      // `www.` is stripped, the numbered heading becomes the title.
+      expect(sources.first.host, 'example.com');
+      expect(sources.first.title, 'Annual report 2025');
+      expect(sources.last.host, 'ir.example.org');
+    });
+
+    test('a crawl reports the page it was given', () {
+      final call = _call(
+        'web_crawl',
+        arguments: {'url': 'https://www.example.com/a'},
+      );
+      call.result = 'Content from https://www.example.com/a\nBody text';
+
+      final sources = extractSourcesFor(call);
+      expect(sources, hasLength(1));
+      expect(sources.single.host, 'example.com');
+    });
+
+    test('any other tool falls back to the URLs in its result', () {
+      final call = _call('some_tool', arguments: {'query': 'x'});
+      call.result =
+          'Found https://a.example.com/x and https://a.example.com/x '
+          'again, plus https://b.example.org/y.';
+
+      final sources = extractSourcesFor(call);
+      expect(sources.map((s) => s.host), ['a.example.com', 'b.example.org']);
+    });
+
+    test('a result without links has no chips', () {
+      final call = _call('some_tool', arguments: {'query': 'x'});
+      call.result = 'No results.';
+
+      expect(extractSourcesFor(call), isEmpty);
+      expect(buildAgentActivityEntries([call]).single.sources, isEmpty);
+    });
+
+    test('the chip count is capped', () {
+      final call = _call('web_search', arguments: {'query': 'x'});
+      call.result = List.generate(
+        maxSourcesPerStep + 3,
+        (i) => 'https://site$i.example.com/page',
+      ).join(' ');
+
+      expect(extractSourcesFor(call).length, maxSourcesPerStep);
     });
   });
 
@@ -203,19 +257,19 @@ void main() {
       expect(entries[1].label, 'Now I check the page.');
     });
 
-    test('reasoning breaks a run of same-kind calls', () {
+    test('reasoning sits between the steps it separates', () {
       final entries = buildAgentActivityEntriesFromSteps([
         AgentActivityStep.tool(_call('web_search', arguments: {'query': 'a'})),
         AgentActivityStep.tool(_call('web_search', arguments: {'query': 'b'})),
         const AgentActivityStep.reasoning('Need one more angle.'),
         AgentActivityStep.tool(_call('web_search', arguments: {'query': 'c'})),
-        AgentActivityStep.tool(_call('web_search', arguments: {'query': 'd'})),
       ]);
 
       expect(entries.map((e) => e.label), [
-        'Ran 2 searches',
+        'Searched',
+        'Searched',
         'Need one more angle.',
-        'Ran 2 searches',
+        'Searched',
       ]);
     });
 
@@ -273,7 +327,7 @@ void main() {
       await _pumpTimeline(
         tester,
         calls: [
-          _call('web_search', arguments: {'query': 'VR Bank'}, endSecond: 4),
+          _call('web_search', arguments: {'query': 'quarterly report'}, endSecond: 4),
           _call('fetch_url', arguments: {'url': 'https://example.com'},
               startSecond: 4),
         ],
@@ -291,7 +345,7 @@ void main() {
       await _pumpTimeline(
         tester,
         calls: [
-          _call('web_search', arguments: {'query': 'VR Bank'}, endSecond: 13),
+          _call('web_search', arguments: {'query': 'quarterly report'}, endSecond: 13),
         ],
         now: _t0.add(const Duration(minutes: 1)),
       );
@@ -306,7 +360,7 @@ void main() {
       await _pumpTimeline(
         tester,
         calls: [
-          _call('web_search', arguments: {'query': 'VR Bank'}, endSecond: 13),
+          _call('web_search', arguments: {'query': 'quarterly report'}, endSecond: 13),
         ],
         now: _t0.add(const Duration(minutes: 1)),
       );
@@ -314,14 +368,14 @@ void main() {
       await tester.tap(find.text('Worked for 13s'));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.search), findsOneWidget);
-      expect(find.text('VR Bank'), findsNothing); // rendered in a rich span
+      expect(find.text('quarterly report'), findsNothing); // rendered in a rich span
 
       await tester.tap(find.text('Worked for 13s'));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.search), findsNothing);
     });
 
-    testWidgets('a group shows its header and its children', (tester) async {
+    testWidgets('every search gets its own line', (tester) async {
       await _pumpTimeline(
         tester,
         calls: [
@@ -333,15 +387,40 @@ void main() {
         now: _t0.add(const Duration(seconds: 4)),
       );
 
-      expect(find.text('Ran 3 searches'), findsOneWidget);
-      // Header plus three children.
-      expect(find.byIcon(Icons.search), findsNWidgets(4));
+      expect(find.byIcon(Icons.search), findsNWidgets(3));
+    });
+
+    testWidgets('a search shows its pages as chips', (tester) async {
+      final call = _call(
+        'web_search',
+        arguments: {'query': 'annual report'},
+        endSecond: 3,
+      );
+      call.result =
+          'Search results:\n\n'
+          '1. Annual report\n'
+          '   https://www.example.com/reports\n';
+
+      final tapped = <AgentActivitySource>[];
+      await _pumpTimeline(
+        tester,
+        calls: [call],
+        initiallyExpanded: true,
+        now: _t0.add(const Duration(seconds: 3)),
+        onSourceTap: tapped.add,
+      );
+
+      expect(find.text('example.com'), findsOneWidget);
+
+      await tester.tap(find.text('example.com'));
+      await tester.pump();
+      expect(tapped.single.url, 'https://www.example.com/reports');
     });
 
     testWidgets('tapping a step reports the call behind it', (tester) async {
       final search = _call(
         'web_search',
-        arguments: {'query': 'VR Bank'},
+        arguments: {'query': 'quarterly report'},
         endSecond: 2,
       );
       final page = _call(
@@ -364,26 +443,6 @@ void main() {
       await tester.pump();
 
       expect(tapped, [page]);
-    });
-
-    testWidgets('a group header is not tappable', (tester) async {
-      final tapped = <ToolCall>[];
-
-      await _pumpTimeline(
-        tester,
-        calls: [
-          _call('web_search', arguments: {'query': 'a'}, endSecond: 2),
-          _call('web_search', arguments: {'query': 'b'}, endSecond: 3),
-        ],
-        initiallyExpanded: true,
-        now: _t0.add(const Duration(seconds: 3)),
-        onStepTap: tapped.add,
-      );
-
-      await tester.tap(find.text('Ran 2 searches'));
-      await tester.pump();
-
-      expect(tapped, isEmpty);
     });
 
     testWidgets('steps are inert without a tap handler', (tester) async {

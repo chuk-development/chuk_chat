@@ -5,11 +5,14 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
 
-const int _defaultSearchCount = 5;
-const int _maxSearchCount = 8;
-const int _defaultAutoCrawlCount = 2;
-const int _maxAutoCrawlCount = 3;
-const int _defaultAutoCrawlMaxChars = 3000;
+// Two crawled pages was too thin — portals disagree, and the operator's
+// own site fell outside the window. The fetches run together, so reading
+// four costs prompt size, not wall-clock.
+const int _defaultSearchCount = 8;
+const int _maxSearchCount = 10;
+const int _defaultAutoCrawlCount = 4;
+const int _maxAutoCrawlCount = 6;
+const int _defaultAutoCrawlMaxChars = 3500;
 const int _maxAutoCrawlMaxChars = 8000;
 const int _maxExcerptCharsPerPage = 2200;
 

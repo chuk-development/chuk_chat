@@ -356,7 +356,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       'Model': state.debugModelId,
       'Provider': state.debugProviderSlug ?? '',
       'Workspace': state.debugWorkspaceId ?? '',
-      'Reasoning': state.debugReasoningEnabled.toString(),
+      'Reasoning': state.debugReasoningEffort,
       'Platform': 'desktop',
       'Chat ID': chatId ?? '',
       'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',
