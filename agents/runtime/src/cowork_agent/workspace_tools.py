@@ -15,10 +15,16 @@ how you end up with a tree that never existed.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 from .registry import ToolRegistry
 from .workspace_git import GitWorkspace, timed_record
+
+#: An observer of every dispatch: ``(name, args, result)``. One place, for the
+#: same reason journaling lives here — a live feed that is wired per tool goes
+#: stale the first time a tool is added.
+ToolObserver = Callable[[str, "dict | None", Any], None]
 
 WORKSPACE_HISTORY_SCHEMA = {
     "type": "object",
@@ -68,9 +74,15 @@ class JournalingRegistry(ToolRegistry):
     is not.
     """
 
-    def __init__(self, workspace: GitWorkspace | None = None) -> None:
+    def __init__(
+        self,
+        workspace: GitWorkspace | None = None,
+        *,
+        observer: ToolObserver | None = None,
+    ) -> None:
         super().__init__()
         self._workspace = workspace
+        self._observer = observer
 
     @property
     def workspace(self) -> GitWorkspace | None:
@@ -80,6 +92,11 @@ class JournalingRegistry(ToolRegistry):
         started = time.perf_counter()
         result = super().dispatch(name, args)
         timed_record(self._workspace, name, args, result, started)
+        if self._observer is not None:
+            try:
+                self._observer(name, args, result)
+            except Exception:  # noqa: BLE001 — an observer never fails a call
+                pass
         return result
 
 

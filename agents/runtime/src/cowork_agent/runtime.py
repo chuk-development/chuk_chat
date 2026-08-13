@@ -14,27 +14,167 @@ started with.
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .files_out import FileSink
-from .loop import AgentLoop, IterationBudget, KillSwitch
+from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .media import WorkspaceMount
 from .memory import MemoryStore, register_memory_tool
-from .model import ModelClient
+from .model import ModelClient, ModelResponse
 from .prompt import build_system_prompt
 from .search import register_search_tool
 from .skills import SkillLibrary, load_skills, register_skill_tool
 from .state import StateStore
+from .subagents import (
+    ActivityMonitor,
+    ChildContext,
+    ChildRunner,
+    SubagentLimits,
+    SubagentSupervisor,
+    register_subagent_tools,
+)
 from .terminal import TerminalManager, register_terminal_tools
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
-from .workspace_git import GitWorkspace
+from .workspace_git import JOURNAL_PATH, GitWorkspace, summarize_result
 from .workspace_tools import JournalingRegistry, register_workspace_tools
 
 MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
+SUBAGENT_DIRNAME = "subagents"
+
+
+@dataclass
+class SubagentConfig:
+    """How this runtime spawns children (§7.6).
+
+    Passed to :func:`build_runtime` to add ``delegate_task`` /
+    ``subagent_control``. Everything a child needs that this process cannot
+    invent is a field here: a **fresh model client** per child (a scripted or
+    streaming client is single-use), and an **environment factory keyed by the
+    child's task id** — that factory is the whole isolation story. Hand it
+    ``cowork_sandbox.make_environment`` and each child gets its own container;
+    leave it out and children get their own local stand-in, so the same code path
+    is exercised in tests and in production.
+    """
+
+    model_factory: Callable[[], ModelClient]
+    env_factory: Callable[[str], Environment] | None = None
+    limits: SubagentLimits = field(default_factory=SubagentLimits)
+    #: Depth of the agent this config belongs to. The root is 0; a child's own
+    #: config is derived with ``depth = ctx.depth``.
+    depth: int = 0
+    task_id: str = "task"
+    #: Where child state (db, per-child scratch) lives. Defaults to a
+    #: ``subagents/`` directory next to the parent's database.
+    root: str | None = None
+    #: Shared across the whole tree so the concurrency ceiling is per level, not
+    #: per node. Left unset at the root and threaded down from there.
+    gates: dict[int, threading.BoundedSemaphore] | None = None
+    on_event: Callable[[dict], None] | None = None
+    activity: ActivityMonitor | None = None
+    #: Override the default child runner (tests use a fake).
+    runner: ChildRunner | None = None
+    system_prompt: str | None = None
+    max_iterations: int = 30
+    version_workspace: bool = True
+    #: Extra keyword arguments forwarded verbatim to the child's
+    #: ``build_runtime`` (``session``, ``aux_model``, ``media_mount``, ...).
+    runtime_kwargs: dict[str, Any] = field(default_factory=dict)
+    #: Set by :func:`build_runtime` so the caller can shut the tree down.
+    supervisor: SubagentSupervisor | None = None
+
+
+class _ChildStreamingModel:
+    """Reports each child turn's assistant text upward as it happens (§7.6 live
+    streaming). Mirrors the executor's wrapper, one level down."""
+
+    def __init__(self, inner: ModelClient, emit: Callable[[dict], None]) -> None:
+        self._inner = inner
+        self._emit = emit
+
+    def complete(self, messages: list[dict]) -> ModelResponse:
+        response = self._inner.complete(messages)
+        if response.text:
+            self._emit({"type": "delta", "text": response.text})
+        return response
+
+
+def make_child_runner(config: SubagentConfig) -> ChildRunner:
+    """The default :class:`~cowork_agent.subagents.ChildRunner`: a full runtime.
+
+    One child = one environment built from its own task id, one database, one
+    loop. The environment is released in a ``finally`` — a leaked child container
+    outlives the run that made it.
+    """
+
+    def run(ctx: ChildContext) -> LoopResult:
+        factory = config.env_factory or (lambda task_id: LocalEnvironment())
+        env = factory(ctx.task_id)
+        try:
+            child_config = SubagentConfig(
+                model_factory=config.model_factory,
+                env_factory=config.env_factory,
+                limits=config.limits,
+                depth=ctx.depth,
+                task_id=ctx.task_id,
+                root=ctx.root,
+                gates=ctx.gates,
+                on_event=ctx.emit,
+                runner=config.runner,
+                system_prompt=config.system_prompt,
+                max_iterations=config.max_iterations,
+                version_workspace=config.version_workspace,
+                runtime_kwargs=config.runtime_kwargs,
+            )
+            loop = build_runtime(
+                _ChildStreamingModel(config.model_factory(), ctx.emit),
+                db_path=ctx.db_path,
+                environment=env,
+                workspace=ctx.workspace,
+                max_iterations=config.max_iterations,
+                system_prompt=config.system_prompt,
+                kill_switch=ctx.kill_switch,
+                version_workspace=config.version_workspace and ctx.branch is not None,
+                # One journal file per agent, or two children merging back would
+                # collide on every line of it.
+                git_journal_path=f".cowork/journal-{ctx.subagent_id}.jsonl",
+                terminal_task_id=ctx.task_id,
+                # Summarised, not verbatim: the child's raw tool output can be
+                # megabytes, and this event exists to show the parent (and the
+                # phone) that something happened, not to move the payload.
+                tool_observer=lambda name, args, result: ctx.emit(
+                    {
+                        "type": "tool",
+                        "name": name,
+                        "summary": summarize_result(result),
+                    }
+                ),
+                subagents=child_config,
+                **config.runtime_kwargs,
+            )
+            ctx.on_loop(loop)
+            try:
+                return loop.run(ctx.session_key, ctx.prompt)
+            finally:
+                nested = child_config.supervisor
+                if nested is not None:
+                    nested.shutdown()
+        finally:
+            cleanup = getattr(env, "cleanup", None)
+            if callable(cleanup):
+                try:
+                    cleanup()
+                except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                    pass
+
+    return run
 
 
 def build_runtime(
@@ -61,8 +201,12 @@ def build_runtime(
     enable_terminal: bool = True,
     terminal_task_id: str = "task",
     version_workspace: bool = True,
+    git_journal_path: str = JOURNAL_PATH,
     file_sink: FileSink | None = None,
     media_mount: WorkspaceMount | None = None,
+    kill_switch: KillSwitch | None = None,
+    tool_observer: Callable[[str, dict | None, Any], None] | None = None,
+    subagents: SubagentConfig | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -88,13 +232,23 @@ def build_runtime(
     invent for itself: where a file sent to the user goes (the executor's sealed
     event stream) and which host directory the sandbox workspace really is (for
     the host-side ffmpeg, §9). Each unset tool stays out of the prompt.
+
+    ``subagents`` (§7.6) adds ``delegate_task`` / ``subagent_control``. It needs
+    the state store (children are recorded in it) and, for branch-per-child, a
+    versioned workspace; without git the children share this workspace.
+    ``kill_switch`` lets a caller own the Stop switch — that is how a parent
+    interrupts one child, since a child's loop is built by this same function.
     """
     env = environment or LocalEnvironment()
     # The workspace is a git repo and every dispatch is journaled into it (§7.7).
     # No workspace, no git binary, or an unwritable directory -> the registry is
     # a plain one and the run continues unversioned.
-    git_workspace = GitWorkspace.open(workspace) if version_workspace else None
-    registry = JournalingRegistry(git_workspace)
+    git_workspace = (
+        GitWorkspace.open(workspace, journal_path=git_journal_path)
+        if version_workspace
+        else None
+    )
+    registry = JournalingRegistry(git_workspace, observer=tool_observer)
     register_builtin_tools(
         registry,
         env,
@@ -123,6 +277,29 @@ def build_runtime(
     store = StateStore(db_path)
     if enable_chat_search:
         register_search_tool(registry, store)
+
+    kill = kill_switch or KillSwitch(estop_path)
+
+    if subagents is not None:
+        supervisor = SubagentSupervisor(
+            parent_key=f"agent:{subagents.task_id}",
+            store=store,
+            runner=subagents.runner or make_child_runner(subagents),
+            root=subagents.root or str(Path(db_path).parent / SUBAGENT_DIRNAME),
+            depth=subagents.depth,
+            task_id=subagents.task_id,
+            limits=subagents.limits,
+            workspace=workspace,
+            git=git_workspace,
+            gates=subagents.gates,
+            on_event=subagents.on_event,
+            activity=subagents.activity,
+            # The parent's own Stop reaches the children: stopping a run must
+            # stop the sandboxes it opened, not orphan them.
+            parent_kill=kill,
+        )
+        subagents.supervisor = supervisor
+        register_subagent_tools(registry, supervisor)
 
     memory: MemoryStore | None = None
     if enable_memory:
@@ -165,7 +342,7 @@ def build_runtime(
         store,
         max_iterations=max_iterations,
         budget=IterationBudget(budget if budget is not None else max_iterations),
-        kill_switch=KillSwitch(estop_path),
+        kill_switch=kill,
         system_prompt=prompt,
         context_providers=[library.pending_context],
         context_ladder=ladder,

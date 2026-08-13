@@ -30,6 +30,8 @@ from collections.abc import Callable
 from cowork_agent import (
     ModelClient,
     ModelResponse,
+    SubagentConfig,
+    SubagentLimits,
     WorkspaceMount,
     build_runtime,
 )
@@ -39,7 +41,7 @@ from cowork_crypto import (
     CoworkFrameSealer,
 )
 from cowork_manager import decode_frames, encode_frame, make_request, make_response
-from cowork_sandbox import BaseEnvironment
+from cowork_sandbox import BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .protocol import (
@@ -53,6 +55,7 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    subagent_payload,
     tool_payload,
 )
 
@@ -101,6 +104,9 @@ class Executor:
         media_mount: WorkspaceMount | None = None,
         max_iterations: int = 50,
         poll_interval: float = 0.1,
+        subagent_sandbox: str | None = None,
+        subagent_sandbox_options: dict | None = None,
+        subagent_limits: SubagentLimits | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -118,6 +124,14 @@ class Executor:
         self._media_mount = media_mount
         self._max_iterations = max_iterations
         self._poll = poll_interval
+        # Subagents (§7.6) are opt-in per executor, because a child is a second
+        # sandbox and a second model stream — a cost the operator says yes to.
+        # ``subagent_sandbox`` is the *kind* ("local" / "docker"), and each child
+        # is built through the sandbox factory with its own task id, so with
+        # docker one subagent is one container (§6).
+        self._subagent_sandbox = subagent_sandbox
+        self._subagent_sandbox_options = dict(subagent_sandbox_options or {})
+        self._subagent_limits = subagent_limits
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -215,6 +229,7 @@ class Executor:
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
         )
 
+        subagents = self._subagent_config(request_id, session_key)
         loop = build_runtime(
             model,
             db_path=self._db_path,
@@ -222,6 +237,7 @@ class Executor:
             max_iterations=self._max_iterations,
             system_prompt=self._system_prompt,
             workspace=self._workspace,
+            subagents=subagents,
             # `send_file_to_user` (§9): the agent hands over the bytes, this
             # turns them into one sealed `file` event on the same stream as the
             # deltas. A file too large to send raises here, the agent tool
@@ -244,6 +260,10 @@ class Executor:
             return
         finally:
             self._env_shim.on_run = None
+            # Children outlive the parent's turn otherwise: a leaked child keeps a
+            # container and a model stream alive with nobody reading either.
+            if subagents is not None and subagents.supervisor is not None:
+                subagents.supervisor.shutdown()
 
         self._terminal(
             request_id,
@@ -253,6 +273,37 @@ class Executor:
                 iterations=result.iterations,
             ),
         )
+
+    # -- subagents (§7.6) ------------------------------------------------
+    def _subagent_config(self, request_id: str, session_key: str) -> SubagentConfig | None:
+        """Build the child wiring for one task, or ``None`` when subagents are off.
+
+        The environment factory is the isolation guarantee: it is keyed by the
+        child's task id and goes through the same sandbox factory the parent's
+        container came from, so "one child = one sandbox" holds locally and in
+        the container backend without a second code path.
+        """
+        if self._subagent_sandbox is None:
+            return None
+        kind = self._subagent_sandbox
+        options = self._subagent_sandbox_options
+
+        def env_factory(task_id: str) -> BaseEnvironment:
+            opts = dict(options)
+            if kind == "docker":
+                opts.setdefault("session_id", task_id)
+            return make_environment(kind, **opts)
+
+        config = SubagentConfig(
+            model_factory=self._model_factory,
+            env_factory=env_factory,
+            task_id=session_key,
+            system_prompt=self._system_prompt,
+            on_event=lambda event: self._event(request_id, subagent_payload(event)),
+        )
+        if self._subagent_limits is not None:
+            config.limits = self._subagent_limits
+        return config
 
     # -- outbound (all sealed) -------------------------------------------
     def _seal_b64(self, payload: dict) -> str:
