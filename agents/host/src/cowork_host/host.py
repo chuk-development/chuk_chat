@@ -27,8 +27,8 @@ from cowork_crypto import (
     Pairing,
     ReconnectHandshake,
 )
-from cowork_manager import Agent, RosterStore
-from cowork_sandbox import make_environment
+from cowork_manager import Agent, ContainerSupervisor, RosterStore
+from cowork_sandbox import BaseEnvironment, make_environment
 
 from cowork_executor import ModelFactory, resolve_backend_model_factory
 
@@ -85,6 +85,15 @@ class LocalHost:
 
         self._roster = RosterStore(self._roster_path)
         self._agent = self._load_or_create_agent(agent_name)
+
+        # The container lifecycle (§6) is only built for the docker backend: one
+        # labelled container per agent, its workspace bind-mounted, reused across
+        # turns. The local backend has no lifecycle to supervise.
+        self._containers: ContainerSupervisor | None = None
+        if sandbox_kind == "docker":
+            self._containers = ContainerSupervisor(
+                workspace_resolver=lambda _aid: self._agent.workspace_dir or None,
+            )
 
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
         self._device_id = HOST_DEVICE_ID
@@ -289,6 +298,7 @@ class LocalHost:
 
     def start(self) -> None:
         """Start the relay and the host party. Non-blocking."""
+        self._reap_orphan_containers()
         self._relay.start()
         self._port = self._relay.port
         self._party = HostParty(
@@ -313,7 +323,26 @@ class LocalHost:
             self._party.stop()
             self._party = None
         self._relay.stop()
+        if self._containers is not None:
+            # Releases the handles. The agent's own container is deliberately left
+            # in place: it is the box the agent installed into, and the next start
+            # reuses it (§6). Task-scoped children are removed by their cleanup.
+            self._containers.shutdown()
         self._roster.close()
+
+    def _reap_orphan_containers(self) -> None:
+        """Remove containers a killed previous run left behind (§6 orphan reaper).
+
+        Startup is the only safe moment for this: nothing of ours is running yet,
+        so every managed container found is by definition an orphan.
+        """
+        if self._containers is None:
+            return
+        reaped = self._containers.reap_orphans()
+        if reaped:
+            self._log(
+                f"reaped {len(reaped)} orphaned agent container(s) from a previous run"
+            )
 
     # -- observable pairing info ----------------------------------------
 
@@ -350,6 +379,17 @@ class LocalHost:
 
     # -- model factory + task server wiring (called by HostParty) --------
 
+    def _make_environment(self) -> BaseEnvironment:
+        """The agent's execution environment for one served session.
+
+        ``docker`` goes through the supervisor, so the agent gets **its** labelled
+        container with the workspace bind-mounted and reused across turns.
+        ``local`` runs on the host itself in the same workspace directory.
+        """
+        if self._containers is not None:
+            return self._containers.environment(self._agent.id)
+        return make_environment("local", workdir=self._agent.workspace_dir)
+
     def _make_model_factory(self, token: dict) -> ModelFactory:
         if self._model_factory_override is not None:
             self._log("using injected model factory (no backend, no credits)")
@@ -380,9 +420,7 @@ class LocalHost:
         party: HostParty,
     ) -> TaskServer:
         model_factory = self._make_model_factory(token)
-        environment = make_environment(
-            self._sandbox_kind, workdir=self._agent.workspace_dir
-        )
+        environment = self._make_environment()
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
         serve_roster = RosterStore(self._roster_path)
