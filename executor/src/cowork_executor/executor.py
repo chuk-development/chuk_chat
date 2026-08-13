@@ -30,6 +30,7 @@ from collections.abc import Callable
 from cowork_agent import (
     ModelClient,
     ModelResponse,
+    WorkspaceMount,
     build_runtime,
 )
 from cowork_crypto import (
@@ -50,6 +51,7 @@ from .protocol import (
     done_payload,
     encode_payload,
     error_payload,
+    file_payload,
     frame_to_b64,
     tool_payload,
 )
@@ -96,6 +98,7 @@ class Executor:
         model_factory: ModelFactory,
         system_prompt: str | None = None,
         workspace: str | None = None,
+        media_mount: WorkspaceMount | None = None,
         max_iterations: int = 50,
         poll_interval: float = 0.1,
     ) -> None:
@@ -109,6 +112,10 @@ class Executor:
         self._model_factory = model_factory
         self._system_prompt = system_prompt
         self._workspace = workspace
+        # The host directory the sandbox workspace really is, for the host-side
+        # ffmpeg passthrough (§9). Left unset, the media tools are not registered
+        # and cost nothing in the prompt.
+        self._media_mount = media_mount
         self._max_iterations = max_iterations
         self._poll = poll_interval
 
@@ -215,6 +222,17 @@ class Executor:
             max_iterations=self._max_iterations,
             system_prompt=self._system_prompt,
             workspace=self._workspace,
+            # `send_file_to_user` (§9): the agent hands over the bytes, this
+            # turns them into one sealed `file` event on the same stream as the
+            # deltas. A file too large to send raises here, the agent tool
+            # catches it, and the model is told — the channel is never flooded.
+            file_sink=lambda sent: self._event(
+                request_id,
+                file_payload(
+                    name=sent.name, mime_type=sent.mime_type, data=sent.data
+                ),
+            ),
+            media_mount=self._media_mount,
         )
 
         try:
