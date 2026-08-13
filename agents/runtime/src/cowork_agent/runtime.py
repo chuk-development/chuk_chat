@@ -25,6 +25,7 @@ from .registry import ToolRegistry
 from .search import register_search_tool
 from .skills import SkillLibrary, load_skills, register_skill_tool
 from .state import StateStore
+from .terminal import TerminalManager, register_terminal_tools
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
 
@@ -50,6 +51,8 @@ def build_runtime(
     enable_memory: bool = True,
     enable_skills: bool = True,
     enable_chat_search: bool = True,
+    enable_terminal: bool = True,
+    terminal_task_id: str = "task",
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -63,6 +66,14 @@ def build_runtime(
     env = environment or LocalEnvironment()
     registry = ToolRegistry()
     register_builtin_tools(registry, env, session=session, base_url=base_url)
+
+    if enable_terminal:
+        # Task-scoped by construction (§7.8): the task id is part of every tmux
+        # session name, so a new task can only ever get a fresh terminal.
+        # Registered even without tmux — `check_fn` keeps it out of the prompt.
+        register_terminal_tools(
+            registry, TerminalManager(env, task_id=terminal_task_id)
+        )
 
     store = StateStore(db_path)
     if enable_chat_search:
