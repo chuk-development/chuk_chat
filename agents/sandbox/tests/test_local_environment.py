@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import threading
 import time
 
 import pytest
@@ -93,3 +95,87 @@ def test_factory_builds_local():
 def test_factory_rejects_unknown():
     with pytest.raises(ValueError):
         make_environment("nope")
+
+
+# -- cancel: the §7.1 Stop reaching a command already running ---------------
+
+
+def test_cancel_kills_the_command_in_flight(env, tmp_path):
+    """A Stop must not wait out a long command. The barrier is the file the
+    command creates before it blocks, so the cancel provably lands while the
+    shell is running."""
+    marker = tmp_path / "started"
+    result: dict[str, ProcessResult] = {}
+
+    def work() -> None:
+        result["r"] = env.run(f"touch {marker} && sleep 60", timeout=120)
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    deadline = time.monotonic() + 20.0
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists(), "the command never started"
+
+    start = time.monotonic()
+    env.cancel()
+    worker.join(20.0)
+    elapsed = time.monotonic() - start
+
+    assert not worker.is_alive(), "run() never returned after the cancel"
+    assert elapsed < 15.0, f"the cancel took {elapsed:.1f}s"
+    # A killed command is a failed command, not an exception and not a timeout.
+    assert result["r"].exit_code != 0
+    assert result["r"].timed_out is False
+
+
+def test_cancel_kills_the_whole_process_group(env, tmp_path):
+    """The command's children die with it: a `sleep` left behind would keep
+    holding the workspace with nobody watching it."""
+    marker = tmp_path / "child-pid"
+    done = threading.Event()
+
+    def work() -> None:
+        env.run(f"sleep 90 & echo $! > {marker}; wait", timeout=120)
+        done.set()
+
+    threading.Thread(target=work, daemon=True).start()
+    deadline = time.monotonic() + 20.0
+    while not (marker.exists() and marker.read_text().strip()) and (
+        time.monotonic() < deadline
+    ):
+        time.sleep(0.01)
+    pid = int(marker.read_text().strip())
+
+    env.cancel()
+    assert done.wait(20.0), "run() never returned"
+
+    gone_by = time.monotonic() + 5.0
+    while time.monotonic() < gone_by:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        time.sleep(0.01)
+    with pytest.raises(OSError):
+        os.kill(pid, 0)  # the background sleep went with the group
+
+
+def test_cancel_with_nothing_running_is_a_no_op(env):
+    env.cancel()
+    # And the environment still works afterwards: cancel is not a mode.
+    assert env.run("echo alive").stdout.strip() == "alive"
+
+
+def test_cancel_does_not_poison_the_next_command(env, tmp_path):
+    marker = tmp_path / "go"
+    threading.Thread(
+        target=lambda: env.run(f"touch {marker} && sleep 60", timeout=120), daemon=True
+    ).start()
+    deadline = time.monotonic() + 20.0
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    env.cancel()
+    # The plumbing that runs after a stop (a journal commit, a cleanup) still
+    # needs a working shell.
+    assert env.run("echo still here").stdout.strip() == "still here"

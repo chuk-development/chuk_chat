@@ -82,6 +82,8 @@ class LocalHost:
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")
         self._db_path = str(self._workspace / "executor-state.db")
+        # The app-free kill switch (§7.1): `touch ~/.cowork/ESTOP` stops the run.
+        self._estop_path = str(self._workspace / "ESTOP")
 
         self._roster = RosterStore(self._roster_path)
         self._agent = self._load_or_create_agent(agent_name)
@@ -435,4 +437,18 @@ class LocalHost:
             send_frame=party.send_result_frame,
             system_prompt=self._agent.persona or DEFAULT_SYSTEM_PROMPT,
             workspace=self._agent.workspace_dir or None,
+            estop_path=self._estop_path,
         )
+
+    @property
+    def estop_path(self) -> str:
+        """The file-sentinel ESTOP for this host (§7.1), the way to stop a run
+        **without the app**: ``touch ~/.cowork/ESTOP``.
+
+        Every run and every subagent on this host checks it at the top of each
+        round, so an engaged sentinel ends the current run and refuses new work
+        until the file is removed again. It needs no phone, no pairing and no
+        network — a shell on this machine is enough, which is what makes it the
+        fallback when the app is the thing that is broken.
+        """
+        return self._estop_path

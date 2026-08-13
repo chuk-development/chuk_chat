@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -29,7 +31,7 @@ from cowork_crypto import (
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from cowork_executor import frame_to_b64, task_payload
+from cowork_executor import frame_to_b64, stop_payload, task_payload
 from cowork_host import KEY_VERSION, LocalHost
 from cowork_host.protocol import (
     STEP_CONFIRM_D,
@@ -90,10 +92,13 @@ class ControllerDouble:
         pairing_code: str | None = None,
         *,
         reconnect_trust: AppTrust | None = None,
+        stop_when: threading.Event | None = None,
     ) -> None:
         self._url = url
         self._channel_id = channel_id
         self._reconnect_trust = reconnect_trust
+        # When set, this double presses Stop as soon as the event fires.
+        self._stop_when = stop_when
         if reconnect_trust is not None:
             self._identity = reconnect_trust.identity
             self._pairing = None
@@ -229,6 +234,15 @@ class ControllerDouble:
         }
         ws.send(json.dumps(frame_envelope(self._seal(token))))
         ws.send(json.dumps(frame_envelope(self._seal(task_payload(prompt, "thread-1")))))
+        if self._stop_when is not None:
+            # The app's Stop button: pressed once the run is provably working,
+            # and sent as a plain sealed frame like everything else.
+            assert self._stop_when.wait(15.0), "the run never started"
+            ws.send(
+                json.dumps(
+                    frame_envelope(self._seal(stop_payload(session_key="thread-1")))
+                )
+            )
 
     # -- crypto helpers --------------------------------------------------
 
@@ -750,3 +764,80 @@ def test_reconnect_after_a_dropped_attempt_still_pairs(tmp_path):
         _assert_ran(events)
     finally:
         host.stop()
+
+
+def test_the_apps_stop_reaches_the_executor_over_the_relay(tmp_path):
+    """§16's Stop button, all the way down: the app seals a ``stop`` frame, the
+    blind host forwards it like any other frame, and the executor ends the run it
+    names with ``reason: interrupted``.
+
+    Before this wiring existed the frame arrived and was dropped — the run kept
+    going and the app sat on "Stopping…" until the task finished on its own.
+    """
+    started = threading.Event()
+
+    class _ParkedModel:
+        """Blocks mid-turn so the run is provably in flight when Stop is sent, and
+        fails on cancel exactly as the real client does when its socket closes."""
+
+        def __init__(self) -> None:
+            self._gate = threading.Event()
+            self._cancelled = False
+
+        def complete(self, messages):
+            started.set()
+            assert self._gate.wait(20.0), "the model was never cancelled"
+            raise RuntimeError("model call cancelled")
+
+        def cancel(self) -> None:
+            self._cancelled = True
+            self._gate.set()
+
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="stopper",
+        channel_id="chanstop00000",
+        digits="112233",
+        model_factory_override=_ParkedModel,
+    )
+    host.start()
+    try:
+        controller = ControllerDouble(
+            host.url, host.channel_id, host.pairing_code, stop_when=started
+        )
+        events = controller.run("work until I stop you", timeout=40.0)
+    finally:
+        host.stop()
+
+    assert events, "controller received no frames"
+    done = events[-1]
+    assert done["type"] == "done", f"stream did not close: {events}"
+    assert done["reason"] == "interrupted"
+    # The ack rode the same sealed channel, ahead of the terminal.
+    acks = [e for e in events if e["type"] == "stop_ack"]
+    assert acks and acks[0]["stopping"], f"no stop_ack: {[e['type'] for e in events]}"
+
+
+def test_the_host_exposes_an_estop_file_for_stopping_without_the_app(tmp_path):
+    """§7.1's second tier: no app, no relay, no network — a file on the machine.
+
+    The host tells the user where it is, and every run and subagent on it checks
+    that path at the top of each round.
+    """
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="estopper",
+        channel_id="chanestop0000",
+        digits="445566",
+        model_factory_override=_scripted_model,
+    )
+    assert host.estop_path == str(tmp_path / "ESTOP")
+
+    from cowork_agent import KillSwitch
+
+    switch = KillSwitch(host.estop_path)
+    assert switch.estop_engaged() is False
+    Path(host.estop_path).write_text("stop", encoding="utf-8")
+    assert switch.estop_engaged() is True

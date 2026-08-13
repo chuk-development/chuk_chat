@@ -96,7 +96,7 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async {}
 
   @override
-  Future<void> requestStop() async {}
+  Future<void> requestStop({String sessionKey = 'default'}) async {}
 
   @override
   Future<void> dispose() async {

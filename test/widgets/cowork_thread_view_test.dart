@@ -41,6 +41,7 @@ class FakeRelayController implements CoworkRelayController {
   final List<String> tasks = <String>[];
   final List<String> taskSessionKeys = <String>[];
   int stopCalls = 0;
+  final List<String> stopSessionKeys = <String>[];
 
   /// When set, [requestStop] throws it — the "the stop never left" path.
   Object? stopError;
@@ -94,8 +95,9 @@ class FakeRelayController implements CoworkRelayController {
   }
 
   @override
-  Future<void> requestStop() async {
+  Future<void> requestStop({String sessionKey = 'default'}) async {
     stopCalls++;
+    stopSessionKeys.add(sessionKey);
     final error = stopError;
     if (error != null) throw error;
   }
@@ -394,6 +396,10 @@ void main() {
       expect(button.onPressed, isNull);
       // Still running until the executor closes the stream.
       expect(runStates, <bool>[true]);
+
+      // The stop names the thread the run belongs to, which is the session key
+      // the task was sent with — without it the executor has nothing to match.
+      expect(controller.stopSessionKeys, controller.taskSessionKeys);
 
       // The run is only over when the executor says so.
       controller.emit(const CoworkRelayDone(reason: 'interrupted', iterations: 2));
