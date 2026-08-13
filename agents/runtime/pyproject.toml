@@ -13,6 +13,14 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# The browser fallback (§8/§9). Optional on purpose: browser-use pulls the
+# provider SDKs (openai, anthropic, google-genai, groq, ollama) plus cdp-use and
+# browser-harness, and it is useless without a Chromium binary. `browser_task`
+# gates itself on the import through `check_fn`, so the runtime is complete
+# without this extra. MIT, requires Python >= 3.11.
+browser = [
+    "browser-use>=0.13.7",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .browser import BrowserRunner, register_browser_task
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .files_out import FileSink
@@ -200,6 +201,9 @@ def build_runtime(
     aux_model: ModelClient | None = None,
     enable_terminal: bool = True,
     terminal_task_id: str = "task",
+    enable_browser: bool = True,
+    browser_model: ModelClient | None = None,
+    browser_runner: BrowserRunner | None = None,
     version_workspace: bool = True,
     git_journal_path: str = JOURNAL_PATH,
     file_sink: FileSink | None = None,
@@ -233,6 +237,12 @@ def build_runtime(
     event stream) and which host directory the sandbox workspace really is (for
     the host-side ffmpeg, §9). Each unset tool stays out of the prompt.
 
+    ``browser_model`` is the client the browser fallback (§8) may spend rounds
+    on. It is a separate parameter because the loop's own client is wrapped to
+    stream deltas to the user, and a browser session's per-step JSON has no
+    business in the chat thread. Unset, the cheap ``aux_model`` is used; with
+    neither, ``browser_task`` is not registered at all.
+
     ``subagents`` (§7.6) adds ``delegate_task`` / ``subagent_control``. It needs
     the state store (children are recorded in it) and, for branch-per-child, a
     versioned workspace; without git the children share this workspace.
@@ -265,6 +275,19 @@ def build_runtime(
         # Registered even without tmux — `check_fn` keeps it out of the prompt.
         register_terminal_tools(
             registry, TerminalManager(env, task_id=terminal_task_id)
+        )
+
+    if enable_browser:
+        # The browser fallback (§8/§9). It needs a model client of its own: the
+        # loop's client is wrapped for streaming, and every browser step's JSON
+        # would land in the user's chat. `browser_model` first, else the cheap
+        # `aux_model`; with neither, the tool is simply not registered. Chromium
+        # or a CDP endpoint gates the rest, through `check_fn`.
+        register_browser_task(
+            registry,
+            browser_model or aux_model,
+            runner=browser_runner,
+            file_sink=file_sink,
         )
 
     ladder: ContextLadder | None = None
