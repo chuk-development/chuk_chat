@@ -51,6 +51,24 @@ class ModelCacheService {
     }
   }
 
+  /// Human name of a model, e.g. `DeepSeek: DeepSeek V4 Flash` for
+  /// `deepseek/deepseek-v4-flash`.
+  ///
+  /// Returns null when the list has not been cached yet or the id is not
+  /// in it — callers then show the id, which is ugly but never wrong.
+  static Future<String?> displayNameFor(String modelId) async {
+    if (modelId.isEmpty) return null;
+    final models = await loadAvailableModels();
+    for (final model in models) {
+      if (model['id'] == modelId) {
+        final name = model['name'];
+        if (name is String && name.trim().isNotEmpty) return name.trim();
+        return null;
+      }
+    }
+    return null;
+  }
+
   static Future<void> saveSelectedModel(String userId, String modelId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_selectedModelKey(userId), modelId);

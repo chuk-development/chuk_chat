@@ -721,16 +721,16 @@ class ToolExecutor {
 
       // -- Maps --
       case 'search_places':
-        return _wrapOutput(
-          await map_tools.executeSearchPlaces(
+        return _placesResult(
+          await map_tools.searchPlacesWithMap(
             serverHttpUrl: serverHttpUrl,
             serverHeaders: _serverHeaders(accessToken: accessToken),
             args: args,
           ),
         );
       case 'search_restaurants':
-        return _wrapOutput(
-          await map_tools.executeSearchRestaurants(
+        return _placesResult(
+          await map_tools.searchRestaurantsWithMap(
             serverHttpUrl: serverHttpUrl,
             serverHeaders: _serverHeaders(accessToken: accessToken),
             args: args,
@@ -1313,6 +1313,24 @@ class ToolExecutor {
   /// stopgap actually matches. Handlers that return arbitrary upstream content
   /// (a file body, a raw API response) must pass `sniff: false`, otherwise a
   /// file that merely begins with the word "Error" is reported as a failure.
+
+  /// A places lookup answers twice: text for the model, and a map card for
+  /// the reader, attached as a produced block.
+  ///
+  /// The card comes from the same response the model reads, so it cannot
+  /// disagree with the answer, and the model does not have to spend a turn
+  /// copying coordinates into a `<map>` tag.
+  ToolExecutionResult _placesResult(map_tools.PlacesToolResult result) {
+    final mapTag = result.mapTag;
+    return ToolExecutionResult(
+      output: result.text,
+      isError: false,
+      producedBlocks: mapTag == null
+          ? const []
+          : <ContentBlock>[ContentBlock.text(mapTag)],
+    );
+  }
+
   ToolExecutionResult _wrapOutput(String output, {bool sniff = true}) {
     return ToolExecutionResult(
       output: output,

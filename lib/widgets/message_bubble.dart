@@ -2266,7 +2266,25 @@ class _MessageBubbleState extends State<MessageBubble> {
       steps: steps,
       isRunning: isRunning,
       onStepTap: _showToolCallDetails,
+      onSourceTap: _openSourceUrl,
     );
+  }
+
+  /// Open a source chip's page in the browser.
+  Future<void> _openSourceUrl(AgentActivitySource source) async {
+    final uri = Uri.tryParse(source.url);
+    if (uri == null) return;
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      // Nothing to do when the device has no handler for it.
+    }
   }
 
   void _showToolCallDetails(ToolCall toolCall) {

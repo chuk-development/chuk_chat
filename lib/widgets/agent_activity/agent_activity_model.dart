@@ -1,9 +1,10 @@
 // lib/widgets/agent_activity/agent_activity_model.dart
 //
 // Turns a round's tool calls into the lines an activity timeline shows:
-// one line per step, consecutive steps of the same kind folded into a
-// group ("Ran 4 searches"). Pure functions — the widget only renders what
-// this produces, so the wording and grouping are testable on their own.
+// one line per step, in the order they happened, each carrying the pages
+// it pulled in. Pure functions — the widget only renders what this
+// produces, so the wording and the source extraction are testable on
+// their own.
 
 import 'package:chuk_chat/models/tool_call.dart';
 
@@ -22,6 +23,19 @@ enum AgentActivityKind {
   other,
 }
 
+/// A page a step pulled in, shown as a chip under that step.
+class AgentActivitySource {
+  const AgentActivitySource({
+    required this.url,
+    required this.host,
+    required this.title,
+  });
+
+  final String url;
+  final String host;
+  final String title;
+}
+
 /// One line in the timeline.
 class AgentActivityEntry {
   const AgentActivityEntry({
@@ -31,6 +45,7 @@ class AgentActivityEntry {
     this.children = const <AgentActivityEntry>[],
     this.hasError = false,
     this.toolCall,
+    this.sources = const <AgentActivitySource>[],
   });
 
   final AgentActivityKind kind;
@@ -51,6 +66,11 @@ class AgentActivityEntry {
   /// result. Null on group headers and on thinking notes — those summarise
   /// several calls or none.
   final ToolCall? toolCall;
+
+  /// Pages this step brought in. Rendered as chips under the line, the
+  /// way a reader checks where an answer came from without opening the
+  /// raw result.
+  final List<AgentActivitySource> sources;
 
   bool get isGroup => children.isNotEmpty;
 }
@@ -127,10 +147,11 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.search:
       return AgentActivityEntry(
         kind: kind,
-        label: 'Searched for',
+        label: 'Searched',
         detail: subject,
         hasError: hasError,
         toolCall: call,
+        sources: extractSourcesFor(call),
       );
     case AgentActivityKind.page:
       return AgentActivityEntry(
@@ -139,6 +160,7 @@ AgentActivityEntry _entryFor(ToolCall call) {
         detail: subject == null ? null : _shortenUrl(subject),
         hasError: hasError,
         toolCall: call,
+        sources: extractSourcesFor(call),
       );
     case AgentActivityKind.thinking:
     case AgentActivityKind.other:
@@ -148,21 +170,8 @@ AgentActivityEntry _entryFor(ToolCall call) {
         detail: subject,
         hasError: hasError,
         toolCall: call,
+        sources: extractSourcesFor(call),
       );
-  }
-}
-
-/// Plural-aware header for a folded run of steps.
-String _groupLabel(AgentActivityKind kind, int count) {
-  switch (kind) {
-    case AgentActivityKind.search:
-      return count == 1 ? 'Ran 1 search' : 'Ran $count searches';
-    case AgentActivityKind.page:
-      return count == 1 ? 'Opened 1 page' : 'Opened $count pages';
-    case AgentActivityKind.thinking:
-      return 'Thought $count times';
-    case AgentActivityKind.other:
-      return count == 1 ? 'Ran 1 step' : 'Ran $count steps';
   }
 }
 
@@ -220,18 +229,14 @@ List<AgentActivityEntry> buildAgentActivityEntriesFromSteps(
 
 /// Build the timeline lines for [calls].
 ///
-/// A run of two or more consecutive calls of the same kind becomes one
-/// group header with the individual steps as children — this is what keeps
-/// a round of eight searches from filling the screen. A `roundThinking`
-/// note is emitted as its own line before the call that carries it,
-/// because that is when the model wrote it.
+/// One line per call, in the order the model made them — a run of eight
+/// searches reads as eight searches, each with its own query and its own
+/// sources. A `roundThinking` note is emitted as its own line before the
+/// call that carries it, because that is when the model wrote it.
 List<AgentActivityEntry> buildAgentActivityEntries(List<ToolCall> calls) {
   final entries = <AgentActivityEntry>[];
 
-  int index = 0;
-  while (index < calls.length) {
-    final call = calls[index];
-
+  for (final call in calls) {
     final thinking = call.roundThinking?.trim();
     if (thinking != null && thinking.isNotEmpty) {
       entries.add(
@@ -241,36 +246,75 @@ List<AgentActivityEntry> buildAgentActivityEntries(List<ToolCall> calls) {
         ),
       );
     }
-
-    // How far does this run of same-kind calls reach? A call carrying its
-    // own thinking note starts a new run, so the note stays next to it.
-    final kind = _kindOf(call);
-    int end = index + 1;
-    while (end < calls.length &&
-        _kindOf(calls[end]) == kind &&
-        (calls[end].roundThinking?.trim().isEmpty ?? true)) {
-      end++;
-    }
-
-    final run = calls.sublist(index, end);
-    if (run.length == 1) {
-      entries.add(_entryFor(run.first));
-    } else {
-      final children = run.map(_entryFor).toList(growable: false);
-      entries.add(
-        AgentActivityEntry(
-          kind: kind,
-          label: _groupLabel(kind, run.length),
-          children: children,
-          hasError: children.any((child) => child.hasError),
-        ),
-      );
-    }
-
-    index = end;
+    entries.add(_entryFor(call));
   }
 
   return entries;
+}
+
+/// Most source chips shown under one step.
+const int maxSourcesPerStep = 8;
+
+/// The pages a call pulled in.
+///
+/// `web_search` results list numbered titles with an indented URL under
+/// each; `web_crawl` fetches the one URL it was given. Anything else falls
+/// back to the URLs in the result text, which is how a new tool still gets
+/// chips without this having to know about it.
+List<AgentActivitySource> extractSourcesFor(ToolCall call) {
+  final result = call.result;
+  if (result == null || result.isEmpty) return const <AgentActivitySource>[];
+
+  final sources = <AgentActivitySource>[];
+  final seen = <String>{};
+
+  void add(String url, String? title) {
+    final trimmed = url.trim().replaceAll(RegExp(r'[),.]+$'), '');
+    if (trimmed.isEmpty || !seen.add(trimmed)) return;
+    if (sources.length >= maxSourcesPerStep) return;
+    final host = Uri.tryParse(trimmed)?.host ?? trimmed;
+    sources.add(
+      AgentActivitySource(
+        url: trimmed,
+        host: host.replaceFirst(RegExp(r'^www\.'), ''),
+        title: (title != null && title.trim().isNotEmpty)
+            ? title.trim()
+            : host,
+      ),
+    );
+  }
+
+  if (call.name == 'web_crawl') {
+    final url = call.arguments['url'];
+    if (url is String && url.isNotEmpty) {
+      add(url, result.split('\n').first.replaceFirst(
+        RegExp(r'^Content from\s+'),
+        '',
+      ));
+    }
+    return List<AgentActivitySource>.unmodifiable(sources);
+  }
+
+  final titles = RegExp(r'^\d+\.\s+(.+)$', multiLine: true)
+      .allMatches(result)
+      .map((m) => m.group(1)!)
+      .toList(growable: false);
+  final urls = RegExp(r'^\s+(https?://\S+)', multiLine: true)
+      .allMatches(result)
+      .map((m) => m.group(1)!)
+      .toList(growable: false);
+
+  if (urls.isNotEmpty) {
+    for (int i = 0; i < urls.length; i++) {
+      add(urls[i], i < titles.length ? titles[i] : null);
+    }
+    return List<AgentActivitySource>.unmodifiable(sources);
+  }
+
+  for (final match in RegExp(r'https?://\S+').allMatches(result)) {
+    add(match.group(0)!, null);
+  }
+  return List<AgentActivitySource>.unmodifiable(sources);
 }
 
 /// First sentence of [text], or the whole string when it has no break.

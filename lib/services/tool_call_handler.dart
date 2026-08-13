@@ -18,6 +18,26 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
 
+/// Tools that only read. A round made up entirely of these can run its
+/// calls at the same time — none of them changes state, so the order
+/// they finish in does not matter.
+const Set<String> _readOnlyToolNames = <String>{
+  'web_search',
+  'web_crawl',
+  'search_places',
+  'search_restaurants',
+  'geocode',
+  'get_route',
+  'weather',
+  'search_chats',
+  'get_time',
+  'calculate',
+  'crypto_data',
+  'find_tools',
+  'view_chat_images',
+};
+
+
 class ToolLoopSession {
   ToolLoopSession({
     required this.latestUserMessage,
@@ -937,17 +957,40 @@ class ToolCallHandler {
     // calls so we can slice off only the blocks added in this round and
     // return them via ToolLoopResult.producedBlocks.
     final producedBlocksBefore = session.producedBlocks.length;
+
+    // A round that only looks things up starts all of its calls at once.
+    // "When is it open" wants a web search and a places lookup, and running
+    // those back to back doubles the wait for nothing. Results are still
+    // collected in order below, so the model sees them exactly as before.
+    // Anything that writes — notes, artifacts, the device — stays
+    // sequential, because with those the order is part of the meaning.
+    final inFlight = <String, Future<dynamic>>{};
+    if (enforceResult.validCalls.length > 1 &&
+        enforceResult.validCalls.every(
+          (call) => _readOnlyToolNames.contains(call.name),
+        )) {
+      for (final call in enforceResult.validCalls) {
+        inFlight[call.callId] = _toolExecutor.execute(
+          call.name,
+          call.arguments,
+          accessToken: session.accessToken,
+        );
+      }
+    }
+
     for (final call in enforceResult.validCalls) {
       final uiCall = uiCallsById[call.callId]!;
 
       String rawResult;
       bool isError;
       try {
-        final executionResult = await _toolExecutor.execute(
-          call.name,
-          call.arguments,
-          accessToken: session.accessToken,
-        );
+        final executionResult =
+            await (inFlight[call.callId] ??
+                _toolExecutor.execute(
+                  call.name,
+                  call.arguments,
+                  accessToken: session.accessToken,
+                ));
         rawResult = executionResult.output;
         isError = executionResult.isError;
         if (executionResult.producedBlocks.isNotEmpty) {
@@ -1257,6 +1300,13 @@ class ToolCallHandler {
         .where((t) => t.name == 'web_crawl')
         .map((t) => t.toJson())
         .firstOrNull;
+    // Places sits next to web search rather than behind discovery: a
+    // question about a shop's hours wants both in the first response, and
+    // a tool the model must discover first cannot be part of that.
+    final searchPlacesToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'search_places')
+        .map((t) => t.toJson())
+        .firstOrNull;
 
     // search_chats is always available: the AI must be able to recover the
     // subject of a prior-conversation reference without a discovery round-trip.
@@ -1328,6 +1378,7 @@ class ToolCallHandler {
           notesToolDef: notesToolDef,
           askUserToolDef: askUserToolDef,
           webSearchToolDef: webSearchToolDef,
+          searchPlacesToolDef: searchPlacesToolDef,
           webCrawlToolDef: webCrawlToolDef,
           searchChatsToolDef: searchChatsToolDef,
           projectToolDef: projectToolDef,
