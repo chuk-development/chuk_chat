@@ -183,11 +183,15 @@ name = "cowork-manager"
 version = "0.1.0"
 source = { editable = "../manager" }
 dependencies = [
+    { name = "cowork-sandbox" },
     { name = "croniter" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "croniter", specifier = ">=3" }]
+requires-dist = [
+    { name = "cowork-sandbox", editable = "../sandbox" },
+    { name = "croniter", specifier = ">=3" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]

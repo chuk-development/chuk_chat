@@ -9,7 +9,11 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "croniter>=3",
+    "cowork-sandbox",
 ]
+
+[tool.uv.sources]
+cowork-sandbox = { path = "../sandbox", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]
@@ -19,3 +23,7 @@ build-backend = "uv_build"
 dev = [
     "pytest>=8",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
