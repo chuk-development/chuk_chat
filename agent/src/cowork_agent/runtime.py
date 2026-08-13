@@ -22,12 +22,13 @@ from .loop import AgentLoop, IterationBudget, KillSwitch
 from .memory import MemoryStore, register_memory_tool
 from .model import ModelClient
 from .prompt import build_system_prompt
-from .registry import ToolRegistry
 from .search import register_search_tool
 from .skills import SkillLibrary, load_skills, register_skill_tool
 from .state import StateStore
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
+from .workspace_git import GitWorkspace
+from .workspace_tools import JournalingRegistry, register_workspace_tools
 
 MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
@@ -54,6 +55,7 @@ def build_runtime(
     context_ladder: bool = True,
     context_config: LadderConfig | None = None,
     aux_model: ModelClient | None = None,
+    version_workspace: bool = True,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -70,10 +72,19 @@ def build_runtime(
     is the tier that reclaims most of the waste anyway. Pass a cheap
     ``aux_model`` to enable the tier-2/3 summary of the middle, or
     ``context_ladder=False`` to send the raw history.
+
+    ``version_workspace`` (§7.7) makes the workspace a git repo, journals every
+    tool call into it and registers the undo/history tools. It needs a
+    ``workspace``; without one, or without git, it silently does nothing.
     """
     env = environment or LocalEnvironment()
-    registry = ToolRegistry()
+    # The workspace is a git repo and every dispatch is journaled into it (§7.7).
+    # No workspace, no git binary, or an unwritable directory -> the registry is
+    # a plain one and the run continues unversioned.
+    git_workspace = GitWorkspace.open(workspace) if version_workspace else None
+    registry = JournalingRegistry(git_workspace)
     register_builtin_tools(registry, env, session=session, base_url=base_url)
+    register_workspace_tools(registry, git_workspace)
 
     ladder: ContextLadder | None = None
     if context_ladder:
