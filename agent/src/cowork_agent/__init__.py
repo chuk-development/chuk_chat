@@ -84,6 +84,15 @@ from .skills import (
 )
 from .state import Message, StateStore
 from .think_scrubber import ThinkScrubber, scrub_history, scrub_text
+from .terminal import (
+    TerminalError,
+    TerminalManager,
+    TerminalSession,
+    diff_screens,
+    normalize_screen,
+    register_terminal_tools,
+    tmux_key,
+)
 from .tools import register_builtin_tools, register_file_tools, register_run_command
 from .web_fetch import (
     FETCH_CAP,
@@ -142,6 +151,9 @@ __all__ = [
     "Summarizer",
     "SupabaseAuthError",
     "SupabaseSession",
+    "TerminalError",
+    "TerminalManager",
+    "TerminalSession",
     "TokenSession",
     "ThinkScrubber",
     "ToolCall",
@@ -155,6 +167,7 @@ __all__ = [
     "estimate_messages_tokens",
     "estimate_tokens",
     "expand_back_references",
+    "diff_screens",
     "extract_tool_calls",
     "fetch_models_info",
     "html_to_markdown",
@@ -163,6 +176,7 @@ __all__ = [
     "login",
     "make_web_fetch_handler",
     "make_web_search_handler",
+    "normalize_screen",
     "parse_openai_response",
     "parse_skill",
     "prompt_tokens_from_usage",
@@ -174,6 +188,7 @@ __all__ = [
     "register_run_command",
     "register_search_tool",
     "register_skill_tool",
+    "register_terminal_tools",
     "register_web_fetch",
     "register_web_search",
     "render_tool_docs",
@@ -183,6 +198,7 @@ __all__ = [
     "sanitize_match",
     "search_messages",
     "segment_cjk",
+    "tmux_key",
     "validate_url",
     "scrub_history",
     "scrub_text",
