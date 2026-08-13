@@ -83,6 +83,16 @@ from .media import (
     subprocess_runner,
     validate_options,
 )
+from .mcp_client import (
+    MCPConnection,
+    MCPManager,
+    MCPServerConfig,
+    MCPToolInfo,
+    load_mcp_config,
+    parse_mcp_config,
+    register_mcp_tools,
+    tool_name,
+)
 from .model import (
     ModelClient,
     ModelResponse,
@@ -93,10 +103,22 @@ from .model import (
     parse_openai_response,
     response_from_content,
 )
+from .oauth_bridge import (
+    BackendOAuthClient,
+    CredentialStash,
+    OAuthBridge,
+    OAuthFlow,
+    callback_uri,
+    config_token_exchange,
+    http_token_exchange,
+    pkce_pair,
+    register_oauth_tool,
+)
 from .prompt import (
     BASE_INSTRUCTIONS,
     TOOL_PROTOCOL,
     build_system_prompt,
+    render_tool_block,
     render_tool_docs,
 )
 from .registry import ToolRegistry, ToolSpec
@@ -149,6 +171,14 @@ from .terminal import (
     register_terminal_tools,
     tmux_key,
 )
+from .tool_search import (
+    CORE_TOOLS,
+    DEFAULT_THRESHOLD,
+    ToolSearchDecision,
+    apply_tool_search,
+    register_bridge_tools,
+    tool_doc_tokens,
+)
 from .tools import register_builtin_tools, register_file_tools, register_run_command
 from .web_fetch import (
     FETCH_CAP,
@@ -183,8 +213,14 @@ from .workspace_tools import (
 )
 
 __all__ = [
+    "apply_tool_search",
     "ARG_VALUE_CAP",
+    "BackendOAuthClient",
     "BASE_INSTRUCTIONS",
+    "callback_uri",
+    "config_token_exchange",
+    "CORE_TOOLS",
+    "CredentialStash",
     "DEFAULT_BASE_URL",
     "DEFAULT_CONTEXT_LENGTH",
     "DEFAULT_MAX_BATCH",
@@ -194,22 +230,38 @@ __all__ = [
     "DEFAULT_MAX_WAIT_S",
     "DEFAULT_MODEL_ID",
     "DEFAULT_RESERVED_OUTPUT",
+    "DEFAULT_THRESHOLD",
     "FETCH_CAP",
+    "http_token_exchange",
     "JOURNAL_PATH",
     "ALLOWED_FLAG_OPTIONS",
     "ALLOWED_VALUE_OPTIONS",
     "CHUNK_BYTES",
     "DEFAULT_VISION_MODEL",
     "DOCUMENT_MAX_BYTES",
+    "load_mcp_config",
     "MARKDOWN_CAP",
     "MAX_DESCRIPTION_CHARS",
     "MAX_ENTRY_CHARS",
     "MAX_FILE_BYTES",
     "MAX_FILE_CHARS",
+    "MCPConnection",
+    "MCPManager",
+    "MCPServerConfig",
+    "MCPToolInfo",
+    "OAuthBridge",
+    "OAuthFlow",
+    "parse_mcp_config",
+    "register_bridge_tools",
+    "register_mcp_tools",
+    "register_oauth_tool",
+    "render_tool_block",
     "RESULT_CAP",
     "SUMMARY_PREFIX",
     "SUMMARY_TEMPLATE",
     "SUBAGENT_BRANCH_PREFIX",
+    "tool_doc_tokens",
+    "tool_name",
     "TOOL_PROTOCOL",
     "ActivityMonitor",
     "AgentLoop",
@@ -269,6 +321,7 @@ __all__ = [
     "ToolCall",
     "ToolObserver",
     "ToolRegistry",
+    "ToolSearchDecision",
     "ToolSpec",
     "TransferError",
     "UrlRejected",
@@ -302,6 +355,7 @@ __all__ = [
     "make_web_search_handler",
     "normalize_screen",
     "parse_openai_response",
+    "pkce_pair",
     "parse_skill",
     "prompt_tokens_from_usage",
     "redact_args",

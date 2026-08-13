@@ -31,11 +31,20 @@ class ToolSpec:
     handler: Handler
     check_fn: CheckFn | None = None
     is_async: bool = False
+    #: May this tool be hidden from the prompt behind the ``tool_search`` /
+    #: ``tool_describe`` / ``tool_call`` bridge (§7.2)? Only MCP and plugin tools
+    #: opt in. Every core tool leaves this at ``False`` and can therefore never
+    #: be deferred — see :meth:`ToolRegistry.defer`.
+    deferrable: bool = False
 
 
 @dataclass
 class ToolRegistry:
     _tools: dict[str, ToolSpec] = field(default_factory=dict)
+    #: Names currently hidden from the prompt. Deferral is a *prompt* state, not
+    #: a dispatch state: a deferred tool stays fully callable through
+    #: ``tool_call``, so the bridge needs no second dispatch path.
+    _deferred: set[str] = field(default_factory=set)
 
     # -- registration -----------------------------------------------------
 
@@ -46,6 +55,7 @@ class ToolRegistry:
         handler: Handler,
         check_fn: CheckFn | None = None,
         is_async: bool = False,
+        deferrable: bool = False,
     ) -> None:
         if name in self._tools:
             raise ValueError(f"tool already registered: {name}")
@@ -55,6 +65,7 @@ class ToolRegistry:
             handler=handler,
             check_fn=check_fn,
             is_async=is_async,
+            deferrable=deferrable,
         )
 
     def has(self, name: str) -> bool:
@@ -78,6 +89,37 @@ class ToolRegistry:
             return bool(spec.check_fn())
         except Exception:
             return False
+
+    # -- progressive disclosure (§7.2) ------------------------------------
+
+    def deferrable_names(self) -> list[str]:
+        """Every registered tool that opted in to being hidden behind the
+        bridge tools. Availability is not checked here — the caller measures the
+        prompt surface, and an unavailable tool is not in the prompt anyway."""
+        return [name for name, spec in self._tools.items() if spec.deferrable]
+
+    def defer(self, name: str) -> None:
+        """Hide one tool from the prompt.
+
+        Refuses a tool that did not opt in. That refusal is the whole guarantee
+        behind "core tools are never deferred": there is one door, and
+        ``run_command`` never has the key.
+        """
+        spec = self._tools.get(name)
+        if spec is None:
+            raise KeyError(f"unknown tool: {name}")
+        if not spec.deferrable:
+            raise ValueError(f"tool is not deferrable: {name}")
+        self._deferred.add(name)
+
+    def undefer_all(self) -> None:
+        self._deferred.clear()
+
+    def is_deferred(self, name: str) -> bool:
+        return name in self._deferred
+
+    def deferred_names(self) -> list[str]:
+        return sorted(self._deferred)
 
     # -- dispatch ---------------------------------------------------------
 
