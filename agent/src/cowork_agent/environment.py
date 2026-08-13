@@ -35,9 +35,17 @@ class ProcessResult:
 class Environment(Protocol):
     """Where a command runs. The one seam between runtime and sandbox."""
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> ProcessResult:
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> ProcessResult:
         """Run one shell command and return its result. Never raises for a
-        non-zero exit or a timeout — those are reported in the result."""
+        non-zero exit or a timeout — those are reported in the result.
+
+        ``internal=True`` marks plumbing the *agent* did not ask for — an
+        availability probe, a git commit for the action journal. It is the same
+        shell, but it is not agent activity, so observers must not report it to
+        the user as a tool call. Without this flag a `command -v tmux` probe
+        shows up in the chat thread as work the agent did."""
         ...
 
 
@@ -48,7 +56,10 @@ class LocalEnvironment:
     development stand-in only. The production sandbox replaces it.
     """
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> ProcessResult:
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> ProcessResult:
+        del internal  # nothing observes a local run
         start = time.monotonic()
         try:
             proc = subprocess.run(

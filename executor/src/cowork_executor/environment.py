@@ -51,7 +51,9 @@ class SandboxEnvironment:
     def inner(self) -> BaseEnvironment:
         return self._inner
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> AgentProcessResult:
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> AgentProcessResult:
         start = time.monotonic()
         raw = self._inner.run_bash(cmd, timeout=timeout)
         result = AgentProcessResult(
@@ -61,7 +63,10 @@ class SandboxEnvironment:
             duration_s=time.monotonic() - start,
             timed_out=raw.timed_out,
         )
+        # Internal plumbing (availability probes, journal commits) runs on the
+        # same shell but is not agent activity — reporting it would put
+        # `command -v tmux` in the user's thread as a tool call.
         observer = self.on_run
-        if observer is not None:
+        if observer is not None and not internal:
             observer(cmd, result)
         return result

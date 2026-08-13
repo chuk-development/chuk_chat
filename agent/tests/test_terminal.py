@@ -59,7 +59,9 @@ class FakeEnv:
 
     # -- the Environment seam ---------------------------------------------
 
-    def run_bash(self, cmd: str, *, timeout: int = 120) -> ProcessResult:
+    def run_bash(
+        self, cmd: str, *, timeout: int = 120, internal: bool = False
+    ) -> ProcessResult:
         self.commands.append(cmd)
         tokens = shlex.split(cmd)
         groups: list[list[str]] = [[]]

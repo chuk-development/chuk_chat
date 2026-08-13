@@ -64,3 +64,19 @@ def test_on_run_observer_fires():
     assert len(seen) == 1
     assert seen[0][0] == "true"
     assert seen[0][1].exit_code == 0
+
+
+def test_an_availability_probe_is_not_reported_as_agent_activity():
+    """A tool's ``check_fn`` runs a shell command (``command -v tmux``) on the
+    same seam the agent uses for real work. Without the ``internal`` flag that
+    probe reached the user's thread as a tool call nobody asked for — the chat
+    showed "ran run_command: command -v tmux"."""
+    seen: list[str] = []
+    with LocalEnvironment() as sandbox:
+        shim = SandboxEnvironment(sandbox, on_run=lambda cmd, _r: seen.append(cmd))
+
+        shim.run_bash("command -v tmux >/dev/null 2>&1", internal=True)
+        assert seen == []
+
+        shim.run_bash("echo hi")
+        assert seen == ["echo hi"]
