@@ -6,6 +6,11 @@ control-plane skeleton: real container lifecycle and a real network relay wire i
 later behind the interfaces defined here.
 """
 
+from cowork_manager.containers import (
+    ContainerSupervisor,
+    WorkspaceResolver,
+    roster_workspace_resolver,
+)
 from cowork_manager.names import random_name
 from cowork_manager.roster import Agent, RosterStore
 from cowork_manager.supervisor import (
@@ -58,6 +63,9 @@ __all__ = [
     "Agent",
     "RosterStore",
     "AgentSupervisor",
+    "ContainerSupervisor",
+    "WorkspaceResolver",
+    "roster_workspace_resolver",
     "RuntimeState",
     "RuntimeStatus",
     "StubSupervisor",

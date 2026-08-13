@@ -282,6 +282,61 @@ def test_full_local_run(tmp_path):
     assert produced.read_text().strip() == "hello"
 
 
+def _docker_ready() -> bool:
+    from cowork_sandbox import docker_available
+
+    return docker_available()
+
+
+@pytest.mark.skipif(not _docker_ready(), reason="docker CLI or daemon unavailable")
+def test_full_run_inside_the_agents_container(tmp_path, monkeypatch):
+    """The same end-to-end run, but the agent's shell is a container (§6).
+
+    Proves the milestone's three pieces at once: the container is created for
+    *this* agent, its workspace is bind-mounted (the file appears on the host),
+    and the box survives the session for the next turn to reuse.
+    """
+    import os
+
+    from cowork_sandbox import DockerEnvironment, find_agent_container
+
+    image = os.environ.get("COWORK_TEST_IMAGE", "debian:stable-slim")
+    monkeypatch.setenv("COWORK_SANDBOX_IMAGE", image)
+
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="dockerworker",
+        channel_id="dockerchannel",
+        digits="314159",
+        sandbox_kind="docker",
+        model_factory_override=_scripted_model,
+    )
+    agent_id = host.agent.id
+    host.start()
+    try:
+        controller = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        events = controller.run("run `echo hello > f.txt` then tell me done")
+    finally:
+        host.stop()
+
+    try:
+        assert [e["type"] for e in events][-1] == "done", events
+        tool = [e for e in events if e["type"] == "tool"][0]
+        assert tool["exit_code"] == 0, tool
+
+        # The container wrote into the bind-mounted workspace, so the HOST sees it.
+        produced = tmp_path / "agents" / "dockerworker" / "f.txt"
+        assert produced.exists(), "the container's workspace is not the host's"
+        assert produced.read_text().strip() == "hello"
+
+        # The agent's box is still there after the session — that is the reuse
+        # contract; only the orphan reaper or an explicit destroy removes it.
+        assert find_agent_container(agent_id=agent_id) is not None
+    finally:
+        DockerEnvironment(agent_id=agent_id, image=image).remove()
+
+
 def test_result_frames_are_sealed_and_authenticated(tmp_path):
     """Every result frame the app receives is opaque to a stranger: the relay is
     blind, the frames are genuinely encrypted + device-authenticated."""
