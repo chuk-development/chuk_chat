@@ -29,6 +29,29 @@ the inactivity timeout, per-child kill switch, depth/concurrency/pause caps
 back on success (§7.7). On in the executor with
 `Executor(subagent_sandbox="local"|"docker")`; off by default.
 
+**MCP client + Tool Search + the OAuth bridge landed** (§9 / §7.2 / §10) —
+`agent/src/cowork_agent/{mcp_client,tool_search,oauth_bridge}.py`:
+
+- **MCP as the fallback protocol**, on the official `mcp` SDK (2.0), all three
+  transports (stdio / SSE / streamable HTTP), **one persistent transport thread
+  per server** so a session survives across tool calls. Servers come from
+  `<workspace>/.cowork/mcp.json` (or `mcp.json`), editor-shaped
+  (`{"mcpServers": {...}}`). Tools register as `mcp__<server>__<tool>` with the
+  server's own schema. A server that does not answer costs only its own tools —
+  `check_fn` false, error in `MCPManager.errors`, nothing in the prompt.
+- **Tool Search (§7.2)**: once the deferrable (= MCP) schemas pass 10 % of the
+  effective input budget, they leave the prompt and `tool_search` /
+  `tool_describe` / `tool_call` replace them. Core tools are structurally
+  undeferrable (`ToolRegistry.defer` refuses a tool that did not opt in).
+  Measured: 160 MCP tools = 15 930 prompt tokens → 403, **−97 %**, per round.
+- **OAuth bridge (§10)**: client side complete — flow start through the backend,
+  redirect terminating on the **public** backend URL, `hmac.compare_digest` state
+  compare, expiry, single-use code, Event-gated wait with a timeout. **The
+  backend routes do not exist yet** — the contract is
+  `docs/MCP_OAUTH_BACKEND_ROUTE.md` and the tests implement it as a fake.
+- Wired in `build_runtime`: `loop.mcp` (close it when the run ends) and
+  `loop.tool_search` (the measured decision).
+
 ## What works (verified live)
 
 - **Local encrypted end-to-end, cross-language**: the real Dart `CoworkRelayClient`
@@ -109,6 +132,14 @@ Two release-class bugs were found and fixed while landing it:
   The debug client (`flutter run`) prints `[cowork-relay]` logs; the host logs each
   pairing step. Use both to localize.
 - **Don't burn real credits** — use `--mock-model` for transport/pairing tests.
+- **`uv run pytest` in `agent/` used to run the SYSTEM python** (`/usr/bin/python3`
+  + `~/.local/lib`), because `pytest` was only an optional extra and `uv run` fell
+  back to the one on `PATH`. That silently tested against whatever version of a
+  dependency happened to sit in `~/.local` — `mcp` 1.25 instead of the pinned 2.0,
+  whose `ClientSession` takes a `timedelta` where 2.0 takes a float. `pytest` is a
+  real dev dependency now, so `uv run pytest` uses `agent/.venv`. If a test
+  suddenly cannot import something, check `uv run python -c "import sys;
+  print(sys.executable)"` first.
 - Two plan copies exist; edit the one in `cowork/docs/`.
 - CodeRabbit has an org-seat error in this environment (`FORBIDDEN`, not the code);
   don't loop on it.

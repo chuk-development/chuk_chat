@@ -98,24 +98,39 @@ def _render_arguments(schema: dict) -> list[str]:
     return lines
 
 
+def render_tool_block(name: str, schema: dict | None) -> str:
+    """One tool's prompt block: heading, description, argument lines.
+
+    Public because three callers must agree on it to the character:
+    :func:`render_tool_docs` writes it into the prompt, ``tool_describe``
+    (§7.2) hands the same text back for a deferred tool, and the tool-search
+    threshold is measured on it. A second renderer would make the measured
+    saving a fiction.
+    """
+    schema = schema or {}
+    blocks = [f"\n## {name}\n"]
+    summary = schema.get("description")
+    if summary:
+        blocks.append(f"{summary}\n")
+    arguments = _render_arguments(schema)
+    if arguments:
+        blocks.append("Arguments:")
+        blocks.extend(arguments)
+    else:
+        blocks.append("Arguments: none.")
+    return "\n".join(blocks)
+
+
 def render_tool_docs(registry: ToolRegistry) -> str:
     """Render the registry as prompt text. Unavailable tools (a failing
-    ``check_fn``) are left out — the model must not call what cannot run."""
+    ``check_fn``) are left out — the model must not call what cannot run — and
+    so are deferred tools (§7.2), which the model reaches through
+    ``tool_search`` / ``tool_call`` instead."""
     blocks: list[str] = ["# Tools you can call"]
     for name in registry.names():
-        if not registry.available(name):
+        if not registry.available(name) or registry.is_deferred(name):
             continue
-        schema = registry.spec(name).schema or {}
-        blocks.append(f"\n## {name}\n")
-        summary = schema.get("description")
-        if summary:
-            blocks.append(f"{summary}\n")
-        arguments = _render_arguments(schema)
-        if arguments:
-            blocks.append("Arguments:")
-            blocks.extend(arguments)
-        else:
-            blocks.append("Arguments: none.")
+        blocks.append(render_tool_block(name, registry.spec(name).schema))
     return "\n".join(blocks)
 
 

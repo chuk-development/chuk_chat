@@ -20,13 +20,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .files_out import FileSink
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
+from .mcp_client import MCPManager, register_mcp_tools
 from .media import WorkspaceMount
 from .memory import MemoryStore, register_memory_tool
 from .model import ModelClient, ModelResponse
+from .oauth_bridge import (
+    BackendOAuthClient,
+    CredentialStash,
+    LinkNotifier,
+    OAuthBridge,
+    config_token_exchange,
+    register_oauth_tool,
+)
 from .prompt import build_system_prompt
 from .search import register_search_tool
 from .skills import SkillLibrary, load_skills, register_skill_tool
@@ -40,6 +51,7 @@ from .subagents import (
     register_subagent_tools,
 )
 from .terminal import TerminalManager, register_terminal_tools
+from .tool_search import DEFAULT_THRESHOLD, ToolSearchDecision, apply_tool_search
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
 from .workspace_git import JOURNAL_PATH, GitWorkspace, summarize_result
@@ -166,6 +178,17 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
                 nested = child_config.supervisor
                 if nested is not None:
                     nested.shutdown()
+                # A child reads the same workspace, so it started its own MCP
+                # servers (§9). Close them with the child, or a run with four
+                # subagents leaves four sets of subprocesses behind. An executor
+                # that wants one shared manager passes ``mcp=`` in
+                # ``runtime_kwargs`` and then owns the lifetime itself.
+                child_mcp = getattr(loop, "mcp", None)
+                if child_mcp is not None and "mcp" not in config.runtime_kwargs:
+                    try:
+                        child_mcp.close()
+                    except Exception:  # noqa: BLE001 — cleanup never fails a result
+                        pass
         finally:
             cleanup = getattr(env, "cleanup", None)
             if callable(cleanup):
@@ -207,6 +230,12 @@ def build_runtime(
     kill_switch: KillSwitch | None = None,
     tool_observer: Callable[[str, dict | None, Any], None] | None = None,
     subagents: SubagentConfig | None = None,
+    enable_mcp: bool = True,
+    mcp: MCPManager | None = None,
+    enable_tool_search: bool = True,
+    tool_search_threshold: float = DEFAULT_THRESHOLD,
+    oauth_link_notifier: LinkNotifier | None = None,
+    oauth_http_client: httpx.Client | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -238,8 +267,25 @@ def build_runtime(
     versioned workspace; without git the children share this workspace.
     ``kill_switch`` lets a caller own the Stop switch — that is how a parent
     interrupts one child, since a child's loop is built by this same function.
+
+    ``enable_mcp`` (§9) reads ``mcp.json`` from the workspace and connects the
+    servers listed there — the fallback protocol, off the critical path: no file
+    means no servers, and a server that does not answer only costs its own tools.
+    Pass ``mcp=`` to supply a prepared :class:`~cowork_agent.mcp_client.MCPManager`
+    (tests, or an executor that owns the lifetime). The returned loop carries it
+    as ``loop.mcp``; **close it when the run ends** or the transport threads and
+    their subprocesses outlive the task.
+
+    ``enable_tool_search`` (§7.2) hides the MCP tools behind ``tool_search`` /
+    ``tool_describe`` / ``tool_call`` once their schemas pass
+    ``tool_search_threshold`` of the effective input budget. Core tools are never
+    hidden. The measured decision is on the loop as ``loop.tool_search``.
     """
     env = environment or LocalEnvironment()
+    ladder_config = context_config or LadderConfig()
+    # The one place a third-party MCP token may live in this process (§10). Empty
+    # until an OAuth flow completes; memory only, redacted repr, never journaled.
+    stash = CredentialStash()
     # The workspace is a git repo and every dispatch is journaled into it (§7.7).
     # No workspace, no git binary, or an unwritable directory -> the registry is
     # a plain one and the run continues unversioned.
@@ -270,7 +316,7 @@ def build_runtime(
     ladder: ContextLadder | None = None
     if context_ladder:
         ladder = ContextLadder(
-            config=context_config or LadderConfig(),
+            config=ladder_config,
             summarizer=AuxSummarizer(aux_model) if aux_model is not None else None,
         )
 
@@ -321,6 +367,51 @@ def build_runtime(
         # sessions then needs no re-wiring.
         register_skill_tool(registry, library)
 
+    # MCP last, after every core tool is in (§9): the tool-search threshold is
+    # measured on the deferrable surface, and a core tool registered afterwards
+    # would not be counted in the baseline.
+    manager = mcp
+    if manager is None and enable_mcp:
+        manager = MCPManager.from_workspace(workspace, token_provider=stash.get)
+    if manager is not None:
+        register_mcp_tools(registry, manager)
+        # One tool, for every configured server, to run the §10 bridge. Needs the
+        # account session: the backend holds the pending flow and pays for it.
+        if session is not None and manager.configs:
+            register_oauth_tool(
+                registry,
+                OAuthBridge(),
+                BackendOAuthClient(
+                    session, base_url=base_url, http_client=oauth_http_client
+                ),
+                stash=stash,
+                exchange=config_token_exchange(
+                    {c.name: c.oauth for c in manager.configs if c.oauth},
+                    base_url=base_url,
+                    http_client=oauth_http_client,
+                ),
+                notify=oauth_link_notifier,
+                # A fresh handshake is what picks the new token out of the stash.
+                on_authorized=manager.reconnect,
+                # Stop reaches into the wait: the tool can park for minutes, and
+                # the loop only polls the kill switch between tool calls.
+                cancel=lambda: kill.interrupted() or kill.estop_engaged(),
+            )
+
+    decision = ToolSearchDecision(
+        active=False,
+        effective_budget=0,
+        threshold_tokens=0,
+        deferrable_tokens=0,
+    )
+    if enable_tool_search:
+        decision = apply_tool_search(
+            registry,
+            context_window=ladder_config.context_length,
+            reserved_output=ladder_config.reserved_output,
+            threshold=tool_search_threshold,
+        )
+
     def _prompt_factory() -> str:
         """Resolved once, when a session is seeded (see ``AgentLoop.run``).
         Reading memory here and not at build time is what makes the snapshot
@@ -336,7 +427,7 @@ def build_runtime(
 
     prompt = _prompt_factory if include_tool_docs else system_prompt
 
-    return AgentLoop(
+    loop = AgentLoop(
         model,
         registry,
         store,
@@ -347,3 +438,9 @@ def build_runtime(
         context_providers=[library.pending_context],
         context_ladder=ladder,
     )
+    # Two handles the caller needs and the loop itself does not: the MCP manager,
+    # whose transport threads and subprocesses must be closed when the run ends,
+    # and the tool-search decision, which is what the executor logs.
+    loop.mcp = manager
+    loop.tool_search = decision
+    return loop
