@@ -1,8 +1,12 @@
 """parse_schedule (all forms) + due-job computation + advance-before-exec +
-hash-diff monitor. All time is pinned — no real-clock dependence."""
+claim/heartbeat + hash-diff monitor + the ticker.
+
+All time is pinned — every test injects the instant it wants, so nothing here
+sleeps or depends on the host clock."""
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -13,7 +17,9 @@ from cowork_manager.scheduler import (
     JobMode,
     MonitorSignal,
     Scheduler,
+    Ticker,
     parse_schedule,
+    unified_diff,
     utc,
 )
 
@@ -55,6 +61,35 @@ def test_parse_once_at_is_timezone_anchored() -> None:
 def test_parse_once_at_default_utc() -> None:
     spec = parse_schedule("2026-02-03T14:00")
     assert spec["at"] == datetime(2026, 2, 3, 14, 0, tzinfo=ZoneInfo("UTC"))
+
+
+def test_parse_once_at_does_not_drift_across_dst() -> None:
+    # Europe/Berlin switches to CEST on 2026-03-29. The *wall clock* the model
+    # asked for must survive that: 14:00 local before and after, i.e. a
+    # different UTC instant — not a fixed offset applied blindly.
+    before = parse_schedule("2026-03-28T14:00", tz="Europe/Berlin")["at"]
+    after = parse_schedule("2026-03-30T14:00", tz="Europe/Berlin")["at"]
+
+    assert before.hour == after.hour == 14
+    assert before.utcoffset() == timedelta(hours=1)   # CET
+    assert after.utcoffset() == timedelta(hours=2)    # CEST
+    assert before.astimezone(timezone.utc) == utc(2026, 3, 28, 13, 0)
+    assert after.astimezone(timezone.utc) == utc(2026, 3, 30, 12, 0)
+
+
+def test_cron_keeps_local_wall_clock_across_dst() -> None:
+    # A "0 9 * * *" job in Berlin must fire at 09:00 local every day, including
+    # the day the clocks change — the classic scheduler drift bug.
+    sch = Scheduler(tz="Europe/Berlin")
+    berlin = ZoneInfo("Europe/Berlin")
+    job = sch.schedule(
+        "daily", "0 9 * * *", now=datetime(2026, 3, 28, 8, 0, tzinfo=berlin)
+    )
+
+    assert job.next_run == datetime(2026, 3, 28, 9, 0, tzinfo=berlin)
+    job.advance(job.next_run)  # cross the DST boundary
+    assert job.next_run == datetime(2026, 3, 29, 9, 0, tzinfo=berlin)
+    assert job.next_run.utcoffset() == timedelta(hours=2)
 
 
 def test_parse_invalid_raises() -> None:
@@ -184,6 +219,37 @@ def test_monitor_signals_only_on_change() -> None:
     assert woken == [t1, t3]
 
 
+def test_monitor_carries_a_unified_diff_of_the_change() -> None:
+    sch = Scheduler()
+    state = {"data": b"alpha\nbeta\n"}
+    sch.schedule(
+        "mon",
+        "every 30m",
+        now=NOW,
+        mode=JobMode.MONITOR,
+        source=lambda: state["data"],
+    )
+
+    sch.tick(NOW + timedelta(minutes=30))          # baseline
+    state["data"] = b"alpha\ngamma\n"
+    sig = sch.tick(NOW + timedelta(minutes=60))[0]
+
+    assert sig.changed is True
+    assert "-beta" in sig.diff
+    assert "+gamma" in sig.diff
+    # The unchanged line rides along as context, never as a change.
+    assert " alpha" in sig.diff
+    assert "+alpha" not in sig.diff
+
+
+def test_unified_diff_is_bounded() -> None:
+    old = b""
+    new = ("line\n" * 500).encode()
+    diff = unified_diff(old, new, label="src", max_lines=20)
+    assert len(diff.splitlines()) <= 21          # 20 + the truncation marker
+    assert "diff truncated" in diff
+
+
 def test_monitor_without_source_raises() -> None:
     sch = Scheduler()
     job = Job(
@@ -195,3 +261,174 @@ def test_monitor_without_source_raises() -> None:
     sch.add(job)
     with pytest.raises(ValueError):
         sch.tick(NOW)
+
+
+# -- at-most-once: parallel ticks, claims & heartbeats ---------------------
+
+
+def test_parallel_ticks_fire_a_due_job_exactly_once() -> None:
+    """The at-most-once proof: N threads tick the same instant, one run happens."""
+    sch = Scheduler()
+    runs: list[datetime] = []
+    guard = threading.Lock()
+
+    def action(job: Job, now: datetime) -> str:
+        with guard:
+            runs.append(now)
+        return "ran"
+
+    sch.schedule("j", "every 30m", now=NOW, action=action)
+    fire_at = NOW + timedelta(minutes=30)
+
+    workers = 16
+    ready = threading.Barrier(workers)
+    results: list[list] = []
+
+    def tick() -> None:
+        ready.wait()          # line every thread up on the same instant
+        results.append(sch.tick(fire_at))
+
+    threads = [threading.Thread(target=tick) for _ in range(workers)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(runs) == 1
+    assert sum(len(r) for r in results) == 1
+    assert sch.get("j").next_run == fire_at + timedelta(minutes=30)
+
+
+def test_running_job_with_heartbeat_is_not_dispatched_again() -> None:
+    sch = Scheduler()
+    dispatched: list[datetime] = []
+
+    # A long run: the action only *starts* it and keeps the claim (autorelease
+    # off), the way UnattendedRunner does.
+    sch.schedule(
+        "long",
+        "every 30m",
+        now=NOW,
+        action=lambda job, now: dispatched.append(now),
+        autorelease=False,
+        lease_seconds=300,
+    )
+
+    t1 = NOW + timedelta(minutes=30)
+    sch.tick(t1)
+    assert len(dispatched) == 1
+
+    # The next slot comes due while the first run is still working. It beats
+    # regularly, so the scheduler must leave it alone.
+    t2 = NOW + timedelta(minutes=60)
+    sch.heartbeat("long", t2 - timedelta(seconds=30))
+    assert sch.due_jobs(t2) == []
+    assert sch.tick(t2) == []
+    assert len(dispatched) == 1
+
+    # Run finishes and releases → the following slot dispatches normally.
+    sch.release("long")
+    t3 = NOW + timedelta(minutes=90)
+    sch.tick(t3)
+    assert len(dispatched) == 2
+
+
+def test_crashed_run_without_heartbeat_is_released_and_redispatched() -> None:
+    sch = Scheduler()
+    dispatched: list[datetime] = []
+
+    sch.schedule(
+        "long",
+        "every 30m",
+        now=NOW,
+        action=lambda job, now: dispatched.append(now),
+        autorelease=False,
+        lease_seconds=300,          # 5 min lease
+    )
+
+    t1 = NOW + timedelta(minutes=30)
+    sch.tick(t1)
+    assert len(dispatched) == 1
+
+    # The run dies: no heartbeat ever again. The lease outlives the next slot,
+    # so that one is still skipped...
+    t2 = t1 + timedelta(minutes=4)
+    assert sch.due_jobs(t2) == []
+
+    # ...but once the lease expires the job is taken back and fires again.
+    t3 = t1 + timedelta(minutes=30)
+    assert sch.tick(t3) == [None]
+    assert len(dispatched) == 2
+    assert sch.get("long").claimed_at == t3
+
+
+def test_sync_action_releases_its_claim_automatically() -> None:
+    sch = Scheduler()
+    sch.schedule("j", "every 30m", now=NOW, action=lambda job, now: "ok")
+
+    sch.tick(NOW + timedelta(minutes=30))
+    job = sch.get("j")
+    assert job.claimed_at is None
+    assert job.heartbeat_at is None
+
+
+def test_failed_dispatch_releases_the_claim() -> None:
+    sch = Scheduler()
+
+    def boom(job: Job, now: datetime):
+        raise RuntimeError("dispatch failed")
+
+    sch.schedule("j", "every 30m", now=NOW, action=boom, autorelease=False)
+    with pytest.raises(RuntimeError):
+        sch.tick(NOW + timedelta(minutes=30))
+
+    # The slot is gone (at-most-once) but the job is not wedged: the next slot
+    # fires, because a run that never started must not hold the claim.
+    assert sch.get("j").claimed_at is None
+    assert len(sch.due_jobs(NOW + timedelta(minutes=60))) == 1
+
+
+# -- ticker -----------------------------------------------------------------
+
+
+def test_ticker_drives_the_scheduler_and_stops() -> None:
+    sch = Scheduler()
+    fired: list[datetime] = []
+    clock = {"t": NOW}
+
+    sch.schedule("j", "every 30m", now=NOW, action=lambda j, n: fired.append(n))
+
+    ticker: Ticker
+
+    def fake_wait(seconds: float) -> None:
+        # Stand in for the 60s sleep: advance the fake clock instead, and stop
+        # the loop once it has crossed the job's slot.
+        assert seconds == 60.0
+        clock["t"] += timedelta(minutes=15)
+        if clock["t"] >= NOW + timedelta(minutes=45):
+            ticker.stop(timeout=0)
+
+    ticker = Ticker(sch, interval=60.0, now=lambda: clock["t"], wait=fake_wait)
+    ticker.run_forever()
+
+    # Four 15-minute steps cross exactly one 30-minute slot.
+    assert fired == [NOW + timedelta(minutes=30)]
+    assert ticker.stopped
+
+
+def test_ticker_survives_a_failing_action() -> None:
+    sch = Scheduler()
+    seen: list[BaseException] = []
+
+    def boom(job: Job, now: datetime):
+        raise RuntimeError("nope")
+
+    sch.schedule("j", "every 30m", now=NOW, action=boom)
+    ticker = Ticker(
+        sch,
+        now=lambda: NOW + timedelta(minutes=30),
+        on_error=lambda job, exc: seen.append(exc),
+    )
+
+    assert ticker.tick_once() == []
+    assert len(seen) == 1 and isinstance(seen[0], RuntimeError)
