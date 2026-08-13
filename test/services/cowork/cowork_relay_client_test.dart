@@ -392,13 +392,30 @@ void main() {
     await client.dispose();
   });
 
-  test('requestStop seals {type:stop}', () async {
+  test('requestStop seals {type:stop} naming the thread it aborts', () async {
+    final (client, host, _) = await paired();
+
+    await client.sendTask('read the log', sessionKey: 'amber-otter-2');
+    await client.requestStop(sessionKey: 'amber-otter-2');
+    await Future<void>.delayed(Duration.zero);
+
+    final stop = host.received.singleWhere((m) => m['type'] == 'stop');
+    // The executor drops a stop that names no run, so the session key is the
+    // whole point of the frame: it is what the run is matched by.
+    expect(stop['session_key'], 'amber-otter-2');
+    expect(stop.keys, containsAll(<String>['type', 'session_key']));
+
+    await client.dispose();
+  });
+
+  test('requestStop defaults to the default thread', () async {
     final (client, host, _) = await paired();
 
     await client.requestStop();
     await Future<void>.delayed(Duration.zero);
 
-    expect(host.received.where((m) => m['type'] == 'stop'), hasLength(1));
+    final stop = host.received.singleWhere((m) => m['type'] == 'stop');
+    expect(stop['session_key'], 'default');
 
     await client.dispose();
   });

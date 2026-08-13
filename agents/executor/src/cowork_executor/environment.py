@@ -51,6 +51,16 @@ class SandboxEnvironment:
     def inner(self) -> BaseEnvironment:
         return self._inner
 
+    def cancel(self) -> None:
+        """Abort the command in flight (§7.1). Forwards to the sandbox backend.
+
+        The executor hangs this on the task's ``KillSwitch``, so a Stop pressed
+        during a ten-minute ``run_command`` kills the command instead of waiting
+        for it. Backends that cannot interrupt themselves inherit a no-op and the
+        run ends at the loop's next poll instead.
+        """
+        self._inner.cancel()
+
     def run_bash(
         self, cmd: str, *, timeout: int = 120, internal: bool = False
     ) -> AgentProcessResult:

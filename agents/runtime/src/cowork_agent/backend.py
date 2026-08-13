@@ -387,11 +387,17 @@ class BackendModelClient:
         self._auth_timeout = auth_timeout
         self._recv_timeout = recv_timeout
         self._ws: Any | None = None
+        # Set by ``cancel`` so a socket we closed ourselves is not mistaken for a
+        # dropped idle connection and retried.
+        self._cancelled = False
 
     # -- ModelClient -----------------------------------------------------
 
     def complete(self, messages: list[dict]) -> ModelResponse:
         payload = self._messages_to_payload(messages)
+        # A cancel only applies to the call it interrupted. Clearing it here is
+        # what lets one client serve the next task after a stopped one.
+        self._cancelled = False
         try:
             return self._chat_once(payload)
         except _AuthRejected:
@@ -400,9 +406,26 @@ class BackendModelClient:
             self._session.refresh()
             return self._chat_once(payload)
         except ConnectionClosed:
+            if self._cancelled:
+                # We closed this socket on purpose (§7.1 Stop). Retrying would
+                # spend the account's credits on an answer nobody is waiting for.
+                raise BackendModelError("cancelled", code="cancelled") from None
             # Idle socket dropped by an LB: reconnect and retry once.
             self._close()
             return self._chat_once(payload)
+
+    def cancel(self) -> None:
+        """Abandon the turn in flight (§7.1): close the socket so the blocking
+        ``recv`` returns at once instead of waiting out ``recv_timeout``.
+
+        Called from the thread that pressed Stop, not from the one inside
+        ``complete``. The reader then sees ``ConnectionClosed`` and, because
+        ``_cancelled`` is set, fails the turn instead of reconnecting and asking
+        the model the same question twice. The loop turns that failure into
+        ``StopReason.INTERRUPTED`` because its kill switch is set.
+        """
+        self._cancelled = True
+        self._close()
 
     def close(self) -> None:
         self._close()

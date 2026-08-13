@@ -19,6 +19,29 @@ Controller -> executor (one, opens the task)::
 
     {"type": "task", "prompt": "...", "session_key": "..."}
 
+Controller -> executor (any time after it, aborts a run — §7.1, §16)::
+
+    {"type": "stop", "request_id": "task-3"}        # exact: one relay request
+    {"type": "stop", "session_key": "default"}      # thread-level: that thread's run
+
+A stop is a frame like every other one: sealed, signed, replay-checked. That is
+deliberate — the kill switch is reachable only by an **approved device**, so a
+stranger who can talk to the relay cannot end other people's runs, and the
+executor's default-deny opener is the whole enforcement (no extra check).
+
+A stop **names its target**, and a stop that names nothing stops nothing. The
+alternative ("abort whatever is running") loses a race it cannot see: the run the
+user meant can finish while the frame is in flight, and the stop would then kill
+the *next* task in that thread. ``request_id`` is the exact handle for a
+controller that speaks the relay layer itself; ``session_key`` is the handle the
+app has, because the app chose it when it sent the task, and it knows it before
+the first event of the run comes back. The executor answers every stop with::
+
+    {"type": "stop_ack", "stopping": ["task-3"]}   # [] = nothing matched
+
+so a lost stop and a stop that matched nothing are distinguishable instead of
+both looking like silence.
+
 Executor -> controller (a stream, closed by ``done`` or ``error``)::
 
     {"type": "delta", "text": "..."}                     # an assistant text turn
@@ -65,6 +88,29 @@ class PayloadTooLarge(ValueError):
 
 def task_payload(prompt: str, session_key: str = "default") -> dict[str, Any]:
     return {"type": "task", "prompt": prompt, "session_key": session_key}
+
+
+def stop_payload(
+    *, request_id: str | None = None, session_key: str | None = None
+) -> dict[str, Any]:
+    """Build a ``stop``: abort the run named by ``request_id`` or ``session_key``.
+
+    Raises :class:`ValueError` when neither is given — a stop with no target is a
+    stop that would have to guess, and guessing kills the wrong run.
+    """
+    if not request_id and not session_key:
+        raise ValueError("a stop must name a request_id or a session_key")
+    payload: dict[str, Any] = {"type": "stop"}
+    if request_id:
+        payload["request_id"] = request_id
+    if session_key:
+        payload["session_key"] = session_key
+    return payload
+
+
+def stop_ack_payload(stopping: list[str]) -> dict[str, Any]:
+    """Answer a ``stop``: the request ids that were told to stop (possibly none)."""
+    return {"type": "stop_ack", "stopping": list(stopping)}
 
 
 def delta_payload(text: str) -> dict[str, Any]:
@@ -161,10 +207,21 @@ def decode_payload(plaintext: bytes) -> dict[str, Any]:
 
 # -- relay envelope <-> sealed frame ------------------------------------------
 
-# Relay method names. ``run_task`` opens a task; ``event`` is a server-initiated
-# progress notification. The terminal is a plain relay *response* (no method).
+# Relay method names. ``run_task`` opens a task; ``stop`` aborts one; ``event`` is
+# a server-initiated progress notification. The terminal is a plain relay
+# *response* (no method).
+#
+# The method is only a routing hint. What the executor acts on is the **payload
+# type inside the sealed frame**, because the host that forwards app frames is
+# blind by design: it cannot read a frame, so it cannot label it, and it wraps
+# everything as ``run_task``. Trusting the cleartext method would mean trusting
+# the one layer that is neither encrypted nor signed.
 METHOD_RUN_TASK = "run_task"
+METHOD_STOP = "stop"
 METHOD_EVENT = "event"
+
+#: Envelope methods the executor accepts a sealed controller frame on.
+INBOUND_METHODS = (METHOD_RUN_TASK, METHOD_STOP)
 
 
 def frame_to_b64(sealed_bytes: bytes) -> str:

@@ -81,6 +81,31 @@ class BaseEnvironment(ABC):
         """Release backend resources. Safe to call more than once."""
         raise NotImplementedError
 
+    def cancel(self) -> None:
+        """Abort the command **currently in flight**, if there is one.
+
+        This is the sandbox end of the §7.1 kill switch: the loop's Stop can only
+        end a run *between* tool calls, so without this a ``run_command`` that
+        runs for ten minutes would keep the user waiting for ten minutes. A
+        backend implements it by killing the process it is blocked on; the killed
+        command comes back like any other failure (a non-zero exit code), not as
+        an exception, because the caller is a tool handler and not the stopper.
+
+        Not sticky and not a mode: it cancels what is running now and nothing
+        else. The next ``run`` works normally — the run is ended by the loop's
+        kill switch, not by a poisoned environment, and the plumbing that follows
+        a stop (a journal commit, a cleanup) still needs a working shell.
+
+        The default does nothing, which is the honest behaviour for a backend
+        that cannot interrupt itself; the run then ends at the next poll instead.
+
+        Called from another thread than the one inside ``run`` — that is the whole
+        point. One environment still serves **one** command thread: it tracks one
+        cwd, one snapshot and one in-flight process, so two callers running
+        commands on it would race regardless of this method.
+        """
+        return None
+
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #

@@ -19,15 +19,47 @@ Streaming is genuinely incremental and needs no change to ``cowork_agent``:
 
 A :class:`MockModelClient` drives the loop in tests; a real backend client is
 injected in production via ``model_factory``.
+
+Stop (§7.1, §16)
+----------------
+The app's Stop button is a sealed ``stop`` frame, and it is wired all the way
+down:
+
+1. **Two threads, not one.** The serve thread only parses frames; tasks run on a
+   worker thread. Running a task on the serve thread — as this once did — is why
+   a stop could not arrive at all: the frame sat in the transport queue until the
+   run it was meant to abort had already finished.
+2. **One task at a time.** The worker is a single thread over a queue, so the
+   shared sandbox and session db keep exactly the serial behaviour they had.
+3. **The run registry** maps the relay ``requestId`` *and* the session key of
+   every accepted task to its :class:`~cowork_agent.KillSwitch`. A stop names one
+   of the two and fires that switch; a stop that matches nothing is a no-op and
+   says so in its ack.
+4. **Cancel in flight.** The switch's listeners kill the command running in the
+   sandbox and the model call in flight, so a stop pressed during a ten-minute
+   ``run_command`` does not wait ten minutes. The loop then ends with
+   ``StopReason.INTERRUPTED`` and the task closes with a normal ``done`` event
+   carrying ``reason: "interrupted"`` — the terminal the app already renders.
+
+Because the switch belongs to the task and is handed to ``build_runtime``, the
+same interrupt reaches every subagent under it (§7.6) without this module
+knowing anything about the tree.
+
+The second way to stop a run — no app, no relay — is the file-sentinel ESTOP:
+start the executor with ``estop_path`` and ``touch`` that file. See
+:class:`cowork_agent.KillSwitch`.
 """
 
 from __future__ import annotations
 
 import json
+import queue
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from cowork_agent import (
+    KillSwitch,
     ModelClient,
     ModelResponse,
     SubagentConfig,
@@ -45,8 +77,8 @@ from cowork_sandbox import BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .protocol import (
+    INBOUND_METHODS,
     METHOD_EVENT,
-    METHOD_RUN_TASK,
     b64_to_frame,
     decode_payload,
     delta_payload,
@@ -55,6 +87,7 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    stop_ack_payload,
     subagent_payload,
     tool_payload,
 )
@@ -81,6 +114,21 @@ class StreamingModelClient:
         return response
 
 
+@dataclass
+class _Run:
+    """One accepted task: what a ``stop`` can name, and the switch it fires.
+
+    It is registered when the frame is accepted, not when the worker picks it up,
+    so a stop can also name a task that is still queued: the switch is already
+    live and the loop's first poll ends the run without one model call.
+    """
+
+    request_id: str
+    session_key: str
+    prompt: str
+    kill: KillSwitch
+
+
 class Executor:
     """One executor bound to one transport endpoint and one sandbox.
 
@@ -104,6 +152,7 @@ class Executor:
         media_mount: WorkspaceMount | None = None,
         max_iterations: int = 50,
         poll_interval: float = 0.1,
+        estop_path: str | None = None,
         subagent_sandbox: str | None = None,
         subagent_sandbox_options: dict | None = None,
         subagent_limits: SubagentLimits | None = None,
@@ -124,6 +173,10 @@ class Executor:
         self._media_mount = media_mount
         self._max_iterations = max_iterations
         self._poll = poll_interval
+        # The file-sentinel half of the kill switch (§7.1). Every task's switch is
+        # built with it, so one ``touch`` stops the run and its whole subagent
+        # tree with no app and no network involved.
+        self._estop_path = estop_path
         # Subagents (§7.6) are opt-in per executor, because a child is a second
         # sandbox and a second model stream — a cost the operator says yes to.
         # ``subagent_sandbox`` is the *kind* ("local" / "docker"), and each child
@@ -135,7 +188,14 @@ class Executor:
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._worker: threading.Thread | None = None
         self._rx = b""
+
+        # Accepted-but-not-finished tasks, by relay request id. Guarded because
+        # the serve thread writes it (accept, stop) while the worker clears it.
+        self._runs: dict[str, _Run] = {}
+        self._runs_lock = threading.Lock()
+        self._queue: "queue.Queue[_Run]" = queue.Queue()
 
     @property
     def name(self) -> str:
@@ -143,28 +203,54 @@ class Executor:
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
-        """Spawn the serve loop in a background daemon thread."""
+        """Spawn the serve loop and the task worker as background daemon threads."""
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
+        self._start_worker()
         self._thread = threading.Thread(
             target=self._serve, name=f"executor-{self._name}", daemon=True
         )
         self._thread.start()
 
     def stop(self, *, join_timeout: float = 5.0) -> None:
-        """Signal the serve loop, join it, and release the sandbox."""
+        """Signal both loops, join them, and release the sandbox.
+
+        Interrupts every live run first: a task in flight would otherwise hold the
+        worker for as long as the model and its commands want, and the join would
+        expire while a run kept writing to a channel nobody reads.
+        """
         self._stop.set()
-        thread = self._thread
-        if thread is not None:
-            thread.join(join_timeout)
-            self._thread = None
+        for run in self._live_runs():
+            run.kill.interrupt()
+        serve, worker = self._thread, self._worker
+        self._thread = self._worker = None
+        for thread in (serve, worker):
+            if thread is not None:
+                thread.join(join_timeout)
+        # Anything still registered never ran: say so instead of leaving the
+        # controller waiting for a terminal that will never come.
+        for run in self._live_runs():
+            self._forget(run.request_id)
+            self._terminal(
+                run.request_id, error_payload("executor stopped before the task ran")
+            )
         self._environment.cleanup()
 
     def serve_forever(self) -> None:
         """Run the serve loop on the calling thread (for a subprocess entry
         point). Prefer :meth:`start` for in-process use."""
+        self._stop.clear()
+        self._start_worker()
         self._serve()
+
+    def _start_worker(self) -> None:
+        if self._worker is not None and self._worker.is_alive():
+            return
+        self._worker = threading.Thread(
+            target=self._work, name=f"executor-{self._name}-task", daemon=True
+        )
+        self._worker.start()
 
     # -- serve loop ------------------------------------------------------
     def _serve(self) -> None:
@@ -177,12 +263,29 @@ class Executor:
             for frame in frames:
                 if (
                     frame.get("type") == "request"
-                    and frame.get("method") == METHOD_RUN_TASK
+                    and frame.get("method") in INBOUND_METHODS
                 ):
-                    self._handle_task(frame)
+                    self._handle_frame(frame)
 
-    # -- one task --------------------------------------------------------
-    def _handle_task(self, frame: dict) -> None:
+    def _work(self) -> None:
+        """Run accepted tasks, one at a time, off the queue.
+
+        Serial on purpose: one executor owns one sandbox and one session db, so
+        two tasks at once would interleave in both.
+        """
+        while not self._stop.is_set():
+            try:
+                run = self._queue.get(timeout=self._poll)
+            except queue.Empty:
+                continue
+            try:
+                self._run_task(run)
+            finally:
+                self._forget(run.request_id)
+
+    # -- inbound frames --------------------------------------------------
+    def _handle_frame(self, frame: dict) -> None:
+        """Open one sealed controller frame and dispatch on its payload type."""
         request_id = frame.get("requestId", "")
         params = frame.get("params", {}) or {}
         raw_b64 = params.get("frame", "")
@@ -193,8 +296,9 @@ class Executor:
             self._terminal(request_id, error_payload("malformed envelope frame"))
             return
 
-        # Open the encrypted task frame. Default deny: an unapproved device or a
-        # bad signature dies here and never reaches the loop.
+        # Open the encrypted frame. Default deny: an unapproved device or a bad
+        # signature dies here and never reaches the loop — which is also what
+        # keeps a stranger from stopping somebody else's run.
         try:
             plaintext = self._opener.open(sealed)
         except CoworkFrameRejected as exc:
@@ -202,16 +306,87 @@ class Executor:
             return
 
         try:
-            task = decode_payload(plaintext)
-            prompt = task["prompt"]
-            session_key = task.get("session_key", "default")
-        except (json.JSONDecodeError, KeyError, TypeError):
-            self._terminal(request_id, error_payload("bad task payload"))
+            payload = decode_payload(plaintext)
+            kind = payload.get("type")
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            self._terminal(request_id, error_payload("bad payload"))
             return
 
-        self._run_task(request_id, prompt, session_key)
+        if kind == "stop":
+            self._handle_stop(request_id, payload)
+            return
+        if kind == "task" or kind is None:
+            # ``None`` keeps the original contract: the first frames of this
+            # protocol carried a prompt and no type.
+            self._accept_task(request_id, payload)
+            return
+        self._terminal(request_id, error_payload(f"unknown payload type: {kind!r}"))
 
-    def _run_task(self, request_id: str, prompt: str, session_key: str) -> None:
+    def _accept_task(self, request_id: str, payload: dict) -> None:
+        try:
+            prompt = payload["prompt"]
+            session_key = payload.get("session_key", "default")
+        except (KeyError, TypeError):
+            self._terminal(request_id, error_payload("bad task payload"))
+            return
+        run = _Run(
+            request_id=request_id,
+            session_key=str(session_key),
+            prompt=prompt,
+            # Built here, not in the loop, so a stop that arrives while the task
+            # is still queued has something to fire.
+            kill=KillSwitch(self._estop_path),
+        )
+        with self._runs_lock:
+            self._runs[request_id] = run
+        self._queue.put(run)
+
+    # -- stop (§7.1) -----------------------------------------------------
+    def _handle_stop(self, request_id: str, payload: dict) -> None:
+        """Fire the kill switch of the run the stop names, and acknowledge it.
+
+        Runs on the serve thread — never on the worker — so it lands while the
+        task it aborts is still working.
+        """
+        targets = self._resolve_stop(payload)
+        # Acknowledge BEFORE firing, so the ack cannot lose a race with the very
+        # terminal it causes: the run's ``done`` is produced on the worker thread,
+        # and a stop that lands mid-turn can end the run before this thread gets
+        # back to sending. Both go through one FIFO transport, so ack-then-act
+        # gives the app a deterministic order.
+        self._terminal(
+            request_id, stop_ack_payload([run.request_id for run in targets])
+        )
+        for run in targets:
+            run.kill.interrupt()
+
+    def _resolve_stop(self, payload: dict) -> list[_Run]:
+        """The live runs a stop names: by relay request id, else by session key.
+
+        A stop that names neither targets nothing. See :mod:`.protocol` for why
+        "stop whatever is running" is not an option.
+        """
+        target_id = payload.get("request_id")
+        if isinstance(target_id, str) and target_id:
+            with self._runs_lock:
+                run = self._runs.get(target_id)
+            return [run] if run is not None else []
+        session_key = payload.get("session_key")
+        if isinstance(session_key, str) and session_key:
+            return [r for r in self._live_runs() if r.session_key == session_key]
+        return []
+
+    def _live_runs(self) -> list[_Run]:
+        with self._runs_lock:
+            return list(self._runs.values())
+
+    def _forget(self, request_id: str) -> None:
+        with self._runs_lock:
+            self._runs.pop(request_id, None)
+
+    # -- one task --------------------------------------------------------
+    def _run_task(self, run: _Run) -> None:
+        request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
         # Bind the streaming hooks for this task.
         self._env_shim.on_run = lambda cmd, result: self._event(
             request_id,
@@ -224,10 +399,20 @@ class Executor:
                 timed_out=result.timed_out,
             ),
         )
+        inner_model = self._model_factory()
         model = StreamingModelClient(
-            self._model_factory(),
+            inner_model,
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
         )
+
+        # "Cancels in-flight" (§7.1): a Stop kills the command the sandbox is
+        # blocked on and the model turn in flight, instead of ending the run only
+        # after they return on their own. Registered on this task's switch, so the
+        # listeners die with the task.
+        run.kill.on_interrupt(self._env_shim.cancel)
+        cancel_model = getattr(inner_model, "cancel", None)
+        if callable(cancel_model):
+            run.kill.on_interrupt(cancel_model)
 
         subagents = self._subagent_config(request_id, session_key)
         loop = build_runtime(
@@ -238,6 +423,10 @@ class Executor:
             system_prompt=self._system_prompt,
             workspace=self._workspace,
             subagents=subagents,
+            # One switch per task, owned by the executor: the run registry fires
+            # it when a stop names this task, and ``build_runtime`` hands the same
+            # switch to the subagent supervisor, so one Stop reaches the tree.
+            kill_switch=run.kill,
             # `send_file_to_user` (§9): the agent hands over the bytes, this
             # turns them into one sealed `file` event on the same stream as the
             # deltas. A file too large to send raises here, the agent tool
