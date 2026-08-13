@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
+
+-- Subagent handles (§7.6). One row per child, the whole handle as JSON: the app
+-- lists subagents from here, and a relaunch reconstructs every handle with no
+-- in-process state. Keyed by the parent's session key so one store can hold the
+-- children of many runs.
+CREATE TABLE IF NOT EXISTS subagents (
+    subagent_id TEXT PRIMARY KEY,
+    parent_key TEXT NOT NULL,
+    data TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_subagents_parent ON subagents(parent_key);
 """
 
 
@@ -217,6 +230,57 @@ class StateStore:
             )
             for r in rows
         ]
+
+    # -- subagent handles (§7.6) ------------------------------------------
+
+    def save_subagent(self, subagent_id: str, parent_key: str, data: dict) -> None:
+        """Insert or update one subagent handle. The caller owns the shape of
+        ``data``; this store only keeps it addressable and durable."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            cur.execute(
+                "INSERT INTO subagents(subagent_id, parent_key, data, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(subagent_id) DO UPDATE SET "
+                "parent_key=excluded.parent_key, data=excluded.data, "
+                "updated_at=excluded.updated_at",
+                (subagent_id, parent_key, json.dumps(data), time.time()),
+            )
+
+        self._write(op)
+
+    def load_subagent(self, subagent_id: str) -> dict | None:
+        row = self._conn().execute(
+            "SELECT data FROM subagents WHERE subagent_id=?", (subagent_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row["data"])
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def list_subagents(
+        self, *, parent_key: str | None = None, limit: int = 200
+    ) -> list[dict]:
+        """Oldest first, by rowid — insertion order, never a wall clock."""
+        sql = "SELECT data FROM subagents"
+        params: list[Any] = []
+        if parent_key is not None:
+            sql += " WHERE parent_key=?"
+            params.append(parent_key)
+        sql += " ORDER BY rowid LIMIT ?"
+        params.append(max(1, int(limit)))
+        rows = self._conn().execute(sql, tuple(params)).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            try:
+                data = json.loads(row["data"])
+            except ValueError:
+                continue
+            if isinstance(data, dict):
+                out.append(data)
+        return out
 
     # -- full-text search (§12 B) -----------------------------------------
 
