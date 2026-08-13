@@ -51,9 +51,11 @@ plaintext secret in the workspace, which is exactly what §10 avoids. Prefer
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import threading
+from datetime import timedelta
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
@@ -89,6 +91,22 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
 #: ``(server, tool) -> bearer token or None``. Satisfied by
 #: :class:`cowork_agent.oauth_bridge.CredentialStash`.
 TokenProvider = Callable[[str], "str | None"]
+
+
+def _read_timeout(seconds: float) -> Any:
+    """``ClientSession(read_timeout_seconds=...)`` takes a ``timedelta`` in the
+    ``mcp`` 1.x line and a float in 2.x. browser-use 0.13.7 pins ``mcp==1.26.0``,
+    so the runtime has to satisfy both instead of picking a winner: read the
+    annotation of the installed SDK and hand over what it asks for."""
+    from mcp import ClientSession  # imported late: the SDK is an optional dep
+
+    parameter = inspect.signature(ClientSession.__init__).parameters.get(
+        "read_timeout_seconds"
+    )
+    hint = "" if parameter is None else str(parameter.annotation)
+    if "timedelta" in hint:
+        return timedelta(seconds=seconds)
+    return seconds
 
 
 def _clip(value: Any, cap: int) -> str:
@@ -363,7 +381,9 @@ class MCPConnection:
                 # transport. Only the first two are the session's.
                 read, write = streams[0], streams[1]
                 session = await stack.enter_async_context(
-                    ClientSession(read, write, read_timeout_seconds=self.config.call_timeout)
+                    ClientSession(
+                        read, write, read_timeout_seconds=_read_timeout(self.config.call_timeout)
+                    )
                 )
                 await asyncio.wait_for(
                     session.initialize(), timeout=self.config.connect_timeout
