@@ -63,6 +63,15 @@ from .skills import (
     register_skill_tool,
 )
 from .state import Message, StateStore
+from .terminal import (
+    TerminalError,
+    TerminalManager,
+    TerminalSession,
+    diff_screens,
+    normalize_screen,
+    register_terminal_tools,
+    tmux_key,
+)
 from .tools import register_builtin_tools, register_file_tools, register_run_command
 from .web_fetch import (
     FETCH_CAP,
@@ -112,6 +121,9 @@ __all__ = [
     "StopReason",
     "SupabaseAuthError",
     "SupabaseSession",
+    "TerminalError",
+    "TerminalManager",
+    "TerminalSession",
     "TokenSession",
     "ToolCall",
     "ToolRegistry",
@@ -119,6 +131,7 @@ __all__ = [
     "UrlRejected",
     "build_runtime",
     "build_system_prompt",
+    "diff_screens",
     "extract_tool_calls",
     "fetch_models_info",
     "html_to_markdown",
@@ -127,6 +140,7 @@ __all__ = [
     "login",
     "make_web_fetch_handler",
     "make_web_search_handler",
+    "normalize_screen",
     "parse_openai_response",
     "parse_skill",
     "register_builtin_tools",
@@ -135,6 +149,7 @@ __all__ = [
     "register_run_command",
     "register_search_tool",
     "register_skill_tool",
+    "register_terminal_tools",
     "register_web_fetch",
     "register_web_search",
     "render_tool_docs",
@@ -143,5 +158,6 @@ __all__ = [
     "sanitize_match",
     "search_messages",
     "segment_cjk",
+    "tmux_key",
     "validate_url",
 ]
