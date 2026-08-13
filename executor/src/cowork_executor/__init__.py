@@ -31,6 +31,7 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    subagent_payload,
     task_payload,
     tool_payload,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "error_payload",
     "file_payload",
     "frame_to_b64",
+    "subagent_payload",
     "loopback_pair",
     "make_backend_model_factory",
     "resolve_backend_model_factory",

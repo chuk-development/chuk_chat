@@ -19,6 +19,16 @@ merged later). Git on `master`. Plan is canonical HERE (a stale copy sits in
 | `host/` | cowork_host | **`cowork-host` CLI** — a blind localhost relay + Manager + §15 pairing INITIATOR + task serving. `--mock-model` (offline, no credits). Reads supabase creds from the token or `--supabase-url/--anon-key`/env. | ~10 pytest |
 | `app/` | Flutter | CoWork controller app: security-stack port from chuk_chat, real Supabase login, **real chat UI** (`cowork_thread_view.dart`), `CoworkRelayClient` (connect → pairing JOINER → provision token → sendTask → stream), pairing joiner. | ~40 tests |
 
+**Subagents (§7.6) landed** — `agent/src/cowork_agent/subagents.py`:
+`delegate_task` + `subagent_control`, one child per `task_id` with its own
+environment (built through the sandbox factory) and its own state DB, handles
+persisted in the `subagents` table so the app can list them after a restart, live
+child output streamed to the parent, a heartbeat that keeps a waiting parent off
+the inactivity timeout, per-child kill switch, depth/concurrency/pause caps
+(2 / 4 per level / 900 s), and a git worktree + branch per child that is merged
+back on success (§7.7). On in the executor with
+`Executor(subagent_sandbox="local"|"docker")`; off by default.
+
 ## What works (verified live)
 
 - **Local encrypted end-to-end, cross-language**: the real Dart `CoworkRelayClient`
@@ -123,7 +133,9 @@ Two release-class bugs were found and fixed while landing it:
    tools, MCP + the dashboard-OAuth callback bridge), memory + skills
    (frozen-snapshot MEMORY.md/USER.md, FTS5 search, the background-review skill
    fork), the context cost ladder, the interactive terminal (§7.8), the
-   git-versioned workspace (§7.7), scheduler/cron + push, subagents/multi-agent.
+   git-versioned workspace (§7.7), scheduler/cron + push. (Subagents/multi-agent
+   §7.6 is done — see above; what is still open there is the group-thread model,
+   a token budget per child, and surfacing the subagent list in the app.)
 4. **Gates that need the user** (do NOT auto-run): the real relay = the prod
    `relay-crossreplica` deploy on the chat server (§14/§21.1) — it can take chat
    down for all users; do it WITH the user. The current transport is a local
