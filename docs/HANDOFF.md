@@ -29,6 +29,26 @@ the inactivity timeout, per-child kill switch, depth/concurrency/pause caps
 back on success (§7.7). On in the executor with
 `Executor(subagent_sandbox="local"|"docker")`; off by default.
 
+**browser-use fallback (§8/§9) landed** — `agent/src/cowork_agent/browser.py`:
+`browser_task` (a task in plain language, bounded at 12 steps / 40 hard, result
+capped, screenshots pushed through the `send_file_to_user` sink), a
+`BackendChatModel` adapter that makes browser-use's `BaseChatModel` Protocol run
+on **our** `ModelClient` (so every browser step bills the account through
+`api.chuk.chat`; no provider key, no token in the sandbox), and a per-task usage
+block (`model_rounds`, tokens, `structured_retries`) so a browser session can
+never spend invisibly. Chromium lives in a separate image variant,
+`sandbox/docker/Dockerfile.browser` (`cowork-browser:latest`,
+`COWORK_SANDBOX_IMAGE=` to use it); the base image stays browser-free.
+`check_fn` keeps the tool out of the prompt without browser-use + a Chromium (or
+`COWORK_BROWSER_CDP_URL`). Verified against a real install + real Chromium in a
+throwaway container — see the module docstring for the measured numbers.
+**Open wiring:** `build_runtime` only registers it when it is given a
+`browser_model` (or an `aux_model`), because the loop's own client is wrapped for
+streaming and would push every browser step's JSON into the chat. The executor
+does not pass one yet — one line in `executor.py`
+(`browser_model=self._model_factory()`), deliberately left to the executor's own
+milestone.
+
 ## What works (verified live)
 
 - **Local encrypted end-to-end, cross-language**: the real Dart `CoworkRelayClient`

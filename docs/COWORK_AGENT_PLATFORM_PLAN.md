@@ -426,9 +426,15 @@ competitors do and it is the wrong default.
 toolset ships preinstalled so the agent has tools ready without a cold install.
 
 **Inside the sandbox (default):**
-- **Browser:** **browser-use** (MIT, self-hosted) + Playwright + Chromium. Free;
-  we pay only LLM tokens (which route through the backend). Not the Playwright
-  MCP server — a higher-level agent-browser library.
+- **Browser:** **browser-use** (MIT, self-hosted) + Chromium. Free; we pay only
+  LLM tokens (which route through the backend). Not the Playwright MCP server —
+  a higher-level agent-browser library. **Correction, verified against 0.13.7
+  (2026-08-13):** Playwright is no longer part of it. browser-use drives Chromium
+  straight over the DevTools Protocol (`cdp-use`, `browser-harness`); the
+  Playwright CLI survives only as the *downloader* its own `browser-use install`
+  shells out to. Requires Python ≥3.11. Chromium plus its system libraries is a
+  few hundred MB, so it ships as a **separate image variant**
+  (`sandbox/docker/Dockerfile.browser`), not in the base image.
 - **File → markdown:** **anydoc** (firecrawl, MIT, fully offline, no API key).
   One dependency (`pip install firecrawl-anydoc`) replacing pandoc + python-docx
   + LibreOffice + pypdf for ingestion of doc/docx, ppt/pptx, xls/xlsx, odt, rtf,
