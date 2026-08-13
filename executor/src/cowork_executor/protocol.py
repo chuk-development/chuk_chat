@@ -25,9 +25,21 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
     {"type": "tool",  "name": "run_command",             # a tool that just ran
      "command": "...", "exit_code": 0,
      "stdout": "...", "stderr": "...", "timed_out": false}
+    {"type": "file",  "name": "report.csv",               # a file for the user
+     "mime_type": "text/csv", "size": 1234,
+     "data": "<base64>"}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3}
     {"type": "error", "message": "..."}                   # rejected / crashed
+
+The ``file`` event (§9, ``send_file_to_user``) is how a produced file reaches the
+chat thread. It rides the same sealed frame as every other event, so a file the
+agent made is encrypted end to end exactly like the text around it, and the relay
+sees nothing. It is the one event with an unbounded-by-nature body, so it is the
+one event with a **hard size gate**: :func:`file_payload` refuses anything over
+:data:`MAX_FILE_BYTES` rather than pushing a hundred megabytes through a phone
+connection. The agent-side tool checks the same ceiling before it moves a byte;
+this second gate is what makes that a guarantee instead of a convention.
 """
 
 from __future__ import annotations
@@ -35,6 +47,16 @@ from __future__ import annotations
 import base64
 import json
 from typing import Any
+
+# Hard ceiling for one ``file`` event, in raw bytes. Base64 inside the sealed
+# frame and base64 again in the relay envelope put an 8 MiB file at roughly
+# 15 MiB on the wire — the most that is reasonable to move in one frame.
+# Mirrors ``cowork_agent.files_out.MAX_FILE_BYTES``.
+MAX_FILE_BYTES = 8 * 1024 * 1024
+
+
+class PayloadTooLarge(ValueError):
+    """A file event exceeded :data:`MAX_FILE_BYTES` and was not built."""
 
 # -- in-frame payload builders ------------------------------------------------
 
@@ -64,6 +86,38 @@ def tool_payload(
         "stdout": stdout,
         "stderr": stderr,
         "timed_out": timed_out,
+    }
+
+
+def file_payload(
+    *,
+    name: str,
+    mime_type: str,
+    data: bytes,
+    max_bytes: int = MAX_FILE_BYTES,
+) -> dict[str, Any]:
+    """Build a ``file`` event: one produced file on its way to the user.
+
+    ``size`` is the raw byte count and ``data`` is that same content base64'd,
+    so a receiver can check the decode against the declared length instead of
+    trusting it. Raises :class:`PayloadTooLarge` past ``max_bytes``; the caller
+    reports that to the model as a normal tool failure.
+    """
+    if not isinstance(data, (bytes, bytearray)):
+        raise TypeError("file data must be bytes")
+    size = len(data)
+    if size == 0:
+        raise ValueError("file is empty")
+    if size > max_bytes:
+        raise PayloadTooLarge(
+            f"file is {size} bytes, over the {max_bytes} byte event limit"
+        )
+    return {
+        "type": "file",
+        "name": name,
+        "mime_type": mime_type,
+        "size": size,
+        "data": base64.b64encode(bytes(data)).decode("ascii"),
     }
 
 
