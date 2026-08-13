@@ -16,6 +16,13 @@ filesystem path — a Docker sandbox stays a Docker sandbox.
   session; without one it is not registered and not documented to the model.
 - ``web_fetch`` (:mod:`cowork_agent.web_fetch`) — read one page as Markdown,
   locally, with the SSRF/size/type hardening that module documents.
+- ``read_document`` (:mod:`cowork_agent.documents`) — any document to Markdown,
+  offline through anydoc, with a vision route for scans and images.
+- ``send_file_to_user`` (:mod:`cowork_agent.files_out`) — push a produced file
+  into the chat thread. Needs a sink; without one it is not registered.
+- ``run_ffmpeg`` / ``run_ffprobe`` (:mod:`cowork_agent.media`) — the host's
+  ffmpeg on the workspace's files. Needs a workspace mount; without one neither
+  is registered.
 
 The web tools follow §8: an API call first, a browser only as a fallback.
 """
@@ -27,7 +34,10 @@ import shlex
 
 import httpx
 
+from .documents import VisionReader, build_backend_vision, register_read_document
 from .environment import Environment
+from .files_out import FileSink, register_send_file
+from .media import WorkspaceMount, register_media_tools
 from .registry import ToolRegistry
 from .web_fetch import Resolver, register_web_fetch
 from .web_search import DEFAULT_BASE_URL, TokenSession, register_web_search
@@ -206,14 +216,29 @@ def register_builtin_tools(
     search_http_client: httpx.Client | None = None,
     fetch_http_client: httpx.Client | None = None,
     resolve: Resolver | None = None,
+    file_sink: FileSink | None = None,
+    media_mount: WorkspaceMount | None = None,
+    vision: VisionReader | None = None,
+    vision_http_client: httpx.Client | None = None,
 ) -> None:
     """Register the whole built-in tool set against one environment.
 
     ``session`` is the account session (:class:`~cowork_agent.backend.SupabaseSession`).
-    It is what pays for ``web_search``; leave it out and only the local tools
-    are registered. The two clients stay separate on purpose — one talks to our
-    backend, the other to whatever host the model picked. ``*_http_client`` and
-    ``resolve`` are the test injection points.
+    It is what pays for ``web_search`` and for the vision route of
+    ``read_document``; leave it out and only the local tools are registered. The
+    clients stay separate on purpose — one talks to our backend, the other to
+    whatever host the model picked. ``*_http_client`` and ``resolve`` are the
+    test injection points.
+
+    Three tools are wired only when their channel exists, which is what keeps
+    them out of the prompt in a run that cannot use them (§7.9):
+
+    - ``file_sink`` — where a sent file goes. The executor binds it to a sealed
+      ``file`` event; without it ``send_file_to_user`` is not registered.
+    - ``media_mount`` — the shared workspace directory the host's ffmpeg works
+      on; without it neither media tool is registered.
+    - ``vision`` — an explicit :class:`~cowork_agent.documents.VisionReader`.
+      Left out, one is built from ``session`` when there is a session to bill.
     """
     register_run_command(registry, env)
     register_file_tools(registry, env)
@@ -221,3 +246,13 @@ def register_builtin_tools(
         registry, session, base_url=base_url, http_client=search_http_client
     )
     register_web_fetch(registry, http_client=fetch_http_client, resolve=resolve)
+    register_read_document(
+        registry,
+        env,
+        vision=vision
+        or build_backend_vision(
+            session, base_url=base_url, http_client=vision_http_client
+        ),
+    )
+    register_send_file(registry, env, file_sink)
+    register_media_tools(registry, media_mount)

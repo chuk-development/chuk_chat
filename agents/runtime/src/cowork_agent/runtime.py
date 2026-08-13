@@ -18,7 +18,9 @@ from pathlib import Path
 
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
+from .files_out import FileSink
 from .loop import AgentLoop, IterationBudget, KillSwitch
+from .media import WorkspaceMount
 from .memory import MemoryStore, register_memory_tool
 from .model import ModelClient
 from .prompt import build_system_prompt
@@ -59,6 +61,8 @@ def build_runtime(
     enable_terminal: bool = True,
     terminal_task_id: str = "task",
     version_workspace: bool = True,
+    file_sink: FileSink | None = None,
+    media_mount: WorkspaceMount | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -79,6 +83,11 @@ def build_runtime(
     ``version_workspace`` (§7.7) makes the workspace a git repo, journals every
     tool call into it and registers the undo/history tools. It needs a
     ``workspace``; without one, or without git, it silently does nothing.
+
+    ``file_sink`` and ``media_mount`` are the two channels the runtime cannot
+    invent for itself: where a file sent to the user goes (the executor's sealed
+    event stream) and which host directory the sandbox workspace really is (for
+    the host-side ffmpeg, §9). Each unset tool stays out of the prompt.
     """
     env = environment or LocalEnvironment()
     # The workspace is a git repo and every dispatch is journaled into it (§7.7).
@@ -86,7 +95,14 @@ def build_runtime(
     # a plain one and the run continues unversioned.
     git_workspace = GitWorkspace.open(workspace) if version_workspace else None
     registry = JournalingRegistry(git_workspace)
-    register_builtin_tools(registry, env, session=session, base_url=base_url)
+    register_builtin_tools(
+        registry,
+        env,
+        session=session,
+        base_url=base_url,
+        file_sink=file_sink,
+        media_mount=media_mount,
+    )
     register_workspace_tools(registry, git_workspace)
 
     if enable_terminal:
