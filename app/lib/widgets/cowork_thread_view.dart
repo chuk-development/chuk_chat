@@ -3,20 +3,28 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
+import 'package:cowork/widgets/agent_run_views.dart';
 
 /// The CoWork chat surface: one scrolling conversation with the agent running
 /// on the user's own host.
 ///
 /// It reads like any messenger — the user's messages, the agent's reply
-/// streaming in as deltas arrive, tool activity as compact inline chips, a
-/// subtle done marker — with the message input pinned at the bottom. The
-/// connection is a small, out-of-the-way affordance: while disconnected the
-/// input row is a compact host + pairing-code connect bar; once paired it is
-/// the composer, and a tiny "connected" chip with a disconnect button sits at
-/// the top.
+/// streaming in as deltas arrive, the run's tool calls as quiet collapsible
+/// lines, reasoning folded away in its own block, files and screenshots as
+/// cards — with the composer pinned at the bottom. While a run is in flight the
+/// send button becomes **Stop** (§7.1's kill switch, from the user's side).
+///
+/// The connection is deliberately not on screen: no "connected to", no SAS, no
+/// disconnect. While disconnected the bottom bar is a compact connect bar, and
+/// only before the very first pairing does it ask for a code.
+///
+/// One view serves many threads. [threadKey] is the executor's `session_key`, so
+/// switching threads switches the conversation on both sides; the log of each
+/// thread is kept, so switching back shows it again.
 ///
 /// All transport lives behind [CoworkRelayController], so the UI is the same
 /// whether it drives a real socket or a fake in a widget test.
@@ -27,6 +35,11 @@ class CoworkThreadView extends StatefulWidget {
     required this.sessionSource,
     this.pairingStore,
     this.defaultHostUrl = 'ws://127.0.0.1:8787',
+    this.threadKey = 'default',
+    this.fileSaver = const DownloadsAgentFileSaver(),
+    this.onRunStateChanged,
+    this.onActivity,
+    this.onPaired,
   });
 
   /// Builds the transport controller. Async because a real client generates a
@@ -46,9 +59,30 @@ class CoworkThreadView extends StatefulWidget {
   /// Prefilled host URL for a local run.
   final String defaultHostUrl;
 
+  /// The executor-side session this view talks to (§4: many threads per agent).
+  final String threadKey;
+
+  /// Where a file card writes when the user saves. Injected so a test can prove
+  /// the action without a filesystem.
+  final AgentFileSaver fileSaver;
+
+  /// Reports whether a run is in flight, and for which thread, so the roster can
+  /// show "working" against the right coworker.
+  final void Function(String threadKey, bool running)? onRunStateChanged;
+
+  /// Reports that something happened in [threadKey], for "last active".
+  final void Function(String threadKey, DateTime when)? onActivity;
+
+  /// Reports the host device id the moment the transport is paired, so the
+  /// roster can list the agent that really runs over there.
+  final void Function(String peerDeviceId)? onPaired;
+
   @override
   State<CoworkThreadView> createState() => _CoworkThreadViewState();
 }
+
+/// Where a run is, from the user's point of view.
+enum _RunPhase { idle, running, stopping }
 
 class _CoworkThreadViewState extends State<CoworkThreadView> {
   late final TextEditingController _hostController;
@@ -59,11 +93,22 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   CoworkRelayController? _controller;
   StreamSubscription<CoworkRelayInbound>? _inboundSub;
 
-  final List<_ThreadEntry> _entries = <_ThreadEntry>[];
+  /// One log per thread, so switching threads keeps both conversations.
+  final Map<String, List<_ThreadEntry>> _logs = <String, List<_ThreadEntry>>{};
   _AssistantEntry? _currentAssistant;
+  _ReasoningEntry? _currentReasoning;
 
   String? _localError;
   bool _busy = false;
+
+  /// One run at a time: the executor serves tasks one after another, so the
+  /// phase is per view, not per thread.
+  _RunPhase _runPhase = _RunPhase.idle;
+
+  /// The thread whose run is in flight. Events carry no session key, so they
+  /// belong to whichever thread started the run — even if the user has since
+  /// switched to another one.
+  String? _activeRunThread;
 
   /// The persisted trust, loaded once at startup. Non-null means "already
   /// paired": auto-reconnect, hide the code form, offer Forget.
@@ -79,11 +124,27 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   static const Duration _baseBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
 
+  List<_ThreadEntry> get _entries => _logFor(widget.threadKey);
+
+  List<_ThreadEntry> _logFor(String threadKey) =>
+      _logs.putIfAbsent(threadKey, () => <_ThreadEntry>[]);
+
   @override
   void initState() {
     super.initState();
     _hostController = TextEditingController(text: widget.defaultHostUrl);
     _bootstrap();
+  }
+
+  @override
+  void didUpdateWidget(CoworkThreadView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.threadKey != widget.threadKey) {
+      // A different conversation: no half-streamed turn carries over.
+      _currentAssistant = null;
+      _currentReasoning = null;
+      _scrollToBottom();
+    }
   }
 
   @override
@@ -139,14 +200,20 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   void _onStateChanged() {
     final controller = _controller;
     if (controller == null) return;
-    final phase = controller.state.value.phase;
+    final state = controller.state.value;
+    final phase = state.phase;
     if (phase == CoworkRelayPhase.paired) {
       _reconnectAttempts = 0;
+      final peer = state.peerDeviceId;
+      if (peer != null) widget.onPaired?.call(peer);
       return;
     }
     if (phase == CoworkRelayPhase.closed &&
         _storedPairing != null &&
         !_manuallyDisconnected) {
+      // A run cannot still be in flight over a socket that is gone.
+      _setRunPhase(_RunPhase.idle);
+      _activeRunThread = null;
       _scheduleAutoReconnect();
     }
   }
@@ -216,6 +283,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     setState(() {
       _controller = controller;
       _currentAssistant = null;
+      _currentReasoning = null;
       _inboundSub = controller.inbound.listen(_onInbound);
     });
     // Tear the old transport down in the background: it is fully detached now.
@@ -224,28 +292,71 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
   void _onInbound(CoworkRelayInbound event) {
     if (!mounted) return;
+    final target = _activeRunThread ?? widget.threadKey;
+    final log = _logFor(target);
     setState(() {
       switch (event) {
         case CoworkRelayDelta(:final text):
-          final assistant = _currentAssistant ??= _startAssistant();
+          _currentReasoning = null;
+          final assistant = _currentAssistant ??= _startAssistant(log);
           assistant.text += text;
-        case CoworkRelayTool(:final name, :final status):
-          _entries.add(_ToolEntry(name, status));
+        case CoworkRelayReasoning(:final text):
+          // Reasoning is its own channel: it never lands in the reply text.
+          _currentAssistant = null;
+          final reasoning = _currentReasoning ??= _startReasoning(log);
+          reasoning.text += text;
+        case CoworkRelayTool():
+          _currentAssistant = null;
+          _currentReasoning = null;
+          log.add(_ToolEntry(event));
+        case CoworkRelayFile():
+          _currentAssistant = null;
+          _currentReasoning = null;
+          log.add(_FileEntry(event));
         case CoworkRelayDone():
-          _entries.add(const _DoneEntry());
+          log.add(_DoneEntry(event));
           _currentAssistant = null;
+          _currentReasoning = null;
         case CoworkRelayRunError(:final message):
-          _entries.add(_ErrorEntry(message));
+          log.add(_ErrorEntry(message));
           _currentAssistant = null;
+          _currentReasoning = null;
       }
     });
+    if (event is CoworkRelayDone || event is CoworkRelayRunError) {
+      // The run is over only when the executor closes the stream. Report the
+      // phase change first, while the run still knows which thread it was.
+      _setRunPhase(_RunPhase.idle);
+      _activeRunThread = null;
+    }
+    widget.onActivity?.call(target, DateTime.now());
     _scrollToBottom();
   }
 
-  _AssistantEntry _startAssistant() {
+  _AssistantEntry _startAssistant(List<_ThreadEntry> log) {
     final entry = _AssistantEntry();
-    _entries.add(entry);
+    log.add(entry);
     return entry;
+  }
+
+  _ReasoningEntry _startReasoning(List<_ThreadEntry> log) {
+    final entry = _ReasoningEntry();
+    log.add(entry);
+    return entry;
+  }
+
+  void _setRunPhase(_RunPhase phase) {
+    if (_runPhase == phase) return;
+    final wasRunning = _runPhase != _RunPhase.idle;
+    final thread = _activeRunThread ?? widget.threadKey;
+    if (mounted) {
+      setState(() => _runPhase = phase);
+    } else {
+      _runPhase = phase;
+    }
+    final running = phase != _RunPhase.idle;
+    // "Stopping" is still running: only a real change is reported outward.
+    if (running != wasRunning) widget.onRunStateChanged?.call(thread, running);
   }
 
   void _scrollToBottom() {
@@ -322,19 +433,45 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   void _send() {
     final controller = _controller;
     if (controller == null || !controller.state.value.isPaired) return;
+    if (_runPhase != _RunPhase.idle) return;
     final text = _composerController.text.trim();
     if (text.isEmpty) return;
+    final thread = widget.threadKey;
     setState(() {
       _entries.add(_UserEntry(text));
       _currentAssistant = null;
+      _currentReasoning = null;
     });
+    _activeRunThread = thread;
+    _setRunPhase(_RunPhase.running);
     _composerController.clear();
+    widget.onActivity?.call(thread, DateTime.now());
     _scrollToBottom();
-    controller.sendTask(text).catchError((Object error) {
+    controller.sendTask(text, sessionKey: thread).catchError((Object error) {
       if (mounted) {
-        setState(() => _entries.add(_ErrorEntry('$error')));
+        setState(() => _logFor(thread).add(_ErrorEntry('$error')));
+        _setRunPhase(_RunPhase.idle);
+        _activeRunThread = null;
         _scrollToBottom();
       }
+    });
+  }
+
+  /// Asks the executor to abort the run. The run is only over when a `done` or
+  /// an `error` arrives, so the button goes to "Stopping…" and waits.
+  void _stop() {
+    final controller = _controller;
+    if (controller == null || _runPhase != _RunPhase.running) return;
+    _setRunPhase(_RunPhase.stopping);
+    final thread = _activeRunThread ?? widget.threadKey;
+    controller.requestStop().catchError((Object error) {
+      if (!mounted) return;
+      setState(
+        () => _logFor(thread).add(_ErrorEntry('Could not stop the run: $error')),
+      );
+      // The request never left, so the run is still going: back to Stop.
+      _setRunPhase(_RunPhase.running);
+      _scrollToBottom();
     });
   }
 
@@ -388,7 +525,8 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
   Widget _buildConversation(BuildContext context, bool connected) {
     final theme = Theme.of(context);
-    if (_entries.isEmpty) {
+    final entries = _entries;
+    if (entries.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -405,14 +543,19 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _entries.length,
-      itemBuilder: (context, index) => _entries[index].build(context),
+      itemCount: entries.length,
+      itemBuilder: (context, index) => entries[index].build(context, widget),
     );
   }
 
   // --- bottom bar: composer or connect affordance ----------------------------
 
   Widget _buildComposer(BuildContext context) {
+    final busy = _runPhase != _RunPhase.idle;
+    // The executor serves one task at a time, so a run in another thread blocks
+    // this composer too — but Stop belongs to the thread the run came from.
+    final runningHere =
+        busy && (_activeRunThread == null || _activeRunThread == widget.threadKey);
     return SafeArea(
       top: false,
       child: Padding(
@@ -423,20 +566,36 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
               child: TextField(
                 controller: _composerController,
                 textInputAction: TextInputAction.send,
-                decoration: const InputDecoration(
-                  hintText: 'Message the agent…',
-                  border: OutlineInputBorder(),
+                enabled: !busy,
+                decoration: InputDecoration(
+                  hintText: busy && !runningHere
+                      ? 'The agent is busy in another thread…'
+                      : 'Message the agent…',
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 onSubmitted: (_) => _send(),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: 'Send',
-              icon: const Icon(Icons.send),
-              onPressed: _send,
-            ),
+            if (!runningHere)
+              IconButton.filled(
+                tooltip: 'Send',
+                icon: const Icon(Icons.send),
+                onPressed: busy ? null : _send,
+              )
+            else
+              FilledButton.tonalIcon(
+                onPressed: _runPhase == _RunPhase.running ? _stop : null,
+                icon: _runPhase == _RunPhase.stopping
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.stop),
+                label: Text(_runPhase == _RunPhase.stopping ? 'Stopping…' : 'Stop'),
+              ),
           ],
         ),
       ),
@@ -580,7 +739,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
 sealed class _ThreadEntry {
   const _ThreadEntry();
-  Widget build(BuildContext context);
+  Widget build(BuildContext context, CoworkThreadView view);
 }
 
 class _UserEntry extends _ThreadEntry {
@@ -588,7 +747,7 @@ class _UserEntry extends _ThreadEntry {
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, CoworkThreadView view) {
     final theme = Theme.of(context);
     return Align(
       alignment: Alignment.centerRight,
@@ -610,7 +769,7 @@ class _AssistantEntry extends _ThreadEntry {
   String text = '';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, CoworkThreadView view) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -624,33 +783,43 @@ class _AssistantEntry extends _ThreadEntry {
   }
 }
 
-class _ToolEntry extends _ThreadEntry {
-  _ToolEntry(this.name, this.status);
-  final String name;
-  final String? status;
+class _ReasoningEntry extends _ThreadEntry {
+  _ReasoningEntry();
+  String text = '';
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Chip(
-          avatar: const Icon(Icons.build, size: 16),
-          label: Text(status == null ? 'ran $name' : 'ran $name · $status'),
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context, CoworkThreadView view) =>
+      AgentReasoningBlock(text: text);
+}
+
+class _ToolEntry extends _ThreadEntry {
+  _ToolEntry(this.call);
+  final CoworkRelayTool call;
+
+  @override
+  Widget build(BuildContext context, CoworkThreadView view) =>
+      AgentToolLine(call: call);
+}
+
+class _FileEntry extends _ThreadEntry {
+  _FileEntry(this.file);
+  final CoworkRelayFile file;
+
+  @override
+  Widget build(BuildContext context, CoworkThreadView view) =>
+      AgentFileCard(file: file, saver: view.fileSaver);
 }
 
 class _DoneEntry extends _ThreadEntry {
-  const _DoneEntry();
+  const _DoneEntry(this.done);
+  final CoworkRelayDone done;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, CoworkThreadView view) {
     final theme = Theme.of(context);
+    // The label comes from the protocol's reason, never from the text.
+    final label = done.wasStopped ? 'stopped' : 'done';
+    final rounds = done.iterations;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -658,7 +827,10 @@ class _DoneEntry extends _ThreadEntry {
           const Expanded(child: Divider()),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('done', style: theme.textTheme.bodySmall),
+            child: Text(
+              rounds == null ? label : '$label · $rounds rounds',
+              style: theme.textTheme.bodySmall,
+            ),
           ),
           const Expanded(child: Divider()),
         ],
@@ -672,7 +844,7 @@ class _ErrorEntry extends _ThreadEntry {
   final String message;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, CoworkThreadView view) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
