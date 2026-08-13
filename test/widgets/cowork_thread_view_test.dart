@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_device_keys.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
@@ -38,6 +39,11 @@ class FakeRelayController implements CoworkRelayController {
   int connectCalls = 0;
   bool provisioned = false;
   final List<String> tasks = <String>[];
+  final List<String> taskSessionKeys = <String>[];
+  int stopCalls = 0;
+
+  /// When set, [requestStop] throws it — the "the stop never left" path.
+  Object? stopError;
 
   @override
   ValueListenable<CoworkRelayState> get state => _state;
@@ -82,7 +88,17 @@ class FakeRelayController implements CoworkRelayController {
   }
 
   @override
-  Future<void> sendTask(String prompt) async => tasks.add(prompt);
+  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async {
+    tasks.add(prompt);
+    taskSessionKeys.add(sessionKey);
+  }
+
+  @override
+  Future<void> requestStop() async {
+    stopCalls++;
+    final error = stopError;
+    if (error != null) throw error;
+  }
 
   @override
   Future<void> dispose() async {
@@ -92,6 +108,13 @@ class FakeRelayController implements CoworkRelayController {
 
   void set(CoworkRelayState next) => _state.value = next;
   void emit(CoworkRelayInbound event) => _inbound.add(event);
+}
+
+/// A saver that never touches a filesystem — the thread tests only care that a
+/// card renders, not where it would land.
+class _NoopSaver implements AgentFileSaver {
+  @override
+  Future<String> save(CoworkRelayFile file) async => '/dev/null/${file.name}';
 }
 
 class _FakeSessionSource implements AccountSessionSource {
@@ -208,7 +231,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello'), findsOneWidget);
-    expect(find.text('ran shell · running'), findsOneWidget);
+    expect(find.text('shell · running'), findsOneWidget);
     expect(find.text('done'), findsOneWidget);
   });
 
@@ -242,6 +265,247 @@ void main() {
 
     expect(controller.tasks, <String>['do the thing']);
     expect(find.text('do the thing'), findsOneWidget);
+  });
+
+  group('streaming a run', () {
+    Future<FakeRelayController> pumpPaired(
+      WidgetTester tester, {
+      String threadKey = 'default',
+      AgentFileSaver? saver,
+      List<bool>? runStates,
+    }) async {
+      final controller = FakeRelayController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CoworkThreadView(
+              controllerBuilder: () async => controller,
+              sessionSource: const _FakeSessionSource(),
+              threadKey: threadKey,
+              fileSaver: saver ?? _NoopSaver(),
+              onRunStateChanged: runStates == null
+                  ? null
+                  : (threadKey, running) => runStates.add(running),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+      await tester.pump();
+      return controller;
+    }
+
+    testWidgets('a tool line opens on tap and marks a failure differently',
+        (tester) async {
+      final controller = await pumpPaired(tester);
+
+      controller.emit(
+        const CoworkRelayTool(
+          'run_command',
+          arguments: 'ls /nope',
+          result: 'No such file or directory',
+          detail: 'ls: /nope: No such file or directory',
+          exitCode: 2,
+          failed: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.error_outline), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+      expect(find.textContaining('ls: /nope'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.expand_more));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('ls: /nope'), findsOneWidget);
+      expect(find.textContaining('exit 2'), findsWidgets);
+    });
+
+    testWidgets('reasoning renders in its own folded block, not as the answer',
+        (tester) async {
+      final controller = await pumpPaired(tester);
+
+      controller.emit(const CoworkRelayReasoning('I will read the log first'));
+      controller.emit(const CoworkRelayDelta('Here is the summary.'));
+      await tester.pumpAndSettle();
+
+      // The answer is visible; the thinking is behind its own toggle.
+      expect(find.text('Here is the summary.'), findsOneWidget);
+      expect(find.text('Reasoning'), findsOneWidget);
+      expect(find.text('I will read the log first'), findsNothing);
+
+      await tester.tap(find.text('Reasoning'));
+      await tester.pumpAndSettle();
+      expect(find.text('I will read the log first'), findsOneWidget);
+    });
+
+    testWidgets('a file event becomes a card; a broken one becomes an error card',
+        (tester) async {
+      final controller = await pumpPaired(tester);
+
+      controller.emit(
+        CoworkRelayFile(
+          name: 'report.csv',
+          mimeType: 'text/csv',
+          declaredSize: 3,
+          bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        ),
+      );
+      controller.emit(
+        const CoworkRelayFile(
+          name: 'shot.png',
+          mimeType: 'image/png',
+          declaredSize: 9,
+          error: 'The file body is not valid base64.',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('report.csv'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('shot.png'), findsOneWidget);
+      expect(find.text('The file body is not valid base64.'), findsOneWidget);
+    });
+
+    testWidgets('Stop calls the abort action and shows the in-between state',
+        (tester) async {
+      final runStates = <bool>[];
+      final controller = await pumpPaired(tester, runStates: runStates);
+
+      await tester.enterText(find.byType(TextField).first, 'do the thing');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pump();
+
+      // A run is in flight: the send button became Stop.
+      expect(find.widgetWithText(FilledButton, 'Stop'), findsOneWidget);
+      expect(find.byIcon(Icons.send), findsNothing);
+      expect(runStates, <bool>[true]);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Stop'));
+      await tester.pump();
+
+      // Stopping is a request, not a fact: the button says so and is disabled.
+      expect(controller.stopCalls, 1);
+      expect(find.widgetWithText(FilledButton, 'Stopping…'), findsOneWidget);
+      final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Stopping…'),
+      );
+      expect(button.onPressed, isNull);
+      // Still running until the executor closes the stream.
+      expect(runStates, <bool>[true]);
+
+      // The run is only over when the executor says so.
+      controller.emit(const CoworkRelayDone(reason: 'interrupted', iterations: 2));
+      await tester.pumpAndSettle();
+
+      expect(find.text('stopped · 2 rounds'), findsOneWidget);
+      expect(find.byIcon(Icons.send), findsOneWidget);
+      expect(runStates, <bool>[true, false]);
+    });
+
+    testWidgets('a stop that never leaves goes back to Stop and says why',
+        (tester) async {
+      final controller = await pumpPaired(tester);
+      controller.stopError = StateError('socket gone');
+
+      await tester.enterText(find.byType(TextField).first, 'do the thing');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Stop'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Could not stop the run'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Stop'), findsOneWidget);
+    });
+
+    testWidgets('a run error ends the run and shows the message', (tester) async {
+      final controller = await pumpPaired(tester);
+
+      await tester.enterText(find.byType(TextField).first, 'do the thing');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pump();
+      controller.emit(const CoworkRelayRunError('loop failed: ValueError'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('loop failed: ValueError'), findsOneWidget);
+      expect(find.byIcon(Icons.send), findsOneWidget);
+    });
+
+    testWidgets('the task carries the thread key, and each thread keeps its log',
+        (tester) async {
+      final controller = FakeRelayController();
+      Widget build(String threadKey) => MaterialApp(
+            home: Scaffold(
+              body: CoworkThreadView(
+                controllerBuilder: () async => controller,
+                sessionSource: const _FakeSessionSource(),
+                threadKey: threadKey,
+                fileSaver: _NoopSaver(),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(build('amber-otter-1'));
+      await tester.pumpAndSettle();
+      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'first thread');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pump();
+      expect(controller.taskSessionKeys, <String>['amber-otter-1']);
+      // The executor serves one task at a time, so let this run finish first.
+      controller.emit(const CoworkRelayDone());
+      await tester.pumpAndSettle();
+
+      // Switch thread: the other conversation is empty, not merged.
+      await tester.pumpWidget(build('amber-otter-2'));
+      await tester.pumpAndSettle();
+      expect(find.text('first thread'), findsNothing);
+      expect(find.text('Send a task to the agent'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, 'second thread');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pump();
+      expect(controller.taskSessionKeys,
+          <String>['amber-otter-1', 'amber-otter-2']);
+
+      // And switching back brings the first log home.
+      await tester.pumpWidget(build('amber-otter-1'));
+      await tester.pumpAndSettle();
+      expect(find.text('first thread'), findsOneWidget);
+      expect(find.text('second thread'), findsNothing);
+    });
+
+    testWidgets('a paired transport reports the host device id once',
+        (tester) async {
+      final peers = <String>[];
+      final controller = FakeRelayController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CoworkThreadView(
+              controllerBuilder: () async => controller,
+              sessionSource: const _FakeSessionSource(),
+              fileSaver: _NoopSaver(),
+              onPaired: peers.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'cowork-host',
+        ),
+      );
+      await tester.pump();
+
+      expect(peers, <String>['cowork-host']);
+    });
   });
 
   group('persistent pairing', () {
