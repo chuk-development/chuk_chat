@@ -34,6 +34,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import threading
 import uuid
 
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
@@ -124,6 +125,10 @@ class DockerEnvironment(BaseEnvironment):
         self._cli = cli or DockerCli()
         self._container: str | None = None
         self._reused = False
+        # The exec client this environment is blocked on, so ``cancel`` (§7.1)
+        # can kill it from the thread that pressed Stop.
+        self._proc: subprocess.Popen | None = None
+        self._proc_lock = threading.Lock()
 
         cwd = initial_cwd or CONTAINER_WORKSPACE
         # The snapshot lives in the container's /tmp, never in the mounted
@@ -327,6 +332,8 @@ class DockerEnvironment(BaseEnvironment):
             )
         except OSError as exc:  # CLI vanished mid-session
             raise DockerUnavailableError(str(exc)) from exc
+        with self._proc_lock:
+            self._proc = proc
         try:
             out, err = proc.communicate(input=stdin, timeout=timeout)
             return ProcessResult(out, err, proc.returncode)
@@ -338,6 +345,24 @@ class DockerEnvironment(BaseEnvironment):
             out, err = proc.communicate()
             self._kill_in_container()
             return ProcessResult(out, err, -9, timed_out=True)
+        finally:
+            with self._proc_lock:
+                if self._proc is proc:
+                    self._proc = None
+
+    def cancel(self) -> None:
+        """Kill the ``docker exec`` in flight and the tree it left inside (§7.1).
+
+        Same two-step as the timeout path, for the same reason: the container is
+        kept alive for reuse, so killing only the exec client would leave the
+        command running in it forever with nobody reading its output.
+        """
+        with self._proc_lock:
+            proc = self._proc
+        if proc is None or proc.poll() is not None:
+            return
+        proc.kill()
+        self._kill_in_container()
 
     def _kill_in_container(self) -> None:
         """Best-effort kill of the bash tree a timed-out exec left behind."""

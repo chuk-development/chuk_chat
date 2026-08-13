@@ -70,7 +70,7 @@ class _FakeRelayController implements CoworkRelayController {
       sessionKeys.add(sessionKey);
 
   @override
-  Future<void> requestStop() async {}
+  Future<void> requestStop({String sessionKey = 'default'}) async {}
 
   @override
   Future<void> dispose() async {

@@ -177,3 +177,152 @@ def test_estop_stat_error_counts_as_engaged(tmp_path):
     assert not isinstance(exc.value, FileNotFoundError)  # it's NotADirectoryError
     ks = KillSwitch(estop_path=weird)
     assert ks.estop_engaged() is True
+
+
+# -- the interrupt cancels work in flight ---------------------------------
+
+
+def test_interrupt_notifies_its_listeners_once():
+    """The listener is how a Stop reaches work already running (a command, a
+    subagent tree) instead of only ending the loop between rounds."""
+    ks = KillSwitch()
+    fired: list[str] = []
+    ks.on_interrupt(lambda: fired.append("a"))
+    ks.on_interrupt(lambda: fired.append("b"))
+    ks.interrupt()
+    ks.interrupt()  # idempotent: a second Stop is not a second cancel
+    assert fired == ["a", "b"]
+
+
+def test_a_listener_registered_after_the_interrupt_fires_immediately():
+    """A child whose runtime is built one instant too late must not keep running."""
+    ks = KillSwitch()
+    ks.interrupt()
+    fired: list[str] = []
+    ks.on_interrupt(lambda: fired.append("late"))
+    assert fired == ["late"]
+
+
+def test_a_broken_listener_does_not_block_the_others():
+    ks = KillSwitch()
+    fired: list[str] = []
+
+    def boom() -> None:
+        raise RuntimeError("no")
+
+    ks.on_interrupt(boom)
+    ks.on_interrupt(lambda: fired.append("still ran"))
+    ks.interrupt()
+    assert ks.interrupted() is True
+    assert fired == ["still ran"]
+
+
+def test_wait_interrupted_returns_false_on_timeout():
+    ks = KillSwitch()
+    assert ks.wait_interrupted(0.01) is False
+    ks.interrupt()
+    assert ks.wait_interrupted(0.01) is True
+
+
+class _CancelledModel:
+    """A model whose call dies because the caller cancelled it — the real
+    ``BackendModelClient`` behaviour when its socket is closed under a blocking
+    recv."""
+
+    def __init__(self, kill: KillSwitch) -> None:
+        self._kill = kill
+        self.calls = 0
+
+    def complete(self, messages):
+        self.calls += 1
+        self._kill.interrupt()  # stand-in for "Stop landed while we were waiting"
+        raise RuntimeError("socket closed")
+
+
+def test_a_model_call_that_dies_while_stopping_is_reported_as_interrupted(tmp_path):
+    ks = KillSwitch()
+    model = _CancelledModel(ks)
+    loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path), kill_switch=ks)
+    result = loop.run("k8", "go")
+    assert result.reason is StopReason.INTERRUPTED
+    assert result.final_answer is None
+    assert model.calls == 1
+
+
+def test_a_model_failure_without_a_stop_still_raises(tmp_path):
+    """Only a stop turns a dead model call into a clean stop; a real failure must
+    stay a failure."""
+
+    class _Broken:
+        def complete(self, messages):
+            raise RuntimeError("upstream is down")
+
+    loop = AgentLoop(_Broken(), _reg_with_echo(), _store(tmp_path))
+    with pytest.raises(RuntimeError):
+        loop.run("k9", "go")
+
+
+def test_an_interrupt_during_the_turn_beats_a_finished_answer(tmp_path):
+    """The model answered, but the user had already pressed Stop: reporting
+    "finished" would tell the app the agent completed the task."""
+    ks = KillSwitch()
+
+    class _AnswersWhileStopping:
+        def complete(self, messages):
+            ks.interrupt()
+            return ModelResponse(text="all done!")
+
+    loop = AgentLoop(
+        _AnswersWhileStopping(), _reg_with_echo(), _store(tmp_path), kill_switch=ks
+    )
+    result = loop.run("k10", "go")
+    assert result.reason is StopReason.INTERRUPTED
+    assert result.final_answer is None
+    # The turn itself is kept: it is real history for the next session.
+    assert any(
+        m.content.get("content") == "all done!"
+        for m in loop.store.get_conversation(loop.store.route("k10"))
+    )
+
+
+def test_an_interrupt_mid_batch_skips_the_rest_but_answers_every_call(tmp_path):
+    """A turn can carry several tool calls, each of them slow. The stop lands
+    between them — and every call still gets a result row, or a resumed session
+    would read an assistant turn with a dangling tool call."""
+    ks = KillSwitch()
+    ran: list[str] = []
+    three_calls = "".join(
+        '<tool_call>{"name":"step","arguments":{"n":"%s"}}</tool_call>' % n
+        for n in ("1", "2", "3")
+    )
+
+    def step(n: str = "") -> dict:
+        ran.append(n)
+        if n == "1":
+            # The Stop frame lands on the serve thread while the worker is
+            # halfway through this batch.
+            ks.interrupt()
+        return {"ok": n}
+
+    reg = ToolRegistry()
+    reg.register(
+        "step", {"type": "object", "properties": {"n": {"type": "string"}}}, step
+    )
+
+    class _ThreeToolCalls:
+        def complete(self, messages):
+            return response_from_content(three_calls)
+
+    loop = AgentLoop(_ThreeToolCalls(), reg, _store(tmp_path), kill_switch=ks)
+    result = loop.run("k11", "go")
+
+    assert result.reason is StopReason.INTERRUPTED
+    assert ran == ["1"]  # 2 and 3 were never executed
+    rows = [
+        m.content
+        for m in loop.store.get_conversation(loop.store.route("k11"))
+        if m.content.get("role") == "tool"
+    ]
+    assert len(rows) == 3  # every call answered, two of them "not run"
+    assert rows[0]["content"] == {"ok": "1"}
+    assert all("stopped" in str(r["content"]) for r in rows[1:])

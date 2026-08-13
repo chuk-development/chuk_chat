@@ -353,12 +353,19 @@ abstract interface class CoworkRelayController {
   /// append-only session that key routes to.
   Future<void> sendTask(String prompt, {String sessionKey});
 
-  /// Asks the executor to abort the current run — the controller side of the
-  /// two-tier kill switch (§7.1).
+  /// Asks the executor to abort the run in [sessionKey] — the controller side of
+  /// the two-tier kill switch (§7.1).
+  ///
+  /// The stop **names its target**, and the thread key is the name the app has:
+  /// it chose it when it sent the task, and it knows it before the first event of
+  /// the run comes back. A stop that named nothing would have to mean "abort
+  /// whatever is running", which loses an invisible race — the run the user meant
+  /// can finish while the frame is in flight, and the next task in that thread
+  /// would be the one that died.
   ///
   /// The UI must not treat this as "stopped": it is a request. The run is only
   /// over when a `done` or `error` event arrives.
-  Future<void> requestStop();
+  Future<void> requestStop({String sessionKey});
 
   /// Tears the client down.
   Future<void> dispose();
@@ -665,8 +672,14 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       });
 
   @override
-  Future<void> requestStop() =>
-      _sendFramePayload(<String, dynamic>{'type': 'stop'});
+  Future<void> requestStop({String sessionKey = 'default'}) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'stop',
+        // The executor matches this against the session key of the run it is
+        // working on. A bare `{"type":"stop"}` — what this used to send — named
+        // no run at all, so nothing could act on it.
+        'session_key': sessionKey,
+      });
 
   @override
   Future<void> dispose() async {

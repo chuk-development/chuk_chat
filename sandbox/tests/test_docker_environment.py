@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
+import time
 import uuid
 
 import pytest
@@ -273,17 +275,57 @@ def test_timeout_kills_the_command_but_keeps_the_container(env):
     assert env.run("echo alive").stdout.strip().endswith("alive")
 
 
-# ------------------------------------------------------- real base image
+def test_cancel_kills_the_command_in_flight_but_keeps_the_container(env):
+    """The §7.1 Stop reaching into the container: the exec client AND the tree it
+    started inside must die, or the command would keep running in a box we
+    deliberately keep alive for the next turn.
 
+    The marker is checked with a plain ``docker exec``, never through ``env``:
+    one environment serves one command thread by construction (it tracks one cwd,
+    one snapshot and one in-flight process), so a second caller would race it.
+    """
+    marker = "/tmp/cowork-cancel-marker"
+    env.run(f"rm -f {marker}")
+    container = env.container_id
+    assert container is not None
+    outcome: dict[str, ProcessResult] = {}
 
-@pytest.mark.skipif(
-    subprocess.run(
-        ["docker", "image", "inspect", "cowork-base:latest"],
+    def work() -> None:
+        outcome["r"] = env.run(f"touch {marker} && sleep 90", timeout=180)
+
+    def marker_exists() -> bool:
+        probe = subprocess.run(
+            ["docker", "exec", container, "test", "-e", marker],
+            capture_output=True,
+            timeout=30,
+        )
+        return probe.returncode == 0
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    deadline = time.monotonic() + 30.0
+    while not marker_exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert marker_exists(), "the command never started in the container"
+
+    start = time.monotonic()
+    env.cancel()
+    worker.join(30.0)
+    assert not worker.is_alive(), "run() never returned after the cancel"
+    assert time.monotonic() - start < 20.0
+    assert outcome["r"].exit_code != 0
+
+    # No leftover `sleep 90` in the container, and the box still works.
+    leftovers = subprocess.run(
+        ["docker", "exec", container, "pgrep", "-f", "sleep 90"],
         capture_output=True,
-    ).returncode
-    != 0,
-    reason="cowork-base:latest is not built (run scripts/install.sh)",
-)
+        text=True,
+        timeout=30,
+    )
+    assert leftovers.returncode != 0, f"orphaned command: {leftovers.stdout}"
+    assert env.run("echo alive").stdout.strip().endswith("alive")
+
+
 def test_base_image_gives_the_agent_sudo_python_and_tmux():
     """Only runs where the base image exists; asserts what §6/§9 promise it has."""
     e = DockerEnvironment(image="cowork-base:latest", agent_id=unique_agent())

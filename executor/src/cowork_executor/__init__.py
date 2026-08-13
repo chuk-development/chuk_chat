@@ -19,9 +19,11 @@ from .controller import ControllerSession
 from .environment import SandboxEnvironment
 from .executor import Executor, ModelFactory, StreamingModelClient
 from .protocol import (
+    INBOUND_METHODS,
     MAX_FILE_BYTES,
     METHOD_EVENT,
     METHOD_RUN_TASK,
+    METHOD_STOP,
     PayloadTooLarge,
     b64_to_frame,
     decode_payload,
@@ -31,6 +33,8 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    stop_ack_payload,
+    stop_payload,
     subagent_payload,
     task_payload,
     tool_payload,
@@ -40,6 +44,7 @@ from .transport import LoopbackEndpoint, loopback_pair
 
 __all__ = [
     "ControllerSession",
+    "INBOUND_METHODS",
     "Executor",
     "ExecutorFactory",
     "ExecutorSupervisor",
@@ -51,6 +56,7 @@ __all__ = [
     "StreamingModelClient",
     "METHOD_EVENT",
     "METHOD_RUN_TASK",
+    "METHOD_STOP",
     "b64_to_frame",
     "decode_payload",
     "delta_payload",
@@ -59,6 +65,8 @@ __all__ = [
     "error_payload",
     "file_payload",
     "frame_to_b64",
+    "stop_ack_payload",
+    "stop_payload",
     "subagent_payload",
     "loopback_pair",
     "make_backend_model_factory",
