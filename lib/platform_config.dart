@@ -66,6 +66,14 @@ const bool kFeatureServerTools = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Remote MCP connectors: sign in to a server in the browser and its tools
+/// join the tool list. Native only — the sign-in needs a loopback port,
+/// which a web page cannot open.
+const bool kFeatureMcp = bool.fromEnvironment(
+  'FEATURE_MCP',
+  defaultValue: true,
+);
+
 /// Desktop system tray integration (Linux, Windows, macOS).
 /// Disabled by default; enable via --dart-define=FEATURE_SYSTEM_TRAY=true.
 const bool kFeatureSystemTray = bool.fromEnvironment(

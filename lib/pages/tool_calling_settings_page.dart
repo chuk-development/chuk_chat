@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class ToolCallingSettingsPage extends StatefulWidget {
   const ToolCallingSettingsPage({super.key, required this.config});
@@ -187,6 +188,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 11;
       case ToolCategory.sandbox:
         return 12;
+      case ToolCategory.mcp:
+        return 13;
     }
   }
 
@@ -219,6 +222,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catNextcloud;
       case ToolCategory.sandbox:
         return l.catSandbox;
+      case ToolCategory.mcp:
+        return 'Connectors';
     }
   }
 
@@ -250,6 +255,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.cloud_outlined;
       case ToolCategory.sandbox:
         return Icons.code_outlined;
+      case ToolCategory.mcp:
+        return Icons.extension_outlined;
     }
   }
 
@@ -282,6 +289,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catNextcloudDesc;
       case ToolCategory.sandbox:
         return l.catSandboxDesc;
+      case ToolCategory.mcp:
+        return 'Tools from the servers you connected';
     }
   }
 
@@ -446,6 +455,13 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         .where((tool) {
           final category =
               ToolExecutor.toolCategories[tool.name] ?? ToolCategory.basic;
+          // Tools from MCP servers are not listed here. A connector is a
+          // server you sign in to, and it is managed on the Connectors
+          // screen — mixing its tools into this list only made the page
+          // longer without giving anything to switch.
+          if (category == ToolCategory.mcp) {
+            return false;
+          }
           return !_isCategoryDevOnly(category);
         })
         .toList();
@@ -467,17 +483,11 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return tools;
   }
 
-  List<Widget> _buildConnectorSections() {
+  List<Widget> _buildToolSections() {
     final l = AppLocalizations.of(context)!;
     final tools = _visibleTools();
     if (tools.isEmpty) {
-      return [
-        _InfoCard(
-          text: l.noToolsRegistered,
-          tone: InfoTone.neutral,
-          icon: Icons.info_outline,
-        ),
-      ];
+      return [ExpressiveInfoCard(text: l.noToolsRegistered)];
     }
 
     final grouped = <ToolCategory, List<ClientTool>>{};
@@ -527,8 +537,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           ),
         );
       }
-      widgets.add(_GroupedCard(children: rows));
-      widgets.add(const SizedBox(height: 20));
+      widgets.add(ExpressiveGroup(children: rows));
+      widgets.add(const SizedBox(height: 22));
     }
 
     return widgets;
@@ -591,12 +601,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         centerTitle: false,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          const _SectionHeader('Engine'),
-          _GroupedCard(
+          const ExpressiveSectionHeader('Engine'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.precision_manufacturing_outlined,
                 title: l.enableToolCalling,
                 subtitle: l.enableToolCallingSubtitle,
@@ -610,10 +620,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Behavior'),
-          _GroupedCard(
+          const ExpressiveSectionHeader('Behavior'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.search,
                 title: l.requireDiscoveryFirst,
                 subtitle: l.requireDiscoverySubtitle,
@@ -627,7 +637,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                       }
                     : null,
               ),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.code,
                 title: l.markdownToolCallFallback,
                 subtitle: l.markdownFallbackSubtitle,
@@ -643,10 +653,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Display'),
-          _GroupedCard(
+          const ExpressiveSectionHeader('Display'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.visibility_outlined,
                 title: l.showToolActivity,
                 subtitle: l.showToolActivitySubtitle,
@@ -660,16 +670,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _InfoCard(
-            text: l.toolCallingTip,
-            tone: InfoTone.neutral,
-            icon: Icons.info_outline,
-          ),
-          const _SectionHeader('Visual Output'),
-          _GroupedCard(
+          const SizedBox(height: 8),
+          ExpressiveInfoCard(text: l.toolCallingTip),
+          const ExpressiveSectionHeader('Visual output'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.map_outlined,
                 title: l.enableMapBlocks,
                 subtitle: l.enableMapBlocksSubtitle,
@@ -686,7 +692,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                       }
                     : null,
               ),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.insights_outlined,
                 title: l.enableChartBlocks,
                 subtitle: l.enableChartBlocksSubtitle,
@@ -705,16 +711,15 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Connectors'),
+          const ExpressiveSectionHeader('Tools'),
           if (_isLoadingToolPreferences)
-            _InfoCard(
+            ExpressiveInfoCard(
               text: l.loadingToolSettings,
-              tone: InfoTone.neutral,
               icon: Icons.hourglass_empty,
             )
           else
-            ..._buildConnectorSections(),
-          const SizedBox(height: 12),
+            ..._buildToolSections(),
+          const SizedBox(height: 20),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
@@ -725,7 +730,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               label: Text(l.resetAllToolPrefs),
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -734,120 +738,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 
 // ───────── private shared widgets ─────────
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  const _GroupedCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final separated = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) {
-        separated.add(
-          Divider(height: 1, color: m3.outlineVariant, indent: 56),
-        );
-      }
-      separated.add(children[i]);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: separated),
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final disabled = onChanged == null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 24,
-            color: disabled
-                ? m3.onSurfaceVariant.withValues(alpha: 0.5)
-                : m3.onSurfaceVariant,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: disabled
-                        ? cs.onSurface.withValues(alpha: 0.5)
-                        : cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Switch.adaptive(value: value, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
-
+/// One tool: the switch turns it off, the tile itself opens its detail.
 class _ToolRow extends StatelessWidget {
   const _ToolRow({
     required this.icon,
@@ -870,51 +761,20 @@ class _ToolRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final m3 = theme.m3;
-    return InkWell(
+    return ExpressiveRow(
+      icon: icon,
+      tone: iconEnabled ? null : m3.surfaceContainerHighest,
+      title: title,
+      subtitle: subtitle,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: iconEnabled ? cs.primary : m3.onSurfaceVariant,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: m3.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Switch.adaptive(value: value, onChanged: onChanged),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-          ],
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Switch.adaptive(value: value, onChanged: onChanged),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+        ],
       ),
     );
   }
@@ -949,18 +809,14 @@ class _CategoryHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(kExpressiveOuterRadius),
       ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: m3.primaryContainer.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 20, color: m3.onPrimaryContainer),
+          ExpressiveIconTile(
+            icon: icon,
+            size: 40,
+            tone: m3.primaryContainer.withValues(alpha: 0.4),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -991,9 +847,9 @@ class _CategoryHeader extends StatelessWidget {
           if (connectable) ...[
             const SizedBox(width: 8),
             if (connected)
-              _Badge(label: 'Connected', tone: BadgeTone.success)
+              ExpressiveBadge('Connected', tone: m3.successContainer)
             else
-              _Badge(label: 'Not connected', tone: BadgeTone.neutral),
+              const ExpressiveBadge('Not connected'),
             const SizedBox(width: 8),
             connected
                 ? OutlinedButton(
@@ -1029,114 +885,3 @@ class _CategoryHeader extends StatelessWidget {
   }
 }
 
-enum BadgeTone { neutral, primary, success, warning, error }
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, this.tone = BadgeTone.neutral});
-  final String label;
-  final BadgeTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case BadgeTone.primary:
-        bg = m3.primaryContainer;
-        fg = m3.onPrimaryContainer;
-        break;
-      case BadgeTone.success:
-        bg = m3.successContainer;
-        fg = m3.onSuccessContainer;
-        break;
-      case BadgeTone.warning:
-        bg = m3.warningContainer;
-        fg = m3.onWarningContainer;
-        break;
-      case BadgeTone.error:
-        bg = cs.errorContainer;
-        fg = cs.onErrorContainer;
-        break;
-      case BadgeTone.neutral:
-        bg = m3.surfaceContainerHigh;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w600,
-          color: fg,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
-}
-
-enum InfoTone { neutral, warn, danger }
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.text,
-    this.tone = InfoTone.neutral,
-    this.icon,
-  });
-
-  final String text;
-  final InfoTone tone;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case InfoTone.danger:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

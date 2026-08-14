@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
-import 'package:chuk_chat/constants.dart';
 
 class ChatModeSelector extends StatelessWidget {
   const ChatModeSelector({
@@ -26,6 +25,7 @@ class ChatModeSelector extends StatelessWidget {
     this.reasoning = true,
     this.onReasoningChanged,
     this.height = 40,
+    this.menuAbove = false,
   });
 
   final ChatMode mode;
@@ -64,6 +64,12 @@ class ChatModeSelector extends StatelessWidget {
   final bool showLabel;
 
   final double height;
+
+  /// Open the menus above the pill whenever they fit there. The desktop
+  /// composer sets it: its window is tall, so a menu is free to drop down
+  /// over the composer it was opened from, which reads as the wrong thing
+  /// moving.
+  final bool menuAbove;
 
   /// Longest model list shown in the second dropdown. Beyond this the list
   /// stops being a menu and becomes a screen — that is what the model page
@@ -157,12 +163,8 @@ class ChatModeSelector extends StatelessWidget {
             label: labelFor(option),
             isSelected: !usesPickedModel && option == mode,
           ),
-        if (onReasoningChanged != null) ...[
-          const PopupMenuDivider(),
-          _reasoningRow<_MenuChoice>(iconFg: iconFg),
-        ],
-        if (onModelSelected != null || onOpenModelScreen != null) ...[
-          const PopupMenuDivider(),
+        if (onReasoningChanged != null) _reasoningRow<_MenuChoice>(iconFg: iconFg),
+        if (onModelSelected != null || onOpenModelScreen != null)
           _menuRow<_MenuChoice>(
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
@@ -176,7 +178,6 @@ class ChatModeSelector extends StatelessWidget {
               color: iconFg.withValues(alpha: 0.8),
             ),
           ),
-        ],
       ],
     );
 
@@ -216,8 +217,7 @@ class ChatModeSelector extends StatelessWidget {
             label: stripLabPrefix(model.name),
             isSelected: model.id == selectedModelId,
           ),
-        if (onOpenModelScreen != null) ...[
-          const PopupMenuDivider(),
+        if (onOpenModelScreen != null)
           _menuRow<_ModelChoice>(
             value: const _ModelChoice.openScreen(),
             iconFg: iconFg,
@@ -229,7 +229,6 @@ class ChatModeSelector extends StatelessWidget {
               color: iconFg.withValues(alpha: 0.8),
             ),
           ),
-        ],
       ],
     );
 
@@ -252,6 +251,7 @@ class ChatModeSelector extends StatelessWidget {
     // Lives as long as the open menu does: the row keeps showing what the
     // reader just did, whoever owns the setting underneath.
     bool on = reasoning;
+    bool flash = false;
     return PopupMenuItem<T>(
       enabled: false,
       height: 40,
@@ -259,12 +259,23 @@ class ChatModeSelector extends StatelessWidget {
       child: StatefulBuilder(
         builder: (context, setLocalState) {
           return InkWell(
-            borderRadius: kBorderRadiusRow,
             onTap: () {
-              setLocalState(() => on = !on);
+              setLocalState(() {
+                on = !on;
+                flash = true;
+              });
               onReasoningChanged?.call(on);
+              // Picking a model flashes the row on its way out. This row
+              // stays, so it flashes on its own — the same short answer to
+              // the same tap.
+              Future<void>.delayed(const Duration(milliseconds: 220), () {
+                if (context.mounted) setLocalState(() => flash = false);
+              });
             },
-            child: Padding(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              color: flash ? iconFg.withValues(alpha: 0.16) : null,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
@@ -282,19 +293,23 @@ class ChatModeSelector extends StatelessWidget {
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.8),
+                        color: on ? iconFg : iconFg.withValues(alpha: 0.8),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  IgnorePointer(
-                    child: Switch(
-                      value: on,
-                      onChanged: (_) {},
-                      activeThumbColor: iconFg,
-                      activeTrackColor: iconFg.withValues(alpha: 0.5),
+                  // A tick, like every other row that is on. The switch was
+                  // taller than a row and behaved like nothing else here.
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
                     ),
+                    child: on
+                        ? Icon(Icons.check, color: iconFg, size: 18)
+                        : const SizedBox(width: 18, height: 18),
                   ),
                 ],
               ),
@@ -359,6 +374,7 @@ class ChatModeSelector extends StatelessWidget {
       color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       minWidth: 220,
+      preferAbove: menuAbove,
     );
   }
 
@@ -369,6 +385,29 @@ class ChatModeSelector extends StatelessWidget {
     if (index <= 0 || index + 2 >= name.length) return name;
     return name.substring(index + 2);
   }
+}
+
+/// A readable name for a model id the catalogue does not know, so the menu
+/// never shows a raw slug: `deepseek/deepseek-v4-pro` → `DeepSeek V4 Pro`.
+String prettyModelId(String id) {
+  final tail = id.contains('/') ? id.split('/').last : id;
+  final words = tail
+      .replaceAll(RegExp(r'[-_:]+'), ' ')
+      .split(' ')
+      .where((word) => word.isNotEmpty)
+      .map((word) {
+        // Version-ish parts stay as they are: v4, 4b, 20b, 3.5.
+        if (RegExp(r'^[0-9]').hasMatch(word) ||
+            RegExp(r'^v[0-9]', caseSensitive: false).hasMatch(word)) {
+          return word.toLowerCase();
+        }
+        // Short words that are acronyms in model names, not words.
+        const acronyms = {'gpt', 'oss', 'ai', 'llm', 'moe', 'vl', 'r'};
+        if (acronyms.contains(word.toLowerCase())) return word.toUpperCase();
+        return word[0].toUpperCase() + word.substring(1);
+      });
+  final name = words.join(' ');
+  return name.isEmpty ? id : name;
 }
 
 /// A model the reader has picked, as shown in the second dropdown.

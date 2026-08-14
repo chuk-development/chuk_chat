@@ -69,7 +69,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
   String _currentBucket = '';
   final List<_BucketBound> _sectionMarkers = [];
   static const double _kEstimatedRowHeight = 32.0;
-  static const double _kStickyHeaderHeight = 32.0;
+  // Tall enough for the label's descenders: the y of "Today" and the p of
+  // "Pinned" were cut off when the label grew and this did not.
+  static const double _kStickyHeaderHeight = 42.0;
   ProfileRecord? _profile;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;

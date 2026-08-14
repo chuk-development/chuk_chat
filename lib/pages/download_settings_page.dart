@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/download_preferences_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class DownloadSettingsPage extends StatefulWidget {
   const DownloadSettingsPage({super.key});
@@ -63,6 +63,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
     final theme = Theme.of(context);
     final l = AppLocalizations.of(context)!;
     final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
     final folder = DownloadPreferencesService.defaultFolderNotifier.value;
     final alwaysAsk = DownloadPreferencesService.alwaysAskNotifier.value;
     final hasFolder = folder != null && folder.isNotEmpty;
@@ -78,39 +79,32 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
         scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          const _SectionHeader('BEHAVIOR'),
-          _GroupedCard(
+          const ExpressiveSectionHeader('Behavior'),
+          ExpressiveGroup(
             children: [
-              _SettingsRow(
-                leading: _LeadingIcon(
-                  icon: Icons.help_outline,
-                  tint: colorScheme.onSurfaceVariant,
-                ),
+              ExpressiveSwitchRow(
+                icon: Icons.help_outline,
                 title: l.downloadsAlwaysAsk,
                 subtitle: canDisableAsk
                     ? l.downloadsAlwaysAskHintCan
                     : l.downloadsAlwaysAskHintNoFolder,
-                trailing: Switch(
-                  value: alwaysAsk || !canDisableAsk,
-                  onChanged: canDisableAsk
-                      ? (v) => DownloadPreferencesService.setAlwaysAsk(v)
-                      : null,
-                ),
+                // Without a default folder there is nowhere to save to, so
+                // asking is the only thing the app can do.
+                value: alwaysAsk || !canDisableAsk,
+                onChanged: canDisableAsk
+                    ? (v) => DownloadPreferencesService.setAlwaysAsk(v)
+                    : null,
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const _SectionHeader('DEFAULT FOLDER'),
-          _GroupedCard(
+
+          const ExpressiveSectionHeader('Default folder'),
+          ExpressiveGroup(
             children: [
-              _SettingsRow(
-                onTap: _busy ? null : _pickFolder,
-                leading: _LeadingIcon(
-                  icon: Icons.folder_outlined,
-                  tint: colorScheme.primary,
-                ),
+              ExpressiveRow(
+                icon: Icons.folder_outlined,
                 title: hasFolder ? folder : l.downloadsDefaultFolder,
                 subtitle: hasFolder
                     ? l.downloadsDefaultFolder
@@ -123,185 +117,15 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                       )
                     : Icon(
                         Icons.chevron_right,
-                        color: colorScheme.onSurfaceVariant,
+                        size: 20,
+                        color: m3.onSurfaceVariant,
                       ),
+                onTap: _busy ? null : _pickFolder,
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _InfoCard(l.downloadsInfo),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Reusable private pieces ─────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-
-    final List<Widget> rows = [];
-    for (int i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.only(left: 56),
-          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
-        ));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: rows),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  const _SettingsRow({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            leading,
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LeadingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color tint;
-  const _LeadingIcon({required this.icon, required this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Center(
-        child: Icon(icon, size: 22, color: tint),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  const _InfoCard(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-                height: 1.4,
-              ),
-            ),
-          ),
+          ExpressiveInfoCard(text: l.downloadsInfo),
         ],
       ),
     );

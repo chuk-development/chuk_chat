@@ -46,6 +46,7 @@ class AgentActivityEntry {
     this.hasError = false,
     this.toolCall,
     this.sources = const <AgentActivitySource>[],
+    this.body,
   });
 
   final AgentActivityKind kind;
@@ -72,7 +73,13 @@ class AgentActivityEntry {
   /// raw result.
   final List<AgentActivitySource> sources;
 
+  /// The whole of what the model wrote, when the line is only its first
+  /// sentence. A reader can open it; the line stays short either way.
+  final String? body;
+
   bool get isGroup => children.isNotEmpty;
+
+  bool get hasBody => (body?.trim().isNotEmpty ?? false);
 }
 
 /// Argument keys that hold the thing a tool acted on, in priority order.
@@ -202,7 +209,14 @@ List<AgentActivityEntry> buildAgentActivityEntriesFromSteps(
 
   void flushCalls() {
     if (pendingCalls.isEmpty) return;
-    entries.addAll(buildAgentActivityEntries(List<ToolCall>.of(pendingCalls)));
+    // The steps already carry the round's thinking as its own entry. Left
+    // on, the calls would repeat it and every note would appear twice.
+    entries.addAll(
+      buildAgentActivityEntries(
+        List<ToolCall>.of(pendingCalls),
+        includeRoundThinking: false,
+      ),
+    );
     pendingCalls.clear();
   }
 
@@ -214,6 +228,7 @@ List<AgentActivityEntry> buildAgentActivityEntriesFromSteps(
         AgentActivityEntry(
           kind: AgentActivityKind.thinking,
           label: _clip(_firstSentence(reasoning), _maxThinkingChars),
+          body: reasoning,
         ),
       );
       continue;
@@ -233,16 +248,20 @@ List<AgentActivityEntry> buildAgentActivityEntriesFromSteps(
 /// searches reads as eight searches, each with its own query and its own
 /// sources. A `roundThinking` note is emitted as its own line before the
 /// call that carries it, because that is when the model wrote it.
-List<AgentActivityEntry> buildAgentActivityEntries(List<ToolCall> calls) {
+List<AgentActivityEntry> buildAgentActivityEntries(
+  List<ToolCall> calls, {
+  bool includeRoundThinking = true,
+}) {
   final entries = <AgentActivityEntry>[];
 
   for (final call in calls) {
-    final thinking = call.roundThinking?.trim();
+    final thinking = includeRoundThinking ? call.roundThinking?.trim() : null;
     if (thinking != null && thinking.isNotEmpty) {
       entries.add(
         AgentActivityEntry(
           kind: AgentActivityKind.thinking,
           label: _clip(_firstSentence(thinking), _maxThinkingChars),
+          body: thinking,
         ),
       );
     }
@@ -328,7 +347,11 @@ String _firstSentence(String text) {
 ///
 /// While calls are still running the end is [now], so the label counts up.
 /// Returns null when [calls] is empty.
-Duration? agentActivityDuration(List<ToolCall> calls, {required DateTime now}) {
+Duration? agentActivityDuration(
+  List<ToolCall> calls, {
+  required DateTime now,
+  bool running = false,
+}) {
   if (calls.isEmpty) return null;
 
   DateTime? start;
@@ -348,7 +371,9 @@ Duration? agentActivityDuration(List<ToolCall> calls, {required DateTime now}) {
   }
 
   if (start == null) return null;
-  final stop = stillRunning || end == null ? now : end;
+  // While the round runs the clock runs with it, even between calls: the
+  // model thinking after its last tool is still time the reader waits.
+  final stop = running || stillRunning || end == null ? now : end;
   final elapsed = stop.difference(start);
   return elapsed.isNegative ? Duration.zero : elapsed;
 }

@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -234,76 +235,54 @@ class _CustomizationPageState extends State<CustomizationPage> {
         scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // Language section.
-          _SectionHeader(l.language),
-          _FilledCard(
-            child: Row(
-              children: [
-                Icon(Icons.language, size: 24, color: m3.onSurfaceVariant),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l.language,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l.languageSubtitle,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: m3.onSurfaceVariant,
-                        ),
-                      ),
+          // Language.
+          ExpressiveSectionHeader(l.language),
+          ExpressiveGroup(
+            children: [
+              ExpressiveRow(
+                icon: Icons.language,
+                title: l.language,
+                subtitle: l.languageSubtitle,
+                trailing: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedLocale,
+                    dropdownColor: m3.surfaceContainerHigh,
+                    borderRadius: kBorderRadiusMenu,
+                    focusColor: Colors.transparent,
+                    items: const [
+                      DropdownMenuItem(value: 'en', child: Text('English')),
+                      DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                      DropdownMenuItem(value: 'zh', child: Text('中文')),
+                      DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
+                      DropdownMenuItem(value: 'es', child: Text('Español')),
+                      DropdownMenuItem(value: 'fr', child: Text('Français')),
+                      DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                      DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
+                      DropdownMenuItem(value: 'pt', child: Text('Português')),
+                      DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                      DropdownMenuItem(value: 'ja', child: Text('日本語')),
                     ],
+                    onChanged: (String? value) {
+                      if (value != null && value != _selectedLocale) {
+                        setState(() {
+                          _selectedLocale = value;
+                        });
+                        widget.config.setUiLocale(value);
+                      }
+                    },
                   ),
                 ),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: _selectedLocale,
-                  underline: const SizedBox.shrink(),
-                  dropdownColor: m3.surfaceContainerHigh,
-                  borderRadius: kBorderRadiusMenu,
-                  focusColor: Colors.transparent,
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                    DropdownMenuItem(value: 'zh', child: Text('中文')),
-                    DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
-                    DropdownMenuItem(value: 'es', child: Text('Español')),
-                    DropdownMenuItem(value: 'fr', child: Text('Français')),
-                    DropdownMenuItem(value: 'ar', child: Text('العربية')),
-                    DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
-                    DropdownMenuItem(value: 'pt', child: Text('Português')),
-                    DropdownMenuItem(value: 'ru', child: Text('Русский')),
-                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
-                  ],
-                  onChanged: (String? value) {
-                    if (value != null && value != _selectedLocale) {
-                      setState(() {
-                        _selectedLocale = value;
-                      });
-                      widget.config.setUiLocale(value);
-                    }
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
 
-          // Voice Transcription section.
-          _SectionHeader(l.voiceTranscription),
-          _GroupedCard(
+          // Voice transcription.
+          ExpressiveSectionHeader(l.voiceTranscription),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.mic_outlined,
                 title: l.autoSendVoice,
                 subtitle: l.autoSendVoiceSubtitle,
@@ -318,14 +297,13 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
           const SizedBox(height: 8),
-          _InfoCard(text: l.autoSendVoiceInfo),
-          const SizedBox(height: 24),
+          ExpressiveInfoCard(text: l.autoSendVoiceInfo),
 
-          // Message Display section (toggles only; typography is its own section).
-          _SectionHeader(l.messageDisplay),
-          _GroupedCard(
+          // Message display (toggles only; typography is its own section).
+          ExpressiveSectionHeader(l.messageDisplay),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.psychology_alt_outlined,
                 title: l.showReasoningTokens,
                 subtitle: l.showReasoningTokensSubtitle,
@@ -337,8 +315,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   widget.config.setShowReasoningTokens(value);
                 },
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.info_outline,
                 title: l.showModelInfo,
                 subtitle: l.showModelInfoSubtitle,
@@ -350,8 +327,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   widget.config.setShowModelInfo(value);
                 },
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.speed_outlined,
                 title: l.showTps,
                 subtitle: l.showTpsSubtitle,
@@ -365,214 +341,201 @@ class _CustomizationPageState extends State<CustomizationPage> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
-          // Typography section.
-          const _SectionHeader('Typography'),
-          _FilledCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l.chatFontSize,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l.chatFontSizeSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Slider(
-                        value: _selectedChatFontSize,
-                        min: kMinChatFontSize,
-                        max: kMaxChatFontSize,
-                        divisions:
-                            (kMaxChatFontSize - kMinChatFontSize).round(),
-                        label: '${_selectedChatFontSize.toStringAsFixed(0)} pt',
-                        onChanged: (double value) {
-                          setState(() {
-                            _selectedChatFontSize = value;
-                          });
-                        },
-                        onChangeEnd: (double value) {
-                          widget.config.setChatFontSize(value);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 56,
-                      child: Text(
-                        '${_selectedChatFontSize.toStringAsFixed(0)} pt',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l.chatFontFamily,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l.chatFontFamilySubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _FontFamilyField(
-                  value: _selectedChatFontFamily,
-                  items: kSupportedChatFontFamilies
-                      .map((id) => DropdownMenuItem<String>(
-                            value: id,
-                            child: Text(_fontFamilyLabel(id, l)),
-                          ))
-                      .toList(),
-                  onChanged: (String? value) {
-                    if (value == null || value == _selectedChatFontFamily) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedChatFontFamily = value;
-                    });
-                    widget.config.setChatFontFamily(value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: m3.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    l.fontSizePreview,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: _selectedChatFontSize,
-                      fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
-                      height: 1.38,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // UI Scale section.
-          _SectionHeader(l.uiScale),
-          _FilledCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l.uiScalePercentage(
-                    (_selectedUiScale * 100).round().toString(),
-                  ),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l.uiScaleSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Slider(
-                        value: _selectedUiScale,
-                        min: kMinUiScale,
-                        max: kMaxUiScale,
-                        // 5% steps across the 80%-150% range => 14 divisions.
-                        divisions: 14,
-                        label:
-                            '${(_selectedUiScale * 100).round()}%',
-                        onChanged: (double value) {
-                          setState(() {
-                            _selectedUiScale = value;
-                          });
-                        },
-                        onChangeEnd: (double value) {
-                          widget.config.setUiScale(value);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 56,
-                      child: Text(
-                        '${(_selectedUiScale * 100).round()}%',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: <double>[0.8, 1.0, 1.2].map((preset) {
-                    final selected =
-                        (_selectedUiScale - preset).abs() < 0.001;
-                    return ChoiceChip(
-                      label: Text('${(preset * 100).round()}%'),
-                      selected: selected,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedUiScale = preset;
-                        });
-                        widget.config.setUiScale(preset);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // AI Context section.
-          _SectionHeader(l.aiContext),
-          _InfoCard(text: l.aiContextInfo),
-          const SizedBox(height: 8),
-          _GroupedCard(
+          // Typography.
+          const ExpressiveSectionHeader('Typography'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CardLabel(
+                      title: l.chatFontSize,
+                      subtitle: l.chatFontSizeSubtitle,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Slider(
+                            value: _selectedChatFontSize,
+                            min: kMinChatFontSize,
+                            max: kMaxChatFontSize,
+                            divisions:
+                                (kMaxChatFontSize - kMinChatFontSize).round(),
+                            label:
+                                '${_selectedChatFontSize.toStringAsFixed(0)} pt',
+                            onChanged: (double value) {
+                              setState(() {
+                                _selectedChatFontSize = value;
+                              });
+                            },
+                            onChangeEnd: (double value) {
+                              widget.config.setChatFontSize(value);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 56,
+                          child: Text(
+                            '${_selectedChatFontSize.toStringAsFixed(0)} pt',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              ExpressiveCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CardLabel(
+                      title: l.chatFontFamily,
+                      subtitle: l.chatFontFamilySubtitle,
+                    ),
+                    const SizedBox(height: 10),
+                    ExpressiveField(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedChatFontFamily,
+                          isExpanded: true,
+                          dropdownColor: m3.surfaceContainerHigh,
+                          borderRadius: kBorderRadiusMenu,
+                          // The default focus tint is a full-bleed rectangle
+                          // drawn behind the rounded container — it is what
+                          // makes a focused dropdown look square. The
+                          // container already carries the shape.
+                          focusColor: Colors.transparent,
+                          items: kSupportedChatFontFamilies
+                              .map((id) => DropdownMenuItem<String>(
+                                    value: id,
+                                    child: Text(_fontFamilyLabel(id, l)),
+                                  ))
+                              .toList(),
+                          onChanged: (String? value) {
+                            if (value == null ||
+                                value == _selectedChatFontFamily) {
+                              return;
+                            }
+                            setState(() {
+                              _selectedChatFontFamily = value;
+                            });
+                            widget.config.setChatFontFamily(value);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ExpressiveField(
+                      padding: const EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          l.fontSizePreview,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: _selectedChatFontSize,
+                            fontFamily:
+                                resolveChatFontFamily(_selectedChatFontFamily),
+                            height: 1.38,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // UI scale.
+          ExpressiveSectionHeader(l.uiScale),
+          ExpressiveGroup(
+            children: [
+              ExpressiveCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CardLabel(
+                      title: l.uiScalePercentage(
+                        (_selectedUiScale * 100).round().toString(),
+                      ),
+                      subtitle: l.uiScaleSubtitle,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Slider(
+                            value: _selectedUiScale,
+                            min: kMinUiScale,
+                            max: kMaxUiScale,
+                            // 5% steps across the 80%-150% range => 14 divisions.
+                            divisions: 14,
+                            label: '${(_selectedUiScale * 100).round()}%',
+                            onChanged: (double value) {
+                              setState(() {
+                                _selectedUiScale = value;
+                              });
+                            },
+                            onChangeEnd: (double value) {
+                              widget.config.setUiScale(value);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 56,
+                          child: Text(
+                            '${(_selectedUiScale * 100).round()}%',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: <double>[0.8, 1.0, 1.2].map((preset) {
+                        final selected =
+                            (_selectedUiScale - preset).abs() < 0.001;
+                        return ChoiceChip(
+                          label: Text('${(preset * 100).round()}%'),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedUiScale = preset;
+                            });
+                            widget.config.setUiScale(preset);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // AI context.
+          ExpressiveSectionHeader(l.aiContext),
+          ExpressiveInfoCard(text: l.aiContextInfo),
+          const SizedBox(height: 8),
+          ExpressiveGroup(
+            children: [
+              ExpressiveSwitchRow(
                 icon: Icons.image_outlined,
                 title: l.recentImagesInContext,
                 subtitle: l.recentImagesInContextSubtitle,
@@ -584,8 +547,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   widget.config.setIncludeRecentImagesInHistory(value);
                 },
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.photo_library_outlined,
                 title: l.allImagesInContext,
                 subtitle: l.allImagesInContextSubtitle,
@@ -597,8 +559,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   widget.config.setIncludeAllImagesInHistory(value);
                 },
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.psychology_outlined,
                 title: l.reasoningInContext,
                 subtitle: l.reasoningInContextSubtitle,
@@ -610,8 +571,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   widget.config.setIncludeReasoningInHistory(value);
                 },
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.build_outlined,
                 title: l.toolResultsInContext,
                 subtitle: l.toolResultsInContextSubtitle,
@@ -625,16 +585,20 @@ class _CustomizationPageState extends State<CustomizationPage> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
-          // Downloads section: nav row into DownloadSettingsPage.
-          _SectionHeader(l.downloads),
-          _GroupedCard(
+          // Downloads: nav row into DownloadSettingsPage.
+          ExpressiveSectionHeader(l.downloads),
+          ExpressiveGroup(
             children: [
-              _NavRow(
+              ExpressiveRow(
                 icon: Icons.folder_outlined,
                 title: l.downloads,
                 subtitle: l.downloadsSubtitle,
+                trailing: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: m3.onSurfaceVariant,
+                ),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -646,13 +610,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
-          // Auto Chat Titles section.
-          _SectionHeader(l.chatTitles),
-          _GroupedCard(
+          // Auto chat titles.
+          ExpressiveSectionHeader(l.chatTitles),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.auto_awesome_outlined,
                 title: l.autoGenerateTitles,
                 subtitle: l.autoGenerateTitlesSubtitle,
@@ -666,25 +629,17 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         await TitleGenerationService.setEnabled(value);
                       },
               ),
+              if (_autoGenerateTitles && !_isLoadingTitleSetting)
+                ..._systemPromptEditor(l),
             ],
           ),
-          if (_autoGenerateTitles && !_isLoadingTitleSetting) ...[
-            const SizedBox(height: 12),
-            _buildSystemPromptEditor(),
-          ],
           const SizedBox(height: 8),
-          _InfoCard(text: l.titleGenInfo),
-          const SizedBox(height: 16),
+          ExpressiveInfoCard(text: l.titleGenInfo),
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],
       ),
     );
-  }
-
-  Widget _divider(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Divider(height: 1, color: m3.outlineVariant, indent: 56);
   }
 
   String _fontFamilyLabel(String id, AppLocalizations l) {
@@ -701,366 +656,103 @@ class _CustomizationPageState extends State<CustomizationPage> {
     }
   }
 
-  Widget _buildSystemPromptEditor() {
+  /// The prompt editor is two tiles of the same group: the row that opens it,
+  /// and the editor itself once it is open.
+  List<Widget> _systemPromptEditor(AppLocalizations l) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-    final l = AppLocalizations.of(context)!;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
+
+    return [
+      ExpressiveRow(
+        icon: Icons.edit_note,
+        title: l.titleGenerationPrompt,
+        subtitle: _hasCustomPrompt ? l.usingCustomPrompt : l.usingDefaultPrompt,
+        trailing: Icon(
+          _isPromptExpanded ? Icons.expand_less : Icons.expand_more,
+          color: m3.onSurfaceVariant,
+        ),
+        onTap: () {
+          setState(() {
+            _isPromptExpanded = !_isPromptExpanded;
+          });
+        },
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: kBorderRadiusRow,
-            onTap: () {
-              setState(() {
-                _isPromptExpanded = !_isPromptExpanded;
-              });
-            },
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
+      if (_isPromptExpanded)
+        ExpressiveCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'System prompt used to generate titles:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _promptController,
+                maxLines: 6,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Icon(Icons.edit_note, size: 24, color: m3.onSurfaceVariant),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.titleGenerationPrompt,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _hasCustomPrompt
-                              ? l.usingCustomPrompt
-                              : l.usingDefaultPrompt,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: m3.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+                  TextButton.icon(
+                    onPressed: _resetSystemPrompt,
+                    icon: const Icon(Icons.restore, size: 18),
+                    label: Text(l.reset),
                   ),
-                  Icon(
-                    _isPromptExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: m3.onSurfaceVariant,
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _saveSystemPrompt,
+                    icon: const Icon(Icons.save, size: 18),
+                    label: Text(l.save),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-          if (_isPromptExpanded) ...[
-            Divider(height: 1, color: m3.outlineVariant),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'System prompt used to generate titles:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: m3.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _promptController,
-                    maxLines: 6,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _resetSystemPrompt,
-                        icon: const Icon(Icons.restore, size: 18),
-                        label: Text(l.reset),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: _saveSystemPrompt,
-                        icon: const Icon(Icons.save, size: 18),
-                        label: Text(l.save),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ---- Shared UI primitives (colocated because both pages use them) ----
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: cs.primary,
         ),
-      ),
-    );
+    ];
   }
 }
 
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
+/// Title and explanation at the top of a card that is not a row.
+class _CardLabel extends StatelessWidget {
+  const _CardLabel({required this.title, this.subtitle});
 
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
-    );
-  }
-}
-
-class _FilledCard extends StatelessWidget {
-  final Widget child;
-  const _FilledCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final IconData icon;
   final String title;
   final String? subtitle;
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-
-  const _SwitchRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final enabled = onChanged != null;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: enabled ? () => onChanged!(!value) : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: m3.onSurfaceVariant),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Switch.adaptive(value: value, onChanged: onChanged),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  const _NavRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: m3.onSurfaceVariant),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  const _InfoCard({required this.text});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                color: m3.onSurfaceVariant,
-                height: 1.4,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        if (subtitle?.isNotEmpty ?? false) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.m3.onSurfaceVariant,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// Dropdown styled as a filled TextField to match the rest of the surface.
-class _FontFamilyField extends StatelessWidget {
-  final String value;
-  final List<DropdownMenuItem<String>> items;
-  final ValueChanged<String?> onChanged;
-
-  const _FontFamilyField({
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: kBorderRadiusField,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: m3.surfaceContainerHigh,
-          borderRadius: kBorderRadiusMenu,
-          // The default focus tint is a full-bleed rectangle drawn behind
-          // the rounded container — it is what makes a focused dropdown
-          // look square. The container already carries the shape.
-          focusColor: Colors.transparent,
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
+      ],
     );
   }
 }

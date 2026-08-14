@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class SandboxManagementPage extends StatefulWidget {
   const SandboxManagementPage({super.key});
@@ -147,72 +148,53 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'About sandboxes',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Each chat runs in its own Linux container for code '
-                      'execution (Python, shell, ffmpeg, git, …). Containers '
-                      'idle-out after 30 minutes. Files are saved as a '
-                      'snapshot and restored on the next chat visit, '
-                      'sliding-expiring after 3 days of inactivity. Up to 2 '
-                      'sandboxes per account can be running concurrently — '
-                      'destroy one here to free a slot.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
+            const ExpressiveInfoCard(
+              text:
+                  'Each chat runs in its own Linux container for code '
+                  'execution (Python, shell, ffmpeg, git, …). Containers '
+                  'idle-out after 30 minutes. Files are saved as a '
+                  'snapshot and restored on the next chat visit, '
+                  'sliding-expiring after 3 days of inactivity. Up to 2 '
+                  'sandboxes per account can be running concurrently — '
+                  'destroy one here to free a slot.',
             ),
-            const SizedBox(height: 12),
             // Fix C: GitHub connection lives here now (was a top-level
             // Settings entry). The token is only ever used by `git` / `gh`
             // inside the sandbox, so the entry point belongs next to the
             // sandbox itself.
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.code),
-                title: const Text('GitHub'),
-                subtitle: const Text(
-                  'Let the AI clone your repos, push, and open PRs in the sandbox',
+            const ExpressiveSectionHeader('Code hosting'),
+            ExpressiveGroup(
+              children: [
+                ExpressiveRow(
+                  icon: Icons.code,
+                  title: 'GitHub',
+                  subtitle: 'Let the AI clone your repos, push, and open PRs '
+                      'in the sandbox',
+                  trailing: const Icon(Icons.chevron_right, size: 20),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const GitHubConnectionPage(),
+                      ),
+                    );
+                  },
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const GitHubConnectionPage(),
-                    ),
-                  );
-                },
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const ExpressiveSectionHeader('Running'),
             if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_error != null)
-              Card(
-                color: scheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: scheme.onErrorContainer),
-                  ),
-                ),
+              ExpressiveInfoCard(
+                text: _error!,
+                icon: Icons.error_outline,
+                tone: scheme.errorContainer,
               )
             else if (_sandboxes.isEmpty)
               Padding(
@@ -261,62 +243,64 @@ class _SandboxRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final running = info.status.toLowerCase() == 'running';
     final statusColor = running ? Colors.green : Colors.orange;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: statusColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    shortId,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w600,
-                    ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ExpressiveGroup(
+        children: [
+          ExpressiveTile(
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${info.status} · created ${formatTime(info.createdAt)} · '
-                    'active ${formatTime(info.lastActivity)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: scheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isDestroying)
-              const SizedBox(
-                width: 32,
-                height: 32,
-                child: Padding(
-                  padding: EdgeInsets.all(6),
-                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              )
-            else
-              IconButton(
-                tooltip: 'Destroy sandbox',
-                icon: Icon(Icons.delete_outline, color: scheme.error),
-                onPressed: onDestroy,
-              ),
-          ],
-        ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shortId,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${info.status} · created ${formatTime(info.createdAt)}'
+                        ' · active ${formatTime(info.lastActivity)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: scheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isDestroying)
+                  const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Padding(
+                      padding: EdgeInsets.all(6),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  IconButton(
+                    tooltip: 'Destroy sandbox',
+                    icon: Icon(Icons.delete_outline, color: scheme.error),
+                    onPressed: onDestroy,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -9,7 +9,7 @@ import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/user_skills_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Lists built-in skills and lets the user author their own.
 ///
@@ -120,21 +120,25 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          _InfoCard(text: l.skillsExplainer),
+          ExpressiveInfoCard(text: l.skillsExplainer),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            _InfoCard(text: _error!, tone: _InfoTone.danger),
+            ExpressiveInfoCard(
+              text: _error!,
+              icon: Icons.error_outline,
+              tone: Theme.of(context).colorScheme.errorContainer,
+            ),
           ],
-          _SectionHeader(l.skillsYours),
+          ExpressiveSectionHeader(l.skillsYours),
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_userSkills.isEmpty)
-            _InfoCard(text: l.skillsYoursEmpty)
+            ExpressiveInfoCard(text: l.skillsYoursEmpty)
           else
-            _GroupedCard(
+            ExpressiveGroup(
               children: [
                 for (final skill in _userSkills)
                   _SkillRow(
@@ -144,8 +148,8 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
                   ),
               ],
             ),
-          _SectionHeader(l.skillsBuiltin),
-          _GroupedCard(
+          ExpressiveSectionHeader(l.skillsBuiltin),
+          ExpressiveGroup(
             children: [for (final skill in builtins) _SkillRow(skill: skill)],
           ),
         ],
@@ -335,12 +339,13 @@ message.
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _InfoCard(text: l.skillEditorHint),
+          ExpressiveInfoCard(text: l.skillEditorHint),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            _InfoCard(
+            ExpressiveInfoCard(
               text: _errorField == null ? _error! : '$_errorField: $_error',
-              tone: _InfoTone.danger,
+              icon: Icons.error_outline,
+              tone: theme.colorScheme.errorContainer,
             ),
           ],
           const SizedBox(height: 12),
@@ -369,149 +374,26 @@ class _SkillRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              skill.isBuiltin
-                  ? Icons.lock_outline
-                  : Icons.auto_awesome_outlined,
-              size: 24,
-              color: skill.isBuiltin ? m3.onSurfaceVariant : cs.primary,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    skill.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    skill.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: m3.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            if (onDelete != null)
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 20),
-                onPressed: onDelete,
-                color: m3.onSurfaceVariant,
-              ),
-            if (onTap != null)
-              Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 20, 0, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  const _GroupedCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
     final m3 = Theme.of(context).m3;
-    final separated = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) {
-        separated.add(Divider(height: 1, color: m3.outlineVariant, indent: 56));
-      }
-      separated.add(children[i]);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: separated),
-    );
-  }
-}
 
-enum _InfoTone { neutral, danger }
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.text, this.tone = _InfoTone.neutral});
-
-  final String text;
-  final _InfoTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final isDanger = tone == _InfoTone.danger;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDanger
-            ? cs.errorContainer.withValues(alpha: 0.5)
-            : m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return ExpressiveRow(
+      icon: skill.isBuiltin ? Icons.lock_outline : Icons.auto_awesome_outlined,
+      // A built-in cannot be edited, so its tile stays quiet.
+      tone: skill.isBuiltin ? m3.surfaceContainerHighest : null,
+      title: skill.name,
+      subtitle: skill.description,
+      onTap: onTap,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isDanger ? Icons.error_outline : Icons.info_outline,
-            size: 18,
-            color: isDanger ? cs.error : m3.onSurfaceVariant,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: isDanger ? cs.onErrorContainer : m3.onSurfaceVariant,
-              ),
+          if (onDelete != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              onPressed: onDelete,
+              color: m3.onSurfaceVariant,
             ),
-          ),
+          if (onTap != null)
+            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
         ],
       ),
     );

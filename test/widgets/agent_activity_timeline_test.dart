@@ -478,4 +478,70 @@ void main() {
       expect(semantics.hasFlag(SemanticsFlag.isExpanded), isFalse);
     });
   });
+
+  group('a round built from steps', () {
+    test('states its thinking once, not once per call', () {
+      final call = ToolCall(
+        id: '1',
+        name: 'web_search',
+        arguments: const {'query': 'stau elbtunnel'},
+        status: ToolCallStatus.completed,
+        result: 'nothing',
+        roundThinking: 'The user asks about the Elbtunnel.',
+      );
+
+      final entries = buildAgentActivityEntriesFromSteps(<AgentActivityStep>[
+        AgentActivityStep.reasoning('The user asks about the Elbtunnel.'),
+        AgentActivityStep.tool(call),
+      ]);
+
+      final thinking = entries
+          .where((e) => e.kind == AgentActivityKind.thinking)
+          .toList();
+      expect(thinking, hasLength(1));
+      expect(entries.last.kind, AgentActivityKind.search);
+    });
+
+    test('a thinking line carries the whole text behind it', () {
+      const long = 'First sentence. Second sentence that the line drops.';
+      final entries = buildAgentActivityEntriesFromSteps(
+        <AgentActivityStep>[AgentActivityStep.reasoning(long)],
+      );
+
+      expect(entries.single.label, 'First sentence.');
+      expect(entries.single.body, long);
+      expect(entries.single.hasBody, isTrue);
+    });
+  });
+
+  group('the header clock', () {
+    ToolCall done(DateTime start, DateTime end) => ToolCall(
+      id: 'a',
+      name: 'web_search',
+      arguments: const {'query': 'x'},
+      status: ToolCallStatus.completed,
+      startedAt: start,
+      completedAt: end,
+      result: 'ok',
+    );
+
+    final start = DateTime(2026, 1, 1, 12, 0, 0);
+
+    test('stops at the last call once the round is over', () {
+      final elapsed = agentActivityDuration(
+        [done(start, start.add(const Duration(seconds: 3)))],
+        now: start.add(const Duration(seconds: 40)),
+      );
+      expect(elapsed, const Duration(seconds: 3));
+    });
+
+    test('keeps running while the model writes after its last tool', () {
+      final elapsed = agentActivityDuration(
+        [done(start, start.add(const Duration(seconds: 3)))],
+        now: start.add(const Duration(seconds: 21)),
+        running: true,
+      );
+      expect(elapsed, const Duration(seconds: 21));
+    });
+  });
 }

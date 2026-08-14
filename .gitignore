@@ -125,3 +125,4 @@ report.xml
 demo/.auth-state.json
 demo/recordings/
 demo/node_modules/
+_scratch/

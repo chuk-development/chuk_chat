@@ -6,17 +6,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
-import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/sandbox_management_page.dart';
+import 'package:chuk_chat/pages/mcp_connectors_page.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
@@ -36,6 +36,7 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/user_status_service.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -128,9 +129,9 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _SectionHeader(label: 'Account'),
-          _GroupedCard(
-            rows: [
+          ExpressiveSectionHeader('Account'),
+          ExpressiveGroup(
+            children: [
               _AccountRow(
                 onTap: () async {
                   await Navigator.push(
@@ -162,9 +163,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          _SectionHeader(label: 'AI & Chat'),
-          _GroupedCard(
-            rows: [
+          ExpressiveSectionHeader('AI & Chat'),
+          ExpressiveGroup(
+            children: [
               KeyedSubtree(
                 key: TourKeyRegistry.instance
                     .keyFor(TourSlots.settingsModelSelectionTile),
@@ -220,6 +221,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
+              if (kFeatureMcp && !kIsWeb)
+                _SettingsRow(
+                  icon: Icons.extension_outlined,
+                  title: l.connectors,
+                  subtitle: l.connectorsSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const McpConnectorsPage(),
+                      ),
+                    );
+                  },
+                ),
               if (kFeatureSkills)
                 _SettingsRow(
                   icon: Icons.auto_awesome_outlined,
@@ -255,9 +270,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          _SectionHeader(label: 'Appearance'),
-          _GroupedCard(
-            rows: [
+          ExpressiveSectionHeader('Appearance'),
+          ExpressiveGroup(
+            children: [
               _SettingsRow(
                 icon: Icons.palette_outlined,
                 title: l.themeSettings,
@@ -288,9 +303,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
 
           if (_developerOptionsEnabled) ...[
-            _SectionHeader(label: 'Data & Privacy'),
-            _GroupedCard(
-              rows: [
+            ExpressiveSectionHeader('Data & Privacy'),
+            ExpressiveGroup(
+              children: [
                 _SettingsRow(
                   icon: Icons.file_download_outlined,
                   title: l.exportChats,
@@ -301,9 +316,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
 
-          _SectionHeader(label: 'System'),
-          _GroupedCard(
-            rows: [
+          ExpressiveSectionHeader('System'),
+          ExpressiveGroup(
+            children: [
               _SettingsRow(
                 icon: Icons.school_outlined,
                 title: l.onboardingReplayTile,
@@ -671,9 +686,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
 class _PlanInfo {
   final String heroLabel;
-  final String chipLabel;
 
-  const _PlanInfo({required this.heroLabel, required this.chipLabel});
+  const _PlanInfo({required this.heroLabel});
 }
 
 class _AccountRow extends StatefulWidget {
@@ -711,61 +725,22 @@ class _AccountRowState extends State<_AccountRow> {
   }
 
   Future<_PlanInfo> _loadPlan() async {
-    try {
-      String? token;
-      try {
-        final session =
-            await SupabaseService.refreshSession() ??
-            SupabaseService.auth.currentSession;
-        token = session?.accessToken;
-      } catch (_) {
-        token = null;
-      }
-      if (token == null || token.isEmpty) {
-        return const _PlanInfo(
-          heroLabel: 'Free plan',
-          chipLabel: 'Free · Upgrade →',
-        );
-      }
-      final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (response.statusCode != 200) {
-        throw StateError('user_status returned ${response.statusCode}');
-      }
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) {
-        throw StateError('user_status body was not a JSON object');
-      }
-      final bool hasSubscription = decoded['has_subscription'] == true;
-      final String? currentPlan = decoded['current_plan'] as String?;
-      if (hasSubscription) {
-        final plan = (currentPlan == null || currentPlan.trim().isEmpty)
-            ? 'Plus'
-            : currentPlan.trim();
-        return _PlanInfo(heroLabel: '$plan plan', chipLabel: '$plan plan');
-      }
-      return const _PlanInfo(
-        heroLabel: 'Free plan',
-        chipLabel: 'Free · Upgrade →',
-      );
-    } catch (error) {
-      unawaited(
-        DiagnosticsLogService.warning(
-          'settings',
-          'Failed to fetch user plan status',
-          data: {'error': error.toString()},
-        ),
-      );
-      if (kDebugMode) {
-        debugPrint('Failed to fetch user plan status: $error');
-      }
-      return const _PlanInfo(
-        heroLabel: 'Free plan',
-        chipLabel: 'Free · Upgrade →',
-      );
-    }
+    // Cache-first — a paying user should never watch the app decide
+    // whether they are a subscriber. UserStatusService refreshes behind
+    // this call and notifies listeners when a newer answer lands.
+    final Map<String, dynamic>? status = await UserStatusService.load();
+    return _planInfoFrom(status);
+  }
+
+  static _PlanInfo _planInfoFrom(Map<String, dynamic>? status) {
+    const _PlanInfo free = _PlanInfo(heroLabel: 'Free plan');
+    if (status == null) return free;
+    if (status['has_subscription'] != true) return free;
+    final String? currentPlan = status['current_plan'] as String?;
+    final String plan = (currentPlan == null || currentPlan.trim().isEmpty)
+        ? 'Plus'
+        : currentPlan.trim();
+    return _PlanInfo(heroLabel: '$plan plan');
   }
 
   ({String displayName, String email}) _identity() {
@@ -802,14 +777,16 @@ class _AccountRowState extends State<_AccountRow> {
     final m3 = theme.m3;
     final id = _identity();
 
-    return InkWell(
+    // The same tile as every other row: a bare InkWell showed the page
+    // background through the group and read as a different colour.
+    return ExpressiveTile(
       onTap: () async {
         await widget.onTap();
         if (!mounted) return;
         await _loadProfile();
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: EdgeInsets.zero,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -831,7 +808,7 @@ class _AccountRowState extends State<_AccountRow> {
                   Text(
                     id.displayName,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: cs.onSurface,
                     ),
@@ -842,7 +819,7 @@ class _AccountRowState extends State<_AccountRow> {
                     Text(
                       id.email,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: m3.onSurfaceVariant,
                       ),
                       maxLines: 1,
@@ -853,18 +830,26 @@ class _AccountRowState extends State<_AccountRow> {
               ),
             ),
             const SizedBox(width: 10),
-            FutureBuilder<_PlanInfo>(
-              future: _planFuture,
-              builder: (context, snapshot) {
-                final String label;
-                if (snapshot.connectionState != ConnectionState.done) {
-                  label = '…';
-                } else if (snapshot.hasData) {
-                  label = snapshot.data!.heroLabel;
-                } else {
-                  label = 'Free plan';
+            ValueListenableBuilder<Map<String, dynamic>?>(
+              valueListenable: UserStatusService.status,
+              builder: (context, status, _) {
+                if (status != null) {
+                  return _PlanBadge(label: _planInfoFrom(status).heroLabel);
                 }
-                return _PlanBadge(label: label);
+                return FutureBuilder<_PlanInfo>(
+                  future: _planFuture,
+                  builder: (context, snapshot) {
+                    final String label;
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      label = '\u2026';
+                    } else if (snapshot.hasData) {
+                      label = snapshot.data!.heroLabel;
+                    } else {
+                      label = 'Free plan';
+                    }
+                    return _PlanBadge(label: label);
+                  },
+                );
               },
             ),
             const SizedBox(width: 10),
@@ -905,66 +890,6 @@ class _PlanBadge extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-
-  const _SectionHeader({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> rows;
-
-  const _GroupedCard({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final children = <Widget>[];
-    for (var i = 0; i < rows.length; i++) {
-      if (i > 0) {
-        children.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 58, right: 16),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: m3.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-        );
-      }
-      children.add(rows[i]);
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Material(
-        color: m3.surfaceContainer,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
 class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -981,62 +906,13 @@ class _SettingsRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color iconColor = cs.primary;
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 26,
-              height: 26,
-              child: Icon(icon, size: 24, color: iconColor),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: m3.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-            const SizedBox(width: 10),
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ExpressiveRow(
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
+    trailing: trailing,
+    onTap: onTap,
+  );
 }
 
 class _DevTile extends StatelessWidget {
@@ -1083,7 +959,7 @@ class _DevTile extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: m3.onSurfaceVariant,
                         ),
@@ -1093,7 +969,7 @@ class _DevTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: m3.onSurfaceVariant.withValues(alpha: 0.85),
                         ),
                         maxLines: 1,

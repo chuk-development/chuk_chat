@@ -80,6 +80,7 @@ class AppLocalizations {
   String get customizationSubtitle => _get('customizationSubtitle');
   String get toolCalling => _get('toolCalling');
   String get toolCallingSubtitle => _get('toolCallingSubtitle');
+  String get connectorsSubtitle => _get('connectorsSubtitle');
   String get skills => _get('skills');
   String get skillsSubtitle => _get('skillsSubtitle');
   String get skillsExplainer => _get('skillsExplainer');

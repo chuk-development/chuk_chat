@@ -219,9 +219,79 @@ frame. Nothing else works without this.
   frames; user-scoped routing (cross-account is impossible — verified).
   "Store-and-forward" was a **misnomer**: it stores nothing.
 
-- **`relay-split`** (server, after `relay-hardening` — decided 2026-07-17) —
-  the relay becomes **its own process with its own WebSocket endpoint**, so a
-  relay fault cannot take the chat API down with it.
+- ~~**`relay-split`** (own process)~~ — **REVERSED by the product owner
+  2026-07-17, after it shipped as `b5d012b`.** Decision: **one API server, one
+  codebase, one domain, one deployment, one process — CoWork is just a new
+  endpoint.** No second container. Separation is achieved *inside* the process,
+  not by splitting it.
+
+  **What survives and must be reused:** the split's refactor was not wasted.
+  `routers/cowork_ws.py` owns the socket, `ws_auth.py` is the one shared trust
+  boundary both paths import, and `cowork_relay.py` stayed pure. Keep all of
+  that; only the second entrypoint and `Dockerfile.relay` go.
+
+  **What in-process actually buys, honestly:** an exception in a WS handler
+  does not kill FastAPI — that isolation is already real. The one credible OOM
+  source (the 20 MB fan-out) is capped at 1 MB. What stays shared and cannot be
+  isolated in-process: a blocking call stalls the event loop for every chat
+  request, and true OOM takes everything down. Mitigated, not eliminated.
+  Accepted.
+
+- **`relay-crossreplica`** (server, next — the blocker that forced the above
+  decision) — **the relay is broken in production right now, and robust code
+  cannot fix it.**
+
+  **Verified in Dokploy, not assumed:** the chat API runs
+  `modeSwarm.Replicated.Replicas: 2`, with `updateConfigSwarm.Order:
+  "start-first"` (which deliberately runs two instances at once during a
+  deploy). The relay's presence map is in memory, so it is correct only at
+  exactly 1 replica. Riding in the same process, it inherits 2 — the phone
+  lands on replica A, the laptop on replica B, and they **never see each
+  other**. Roughly half of all controller/executor pairs would never connect.
+  No test caught it because every test runs in one process. Chat needs ≥2 for
+  availability; an in-RAM presence map needs exactly 1. One process means one
+  replica count — that is arithmetic, not a code-quality problem.
+
+  **Decided fix: peer-to-peer between replicas over Swarm task DNS. NO
+  database.** Replica A forwards the frame straight to replica B on the overlay
+  network. Presence stays in memory, where it belongs.
+
+  **This plan first prescribed Postgres `LISTEN`/`NOTIFY`. That was wrong**, and
+  the correction is recorded because the reasoning generalises:
+
+  - **The direct Postgres connection is unreachable from the code.**
+    `db.xooposctxswumvgtyqlg.supabase.co` has **no A record — AAAA only**
+    (verified). The host has IPv6; the Docker overlay does not
+    (`/etc/docker/daemon.json` lacks `"ipv6": true`). Enabling it means a
+    daemon restart bouncing all **37 containers** on `dokploy-network`.
+  - **The plan's own trap #1 was backwards.** Transaction mode (6543) does
+    break `LISTEN`/`NOTIFY`, but **session mode (5432 on
+    `*.pooler.supabase.com`) supports it and is reachable over IPv4**. "Use the
+    direct connection, not the pooler" was exactly inverted.
+  - **The killer argument, which outranks the plumbing:** a DB presence row
+    needs a **heartbeat** to expire it — smuggling back in precisely the
+    app-level heartbeat that was refused above after *measuring* uvicorn's
+    transport keepalive. Both DB options reintroduce it. Peer-to-peer makes the
+    stale-presence problem **disappear** instead of solving it: no rows,
+    nothing to go stale, no TTL, no reaper — a dead replica's presence
+    evaporates with its heap. **A better class of solution, not a cheaper one.**
+    Do not "improve" this into a database.
+
+  **Verified working end-to-end** (not merely resolved): `tasks.chukchat-api-ssqfsl`
+  → `['10.0.1.92', '10.0.1.93']`, one per replica; the VIP →
+  `['10.0.1.11']`; `socket.gethostname()` gives the task its own ip so
+  self-exclusion works; and replica A reached replica B's `/health` at
+  `10.0.1.92:8000` → `200`. It also keeps "the relay stores nothing" literally
+  true, needs no `asyncpg`, no DB credential, and puts no DB hop on the hot
+  path — the 8 KB `NOTIFY` limit becomes irrelevant.
+
+  **The one cost:** a shared **peer token** env var. `dokploy-network` is shared
+  with 37 containers and Traefik routes `api.chuk.chat → :8000`, so the internal
+  peer endpoint needs a shared secret with constant-time compare (plus a
+  `tasks.` source-ip check as defence-in-depth, not the primary control). It is
+  self-generated, grants no DB access, is freely rotatable, and if it leaks the
+  E2E/Ed25519 layers still hold — an injected frame fails the GCM tag (§7).
+  Incomparably smaller than a Postgres credential.
 
   **Why this is not optional:** today the relay is not a separate component at
   all — it is a *frame type on the chat socket*. `/v2/ws` (`multiplex.py:1271`)

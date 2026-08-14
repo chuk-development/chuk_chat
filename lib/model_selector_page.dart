@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
@@ -631,12 +632,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     }
                     if (index == 1) {
                       final label = _searchQuery.isEmpty
-                          ? 'AVAILABLE · ${_filteredModels.length} MODELS'
-                          : '${_filteredModels.length} MODEL${_filteredModels.length == 1 ? '' : 'S'} FOUND';
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _SectionHeader(label),
-                      );
+                          ? 'Available · ${_filteredModels.length} models'
+                          : '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found';
+                      return ExpressiveSectionHeader(label);
                     }
                     final model = _filteredModels[index - 2];
                     final ModelProviderInfo? selectedProviderForModel =
@@ -1343,28 +1341,6 @@ class _SearchField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
         ),
       ),
     );

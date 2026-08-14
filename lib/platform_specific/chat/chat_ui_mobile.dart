@@ -31,6 +31,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -1313,15 +1314,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           icon: Icons.attach_file,
           label: l10n.files,
         ),
-        if (kFeatureWorkspaces) ...[
-          const PopupMenuDivider(),
+        if (kFeatureWorkspaces)
           _composerMenuRow(
             value: _AttachChoice.workspace,
             iconFg: iconFg,
             icon: Icons.folder_outlined,
-            label: _selectedWorkspaceId == null ? 'Workspace' : 'Change workspace',
+            label: _selectedWorkspaceId == null
+                ? 'Workspace'
+                : 'Change workspace',
           ),
-        ],
       ],
     );
 
@@ -1477,7 +1478,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             label: workspace.name,
             isSelected: workspace.id == _selectedWorkspaceId,
           ),
-        const PopupMenuDivider(),
         _composerMenuRow(
           value: const _WorkspaceChoice.create(),
           iconFg: iconFg,
@@ -3213,10 +3213,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Distance from the bottom edge to the top of the composer, plus a small
     // gap so the last message never sits flush against the input box. The
     // composer is offset `effectiveHorizontalPadding` from the bottom edge.
+    // The measured height stops at the composer's own column: the SafeArea
+    // that lifts it above the gesture bar sits outside MeasureSize, so its
+    // inset has to be added here. Without it the last card of a message
+    // ends up behind the input box.
     final double composerReservedSpace =
         effectiveHorizontalPadding +
-        (composerHeight > 0 ? composerHeight : composerEstimate) +
-        12.0;
+        (composerHeight > 0
+            ? composerHeight + bottomPadding
+            : composerEstimate) +
+        16.0;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
       10,
@@ -3677,14 +3683,50 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
 
-    final prefs = await ModelCacheService.loadProviderPreferences(user.id);
+    // Offline first: the device snapshot paints the menu straight away,
+    // even with no network and before the first sync of a cold start.
+    final local = await ModelCacheService.loadProviderPreferences(user.id);
+    await _applyPickedModels(local);
+
+    // Then the truth. `loadAllProviderPreferences` writes the snapshot back
+    // on success, so a model unpinned on another device disappears here on
+    // the next look instead of lingering until something else rewrote the
+    // cache — which is how it lingered before.
+    try {
+      final remote = await UserPreferencesService.loadAllProviderPreferences();
+      if (!mapEquals(remote, local)) await _applyPickedModels(remote);
+    } catch (_) {
+      // No network: the snapshot already on screen is the best answer.
+    }
+  }
+
+  /// Turn provider preferences into the menu's model list.
+  Future<void> _applyPickedModels(Map<String, String> prefs) async {
     final ids = <String>{
       ChatModeService.defaultModelId,
       if (_selectedModelId.isNotEmpty) _selectedModelId,
-      ...prefs.keys,
+      // Only models that still have a provider pinned. An empty slug means
+      // the pin was taken away, and the model is no longer picked.
+      for (final entry in prefs.entries)
+        if (entry.value.trim().isNotEmpty) entry.key,
     };
 
-    final catalogue = await ModelCacheService.loadAvailableModels();
+    var catalogue = await ModelCacheService.loadAvailableModels();
+    bool namesMissing(List<Map<String, dynamic>> list) {
+      final known = {
+        for (final model in list)
+          if (model['id'] is String) model['id'] as String,
+      };
+      return ids.any((id) => !known.contains(id));
+    }
+
+    // A name the catalogue does not carry would be shown as the raw
+    // OpenRouter slug. Fetch the list once instead of printing the id.
+    if (catalogue.isEmpty || namesMissing(catalogue)) {
+      await ModelPrefetchService.prefetch();
+      catalogue = await ModelCacheService.loadAvailableModels();
+    }
+
     final names = <String, String>{
       for (final model in catalogue)
         if (model['id'] is String && model['name'] is String)
@@ -3693,7 +3735,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final picked = <ChatModelChoice>[
       for (final id in ids)
-        ChatModelChoice(id: id, name: names[id] ?? id),
+        ChatModelChoice(id: id, name: names[id] ?? prettyModelId(id)),
     ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (!mounted) return;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/password_reset_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Page for recovering or deleting chats encrypted with old passwords.
 class RecoverChatsPage extends StatefulWidget {
@@ -242,14 +243,9 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                Text(
-                  l.recoverChatsInfo,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
+                ExpressiveInfoCard(text: l.recoverChatsInfo),
                 const SizedBox(height: 16),
                 for (final entry in _lockedInfo.entries)
                   _buildVersionCard(entry.key, entry.value, theme, iconFg),
@@ -272,10 +268,9 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
         message == l.pleaseEnterOldPassword;
     final isSuccess = message != null && !isError;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: ExpressiveCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

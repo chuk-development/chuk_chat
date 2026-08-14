@@ -9,8 +9,8 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/build_info.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
-import 'package:chuk_chat/constants.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -134,11 +134,11 @@ class _AboutPageState extends State<AboutPage> {
               : null;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Hero header — centered icon, app name, version.
+              // Hero header — the icon, the name, the version.
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: ValueListenableBuilder<UpdateInfo?>(
                   valueListenable: UpdateCheckService.updateAvailable,
                   builder: (context, updateInfo, _) {
@@ -151,7 +151,9 @@ class _AboutPageState extends State<AboutPage> {
                             height: 88,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(
+                                kExpressiveOuterRadius,
+                              ),
                               color: m3.surfaceContainerHigh,
                             ),
                             child: SvgPicture.asset(
@@ -167,7 +169,8 @@ class _AboutPageState extends State<AboutPage> {
                         Text(
                           info?.appName ?? l.chukChat,
                           style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
                             color: colorScheme.onSurface,
                           ),
                         ),
@@ -200,24 +203,24 @@ class _AboutPageState extends State<AboutPage> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         if (updateInfo != null)
                           Semantics(
                             button: true,
                             label: l.updateAvailable(updateInfo.latestVersion),
                             child: GestureDetector(
                               onTap: UpdateCheckService.launchDownload,
-                              child: _Badge(
+                              child: ExpressiveBadge(
                                 l.updateAvailable(updateInfo.latestVersion),
-                                tone: _BadgeTone.primary,
+                                tone: m3.primaryContainer,
                                 icon: Icons.system_update_outlined,
                               ),
                             ),
                           )
                         else
-                          _Badge(
+                          ExpressiveBadge(
                             'Up to date',
-                            tone: _BadgeTone.success,
+                            tone: m3.successContainer,
                             icon: Icons.check_circle_outline,
                           ),
                       ],
@@ -225,61 +228,46 @@ class _AboutPageState extends State<AboutPage> {
                   },
                 ),
               ),
-              const SizedBox(height: 16),
 
-              const _SectionHeader('LINKS'),
-              _GroupedCard(
+              const ExpressiveSectionHeader('Links'),
+              ExpressiveGroup(
                 children: [
-                  _SettingsRow(
-                    onTap: () =>
-                        AboutPage._openLicenses(context, info, versionText),
-                    leading: _LeadingIcon(
-                      icon: Icons.article_outlined,
-                      tint: m3.onSurfaceVariant,
-                    ),
+                  ExpressiveRow(
+                    icon: Icons.article_outlined,
                     title: l.openSourceLicenses,
                     subtitle: l.openSourceLicensesSubtitle,
                     trailing: Icon(
                       Icons.chevron_right,
+                      size: 20,
                       color: m3.onSurfaceVariant,
                     ),
-                  ),
-                  _SettingsRow(
                     onTap: () =>
-                        AboutPage._launchUrl('https://chuk.chat/en/terms/'),
-                    leading: _LeadingIcon(
-                      icon: Icons.description_outlined,
-                      tint: m3.onSurfaceVariant,
-                    ),
+                        AboutPage._openLicenses(context, info, versionText),
+                  ),
+                  ExpressiveRow(
+                    icon: Icons.description_outlined,
                     title: l.termsOfService,
                     trailing: Icon(
                       Icons.north_east,
                       size: 18,
                       color: m3.onSurfaceVariant,
                     ),
-                  ),
-                  _SettingsRow(
                     onTap: () =>
-                        AboutPage._launchUrl('https://chuk.chat/en/privacy/'),
-                    leading: _LeadingIcon(
-                      icon: Icons.lock_outline,
-                      tint: m3.onSurfaceVariant,
-                    ),
+                        AboutPage._launchUrl('https://chuk.chat/en/terms/'),
+                  ),
+                  ExpressiveRow(
+                    icon: Icons.lock_outline,
                     title: l.privacyPolicy,
                     trailing: Icon(
                       Icons.north_east,
                       size: 18,
                       color: m3.onSurfaceVariant,
                     ),
+                    onTap: () =>
+                        AboutPage._launchUrl('https://chuk.chat/en/privacy/'),
                   ),
-                  _SettingsRow(
-                    onTap: () => AboutPage._launchUrl(
-                      'https://github.com/chuk-development/chuk_chat',
-                    ),
-                    leading: _LeadingIcon(
-                      icon: Icons.code,
-                      tint: m3.onSurfaceVariant,
-                    ),
+                  ExpressiveRow(
+                    icon: Icons.code,
                     title: 'GitHub',
                     subtitle: 'chuk-development/chuk_chat',
                     trailing: Icon(
@@ -287,22 +275,21 @@ class _AboutPageState extends State<AboutPage> {
                       size: 18,
                       color: m3.onSurfaceVariant,
                     ),
+                    onTap: () => AboutPage._launchUrl(
+                      'https://github.com/chuk-development/chuk_chat',
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  l.copyrightYear(DateTime.now().year.toString()),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: m3.onSurfaceVariant,
-                    fontSize: 11,
-                  ),
+              const SizedBox(height: 28),
+              Text(
+                l.copyrightYear(DateTime.now().year.toString()),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant.withValues(alpha: 0.7),
+                  fontSize: 11,
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           );
         },
@@ -393,8 +380,10 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
 
           final packages = snapshot.data ?? const <_LicensePackage>[];
 
+          // One tile per package. The list is long enough that a builder
+          // matters, so every package is its own group of one.
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             itemCount: packages.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -407,8 +396,10 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
 
               final package = packages[index - 1];
               return Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: _LicenseListTile(package: package),
+                padding: const EdgeInsets.only(top: 8),
+                child: ExpressiveGroup(
+                  children: [_LicenseTile(package: package)],
+                ),
               );
             },
           );
@@ -418,8 +409,8 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
   }
 }
 
-class _LicenseListTile extends StatelessWidget {
-  const _LicenseListTile({required this.package});
+class _LicenseTile extends StatelessWidget {
+  const _LicenseTile({required this.package});
 
   final _LicensePackage package;
 
@@ -429,58 +420,19 @@ class _LicenseListTile extends StatelessWidget {
     final m3 = theme.m3;
     final String? licenseLabel = _inferLicenseName(package.license);
 
-    return Material(
-      color: m3.surfaceContainer,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: kBorderRadiusRow,
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => _LicenseDetailPage(package: package),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      package.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ],
-              ),
-              if (licenseLabel != null) ...[
-                const SizedBox(height: 10),
-                _Badge(
-                  licenseLabel,
-                  tone: _BadgeTone.primary,
-                ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                AppLocalizations.of(context)!.tapToViewLicense,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: m3.onSurfaceVariant,
-                ),
-              ),
-            ],
+    return ExpressiveRow(
+      title: package.name,
+      subtitle: AppLocalizations.of(context)!.tapToViewLicense,
+      trailing: licenseLabel == null
+          ? Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant)
+          : ExpressiveBadge(licenseLabel, tone: m3.primaryContainer),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => _LicenseDetailPage(package: package),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -501,12 +453,7 @@ class _LicenseHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final m3 = theme.m3;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.all(16),
+    return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -568,13 +515,8 @@ class _LicenseDetailPage extends StatelessWidget {
         scrolledUnderElevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: m3.surfaceContainer,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: ExpressiveCard(
           child: SelectableText(
             package.license,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -622,200 +564,4 @@ String? _inferLicenseName(String text) {
     return 'Creative Commons';
   }
   return null;
-}
-
-// ─── Reusable private pieces ─────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-
-    final List<Widget> rows = [];
-    for (int i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.only(left: 56),
-          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
-        ));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: rows),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  const _SettingsRow({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            leading,
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.m3.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LeadingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color tint;
-  const _LeadingIcon({required this.icon, required this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Center(
-        child: Icon(icon, size: 22, color: tint),
-      ),
-    );
-  }
-}
-
-enum _BadgeTone { primary, success, warn, neutral }
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final _BadgeTone tone;
-  final IconData? icon;
-  const _Badge(this.label, {this.tone = _BadgeTone.neutral, this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    late Color bg;
-    late Color fg;
-    switch (tone) {
-      case _BadgeTone.primary:
-        bg = m3.primaryContainer;
-        fg = m3.onPrimaryContainer;
-        break;
-      case _BadgeTone.success:
-        bg = m3.successContainer;
-        fg = m3.onSuccessContainer;
-        break;
-      case _BadgeTone.warn:
-        bg = m3.warningContainer;
-        fg = m3.onWarningContainer;
-        break;
-      case _BadgeTone.neutral:
-        bg = m3.surfaceContainerHigh;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.15,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

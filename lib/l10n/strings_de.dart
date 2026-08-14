@@ -217,6 +217,7 @@ const Map<String, String> stringsDe = {
   'enableChartBlocksSubtitle':
       'Dem Modell-Prompt Diagramm-Rendering-Anweisungen erlauben',
   'connectors': 'Konnektoren',
+  'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
   'loadingToolSettings': 'Tool-Einstellungen werden geladen...',
   'noToolsRegistered': 'Noch keine Tools registriert.',
   'catSearchWeb': 'Suche und Web',

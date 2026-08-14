@@ -259,7 +259,9 @@ ThemeData buildAppTheme({
       color: surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      // Same corner as the settings tiles (kExpressiveOuterRadius), so the
+      // cards on every settings sub-page match the list they came from.
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
     ),
     dividerTheme: DividerThemeData(color: outlineVariant, space: 1),
     switchTheme: SwitchThemeData(

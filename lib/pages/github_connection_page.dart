@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/github_connection_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class GitHubConnectionPage extends StatefulWidget {
@@ -201,7 +202,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
         onRefresh: _refreshStatus,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _intro(scheme),
             const SizedBox(height: 20),
@@ -228,12 +229,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
   }
 
   Widget _intro(ColorScheme scheme) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -266,10 +262,8 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
   }
 
   Widget _disconnectedCard(ColorScheme scheme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    return ExpressiveCard(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Not connected',
@@ -289,15 +283,12 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
             ),
           ],
         ),
-      ),
     );
   }
 
   Widget _connectedCard(ColorScheme scheme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    return ExpressiveCard(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -340,7 +331,6 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -381,13 +371,11 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
             style: Theme.of(context).textTheme.titleSmall);
         break;
     }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            header,
+    return ExpressiveCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
             const SizedBox(height: 16),
             Text(
               '1. Open github.com/login/device (already opened in your browser).',
@@ -460,34 +448,16 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
                   ),
               ],
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _errorBanner(String msg) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline,
-              color: Theme.of(context).colorScheme.onErrorContainer),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              msg,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return ExpressiveInfoCard(
+      text: msg,
+      icon: Icons.error_outline,
+      tone: Theme.of(context).colorScheme.errorContainer,
     );
   }
 }

@@ -211,6 +211,7 @@ const Map<String, String> stringsEn = {
   'enableChartBlocksSubtitle':
       'Allow the model prompt to include chart rendering instructions',
   'connectors': 'Connectors',
+  'connectorsSubtitle': 'Let the assistant use tools from other services',
   'loadingToolSettings': 'Loading tool settings...',
   'noToolsRegistered': 'No tools are registered yet.',
   'catSearchWeb': 'Search and Web',
