@@ -663,6 +663,17 @@ Future<String> _spotifyRecentlyLiked(
 
 // ============== Bash ==============
 
+/// Folder the local bash tool is confined to, null while unset.
+String? get bashSandboxFolder => _bashSandbox.sandboxFolder;
+
+/// Confine the local bash tool to [path]. Throws [StateError] if the folder
+/// is gone by the time it is picked.
+Future<void> setBashSandboxFolder(String path) =>
+    _bashSandbox.setSandboxFolder(path);
+
+/// Forget the sandbox folder; bash commands are refused until a new one is set.
+Future<void> clearBashSandboxFolder() => _bashSandbox.clearSandboxFolder();
+
 Future<String> executeBash(Map<String, dynamic> args) async {
   final command = args['command'] as String?;
   if (command == null || command.isEmpty) {

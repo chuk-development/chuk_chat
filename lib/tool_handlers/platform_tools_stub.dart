@@ -6,6 +6,13 @@ Future<String> executeSpotify(Map<String, dynamic> args) async {
   return 'Spotify control is not available on web.';
 }
 
+/// The local bash sandbox is desktop-only; on web there is no folder.
+String? get bashSandboxFolder => null;
+
+Future<void> setBashSandboxFolder(String path) async {}
+
+Future<void> clearBashSandboxFolder() async {}
+
 Future<String> executeBash(Map<String, dynamic> args) async {
   return 'Bash commands are not available on web.';
 }

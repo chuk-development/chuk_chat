@@ -727,4 +727,7 @@ const Map<String, String> stringsEn = {
       'activity so replies finish even when your phone is locked.',
   'batteryOptimizationAllow': 'Allow',
   'batteryOptimizationLater': 'Later',
+  'bashSandboxFolder': 'Sandbox folder',
+  'bashSandboxFolderUnset': 'Not set — bash commands are refused',
+  'bashSandboxChooseDialog': 'Choose the bash sandbox folder',
 };

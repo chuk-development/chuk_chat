@@ -522,4 +522,7 @@ const Map<String, String> stringsRu = {
   'close': 'Закрыть',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'Папка песочницы',
+  'bashSandboxFolderUnset': 'Не задана — команды bash отклоняются',
+  'bashSandboxChooseDialog': 'Выберите папку песочницы bash',
 };

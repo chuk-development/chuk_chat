@@ -510,4 +510,7 @@ const Map<String, String> stringsJa = {
   'close': '閉じる',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'サンドボックスフォルダ',
+  'bashSandboxFolderUnset': '未設定 — bash コマンドは拒否されます',
+  'bashSandboxChooseDialog': 'bash サンドボックスフォルダを選択',
 };

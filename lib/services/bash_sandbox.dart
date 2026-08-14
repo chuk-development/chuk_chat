@@ -101,6 +101,9 @@ class BashSandbox {
 
   bool get isConfigured => _sandboxFolder != null;
 
+  /// Folder every bash command is confined to, null until one is chosen.
+  String? get sandboxFolder => _sandboxFolder;
+
   Future<void> loadSavedFolder() async {
     final prefs = await SharedPreferences.getInstance();
     final savedFolder = prefs.getString('bash_sandbox_folder');
@@ -110,6 +113,24 @@ class BashSandbox {
         _sandboxFolder = savedFolder;
       }
     }
+  }
+
+  /// Point the sandbox at [path] and remember it across restarts.
+  Future<void> setSandboxFolder(String path) async {
+    final dir = io.Directory(path);
+    if (!await dir.exists()) {
+      throw StateError('That folder does not exist any more: $path');
+    }
+    _sandboxFolder = p.canonicalize(path);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bash_sandbox_folder', _sandboxFolder!);
+  }
+
+  /// Forget the folder. Commands are refused again until a new one is set.
+  Future<void> clearSandboxFolder() async {
+    _sandboxFolder = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('bash_sandbox_folder');
   }
 
 

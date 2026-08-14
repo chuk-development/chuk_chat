@@ -514,4 +514,7 @@ const Map<String, String> stringsHi = {
   'close': 'बंद करें',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'सैंडबॉक्स फ़ोल्डर',
+  'bashSandboxFolderUnset': 'सेट नहीं — bash कमांड अस्वीकार किए जाते हैं',
+  'bashSandboxChooseDialog': 'bash सैंडबॉक्स फ़ोल्डर चुनें',
 };
