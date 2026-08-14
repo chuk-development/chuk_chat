@@ -514,4 +514,7 @@ const Map<String, String> stringsEs = {
   'close': 'Cerrar',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'Carpeta del sandbox',
+  'bashSandboxFolderUnset': 'Sin definir: los comandos bash se rechazan',
+  'bashSandboxChooseDialog': 'Elegir la carpeta del sandbox de bash',
 };

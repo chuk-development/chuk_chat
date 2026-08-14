@@ -602,4 +602,7 @@ const Map<String, String> stringsFr = {
   'close': 'Fermer',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'Dossier du bac à sable',
+  'bashSandboxFolderUnset': 'Non défini — les commandes bash sont refusées',
+  'bashSandboxChooseDialog': 'Choisir le dossier du bac à sable bash',
 };

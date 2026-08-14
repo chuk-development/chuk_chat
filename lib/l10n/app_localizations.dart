@@ -765,6 +765,9 @@ class AppLocalizations {
   String get batteryOptimizationBody => _get('batteryOptimizationBody');
   String get batteryOptimizationAllow => _get('batteryOptimizationAllow');
   String get batteryOptimizationLater => _get('batteryOptimizationLater');
+  String get bashSandboxFolder => _get('bashSandboxFolder');
+  String get bashSandboxFolderUnset => _get('bashSandboxFolderUnset');
+  String get bashSandboxChooseDialog => _get('bashSandboxChooseDialog');
 }
 
 class _AppLocalizationsDelegate

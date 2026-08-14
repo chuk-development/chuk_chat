@@ -745,4 +745,7 @@ const Map<String, String> stringsDe = {
       'bei gesperrtem Handy fertig werden.',
   'batteryOptimizationAllow': 'Erlauben',
   'batteryOptimizationLater': 'Später',
+  'bashSandboxFolder': 'Sandbox-Ordner',
+  'bashSandboxFolderUnset': 'Nicht gesetzt — bash-Befehle werden abgelehnt',
+  'bashSandboxChooseDialog': 'Bash-Sandbox-Ordner wählen',
 };

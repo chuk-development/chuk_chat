@@ -514,4 +514,7 @@ const Map<String, String> stringsBn = {
   'close': 'বন্ধ',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'স্যান্ডবক্স ফোল্ডার',
+  'bashSandboxFolderUnset': 'সেট করা নেই — bash কমান্ড প্রত্যাখ্যান করা হয়',
+  'bashSandboxChooseDialog': 'bash স্যান্ডবক্স ফোল্ডার বেছে নিন',
 };

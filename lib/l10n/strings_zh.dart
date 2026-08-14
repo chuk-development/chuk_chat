@@ -460,4 +460,7 @@ const Map<String, String> stringsZh = {
   'close': '关闭',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': '沙箱文件夹',
+  'bashSandboxFolderUnset': '未设置 — bash 命令将被拒绝',
+  'bashSandboxChooseDialog': '选择 bash 沙箱文件夹',
 };

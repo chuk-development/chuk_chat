@@ -530,4 +530,7 @@ const Map<String, String> stringsPt = {
   'close': 'Fechar',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'Pasta do sandbox',
+  'bashSandboxFolderUnset': 'Não definida — comandos bash são recusados',
+  'bashSandboxChooseDialog': 'Escolher a pasta do sandbox do bash',
 };

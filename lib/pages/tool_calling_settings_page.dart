@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -12,6 +13,7 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class ToolCallingSettingsPage extends StatefulWidget {
@@ -479,6 +481,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       widgets.add(const SizedBox(height: 10));
 
       final rows = <Widget>[];
+      if (category == ToolCategory.bash) {
+        rows.add(_buildSandboxFolderRow(l));
+      }
       for (final tool in toolsInCategory) {
         final isEnabled = _toolExecutor.isToolEnabled(tool.name);
         rows.add(
@@ -503,6 +508,51 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     }
 
     return widgets;
+  }
+
+  /// Row that chooses the folder the local bash tool is confined to. Without
+  /// it every bash command is refused, so it belongs next to the tool.
+  Widget _buildSandboxFolderRow(AppLocalizations l) {
+    final folder = platform_tools.bashSandboxFolder;
+    final hasFolder = folder != null && folder.isNotEmpty;
+    return SettingsRow(
+      icon: Icons.folder_outlined,
+      iconColor: Theme.of(context).colorScheme.primary,
+      title: hasFolder ? folder : l.bashSandboxFolderUnset,
+      subtitle: l.bashSandboxFolder,
+      onTap: _pickSandboxFolder,
+      trailing: hasFolder
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: l.clear,
+              onPressed: _clearSandboxFolder,
+            )
+          : null,
+      showChevron: !hasFolder,
+    );
+  }
+
+  Future<void> _pickSandboxFolder() async {
+    final l = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final selected = await FilePicker.getDirectoryPath(
+      dialogTitle: l.bashSandboxChooseDialog,
+    );
+    if (selected == null || selected.isEmpty) return;
+    try {
+      await platform_tools.setBashSandboxFolder(selected);
+    } on StateError catch (error) {
+      NiceSnackBar.showOn(messenger, error.message);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _clearSandboxFolder() async {
+    await platform_tools.clearBashSandboxFolder();
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _openToolDetail(ClientTool tool) async {

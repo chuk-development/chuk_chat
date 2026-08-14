@@ -514,4 +514,7 @@ const Map<String, String> stringsAr = {
   'close': 'إغلاق',
 
   // ── Subscription dialogs ───────────────────────────────────
+  'bashSandboxFolder': 'مجلد بيئة العزل',
+  'bashSandboxFolderUnset': 'غير محدد — يتم رفض أوامر bash',
+  'bashSandboxChooseDialog': 'اختر مجلد بيئة عزل bash',
 };
