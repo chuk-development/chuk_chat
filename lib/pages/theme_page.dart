@@ -6,6 +6,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class ThemePage extends StatefulWidget {
   final AppShellConfig config;
@@ -171,8 +172,12 @@ class _ThemePageState extends State<ThemePage> {
         padding: const EdgeInsets.all(16.0),
         children: [
           // Mode section: dark toggle + film grain grouped in one card.
-          const _SectionHeader('Mode'),
-          _GroupedCard(
+          SettingsSectionHeader(
+            'Mode',
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _SwitchRow(
                 icon: Icons.dark_mode_outlined,
@@ -204,7 +209,10 @@ class _ThemePageState extends State<ThemePage> {
           // Material You drives the whole palette (accent, icon/foreground and
           // background). While it is on, every colour picker is replaced by a
           // note so the UI never implies a choice that the system overrides.
-          _SectionHeader(l.accentColor),
+          SettingsSectionHeader(
+            l.accentColor,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -234,7 +242,10 @@ class _ThemePageState extends State<ThemePage> {
             ),
           const SizedBox(height: 24),
 
-          _SectionHeader(l.iconFgColor),
+          SettingsSectionHeader(
+            l.iconFgColor,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -264,7 +275,10 @@ class _ThemePageState extends State<ThemePage> {
             ),
           const SizedBox(height: 24),
 
-          _SectionHeader(l.backgroundColor),
+          SettingsSectionHeader(
+            l.backgroundColor,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -301,7 +315,8 @@ class _ThemePageState extends State<ThemePage> {
   // Shown in place of a colour picker while Material You is active — the
   // system palette owns the colour, so there is nothing to choose here.
   Widget _dynamicColorNote(AppLocalizations l) {
-    return _GroupedCard(
+    return SettingsGroupedCard(
+      dividers: false,
       children: [
         _NoteRow(
           icon: Icons.auto_awesome_outlined,
@@ -314,48 +329,6 @@ class _ThemePageState extends State<ThemePage> {
   Widget _divider(BuildContext context) {
     final m3 = Theme.of(context).m3;
     return Divider(height: 1, color: m3.outlineVariant, indent: 56);
-  }
-}
-
-// Small caps section header used across both settings pages.
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-// Grouped rounded surfaceContainer card, rows separated by thin dividers.
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
-    );
   }
 }
 

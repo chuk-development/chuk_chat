@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -237,7 +238,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
         padding: const EdgeInsets.all(16.0),
         children: [
           // Language section.
-          _SectionHeader(l.language),
+          SettingsSectionHeader(
+            l.language,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           _FilledCard(
             child: Row(
               children: [
@@ -299,8 +303,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // Voice Transcription section.
-          _SectionHeader(l.voiceTranscription),
-          _GroupedCard(
+          SettingsSectionHeader(
+            l.voiceTranscription,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _SwitchRow(
                 icon: Icons.mic_outlined,
@@ -317,12 +325,16 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
           const SizedBox(height: 8),
-          _InfoCard(text: l.autoSendVoiceInfo),
+          SettingsInfoCard(l.autoSendVoiceInfo),
           const SizedBox(height: 24),
 
           // Message Display section (toggles only; typography is its own section).
-          _SectionHeader(l.messageDisplay),
-          _GroupedCard(
+          SettingsSectionHeader(
+            l.messageDisplay,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _SwitchRow(
                 icon: Icons.psychology_alt_outlined,
@@ -367,7 +379,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // Typography section.
-          const _SectionHeader('Typography'),
+          SettingsSectionHeader(
+            'Typography',
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           _FilledCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,7 +499,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // UI Scale section.
-          _SectionHeader(l.uiScale),
+          SettingsSectionHeader(
+            l.uiScale,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
           _FilledCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,10 +584,14 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // AI Context section.
-          _SectionHeader(l.aiContext),
-          _InfoCard(text: l.aiContextInfo),
+          SettingsSectionHeader(
+            l.aiContext,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsInfoCard(l.aiContextInfo),
           const SizedBox(height: 8),
-          _GroupedCard(
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _SwitchRow(
                 icon: Icons.image_outlined,
@@ -627,8 +649,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // Downloads section: nav row into DownloadSettingsPage.
-          _SectionHeader(l.downloads),
-          _GroupedCard(
+          SettingsSectionHeader(
+            l.downloads,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _NavRow(
                 icon: Icons.folder_outlined,
@@ -648,8 +674,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // Auto Chat Titles section.
-          _SectionHeader(l.chatTitles),
-          _GroupedCard(
+          SettingsSectionHeader(
+            l.chatTitles,
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+          ),
+          SettingsGroupedCard(
+            dividers: false,
             children: [
               _SwitchRow(
                 icon: Icons.auto_awesome_outlined,
@@ -672,7 +702,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
             _buildSystemPromptEditor(),
           ],
           const SizedBox(height: 8),
-          _InfoCard(text: l.titleGenInfo),
+          SettingsInfoCard(l.titleGenInfo),
           const SizedBox(height: 16),
 
           // Image generation is now handled via tool calling (generate_image tool)
@@ -812,46 +842,6 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
 // ---- Shared UI primitives (colocated because both pages use them) ----
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
-    );
-  }
-}
-
 class _FilledCard extends StatelessWidget {
   final Widget child;
   const _FilledCard({required this.child});
@@ -981,41 +971,6 @@ class _NavRow extends StatelessWidget {
             Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  const _InfoCard({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                color: m3.onSurfaceVariant,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

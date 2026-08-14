@@ -22,6 +22,8 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug;
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -392,20 +394,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    NiceSnackBar.show(context, message);
   }
 
   void _startApiAvailabilityPolling() {
@@ -635,7 +624,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                           : '${_filteredModels.length} MODEL${_filteredModels.length == 1 ? '' : 'S'} FOUND';
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
-                        child: _SectionHeader(label),
+                        child: SettingsSectionHeader(
+   label,
+   padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+ ),
                       );
                     }
                     final model = _filteredModels[index - 2];
@@ -1329,28 +1321,6 @@ class _SearchField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(999),
           borderSide: BorderSide(color: colorScheme.primary, width: 2),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
         ),
       ),
     );

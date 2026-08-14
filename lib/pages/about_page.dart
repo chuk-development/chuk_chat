@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/build_info.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -226,13 +227,16 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: 16),
 
-              const _SectionHeader('LINKS'),
-              _GroupedCard(
+              const SettingsSectionHeader(
+                'LINKS',
+                padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+              ),
+              SettingsGroupedCard(
                 children: [
-                  _SettingsRow(
+                  SettingsRow(
                     onTap: () =>
                         AboutPage._openLicenses(context, info, versionText),
-                    leading: _LeadingIcon(
+                    leading: SettingsLeadingIcon(
                       icon: Icons.article_outlined,
                       tint: m3.onSurfaceVariant,
                     ),
@@ -243,10 +247,10 @@ class _AboutPageState extends State<AboutPage> {
                       color: m3.onSurfaceVariant,
                     ),
                   ),
-                  _SettingsRow(
+                  SettingsRow(
                     onTap: () =>
                         AboutPage._launchUrl('https://chuk.chat/en/terms/'),
-                    leading: _LeadingIcon(
+                    leading: SettingsLeadingIcon(
                       icon: Icons.description_outlined,
                       tint: m3.onSurfaceVariant,
                     ),
@@ -257,10 +261,10 @@ class _AboutPageState extends State<AboutPage> {
                       color: m3.onSurfaceVariant,
                     ),
                   ),
-                  _SettingsRow(
+                  SettingsRow(
                     onTap: () =>
                         AboutPage._launchUrl('https://chuk.chat/en/privacy/'),
-                    leading: _LeadingIcon(
+                    leading: SettingsLeadingIcon(
                       icon: Icons.lock_outline,
                       tint: m3.onSurfaceVariant,
                     ),
@@ -271,11 +275,11 @@ class _AboutPageState extends State<AboutPage> {
                       color: m3.onSurfaceVariant,
                     ),
                   ),
-                  _SettingsRow(
+                  SettingsRow(
                     onTap: () => AboutPage._launchUrl(
                       'https://github.com/chuk-development/chuk_chat',
                     ),
-                    leading: _LeadingIcon(
+                    leading: SettingsLeadingIcon(
                       icon: Icons.code,
                       tint: m3.onSurfaceVariant,
                     ),
@@ -623,140 +627,6 @@ String? _inferLicenseName(String text) {
 }
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-
-    final List<Widget> rows = [];
-    for (int i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.only(left: 56),
-          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
-        ));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: rows),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  const _SettingsRow({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            leading,
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.m3.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LeadingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color tint;
-  const _LeadingIcon({required this.icon, required this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Center(
-        child: Icon(icon, size: 22, color: tint),
-      ),
-    );
-  }
-}
 
 enum _BadgeTone { primary, success, warn, neutral }
 

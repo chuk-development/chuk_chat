@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -245,19 +247,11 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 3),
-      ),
+    NiceSnackBar.show(
+      context,
+      message,
+      duration: const Duration(seconds: 3),
+      backgroundColor: Colors.red,
     );
   }
 
@@ -306,7 +300,10 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(16),
         children: [
           // ── Credits ────────────────────────────────────────────
-          const _SectionHeader('CREDITS'),
+          const SettingsSectionHeader(
+            'CREDITS',
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          ),
           Container(
             decoration: BoxDecoration(
               color: m3.surfaceContainer,
@@ -345,11 +342,14 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           const SizedBox(height: 24),
 
           // ── Plans ──────────────────────────────────────────────
-          const _SectionHeader('PLANS'),
+          const SettingsSectionHeader(
+            'PLANS',
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          ),
 
           // Payments-disabled notice
           if (paymentsDisabled) ...[
-            _InfoCard(l.paymentsDisabledInBuild),
+            SettingsInfoCard(l.paymentsDisabledInBuild),
             const SizedBox(height: 12),
           ],
 
@@ -572,28 +572,6 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
 enum _BadgeTone { primary, success, warn, neutral }
 
 class _Badge extends StatelessWidget {
@@ -638,40 +616,6 @@ class _Badge extends StatelessWidget {
           fontWeight: FontWeight.w600,
           letterSpacing: 0.15,
         ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  const _InfoCard(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
