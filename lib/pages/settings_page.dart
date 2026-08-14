@@ -36,6 +36,8 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -128,9 +130,12 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _SectionHeader(label: 'Account'),
-          _GroupedCard(
-            rows: [
+          SettingsSectionHeader(
+            'Account',
+            padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+          ),
+          SettingsGroupedCard(
+            children: [
               _AccountRow(
                 onTap: () async {
                   await Navigator.push(
@@ -144,7 +149,7 @@ class _SettingsPageState extends State<SettingsPage> {
               KeyedSubtree(
                 key: TourKeyRegistry.instance
                     .keyFor(TourSlots.settingsPricingTile),
-                child: _SettingsRow(
+                child: SettingsRow(
                   icon: Icons.credit_card,
                   title: l.pricingPlans,
                   subtitle: l.pricingPlansSubtitle,
@@ -157,18 +162,22 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+                  showChevron: true,
                 ),
               ),
             ],
           ),
 
-          _SectionHeader(label: 'AI & Chat'),
-          _GroupedCard(
-            rows: [
+          SettingsSectionHeader(
+            'AI & Chat',
+            padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+          ),
+          SettingsGroupedCard(
+            children: [
               KeyedSubtree(
                 key: TourKeyRegistry.instance
                     .keyFor(TourSlots.settingsModelSelectionTile),
-                child: _SettingsRow(
+                child: SettingsRow(
                   icon: Icons.smart_toy_outlined,
                   title: l.modelSelection,
                   subtitle: l.modelSelectionSubtitle,
@@ -183,12 +192,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+                  showChevron: true,
                 ),
               ),
               KeyedSubtree(
                 key: TourKeyRegistry.instance
                     .keyFor(TourSlots.settingsAiIdentityTile),
-                child: _SettingsRow(
+                child: SettingsRow(
                   icon: Icons.fingerprint,
                   title: l.aiIdentityMemory,
                   subtitle: l.aiIdentityMemorySubtitle,
@@ -203,9 +213,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+                  showChevron: true,
                 ),
               ),
-              _SettingsRow(
+              SettingsRow(
                 icon: Icons.build_circle_outlined,
                 title: l.toolCalling,
                 subtitle: l.toolCallingSubtitle,
@@ -219,9 +230,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   );
                 },
+                showChevron: true,
               ),
               if (kFeatureSkills)
-                _SettingsRow(
+                SettingsRow(
                   icon: Icons.auto_awesome_outlined,
                   title: l.skills,
                   subtitle: l.skillsSubtitle,
@@ -233,12 +245,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+                  showChevron: true,
                 ),
               // Fix C: the standalone GitHub entry was removed and the
               // GitHub connection now lives inside SandboxManagementPage —
               // the GitHub token is only ever used by `git`/`gh` inside the
               // sandbox, so the entry point belongs there.
-              _SettingsRow(
+              SettingsRow(
                 icon: Icons.developer_board,
                 title: 'Sandboxes',
                 subtitle:
@@ -251,14 +264,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   );
                 },
+                showChevron: true,
               ),
             ],
           ),
 
-          _SectionHeader(label: 'Appearance'),
-          _GroupedCard(
-            rows: [
-              _SettingsRow(
+          SettingsSectionHeader(
+            'Appearance',
+            padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+          ),
+          SettingsGroupedCard(
+            children: [
+              SettingsRow(
                 icon: Icons.palette_outlined,
                 title: l.themeSettings,
                 subtitle: l.themeSettingsSubtitle,
@@ -270,8 +287,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   );
                 },
+                showChevron: true,
               ),
-              _SettingsRow(
+              SettingsRow(
                 icon: Icons.tune,
                 title: l.customization,
                 subtitle: l.customizationSubtitle,
@@ -283,34 +301,43 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   );
                 },
+                showChevron: true,
               ),
             ],
           ),
 
           if (_developerOptionsEnabled) ...[
-            _SectionHeader(label: 'Data & Privacy'),
-            _GroupedCard(
-              rows: [
-                _SettingsRow(
+            SettingsSectionHeader(
+              'Data & Privacy',
+              padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+            ),
+            SettingsGroupedCard(
+              children: [
+                SettingsRow(
                   icon: Icons.file_download_outlined,
                   title: l.exportChats,
                   subtitle: l.exportChatsSubtitle,
                   onTap: () => _exportChats(context),
+                  showChevron: true,
                 ),
               ],
             ),
           ],
 
-          _SectionHeader(label: 'System'),
-          _GroupedCard(
-            rows: [
-              _SettingsRow(
+          SettingsSectionHeader(
+            'System',
+            padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+          ),
+          SettingsGroupedCard(
+            children: [
+              SettingsRow(
                 icon: Icons.school_outlined,
                 title: l.onboardingReplayTile,
                 subtitle: l.onboardingReplayTileSubtitle,
                 onTap: () => _replayOnboarding(context),
+                showChevron: true,
               ),
-              _SettingsRow(
+              SettingsRow(
                 icon: Icons.info_outline,
                 title: l.about,
                 subtitle: l.aboutSubtitle,
@@ -320,6 +347,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     MaterialPageRoute(builder: (_) => const AboutPage()),
                   );
                 },
+                showChevron: true,
               ),
             ],
           ),
@@ -361,51 +389,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     navigator.pop();
                   }
                 } on AuthServiceException catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        error.message,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
-                  );
+                  NiceSnackBar.showOn(messenger, error.message);
                 } catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error: $error',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
-                  );
+                  NiceSnackBar.showOn(messenger, 'Error: $error');
                 }
               },
               child: Text(
@@ -453,22 +439,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (ChatStorageService.savedChats.isEmpty) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.noChatsToExport,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        NiceSnackBar.showOn(messenger, l.noChatsToExport);
         return;
       }
       final jsonPayload = await ChatStorageService.exportChatsAsJson();
@@ -478,63 +449,19 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (kIsWeb) {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.copiedToClipboard,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        NiceSnackBar.showOn(messenger, l.copiedToClipboard);
         return;
       }
 
       if (Platform.isLinux) {
         final savedPath = await _saveExportToLinux(data, fileName);
         if (savedPath != null) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l.savedToPath(savedPath),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+          NiceSnackBar.showOn(messenger, l.savedToPath(savedPath));
         } else {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l.exportCancelled,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 1),
-              dismissDirection: DismissDirection.horizontal,
-            ),
+          NiceSnackBar.showOn(
+            messenger,
+            l.exportCancelled,
+            duration: const Duration(seconds: 1),
           );
         }
         return;
@@ -553,75 +480,19 @@ class _SettingsPageState extends State<SettingsPage> {
             text: 'Backup of your Chuk Chat conversations.',
           ),
         );
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.shareOpened,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 1),
-            dismissDirection: DismissDirection.horizontal,
-          ),
+        NiceSnackBar.showOn(
+          messenger,
+          l.shareOpened,
+          duration: const Duration(seconds: 1),
         );
       } on Exception {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.copiedToClipboard,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        NiceSnackBar.showOn(messenger, l.copiedToClipboard);
       }
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            l.exportFailed(error.toString()),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, l.exportFailed(error.toString()));
     }
   }
 
@@ -899,140 +770,6 @@ class _PlanBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: cs.onSurface,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-
-  const _SectionHeader({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> rows;
-
-  const _GroupedCard({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final children = <Widget>[];
-    for (var i = 0; i < rows.length; i++) {
-      if (i > 0) {
-        children.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 58, right: 16),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: m3.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-        );
-      }
-      children.add(rows[i]);
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Material(
-        color: m3.surfaceContainer,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback onTap;
-
-  const _SettingsRow({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.subtitle,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color iconColor = cs.primary;
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 26,
-              height: 26,
-              child: Icon(icon, size: 24, color: iconColor),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: m3.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-            const SizedBox(width: 10),
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-          ],
         ),
       ),
     );

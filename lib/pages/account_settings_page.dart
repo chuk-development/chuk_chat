@@ -15,6 +15,8 @@ import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -126,22 +128,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       });
 
       final messenger = ScaffoldMessenger.of(context);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            emailNotice ?? l.saved,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
+      NiceSnackBar.showOn(
+        messenger,
+        emailNotice ?? l.saved,
+        backgroundColor: Theme.of(context).colorScheme.primary,
       );
     } on AuthException catch (error) {
       if (!mounted) return;
@@ -183,18 +173,21 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader('Chat Recovery'),
-        _InfoCard(
-          text: lockedCount > 0
+        const SettingsSectionHeader(
+          'Chat Recovery',
+          padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+        ),
+        SettingsInfoCard(
+          lockedCount > 0
               ? l.lockedChatsCount(lockedCount)
               : l.recoverOldChatsAvailable,
-          tone: InfoTone.neutral,
+          tone: SettingsInfoTone.neutral,
           icon: Icons.lock_outline,
         ),
         const SizedBox(height: 12),
-        _GroupedCard(
+        SettingsGroupedCard(
           children: [
-            _SettingsRow(
+            SettingsRow(
               icon: Icons.lock_open,
               title: l.encryptedChatRecovery,
               subtitle: l.recoverChats,
@@ -247,22 +240,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _isChangingPassword = false;
         _passwordChangeNotice = notice;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            notice,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
+      NiceSnackBar.show(
+        context,
+        notice,
+        backgroundColor: Theme.of(context).colorScheme.primary,
       );
     } on PasswordChangeException catch (error) {
       if (!mounted) return;
@@ -497,21 +478,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            l.failedToDeleteAccount(error.toString()),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 3),
-          dismissDirection: DismissDirection.horizontal,
-        ),
+      NiceSnackBar.showOn(
+        messenger,
+        l.failedToDeleteAccount(error.toString()),
+        duration: const Duration(seconds: 3),
       );
     }
   }
@@ -554,15 +524,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
-                text: _errorMessage!,
-                tone: InfoTone.danger,
+              child: SettingsInfoCard(
+                _errorMessage!,
+                tone: SettingsInfoTone.danger,
                 icon: Icons.error_outline,
               ),
             ),
 
           // Profile
-          const _SectionHeader('Profile'),
+          const SettingsSectionHeader(
+            'Profile',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
           _FieldLabel(l.displayName),
           TextFormField(
             controller: _displayNameCtrl,
@@ -606,22 +579,25 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ),
 
           // Security
-          const _SectionHeader('Security'),
+          const SettingsSectionHeader(
+            'Security',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
           if (_passwordChangeError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
-                text: _passwordChangeError!,
-                tone: InfoTone.danger,
+              child: SettingsInfoCard(
+                _passwordChangeError!,
+                tone: SettingsInfoTone.danger,
                 icon: Icons.error_outline,
               ),
             ),
           if (_passwordChangeNotice != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
-                text: _passwordChangeNotice!,
-                tone: InfoTone.success,
+              child: SettingsInfoCard(
+                _passwordChangeNotice!,
+                tone: SettingsInfoTone.success,
                 icon: Icons.check_circle_outline,
               ),
             ),
@@ -737,9 +713,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ),
             ),
           ),
-          _InfoCard(
-            text: l.deleteAccountWarning,
-            tone: InfoTone.danger,
+          SettingsInfoCard(
+            l.deleteAccountWarning,
+            tone: SettingsInfoTone.danger,
             icon: Icons.warning_amber_rounded,
           ),
           const SizedBox(height: 12),
@@ -783,54 +759,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
 // ───────── private shared widgets ─────────
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  const _GroupedCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final separated = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) {
-        separated.add(
-          Divider(height: 1, color: m3.outlineVariant, indent: 56),
-        );
-      }
-      separated.add(children[i]);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: separated),
-    );
-  }
-}
-
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.label, {this.helper});
 
@@ -863,134 +791,6 @@ class _FieldLabel extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: m3.onSurfaceVariant),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              IconTheme.merge(
-                data: IconThemeData(color: m3.onSurfaceVariant),
-                child: trailing!,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum InfoTone { neutral, warn, danger, success }
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.text,
-    this.tone = InfoTone.neutral,
-    this.icon,
-  });
-
-  final String text;
-  final InfoTone tone;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case InfoTone.danger:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case InfoTone.success:
-        bg = m3.successContainer.withValues(alpha: 0.4);
-        fg = m3.onSuccessContainer;
-        break;
-      case InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
-            ),
-          ),
         ],
       ),
     );

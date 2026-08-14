@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class ToolCallingSettingsPage extends StatefulWidget {
   const ToolCallingSettingsPage({super.key, required this.config});
@@ -472,9 +473,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     final tools = _visibleTools();
     if (tools.isEmpty) {
       return [
-        _InfoCard(
-          text: l.noToolsRegistered,
-          tone: InfoTone.neutral,
+        SettingsInfoCard(
+          l.noToolsRegistered,
+          tone: SettingsInfoTone.neutral,
           icon: Icons.info_outline,
         ),
       ];
@@ -527,7 +528,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           ),
         );
       }
-      widgets.add(_GroupedCard(children: rows));
+      widgets.add(SettingsGroupedCard(children: rows));
       widgets.add(const SizedBox(height: 20));
     }
 
@@ -593,8 +594,11 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const _SectionHeader('Engine'),
-          _GroupedCard(
+          const SettingsSectionHeader(
+            'Engine',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
+          SettingsGroupedCard(
             children: [
               _SwitchRow(
                 icon: Icons.precision_manufacturing_outlined,
@@ -610,8 +614,11 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Behavior'),
-          _GroupedCard(
+          const SettingsSectionHeader(
+            'Behavior',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
+          SettingsGroupedCard(
             children: [
               _SwitchRow(
                 icon: Icons.search,
@@ -643,8 +650,11 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Display'),
-          _GroupedCard(
+          const SettingsSectionHeader(
+            'Display',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
+          SettingsGroupedCard(
             children: [
               _SwitchRow(
                 icon: Icons.visibility_outlined,
@@ -661,13 +671,16 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
             ],
           ),
           const SizedBox(height: 12),
-          _InfoCard(
-            text: l.toolCallingTip,
-            tone: InfoTone.neutral,
+          SettingsInfoCard(
+            l.toolCallingTip,
+            tone: SettingsInfoTone.neutral,
             icon: Icons.info_outline,
           ),
-          const _SectionHeader('Visual Output'),
-          _GroupedCard(
+          const SettingsSectionHeader(
+            'Visual Output',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
+          SettingsGroupedCard(
             children: [
               _SwitchRow(
                 icon: Icons.map_outlined,
@@ -705,11 +718,14 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               ),
             ],
           ),
-          const _SectionHeader('Connectors'),
+          const SettingsSectionHeader(
+            'Connectors',
+            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          ),
           if (_isLoadingToolPreferences)
-            _InfoCard(
-              text: l.loadingToolSettings,
-              tone: InfoTone.neutral,
+            SettingsInfoCard(
+              l.loadingToolSettings,
+              tone: SettingsInfoTone.neutral,
               icon: Icons.hourglass_empty,
             )
           else
@@ -733,54 +749,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 }
 
 // ───────── private shared widgets ─────────
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  const _GroupedCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final separated = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) {
-        separated.add(
-          Divider(height: 1, color: m3.outlineVariant, indent: 56),
-        );
-      }
-      separated.add(children[i]);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: separated),
-    );
-  }
-}
 
 class _SwitchRow extends StatelessWidget {
   const _SwitchRow({
@@ -1079,63 +1047,6 @@ class _Badge extends StatelessWidget {
           color: fg,
           letterSpacing: 0.3,
         ),
-      ),
-    );
-  }
-}
-
-enum InfoTone { neutral, warn, danger }
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.text,
-    this.tone = InfoTone.neutral,
-    this.icon,
-  });
-
-  final String text;
-  final InfoTone tone;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case InfoTone.danger:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
-            ),
-          ),
-        ],
       ),
     );
   }

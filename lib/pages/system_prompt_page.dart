@@ -12,6 +12,8 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/settings_kit.dart';
 
 class SystemPromptPage extends StatefulWidget {
   const SystemPromptPage({super.key});
@@ -503,20 +505,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   void _showSnackBar(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          text,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 1),
-        dismissDirection: DismissDirection.horizontal,
-      ),
+    NiceSnackBar.show(
+      context,
+      text,
+      duration: const Duration(seconds: 1),
+      backgroundColor: Theme.of(context).colorScheme.primary,
     );
   }
 
@@ -538,16 +531,19 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_errorMessage != null) ...[
-            _InfoCard(_errorMessage!, tone: _InfoTone.error),
+            SettingsInfoCard(_errorMessage!, tone: SettingsInfoTone.danger),
             const SizedBox(height: 16),
           ],
 
           // ── Identity System (master toggle) ─────────────────────
-          const _SectionHeader('IDENTITY SYSTEM'),
-          _GroupedCard(
+          const SettingsSectionHeader(
+            'IDENTITY SYSTEM',
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          ),
+          SettingsGroupedCard(
             children: [
-              _SettingsRow(
-                leading: _LeadingIcon(
+              SettingsRow(
+                leading: SettingsLeadingIcon(
                   icon: Icons.psychology,
                   tint: _identityEnabled
                       ? colorScheme.primary
@@ -579,8 +575,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── Soul ─────────────────────────────────────────
-                  const _SectionHeader('SOUL'),
-                  _InfoCard(l.soulHint),
+                  const SettingsSectionHeader(
+                    'SOUL',
+                    padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  ),
+                  SettingsInfoCard(l.soulHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _soulCtrl,
@@ -594,8 +593,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 24),
 
                   // ── User ─────────────────────────────────────────
-                  const _SectionHeader('USER'),
-                  _InfoCard(l.userHint),
+                  const SettingsSectionHeader(
+                    'USER',
+                    padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  ),
+                  SettingsInfoCard(l.userHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _userInfoCtrl,
@@ -609,8 +611,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 24),
 
                   // ── Memory ───────────────────────────────────────
-                  const _SectionHeader('MEMORY'),
-                  _InfoCard(l.memoryHint),
+                  const SettingsSectionHeader(
+                    'MEMORY',
+                    padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  ),
+                  SettingsInfoCard(l.memoryHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _memoryCtrl,
@@ -654,8 +659,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           const SizedBox(height: 24),
 
           // ── Raw System Prompt ───────────────────────────────────
-          const _SectionHeader('RAW SYSTEM PROMPT'),
-          _InfoCard(l.systemPromptHint),
+          const SettingsSectionHeader(
+            'RAW SYSTEM PROMPT',
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          ),
+          SettingsInfoCard(l.systemPromptHint),
           const SizedBox(height: 12),
           _MaterialTextField(
             controller: _systemPromptCtrl,
@@ -728,189 +736,6 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 }
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-
-    final List<Widget> rows = [];
-    for (int i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.only(left: 56),
-          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
-        ));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: rows),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  const _SettingsRow({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          leading,
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.m3.onSurfaceVariant,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            trailing!,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LeadingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color tint;
-  const _LeadingIcon({required this.icon, required this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Center(
-        child: Icon(icon, size: 22, color: tint),
-      ),
-    );
-  }
-}
-
-enum _InfoTone { neutral, warn, error }
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  final _InfoTone tone;
-  const _InfoCard(this.text, {this.tone = _InfoTone.neutral});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case _InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case _InfoTone.error:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case _InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: fg,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _MaterialTextField extends StatelessWidget {
   final TextEditingController controller;
