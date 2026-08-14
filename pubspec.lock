@@ -57,14 +57,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.7.0"
-  asn1lib:
-    dependency: transitive
-    description:
-      name: asn1lib
-      sha256: "9a8f69025044eb466b9b60ef3bc3ac99b4dc6c158ae9c56d25eeccf5bc56d024"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.6.5"
   async:
     dependency: transitive
     description:
@@ -81,14 +73,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.9"
-  basic_utils:
-    dependency: transitive
-    description:
-      name: basic_utils
-      sha256: "548047bef0b3b697be19fa62f46de54d99c9019a69fb7db92c69e19d87f633c7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.8.2"
   bidi:
     dependency: transitive
     description:
@@ -273,30 +257,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.8.1"
-  encrypter_plus:
-    dependency: transitive
-    description:
-      name: encrypter_plus
-      sha256: "6f6f3c73e26058af4fd138369a928ccae667e45d254cf6ded6301a2d99551a67"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.0"
-  enough_convert:
-    dependency: transitive
-    description:
-      name: enough_convert
-      sha256: c67d85ca21aaa0648f155907362430701db41f7ec8e6501a58ad9cd9d8569d01
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.6.0"
-  enough_mail:
-    dependency: "direct main"
-    description:
-      name: enough_mail
-      sha256: b8b3d4da3f3d727013c5ffc562046ed1d2553a7ffdcc7e7a0e7e1bb96ed445ae
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.7"
   equatable:
     dependency: transitive
     description:
@@ -305,14 +265,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  event_bus:
-    dependency: transitive
-    description:
-      name: event_bus
-      sha256: "1a55e97923769c286d295240048fc180e7b0768902c3c2e869fe059aafa15304"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.1"
   extension:
     dependency: transitive
     description:

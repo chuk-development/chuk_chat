@@ -124,8 +124,6 @@ const Map<String, String> stringsEs = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
-  'catEmailImapSmtp': 'Correo electrónico (IMAP/SMTP)',
-  'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
       'Buscar en la web, obtener páginas, generar imágenes y consultar datos',
@@ -142,9 +140,6 @@ const Map<String, String> stringsEs = {
       'Enviar mensajes, buscar canales y obtener datos de Slack',
   'catGoogleCalGmailDesc':
       'Gestionar tu agenda y correo electrónico con Google Calendar y Gmail',
-  'catEmailImapSmtpDesc': 'Enviar y recibir correo electrónico por IMAP y SMTP',
-  'catNextcloudDesc':
-      'Explorar archivos, calendario y contactos en Nextcloud',
   'catSandboxDesc':
       'Ejecutar código Python o shell en un sandbox aislado y leer/escribir archivos',
   'connect': 'Conectar',

@@ -257,8 +257,6 @@ class AppLocalizations {
   String get catGitHub => _get('catGitHub');
   String get catSlack => _get('catSlack');
   String get catGoogleCalGmail => _get('catGoogleCalGmail');
-  String get catEmailImapSmtp => _get('catEmailImapSmtp');
-  String get catNextcloud => _get('catNextcloud');
   String get catSandbox => _get('catSandbox');
   String get catSearchWebDesc => _get('catSearchWebDesc');
   String get catUtilitiesDesc => _get('catUtilitiesDesc');
@@ -269,8 +267,6 @@ class AppLocalizations {
   String get catGitHubDesc => _get('catGitHubDesc');
   String get catSlackDesc => _get('catSlackDesc');
   String get catGoogleCalGmailDesc => _get('catGoogleCalGmailDesc');
-  String get catEmailImapSmtpDesc => _get('catEmailImapSmtpDesc');
-  String get catNextcloudDesc => _get('catNextcloudDesc');
   String get catSandboxDesc => _get('catSandboxDesc');
   String get connect => _get('connect');
   String get disconnect => _get('disconnect');

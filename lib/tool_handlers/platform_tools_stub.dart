@@ -26,10 +26,6 @@ Future<String> executeGmail(Map<String, dynamic> args) async {
   return 'Gmail is not available on web.';
 }
 
-Future<String> executeEmail(Map<String, dynamic> args) async {
-  return 'Email (IMAP/SMTP) is not available on web.';
-}
-
 Future<String> executeDevice(Map<String, dynamic> args) async {
   return 'Device features are not available on web.';
 }
@@ -40,10 +36,6 @@ Future<String> executeCalendar(Map<String, dynamic> args) async {
 
 Future<String> executeReminder(Map<String, dynamic> args) async {
   return 'Reminders are not available on web.';
-}
-
-Future<String> executeDraftEmail(Map<String, dynamic> args) async {
-  return 'Email drafts are not available on web.';
 }
 
 /// Initialize platform services (no-op on web).
