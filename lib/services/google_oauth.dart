@@ -82,9 +82,10 @@ class GoogleOAuth {
       }
 
       final uri = Uri.parse(authUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
+      final launched =
+          await canLaunchUrl(uri) &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
         throw Exception('Could not launch Google authorization URL');
       }
     } catch (_) {
