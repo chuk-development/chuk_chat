@@ -218,7 +218,8 @@ class BashSandbox {
     }
 
     final parts = command.trim().split(RegExp(r'\s+'));
-    final normalizedSandbox = p.canonicalize(_sandboxFolder!);
+    final normalizedSandbox = _resolvedSandboxRoot();
+    if (normalizedSandbox == null) return false;
 
     for (final arg in parts.skip(1)) {
       // Validate every argument that could be a path — including flags that
@@ -238,6 +239,49 @@ class BashSandbox {
     return true;
   }
 
+  /// The sandbox root with symlinks resolved, or null when it is gone or
+  /// unreadable. Comparing against the resolved root keeps a sandbox that is
+  /// itself reached through a link (macOS `/var` → `/private/var`) working.
+  String? _resolvedSandboxRoot() {
+    final folder = _sandboxFolder;
+    if (folder == null) return null;
+    try {
+      return p.canonicalize(io.Directory(folder).resolveSymbolicLinksSync());
+    } on io.FileSystemException {
+      return null;
+    }
+  }
+
+  /// Resolve [canonical] through the deepest part of it that exists, then put
+  /// the not-yet-existing tail back on. Returns null when resolution fails.
+  String? _resolveThroughExistingParents(String canonical) {
+    var current = canonical;
+    final missing = <String>[];
+    while (true) {
+      final type = io.FileSystemEntity.typeSync(current, followLinks: false);
+      if (type != io.FileSystemEntityType.notFound) {
+        try {
+          final resolved = io.File(current).resolveSymbolicLinksSync();
+          return p.canonicalize(
+            missing.isEmpty
+                ? resolved
+                : p.joinAll([resolved, ...missing.reversed]),
+          );
+        } on io.FileSystemException {
+          // Broken symlink or permission error — refuse it.
+          return null;
+        }
+      }
+      final parent = p.dirname(current);
+      if (parent == current) {
+        // Nothing along the path exists; the lexical form is all we have.
+        return canonical;
+      }
+      missing.add(p.basename(current));
+      current = parent;
+    }
+  }
+
   /// Extract the file-path portion of an argument. Handles `--flag=path`,
   /// `-f=path`, and bare paths. Returns an empty list for arguments that
   /// clearly aren't paths.
@@ -252,6 +296,18 @@ class BashSandbox {
     }
     // Bare token that looks like a path.
     if (arg.contains('/') || arg.startsWith('.')) {
+      return [arg];
+    }
+    // A bare name is usually a sub-command, but it is a path when something
+    // by that name sits in the sandbox — including a symlink pointing out of
+    // it, which is exactly the case that must not slip through unchecked.
+    final folder = _sandboxFolder;
+    if (folder != null &&
+        io.FileSystemEntity.typeSync(
+              p.join(folder, arg),
+              followLinks: false,
+            ) !=
+            io.FileSystemEntityType.notFound) {
       return [arg];
     }
     return const [];
@@ -271,22 +327,13 @@ class BashSandbox {
       // 2. Collapse `..`, `.`, and duplicate separators.
       var canonical = p.canonicalize(absolute);
 
-      // 3. If the path exists as a symlink (or lives inside one), follow
-      //    it so we compare the real target, not the link's own location.
-      final entityType = io.FileSystemEntity.typeSync(
-        canonical,
-        followLinks: false,
-      );
-      if (entityType != io.FileSystemEntityType.notFound) {
-        try {
-          canonical = p.canonicalize(
-            io.File(canonical).resolveSymbolicLinksSync(),
-          );
-        } on io.FileSystemException {
-          // Broken symlink or permission error — refuse it.
-          return false;
-        }
-      }
+      // 3. Follow symlinks so we compare the real target, not the link's own
+      //    location. A path that does not exist yet still has to be resolved
+      //    through its existing parents: `touch link/new.txt` would otherwise
+      //    look contained while it writes through `link` to somewhere else.
+      final resolved = _resolveThroughExistingParents(canonical);
+      if (resolved == null) return false;
+      canonical = resolved;
 
       // 4. Segment-aware containment check. Exact match or a strict
       //    descendant only — no `startsWith` prefix confusion.
