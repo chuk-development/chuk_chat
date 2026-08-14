@@ -1,16 +1,14 @@
 // lib/pages/workspace_management_page.dart
 import 'dart:async';
 
-import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:chuk_chat/services/workspace_file_upload.dart';
 
 /// Mobile-friendly workspace management page
 /// Allows managing files, instructions, chats, and starting new chats with workspace context
@@ -115,76 +113,47 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
   }
 
   Future<void> _pickAndUploadFile() async {
-    try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: FileConstants.allowedExtensions,
-        allowMultiple: false,
-      );
-
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      if (file.path == null) return;
-
-      final filePath = file.path!;
-      final fileName = file.name;
-      final fileType = fileName.split('.').last;
-
-      setState(() {
-        _isUploadingFile = true;
-        _uploadFileName = fileName;
-        _uploadStatus = 'uploading';
-        _uploadProgress = 0.0;
-      });
-
-      final fileBytes = await File(filePath).readAsBytes();
-
-      await WorkspaceStorageService.uploadFile(
-        widget.workspaceId,
-        fileName,
-        fileBytes,
-        fileType,
-        filePath: filePath,
-        generateMarkdown: true,
-        onUploadProgress: (progress) {
-          if (mounted) setState(() => _uploadProgress = progress);
-        },
-        onConversionStart: () {
-          if (mounted) setState(() => _uploadStatus = 'converting');
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
-      }
-    } catch (e) {
-      if (mounted) {
-        String errorMessage;
-        if (e is StateError) {
-          errorMessage = e.message;
-        } else {
-          errorMessage = e.toString();
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red[700],
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
+    final outcome = await pickAndUploadWorkspaceFile(
+      workspaceId: widget.workspaceId,
+      onStart: (fileName) {
+        if (!mounted) return;
+        setState(() {
+          _isUploadingFile = true;
+          _uploadFileName = fileName;
+          _uploadStatus = 'uploading';
+          _uploadProgress = 0.0;
+        });
+      },
+      onProgress: (progress) {
+        if (mounted) setState(() => _uploadProgress = progress);
+      },
+      onConverting: () {
+        if (mounted) setState(() => _uploadStatus = 'converting');
+      },
+      onFinished: () {
+        if (!mounted) return;
         setState(() {
           _isUploadingFile = false;
           _uploadFileName = null;
           _uploadStatus = '';
           _uploadProgress = 0.0;
         });
-      }
+      },
+    );
+
+    if (!mounted) return;
+    if (outcome.fileName != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Uploaded: ${outcome.fileName}')));
+    } else if (outcome.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(outcome.error!),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
