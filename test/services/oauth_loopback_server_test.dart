@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:chuk_chat/services/oauth_loopback_server.dart';
 
 const _theme = OAuthResultPageTheme(

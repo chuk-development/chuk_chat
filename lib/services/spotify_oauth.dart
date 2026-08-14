@@ -66,31 +66,36 @@ class SpotifyOAuth {
 
     await _callback.start(expectedState: state);
 
-    final response = await http.get(
-      Uri.parse('$_backendUrl/v1/auth/spotify/auth-url').replace(
-        queryParameters: {'redirect_uri': redirectUri, 'state': state},
-      ),
-      headers: _apiHeaders,
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/v1/auth/spotify/auth-url').replace(
+          queryParameters: {'redirect_uri': redirectUri, 'state': state},
+        ),
+        headers: _apiHeaders,
+      );
 
-    if (response.statusCode != 200) {
-      await _callback.stop();
-      throw Exception('Failed to get Spotify auth URL: ${response.statusCode}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to get Spotify auth URL: ${response.statusCode}',
+        );
+      }
 
-    final data = jsonDecode(response.body);
-    final authUrl = data['auth_url'] as String?;
-    if (authUrl == null) {
-      await _callback.stop();
-      throw Exception('API server did not return auth_url');
-    }
+      final data = jsonDecode(response.body);
+      final authUrl = data['auth_url'] as String?;
+      if (authUrl == null) {
+        throw Exception('API server did not return auth_url');
+      }
 
-    final uri = Uri.parse(authUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+      final uri = Uri.parse(authUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch Spotify authorization URL');
+      }
+    } catch (_) {
+      // A failure here leaves the port bound with nobody to answer it.
       await _callback.stop();
-      throw Exception('Could not launch Spotify authorization URL');
+      rethrow;
     }
   }
 

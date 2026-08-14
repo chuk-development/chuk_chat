@@ -47,14 +47,21 @@ Future<WorkspaceUploadOutcome> pickAndUploadWorkspaceFile({
   }
 
   final file = result.files.first;
+  // On web the picker hands back bytes and no path; on native it is the
+  // other way round, and the path is what the conversion API needs.
   final filePath = file.path;
-  if (filePath == null) return const WorkspaceUploadOutcome.cancelled();
+  final pickedBytes = file.bytes;
+  if (filePath == null && pickedBytes == null) {
+    return const WorkspaceUploadOutcome.cancelled();
+  }
 
   final fileName = file.name;
   onStart(fileName);
 
   try {
-    final fileBytes = await File(filePath).readAsBytes();
+    final fileBytes = filePath != null
+        ? await File(filePath).readAsBytes()
+        : pickedBytes!;
 
     await WorkspaceStorageService.uploadFile(
       workspaceId,
