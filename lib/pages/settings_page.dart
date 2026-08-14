@@ -151,6 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     .keyFor(TourSlots.settingsPricingTile),
                 child: SettingsRow(
                   icon: Icons.credit_card,
+                  iconColor: cs.primary,
                   title: l.pricingPlans,
                   subtitle: l.pricingPlansSubtitle,
                   onTap: () {
@@ -179,6 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     .keyFor(TourSlots.settingsModelSelectionTile),
                 child: SettingsRow(
                   icon: Icons.smart_toy_outlined,
+                  iconColor: cs.primary,
                   title: l.modelSelection,
                   subtitle: l.modelSelectionSubtitle,
                   onTap: () {
@@ -200,6 +202,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     .keyFor(TourSlots.settingsAiIdentityTile),
                 child: SettingsRow(
                   icon: Icons.fingerprint,
+                  iconColor: cs.primary,
                   title: l.aiIdentityMemory,
                   subtitle: l.aiIdentityMemorySubtitle,
                   onTap: () {
@@ -218,6 +221,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               SettingsRow(
                 icon: Icons.build_circle_outlined,
+                iconColor: cs.primary,
                 title: l.toolCalling,
                 subtitle: l.toolCallingSubtitle,
                 trailing: const _Badge('On', tone: BadgeTone.success),
@@ -235,6 +239,7 @@ class _SettingsPageState extends State<SettingsPage> {
               if (kFeatureSkills)
                 SettingsRow(
                   icon: Icons.auto_awesome_outlined,
+                  iconColor: cs.primary,
                   title: l.skills,
                   subtitle: l.skillsSubtitle,
                   onTap: () {
@@ -253,6 +258,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // sandbox, so the entry point belongs there.
               SettingsRow(
                 icon: Icons.developer_board,
+                iconColor: cs.primary,
                 title: 'Sandboxes',
                 subtitle:
                     'See and stop running code-execution containers (max 2)',
@@ -277,6 +283,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               SettingsRow(
                 icon: Icons.palette_outlined,
+                iconColor: cs.primary,
                 title: l.themeSettings,
                 subtitle: l.themeSettingsSubtitle,
                 onTap: () {
@@ -291,6 +298,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               SettingsRow(
                 icon: Icons.tune,
+                iconColor: cs.primary,
                 title: l.customization,
                 subtitle: l.customizationSubtitle,
                 onTap: () {
@@ -315,6 +323,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 SettingsRow(
                   icon: Icons.file_download_outlined,
+                  iconColor: cs.primary,
                   title: l.exportChats,
                   subtitle: l.exportChatsSubtitle,
                   onTap: () => _exportChats(context),
@@ -332,6 +341,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               SettingsRow(
                 icon: Icons.school_outlined,
+                iconColor: cs.primary,
                 title: l.onboardingReplayTile,
                 subtitle: l.onboardingReplayTileSubtitle,
                 onTap: () => _replayOnboarding(context),
@@ -339,6 +349,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               SettingsRow(
                 icon: Icons.info_outline,
+                iconColor: cs.primary,
                 title: l.about,
                 subtitle: l.aboutSubtitle,
                 onTap: () {
