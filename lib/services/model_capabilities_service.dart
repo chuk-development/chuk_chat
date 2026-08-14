@@ -43,18 +43,6 @@ class ModelCapabilitiesService {
     }
   }
 
-  /// Returns `true` if the provided model id supports image input.
-  /// Uses cached API data exclusively - no hardcoded fallbacks.
-  static Future<bool> supportsImageInput(String modelId) async {
-    if (modelId.isEmpty) return false;
-
-    // Ensure cache is loaded
-    if (!_isInitialized) {
-      await initialize();
-    }
-
-    return _visionSupportCache[modelId] ?? false;
-  }
 
   /// Synchronous version for UI - uses in-memory cache.
   /// Returns false if model not found or cache not yet initialized.

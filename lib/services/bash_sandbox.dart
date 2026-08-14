@@ -98,7 +98,7 @@ class BashSandbox {
   BashSandbox({ApprovalCallback? onApprovalRequired})
     : _approvalCallback = onApprovalRequired;
 
-  String? get sandboxFolder => _sandboxFolder;
+
   bool get isConfigured => _sandboxFolder != null;
 
   Future<void> loadSavedFolder() async {
@@ -112,28 +112,8 @@ class BashSandbox {
     }
   }
 
-  Future<void> setSandboxFolder(String path) async {
-    path = path.replaceAll(RegExp(r'/$'), '');
-    final dir = io.Directory(path);
-    if (!await dir.exists()) {
-      throw Exception('Folder does not exist: $path');
-    }
-    _sandboxFolder = path;
-    await _saveSandboxFolder();
-  }
 
-  Future<void> clearSandboxFolder() async {
-    _sandboxFolder = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('bash_sandbox_folder');
-  }
 
-  Future<void> _saveSandboxFolder() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_sandboxFolder != null) {
-      await prefs.setString('bash_sandbox_folder', _sandboxFolder!);
-    }
-  }
 
   bool isSafeCommand(String command) {
     final trimmedCommand = command.trim();

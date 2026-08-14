@@ -169,25 +169,9 @@ class ApprovalConfig {
     }
   }
 
-  /// Save a category setting
-  Future<void> setCategoryApproval(
-    ApprovalCategory category,
-    bool required,
-  ) async {
-    _categoryApproval[category] = required;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('approval_${category.name}', required);
-  }
-
   /// Check if approval is required for a category
   bool isApprovalRequired(ApprovalCategory category) {
     return _categoryApproval[category] ?? true;
-  }
-
-  /// Check if approval is required for a specific action
-  bool isActionApprovalRequired(ApprovalCategory category, String action) {
-    if (!isApprovalRequired(category)) return false;
-    return allActions.any((a) => a.category == category && a.action == action);
   }
 
   /// Get actions for a specific category
@@ -195,54 +179,5 @@ class ApprovalConfig {
     return allActions.where((a) => a.category == category).toList();
   }
 
-  /// Get risk description for disabling approval in a category
-  static String getRiskWarning(ApprovalCategory category) {
-    final actions = getActionsForCategory(category);
-    if (actions.isEmpty) return 'No known risks.';
 
-    final highRisk = actions.where(
-      (a) => a.riskLevel == 'high' || a.riskLevel == 'critical',
-    );
-    if (highRisk.isNotEmpty) {
-      return 'HIGH RISK: '
-          '${highRisk.map((a) => a.riskDescription).join(' ')}';
-    }
-
-    final mediumRisk = actions.where((a) => a.riskLevel == 'medium');
-    if (mediumRisk.isNotEmpty) {
-      return 'MEDIUM RISK: '
-          '${mediumRisk.map((a) => a.riskDescription).join(' ')}';
-    }
-
-    return 'Low risk: ${actions.first.riskDescription}';
-  }
-
-  /// Get a human-readable category name
-  static String getCategoryDisplayName(ApprovalCategory category) {
-    switch (category) {
-      case ApprovalCategory.bash:
-        return 'Bash Commands';
-      case ApprovalCategory.email:
-        return 'Email (IMAP/SMTP)';
-      case ApprovalCategory.gmail:
-        return 'Gmail';
-      case ApprovalCategory.slack:
-        return 'Slack Messages';
-      case ApprovalCategory.nextcloud:
-        return 'Nextcloud Files';
-      case ApprovalCategory.github:
-        return 'GitHub Actions';
-      case ApprovalCategory.calendar:
-        return 'Calendar Events';
-    }
-  }
-}
-
-/// Extension to easily get approval status from anywhere
-extension ApprovalCategoryExtension on ApprovalCategory {
-  bool get requiresApproval => ApprovalConfig().isApprovalRequired(this);
-  String get displayName => ApprovalConfig.getCategoryDisplayName(this);
-  String get riskWarning => ApprovalConfig.getRiskWarning(this);
-  List<ApprovalAction> get actions =>
-      ApprovalConfig.getActionsForCategory(this);
 }

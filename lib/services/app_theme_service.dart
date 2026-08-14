@@ -14,8 +14,6 @@ import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 /// Callback type for theme changes
-typedef ThemeChangedCallback = void Function();
-
 /// Service for managing application theme state, persistence, and Supabase sync
 class AppThemeService extends ChangeNotifier {
   AppThemeService._();

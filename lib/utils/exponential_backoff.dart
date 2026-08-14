@@ -165,24 +165,6 @@ class ExponentialBackoff {
     return Duration(milliseconds: finalDelay);
   }
 
-  /// Execute an operation with simple retry (no backoff).
-  static Future<BackoffResult<T>> executeSimple<T>({
-    required Future<T> Function() operation,
-    int maxRetries = 3,
-    Duration retryDelay = const Duration(seconds: 1),
-  }) async {
-    return execute(
-      operation: operation,
-      config: BackoffConfig(
-        maxRetries: maxRetries,
-        initialDelay: retryDelay,
-        maxDelay: retryDelay,
-        multiplier: 1.0,
-        jitter: 0.0,
-      ),
-    );
-  }
-
   /// Determine if an error should trigger a retry based on common scenarios.
   static bool shouldRetryError(dynamic error) {
     final errorString = error.toString().toLowerCase();
@@ -218,25 +200,5 @@ class ExponentialBackoff {
 
     // Default: retry for unknown errors
     return true;
-  }
-}
-
-/// Convenience extension for adding retry logic to Futures.
-extension RetryableFunction<T> on Future<T> Function() {
-  /// Execute this function with exponential backoff.
-  Future<BackoffResult<T>> withBackoff([BackoffConfig? config]) {
-    return ExponentialBackoff.execute(
-      operation: this,
-      config: config ?? const BackoffConfig(),
-      shouldRetry: ExponentialBackoff.shouldRetryError,
-    );
-  }
-
-  /// Execute this function with simple retry.
-  Future<BackoffResult<T>> withRetry({int maxRetries = 3}) {
-    return ExponentialBackoff.executeSimple(
-      operation: this,
-      maxRetries: maxRetries,
-    );
   }
 }

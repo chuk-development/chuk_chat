@@ -5,11 +5,6 @@ import 'package:chuk_chat/services/nextcloud_service.dart';
 /// Web-safe: NextcloudService only uses package:http, no dart:io.
 final NextcloudService _nextcloudService = NextcloudService();
 
-/// Initialize Nextcloud — load saved credentials.
-Future<void> initNextcloudService() async {
-  await _nextcloudService.loadSavedCredentials();
-}
-
 /// Check if Nextcloud is configured.
 bool isNextcloudConnected() => _nextcloudService.isConfigured;
 

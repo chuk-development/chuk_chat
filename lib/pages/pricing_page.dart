@@ -101,22 +101,6 @@ Future<void> openBillingPortal() async {
   await _launchExternalUrl(portalUrl);
 }
 
-Future<void> syncSubscription() async {
-  final token = await _getAccessToken();
-
-  final response = await http.post(
-    Uri.parse('$_apiBaseUrl/v1/stripe/sync-subscription'),
-    headers: {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    },
-  );
-
-  if (response.statusCode != 200) {
-    throw Exception('Failed to sync subscription: ${response.body}');
-  }
-}
-
 Future<Map<String, dynamic>> getUserStatus() async {
   final token = await _getAccessToken();
 

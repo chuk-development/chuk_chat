@@ -239,15 +239,7 @@ class SessionManagerService extends ChangeNotifier {
     await _performLogoutCleanup();
   }
 
-  /// Add callback for password mismatch events
-  void addOnPasswordMismatchCallback(SessionEventCallback callback) {
-    _onPasswordMismatchCallbacks.add(callback);
-  }
 
-  /// Remove password mismatch callback
-  void removeOnPasswordMismatchCallback(SessionEventCallback callback) {
-    _onPasswordMismatchCallbacks.remove(callback);
-  }
 
   @override
   void dispose() {

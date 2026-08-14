@@ -19,7 +19,6 @@ const Map<String, String> stringsAr = {
   'pricingPlans': 'خطط الأسعار',
   'pricingPlansSubtitle': 'عرض خطط الاشتراك والأسعار',
   'accountSettings': 'إعدادات الحساب',
-  'accountSettingsSubtitle': 'إدارة ملفك الشخصي وحسابك',
   'exportChats': 'تصدير المحادثات',
   'exportChatsSubtitle': 'تحميل محادثاتك بصيغة JSON',
   'about': 'حول التطبيق',
@@ -36,8 +35,6 @@ const Map<String, String> stringsAr = {
   // ── Customization page ─────────────────────────────────────
   'language': 'اللغة',
   'languageSubtitle': 'اختر لغتك المفضلة',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'تحويل الصوت إلى نص',
   'autoSendVoice': 'إرسال الرسائل الصوتية تلقائياً',
   'autoSendVoiceSubtitle':
@@ -110,14 +107,12 @@ const Map<String, String> stringsAr = {
       'عرض شرائح الأدوات قيد التشغيل/المكتملة في رسائل المساعد',
   'toolCallingTip':
       'نصيحة: اترك بديل Markdown مفعّلاً لأفضل توافق. عطّله فقط إذا كنت تريد استدعاءات أدوات XML حصرية.',
-  'visualOutputNonTool': 'المخرجات المرئية (بدون أدوات)',
   'enableMapBlocks': 'تفعيل كتل الخرائط (<map>)',
   'enableMapBlocksSubtitle':
       'السماح لتعليمات النموذج بتضمين إرشادات عرض الخرائط',
   'enableChartBlocks': 'تفعيل كتل الرسوم البيانية (<chart>)',
   'enableChartBlocksSubtitle':
       'السماح لتعليمات النموذج بتضمين إرشادات عرض الرسوم البيانية',
-  'connectors': 'الموصلات',
   'loadingToolSettings': 'جارٍ تحميل إعدادات الأدوات...',
   'noToolsRegistered': 'لم تُسجَّل أي أدوات بعد.',
   'catSearchWeb': 'البحث والويب',
@@ -157,10 +152,6 @@ const Map<String, String> stringsAr = {
   'disconnectCategory': 'قطع اتصال {label}؟',
   'removeCredentialsWarning': 'سيؤدي هذا إلى إزالة بيانات الاعتماد المحفوظة.',
   'cancel': 'إلغاء',
-  'categoryConnected': 'تم الاتصال بـ {label}',
-  'failedToConnect': 'فشل الاتصال بـ {label}',
-  'unableToConnect':
-      'تعذر الاتصال بـ {label}. يرجى المحاولة مرة أخرى.',
   'toolWebSearch': 'بحث الويب',
   'toolWebCrawl': 'زحف الويب',
   'toolImageGen': 'توليد الصور',
@@ -189,17 +180,12 @@ const Map<String, String> stringsAr = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'الملف الشخصي',
-  'profileSubtitle':
-      'تحديث كيفية ظهور اسمك وبريدك الإلكتروني في Chuk Chat.',
   'displayName': 'الاسم المعروض',
   'displayNameHint': 'كيف يراك الآخرون',
   'emailAddress': 'عنوان البريد الإلكتروني',
   'emailAddressHint': 'أين نرسل الإشعارات',
   'security': 'الأمان',
-  'securitySubtitle': 'تأكد أن كل شيء محمي.',
   'changePassword': 'تغيير كلمة المرور',
-  'changePasswordSubtitle':
-      'تحديث كلمة مرور Supabase وإعادة تشفير محادثاتك المحفوظة.',
   'currentPassword': 'كلمة المرور الحالية',
   'newPassword': 'كلمة المرور الجديدة',
   'minCharsPassword': '8 أحرف كحد أدنى.',
@@ -209,9 +195,6 @@ const Map<String, String> stringsAr = {
   'lockedChatsSingular': '{count} محادثة مشفرة بكلمة مرور سابقة.',
   'lockedChatsPlural': '{count} محادثات مشفرة بكلمة مرور سابقة.',
   'recoverChats': 'استعادة المحادثات',
-  'dangerZone': 'المنطقة الخطرة',
-  'dangerZoneSubtitle':
-      'إجراءات لا رجعة فيها تؤثر على حسابك بالكامل.',
   'deleteAccountWarning':
       'حذف حسابك سيلغي جميع الاشتراكات ويزيل بياناتك ولا يمكن التراجع عنه.',
   'deleteAccount': 'حذف الحساب',
@@ -277,7 +260,6 @@ const Map<String, String> stringsAr = {
   'openSourceLicenses': 'تراخيص المصادر المفتوحة',
   'openSourceLicensesSubtitle':
       'مراجعة التراخيص لكل مكتبة مضمّنة في هذا الإصدار.',
-  'legalDocuments': 'المستندات القانونية',
   'termsOfService': 'شروط الخدمة',
   'privacyPolicy': 'سياسة الخصوصية',
   'versionText': 'الإصدار {version}',
@@ -307,9 +289,6 @@ const Map<String, String> stringsAr = {
   'manageBilling': 'إدارة الفواتير',
   'manageBillingSubtitle':
       'استخدم بوابة الفواتير لإلغاء اشتراكك أو تحديث طرق الدفع.',
-  'subscribeToGetCredits': 'اشترك للحصول على رصيد الذكاء الاصطناعي',
-  'subscriptionDesktopOnly':
-      'إدارة الاشتراك متاحة فقط على سطح المكتب.',
   'active': 'نشط',
   'getCreditsMonthly': 'احصل على \u20ac16 رصيد ذكاء اصطناعي شهرياً',
   'accessAllModels': 'الوصول إلى جميع نماذج الذكاء الاصطناعي',
@@ -334,9 +313,6 @@ const Map<String, String> stringsAr = {
   'createAccountWithEmail': 'أنشئ حساباً بالبريد الإلكتروني وكلمة المرور',
   'supabaseNotConfigured':
       'بيانات اعتماد Supabase غير مضبوطة. حدّثها قبل تشغيل إصدار الإنتاج.',
-  'confirmEmailToContinue': 'أكّد بريدك الإلكتروني للمتابعة',
-  'confirmEmailBody':
-      'أرسلنا رابط تأكيد إلى عنوان بريدك الإلكتروني. يرجى فتحه والنقر على الرابط قبل تسجيل الدخول.',
   'howOthersSeeYou': 'كيف سيراك الآخرون',
   'email': 'البريد الإلكتروني',
   'emailPlaceholder': 'you@example.com',
@@ -410,7 +386,6 @@ const Map<String, String> stringsAr = {
       'يعمل في إصدارات الإنتاج. يسجل بيانات التطبيق/وقت التشغيل لاستكشاف مشاكل التأخير وشريط النظام.',
   'diagnosticsEnabled': 'تم تفعيل سجل التشخيص',
   'diagnosticsDisabled': 'تم تعطيل سجل التشخيص',
-  'logFile': 'ملف السجل',
   'notInitializedYet': 'لم يتم التهيئة بعد',
   'refresh': 'تحديث',
   'copyRecent': 'نسخ الأخيرة',
@@ -427,7 +402,6 @@ const Map<String, String> stringsAr = {
   'failedToShareLog': 'فشل مشاركة سجل التشخيص: {error}',
   'diagnosticsLogCleared': 'تم مسح سجل التشخيص',
   'failedToClearLog': 'فشل مسح سجل التشخيص: {error}',
-  'recentLogLines': 'أسطر السجل الأخيرة',
   'devOptionsDisabledMsg': 'تم تعطيل خيارات المطور.',
   'noLogsYet':
       'لا توجد سجلات بعد. فعّل سجل التشخيص واستخدم التطبيق لجمع البيانات.',
@@ -457,45 +431,20 @@ const Map<String, String> stringsAr = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.',
-  'offlineMessage':
-      'يبدو أنك غير متصل بالإنترنت. يرجى التحقق من اتصالك.',
-  'cannotReachApi': 'تعذر الوصول إلى خادم API.',
-  'maintenanceMessage':
-      'نقوم حالياً بالصيانة وسنعود قريباً.',
   'free': 'مجاني',
-  'perMillion': '/مليون',
-  'perRequest': '/طلب',
   'best': 'الأفضل',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'فتح في تطبيق البريد',
-  'costLabel': 'التكلفة: {cost}',
-  'generatedLabel': 'تم التوليد: {label}',
-  'unableToCopyImage': 'تعذر نسخ الصورة',
   'unableToSaveImage': 'تعذر حفظ الصورة',
   'image': 'صورة',
-  'openLink': 'فتح الرابط',
-  'openLinkConfirm':
-      'هل تريد فعلاً مغادرة التطبيق وفتح {url}؟',
   'open': 'فتح',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'تم نسخ المحتوى إلى الحافظة',
-  'artifactCopied': 'تم نسخ العنصر إلى الحافظة',
-  'fileSaved': 'تم حفظ الملف',
-  'failedToExportArtifact': 'فشل تصدير العنصر: {error}',
-  'failedToSave': 'فشل الحفظ: {error}',
-  'markdownSaved': 'تم حفظ Markdown',
   'original': 'الأصلي',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'عرض ملخص Markdown',
-  'addSummary': 'إضافة ملخص',
-  'deletedFile': 'ملف محذوف',
   'deleteFile': 'حذف الملف',
-  'deleteFileConfirm': 'حذف "{name}"؟',
   'deleteFailed': 'فشل الحذف: {error}',
-  'uploadedFile': 'تم الرفع: {name}',
-  'freeMessagePlaceholder': 'مجاني: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'اسألني أي شيء!',
@@ -505,8 +454,6 @@ const Map<String, String> stringsAr = {
   'addMessageOrDocs': 'أضف رسالة أو أرسل مستندات',
   'micAccessFailed': 'فشل الوصول إلى الميكروفون',
   'transcriptionFailed': 'فشل تحويل الصوت إلى نص',
-  'replyTargetSelected': 'تم تحديد هدف الرد',
-  'clearReply': 'مسح الرد',
   'nothingToResend': 'لا يوجد شيء لإعادة الإرسال',
   'freeMessagesUsed': 'تم استخدام الرسائل المجانية',
   'ok': 'حسناً',
@@ -520,16 +467,9 @@ const Map<String, String> stringsAr = {
   'modelError': 'خطأ: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'نسخ الصورة',
-  'downloadImage': 'تحميل الصورة',
-  'imageDetails': 'تفاصيل الصورة',
-  'imageCopied': 'تم نسخ الصورة',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'الرسائل المجانية',
-  'freeUsed': 'المستخدم: {count}',
   'freeTotal': 'الإجمالي: {count}',
-  'subscribeToContinue': 'اشترك لمتابعة المحادثة',
   'freeRemaining': 'مجاني: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -579,5 +519,4 @@ const Map<String, String> stringsAr = {
   'close': 'إغلاق',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'ربما لاحقاً',
 };

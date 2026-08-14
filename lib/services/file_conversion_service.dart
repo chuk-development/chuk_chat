@@ -418,34 +418,6 @@ class FileConversionService {
     }
   }
 
-  /// Check if a file extension is supported for conversion
-  /// Uses FileConstants as the single source of truth
-  static bool isExtensionSupported(String extension) {
-    return FileConstants.allowedExtensions.contains(extension.toLowerCase());
-  }
 
-  /// Get the category of a file extension (for display purposes)
-  /// Uses FileConstants for consistent file type detection
-  static String getFileCategory(String extension) {
-    final ext = extension.toLowerCase();
 
-    if (FileConstants.convertApiExtensions.contains(ext)) {
-      // Binary files that need API conversion
-      if (FileConstants.audioExtensions.contains(ext)) {
-        return 'audio';
-      } else if ({'epub'}.contains(ext)) {
-        return 'ebook';
-      } else if ({'msg', 'eml'}.contains(ext)) {
-        return 'email';
-      } else {
-        return 'document';
-      }
-    } else if (FileConstants.isImage(ext)) {
-      return 'image';
-    } else if ({'zip'}.contains(ext)) {
-      return 'archive';
-    } else {
-      return 'text';
-    }
-  }
 }

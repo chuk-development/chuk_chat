@@ -286,4 +286,3 @@ const double kFixedLeftPadding = 8.0;
 const double kTopInitialSpacing = 16.0;
 const double kMenuButtonHeight = 48.0;
 const double kButtonVisualHeight = 40.0;
-const double kSpacingBetweenTopButtons = 8.0;

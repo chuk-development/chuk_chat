@@ -43,7 +43,6 @@ const Map<String, String> stringsEn = {
   'pricingPlans': 'Pricing Plans',
   'pricingPlansSubtitle': 'View our subscription plans and pricing',
   'accountSettings': 'Account Settings',
-  'accountSettingsSubtitle': 'Manage your profile and account',
   'exportChats': 'Export Chats',
   'exportChatsSubtitle': 'Download your conversations as JSON',
   'about': 'About',
@@ -60,8 +59,6 @@ const Map<String, String> stringsEn = {
   // ── Customization page ─────────────────────────────────────
   'language': 'Language',
   'languageSubtitle': 'Choose your preferred language',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'Voice Transcription',
   'autoSendVoice': 'Auto-send voice messages',
   'autoSendVoiceSubtitle':
@@ -205,14 +202,12 @@ const Map<String, String> stringsEn = {
       'Display running/completed tool chips in assistant messages',
   'toolCallingTip':
       'Tip: Leave markdown fallback enabled for best compatibility. Disable it only if you want strict XML-only tool calls.',
-  'visualOutputNonTool': 'Visual Output (Non-Tool)',
   'enableMapBlocks': 'Enable map blocks (<map>)',
   'enableMapBlocksSubtitle':
       'Allow the model prompt to include map rendering instructions',
   'enableChartBlocks': 'Enable chart blocks (<chart>)',
   'enableChartBlocksSubtitle':
       'Allow the model prompt to include chart rendering instructions',
-  'connectors': 'Connectors',
   'loadingToolSettings': 'Loading tool settings...',
   'noToolsRegistered': 'No tools are registered yet.',
   'catSearchWeb': 'Search and Web',
@@ -247,9 +242,6 @@ const Map<String, String> stringsEn = {
   'disconnectCategory': 'Disconnect {label}?',
   'removeCredentialsWarning': 'This will remove your saved credentials.',
   'cancel': 'Cancel',
-  'categoryConnected': '{label} connected',
-  'failedToConnect': 'Failed to connect {label}',
-  'unableToConnect': 'Unable to connect {label}. Please try again.',
   'toolWebSearch': 'Web Search',
   'toolWebCrawl': 'Web Crawl',
   'toolImageGen': 'Image Generation',
@@ -278,16 +270,12 @@ const Map<String, String> stringsEn = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profile',
-  'profileSubtitle': 'Update how your name and email appear inside Chuk Chat.',
   'displayName': 'Display name',
   'displayNameHint': 'How other people see you',
   'emailAddress': 'Email address',
   'emailAddressHint': 'Where we send notifications',
   'security': 'Security',
-  'securitySubtitle': 'Reassure yourself everything is protected.',
   'changePassword': 'Change password',
-  'changePasswordSubtitle':
-      'Update your Supabase password and re-encrypt your saved chats.',
   'currentPassword': 'Current password',
   'newPassword': 'New password',
   'minCharsPassword': 'Minimum 8 characters.',
@@ -300,8 +288,6 @@ const Map<String, String> stringsEn = {
       'You have chats encrypted with a previous password. Enter your old password to unlock them.',
   'chatsFromPreviousPassword': 'Chats from a previous password',
   'recoverChats': 'Recover chats',
-  'dangerZone': 'Danger Zone',
-  'dangerZoneSubtitle': 'Irreversible actions that affect your entire account.',
   'deleteAccountWarning':
       'Deleting your account will cancel all subscriptions, remove your data, and cannot be undone.',
   'deleteAccount': 'Delete Account',
@@ -367,7 +353,6 @@ const Map<String, String> stringsEn = {
   'openSourceLicenses': 'Open Source Licenses',
   'openSourceLicensesSubtitle':
       'Review the licenses for every dependency included in this build.',
-  'legalDocuments': 'Legal Documents',
   'termsOfService': 'Terms of Service',
   'privacyPolicy': 'Privacy Policy',
   'versionText': 'Version {version}',
@@ -396,9 +381,6 @@ const Map<String, String> stringsEn = {
   'manageBilling': 'Manage Billing',
   'manageBillingSubtitle':
       'Use the billing portal to cancel your subscription or update payment methods.',
-  'subscribeToGetCredits': 'Subscribe to Get AI Credits',
-  'subscriptionDesktopOnly':
-      'Subscription management is only available on desktop.',
   'paymentsDisabledInBuild': 'Direct payments are disabled in this build.',
   'active': 'ACTIVE',
   'getCreditsMonthly': 'Get \u20ac16 in AI credits monthly',
@@ -424,9 +406,6 @@ const Map<String, String> stringsEn = {
   'createAccountWithEmail': 'Create an account with email & password',
   'supabaseNotConfigured':
       'Supabase credentials are not configured. Update them before running a production build.',
-  'confirmEmailToContinue': 'Confirm your email to continue',
-  'confirmEmailBody':
-      'We sent a confirmation link to your email address. Please open it and click the link before signing in.',
   'howOthersSeeYou': 'How other people will see you',
   'email': 'Email',
   'emailPlaceholder': 'you@example.com',
@@ -518,7 +497,6 @@ const Map<String, String> stringsEn = {
       'Works in release builds. Logs app/runtime metadata for troubleshooting lag and tray issues.',
   'diagnosticsEnabled': 'Diagnostics logging enabled',
   'diagnosticsDisabled': 'Diagnostics logging disabled',
-  'logFile': 'Log file',
   'notInitializedYet': 'Not initialized yet',
   'refresh': 'Refresh',
   'copyRecent': 'Copy Recent',
@@ -534,7 +512,6 @@ const Map<String, String> stringsEn = {
   'failedToShareLog': 'Failed to share diagnostics log: {error}',
   'diagnosticsLogCleared': 'Diagnostics log cleared',
   'failedToClearLog': 'Failed to clear diagnostics log: {error}',
-  'recentLogLines': 'Recent log lines',
   'devOptionsDisabledMsg': 'Developer options disabled.',
   'noLogsYet':
       'No logs yet. Enable diagnostics logging and use the app to collect data.',
@@ -564,46 +541,22 @@ const Map<String, String> stringsEn = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Session expired. Please sign in again.',
-  'offlineMessage':
-      'You appear to be offline. Please check your internet connection.',
-  'cannotReachApi': 'Cannot reach the API server.',
-  'maintenanceMessage':
-      'We are currently doing maintenance and will be right back.',
   'free': 'Free',
-  'perMillion': '/M',
-  'perRequest': '/req',
   'best': 'Best',
   'autoCheapest': 'Auto (cheapest)',
   'autoCheapestCurrently': 'Auto (cheapest) — currently: {provider} ({price})',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Open in Mail App',
-  'costLabel': 'Cost: {cost}',
-  'generatedLabel': 'Generated: {label}',
-  'unableToCopyImage': 'Unable to copy image',
   'unableToSaveImage': 'Unable to save image',
   'image': 'Image',
-  'openLink': 'Open Link',
-  'openLinkConfirm': 'Do you really want to leave the app and open {url}?',
   'open': 'Open',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'Content copied to clipboard',
-  'artifactCopied': 'Artifact copied to clipboard',
-  'fileSaved': 'File saved',
-  'failedToExportArtifact': 'Failed to export artifact: {error}',
-  'failedToSave': 'Failed to save: {error}',
-  'markdownSaved': 'Markdown saved',
   'original': 'Original',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'View Markdown Summary',
-  'addSummary': 'Add summary',
-  'deletedFile': 'Deleted File',
   'deleteFile': 'Delete File',
-  'deleteFileConfirm': 'Delete "{name}"?',
   'deleteFailed': 'Delete failed: {error}',
-  'uploadedFile': 'Uploaded: {name}',
-  'freeMessagePlaceholder': 'Free: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Ask me anything !',
@@ -612,8 +565,6 @@ const Map<String, String> stringsEn = {
   'addMessageOrDocs': 'Add a message or send documents',
   'micAccessFailed': 'Mic access failed',
   'transcriptionFailed': 'Transcription failed',
-  'replyTargetSelected': 'Reply target selected',
-  'clearReply': 'Clear reply',
   'nothingToResend': 'Nothing to resend',
   'freeMessagesUsed': 'Free Messages Used',
   'ok': 'OK',
@@ -627,17 +578,10 @@ const Map<String, String> stringsEn = {
   'modelError': 'Error: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'Copy image',
-  'downloadImage': 'Download image',
-  'imageDetails': 'Image details',
   'generatingImage': 'Generating…',
-  'imageCopied': 'Image copied',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'Free Messages',
-  'freeUsed': 'Used: {count}',
   'freeTotal': 'Total: {count}',
-  'subscribeToContinue': 'Subscribe to continue chatting',
   'freeRemaining': 'Free: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -692,7 +636,6 @@ const Map<String, String> stringsEn = {
   'close': 'Close',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'Maybe Later',
 
   // ── Workspace (project) detail ─────────────────────────────
   'projectPrivate': 'Private',
@@ -703,7 +646,6 @@ const Map<String, String> stringsEn = {
   'projectInstructionsSubtitle':
       'Sent to the AI at the start of every chat in this project.',
   'projectLatestChats': 'Recent chats',
-  'projectNoChats': 'No chats yet',
   'projectNoChatsHint': 'Start a new chat with this project selected.',
   'projectNewChat': 'New chat',
   'projectFileCountSingular': '{count} file',
@@ -715,8 +657,6 @@ const Map<String, String> stringsEn = {
   'projectPickImage': 'Pick image',
   'projectCreateDocument': 'Create new document',
   'projectNewDocument': 'New document',
-  'projectDocumentTitle': 'Title',
-  'projectDocumentContent': 'Content',
   'projectDocumentTitleHint': 'e.g. Meeting notes',
   'projectDocumentContentHint': 'Start writing…',
   'projectEditProject': 'Edit project',
@@ -732,7 +672,6 @@ const Map<String, String> stringsEn = {
   'projectDiscardAction': 'Discard',
   'projectSaveFailed': 'Save failed: {error}',
   'projectLoadFailed': 'Failed to load: {error}',
-  'projectUploadFailed': 'Upload failed: {error}',
   'projectDeleteFailed': 'Delete failed: {error}',
   'projectUploaded': 'Uploaded: {name}',
   'projectCameraFailed': 'Camera failed: {error}',
@@ -754,11 +693,6 @@ const Map<String, String> stringsEn = {
   'messageRetry': 'Retry',
 
   // ── Onboarding ─────────────────────────────────────────────
-  'onboardingSkip': 'Skip',
-  'onboardingNext': 'Next',
-  'onboardingBack': 'Back',
-  'onboardingDone': 'Done',
-  'onboardingNoModelHint': 'No model selected yet',
   'onboardingReplayTile': 'Show onboarding again',
   'onboardingReplayTileSubtitle': 'Replay the welcome tour',
 
@@ -772,22 +706,13 @@ const Map<String, String> stringsEn = {
   'tourWelcomeBody':
       "End-to-end encrypted AI chat. First, you'll need to pick a model — let me show you where.",
   'tourModelTitle': 'Pick a model — required',
-  'tourModelBody':
-      'You need to pick a model before you can chat. Tap here to open the picker.',
   'tourSettingsModelBody':
       'Tap Model Selection to open the picker. You generally need a model and a provider selected to chat.',
-  'tourModelPageBody':
-      "Choose a model and a provider — this is required to send messages. Try 'Auto (cheapest)' for the best price.",
   'tourSettingsTitle': 'Make it yours',
-  'tourSettingsBody':
-      'Settings is where you change theme, font size, UI scale, and your account.',
   'tourSettingsPageBody': 'Customize the app: theme, font, UI scale, account.',
   'tourSettingsTapHere': 'Tap Settings here.',
   'tourMenuTitle': 'Open the menu',
   'tourMenuBody': 'Tap the menu icon to find Settings.',
-  'tourChatTitle': 'Start chatting',
-  'tourChatBody':
-      'Type your message at the bottom and press Enter. Use the paperclip to attach files.',
   'tourProviderPillBody':
       'Pick a provider on any model — the provider is what activates it. Auto (cheapest) is the default.',
   'tourSettingsPricingTitle': 'Subscription',
