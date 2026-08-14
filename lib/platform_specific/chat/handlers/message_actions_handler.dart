@@ -4,12 +4,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:flutter/foundation.dart';
+
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/pdf_export_service.dart';
 import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
+/// True on a phone: either the build says so, or the device does.
+bool get _isPhone =>
+    kPlatformMobile ||
+    (kAutoDetectPlatform &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS));
+
 class MessageActionsHandler {
   // Callbacks
   Function(String)? onShowSnackBar;
@@ -115,8 +125,12 @@ class MessageActionsHandler {
       );
     }
 
-    // PDF export — only on finalized AI messages with actual text
-    if (!isAssistantPending && messageText.trim().isNotEmpty) {
+    // PDF export and printing — desktop only. A phone has no printer and
+    // no place to put a PDF that beats sharing the text, so both buttons
+    // were noise in a row that has to stay short.
+    if (!_isPhone &&
+        !isAssistantPending &&
+        messageText.trim().isNotEmpty) {
       actions.add(
         MessageBubbleAction(
           icon: Icons.picture_as_pdf_outlined,

@@ -17,7 +17,6 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
-import 'package:chuk_chat/widgets/morph_spinner.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/diff_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
@@ -325,8 +324,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     caseSensitive: false,
   );
 
-  bool _isReasoningExpanded = false;
-  final Set<String> _expandedCards = {};
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
   static final String _kAiResponseFontFamilyDefault =
@@ -449,49 +446,19 @@ class _MessageBubbleState extends State<MessageBubble> {
   static const double _mobileBottomBarHeight = 36.0;
 
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
-    final allToolCalls = _collectAllToolCalls();
-    final bool hasSources = allToolCalls.isNotEmpty;
-
-    if (!hasSources && !hasActions) return const SizedBox.shrink();
+    // No sources pill any more: every step in the timeline shows the pages
+    // it brought in, right where it found them. Repeating them all in one
+    // pill under the answer said the same thing twice and buried the
+    // buttons next to it.
+    if (!hasActions) return const SizedBox.shrink();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (hasActions) _buildActionButtons(iconFgColor, false),
+        _buildActionButtons(iconFgColor, false),
         const Spacer(),
-        if (hasSources) _buildSourcesBar(allToolCalls),
       ],
     );
-  }
-
-  /// Combine top-level tool calls with those nested in content blocks so the
-  /// sources bar still surfaces citations after a multi-round response is
-  /// finalized into blocks.
-  List<ToolCall> _collectAllToolCalls() {
-    final result = <ToolCall>[];
-    final seenIds = <String>{};
-    void add(ToolCall tc) {
-      if (seenIds.add(tc.id)) result.add(tc);
-    }
-
-    final top = widget.toolCalls;
-    if (top != null) {
-      for (final tc in top) {
-        add(tc);
-      }
-    }
-    final blocks = widget.contentBlocks;
-    if (blocks != null) {
-      for (final block in blocks) {
-        if (block.type == ContentBlockType.toolCalls &&
-            block.toolCalls != null) {
-          for (final tc in block.toolCalls!) {
-            add(tc);
-          }
-        }
-      }
-    }
-    return result;
   }
 
   Widget _buildUserActionButtons(Color iconFgColor) {
@@ -972,7 +939,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildActivityTimeline(widget.toolCalls!),
+                  _buildActivityTimeline(widget.toolCalls!, live: true),
                   if (cards.isNotEmpty) ...[
                     const SizedBox(height: _kArtifactGap),
                     ..._stackArtifactCards(cards),
@@ -1106,7 +1073,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     // round before live tools or appears after.
     var trailingText = _strippedMessage.trim();
     if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
-      if (trailingText == finalizedTextPrefix) {
+      if (trailingText == finalizedTextPrefix ||
+          // The flat text field usually holds only the LAST pass, while the
+          // blocks hold every pass. Printing it again put the final answer
+          // — map card and all — on screen twice.
+          finalizedTextPrefix.endsWith(trailingText)) {
         trailingText = '';
       } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
         trailingText = trailingText
@@ -1852,13 +1823,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// NO external margin — callers control the gap below the card via
   /// SizedBox (typically `_kCardStackGap` or `_kBlockGap`).
   Widget _buildBlockReasoning(String text, Color accentColor) {
-    return _buildExpandableCard(
-      key: 'block_reasoning_${text.hashCode}',
-      icon: Icons.psychology,
-      label: 'Reasoning',
-      preview: text,
-      expandedContent: text,
-      accentColor: accentColor,
+    // The same timeline the tool rounds use — one thinking step on the
+    // rail, opened by a tap. There is no second design for reasoning.
+    return AgentActivityTimeline(
+      toolCalls: const <ToolCall>[],
+      steps: <AgentActivityStep>[AgentActivityStep.reasoning(text)],
+      isRunning: false,
     );
   }
 
@@ -1868,279 +1838,47 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// Renders NO external margin — callers control the gap below the bar
   /// via SizedBox using the `_kBlockGap` constant.
   Widget _buildInfoStatusBar(Color iconFgColor, Color accentColor) {
-    final bool isExpanded = _isReasoningExpanded;
     final bool isStreaming = widget.isReasoningStreaming;
+    final String reasoning = _hasReasoning ? (widget.reasoning ?? '') : '';
 
-    // Determine header label and state.
-    // When the message is still "Thinking..." (no tokens yet) we are NOT
-    // connecting — the multiplex socket is persistent and already open by the
-    // time a message is sent (a genuine reconnect surfaces its own
-    // "Reconnecting..." notification). The long dead-air gap before the first
-    // token is the provider working through the prompt, so label it as such
-    // instead of "Connecting...", which wrongly implied a problem on our side.
-    final bool waitingForTokens =
-        isStreaming &&
-        !_hasReasoning &&
-        (widget.message == 'Thinking...' || widget.message.isEmpty);
-    final String label = waitingForTokens
-        ? 'Processing prompt...'
-        : _hasReasoning
-        ? (isStreaming ? 'Reasoning...' : 'Reasoning')
-        : 'Model Info';
-    final Color barAccent = accentColor;
-
-    return SelectionContainer.disabled(
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: barAccent.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: barAccent.withValues(alpha: 0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header bar
-            InkWell(
-              onTap: () =>
-                  setState(() => _isReasoningExpanded = !_isReasoningExpanded),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    if (isStreaming)
-                      MorphSpinner(size: 14, color: barAccent)
-                    else
-                      Icon(
-                        _hasReasoning
-                            ? Icons.psychology
-                            : Icons.smart_toy_outlined,
-                        size: 14,
-                        color: barAccent,
-                      ),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: barAccent,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Preview text when collapsed
-                    if (!isExpanded && _hasReasoning)
-                      Expanded(
-                        child: Text(
-                          _truncatePreview(widget.reasoning!, 60),
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.5),
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    Icon(
-                      isExpanded ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Expanded content: sub-cards for reasoning and model info
-            if (isExpanded)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                child: Column(
-                  children: [
-                    if (_hasReasoning)
-                      _buildExpandableCard(
-                        key: 'reasoning',
-                        icon: Icons.psychology,
-                        label: 'Reasoning',
-                        preview: widget.reasoning!,
-                        expandedContent: widget.reasoning!,
-                        accentColor: barAccent,
-                        isRunning: isStreaming,
-                      ),
-                    if (_hasReasoning && _hasModelInfo)
-                      const SizedBox(height: _kCardStackGap),
-                    if (_hasModelInfo)
-                      _buildExpandableCard(
-                        key: 'model_info',
-                        icon: Icons.smart_toy_outlined,
-                        label: widget.modelLabel!,
-                        preview: _buildModelPreview(),
-                        expandedContent: _buildModelDetails(),
-                        accentColor: Colors.green,
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
+    return AgentActivityTimeline(
+      toolCalls: const <ToolCall>[],
+      steps: <AgentActivityStep>[
+        if (reasoning.trim().isNotEmpty) AgentActivityStep.reasoning(reasoning),
+      ],
+      isRunning: isStreaming,
+      footer: _hasModelInfo ? _buildModelFooter() : null,
     );
   }
 
-  /// Stack expandable cards inside an expanded section, inserting
-  /// Reusable expandable card matching function_calling client design.
-  ///
-  /// Renders NO external margin. When stacking multiple cards in a
-  /// column the caller must insert `SizedBox(height: _kCardStackGap)`
-  /// between siblings (or pass them through `_stackCards`); when using
-  /// a card as a standalone message-body block the caller must provide
-  /// a `_kBlockGap` spacer relative to neighbouring blocks. Previously
-  /// this widget baked a `margin: only(bottom: 6)` which silently
-  /// stacked with any caller-side spacer, producing asymmetric gaps
-  /// that were very hard to trace (see commit b8e4414).
-  Widget _buildExpandableCard({
-    required String key,
-    required IconData icon,
-    required String label,
-    required String preview,
-    required String expandedContent,
-    required Color accentColor,
-    bool isRunning = false,
-    Widget? expandedWidget,
-  }) {
-    final bool cardExpanded = _expandedCards.contains(key);
-    final TextStyle expandedTextStyle = TextStyle(
-      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-      fontSize: 12,
-      fontFamily: 'monospace',
-      height: 1.4,
-    );
+  /// The model line: which model answered, on which provider, how fast.
+  /// A quiet footer under the steps, not a card of its own.
+  Widget _buildModelFooter() {
+    final theme = Theme.of(context);
+    final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final parts = <String>[
+      widget.modelLabel ?? '',
+      if (widget.modelProvider?.isNotEmpty ?? false) widget.modelProvider!,
+      if (_shouldShowTps) '${widget.tps!.toStringAsFixed(1)} tok/s',
+    ].where((part) => part.trim().isNotEmpty);
 
-    // With a shared SelectionArea the card body joins the one selection of the
-    // message list, so Ctrl+C copies it like any other message text. A nested
-    // SelectableText would be its own selection island instead — copyable only
-    // while it happens to hold the focus, which is why copying used to work for
-    // some blocks and not others. Without a shared area there is no outer
-    // region to join, so the island stays.
-    final Widget expandedBody =
-        expandedWidget ??
-        (widget.useSharedSelectionArea
-            ? Text(expandedContent, style: expandedTextStyle)
-            : SelectableText(expandedContent, style: expandedTextStyle));
-
-    final Widget expandedSection = Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: expandedBody,
-    );
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Row(
         children: [
-          // Header chrome (label, preview, chevron) stays out of the selection.
-          SelectionContainer.disabled(
-            child: InkWell(
-              borderRadius: kBorderRadiusRow,
-              onTap: () => setState(() {
-                if (_expandedCards.contains(key)) {
-                  _expandedCards.remove(key);
-                } else {
-                  _expandedCards.add(key);
-                }
-              }),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    if (isRunning)
-                      MorphSpinner(size: 14, color: accentColor)
-                    else
-                      Icon(icon, size: 14, color: accentColor),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        cardExpanded ? '' : _truncatePreview(preview, 60),
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                    Icon(
-                      cardExpanded ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ],
-                ),
-              ),
+          Icon(Icons.smart_toy_outlined, size: 13, color: muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              parts.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
           ),
-          if (cardExpanded)
-            widget.useSharedSelectionArea
-                ? expandedSection
-                : SelectionContainer.disabled(child: expandedSection),
         ],
       ),
     );
-  }
-
-  String _buildModelPreview() {
-    if (_shouldShowTps) {
-      return '${widget.tps!.toStringAsFixed(1)} tok/s';
-    }
-    return '';
-  }
-
-  String _buildModelDetails() {
-    final buf = StringBuffer();
-    buf.writeln('Model: ${widget.modelLabel}');
-    if (widget.modelProvider != null && widget.modelProvider!.isNotEmpty) {
-      buf.writeln('Provider: ${widget.modelProvider}');
-    }
-    if (_shouldShowTps) {
-      buf.writeln('Speed: ${widget.tps!.toStringAsFixed(1)} tok/s');
-    }
-    return buf.toString().trimRight();
-  }
-
-  String _truncatePreview(String text, int maxLength) {
-    final clean = text.replaceAll('\n', ' ').trim();
-    if (clean.length <= maxLength) return clean;
-    return '${clean.substring(0, maxLength)}...';
   }
 
   /// Renders inline artifact cards for artifact_manager tool calls, so users
@@ -2247,14 +1985,19 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget _buildActivityTimeline(
     List<ToolCall> toolCalls, {
     List<_ToolTimelineEntry>? contentBlockTimeline,
+    bool live = false,
   }) {
+    // The live round keeps counting while the message streams — including
+    // the stretch after its last tool, where the model is writing and the
+    // counter used to sit frozen at the time the tools took.
     final bool isRunning =
         widget.isStreamingMessage &&
-        toolCalls.any(
-          (t) =>
-              t.status == ToolCallStatus.running ||
-              t.status == ToolCallStatus.pending,
-        );
+        (live ||
+            toolCalls.any(
+              (t) =>
+                  t.status == ToolCallStatus.running ||
+                  t.status == ToolCallStatus.pending,
+            ));
 
     final steps = contentBlockTimeline == null
         ? null
@@ -2546,244 +2289,6 @@ class _MessageBubbleState extends State<MessageBubble> {
           ];
     return [...textSections, ...diffWidgets];
   }
-
-  // ─── Sources bar (web search / web crawl citations) ──────────────────
-
-  /// Extracts source URLs from web_search and web_crawl tool calls.
-  List<Map<String, String>> _extractSources(List<ToolCall> toolCalls) {
-    final sources = <Map<String, String>>[];
-    final seenUrls = <String>{};
-
-    for (final tool in toolCalls) {
-      if (tool.result == null) continue;
-
-      if (tool.name == 'web_search') {
-        final urlRegex = RegExp(r'^\s+(https?://\S+)', multiLine: true);
-        final titleRegex = RegExp(r'^\d+\.\s+(.+)$', multiLine: true);
-        final urls = urlRegex
-            .allMatches(tool.result!)
-            .map((m) => m.group(1)!)
-            .toList();
-        final titles = titleRegex
-            .allMatches(tool.result!)
-            .map((m) => m.group(1)!)
-            .toList();
-        for (int i = 0; i < urls.length; i++) {
-          if (seenUrls.add(urls[i])) {
-            sources.add({
-              'url': urls[i],
-              // tryParse, not parse: this runs inside build(), so one malformed
-              // URL in a search result would throw and replace the entire
-              // message with a red error box.
-              'title': i < titles.length
-                  ? titles[i]
-                  : (Uri.tryParse(urls[i])?.host ?? urls[i]),
-              'host': Uri.tryParse(urls[i])?.host ?? urls[i],
-            });
-          }
-        }
-      } else if (tool.name == 'web_crawl') {
-        final url = tool.arguments['url'] as String? ?? '';
-        if (url.isNotEmpty && seenUrls.add(url)) {
-          final firstLine = tool.result!.split('\n').first;
-          sources.add({
-            'url': url,
-            'title': firstLine.replaceFirst(RegExp(r'^Content from\s+'), ''),
-            'host': Uri.tryParse(url)?.host ?? url,
-          });
-        }
-      }
-    }
-    return sources;
-  }
-
-  /// Shows the sources list in a bottom sheet.
-  void _showSourcesSheet(
-    BuildContext context,
-    List<Map<String, String>> sources,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      isScrollControlled: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.language,
-                        size: 18,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${sources.length} source${sources.length == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          color: colorScheme.onSurface,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: sources.length,
-                    itemBuilder: (ctx, index) {
-                      final source = sources[index];
-                      return ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Image.network(
-                            'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
-                            width: 20,
-                            height: 20,
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.public,
-                              size: 20,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          source['title']!,
-                          style: TextStyle(
-                            color: colorScheme.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          source['host']!,
-                          style: TextStyle(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.open_in_new,
-                          size: 22,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        onTap: () async {
-                          final url = Uri.tryParse(source['url']!);
-                          if (url == null) return;
-                          try {
-                            final launched = await launchUrl(
-                              url,
-                              mode: LaunchMode.externalApplication,
-                            );
-                            if (!launched) {
-                              await launchUrl(
-                                url,
-                                mode: LaunchMode.platformDefault,
-                              );
-                            }
-                          } catch (_) {
-                            // swallow: nothing to do if no handler available
-                          }
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Compact sources pill — shows favicon icons + count, opens sheet on tap.
-  Widget _buildSourcesBar(List<ToolCall> toolCalls) {
-    final sources = _extractSources(toolCalls);
-    if (sources.isEmpty) return const SizedBox.shrink();
-
-    final colorScheme = Theme.of(context).colorScheme;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-
-    return InkWell(
-      onTap: () => _showSourcesSheet(context, sources),
-      borderRadius: BorderRadius.circular(100),
-      child: Container(
-        height: kPlatformMobile ? _mobileBottomBarHeight : null,
-        decoration: BoxDecoration(
-          color: bgColor.lighten(0.05),
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(
-            color: colorScheme.onSurface.withValues(alpha: 0.15),
-            width: 1,
-          ),
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: kPlatformMobile ? 10 : 10,
-          vertical: kPlatformMobile ? 0 : 6,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < sources.length && i < 5; i++)
-              Padding(
-                padding: EdgeInsets.only(right: i < 4 ? 4.0 : 0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
-                    width: kPlatformMobile ? 21 : 16,
-                    height: kPlatformMobile ? 21 : 16,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.public,
-                      size: kPlatformMobile ? 21 : 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(width: 6),
-            Text(
-              '${sources.length} source${sources.length == 1 ? '' : 's'}',
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-                fontSize: kPlatformMobile ? 15 : 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── ask_user interactive options ─────────────────────────────────────
 
   /// Find the last completed ask_user tool call across all tool call sources.
   ToolCall? _findAskUserToolCall() {

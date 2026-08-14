@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class SystemPromptPage extends StatefulWidget {
   const SystemPromptPage({super.key});
@@ -557,39 +558,36 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       bodyContent = const Center(child: CircularProgressIndicator());
     } else {
       bodyContent = ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           if (_errorMessage != null) ...[
-            _InfoCard(_errorMessage!, tone: _InfoTone.error),
+            ExpressiveInfoCard(
+              text: _errorMessage!,
+              icon: Icons.error_outline,
+              tone: colorScheme.errorContainer,
+            ),
             const SizedBox(height: 16),
           ],
 
           // ── Identity System (master toggle) ─────────────────────
-          const _SectionHeader('IDENTITY SYSTEM'),
-          _GroupedCard(
+          const ExpressiveSectionHeader('Identity system'),
+          ExpressiveGroup(
             children: [
-              _SettingsRow(
-                leading: _LeadingIcon(
-                  icon: Icons.psychology,
-                  tint: _identityEnabled
-                      ? colorScheme.primary
-                      : m3.onSurfaceVariant,
-                ),
+              ExpressiveSwitchRow(
+                icon: Icons.psychology,
+                tone: _identityEnabled ? null : m3.surfaceContainerHighest,
                 title: l.identitySystem,
                 subtitle: _identityEnabled
                     ? l.identityActive
                     : l.identityDisabled,
-                trailing: Switch(
-                  value: _identityEnabled,
-                  onChanged: (value) async {
-                    setState(() => _identityEnabled = value);
-                    await setIdentityEnabled(value);
-                  },
-                ),
+                value: _identityEnabled,
+                onChanged: (value) async {
+                  setState(() => _identityEnabled = value);
+                  await setIdentityEnabled(value);
+                },
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
           // ── Soul / User / Memory — dimmed when identity is off ──
           IgnorePointer(
@@ -601,15 +599,17 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── Soul ─────────────────────────────────────────
-                  _SectionHeader(
-                    'SOUL',
-                    onExpand: () => _editFullscreen(
-                      _soulCtrl,
-                      title: 'Soul',
-                      hint: l.soulExample,
+                  ExpressiveSectionHeader(
+                    'Soul',
+                    trailing: _FullscreenAction(
+                      onPressed: () => _editFullscreen(
+                        _soulCtrl,
+                        title: 'Soul',
+                        hint: l.soulExample,
+                      ),
                     ),
                   ),
-                  _InfoCard(l.soulHint),
+                  ExpressiveInfoCard(text: l.soulHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _soulCtrl,
@@ -620,18 +620,19 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         ? _buildDesktopTextContextMenu
                         : null,
                   ),
-                  const SizedBox(height: 24),
 
                   // ── User ─────────────────────────────────────────
-                  _SectionHeader(
-                    'USER',
-                    onExpand: () => _editFullscreen(
-                      _userInfoCtrl,
-                      title: 'User',
-                      hint: l.userExample,
+                  ExpressiveSectionHeader(
+                    'User',
+                    trailing: _FullscreenAction(
+                      onPressed: () => _editFullscreen(
+                        _userInfoCtrl,
+                        title: 'User',
+                        hint: l.userExample,
+                      ),
                     ),
                   ),
-                  _InfoCard(l.userHint),
+                  ExpressiveInfoCard(text: l.userHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _userInfoCtrl,
@@ -642,18 +643,19 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         ? _buildDesktopTextContextMenu
                         : null,
                   ),
-                  const SizedBox(height: 24),
 
                   // ── Memory ───────────────────────────────────────
-                  _SectionHeader(
-                    'MEMORY',
-                    onExpand: () => _editFullscreen(
-                      _memoryCtrl,
-                      title: 'Memory',
-                      hint: l.memoryExample,
+                  ExpressiveSectionHeader(
+                    'Memory',
+                    trailing: _FullscreenAction(
+                      onPressed: () => _editFullscreen(
+                        _memoryCtrl,
+                        title: 'Memory',
+                        hint: l.memoryExample,
+                      ),
                     ),
                   ),
-                  _InfoCard(l.memoryHint),
+                  ExpressiveInfoCard(text: l.memoryHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _memoryCtrl,
@@ -694,19 +696,20 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
 
           // ── Raw System Prompt ───────────────────────────────────
-          _SectionHeader(
-            'RAW SYSTEM PROMPT',
-            onExpand: () => _editFullscreen(
-              _systemPromptCtrl,
-              title: 'System prompt',
-              hint: l.systemPromptExample,
-              monospace: true,
+          ExpressiveSectionHeader(
+            'Raw system prompt',
+            trailing: _FullscreenAction(
+              onPressed: () => _editFullscreen(
+                _systemPromptCtrl,
+                title: 'System prompt',
+                hint: l.systemPromptExample,
+                monospace: true,
+              ),
             ),
           ),
-          _InfoCard(l.systemPromptHint),
+          ExpressiveInfoCard(text: l.systemPromptHint),
           const SizedBox(height: 12),
           _MaterialTextField(
             controller: _systemPromptCtrl,
@@ -781,210 +784,23 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
+/// Opens the field under a section header in the fullscreen editor.
+class _FullscreenAction extends StatelessWidget {
+  const _FullscreenAction({required this.onPressed});
 
-  /// When set, the header carries a Fullscreen action for the field that
-  /// follows it.
-  final VoidCallback? onExpand;
-
-  const _SectionHeader(this.label, {this.onExpand});
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-              color: colorScheme.primary,
-            ),
-          ),
-          if (onExpand != null) ...[
-            const Spacer(),
-            TextButton.icon(
-              onPressed: onExpand,
-              icon: const Icon(Icons.open_in_full, size: 15),
-              label: const Text('Fullscreen'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 32),
-                visualDensity: VisualDensity.compact,
-                textStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-
-    final List<Widget> rows = [];
-    for (int i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.only(left: 56),
-          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
-        ));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: rows),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  const _SettingsRow({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          leading,
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.m3.onSurfaceVariant,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            trailing!,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LeadingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color tint;
-  const _LeadingIcon({required this.icon, required this.tint});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Center(
-        child: Icon(icon, size: 22, color: tint),
-      ),
-    );
-  }
-}
-
-enum _InfoTone { neutral, warn, error }
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  final _InfoTone tone;
-  const _InfoCard(this.text, {this.tone = _InfoTone.neutral});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case _InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case _InfoTone.error:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case _InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: fg,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.open_in_full, size: 15),
+      label: const Text('Fullscreen'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        minimumSize: const Size(0, 32),
+        visualDensity: VisualDensity.compact,
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

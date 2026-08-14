@@ -158,7 +158,7 @@ void main() {
 
       await tester.tap(find.text('Fast'));
       await tester.pumpAndSettle();
-      expect(find.byType(Switch), findsOneWidget);
+      expect(find.text('Reasoning'), findsOneWidget);
 
       await tester.tap(find.text('Reasoning'));
       await tester.pumpAndSettle();
@@ -176,7 +176,7 @@ void main() {
 
       await tester.tap(find.text('Fast'));
       await tester.pumpAndSettle();
-      expect(find.byType(Switch), findsNothing);
+      expect(find.text('Reasoning'), findsNothing);
     });
   });
 
@@ -370,6 +370,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Choose model'), findsNothing);
+    });
+  });
+
+  group('a model id the catalogue does not know', () {
+    test('reads as a name, not as a slug', () {
+      expect(prettyModelId('deepseek/deepseek-v4-pro'), 'Deepseek v4 Pro');
+      expect(prettyModelId('openai/gpt-oss-120b'), 'GPT OSS 120b');
+      expect(prettyModelId('moonshotai/kimi-k3'), 'Kimi K3');
+    });
+
+    test('an id with nothing in it is handed back unchanged', () {
+      expect(prettyModelId(''), '');
+      expect(prettyModelId('/'), '/');
     });
   });
 }

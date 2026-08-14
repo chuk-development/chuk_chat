@@ -20,6 +20,10 @@ const double _kAnchorGap = 6;
 /// Smallest margin the menu keeps to the screen edges and the keyboard.
 const double _kEdgeMargin = 8;
 
+/// Below this, "open above" is not worth forcing — the menu would be a
+/// two-row scroller squeezed against the top edge.
+const double _kMinRoomAbove = 120;
+
 const Duration _kMenuDuration = Duration(milliseconds: 140);
 
 /// Show [items] as a dropdown anchored to the widget of [anchorContext].
@@ -32,6 +36,7 @@ Future<T?> showAnchoredMenu<T>(
   required Color borderColor,
   double minWidth = 200,
   double borderRadius = 18,
+  bool preferAbove = false,
 }) {
   final RenderBox? box = anchorContext.findRenderObject() as RenderBox?;
   final NavigatorState navigator = Navigator.of(anchorContext);
@@ -66,6 +71,7 @@ Future<T?> showAnchoredMenu<T>(
       borderColor: borderColor,
       minWidth: minWidth,
       borderRadius: borderRadius,
+      preferAbove: preferAbove,
       usableTop:
           math.max(media.padding.top, overlayMedia.padding.top) + _kEdgeMargin,
       usableBottom: overlay.size.height - bottomInset - _kEdgeMargin,
@@ -85,6 +91,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.borderColor,
     required this.minWidth,
     required this.borderRadius,
+    required this.preferAbove,
     required this.usableTop,
     required this.usableBottom,
     required this.themes,
@@ -100,6 +107,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final Color borderColor;
   final double minWidth;
   final double borderRadius;
+  final bool preferAbove;
   final double usableTop;
   final double usableBottom;
   final CapturedThemes themes;
@@ -124,6 +132,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           anchor: anchor,
           usableTop: usableTop,
           usableBottom: usableBottom,
+          preferAbove: preferAbove,
         ),
         child: Material(
           color: color,
@@ -161,20 +170,16 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final CurvedAnimation curve = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
+    // Fade only. The menu used to rise into place, and the distance it rose
+    // was a fraction of its own height — a short menu barely moved, a long
+    // one flew in. It now appears where it will stay.
     return FadeTransition(
-      opacity: curve,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.12),
-          end: Offset.zero,
-        ).animate(curve),
-        child: child,
+      opacity: CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
       ),
+      child: child,
     );
   }
 }
@@ -186,29 +191,41 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
     required this.anchor,
     required this.usableTop,
     required this.usableBottom,
+    this.preferAbove = false,
   });
 
   final Rect anchor;
   final double usableTop;
   final double usableBottom;
 
+  /// Open above the anchor whenever the menu fits there, even when there is
+  /// more room below. The desktop composer sits at the bottom of a tall
+  /// window: a menu that drops down covers the box it belongs to.
+  final bool preferAbove;
+
   double get _roomBelow => usableBottom - anchor.bottom - _kAnchorGap;
   double get _roomAbove => anchor.top - usableTop - _kAnchorGap;
+
+  /// Honour [preferAbove] only while there is room worth using up there.
+  /// A menu forced into 30 pixels is worse than one that drops down.
+  bool get _forceAbove => preferAbove && _roomAbove >= _kMinRoomAbove;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     return BoxConstraints.loose(
       Size(
         constraints.maxWidth - _kEdgeMargin * 2,
-        math.max(48, math.max(_roomAbove, _roomBelow)),
+        _forceAbove
+            ? _roomAbove
+            : math.max(48, math.max(_roomAbove, _roomBelow)),
       ),
     );
   }
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final bool openDown =
-        childSize.height <= _roomBelow || _roomBelow >= _roomAbove;
+    final bool openDown = !_forceAbove &&
+        (childSize.height <= _roomBelow || _roomBelow >= _roomAbove);
     final double y = openDown
         ? anchor.bottom + _kAnchorGap
         : anchor.top - _kAnchorGap - childSize.height;
@@ -226,5 +243,6 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   bool shouldRelayout(_AnchoredMenuLayout old) =>
       anchor != old.anchor ||
       usableTop != old.usableTop ||
-      usableBottom != old.usableBottom;
+      usableBottom != old.usableBottom ||
+      preferAbove != old.preferAbove;
 }

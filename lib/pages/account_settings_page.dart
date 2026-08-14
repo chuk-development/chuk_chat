@@ -15,7 +15,7 @@ import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -184,22 +184,21 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader('Chat Recovery'),
-        _InfoCard(
+        const ExpressiveSectionHeader('Chat recovery'),
+        ExpressiveInfoCard(
           text: lockedCount > 0
               ? l.lockedChatsCount(lockedCount)
               : l.recoverOldChatsAvailable,
-          tone: InfoTone.neutral,
           icon: Icons.lock_outline,
         ),
         const SizedBox(height: 12),
-        _GroupedCard(
+        ExpressiveGroup(
           children: [
-            _SettingsRow(
+            ExpressiveRow(
               icon: Icons.lock_open,
               title: l.encryptedChatRecovery,
               subtitle: l.recoverChats,
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(Icons.chevron_right, size: 20),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -522,6 +521,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m3 = theme.m3;
 
     Widget bodyContent;
 
@@ -550,20 +550,20 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       );
     } else {
       bodyContent = ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
+              child: ExpressiveInfoCard(
                 text: _errorMessage!,
-                tone: InfoTone.danger,
                 icon: Icons.error_outline,
+                tone: cs.errorContainer,
               ),
             ),
 
           // Profile
-          const _SectionHeader('Profile'),
+          const ExpressiveSectionHeader('Profile'),
           _FieldLabel(l.displayName),
           TextFormField(
             controller: _displayNameCtrl,
@@ -607,23 +607,23 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ),
 
           // Security
-          const _SectionHeader('Security'),
+          const ExpressiveSectionHeader('Security'),
           if (_passwordChangeError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
+              child: ExpressiveInfoCard(
                 text: _passwordChangeError!,
-                tone: InfoTone.danger,
                 icon: Icons.error_outline,
+                tone: cs.errorContainer,
               ),
             ),
           if (_passwordChangeNotice != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _InfoCard(
+              child: ExpressiveInfoCard(
                 text: _passwordChangeNotice!,
-                tone: InfoTone.success,
                 icon: Icons.check_circle_outline,
+                tone: m3.successContainer,
               ),
             ),
           _FieldLabel(l.currentPassword),
@@ -726,22 +726,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           const SizedBox(height: 24),
 
           // Danger Zone
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 0, 8),
-            child: Text(
-              'DANGER ZONE',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.5,
-                color: cs.error,
-              ),
-            ),
-          ),
-          _InfoCard(
+          ExpressiveSectionHeader('Danger zone', color: cs.error),
+          ExpressiveInfoCard(
             text: l.deleteAccountWarning,
-            tone: InfoTone.danger,
             icon: Icons.warning_amber_rounded,
+            tone: cs.errorContainer,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -784,54 +773,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
 // ───────── private shared widgets ─────────
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupedCard extends StatelessWidget {
-  const _GroupedCard({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final separated = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) {
-        separated.add(
-          Divider(height: 1, color: m3.outlineVariant, indent: 56),
-        );
-      }
-      separated.add(children[i]);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: separated),
-    );
-  }
-}
-
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.label, {this.helper});
 
@@ -870,131 +811,3 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: m3.onSurfaceVariant),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              IconTheme.merge(
-                data: IconThemeData(color: m3.onSurfaceVariant),
-                child: trailing!,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum InfoTone { neutral, warn, danger, success }
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.text,
-    this.tone = InfoTone.neutral,
-    this.icon,
-  });
-
-  final String text;
-  final InfoTone tone;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color bg;
-    final Color fg;
-    switch (tone) {
-      case InfoTone.warn:
-        bg = m3.warningContainer.withValues(alpha: 0.4);
-        fg = m3.onWarningContainer;
-        break;
-      case InfoTone.danger:
-        bg = cs.errorContainer.withValues(alpha: 0.4);
-        fg = cs.onErrorContainer;
-        break;
-      case InfoTone.success:
-        bg = m3.successContainer.withValues(alpha: 0.4);
-        fg = m3.onSuccessContainer;
-        break;
-      case InfoTone.neutral:
-        bg = m3.surfaceContainerLow;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

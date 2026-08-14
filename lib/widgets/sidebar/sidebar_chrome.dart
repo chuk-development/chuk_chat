@@ -338,18 +338,23 @@ class SbSectionLabel extends StatelessWidget {
       padding: padding,
       child: Row(
         children: [
-          Text(label.toUpperCase(),
+          // Not upper case any more: small capitals read smaller than they
+          // measure, and this label has to be findable at a glance.
+          Text(label,
+              // A line height above 1 keeps the descenders inside the box
+              // whatever the font: without it the y and the p are clipped.
               style: TextStyle(
-                fontSize: 13,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                height: 1.35,
+                letterSpacing: -0.2,
+                fontWeight: FontWeight.w900,
                 color: c,
               )),
           if (count != null) ...[
             const Spacer(),
             Text('$count',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: c.withValues(alpha: 0.7),
                 )),
@@ -522,7 +527,7 @@ class _SbChatTileState extends State<SbChatTile> {
             softWrap: false,
             style: TextStyle(
               fontSize: widget.compact ? 13.5 : 15,
-              fontWeight: FontWeight.w500,
+              fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500,
               color: titleColor,
               fontStyle: widget.locked ? FontStyle.italic : null,
             ),
@@ -578,9 +583,12 @@ class _SbChatTileState extends State<SbChatTile> {
       padding: pad,
       decoration: BoxDecoration(
         color: widget.selected
-            ? t.accent.withValues(alpha: 0.12)
+            ? t.accent.withValues(alpha: 0.18)
             : (_hovered ? t.iconFg.withValues(alpha: 0.05) : null),
-        borderRadius: BorderRadius.circular(8),
+        border: widget.selected
+            ? Border.all(color: t.accent.withValues(alpha: 0.55), width: 1.5)
+            : null,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Stack(
         children: [
@@ -609,7 +617,8 @@ class _SbChatTileState extends State<SbChatTile> {
     body = InkWell(
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
-      borderRadius: BorderRadius.circular(8),
+      // Same radius as the tile above, or the splash bleeds past its corners.
+      borderRadius: BorderRadius.circular(12),
       child: body,
     );
 

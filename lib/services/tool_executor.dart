@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
 import 'package:chuk_chat/tool_handlers/find_tools_handler.dart' as find_tools;
@@ -506,6 +507,10 @@ class ToolExecutor {
         return platform_tools.isPlatformServiceConnected('whoop');
       case ToolCategory.sandbox:
         return true; // Server-managed Docker sandbox
+      case ToolCategory.mcp:
+        // A connected server is a connected service: the connection is what
+        // put its tools in the registry in the first place.
+        return true;
     }
   }
 
@@ -532,6 +537,11 @@ class ToolExecutor {
             'Missing executor implementation.',
         isError: true,
       );
+    }
+
+    if (tool.type == ToolType.mcp) {
+      final result = await McpService.call(toolName, args);
+      return ToolExecutionResult(output: result.text, isError: result.isError);
     }
 
     if (tool.type != ToolType.builtin) {

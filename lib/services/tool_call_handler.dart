@@ -12,6 +12,8 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
@@ -312,6 +314,10 @@ class ToolTurnSignals {
 class ToolCallHandler {
   ToolCallHandler._internal() {
     registerBuiltinTools(_toolExecutor);
+    // Connected MCP servers add their tools to the same executor, and keep
+    // adding and removing them as the reader connects and disconnects.
+    watchMcpConnections(_toolExecutor);
+    unawaited(McpService.load().then((_) => syncMcpTools(_toolExecutor)));
     unawaited(_toolExecutor.loadPreferences());
     unawaited(platform_tools.initPlatformServices());
     if (kFeatureSkills) {

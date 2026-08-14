@@ -8,8 +8,24 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Handles chat persistence and storage
+/// Whether [stored] holds more than [patch] would write, i.e. the patch
+/// would shrink or empty it. Used to keep a late, stale stream tick from
+/// erasing a finished message.
+@visibleForTesting
+bool keepsMoreThanPatch(String? stored, String? patch) {
+  if (patch == null) return false;
+  final current = stored ?? '';
+  if (current.isEmpty) return false;
+  return patch.trim().isEmpty;
+}
+
 class ChatPersistenceHandler {
   static const Duration _backgroundUpdateDebounce = Duration(milliseconds: 700);
+
+  /// How often a patch that could not be written yet is retried, and how
+  /// many times, before it is finally given up on.
+  static const Duration _backgroundRetryDelay = Duration(seconds: 1);
+  static const int _maxBackgroundRetries = 5;
 
   // Callbacks
   Function(String)? onShowSnackBar;
@@ -27,9 +43,16 @@ class ChatPersistenceHandler {
 
     // Best-effort flush so pending background stream/tool-call updates are not
     // lost when the widget tree is disposed while a response is still running.
-    final pendingKeys = _pendingBackgroundUpdates.keys.toList(growable: false);
-    for (final key in pendingKeys) {
-      unawaited(_flushBackgroundUpdate(key));
+    unawaited(flushPending());
+  }
+
+  /// Write every pending patch now. With [chatId] only that chat's patches.
+  Future<void> flushPending({String? chatId}) async {
+    final keys = _pendingBackgroundUpdates.keys
+        .where((key) => chatId == null || key.startsWith('$chatId:'))
+        .toList(growable: false);
+    for (final key in keys) {
+      await _flushBackgroundUpdate(key);
     }
   }
 
@@ -54,6 +77,11 @@ class ChatPersistenceHandler {
         .toList(growable: false);
 
     if (messagesCopy.isEmpty) return null;
+
+    // Land any pending per-message patch first. Otherwise a debounced patch
+    // written afterwards can overwrite this full save with what it knew a
+    // moment ago — which is how a finished answer lost its text.
+    if (chatId != null) await flushPending(chatId: chatId);
 
     final operation = _persistChatInternal(
       messagesCopy,
@@ -246,6 +274,19 @@ class ChatPersistenceHandler {
       return;
     }
 
+    /// Put the patch back and try again shortly. Every early return below
+    /// used to drop it, and a dropped patch is a lost answer.
+    void retry() {
+      if (pending.attempts >= _maxBackgroundRetries) return;
+      pending.attempts++;
+      _pendingBackgroundUpdates.putIfAbsent(key, () => pending);
+      _backgroundUpdateTimers.remove(key)?.cancel();
+      _backgroundUpdateTimers[key] = Timer(
+        _backgroundRetryDelay,
+        () => unawaited(_flushBackgroundUpdate(key)),
+      );
+    }
+
     try {
       // Skip if chat was recently deleted
       if (ChatStorageState.wasRecentlyDeleted(pending.chatId)) {
@@ -261,6 +302,7 @@ class ChatPersistenceHandler {
         (chat) => chat.id == pending.chatId,
       );
       if (chatIndex == -1) {
+        retry();
         return;
       }
 
@@ -268,18 +310,37 @@ class ChatPersistenceHandler {
       if (!chat.isFullyLoaded) {
         final loaded = await ChatStorageService.loadFullChat(pending.chatId);
         if (loaded == null || !loaded.isFullyLoaded) {
+          retry();
           return;
         }
       }
 
       final refreshed = ChatStorageService.getChatById(pending.chatId);
       if (refreshed == null || !refreshed.isFullyLoaded) {
+        retry();
         return;
       }
 
       final messages = refreshed.messages.map((m) => m.toJson()).toList();
       if (pending.messageIndex < 0 || pending.messageIndex >= messages.length) {
+        retry();
         return;
+      }
+
+      // A patch may only add to what is stored, never empty it. A tick that
+      // was queued before the final text arrived would otherwise overwrite
+      // the finished answer with the nothing it knew at the time.
+      if (keepsMoreThanPatch(
+        messages[pending.messageIndex]['text'],
+        pending.content,
+      )) {
+        pending.content = null;
+      }
+      if (keepsMoreThanPatch(
+        messages[pending.messageIndex]['contentBlocks'],
+        pending.contentBlocksJson,
+      )) {
+        pending.contentBlocksJson = null;
       }
 
       if (pending.content != null) {
@@ -338,5 +399,6 @@ class _PendingBackgroundUpdate {
   String? imageCostEur;
   String? imageGeneratedAt;
   String? tps;
+  int attempts = 0;
   String? status;
 }

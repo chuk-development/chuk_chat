@@ -13,6 +13,7 @@ Future<void> _pumpAnchor(
   required double keyboardInset,
   required Alignment anchorAt,
   int itemCount = 3,
+  bool preferAbove = false,
 }) async {
   await tester.pumpWidget(
     MediaQuery(
@@ -43,6 +44,7 @@ Future<void> _pumpAnchor(
                     ],
                     color: Colors.black,
                     borderColor: Colors.white,
+                    preferAbove: preferAbove,
                   ),
                   child: const ColoredBox(
                     color: Colors.blue,
@@ -118,6 +120,53 @@ void main() {
     addTearDown(tester.view.reset);
 
     await _pumpAnchor(tester, keyboardInset: 0, anchorAt: Alignment.topCenter);
+
+    final Rect anchor = tester.getRect(find.text('open'));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.text('row 0').hitTestable()).top,
+      greaterThanOrEqualTo(anchor.bottom),
+    );
+  });
+
+  testWidgets('preferAbove opens upwards even with room below', (tester) async {
+    tester.view.physicalSize = _screen;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    // Middle of the screen: room on both sides, and more of it below.
+    await _pumpAnchor(
+      tester,
+      keyboardInset: 0,
+      anchorAt: const Alignment(0, 0.2),
+      preferAbove: true,
+    );
+
+    final Rect anchor = tester.getRect(find.text('open'));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.text('row 0').hitTestable()).top,
+      lessThan(anchor.top),
+    );
+  });
+
+  testWidgets('preferAbove gives up when there is no room up there', (
+    tester,
+  ) async {
+    tester.view.physicalSize = _screen;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await _pumpAnchor(
+      tester,
+      keyboardInset: 0,
+      anchorAt: Alignment.topCenter,
+      preferAbove: true,
+    );
 
     final Rect anchor = tester.getRect(find.text('open'));
     await tester.tap(find.text('open'));

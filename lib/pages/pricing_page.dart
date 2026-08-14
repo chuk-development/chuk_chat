@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -313,15 +314,11 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
         scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           // ── Credits ────────────────────────────────────────────
-          const _SectionHeader('CREDITS'),
-          Container(
-            decoration: BoxDecoration(
-              color: m3.surfaceContainer,
-              borderRadius: BorderRadius.circular(20),
-            ),
+          const ExpressiveSectionHeader('Credits'),
+          ExpressiveCard(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,14 +346,13 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
               ],
             ),
           ),
-          const SizedBox(height: 24),
 
           // ── Plans ──────────────────────────────────────────────
-          const _SectionHeader('PLANS'),
+          const ExpressiveSectionHeader('Plans'),
 
           // Payments-disabled notice
           if (paymentsDisabled) ...[
-            _InfoCard(l.paymentsDisabledInBuild),
+            ExpressiveInfoCard(text: l.paymentsDisabledInBuild),
             const SizedBox(height: 12),
           ],
 
@@ -370,7 +366,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                 l.unusedCreditsExpire,
               ],
               badgeLabel: l.active,
-              badgeTone: _BadgeTone.success,
+              badgeTone: Theme.of(context).m3.successContainer,
               highlighted: false,
               child: !paymentsDisabled
                   ? Column(
@@ -429,7 +425,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                 l.textChatReasoning,
               ],
               badgeLabel: 'Popular',
-              badgeTone: _BadgeTone.primary,
+              badgeTone: Theme.of(context).m3.primaryContainer,
               highlighted: true,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,117 +575,14 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-enum _BadgeTone { primary, success, warn, neutral }
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final _BadgeTone tone;
-  const _Badge(this.label, {this.tone = _BadgeTone.neutral});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    late Color bg;
-    late Color fg;
-    switch (tone) {
-      case _BadgeTone.primary:
-        bg = m3.primaryContainer;
-        fg = m3.onPrimaryContainer;
-        break;
-      case _BadgeTone.success:
-        bg = m3.successContainer;
-        fg = m3.onSuccessContainer;
-        break;
-      case _BadgeTone.warn:
-        bg = m3.warningContainer;
-        fg = m3.onWarningContainer;
-        break;
-      case _BadgeTone.neutral:
-        bg = m3.surfaceContainerHigh;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.15,
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String text;
-  const _InfoCard(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _PlanCard extends StatelessWidget {
   final String title;
   final String price;
   final List<String> features;
   final String? badgeLabel;
-  final _BadgeTone badgeTone;
+
+  /// Background of the badge. Null keeps the neutral pill.
+  final Color? badgeTone;
   final bool highlighted;
   final Widget? child;
 
@@ -699,7 +592,7 @@ class _PlanCard extends StatelessWidget {
     required this.features,
     required this.highlighted,
     this.badgeLabel,
-    this.badgeTone = _BadgeTone.neutral,
+    this.badgeTone,
     this.child,
   });
 
@@ -754,7 +647,7 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (badgeLabel != null) _Badge(badgeLabel!, tone: badgeTone),
+              if (badgeLabel != null) ExpressiveBadge(badgeLabel!, tone: badgeTone),
             ],
           ),
           const SizedBox(height: 6),

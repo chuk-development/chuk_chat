@@ -22,6 +22,7 @@ class AgentActivityTimeline extends StatefulWidget {
     this.initiallyExpanded,
     this.onStepTap,
     this.onSourceTap,
+    this.footer,
   });
 
   /// The round's calls, in the order the model made them. Drives the
@@ -50,6 +51,10 @@ class AgentActivityTimeline extends StatefulWidget {
 
   /// Called when a reader taps a source chip.
   final void Function(AgentActivitySource source)? onSourceTap;
+
+  /// Shown under the last step when the timeline is open. The model line
+  /// lives here: it belongs to the round, but it is not a step in it.
+  final Widget? footer;
 
   @override
   State<AgentActivityTimeline> createState() => _AgentActivityTimelineState();
@@ -103,19 +108,28 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
   bool get _isExpanded => _expandedOverride ?? widget.isRunning;
 
+  /// Thinking notes the reader opened, by their position in the list.
+  final Set<int> _openBodies = <int>{};
+
   DateTime get _now => (widget.clock ?? DateTime.now)();
 
   @override
   Widget build(BuildContext context) {
-    if (widget.toolCalls.isEmpty) return const SizedBox.shrink();
-
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
     final steps = widget.steps;
     final entries = steps == null
         ? buildAgentActivityEntries(widget.toolCalls)
         : buildAgentActivityEntriesFromSteps(steps);
-    final duration = agentActivityDuration(widget.toolCalls, now: _now);
+    // A round with neither a step nor a model line has nothing to show.
+    if (entries.isEmpty && widget.footer == null) {
+      return const SizedBox.shrink();
+    }
+    final duration = agentActivityDuration(
+      widget.toolCalls,
+      now: _now,
+      running: widget.isRunning,
+    );
 
     return SelectionContainer.disabled(
       child: Column(
@@ -129,8 +143,14 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                 theme,
                 muted,
                 entries[i],
+                index: i,
                 isFirst: i == 0,
-                isLast: i == entries.length - 1,
+                isLast: i == entries.length - 1 && widget.footer == null,
+              ),
+            if (widget.footer != null)
+              Padding(
+                padding: const EdgeInsets.only(left: _badgeSize + 10, top: 2),
+                child: widget.footer,
               ),
           ],
         ],
@@ -139,11 +159,12 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   }
 
   Widget _buildHeader(ThemeData theme, Color muted, Duration? duration) {
+    final String verb = widget.toolCalls.isEmpty
+        ? (widget.isRunning ? 'Thinking' : 'Thought')
+        : (widget.isRunning ? 'Working' : 'Worked');
     final label = duration == null
-        ? (widget.isRunning ? 'Working' : 'Worked')
-        : widget.isRunning
-        ? 'Working for ${formatAgentDuration(duration)}'
-        : 'Worked for ${formatAgentDuration(duration)}';
+        ? verb
+        : '$verb for ${formatAgentDuration(duration)}';
 
     return Semantics(
       button: true,
@@ -185,9 +206,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     ThemeData theme,
     Color muted,
     AgentActivityEntry entry, {
+    required int index,
     required bool isFirst,
     required bool isLast,
   }) {
+    final bool bodyOpen = _openBodies.contains(index);
     final Color color = entry.hasError
         ? theme.colorScheme.error.withValues(alpha: 0.85)
         : muted;
@@ -206,6 +229,16 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             child: _buildEntryText(theme, entry, color),
           ),
         ),
+        if (entry.hasBody && bodyOpen) ...[
+          const SizedBox(height: 2),
+          Text(
+            entry.body!.trim(),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: muted,
+              height: 1.45,
+            ),
+          ),
+        ],
         if (entry.sources.isNotEmpty) ...[
           const SizedBox(height: 4),
           _buildSourceChips(theme, entry.sources),
@@ -237,7 +270,19 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
     final call = entry.toolCall;
     final onTap = widget.onStepTap;
-    if (call == null || onTap == null) return row;
+
+    // A thinking note opens in place; a call opens its arguments.
+    if (call == null) {
+      if (!entry.hasBody) return row;
+      return InkWell(
+        onTap: () => setState(() {
+          if (!_openBodies.remove(index)) _openBodies.add(index);
+        }),
+        borderRadius: BorderRadius.circular(8),
+        child: row,
+      );
+    }
+    if (onTap == null) return row;
 
     return InkWell(
       onTap: () => onTap(call),

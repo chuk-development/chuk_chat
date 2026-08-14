@@ -38,6 +38,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -2594,6 +2595,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
       child: ChatModeSelector(
         mode: _chatMode,
+        // Always upwards here: the composer sits at the bottom of a tall
+        // window, and a menu dropping down covers the box it belongs to.
+        menuAbove: true,
         selectedModelId: _selectedModelId,
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
@@ -2634,14 +2638,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
 
-    final prefs = await ModelCacheService.loadProviderPreferences(user.id);
+    // Offline first: the device snapshot paints the menu straight away,
+    // even with no network and before the first sync of a cold start.
+    final local = await ModelCacheService.loadProviderPreferences(user.id);
+    await _applyPickedModels(local);
+
+    // Then the truth. `loadAllProviderPreferences` writes the snapshot back
+    // on success, so a model unpinned on another device disappears here on
+    // the next look instead of lingering until something else rewrote the
+    // cache — which is how it lingered before.
+    try {
+      final remote = await UserPreferencesService.loadAllProviderPreferences();
+      if (!mapEquals(remote, local)) await _applyPickedModels(remote);
+    } catch (_) {
+      // No network: the snapshot already on screen is the best answer.
+    }
+  }
+
+  /// Turn provider preferences into the menu's model list.
+  Future<void> _applyPickedModels(Map<String, String> prefs) async {
     final ids = <String>{
       ChatModeService.defaultModelId,
       if (_selectedModelId.isNotEmpty) _selectedModelId,
-      ...prefs.keys,
+      // Only models that still have a provider pinned. An empty slug means
+      // the pin was taken away, and the model is no longer picked.
+      for (final entry in prefs.entries)
+        if (entry.value.trim().isNotEmpty) entry.key,
     };
 
-    final catalogue = await ModelCacheService.loadAvailableModels();
+    var catalogue = await ModelCacheService.loadAvailableModels();
+    bool namesMissing(List<Map<String, dynamic>> list) {
+      final known = {
+        for (final model in list)
+          if (model['id'] is String) model['id'] as String,
+      };
+      return ids.any((id) => !known.contains(id));
+    }
+
+    // A name the catalogue does not carry would be shown as the raw
+    // OpenRouter slug. Fetch the list once instead of printing the id.
+    if (catalogue.isEmpty || namesMissing(catalogue)) {
+      await ModelPrefetchService.prefetch();
+      catalogue = await ModelCacheService.loadAvailableModels();
+    }
+
     final names = <String, String>{
       for (final model in catalogue)
         if (model['id'] is String && model['name'] is String)
@@ -2650,7 +2690,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final picked = <ChatModelChoice>[
       for (final id in ids)
-        ChatModelChoice(id: id, name: names[id] ?? id),
+        ChatModelChoice(id: id, name: names[id] ?? prettyModelId(id)),
     ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (!mounted) return;

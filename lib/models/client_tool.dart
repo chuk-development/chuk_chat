@@ -34,6 +34,7 @@ class ClientTool {
 /// Type of tool.
 enum ToolType {
   builtin, // Built-in tools (calculator, time, weather, etc.)
+  mcp, // Tools a connected remote MCP server offers
 }
 
 /// Tool categories for grouping and enabling/disabling.
@@ -49,6 +50,7 @@ enum ToolCategory {
   google, // Google Calendar + Gmail
   email, // IMAP/SMTP email
   nextcloud, // Nextcloud files, calendar, contacts
+  mcp, // Tools from connected remote MCP servers
   whoop, // WHOOP health/fitness tracker
   sandbox, // Code execution sandbox (Python/shell + files)
 }

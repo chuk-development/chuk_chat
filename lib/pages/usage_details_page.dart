@@ -4,6 +4,7 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 const List<String> _kMonthNames = <String>[
   'Jan',
@@ -181,27 +182,23 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
                     // Period first: everything below is a reading of the
                     // window the reader picks here, so the control belongs
                     // above the numbers, not under a decorative header.
-                    _SectionLabel(l.period.toUpperCase()),
+                    ExpressiveSectionHeader(l.period),
                     _buildScopeSelector(context, scopeOptions),
-                    const SizedBox(height: 24),
 
-                    _SectionLabel(l.totals.toUpperCase()),
+                    ExpressiveSectionHeader(l.totals),
                     _buildSummaryCard(context, usageSlice),
-                    const SizedBox(height: 24),
 
                     if (selectedScope.type == _UsageScopeType.billingPeriod &&
                         _hasCreditProgress(overview)) ...[
-                      const _SectionLabel('BILLING'),
+                      const ExpressiveSectionHeader('Billing'),
                       _buildBillingCard(context, overview, selectedScope),
-                      const SizedBox(height: 24),
                     ],
 
-                    const _SectionLabel('BY MODEL'),
+                    const ExpressiveSectionHeader('By model'),
                     _buildModelSummaryCard(context, usageSlice),
-                    const SizedBox(height: 24),
 
-                    _SectionLabel(
-                      'REQUESTS · ${_formatCount(usageSlice.requests)}',
+                    ExpressiveSectionHeader(
+                      'Requests · ${_formatCount(usageSlice.requests)}',
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
@@ -223,7 +220,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  child: _Panel(
+                  child: ExpressiveCard(
                     child: Text(
                       l.noRequestsFound,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -304,7 +301,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final theme = Theme.of(context);
     final m3 = theme.m3;
 
-    return _Panel(
+    return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -360,7 +357,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final double used = overview.creditsUsedThisPeriod!;
     final double progress = (used / allocated).clamp(0.0, 1.0);
 
-    return _Panel(
+    return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -402,7 +399,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final accent = theme.colorScheme.primary;
 
     if (usageSlice.models.isEmpty) {
-      return _Panel(
+      return ExpressiveCard(
         child: Text(
           'No model activity in this period.',
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -468,7 +465,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       );
     }
 
-    return _Panel(
+    return ExpressiveCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
     );
   }
@@ -891,49 +888,6 @@ class _MutableModelSliceSummary {
       mediaRequests: mediaRequests,
       totalCreditsEur: totalCreditsEur,
       totalCostUsd: totalCostUsd,
-    );
-  }
-}
-
-/// Uppercase section label — the same rhythm the subscription and settings
-/// screens use, so this page stops looking like a different app.
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  const _SectionLabel(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-/// Flat rounded surface. No border, no gradient, no elevation — the page
-/// used all three at once and every card fought the one above it.
-class _Panel extends StatelessWidget {
-  final Widget child;
-  const _Panel({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).m3.surfaceContainer,
-        borderRadius: kBorderRadiusCard,
-      ),
-      child: child,
     );
   }
 }

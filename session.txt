@@ -1,26 +1,29 @@
-claude --resume e49ae03b-7484-4ebe-aaac-beb0de9a4921
-claude --resume 311f7c45-653a-4b6c-864c-f2926b8e14f9  # Debug recent commit regression issue
-claude --resume 8f70e38d-c685-4b5d-8933-648e8eff5efb  # Fix Flutter build missing vendor dependency
-claude --resume f2991fbd-a6b0-4a81-8a5a-0ca266889505  # Mahfgitem noise releasing
-claude --resume 8b586be8-2897-4238-8106-9d6604aaa9dc  # Debug message sending issue in app
-claude --resume a8949242-90ad-418a-8d70-142cd29cf0c1  # Implement automatic material color theme support
-claude --resume 0c9ff6d1-9857-4b8f-a167-f0488d526e08  # Generate luxury Italian lake wallpaper for phone
-claude --resume c42dedee-b483-4f7c-bd55-2c2336303340  # otp-code-email-auth
-claude --resume b4b243f2-2319-4526-a8c6-01a9cc5d047c  # Research David Goggins' Ironman times
-claude --resume 2d7601ba-613c-448c-9c05-c3c09ea1af2c  # Update Flutter dependencies to latest versions
-claude --resume cb6aead9-e65c-4b70-b05f-ed1c7ac8235e  # Debug Wan 2.7 image model lookup and chat memory
-claude --resume 34da0129-60c6-4cef-a9a0-fb49078eb465  # Refactor image generation tool architecture
-claude --resume 83f3fd96-f60c-415d-94ec-17381f18c9b5  # Fix double-click text selection in chat
-claude --resume a7e1b72e-4d15-49f4-bdef-4d289a822b8e  # Debug image generation with NSFW content
-claude --resume 7be9a3bb-bd4b-427a-a9be-2a7a735b35e4  # Add loading indicator and resolution display for image gener
-claude --resume 998dc4f8-b1c6-4230-9494-d53e9d95f553  # Research AI web design skills and MCP servers
-claude --resume 59308334-2f0f-4598-8c69-ff895bed59f8  # Debug chat sync and tool execution performance
-claude --resume 64fd74a0-476a-4531-86ba-4e2f9edc144e  # Take mobile app UI screenshots
-claude --resume 2edb1598-7748-4a3a-ad58-c95bd3bb79fe  # Write marketing video script for product demo
-claude --resume 72b4b229-05cc-482e-872c-b93a13093839  # Optimize message streaming latency in Flutter chat
-claude --resume 8cf91e88-0aa4-4512-8a98-122a5141fe3a  # Debug chuk_chat desktop app streaming
-claude --resume 98a586ff-93c6-4ea9-ae4e-5c925f41cd2e  # Create Figma brand kit for Chak Chat
-claude --resume 6faa6cce-55dc-42d5-ad23-2cafe46cc3c8
-claude --resume b344d462-92b0-461f-b749-d782c68c9beb  # Fix SVG cutoff at bottom of page
-claude --resume 14a25d1c-379c-4887-9a69-57c1b1d06168  # Improve Android notifications UI and interactions
-claude --resume 47fed739-3df5-4ae8-8c27-12e0bb5685f4  # Show onboarding only once per user
+claude --resume c6efa9a5-de0a-4140-ac59-2a12ed06fd81  # Check token allowance on Lite coding plan
+claude --resume 4781f87a-2062-4699-a3ec-cfb9966b5fbc  # Display diffs for user notes and artifact updates
+claude --resume 0fd76aba-9a70-4294-9ee8-f659c0466728  # Update Flutter dependencies for Linux
+claude --resume 76eaa85c-3ed3-4176-876b-b819a9d14514  # Ladesymbol für AR-Reasoning und Toolaufrufe anzeigen
+claude --resume 43f781df-0370-4143-8cbe-3b367ae9455f  # Debug mobile login screen instead of chats
+claude --resume 0166cf18-2309-4fd5-9270-b7baabfe5e53  # Debug AI model news search response
+claude --resume 69f0ca6c-1a9f-4dcd-a3f8-ec2ba5616596  # Beheben von Bild-Upload- und Nachrichtenbearbeitungsfehlern
+claude --resume a5f5dc9b-d428-47c2-8b9e-1d8ba453a891  # Recherche Marketing-Strategie Leap Fitness Group
+claude --resume 2f235a00-718d-4d96-a721-818481aa9741  # DeepSec Flutter compatibility check
+claude --resume 7b6a2495-2ec3-4cbd-80b1-5ea0060b8b33  # Chat-UI Scroll-Verhalten und Layout-Probleme beheben
+claude --resume 40cca476-88a6-4d30-8ab2-f632a521662e
+claude --resume d0341b39-7828-4977-8eee-43469b63b8de  # agent-skills-migration
+claude --resume 1f98c8b4-ff90-49cb-9b2f-39fc762c08e6  # Remove Load Skills button and auto-discover skills
+claude --resume b9583098-dc55-43b9-a900-0afd36532435  # Review cowork execution plan documentation
+claude --resume ca4da1e3-3d0f-4fd0-8c8e-60b02d3ed361  # Zusammenfassung der Magellan-Weltumseglung
+claude --resume dd469cad-327b-4c51-aba1-50c5d7a0a9a8  # Rabbit AI Tool und Browser-Funktionalität vergleichen
+claude --resume fc90f68d-7186-43c8-9395-927ea631fb5e  # Chat-UI Kopieren mit Strg-C beheben
+claude --resume dbbfce61-f97a-4ffd-b207-38ace8f6f375  # Cowork-Modus Demo mit lokaler Binary
+claude --resume 9289a35c-c9fd-46c5-9b0d-476f5c1c268d  # Cowork-Projekt Übernahme und Subagent-Integration
+claude --resume a2e8b92c-4dc8-40fa-88b9-59fa89d0ab3c  # Standard-Modell und Provider im Fast Modus
+claude --resume 31a81a80-69fd-4d0c-be3e-592cfd443bfb  # Analyse Chat-UI Mobile auf Code-Duplikate
+claude --resume 1758c7f1-e3d3-4ec8-93b2-c2de0fb63a26
+claude --resume 158acccf-96ca-4c7a-b7de-d202bc552ce5
+claude --resume 7cd0fff2-8f0d-4cdd-a544-a693d23679f5  # Überarbeite Sidebar, Einstellungen und UI-Komponenten
+claude --resume 26ae5b91-3c2b-4ce1-8dd7-7bd652229ab7
+claude --resume aac74d5a-1450-4be4-b537-d32313710395  # Redesign Chat UI und Mode-Auswahl
+claude --resume 20d69f7a-cba1-435c-b67b-01256b66548e  # Code-Reduktion und Refaktorierung in Chat-UI
+claude --resume 1c8622ce-81a8-4a2c-a59b-fa27cde9d188
+claude --resume d87da99c-385d-4811-92ac-79368f21389a

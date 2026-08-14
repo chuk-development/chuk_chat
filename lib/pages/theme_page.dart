@@ -6,6 +6,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class ThemePage extends StatefulWidget {
   final AppShellConfig config;
@@ -158,21 +159,20 @@ class _ThemePageState extends State<ThemePage> {
         scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // Mode section: dark toggle + dynamic colour grouped in one card.
-          const _SectionHeader('Mode'),
-          _GroupedCard(
+          // Mode: the dark toggle and Material You, one group.
+          const ExpressiveSectionHeader('Mode'),
+          ExpressiveGroup(
             children: [
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.dark_mode_outlined,
                 title: l.darkMode,
                 subtitle: l.darkModeSubtitle,
                 value: isDarkMode,
                 onChanged: _updateThemeMode,
               ),
-              _divider(context),
-              _SwitchRow(
+              ExpressiveSwitchRow(
                 icon: Icons.palette_outlined,
                 title: l.dynamicColor,
                 subtitle: l.dynamicColorSubtitle,
@@ -181,12 +181,11 @@ class _ThemePageState extends State<ThemePage> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
           // Material You drives the whole palette (accent, icon/foreground and
           // background). While it is on, every colour picker is replaced by a
           // note so the UI never implies a choice that the system overrides.
-          _SectionHeader(l.accentColor),
+          ExpressiveSectionHeader(l.accentColor),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -214,9 +213,8 @@ class _ThemePageState extends State<ThemePage> {
                 } catch (_) {}
               },
             ),
-          const SizedBox(height: 24),
 
-          _SectionHeader(l.iconFgColor),
+          ExpressiveSectionHeader(l.iconFgColor),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -244,9 +242,8 @@ class _ThemePageState extends State<ThemePage> {
                 } catch (_) {}
               },
             ),
-          const SizedBox(height: 24),
 
-          _SectionHeader(l.backgroundColor),
+          ExpressiveSectionHeader(l.backgroundColor),
           if (_selectedDynamicColor)
             _dynamicColorNote(l)
           else
@@ -274,7 +271,6 @@ class _ThemePageState extends State<ThemePage> {
                 } catch (_) {}
               },
             ),
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -283,149 +279,9 @@ class _ThemePageState extends State<ThemePage> {
   // Shown in place of a colour picker while Material You is active — the
   // system palette owns the colour, so there is nothing to choose here.
   Widget _dynamicColorNote(AppLocalizations l) {
-    return _GroupedCard(
-      children: [
-        _NoteRow(
-          icon: Icons.auto_awesome_outlined,
-          text: l.colorDynamicNote,
-        ),
-      ],
-    );
-  }
-
-  Widget _divider(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Divider(height: 1, color: m3.outlineVariant, indent: 56);
-  }
-}
-
-// Small caps section header used across both settings pages.
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
-          color: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-// Grouped rounded surfaceContainer card, rows separated by thin dividers.
-class _GroupedCard extends StatelessWidget {
-  final List<Widget> children;
-  const _GroupedCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SwitchRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return InkWell(
-      borderRadius: kBorderRadiusRow,
-      onTap: () => onChanged(!value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: m3.onSurfaceVariant),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Switch.adaptive(value: value, onChanged: onChanged),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Informational row (icon + text) used to explain a disabled control,
-// e.g. the accent picker when Material You / dynamic colour is active.
-class _NoteRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _NoteRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Icon(icon, size: 22, color: m3.onSurfaceVariant),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, color: m3.onSurfaceVariant),
-            ),
-          ),
-        ],
-      ),
+    return ExpressiveInfoCard(
+      icon: Icons.auto_awesome_outlined,
+      text: l.colorDynamicNote,
     );
   }
 }
@@ -457,12 +313,7 @@ class _ColorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
