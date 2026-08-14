@@ -132,7 +132,6 @@ const Map<String, String> stringsPt = {
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Agenda / Gmail)',
   'catEmailImapSmtp': 'Email (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
@@ -154,8 +153,6 @@ const Map<String, String> stringsPt = {
   'catGoogleCalGmailDesc':
       'Gerenciar sua agenda e email via Google Agenda e Gmail',
   'catEmailImapSmtpDesc': 'Enviar e receber email via IMAP e SMTP',
-  'catWhoopDesc':
-      'Ver dados de recuperação, esforço, sono e treinos do WHOOP',
   'catNextcloudDesc':
       'Navegar por arquivos, calendário e contatos no Nextcloud',
   'catSandboxDesc':
@@ -190,7 +187,6 @@ const Map<String, String> stringsPt = {
   'toolUuidGen': 'Gerador de UUID',
   'toolNotes': 'Notas',
   'toolQrGen': 'Gerador de QR',
-  'toolWhoopHealth': 'Saúde WHOOP',
   'resetToolSettingsTitle': 'Redefinir Configurações de Ferramentas?',
   'resetToolSettingsBody':
       'Isso reativará todas as ferramentas e redefinirá todos os prompts personalizados.',

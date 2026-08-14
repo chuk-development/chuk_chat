@@ -132,7 +132,6 @@ const Map<String, String> stringsRu = {
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Календарь / Gmail)',
   'catEmailImapSmtp': 'Электронная почта (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Песочница / Код',
   'catSearchWebDesc':
@@ -154,8 +153,6 @@ const Map<String, String> stringsRu = {
       'Управление расписанием и почтой через Google Календарь и Gmail',
   'catEmailImapSmtpDesc':
       'Отправка и получение электронной почты через IMAP и SMTP',
-  'catWhoopDesc':
-      'Просмотр данных восстановления, нагрузки, сна и тренировок из WHOOP',
   'catNextcloudDesc':
       'Просмотр файлов, календаря и контактов в Nextcloud',
   'catSandboxDesc':
@@ -190,7 +187,6 @@ const Map<String, String> stringsRu = {
   'toolUuidGen': 'Генератор UUID',
   'toolNotes': 'Заметки',
   'toolQrGen': 'Генератор QR',
-  'toolWhoopHealth': 'Здоровье WHOOP',
   'resetToolSettingsTitle': 'Сбросить настройки инструментов?',
   'resetToolSettingsBody':
       'Это включит все инструменты обратно и сбросит все пользовательские промпты инструментов.',

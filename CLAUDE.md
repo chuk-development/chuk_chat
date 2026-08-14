@@ -119,7 +119,6 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray on desktop. **Also suppresses `window_close_service`** — with it on, closing the window minimises to tray instead of quitting |
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
-| `FEATURE_WHOOP` | `false` | Leave off — integration removed server-side, same failure |
 
 **There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
 `FEATURE_WORKSPACES`, and it already defaults to `true`. `build.sh`,

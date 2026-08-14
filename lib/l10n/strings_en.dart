@@ -225,7 +225,6 @@ const Map<String, String> stringsEn = {
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
   'catEmailImapSmtp': 'Email (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
@@ -240,7 +239,6 @@ const Map<String, String> stringsEn = {
   'catGoogleCalGmailDesc':
       'Manage your schedule and email via Google Calendar and Gmail',
   'catEmailImapSmtpDesc': 'Send and receive email via IMAP and SMTP',
-  'catWhoopDesc': 'View recovery, strain, sleep, and workout data from WHOOP',
   'catNextcloudDesc': 'Browse files, calendar, and contacts on Nextcloud',
   'catSandboxDesc':
       'Run Python or shell code in an isolated sandbox and read/write files',
@@ -273,7 +271,6 @@ const Map<String, String> stringsEn = {
   'toolUuidGen': 'UUID Generator',
   'toolNotes': 'Notes',
   'toolQrGen': 'QR Generator',
-  'toolWhoopHealth': 'WHOOP Health',
   'resetToolSettingsTitle': 'Reset Tool Settings?',
   'resetToolSettingsBody':
       'This will re-enable all tools and reset all custom tool prompts.',

@@ -2,8 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'package:chuk_chat/platform_config.dart'
-    show kFeatureSpotify, kFeatureWhoop;
+import 'package:chuk_chat/platform_config.dart' show kFeatureSpotify;
 import 'package:chuk_chat/services/approval_config.dart';
 import 'package:chuk_chat/services/bash_sandbox.dart';
 import 'package:chuk_chat/services/device_services.dart';
@@ -12,8 +11,6 @@ import 'package:chuk_chat/services/github_oauth.dart';
 import 'package:chuk_chat/services/google_oauth.dart';
 import 'package:chuk_chat/services/slack_oauth.dart';
 import 'package:chuk_chat/services/spotify_oauth.dart';
-import 'package:chuk_chat/services/whoop_oauth.dart';
-import 'package:chuk_chat/tool_handlers/whoop_tools.dart' as whoop_tools;
 import 'package:chuk_chat/utils/tool_helpers.dart';
 
 /// Singleton service instances for native platforms.
@@ -25,13 +22,12 @@ final GoogleOAuth _googleOAuth = GoogleOAuth();
 final EmailService _emailService = EmailService();
 final DeviceServices _deviceServices = DeviceServices();
 final ApprovalConfig _approvalConfig = ApprovalConfig();
-final WhoopOAuth _whoopOAuth = WhoopOAuth();
 
 /// Initialize platform services — loads saved tokens/configs.
 ///
-/// Spotify and WHOOP services are dormant unless their feature flags are
-/// enabled (the backend OAuth endpoints have been removed). We skip their
-/// token probes here so no background work happens for disabled features.
+/// The Spotify service is dormant unless its feature flag is enabled (the
+/// backend OAuth endpoint is gone). We skip its token probe here so no
+/// background work happens for a disabled feature.
 Future<void> initPlatformServices() async {
   final tasks = <Future<void>>[
     _approvalConfig.load(),
@@ -43,9 +39,6 @@ Future<void> initPlatformServices() async {
   ];
   if (kFeatureSpotify) {
     tasks.add(_spotifyOAuth.checkAuthenticated().then((_) {}));
-  }
-  if (kFeatureWhoop) {
-    tasks.add(_whoopOAuth.checkAuthenticated().then((_) {}));
   }
   await Future.wait(tasks);
 }
@@ -65,8 +58,6 @@ bool isPlatformServiceConnected(String service) {
       return _googleOAuth.isAuthenticated;
     case 'email':
       return _emailService.isConfigured;
-    case 'whoop':
-      return kFeatureWhoop && _whoopOAuth.hasToken;
     default:
       return false;
   }
@@ -74,15 +65,14 @@ bool isPlatformServiceConnected(String service) {
 
 // ============== Service connection management ==============
 
-/// Categories that support OAuth connect/disconnect. Spotify and WHOOP are
-/// excluded by default — their feature flags add them back at compile time
-/// when the integrations are re-enabled.
+/// Categories that support OAuth connect/disconnect. Spotify is excluded by
+/// default — its feature flag adds it back at compile time if the
+/// integration is re-enabled.
 final Set<String> connectableServices = {
   'github',
   'slack',
   'google',
   if (kFeatureSpotify) 'spotify',
-  if (kFeatureWhoop) 'whoop',
 };
 
 /// Start the OAuth flow for a service. Returns true on success.
@@ -101,10 +91,6 @@ Future<bool> connectPlatformService(String service) async {
     case 'google':
       await _googleOAuth.startAuth();
       return _googleOAuth.completeAuth();
-    case 'whoop':
-      if (!kFeatureWhoop) return false;
-      await _whoopOAuth.startAuth();
-      return _whoopOAuth.completeAuth();
     default:
       return false;
   }
@@ -123,8 +109,6 @@ Future<void> disconnectPlatformService(String service) async {
       await _googleOAuth.logout();
     case 'email':
       await _emailService.clearConfig();
-    case 'whoop':
-      if (kFeatureWhoop) await _whoopOAuth.logout();
   }
 }
 
@@ -1482,10 +1466,4 @@ Future<String> executeReminder(Map<String, dynamic> args) async {
 
 Future<String> executeDraftEmail(Map<String, dynamic> args) async {
   return executeDevice({...args, 'action': 'email_draft'});
-}
-
-// ============== WHOOP ==============
-
-Future<String> executeWhoop(Map<String, dynamic> args) async {
-  return whoop_tools.executeWhoop(args, _whoopOAuth);
 }

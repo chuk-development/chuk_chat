@@ -47,7 +47,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': Icons.fingerprint,
     'notes': Icons.note_outlined,
     'generate_qr': Icons.qr_code_2,
-    'whoop': Icons.monitor_heart_outlined,
   };
 
   static Map<String, String> _toolDisplayNames(AppLocalizations l) => {
@@ -72,7 +71,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': l.toolUuidGen,
     'notes': l.toolNotes,
     'generate_qr': l.toolQrGen,
-    'whoop': l.toolWhoopHealth,
   };
 
   late bool _toolCallingEnabled;
@@ -182,8 +180,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 8;
       case ToolCategory.email:
         return 9;
-      case ToolCategory.whoop:
-        return 10;
       case ToolCategory.nextcloud:
         return 11;
       case ToolCategory.sandbox:
@@ -214,8 +210,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catGoogleCalGmail;
       case ToolCategory.email:
         return l.catEmailImapSmtp;
-      case ToolCategory.whoop:
-        return l.catWhoop;
       case ToolCategory.nextcloud:
         return l.catNextcloud;
       case ToolCategory.sandbox:
@@ -245,8 +239,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.event_outlined;
       case ToolCategory.email:
         return Icons.email_outlined;
-      case ToolCategory.whoop:
-        return Icons.monitor_heart_outlined;
       case ToolCategory.nextcloud:
         return Icons.cloud_outlined;
       case ToolCategory.sandbox:
@@ -277,8 +269,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catGoogleCalGmailDesc;
       case ToolCategory.email:
         return l.catEmailImapSmtpDesc;
-      case ToolCategory.whoop:
-        return l.catWhoopDesc;
       case ToolCategory.nextcloud:
         return l.catNextcloudDesc;
       case ToolCategory.sandbox:
@@ -300,8 +290,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'google';
       case ToolCategory.email:
         return 'email';
-      case ToolCategory.whoop:
-        return 'whoop';
       default:
         return null;
     }

@@ -5,7 +5,6 @@ import 'package:chuk_chat/platform_config.dart'
         kFeatureServerTools,
         kFeatureSkills,
         kFeatureSpotify,
-        kFeatureWhoop,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
@@ -63,7 +62,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'gmail': ToolCategory.google,
   'email': ToolCategory.email,
   'nextcloud': ToolCategory.nextcloud,
-  'whoop': ToolCategory.whoop,
   'device': ToolCategory.device,
   'calendar': ToolCategory.device,
   'reminder': ToolCategory.device,
@@ -754,41 +752,6 @@ final List<ClientTool> builtinTools = [
       'shuffle',
       'höre',
       'listening',
-    ],
-  ),
-
-  // -- WHOOP --
-  ClientTool(
-    name: 'whoop',
-    description:
-        'Fetch health and fitness data from WHOOP wearable. '
-        'Actions: status (today\'s recovery, strain, sleep), '
-        'week (7-day summary), days (last N days), '
-        'sleep (detailed sleep data), recovery (recovery scores), '
-        'strain (strain scores), workouts (recent workouts). '
-        'Use "days" param to control how many days of data to fetch.',
-    parameters: {
-      'action':
-          'string (status, week, days, sleep, recovery, strain, workouts)',
-      'days':
-          'int (optional, default 7 — number of days for days/sleep/'
-          'recovery/strain/workouts)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'whoop',
-      'health',
-      'fitness',
-      'recovery',
-      'strain',
-      'sleep',
-      'workout',
-      'gesundheit',
-      'schlaf',
-      'erholung',
-      'training',
-      'wearable',
-      'tracker',
     ],
   ),
 
@@ -1495,12 +1458,9 @@ void registerBuiltinTools(ToolExecutor executor) {
     if (!kFeatureSkills && tool.name == 'skill') {
       continue;
     }
-    // Spotify / WHOOP: integration removed. Tool definitions stay in the
-    // source so re-enabling later only requires flipping the feature flag.
+    // Spotify: the integration is dormant server-side. The tool definition
+    // stays in the source so re-enabling later only needs the flag.
     if (!kFeatureSpotify && tool.name == 'spotify_control') {
-      continue;
-    }
-    if (!kFeatureWhoop && tool.name == 'whoop') {
       continue;
     }
     // Device tool: available on all platforms.

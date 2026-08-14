@@ -130,7 +130,6 @@ const Map<String, String> stringsAr = {
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (التقويم / Gmail)',
   'catEmailImapSmtp': 'البريد الإلكتروني (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'الصندوق الرملي / الكود',
   'catSearchWebDesc':
@@ -149,8 +148,6 @@ const Map<String, String> stringsAr = {
   'catGoogleCalGmailDesc':
       'إدارة جدولك وبريدك الإلكتروني عبر تقويم Google و Gmail',
   'catEmailImapSmtpDesc': 'إرسال واستقبال البريد الإلكتروني عبر IMAP و SMTP',
-  'catWhoopDesc':
-      'عرض بيانات التعافي والجهد والنوم والتمارين من WHOOP',
   'catNextcloudDesc':
       'تصفح الملفات والتقويم وجهات الاتصال على Nextcloud',
   'catSandboxDesc':
@@ -185,7 +182,6 @@ const Map<String, String> stringsAr = {
   'toolUuidGen': 'مولّد UUID',
   'toolNotes': 'الملاحظات',
   'toolQrGen': 'مولّد QR',
-  'toolWhoopHealth': 'صحة WHOOP',
   'resetToolSettingsTitle': 'إعادة تعيين إعدادات الأدوات؟',
   'resetToolSettingsBody':
       'سيؤدي هذا إلى إعادة تفعيل جميع الأدوات وإعادة تعيين جميع تعليمات الأدوات المخصصة.',
