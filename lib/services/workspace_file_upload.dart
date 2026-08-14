@@ -28,7 +28,8 @@ class WorkspaceUploadOutcome {
 /// The callbacks report progress so the caller can drive its own widget
 /// state: [onStart] once the name is known, [onProgress] per chunk,
 /// [onConverting] when the server starts the markdown conversion, and
-/// [onFinished] when the run ends, whatever the outcome.
+/// [onFinished] when the call ends, including a cancelled picker and a
+/// picker that threw.
 Future<WorkspaceUploadOutcome> pickAndUploadWorkspaceFile({
   required String workspaceId,
   required void Function(String fileName) onStart,
@@ -36,29 +37,29 @@ Future<WorkspaceUploadOutcome> pickAndUploadWorkspaceFile({
   required void Function() onConverting,
   required void Function() onFinished,
 }) async {
-  final result = await FilePicker.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: FileConstants.allowedExtensions,
-    allowMultiple: false,
-  );
-
-  if (result == null || result.files.isEmpty) {
-    return const WorkspaceUploadOutcome.cancelled();
-  }
-
-  final file = result.files.first;
-  // On web the picker hands back bytes and no path; on native it is the
-  // other way round, and the path is what the conversion API needs.
-  final filePath = file.path;
-  final pickedBytes = file.bytes;
-  if (filePath == null && pickedBytes == null) {
-    return const WorkspaceUploadOutcome.cancelled();
-  }
-
-  final fileName = file.name;
-  onStart(fileName);
-
   try {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: FileConstants.allowedExtensions,
+      allowMultiple: false,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return const WorkspaceUploadOutcome.cancelled();
+    }
+
+    final file = result.files.first;
+    // On web the picker hands back bytes and no path; on native it is the
+    // other way round, and the path is what the conversion API needs.
+    final filePath = file.path;
+    final pickedBytes = file.bytes;
+    if (filePath == null && pickedBytes == null) {
+      return const WorkspaceUploadOutcome.cancelled();
+    }
+
+    final fileName = file.name;
+    onStart(fileName);
+
     final fileBytes = filePath != null
         ? await File(filePath).readAsBytes()
         : pickedBytes!;
