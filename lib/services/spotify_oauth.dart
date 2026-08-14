@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' as io;
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/service_credentials_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/oauth_loopback_server.dart';
 
 /// Spotify OAuth Service — backend-assisted flow.
 ///
@@ -24,13 +23,22 @@ class SpotifyOAuth {
   static const int callbackPort = 43823;
   static String get redirectUri => 'http://127.0.0.1:$callbackPort/callback';
 
-  io.HttpServer? _callbackServer;
-  Completer<String>? _authCodeCompleter;
+  final OAuthLoopbackServer _callback = OAuthLoopbackServer(
+    port: callbackPort,
+    successTitle: 'Spotify Connected!',
+    theme: const OAuthResultPageTheme(
+      successColor: '#1DB954',
+      errorColor: '#EA4335',
+      background: '#191414',
+      card: '#282828',
+      border: '#3c4043',
+      text: '#e8eaed',
+    ),
+  );
 
   String? _accessToken;
   String? _refreshToken;
   DateTime? _tokenExpiry;
-  String? _state;
 
   bool get isAuthenticated => _accessToken != null;
   bool get hasToken => _accessToken != null;
@@ -54,27 +62,26 @@ class SpotifyOAuth {
   /// Start OAuth flow — gets auth URL from API server, opens browser, starts
   /// local callback server.
   Future<void> startAuth() async {
-    _state = _generateState();
+    final state = OAuthLoopbackServer.generateState();
 
-    _authCodeCompleter = Completer<String>();
-    await _startCallbackServer();
+    await _callback.start(expectedState: state);
 
     final response = await http.get(
       Uri.parse('$_backendUrl/v1/auth/spotify/auth-url').replace(
-        queryParameters: {'redirect_uri': redirectUri, 'state': _state!},
+        queryParameters: {'redirect_uri': redirectUri, 'state': state},
       ),
       headers: _apiHeaders,
     );
 
     if (response.statusCode != 200) {
-      await _stopCallbackServer();
+      await _callback.stop();
       throw Exception('Failed to get Spotify auth URL: ${response.statusCode}');
     }
 
     final data = jsonDecode(response.body);
     final authUrl = data['auth_url'] as String?;
     if (authUrl == null) {
-      await _stopCallbackServer();
+      await _callback.stop();
       throw Exception('API server did not return auth_url');
     }
 
@@ -82,7 +89,7 @@ class SpotifyOAuth {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      await _stopCallbackServer();
+      await _callback.stop();
       throw Exception('Could not launch Spotify authorization URL');
     }
   }
@@ -90,12 +97,12 @@ class SpotifyOAuth {
   /// Wait for OAuth callback and exchange code for tokens via API server.
   Future<bool> completeAuth() async {
     try {
-      final code = await _authCodeCompleter!.future.timeout(
+      final code = await _callback.code.timeout(
         const Duration(minutes: 5),
         onTimeout: () => throw TimeoutException('Authorization timed out'),
       );
 
-      await _stopCallbackServer();
+      await _callback.stop();
 
       // Exchange code for tokens via API server
       final response = await http.post(
@@ -120,7 +127,7 @@ class SpotifyOAuth {
       await _saveTokens();
       return true;
     } catch (_) {
-      await _stopCallbackServer();
+      await _callback.stop();
       return false;
     }
   }
@@ -270,75 +277,4 @@ class SpotifyOAuth {
   // Local callback server
   // ---------------------------------------------------------------------------
 
-  String _generateState() {
-    final random = Random.secure();
-    final values = List<int>.generate(32, (_) => random.nextInt(256));
-    return base64Url.encode(values);
-  }
-
-  Future<void> _startCallbackServer() async {
-    _callbackServer = await io.HttpServer.bind('127.0.0.1', callbackPort);
-
-    _callbackServer!.listen((io.HttpRequest request) async {
-      if (request.uri.path == '/callback') {
-        final code = request.uri.queryParameters['code'];
-        final state = request.uri.queryParameters['state'];
-        final error = request.uri.queryParameters['error'];
-
-        if (error != null) {
-          _authCodeCompleter?.completeError(Exception('OAuth error: $error'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Authorization Failed', false));
-          await request.response.close();
-          return;
-        }
-
-        if (state != _state) {
-          _authCodeCompleter?.completeError(Exception('CSRF state mismatch'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Security Error', false));
-          await request.response.close();
-          return;
-        }
-
-        if (code != null) {
-          if (!_authCodeCompleter!.isCompleted) {
-            _authCodeCompleter!.complete(code);
-          }
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Spotify Connected!', true));
-          await request.response.close();
-        } else {
-          request.response
-            ..statusCode = 400
-            ..write('Missing authorization code');
-          await request.response.close();
-        }
-      }
-    });
-  }
-
-  Future<void> _stopCallbackServer() async {
-    await _callbackServer?.close();
-    _callbackServer = null;
-  }
-
-  String _buildHtml(String title, bool success) {
-    final color = success ? '#1DB954' : '#EA4335';
-    return '<!DOCTYPE html><html><head><title>$title</title>'
-        '<style>body{font-family:sans-serif;display:flex;'
-        'justify-content:center;align-items:center;'
-        'height:100vh;margin:0;background:#191414;color:#e8eaed;}'
-        '.c{text-align:center;padding:40px;background:#282828;'
-        'border-radius:12px;border:1px solid #3c4043;}'
-        'h1{color:$color;}</style></head><body>'
-        '<div class="c"><h1>$title</h1>'
-        '<p>You can close this window.</p></div></body></html>';
-  }
 }
