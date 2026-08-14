@@ -162,7 +162,6 @@ Complete map of all Dart files in the codebase.
 | `file_upload_validator.dart` | File validation |
 | `upload_rate_limiter.dart` | Upload rate limiting (DoS protection) |
 | `certificate_pinning.dart` | SSL certificate pinning |
-| `service_logger.dart` | Logging |
 | `service_error_handler.dart` | Error handling |
 | `highlight_registry.dart` | Syntax highlighting |
 
