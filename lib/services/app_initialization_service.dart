@@ -34,8 +34,7 @@ class AppInitializationService {
   static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3);
   static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2);
 
-  bool get isInitializing => _isInitializing;
-  bool get isSupabaseReady => _isSupabaseReady;
+
 
   /// Initialize core services (call from main())
   Future<void> initializeCoreServices() async {

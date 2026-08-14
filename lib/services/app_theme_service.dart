@@ -123,7 +123,6 @@ class AppThemeService extends ChangeNotifier {
   Color? _cachedThemeAccent;
   Color? _cachedThemeBg;
   Color? _cachedThemeIconFg;
-  bool _hasAppliedSupabaseTheme = false;
   Future<void>? _supabaseLoadInFlight;
   DateTime? _lastSupabaseLoadAt;
   static const Duration _supabaseLoadTtl = Duration(seconds: 20);
@@ -157,9 +156,7 @@ class AppThemeService extends ChangeNotifier {
   String get chatFontFamily => _chatFontFamily;
   double get uiScale => _uiScale;
   bool get onboardingCompleted => _onboardingCompleted;
-  bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
-  ThemeData? get cachedThemeData => _cachedThemeData;
 
   // Performance: Cache SharedPreferences instance
   Future<SharedPreferences> _getPrefs() async {
@@ -360,7 +357,6 @@ class AppThemeService extends ChangeNotifier {
     _chatFontFamily = _sanitizeChatFontFamily(
       customizationPrefs.chatFontFamily,
     );
-    _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
     await _reconcileOnboarding(user.id, customizationPrefs.onboardingCompleted);
@@ -713,9 +709,6 @@ class AppThemeService extends ChangeNotifier {
     }
   }
 
-  void resetSupabaseThemeFlag() {
-    _hasAppliedSupabaseTheme = false;
-  }
 
   /// Build the ThemeData from current settings.
   ///

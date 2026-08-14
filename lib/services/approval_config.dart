@@ -3,10 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Categories of actions that may require approval
 enum ApprovalCategory {
   bash, // Shell commands
-  email, // IMAP/SMTP email
   gmail, // Gmail via Google OAuth
   slack, // Slack messages
-  nextcloud, // Nextcloud file operations
   github, // GitHub actions
   calendar, // Calendar modifications
 }
@@ -40,10 +38,8 @@ class ApprovalConfig {
   // Category-level approval settings
   final Map<ApprovalCategory, bool> _categoryApproval = {
     ApprovalCategory.bash: true,
-    ApprovalCategory.email: true,
     ApprovalCategory.gmail: true,
     ApprovalCategory.slack: true,
-    ApprovalCategory.nextcloud: true,
     ApprovalCategory.github: false,
     ApprovalCategory.calendar: false,
   };
@@ -68,24 +64,6 @@ class ApprovalConfig {
       riskDescription: 'Could permanently delete important files.',
     ),
 
-    // Email (IMAP/SMTP) actions
-    ApprovalAction(
-      category: ApprovalCategory.email,
-      action: 'send_email',
-      description: 'Sending emails via SMTP',
-      riskLevel: 'high',
-      riskDescription:
-          'AI could send emails on your behalf without your knowledge. '
-          'Emails cannot be recalled once sent.',
-    ),
-    ApprovalAction(
-      category: ApprovalCategory.email,
-      action: 'delete_email',
-      description: 'Deleting emails from mailbox',
-      riskLevel: 'medium',
-      riskDescription: 'Could permanently delete important emails.',
-    ),
-
     // Gmail actions
     ApprovalAction(
       category: ApprovalCategory.gmail,
@@ -105,23 +83,6 @@ class ApprovalConfig {
       riskLevel: 'medium',
       riskDescription:
           'AI could post messages visible to your team or organization.',
-    ),
-
-    // Nextcloud actions
-    ApprovalAction(
-      category: ApprovalCategory.nextcloud,
-      action: 'delete_file',
-      description: 'Deleting files from Nextcloud',
-      riskLevel: 'medium',
-      riskDescription:
-          'Could permanently delete files from your cloud storage.',
-    ),
-    ApprovalAction(
-      category: ApprovalCategory.nextcloud,
-      action: 'upload_file',
-      description: 'Uploading files to Nextcloud',
-      riskLevel: 'low',
-      riskDescription: 'Could upload content to your cloud storage.',
     ),
 
     // GitHub actions
@@ -172,11 +133,6 @@ class ApprovalConfig {
   /// Check if approval is required for a category
   bool isApprovalRequired(ApprovalCategory category) {
     return _categoryApproval[category] ?? true;
-  }
-
-  /// Get actions for a specific category
-  static List<ApprovalAction> getActionsForCategory(ApprovalCategory category) {
-    return allActions.where((a) => a.category == category).toList();
   }
 
 
