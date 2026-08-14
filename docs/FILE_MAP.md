@@ -62,7 +62,6 @@ Complete map of all Dart files in the codebase.
 | `message_composition_service.dart` | Prepare messages for API |
 | `local_chat_cache_service.dart` | In-memory cache |
 | `title_generation_service.dart` | AI-powered chat title generation |
-| `session_helper.dart` | Session validation utilities |
 
 ### Projects
 | File | Purpose |
@@ -73,7 +72,6 @@ Complete map of all Dart files in the codebase.
 ### Models
 | File | Purpose |
 |------|---------|
-| `model_prefetch_service.dart` | Preload models |
 | `model_cache_service.dart` | Cache models |
 | `model_capabilities_service.dart` | Model features |
 
@@ -91,7 +89,6 @@ Complete map of all Dart files in the codebase.
 | File | Purpose |
 |------|---------|
 | `image_storage_service.dart` | Encrypted image storage |
-| `image_generation_service.dart` | AI image gen |
 | `image_compression_service.dart` | JPEG compression |
 | `file_conversion_service.dart` | Doc conversion |
 
@@ -107,7 +104,6 @@ Complete map of all Dart files in the codebase.
 | `attachment_preview_bar.dart` | Pre-send attachments |
 | `model_selection_dropdown.dart` | Model dropdown |
 | `credit_display.dart` | Credit balance |
-| `free_message_display.dart` | Free message quota |
 | `password_strength_meter.dart` | Password strength |
 | `project_file_viewer.dart` | Project file viewer dialog |
 | `project_panel.dart` | Right-side project settings panel |
