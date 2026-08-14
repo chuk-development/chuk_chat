@@ -10,8 +10,6 @@ class ModelCacheService {
   static const String _kSelectedModelKeyPrefix = 'cached_selected_model_';
   static const String _kProviderPrefsKeyPrefix = 'cached_provider_prefs_';
 
-  /// Cache validity duration - models don't change often
-  static const Duration _cacheValidDuration = Duration(hours: 24);
 
   static Future<void> saveAvailableModels(
     List<Map<String, dynamic>> models,
@@ -24,16 +22,6 @@ class ModelCacheService {
     );
   }
 
-  /// Check if cached models are still valid (less than 24h old)
-  static Future<bool> isCacheValid() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timestamp = prefs.getInt(_kModelsTimestampKey);
-    if (timestamp == null) return false;
-
-    final cachedAt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final age = DateTime.now().difference(cachedAt);
-    return age < _cacheValidDuration;
-  }
 
   static Future<List<Map<String, dynamic>>> loadAvailableModels() async {
     final prefs = await SharedPreferences.getInstance();
@@ -111,11 +99,6 @@ class ModelCacheService {
     await prefs.setString(_providerPrefsKey(userId), jsonEncode(current));
   }
 
-  static Future<void> clearAllForUser(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_selectedModelKey(userId));
-    await prefs.remove(_providerPrefsKey(userId));
-  }
 
   static String _selectedModelKey(String userId) =>
       '$_kSelectedModelKeyPrefix$userId';

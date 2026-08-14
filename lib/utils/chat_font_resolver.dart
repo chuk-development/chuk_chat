@@ -26,12 +26,3 @@ String? resolveChatFontFamily(String id) {
       return GoogleFonts.arimo().fontFamily;
   }
 }
-
-/// Normalize an unknown id (e.g. from Supabase) back to a known value so the
-/// UI and persistence never drift.
-String sanitizeChatFontFamily(String? id) {
-  if (id == null || !kSupportedChatFontFamilies.contains(id)) {
-    return kDefaultChatFontFamily;
-  }
-  return id;
-}

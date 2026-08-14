@@ -19,7 +19,6 @@ const Map<String, String> stringsHi = {
   'pricingPlans': 'मूल्य योजनाएँ',
   'pricingPlansSubtitle': 'हमारी सदस्यता योजनाएँ और मूल्य देखें',
   'accountSettings': 'खाता सेटिंग्स',
-  'accountSettingsSubtitle': 'अपनी प्रोफ़ाइल और खाता प्रबंधित करें',
   'exportChats': 'चैट निर्यात करें',
   'exportChatsSubtitle': 'अपनी बातचीत JSON के रूप में डाउनलोड करें',
   'about': 'जानकारी',
@@ -36,8 +35,6 @@ const Map<String, String> stringsHi = {
   // ── Customization page ─────────────────────────────────────
   'language': 'भाषा',
   'languageSubtitle': 'अपनी पसंदीदा भाषा चुनें',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'वॉइस ट्रांसक्रिप्शन',
   'autoSendVoice': 'वॉइस संदेश स्वतः भेजें',
   'autoSendVoiceSubtitle':
@@ -110,14 +107,12 @@ const Map<String, String> stringsHi = {
       'सहायक संदेशों में चल रहे/पूर्ण टूल चिप्स प्रदर्शित करें',
   'toolCallingTip':
       'सुझाव: सर्वोत्तम संगतता के लिए Markdown फ़ॉलबैक सक्षम रखें। केवल तभी अक्षम करें जब आप सख्त XML-only टूल कॉल चाहते हैं।',
-  'visualOutputNonTool': 'विज़ुअल आउटपुट (नॉन-टूल)',
   'enableMapBlocks': 'मैप ब्लॉक सक्षम करें (<map>)',
   'enableMapBlocksSubtitle':
       'मॉडल प्रॉम्प्ट में मैप रेंडरिंग निर्देश शामिल करने की अनुमति दें',
   'enableChartBlocks': 'चार्ट ब्लॉक सक्षम करें (<chart>)',
   'enableChartBlocksSubtitle':
       'मॉडल प्रॉम्प्ट में चार्ट रेंडरिंग निर्देश शामिल करने की अनुमति दें',
-  'connectors': 'कनेक्टर्स',
   'loadingToolSettings': 'टूल सेटिंग्स लोड हो रही हैं...',
   'noToolsRegistered': 'अभी तक कोई टूल पंजीकृत नहीं है।',
   'catSearchWeb': 'खोज और वेब',
@@ -157,10 +152,6 @@ const Map<String, String> stringsHi = {
   'disconnectCategory': '{label} डिस्कनेक्ट करें?',
   'removeCredentialsWarning': 'इससे आपके सहेजे गए क्रेडेंशियल हटा दिए जाएँगे।',
   'cancel': 'रद्द करें',
-  'categoryConnected': '{label} कनेक्ट हो गया',
-  'failedToConnect': '{label} कनेक्ट करने में विफल',
-  'unableToConnect':
-      '{label} कनेक्ट करने में असमर्थ। कृपया पुनः प्रयास करें।',
   'toolWebSearch': 'वेब खोज',
   'toolWebCrawl': 'वेब क्रॉल',
   'toolImageGen': 'छवि जनरेशन',
@@ -189,17 +180,12 @@ const Map<String, String> stringsHi = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'प्रोफ़ाइल',
-  'profileSubtitle':
-      'Chuk Chat में आपका नाम और ईमेल कैसा दिखे, यह अपडेट करें।',
   'displayName': 'प्रदर्शन नाम',
   'displayNameHint': 'दूसरे लोग आपको कैसे देखते हैं',
   'emailAddress': 'ईमेल पता',
   'emailAddressHint': 'जहाँ हम सूचनाएँ भेजते हैं',
   'security': 'सुरक्षा',
-  'securitySubtitle': 'आश्वस्त हों कि सब कुछ सुरक्षित है।',
   'changePassword': 'पासवर्ड बदलें',
-  'changePasswordSubtitle':
-      'अपना Supabase पासवर्ड अपडेट करें और अपनी सहेजी गई चैट को पुनः एन्क्रिप्ट करें।',
   'currentPassword': 'वर्तमान पासवर्ड',
   'newPassword': 'नया पासवर्ड',
   'minCharsPassword': 'न्यूनतम 8 अक्षर।',
@@ -209,9 +195,6 @@ const Map<String, String> stringsHi = {
   'lockedChatsSingular': '{count} चैट पिछले पासवर्ड से एन्क्रिप्टेड है।',
   'lockedChatsPlural': '{count} चैट पिछले पासवर्ड से एन्क्रिप्टेड हैं।',
   'recoverChats': 'चैट पुनर्प्राप्त करें',
-  'dangerZone': 'ख़तरनाक क्षेत्र',
-  'dangerZoneSubtitle':
-      'अपरिवर्तनीय कार्रवाइयाँ जो आपके पूरे खाते को प्रभावित करती हैं।',
   'deleteAccountWarning':
       'खाता हटाने से सभी सदस्यताएँ रद्द हो जाएँगी, आपका डेटा हट जाएगा और यह पूर्ववत नहीं किया जा सकता।',
   'deleteAccount': 'खाता हटाएँ',
@@ -277,7 +260,6 @@ const Map<String, String> stringsHi = {
   'openSourceLicenses': 'ओपन सोर्स लाइसेंस',
   'openSourceLicensesSubtitle':
       'इस बिल्ड में शामिल हर डिपेंडेंसी के लाइसेंस की समीक्षा करें।',
-  'legalDocuments': 'कानूनी दस्तावेज़',
   'termsOfService': 'सेवा की शर्तें',
   'privacyPolicy': 'गोपनीयता नीति',
   'versionText': 'संस्करण {version}',
@@ -307,9 +289,6 @@ const Map<String, String> stringsHi = {
   'manageBilling': 'बिलिंग प्रबंधित करें',
   'manageBillingSubtitle':
       'अपनी सदस्यता रद्द करने या भुगतान विधियाँ अपडेट करने के लिए बिलिंग पोर्टल का उपयोग करें।',
-  'subscribeToGetCredits': 'AI क्रेडिट पाने के लिए सदस्यता लें',
-  'subscriptionDesktopOnly':
-      'सदस्यता प्रबंधन केवल डेस्कटॉप पर उपलब्ध है।',
   'active': 'सक्रिय',
   'getCreditsMonthly': 'मासिक \u20ac16 AI क्रेडिट प्राप्त करें',
   'accessAllModels': 'सभी AI मॉडल तक पहुँच',
@@ -334,9 +313,6 @@ const Map<String, String> stringsHi = {
   'createAccountWithEmail': 'ईमेल और पासवर्ड से खाता बनाएँ',
   'supabaseNotConfigured':
       'Supabase क्रेडेंशियल कॉन्फ़िगर नहीं हैं। प्रोडक्शन बिल्ड चलाने से पहले उन्हें अपडेट करें।',
-  'confirmEmailToContinue': 'जारी रखने के लिए अपना ईमेल पुष्टि करें',
-  'confirmEmailBody':
-      'हमने आपके ईमेल पते पर एक पुष्टिकरण लिंक भेजा है। कृपया साइन इन करने से पहले उसे खोलें और लिंक पर क्लिक करें।',
   'howOthersSeeYou': 'दूसरे लोग आपको कैसे देखेंगे',
   'email': 'ईमेल',
   'emailPlaceholder': 'you@example.com',
@@ -410,7 +386,6 @@ const Map<String, String> stringsHi = {
       'रिलीज़ बिल्ड में काम करता है। लैग और ट्रे समस्याओं के निवारण के लिए ऐप/रनटाइम मेटाडेटा लॉग करता है।',
   'diagnosticsEnabled': 'डायग्नोस्टिक्स लॉगिंग सक्षम',
   'diagnosticsDisabled': 'डायग्नोस्टिक्स लॉगिंग अक्षम',
-  'logFile': 'लॉग फ़ाइल',
   'notInitializedYet': 'अभी तक आरंभ नहीं हुआ',
   'refresh': 'रीफ़्रेश',
   'copyRecent': 'हालिया कॉपी करें',
@@ -427,7 +402,6 @@ const Map<String, String> stringsHi = {
   'failedToShareLog': 'डायग्नोस्टिक्स लॉग शेयर करने में विफल: {error}',
   'diagnosticsLogCleared': 'डायग्नोस्टिक्स लॉग साफ़ किया गया',
   'failedToClearLog': 'डायग्नोस्टिक्स लॉग साफ़ करने में विफल: {error}',
-  'recentLogLines': 'हालिया लॉग लाइनें',
   'devOptionsDisabledMsg': 'डेवलपर विकल्प अक्षम।',
   'noLogsYet':
       'अभी तक कोई लॉग नहीं। डायग्नोस्टिक्स लॉगिंग सक्षम करें और डेटा एकत्र करने के लिए ऐप का उपयोग करें।',
@@ -457,45 +431,20 @@ const Map<String, String> stringsHi = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'सत्र समाप्त हो गया। कृपया पुनः साइन इन करें।',
-  'offlineMessage':
-      'ऐसा लगता है कि आप ऑफ़लाइन हैं। कृपया अपना इंटरनेट कनेक्शन जाँचें।',
-  'cannotReachApi': 'API सर्वर तक नहीं पहुँचा जा सकता।',
-  'maintenanceMessage':
-      'हम वर्तमान में रखरखाव कर रहे हैं और जल्द ही वापस आएँगे।',
   'free': 'मुफ़्त',
-  'perMillion': '/M',
-  'perRequest': '/अनुरोध',
   'best': 'सर्वश्रेष्ठ',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'मेल ऐप में खोलें',
-  'costLabel': 'लागत: {cost}',
-  'generatedLabel': 'जनरेट किया गया: {label}',
-  'unableToCopyImage': 'छवि कॉपी करने में असमर्थ',
   'unableToSaveImage': 'छवि सहेजने में असमर्थ',
   'image': 'छवि',
-  'openLink': 'लिंक खोलें',
-  'openLinkConfirm':
-      'क्या आप वाकई ऐप छोड़कर {url} खोलना चाहते हैं?',
   'open': 'खोलें',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'सामग्री क्लिपबोर्ड पर कॉपी की गई',
-  'artifactCopied': 'आर्टिफ़ैक्ट क्लिपबोर्ड पर कॉपी किया गया',
-  'fileSaved': 'फ़ाइल सहेजी गई',
-  'failedToExportArtifact': 'आर्टिफ़ैक्ट निर्यात करने में विफल: {error}',
-  'failedToSave': 'सहेजने में विफल: {error}',
-  'markdownSaved': 'Markdown सहेजा गया',
   'original': 'मूल',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Markdown सारांश देखें',
-  'addSummary': 'सारांश जोड़ें',
-  'deletedFile': 'हटाई गई फ़ाइल',
   'deleteFile': 'फ़ाइल हटाएँ',
-  'deleteFileConfirm': '"{name}" हटाएँ?',
   'deleteFailed': 'हटाना विफल: {error}',
-  'uploadedFile': 'अपलोड किया गया: {name}',
-  'freeMessagePlaceholder': 'मुफ़्त: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'मुझसे कुछ भी पूछें !',
@@ -505,8 +454,6 @@ const Map<String, String> stringsHi = {
   'addMessageOrDocs': 'संदेश जोड़ें या दस्तावेज़ भेजें',
   'micAccessFailed': 'माइक एक्सेस विफल',
   'transcriptionFailed': 'ट्रांसक्रिप्शन विफल',
-  'replyTargetSelected': 'उत्तर लक्ष्य चुना गया',
-  'clearReply': 'उत्तर साफ़ करें',
   'nothingToResend': 'पुनः भेजने के लिए कुछ नहीं',
   'freeMessagesUsed': 'मुफ़्त संदेश समाप्त',
   'ok': 'ठीक है',
@@ -520,16 +467,9 @@ const Map<String, String> stringsHi = {
   'modelError': 'त्रुटि: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'छवि कॉपी करें',
-  'downloadImage': 'छवि डाउनलोड करें',
-  'imageDetails': 'छवि विवरण',
-  'imageCopied': 'छवि कॉपी की गई',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'मुफ़्त संदेश',
-  'freeUsed': 'उपयोग किए: {count}',
   'freeTotal': 'कुल: {count}',
-  'subscribeToContinue': 'चैट जारी रखने के लिए सदस्यता लें',
   'freeRemaining': 'मुफ़्त: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -579,5 +519,4 @@ const Map<String, String> stringsHi = {
   'close': 'बंद करें',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'शायद बाद में',
 };

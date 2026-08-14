@@ -19,7 +19,6 @@ const Map<String, String> stringsZh = {
   'pricingPlans': '订阅方案',
   'pricingPlansSubtitle': '查看我们的订阅方案和价格',
   'accountSettings': '账户设置',
-  'accountSettingsSubtitle': '管理你的个人资料和账户',
   'exportChats': '导出聊天记录',
   'exportChatsSubtitle': '以 JSON 格式下载你的对话',
   'about': '关于',
@@ -36,8 +35,6 @@ const Map<String, String> stringsZh = {
   // ── Customization page ─────────────────────────────────────
   'language': '语言',
   'languageSubtitle': '选择你的首选语言',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': '语音转文字',
   'autoSendVoice': '自动发送语音消息',
   'autoSendVoiceSubtitle': '自动发送转录后的语音消息，无需确认',
@@ -100,12 +97,10 @@ const Map<String, String> stringsZh = {
   'showToolActivitySubtitle': '在助手消息中显示运行中/已完成的工具标签',
   'toolCallingTip':
       '提示：建议保持 Markdown 回退处于启用状态以获得最佳兼容性。仅在需要严格使用 XML 工具调用时才禁用它。',
-  'visualOutputNonTool': '视觉输出（非工具）',
   'enableMapBlocks': '启用地图块（<map>）',
   'enableMapBlocksSubtitle': '允许模型提示词中包含地图渲染指令',
   'enableChartBlocks': '启用图表块（<chart>）',
   'enableChartBlocksSubtitle': '允许模型提示词中包含图表渲染指令',
-  'connectors': '连接器',
   'loadingToolSettings': '正在加载工具设置...',
   'noToolsRegistered': '尚未注册任何工具。',
   'catSearchWeb': '搜索和网络',
@@ -137,9 +132,6 @@ const Map<String, String> stringsZh = {
   'disconnectCategory': '断开 {label} 的连接？',
   'removeCredentialsWarning': '这将删除你保存的凭据。',
   'cancel': '取消',
-  'categoryConnected': '{label} 已连接',
-  'failedToConnect': '连接 {label} 失败',
-  'unableToConnect': '无法连接 {label}。请重试。',
   'toolWebSearch': '网络搜索',
   'toolWebCrawl': '网页抓取',
   'toolImageGen': '图片生成',
@@ -167,15 +159,12 @@ const Map<String, String> stringsZh = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': '个人资料',
-  'profileSubtitle': '更新你在 Chuk Chat 中显示的名称和邮箱。',
   'displayName': '显示名称',
   'displayNameHint': '其他人看到的名字',
   'emailAddress': '电子邮箱',
   'emailAddressHint': '我们发送通知的邮箱',
   'security': '安全',
-  'securitySubtitle': '确认一切都受到保护。',
   'changePassword': '更改密码',
-  'changePasswordSubtitle': '更新你的 Supabase 密码并重新加密已保存的聊天记录。',
   'currentPassword': '当前密码',
   'newPassword': '新密码',
   'minCharsPassword': '至少 8 个字符。',
@@ -185,8 +174,6 @@ const Map<String, String> stringsZh = {
   'lockedChatsSingular': '{count} 条聊天使用旧密码加密。',
   'lockedChatsPlural': '{count} 条聊天使用旧密码加密。',
   'recoverChats': '恢复聊天',
-  'dangerZone': '危险区域',
-  'dangerZoneSubtitle': '影响整个账户的不可撤销操作。',
   'deleteAccountWarning': '删除账户将取消所有订阅、移除你的数据，且无法撤销。',
   'deleteAccount': '删除账户',
   'unableToLoadProfile': '暂时无法加载你的个人资料。',
@@ -243,7 +230,6 @@ const Map<String, String> stringsZh = {
   'chukChat': 'Chuk Chat',
   'openSourceLicenses': '开源许可',
   'openSourceLicensesSubtitle': '查看此构建中包含的每个依赖项的许可证。',
-  'legalDocuments': '法律文件',
   'termsOfService': '服务条款',
   'privacyPolicy': '隐私政策',
   'versionText': '版本 {version}',
@@ -269,8 +255,6 @@ const Map<String, String> stringsZh = {
   'unusedCreditsExpire': '未使用的额度将在每月底到期。',
   'manageBilling': '管理账单',
   'manageBillingSubtitle': '使用账单门户取消订阅或更新支付方式。',
-  'subscribeToGetCredits': '订阅以获取 AI 额度',
-  'subscriptionDesktopOnly': '订阅管理仅在桌面端可用。',
   'active': '已激活',
   'getCreditsMonthly': '每月获得 \u20ac16 AI 额度',
   'accessAllModels': '访问所有 AI 模型',
@@ -293,8 +277,6 @@ const Map<String, String> stringsZh = {
   'createAccountWithEmail': '使用邮箱和密码创建账户',
   'supabaseNotConfigured':
       'Supabase 凭据未配置。请在运行生产构建之前更新它们。',
-  'confirmEmailToContinue': '确认你的邮箱以继续',
-  'confirmEmailBody': '我们已向你的邮箱发送了一封确认链接。请打开邮件并点击链接，然后再登录。',
   'howOthersSeeYou': '其他人将看到的名字',
   'email': '邮箱',
   'emailPlaceholder': 'you@example.com',
@@ -360,7 +342,6 @@ const Map<String, String> stringsZh = {
   'enableDiagnosticsSubtitle': '在发布版本中有效。记录应用/运行时元数据以排查延迟和托盘问题。',
   'diagnosticsEnabled': '诊断日志已启用',
   'diagnosticsDisabled': '诊断日志已禁用',
-  'logFile': '日志文件',
   'notInitializedYet': '尚未初始化',
   'refresh': '刷新',
   'copyRecent': '复制近期日志',
@@ -376,7 +357,6 @@ const Map<String, String> stringsZh = {
   'failedToShareLog': '分享诊断日志失败：{error}',
   'diagnosticsLogCleared': '诊断日志已清除',
   'failedToClearLog': '清除诊断日志失败：{error}',
-  'recentLogLines': '近期日志行',
   'devOptionsDisabledMsg': '开发者选项已禁用。',
   'noLogsYet': '暂无日志。启用诊断日志并使用应用以收集数据。',
 
@@ -402,42 +382,20 @@ const Map<String, String> stringsZh = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': '会话已过期。请重新登录。',
-  'offlineMessage': '你似乎已离线。请检查你的网络连接。',
-  'cannotReachApi': '无法连接到 API 服务器。',
-  'maintenanceMessage': '我们正在进行维护，很快就会恢复。',
   'free': '免费',
-  'perMillion': '/百万',
-  'perRequest': '/请求',
   'best': '最佳',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': '在邮件应用中打开',
-  'costLabel': '费用：{cost}',
-  'generatedLabel': '生成时间：{label}',
-  'unableToCopyImage': '无法复制图片',
   'unableToSaveImage': '无法保存图片',
   'image': '图片',
-  'openLink': '打开链接',
-  'openLinkConfirm': '你确定要离开应用并打开 {url} 吗？',
   'open': '打开',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': '内容已复制到剪贴板',
-  'artifactCopied': '制品已复制到剪贴板',
-  'fileSaved': '文件已保存',
-  'failedToExportArtifact': '导出制品失败：{error}',
-  'failedToSave': '保存失败：{error}',
-  'markdownSaved': 'Markdown 已保存',
   'original': '原文',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': '查看 Markdown 摘要',
-  'addSummary': '添加摘要',
-  'deletedFile': '已删除的文件',
   'deleteFile': '删除文件',
-  'deleteFileConfirm': '删除"{name}"？',
   'deleteFailed': '删除失败：{error}',
-  'uploadedFile': '已上传：{name}',
-  'freeMessagePlaceholder': '免费：--',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '问我任何问题！',
@@ -447,8 +405,6 @@ const Map<String, String> stringsZh = {
   'addMessageOrDocs': '添加消息或发送文档',
   'micAccessFailed': '麦克风访问失败',
   'transcriptionFailed': '转录失败',
-  'replyTargetSelected': '已选择回复目标',
-  'clearReply': '取消回复',
   'nothingToResend': '没有可重发的内容',
   'freeMessagesUsed': '免费消息已用完',
   'ok': '确定',
@@ -462,16 +418,9 @@ const Map<String, String> stringsZh = {
   'modelError': '错误：{error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': '复制图片',
-  'downloadImage': '下载图片',
-  'imageDetails': '图片详情',
-  'imageCopied': '图片已复制',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': '免费消息',
-  'freeUsed': '已用：{count}',
   'freeTotal': '总计：{count}',
-  'subscribeToContinue': '订阅以继续聊天',
   'freeRemaining': '免费：{remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -515,5 +464,4 @@ const Map<String, String> stringsZh = {
   'close': '关闭',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': '以后再说',
 };

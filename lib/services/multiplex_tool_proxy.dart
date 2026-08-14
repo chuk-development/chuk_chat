@@ -35,7 +35,7 @@ class MultiplexToolOutcome {
   final Object? error;
 
   bool get isOk => body != null;
-  bool get isFallback => fallback;
+
   bool get isError => error != null;
 }
 

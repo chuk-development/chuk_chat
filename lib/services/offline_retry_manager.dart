@@ -197,7 +197,6 @@ class OfflineRetryManager {
   }
 
   @visibleForTesting
-  Future<void> debugRetryAll() => _retryAll();
 
   @visibleForTesting
   void debugReset() {

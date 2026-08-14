@@ -231,17 +231,6 @@ class ImageStorageService {
     }
   }
 
-  /// Gets the file size of a stored image
-  static Future<int> getImageSize(String storagePath) async {
-    try {
-      final response = await SupabaseService.client.storage
-          .from(bucketName)
-          .download(storagePath);
-      return response.length;
-    } catch (e) {
-      throw Exception('Failed to get image size: $e');
-    }
-  }
 
   /// Lists all images stored by the current user
   /// Returns a list of StoredImage objects with metadata
@@ -345,15 +334,5 @@ class ImageStorageService {
     }
   }
 
-  /// Checks if an image exists in storage
-  static Future<bool> imageExists(String storagePath) async {
-    try {
-      await SupabaseService.client.storage
-          .from(bucketName)
-          .download(storagePath);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
+
 }

@@ -18,8 +18,6 @@ import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Callback for initialization events
-typedef InitProgressCallback = void Function(String stage, int progressPercent);
-
 /// Service for managing app initialization and user session startup
 class AppInitializationService {
   AppInitializationService._();

@@ -85,8 +85,6 @@ class StoredChat {
   /// Get messages or null if not loaded (safe access)
   List<ChatMessage>? get messagesOrNull => _messages;
 
-  /// Check if this chat is associated with an assistant
-  bool get hasAssistant => assistantId != null && assistantId!.isNotEmpty;
 
   /// Get a preview of the chat (first user message or first message text)
   /// Falls back to title if messages not loaded

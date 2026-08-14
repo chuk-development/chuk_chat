@@ -231,6 +231,4 @@ class ChatHistoryBuilder {
     return dataUrls;
   }
 
-  @visibleForTesting
-  static void clearImageCacheForTest() => _imageBase64Cache.clear();
 }

@@ -102,7 +102,6 @@ class AppLocalizations {
   String get pricingPlans => _get('pricingPlans');
   String get pricingPlansSubtitle => _get('pricingPlansSubtitle');
   String get accountSettings => _get('accountSettings');
-  String get accountSettingsSubtitle => _get('accountSettingsSubtitle');
   String get exportChats => _get('exportChats');
   String get exportChatsSubtitle => _get('exportChatsSubtitle');
   String get about => _get('about');
@@ -121,8 +120,6 @@ class AppLocalizations {
   // ── Customization page ─────────────────────────────────────
   String get language => _get('language');
   String get languageSubtitle => _get('languageSubtitle');
-  String get english => _get('english');
-  String get german => _get('german');
   String get voiceTranscription => _get('voiceTranscription');
   String get autoSendVoice => _get('autoSendVoice');
   String get autoSendVoiceSubtitle => _get('autoSendVoiceSubtitle');
@@ -245,12 +242,10 @@ class AppLocalizations {
   String get showToolActivity => _get('showToolActivity');
   String get showToolActivitySubtitle => _get('showToolActivitySubtitle');
   String get toolCallingTip => _get('toolCallingTip');
-  String get visualOutputNonTool => _get('visualOutputNonTool');
   String get enableMapBlocks => _get('enableMapBlocks');
   String get enableMapBlocksSubtitle => _get('enableMapBlocksSubtitle');
   String get enableChartBlocks => _get('enableChartBlocks');
   String get enableChartBlocksSubtitle => _get('enableChartBlocksSubtitle');
-  String get connectors => _get('connectors');
   String get loadingToolSettings => _get('loadingToolSettings');
   String get noToolsRegistered => _get('noToolsRegistered');
   String get catSearchWeb => _get('catSearchWeb');
@@ -283,12 +278,6 @@ class AppLocalizations {
       _get('disconnectCategory').replaceAll('{label}', label);
   String get removeCredentialsWarning => _get('removeCredentialsWarning');
   String get cancel => _get('cancel');
-  String categoryConnected(String label) =>
-      _get('categoryConnected').replaceAll('{label}', label);
-  String failedToConnect(String label) =>
-      _get('failedToConnect').replaceAll('{label}', label);
-  String unableToConnect(String label) =>
-      _get('unableToConnect').replaceAll('{label}', label);
   String get toolWebSearch => _get('toolWebSearch');
   String get toolWebCrawl => _get('toolWebCrawl');
   String get toolImageGen => _get('toolImageGen');
@@ -316,15 +305,12 @@ class AppLocalizations {
 
   // ── Account settings page ──────────────────────────────────
   String get profile => _get('profile');
-  String get profileSubtitle => _get('profileSubtitle');
   String get displayName => _get('displayName');
   String get displayNameHint => _get('displayNameHint');
   String get emailAddress => _get('emailAddress');
   String get emailAddressHint => _get('emailAddressHint');
   String get security => _get('security');
-  String get securitySubtitle => _get('securitySubtitle');
   String get changePassword => _get('changePassword');
-  String get changePasswordSubtitle => _get('changePasswordSubtitle');
   String get currentPassword => _get('currentPassword');
   String get newPassword => _get('newPassword');
   String get minCharsPassword => _get('minCharsPassword');
@@ -337,8 +323,6 @@ class AppLocalizations {
   String get recoverOldChatsAvailable => _get('recoverOldChatsAvailable');
   String get chatsFromPreviousPassword => _get('chatsFromPreviousPassword');
   String get recoverChats => _get('recoverChats');
-  String get dangerZone => _get('dangerZone');
-  String get dangerZoneSubtitle => _get('dangerZoneSubtitle');
   String get deleteAccountWarning => _get('deleteAccountWarning');
   String get deleteAccount => _get('deleteAccount');
   String get unableToLoadProfile => _get('unableToLoadProfile');
@@ -396,7 +380,6 @@ class AppLocalizations {
   String get chukChat => _get('chukChat');
   String get openSourceLicenses => _get('openSourceLicenses');
   String get openSourceLicensesSubtitle => _get('openSourceLicensesSubtitle');
-  String get legalDocuments => _get('legalDocuments');
   String get termsOfService => _get('termsOfService');
   String get privacyPolicy => _get('privacyPolicy');
   String versionText(String version) =>
@@ -427,8 +410,6 @@ class AppLocalizations {
   String get unusedCreditsExpire => _get('unusedCreditsExpire');
   String get manageBilling => _get('manageBilling');
   String get manageBillingSubtitle => _get('manageBillingSubtitle');
-  String get subscribeToGetCredits => _get('subscribeToGetCredits');
-  String get subscriptionDesktopOnly => _get('subscriptionDesktopOnly');
   String get paymentsDisabledInBuild => _get('paymentsDisabledInBuild');
   String get active => _get('active');
   String get getCreditsMonthly => _get('getCreditsMonthly');
@@ -450,8 +431,6 @@ class AppLocalizations {
   String get signInWithEmail => _get('signInWithEmail');
   String get createAccountWithEmail => _get('createAccountWithEmail');
   String get supabaseNotConfigured => _get('supabaseNotConfigured');
-  String get confirmEmailToContinue => _get('confirmEmailToContinue');
-  String get confirmEmailBody => _get('confirmEmailBody');
   String get howOthersSeeYou => _get('howOthersSeeYou');
   String get email => _get('email');
   String get emailPlaceholder => _get('emailPlaceholder');
@@ -544,7 +523,6 @@ class AppLocalizations {
   String get enableDiagnosticsSubtitle => _get('enableDiagnosticsSubtitle');
   String get diagnosticsEnabled => _get('diagnosticsEnabled');
   String get diagnosticsDisabled => _get('diagnosticsDisabled');
-  String get logFile => _get('logFile');
   String get notInitializedYet => _get('notInitializedYet');
   String get refresh => _get('refresh');
   String get copyRecent => _get('copyRecent');
@@ -563,7 +541,6 @@ class AppLocalizations {
   String get diagnosticsLogCleared => _get('diagnosticsLogCleared');
   String failedToClearLog(String error) =>
       _get('failedToClearLog').replaceAll('{error}', error);
-  String get recentLogLines => _get('recentLogLines');
   String get devOptionsDisabledMsg => _get('devOptionsDisabledMsg');
   String get noLogsYet => _get('noLogsYet');
 
@@ -590,12 +567,7 @@ class AppLocalizations {
 
   // ── Model selector page ────────────────────────────────────
   String get sessionExpired => _get('sessionExpired');
-  String get offlineMessage => _get('offlineMessage');
-  String get cannotReachApi => _get('cannotReachApi');
-  String get maintenanceMessage => _get('maintenanceMessage');
   String get free => _get('free');
-  String get perMillion => _get('perMillion');
-  String get perRequest => _get('perRequest');
   String get best => _get('best');
   String get autoCheapest => _get('autoCheapest');
   String autoCheapestCurrently(String provider, String price) => _get(
@@ -604,39 +576,16 @@ class AppLocalizations {
 
   // ── Message bubble / chat ──────────────────────────────────
   String get openInMailApp => _get('openInMailApp');
-  String costLabel(String cost) => _get('costLabel').replaceAll('{cost}', cost);
-  String generatedLabel(String label) =>
-      _get('generatedLabel').replaceAll('{label}', label);
-  String get unableToCopyImage => _get('unableToCopyImage');
   String get unableToSaveImage => _get('unableToSaveImage');
   String get image => _get('image');
-  String get openLink => _get('openLink');
-  String openLinkConfirm(String url) =>
-      _get('openLinkConfirm').replaceAll('{url}', url);
   String get open => _get('open');
 
   // ── Misc / shared ─────────────────────────────────────────
-  String get contentCopied => _get('contentCopied');
-  String get artifactCopied => _get('artifactCopied');
-  String get fileSaved => _get('fileSaved');
-  String failedToExportArtifact(String error) =>
-      _get('failedToExportArtifact').replaceAll('{error}', error);
-  String failedToSave(String error) =>
-      _get('failedToSave').replaceAll('{error}', error);
-  String get markdownSaved => _get('markdownSaved');
   String get original => _get('original');
   String get markdown => _get('markdown');
-  String get viewMarkdownSummary => _get('viewMarkdownSummary');
-  String get addSummary => _get('addSummary');
-  String get deletedFile => _get('deletedFile');
   String get deleteFile => _get('deleteFile');
-  String deleteFileConfirm(String name) =>
-      _get('deleteFileConfirm').replaceAll('{name}', name);
   String deleteFailed(String error) =>
       _get('deleteFailed').replaceAll('{error}', error);
-  String uploadedFile(String name) =>
-      _get('uploadedFile').replaceAll('{name}', name);
-  String get freeMessagePlaceholder => _get('freeMessagePlaceholder');
 
   // ── Chat UI ────────────────────────────────────────────────
   String get askMeAnything => _get('askMeAnything');
@@ -645,8 +594,6 @@ class AppLocalizations {
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');
   String get transcriptionFailed => _get('transcriptionFailed');
-  String get replyTargetSelected => _get('replyTargetSelected');
-  String get clearReply => _get('clearReply');
   String get nothingToResend => _get('nothingToResend');
   String get freeMessagesUsed => _get('freeMessagesUsed');
   String get ok => _get('ok');
@@ -661,19 +608,11 @@ class AppLocalizations {
       _get('modelError').replaceAll('{error}', error);
 
   // ── Message bubble extras ──────────────────────────────────
-  String get copyImage => _get('copyImage');
-  String get downloadImage => _get('downloadImage');
-  String get imageDetails => _get('imageDetails');
   String get generatingImage => _get('generatingImage');
-  String get imageCopied => _get('imageCopied');
 
   // ── Free message display ───────────────────────────────────
-  String get freeMessages => _get('freeMessages');
-  String freeUsed(String count) =>
-      _get('freeUsed').replaceAll('{count}', count);
   String freeTotal(String count) =>
       _get('freeTotal').replaceAll('{count}', count);
-  String get subscribeToContinue => _get('subscribeToContinue');
   String freeRemaining(String remaining, String total) => _get(
     'freeRemaining',
   ).replaceAll('{remaining}', remaining).replaceAll('{total}', total);
@@ -733,7 +672,6 @@ class AppLocalizations {
   String get close => _get('close');
 
   // ── Subscription dialogs ───────────────────────────────────
-  String get maybeLater => _get('maybeLater');
 
   // ── Workspace (project) detail ─────────────────────────────
   String get projectPrivate => _get('projectPrivate');
@@ -743,7 +681,6 @@ class AppLocalizations {
   String get projectInstructionsEmpty => _get('projectInstructionsEmpty');
   String get projectInstructionsSubtitle => _get('projectInstructionsSubtitle');
   String get projectLatestChats => _get('projectLatestChats');
-  String get projectNoChats => _get('projectNoChats');
   String get projectNoChatsHint => _get('projectNoChatsHint');
   String get projectNewChat => _get('projectNewChat');
   String projectFileCount(int count) => _get(
@@ -756,8 +693,6 @@ class AppLocalizations {
   String get projectPickImage => _get('projectPickImage');
   String get projectCreateDocument => _get('projectCreateDocument');
   String get projectNewDocument => _get('projectNewDocument');
-  String get projectDocumentTitle => _get('projectDocumentTitle');
-  String get projectDocumentContent => _get('projectDocumentContent');
   String get projectDocumentTitleHint => _get('projectDocumentTitleHint');
   String get projectDocumentContentHint => _get('projectDocumentContentHint');
   String get projectEditProject => _get('projectEditProject');
@@ -774,8 +709,6 @@ class AppLocalizations {
       _get('projectSaveFailed').replaceAll('{error}', error);
   String projectLoadFailed(String error) =>
       _get('projectLoadFailed').replaceAll('{error}', error);
-  String projectUploadFailed(String error) =>
-      _get('projectUploadFailed').replaceAll('{error}', error);
   String projectDeleteFailed(String error) =>
       _get('projectDeleteFailed').replaceAll('{error}', error);
   String projectUploaded(String name) =>
@@ -804,11 +737,6 @@ class AppLocalizations {
   String get messageRetry => _get('messageRetry');
 
   // ── Onboarding ─────────────────────────────────────────────
-  String get onboardingSkip => _get('onboardingSkip');
-  String get onboardingNext => _get('onboardingNext');
-  String get onboardingBack => _get('onboardingBack');
-  String get onboardingDone => _get('onboardingDone');
-  String get onboardingNoModelHint => _get('onboardingNoModelHint');
   String get onboardingReplayTile => _get('onboardingReplayTile');
   String get onboardingReplayTileSubtitle =>
       _get('onboardingReplayTileSubtitle');
@@ -822,17 +750,12 @@ class AppLocalizations {
   String get tourWelcomeTitle => _get('tourWelcomeTitle');
   String get tourWelcomeBody => _get('tourWelcomeBody');
   String get tourModelTitle => _get('tourModelTitle');
-  String get tourModelBody => _get('tourModelBody');
   String get tourSettingsModelBody => _get('tourSettingsModelBody');
-  String get tourModelPageBody => _get('tourModelPageBody');
   String get tourSettingsTitle => _get('tourSettingsTitle');
-  String get tourSettingsBody => _get('tourSettingsBody');
   String get tourSettingsPageBody => _get('tourSettingsPageBody');
   String get tourSettingsTapHere => _get('tourSettingsTapHere');
   String get tourMenuTitle => _get('tourMenuTitle');
   String get tourMenuBody => _get('tourMenuBody');
-  String get tourChatTitle => _get('tourChatTitle');
-  String get tourChatBody => _get('tourChatBody');
   String get tourProviderPillBody => _get('tourProviderPillBody');
   String get tourSettingsPricingTitle => _get('tourSettingsPricingTitle');
   String get tourSettingsPricingBody => _get('tourSettingsPricingBody');

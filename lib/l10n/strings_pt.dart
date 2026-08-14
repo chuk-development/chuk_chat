@@ -21,7 +21,6 @@ const Map<String, String> stringsPt = {
   'pricingPlans': 'Planos e Preços',
   'pricingPlansSubtitle': 'Veja nossos planos de assinatura e preços',
   'accountSettings': 'Configurações da Conta',
-  'accountSettingsSubtitle': 'Gerencie seu perfil e conta',
   'exportChats': 'Exportar Conversas',
   'exportChatsSubtitle': 'Baixe suas conversas como JSON',
   'about': 'Sobre',
@@ -38,8 +37,6 @@ const Map<String, String> stringsPt = {
   // ── Customization page ─────────────────────────────────────
   'language': 'Idioma',
   'languageSubtitle': 'Escolha seu idioma preferido',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'Transcrição de Voz',
   'autoSendVoice': 'Envio automático de mensagens de voz',
   'autoSendVoiceSubtitle':
@@ -112,14 +109,12 @@ const Map<String, String> stringsPt = {
       'Exibir chips de ferramentas em execução/concluídas nas mensagens do assistente',
   'toolCallingTip':
       'Dica: Deixe o fallback em Markdown ativado para melhor compatibilidade. Desative apenas se quiser chamadas de ferramenta estritamente em XML.',
-  'visualOutputNonTool': 'Saída Visual (Sem Ferramenta)',
   'enableMapBlocks': 'Habilitar blocos de mapa (<map>)',
   'enableMapBlocksSubtitle':
       'Permitir que o prompt do modelo inclua instruções de renderização de mapa',
   'enableChartBlocks': 'Habilitar blocos de gráfico (<chart>)',
   'enableChartBlocksSubtitle':
       'Permitir que o prompt do modelo inclua instruções de renderização de gráfico',
-  'connectors': 'Conectores',
   'loadingToolSettings': 'Carregando configurações de ferramentas...',
   'noToolsRegistered': 'Nenhuma ferramenta registrada ainda.',
   'catSearchWeb': 'Busca e Web',
@@ -162,10 +157,6 @@ const Map<String, String> stringsPt = {
   'disconnectCategory': 'Desconectar {label}?',
   'removeCredentialsWarning': 'Isso removerá suas credenciais salvas.',
   'cancel': 'Cancelar',
-  'categoryConnected': '{label} conectado',
-  'failedToConnect': 'Falha ao conectar {label}',
-  'unableToConnect':
-      'Não foi possível conectar {label}. Por favor, tente novamente.',
   'toolWebSearch': 'Busca na Web',
   'toolWebCrawl': 'Rastreamento Web',
   'toolImageGen': 'Geração de Imagem',
@@ -194,17 +185,12 @@ const Map<String, String> stringsPt = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Perfil',
-  'profileSubtitle':
-      'Atualize como seu nome e email aparecem no Chuk Chat.',
   'displayName': 'Nome de exibição',
   'displayNameHint': 'Como outras pessoas veem você',
   'emailAddress': 'Endereço de email',
   'emailAddressHint': 'Para onde enviamos notificações',
   'security': 'Segurança',
-  'securitySubtitle': 'Tenha certeza de que tudo está protegido.',
   'changePassword': 'Alterar senha',
-  'changePasswordSubtitle':
-      'Atualize sua senha do Supabase e recriptografe suas conversas salvas.',
   'currentPassword': 'Senha atual',
   'newPassword': 'Nova senha',
   'minCharsPassword': 'Mínimo de 8 caracteres.',
@@ -216,9 +202,6 @@ const Map<String, String> stringsPt = {
   'lockedChatsPlural':
       '{count} conversas criptografadas com uma senha anterior.',
   'recoverChats': 'Recuperar conversas',
-  'dangerZone': 'Zona de Perigo',
-  'dangerZoneSubtitle':
-      'Ações irreversíveis que afetam toda a sua conta.',
   'deleteAccountWarning':
       'Excluir sua conta cancelará todas as assinaturas, removerá seus dados e não pode ser desfeito.',
   'deleteAccount': 'Excluir Conta',
@@ -285,7 +268,6 @@ const Map<String, String> stringsPt = {
   'openSourceLicenses': 'Licenças de Código Aberto',
   'openSourceLicensesSubtitle':
       'Revise as licenças de todas as dependências incluídas nesta compilação.',
-  'legalDocuments': 'Documentos Legais',
   'termsOfService': 'Termos de Serviço',
   'privacyPolicy': 'Política de Privacidade',
   'versionText': 'Versão {version}',
@@ -316,9 +298,6 @@ const Map<String, String> stringsPt = {
   'manageBilling': 'Gerenciar Cobrança',
   'manageBillingSubtitle':
       'Use o portal de cobrança para cancelar sua assinatura ou atualizar métodos de pagamento.',
-  'subscribeToGetCredits': 'Assine para Obter Créditos de IA',
-  'subscriptionDesktopOnly':
-      'O gerenciamento de assinatura está disponível apenas no desktop.',
   'active': 'ATIVO',
   'getCreditsMonthly': 'Receba \u20ac16 em créditos de IA mensalmente',
   'accessAllModels': 'Acesso a todos os modelos de IA',
@@ -344,9 +323,6 @@ const Map<String, String> stringsPt = {
   'createAccountWithEmail': 'Crie uma conta com email e senha',
   'supabaseNotConfigured':
       'As credenciais do Supabase não estão configuradas. Atualize-as antes de executar uma compilação de produção.',
-  'confirmEmailToContinue': 'Confirme seu email para continuar',
-  'confirmEmailBody':
-      'Enviamos um link de confirmação para o seu endereço de email. Por favor, abra-o e clique no link antes de entrar.',
   'howOthersSeeYou': 'Como outras pessoas verão você',
   'email': 'Email',
   'emailPlaceholder': 'voce@exemplo.com',
@@ -422,7 +398,6 @@ const Map<String, String> stringsPt = {
       'Funciona em compilações de produção. Registra metadados do app/runtime para solução de problemas de lag e bandeja do sistema.',
   'diagnosticsEnabled': 'Registro de diagnóstico habilitado',
   'diagnosticsDisabled': 'Registro de diagnóstico desabilitado',
-  'logFile': 'Arquivo de log',
   'notInitializedYet': 'Ainda não inicializado',
   'refresh': 'Atualizar',
   'copyRecent': 'Copiar Recentes',
@@ -440,7 +415,6 @@ const Map<String, String> stringsPt = {
       'Falha ao compartilhar log de diagnóstico: {error}',
   'diagnosticsLogCleared': 'Log de diagnóstico limpo',
   'failedToClearLog': 'Falha ao limpar log de diagnóstico: {error}',
-  'recentLogLines': 'Linhas de log recentes',
   'devOptionsDisabledMsg': 'Opções de desenvolvedor desativadas.',
   'noLogsYet':
       'Nenhum log ainda. Habilite o registro de diagnóstico e use o app para coletar dados.',
@@ -471,45 +445,20 @@ const Map<String, String> stringsPt = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Sessão expirada. Por favor, entre novamente.',
-  'offlineMessage':
-      'Você parece estar offline. Por favor, verifique sua conexão com a internet.',
-  'cannotReachApi': 'Não é possível alcançar o servidor da API.',
-  'maintenanceMessage':
-      'Estamos em manutenção no momento e voltaremos em breve.',
   'free': 'Grátis',
-  'perMillion': '/M',
-  'perRequest': '/req',
   'best': 'Melhor',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Abrir no App de Email',
-  'costLabel': 'Custo: {cost}',
-  'generatedLabel': 'Gerado: {label}',
-  'unableToCopyImage': 'Não foi possível copiar a imagem',
   'unableToSaveImage': 'Não foi possível salvar a imagem',
   'image': 'Imagem',
-  'openLink': 'Abrir Link',
-  'openLinkConfirm':
-      'Você realmente deseja sair do app e abrir {url}?',
   'open': 'Abrir',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'Conteúdo copiado para a área de transferência',
-  'artifactCopied': 'Artefato copiado para a área de transferência',
-  'fileSaved': 'Arquivo salvo',
-  'failedToExportArtifact': 'Falha ao exportar artefato: {error}',
-  'failedToSave': 'Falha ao salvar: {error}',
-  'markdownSaved': 'Markdown salvo',
   'original': 'Original',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Ver Resumo em Markdown',
-  'addSummary': 'Adicionar resumo',
-  'deletedFile': 'Arquivo Excluído',
   'deleteFile': 'Excluir Arquivo',
-  'deleteFileConfirm': 'Excluir "{name}"?',
   'deleteFailed': 'Falha ao excluir: {error}',
-  'uploadedFile': 'Enviado: {name}',
-  'freeMessagePlaceholder': 'Grátis: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
@@ -519,8 +468,6 @@ const Map<String, String> stringsPt = {
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',
   'micAccessFailed': 'Falha no acesso ao microfone',
   'transcriptionFailed': 'Falha na transcrição',
-  'replyTargetSelected': 'Alvo da resposta selecionado',
-  'clearReply': 'Limpar resposta',
   'nothingToResend': 'Nada para reenviar',
   'freeMessagesUsed': 'Mensagens Gratuitas Esgotadas',
   'ok': 'OK',
@@ -534,16 +481,9 @@ const Map<String, String> stringsPt = {
   'modelError': 'Erro: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'Copiar imagem',
-  'downloadImage': 'Baixar imagem',
-  'imageDetails': 'Detalhes da imagem',
-  'imageCopied': 'Imagem copiada',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'Mensagens Gratuitas',
-  'freeUsed': 'Usadas: {count}',
   'freeTotal': 'Total: {count}',
-  'subscribeToContinue': 'Assine para continuar conversando',
   'freeRemaining': 'Grátis: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -595,5 +535,4 @@ const Map<String, String> stringsPt = {
   'close': 'Fechar',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'Talvez Depois',
 };

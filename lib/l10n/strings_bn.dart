@@ -19,7 +19,6 @@ const Map<String, String> stringsBn = {
   'pricingPlans': 'মূল্য পরিকল্পনা',
   'pricingPlansSubtitle': 'আমাদের সাবস্ক্রিপশন প্ল্যান এবং মূল্য দেখুন',
   'accountSettings': 'অ্যাকাউন্ট সেটিংস',
-  'accountSettingsSubtitle': 'আপনার প্রোফাইল এবং অ্যাকাউন্ট পরিচালনা করুন',
   'exportChats': 'চ্যাট এক্সপোর্ট',
   'exportChatsSubtitle': 'আপনার কথোপকথন JSON হিসেবে ডাউনলোড করুন',
   'about': 'সম্পর্কে',
@@ -36,8 +35,6 @@ const Map<String, String> stringsBn = {
   // ── Customization page ─────────────────────────────────────
   'language': 'ভাষা',
   'languageSubtitle': 'আপনার পছন্দের ভাষা বেছে নিন',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'ভয়েস ট্রান্সক্রিপশন',
   'autoSendVoice': 'ভয়েস মেসেজ স্বয়ংক্রিয়ভাবে পাঠান',
   'autoSendVoiceSubtitle':
@@ -110,14 +107,12 @@ const Map<String, String> stringsBn = {
       'সহকারী মেসেজে চলমান/সম্পন্ন টুল চিপ প্রদর্শন করুন',
   'toolCallingTip':
       'পরামর্শ: সেরা সামঞ্জস্যের জন্য মার্কডাউন ফলব্যাক সক্রিয় রাখুন। শুধুমাত্র কঠোর XML-শুধু টুল কলের জন্য নিষ্ক্রিয় করুন।',
-  'visualOutputNonTool': 'ভিজ্যুয়াল আউটপুট (নন-টুল)',
   'enableMapBlocks': 'ম্যাপ ব্লক সক্রিয় করুন (<map>)',
   'enableMapBlocksSubtitle':
       'মডেল প্রম্পটে ম্যাপ রেন্ডারিং নির্দেশনা অন্তর্ভুক্ত করার অনুমতি দিন',
   'enableChartBlocks': 'চার্ট ব্লক সক্রিয় করুন (<chart>)',
   'enableChartBlocksSubtitle':
       'মডেল প্রম্পটে চার্ট রেন্ডারিং নির্দেশনা অন্তর্ভুক্ত করার অনুমতি দিন',
-  'connectors': 'সংযোগকারী',
   'loadingToolSettings': 'টুল সেটিংস লোড হচ্ছে...',
   'noToolsRegistered': 'এখনও কোনো টুল নিবন্ধিত হয়নি।',
   'catSearchWeb': 'সার্চ এবং ওয়েব',
@@ -157,10 +152,6 @@ const Map<String, String> stringsBn = {
   'disconnectCategory': '{label} সংযোগ বিচ্ছিন্ন করবেন?',
   'removeCredentialsWarning': 'এটি আপনার সংরক্ষিত শংসাপত্র মুছে ফেলবে।',
   'cancel': 'বাতিল',
-  'categoryConnected': '{label} সংযুক্ত',
-  'failedToConnect': '{label} সংযুক্ত করতে ব্যর্থ',
-  'unableToConnect':
-      '{label} সংযুক্ত করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।',
   'toolWebSearch': 'ওয়েব সার্চ',
   'toolWebCrawl': 'ওয়েব ক্রল',
   'toolImageGen': 'ছবি তৈরি',
@@ -189,17 +180,12 @@ const Map<String, String> stringsBn = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'প্রোফাইল',
-  'profileSubtitle':
-      'Chuk Chat-এ আপনার নাম এবং ইমেইল কিভাবে দেখায় তা আপডেট করুন।',
   'displayName': 'প্রদর্শনের নাম',
   'displayNameHint': 'অন্যরা আপনাকে যেভাবে দেখে',
   'emailAddress': 'ইমেইল ঠিকানা',
   'emailAddressHint': 'যেখানে আমরা বিজ্ঞপ্তি পাঠাই',
   'security': 'নিরাপত্তা',
-  'securitySubtitle': 'নিশ্চিত করুন সবকিছু সুরক্ষিত আছে।',
   'changePassword': 'পাসওয়ার্ড পরিবর্তন করুন',
-  'changePasswordSubtitle':
-      'আপনার Supabase পাসওয়ার্ড আপডেট করুন এবং আপনার সংরক্ষিত চ্যাট পুনরায় এনক্রিপ্ট করুন।',
   'currentPassword': 'বর্তমান পাসওয়ার্ড',
   'newPassword': 'নতুন পাসওয়ার্ড',
   'minCharsPassword': 'সর্বনিম্ন ৮ অক্ষর।',
@@ -209,9 +195,6 @@ const Map<String, String> stringsBn = {
   'lockedChatsSingular': '{count}টি চ্যাট পূর্ববর্তী পাসওয়ার্ড দিয়ে এনক্রিপ্ট করা।',
   'lockedChatsPlural': '{count}টি চ্যাট পূর্ববর্তী পাসওয়ার্ড দিয়ে এনক্রিপ্ট করা।',
   'recoverChats': 'চ্যাট পুনরুদ্ধার করুন',
-  'dangerZone': 'বিপদ অঞ্চল',
-  'dangerZoneSubtitle':
-      'অপরিবর্তনীয় পদক্ষেপ যা আপনার পুরো অ্যাকাউন্টকে প্রভাবিত করে।',
   'deleteAccountWarning':
       'আপনার অ্যাকাউন্ট মুছে ফেললে সব সাবস্ক্রিপশন বাতিল হবে, আপনার ডেটা মুছে যাবে এবং এটি পূর্বাবস্থায় ফেরানো যাবে না।',
   'deleteAccount': 'অ্যাকাউন্ট মুছুন',
@@ -277,7 +260,6 @@ const Map<String, String> stringsBn = {
   'openSourceLicenses': 'ওপেন সোর্স লাইসেন্স',
   'openSourceLicensesSubtitle':
       'এই বিল্ডে অন্তর্ভুক্ত প্রতিটি নির্ভরতার লাইসেন্স পর্যালোচনা করুন।',
-  'legalDocuments': 'আইনি নথি',
   'termsOfService': 'সেবার শর্তাবলী',
   'privacyPolicy': 'গোপনীয়তা নীতি',
   'versionText': 'সংস্করণ {version}',
@@ -307,9 +289,6 @@ const Map<String, String> stringsBn = {
   'manageBilling': 'বিলিং পরিচালনা',
   'manageBillingSubtitle':
       'আপনার সাবস্ক্রিপশন বাতিল করতে বা পেমেন্ট পদ্ধতি আপডেট করতে বিলিং পোর্টাল ব্যবহার করুন।',
-  'subscribeToGetCredits': 'AI ক্রেডিট পেতে সাবস্ক্রাইব করুন',
-  'subscriptionDesktopOnly':
-      'সাবস্ক্রিপশন পরিচালনা শুধুমাত্র ডেস্কটপে উপলব্ধ।',
   'active': 'সক্রিয়',
   'getCreditsMonthly': 'মাসিক \u20ac১৬ AI ক্রেডিট পান',
   'accessAllModels': 'সব AI মডেলে অ্যাক্সেস',
@@ -334,9 +313,6 @@ const Map<String, String> stringsBn = {
   'createAccountWithEmail': 'ইমেইল ও পাসওয়ার্ড দিয়ে একটি অ্যাকাউন্ট তৈরি করুন',
   'supabaseNotConfigured':
       'Supabase শংসাপত্র কনফিগার করা হয়নি। প্রোডাকশন বিল্ডের আগে আপডেট করুন।',
-  'confirmEmailToContinue': 'চালিয়ে যেতে আপনার ইমেইল নিশ্চিত করুন',
-  'confirmEmailBody':
-      'আমরা আপনার ইমেইল ঠিকানায় একটি নিশ্চিতকরণ লিঙ্ক পাঠিয়েছি। সাইন ইন করার আগে অনুগ্রহ করে এটি খুলুন এবং লিঙ্কে ক্লিক করুন।',
   'howOthersSeeYou': 'অন্যরা আপনাকে যেভাবে দেখবে',
   'email': 'ইমেইল',
   'emailPlaceholder': 'you@example.com',
@@ -410,7 +386,6 @@ const Map<String, String> stringsBn = {
       'রিলিজ বিল্ডে কাজ করে। ল্যাগ এবং ট্রে সমস্যার জন্য অ্যাপ/রানটাইম মেটাডেটা লগ করে।',
   'diagnosticsEnabled': 'ডায়াগনস্টিকস লগিং সক্রিয়',
   'diagnosticsDisabled': 'ডায়াগনস্টিকস লগিং নিষ্ক্রিয়',
-  'logFile': 'লগ ফাইল',
   'notInitializedYet': 'এখনও ইনিশিয়ালাইজ হয়নি',
   'refresh': 'রিফ্রেশ',
   'copyRecent': 'সাম্প্রতিক কপি করুন',
@@ -427,7 +402,6 @@ const Map<String, String> stringsBn = {
   'failedToShareLog': 'ডায়াগনস্টিকস লগ শেয়ার করতে ব্যর্থ: {error}',
   'diagnosticsLogCleared': 'ডায়াগনস্টিকস লগ মুছে ফেলা হয়েছে',
   'failedToClearLog': 'ডায়াগনস্টিকস লগ মুছতে ব্যর্থ: {error}',
-  'recentLogLines': 'সাম্প্রতিক লগ লাইন',
   'devOptionsDisabledMsg': 'ডেভেলপার অপশন নিষ্ক্রিয়।',
   'noLogsYet':
       'এখনও কোনো লগ নেই। ডায়াগনস্টিকস লগিং সক্রিয় করুন এবং ডেটা সংগ্রহ করতে অ্যাপ ব্যবহার করুন।',
@@ -457,45 +431,20 @@ const Map<String, String> stringsBn = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'সেশন মেয়াদোত্তীর্ণ। অনুগ্রহ করে আবার সাইন ইন করুন।',
-  'offlineMessage':
-      'আপনি অফলাইনে আছেন বলে মনে হচ্ছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন।',
-  'cannotReachApi': 'API সার্ভারে পৌঁছানো যাচ্ছে না।',
-  'maintenanceMessage':
-      'আমরা বর্তমানে রক্ষণাবেক্ষণ করছি এবং শীঘ্রই ফিরে আসব।',
   'free': 'বিনামূল্যে',
-  'perMillion': '/M',
-  'perRequest': '/অনুরোধ',
   'best': 'সেরা',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'মেইল অ্যাপে খুলুন',
-  'costLabel': 'খরচ: {cost}',
-  'generatedLabel': 'তৈরি: {label}',
-  'unableToCopyImage': 'ছবি কপি করা যায়নি',
   'unableToSaveImage': 'ছবি সংরক্ষণ করা যায়নি',
   'image': 'ছবি',
-  'openLink': 'লিঙ্ক খুলুন',
-  'openLinkConfirm':
-      'আপনি কি সত্যিই অ্যাপ ছেড়ে {url} খুলতে চান?',
   'open': 'খুলুন',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'বিষয়বস্তু ক্লিপবোর্ডে কপি করা হয়েছে',
-  'artifactCopied': 'আর্টিফ্যাক্ট ক্লিপবোর্ডে কপি করা হয়েছে',
-  'fileSaved': 'ফাইল সংরক্ষিত',
-  'failedToExportArtifact': 'আর্টিফ্যাক্ট এক্সপোর্ট করতে ব্যর্থ: {error}',
-  'failedToSave': 'সংরক্ষণ করতে ব্যর্থ: {error}',
-  'markdownSaved': 'মার্কডাউন সংরক্ষিত',
   'original': 'মূল',
   'markdown': 'মার্কডাউন',
-  'viewMarkdownSummary': 'মার্কডাউন সারাংশ দেখুন',
-  'addSummary': 'সারাংশ যোগ করুন',
-  'deletedFile': 'মুছে ফেলা ফাইল',
   'deleteFile': 'ফাইল মুছুন',
-  'deleteFileConfirm': '"{name}" মুছবেন?',
   'deleteFailed': 'মুছতে ব্যর্থ: {error}',
-  'uploadedFile': 'আপলোড করা হয়েছে: {name}',
-  'freeMessagePlaceholder': 'বিনামূল্যে: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'আমাকে যেকোনো কিছু জিজ্ঞাসা করুন!',
@@ -505,8 +454,6 @@ const Map<String, String> stringsBn = {
   'addMessageOrDocs': 'একটি মেসেজ যোগ করুন বা ডকুমেন্ট পাঠান',
   'micAccessFailed': 'মাইক্রোফোন অ্যাক্সেস ব্যর্থ',
   'transcriptionFailed': 'ট্রান্সক্রিপশন ব্যর্থ',
-  'replyTargetSelected': 'রিপ্লাই টার্গেট নির্বাচিত',
-  'clearReply': 'রিপ্লাই মুছুন',
   'nothingToResend': 'পুনরায় পাঠানোর কিছু নেই',
   'freeMessagesUsed': 'বিনামূল্যে মেসেজ ব্যবহৃত',
   'ok': 'ঠিক আছে',
@@ -520,16 +467,9 @@ const Map<String, String> stringsBn = {
   'modelError': 'ত্রুটি: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'ছবি কপি করুন',
-  'downloadImage': 'ছবি ডাউনলোড করুন',
-  'imageDetails': 'ছবির বিবরণ',
-  'imageCopied': 'ছবি কপি করা হয়েছে',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'বিনামূল্যে মেসেজ',
-  'freeUsed': 'ব্যবহৃত: {count}',
   'freeTotal': 'মোট: {count}',
-  'subscribeToContinue': 'চ্যাট চালিয়ে যেতে সাবস্ক্রাইব করুন',
   'freeRemaining': 'বিনামূল্যে: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -579,5 +519,4 @@ const Map<String, String> stringsBn = {
   'close': 'বন্ধ',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'পরে হয়তো',
 };

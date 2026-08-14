@@ -166,9 +166,6 @@ class ToolExecutor {
     );
   }
 
-  void unregisterTool(String name) {
-    _tools.remove(name);
-  }
 
   /// Get all registered tools.
   List<ClientTool> get allRegisteredTools => _tools.values.toList();

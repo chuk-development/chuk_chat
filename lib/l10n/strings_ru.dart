@@ -21,7 +21,6 @@ const Map<String, String> stringsRu = {
   'pricingPlans': 'Тарифные планы',
   'pricingPlansSubtitle': 'Просмотр планов подписки и цен',
   'accountSettings': 'Настройки аккаунта',
-  'accountSettingsSubtitle': 'Управление профилем и аккаунтом',
   'exportChats': 'Экспорт чатов',
   'exportChatsSubtitle': 'Скачать ваши разговоры в формате JSON',
   'about': 'О приложении',
@@ -38,8 +37,6 @@ const Map<String, String> stringsRu = {
   // ── Customization page ─────────────────────────────────────
   'language': 'Язык',
   'languageSubtitle': 'Выберите предпочитаемый язык',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'Голосовая транскрипция',
   'autoSendVoice': 'Автоотправка голосовых сообщений',
   'autoSendVoiceSubtitle':
@@ -112,14 +109,12 @@ const Map<String, String> stringsRu = {
       'Отображать чипы работающих/завершённых инструментов в сообщениях ассистента',
   'toolCallingTip':
       'Совет: оставьте Markdown-резерв включённым для лучшей совместимости. Отключайте только если хотите строго XML-вызовы инструментов.',
-  'visualOutputNonTool': 'Визуальный вывод (без инструментов)',
   'enableMapBlocks': 'Включить блоки карт (<map>)',
   'enableMapBlocksSubtitle':
       'Разрешить промпту модели включать инструкции рендеринга карт',
   'enableChartBlocks': 'Включить блоки графиков (<chart>)',
   'enableChartBlocksSubtitle':
       'Разрешить промпту модели включать инструкции рендеринга графиков',
-  'connectors': 'Коннекторы',
   'loadingToolSettings': 'Загрузка настроек инструментов...',
   'noToolsRegistered': 'Инструменты ещё не зарегистрированы.',
   'catSearchWeb': 'Поиск и Интернет',
@@ -162,10 +157,6 @@ const Map<String, String> stringsRu = {
   'disconnectCategory': 'Отключить {label}?',
   'removeCredentialsWarning': 'Это удалит ваши сохранённые учётные данные.',
   'cancel': 'Отмена',
-  'categoryConnected': '{label} подключён',
-  'failedToConnect': 'Не удалось подключить {label}',
-  'unableToConnect':
-      'Не удалось подключить {label}. Пожалуйста, попробуйте снова.',
   'toolWebSearch': 'Веб-поиск',
   'toolWebCrawl': 'Веб-сканирование',
   'toolImageGen': 'Генерация изображений',
@@ -194,17 +185,12 @@ const Map<String, String> stringsRu = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Профиль',
-  'profileSubtitle':
-      'Обновите отображение вашего имени и email в Chuk Chat.',
   'displayName': 'Отображаемое имя',
   'displayNameHint': 'Как другие люди видят вас',
   'emailAddress': 'Адрес электронной почты',
   'emailAddressHint': 'Куда мы отправляем уведомления',
   'security': 'Безопасность',
-  'securitySubtitle': 'Убедитесь, что всё надёжно защищено.',
   'changePassword': 'Сменить пароль',
-  'changePasswordSubtitle':
-      'Обновите пароль Supabase и перешифруйте сохранённые чаты.',
   'currentPassword': 'Текущий пароль',
   'newPassword': 'Новый пароль',
   'minCharsPassword': 'Минимум 8 символов.',
@@ -216,9 +202,6 @@ const Map<String, String> stringsRu = {
   'lockedChatsPlural':
       '{count} чатов зашифрованы предыдущим паролем.',
   'recoverChats': 'Восстановить чаты',
-  'dangerZone': 'Опасная зона',
-  'dangerZoneSubtitle':
-      'Необратимые действия, затрагивающие весь ваш аккаунт.',
   'deleteAccountWarning':
       'Удаление аккаунта отменит все подписки, удалит ваши данные и не может быть отменено.',
   'deleteAccount': 'Удалить аккаунт',
@@ -284,7 +267,6 @@ const Map<String, String> stringsRu = {
   'openSourceLicenses': 'Лицензии открытого ПО',
   'openSourceLicensesSubtitle':
       'Просмотр лицензий всех зависимостей, включённых в эту сборку.',
-  'legalDocuments': 'Юридические документы',
   'termsOfService': 'Условия использования',
   'privacyPolicy': 'Политика конфиденциальности',
   'versionText': 'Версия {version}',
@@ -314,9 +296,6 @@ const Map<String, String> stringsRu = {
   'manageBilling': 'Управление оплатой',
   'manageBillingSubtitle':
       'Используйте портал оплаты для отмены подписки или обновления способов оплаты.',
-  'subscribeToGetCredits': 'Подпишитесь для получения кредитов ИИ',
-  'subscriptionDesktopOnly':
-      'Управление подпиской доступно только на десктопе.',
   'active': 'АКТИВНА',
   'getCreditsMonthly': 'Получайте \u20ac16 кредитов ИИ ежемесячно',
   'accessAllModels': 'Доступ ко всем моделям ИИ',
@@ -341,9 +320,6 @@ const Map<String, String> stringsRu = {
   'createAccountWithEmail': 'Создайте аккаунт с email и паролем',
   'supabaseNotConfigured':
       'Учётные данные Supabase не настроены. Обновите их перед сборкой для продакшена.',
-  'confirmEmailToContinue': 'Подтвердите email для продолжения',
-  'confirmEmailBody':
-      'Мы отправили ссылку для подтверждения на ваш email. Откройте письмо и перейдите по ссылке перед входом.',
   'howOthersSeeYou': 'Как другие люди будут вас видеть',
   'email': 'Email',
   'emailPlaceholder': 'you@example.com',
@@ -418,7 +394,6 @@ const Map<String, String> stringsRu = {
       'Работает в релизных сборках. Записывает метаданные приложения и среды выполнения для устранения зависаний и проблем с треем.',
   'diagnosticsEnabled': 'Журнал диагностики включён',
   'diagnosticsDisabled': 'Журнал диагностики отключён',
-  'logFile': 'Файл журнала',
   'notInitializedYet': 'Ещё не инициализирован',
   'refresh': 'Обновить',
   'copyRecent': 'Копировать недавние',
@@ -435,7 +410,6 @@ const Map<String, String> stringsRu = {
   'failedToShareLog': 'Не удалось поделиться журналом диагностики: {error}',
   'diagnosticsLogCleared': 'Журнал диагностики очищен',
   'failedToClearLog': 'Не удалось очистить журнал диагностики: {error}',
-  'recentLogLines': 'Последние строки журнала',
   'devOptionsDisabledMsg': 'Параметры разработчика отключены.',
   'noLogsYet':
       'Журналов пока нет. Включите диагностику и используйте приложение для сбора данных.',
@@ -466,45 +440,20 @@ const Map<String, String> stringsRu = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Сессия истекла. Пожалуйста, войдите снова.',
-  'offlineMessage':
-      'Похоже, вы не в сети. Проверьте подключение к интернету.',
-  'cannotReachApi': 'Невозможно связаться с сервером API.',
-  'maintenanceMessage':
-      'Мы проводим техническое обслуживание и скоро вернёмся.',
   'free': 'Бесплатно',
-  'perMillion': '/М',
-  'perRequest': '/запрос',
   'best': 'Лучшая',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Открыть в почтовом приложении',
-  'costLabel': 'Стоимость: {cost}',
-  'generatedLabel': 'Сгенерировано: {label}',
-  'unableToCopyImage': 'Не удалось скопировать изображение',
   'unableToSaveImage': 'Не удалось сохранить изображение',
   'image': 'Изображение',
-  'openLink': 'Открыть ссылку',
-  'openLinkConfirm':
-      'Вы действительно хотите покинуть приложение и открыть {url}?',
   'open': 'Открыть',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'Содержимое скопировано в буфер обмена',
-  'artifactCopied': 'Артефакт скопирован в буфер обмена',
-  'fileSaved': 'Файл сохранён',
-  'failedToExportArtifact': 'Не удалось экспортировать артефакт: {error}',
-  'failedToSave': 'Не удалось сохранить: {error}',
-  'markdownSaved': 'Markdown сохранён',
   'original': 'Оригинал',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Просмотр Markdown-сводки',
-  'addSummary': 'Добавить сводку',
-  'deletedFile': 'Файл удалён',
   'deleteFile': 'Удалить файл',
-  'deleteFileConfirm': 'Удалить «{name}»?',
   'deleteFailed': 'Ошибка удаления: {error}',
-  'uploadedFile': 'Загружено: {name}',
-  'freeMessagePlaceholder': 'Бесплатно: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Спросите меня о чём угодно!',
@@ -514,8 +463,6 @@ const Map<String, String> stringsRu = {
   'addMessageOrDocs': 'Добавьте сообщение или отправьте документы',
   'micAccessFailed': 'Не удалось получить доступ к микрофону',
   'transcriptionFailed': 'Ошибка транскрипции',
-  'replyTargetSelected': 'Выбрана цель ответа',
-  'clearReply': 'Очистить ответ',
   'nothingToResend': 'Нечего переотправить',
   'freeMessagesUsed': 'Бесплатные сообщения использованы',
   'ok': 'ОК',
@@ -529,16 +476,9 @@ const Map<String, String> stringsRu = {
   'modelError': 'Ошибка: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'Копировать изображение',
-  'downloadImage': 'Скачать изображение',
-  'imageDetails': 'Детали изображения',
-  'imageCopied': 'Изображение скопировано',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'Бесплатные сообщения',
-  'freeUsed': 'Использовано: {count}',
   'freeTotal': 'Всего: {count}',
-  'subscribeToContinue': 'Подпишитесь, чтобы продолжить общение',
   'freeRemaining': 'Бесплатно: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -588,5 +528,4 @@ const Map<String, String> stringsRu = {
   'close': 'Закрыть',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'Может быть позже',
 };

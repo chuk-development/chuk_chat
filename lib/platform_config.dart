@@ -18,9 +18,6 @@ const bool kPlatformDesktop = bool.fromEnvironment(
   defaultValue: false,
 );
 
-// Auto-detect if not explicitly set
-const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
-
 // ============================================================================
 // FEATURE FLAGS
 // ============================================================================
@@ -50,10 +47,6 @@ const bool kFeatureArtifacts = bool.fromEnvironment(
   'FEATURE_ARTIFACTS',
   defaultValue: true,
 );
-
-/// Image Generation - AI image creation via Z-Image Turbo
-/// Always enabled - no feature flag needed (Image Generation is production-ready)
-const bool kFeatureImageGen = true;
 
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;

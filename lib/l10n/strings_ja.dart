@@ -20,7 +20,6 @@ const Map<String, String> stringsJa = {
   'pricingPlans': '料金プラン',
   'pricingPlansSubtitle': 'サブスクリプションプランと料金を表示',
   'accountSettings': 'アカウント設定',
-  'accountSettingsSubtitle': 'プロフィールとアカウントの管理',
   'exportChats': 'チャットのエクスポート',
   'exportChatsSubtitle': '会話をJSON形式でダウンロード',
   'about': 'このアプリについて',
@@ -37,8 +36,6 @@ const Map<String, String> stringsJa = {
   // ── Customization page ─────────────────────────────────────
   'language': '言語',
   'languageSubtitle': 'お好みの言語を選択してください',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': '音声文字起こし',
   'autoSendVoice': '音声メッセージを自動送信',
   'autoSendVoiceSubtitle':
@@ -107,14 +104,12 @@ const Map<String, String> stringsJa = {
       'アシスタントメッセージに実行中/完了したツールのチップを表示',
   'toolCallingTip':
       'ヒント: 最良の互換性のためにMarkdownフォールバックを有効にしておいてください。厳密にXMLのみのツール呼び出しが必要な場合のみ無効にしてください。',
-  'visualOutputNonTool': 'ビジュアル出力（非ツール）',
   'enableMapBlocks': '地図ブロックを有効にする (<map>)',
   'enableMapBlocksSubtitle':
       'モデルプロンプトに地図レンダリング指示を含めることを許可',
   'enableChartBlocks': 'チャートブロックを有効にする (<chart>)',
   'enableChartBlocksSubtitle':
       'モデルプロンプトにチャートレンダリング指示を含めることを許可',
-  'connectors': 'コネクタ',
   'loadingToolSettings': 'ツール設定を読み込み中...',
   'noToolsRegistered': 'まだツールが登録されていません。',
   'catSearchWeb': '検索とウェブ',
@@ -154,10 +149,6 @@ const Map<String, String> stringsJa = {
   'disconnectCategory': '{label} を切断しますか？',
   'removeCredentialsWarning': '保存された認証情報が削除されます。',
   'cancel': 'キャンセル',
-  'categoryConnected': '{label} に接続しました',
-  'failedToConnect': '{label} への接続に失敗しました',
-  'unableToConnect':
-      '{label} に接続できません。もう一度お試しください。',
   'toolWebSearch': 'ウェブ検索',
   'toolWebCrawl': 'ウェブクロール',
   'toolImageGen': '画像生成',
@@ -186,17 +177,12 @@ const Map<String, String> stringsJa = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'プロフィール',
-  'profileSubtitle':
-      'Chuk Chatでの名前とメールアドレスの表示を更新します。',
   'displayName': '表示名',
   'displayNameHint': '他の人に表示される名前',
   'emailAddress': 'メールアドレス',
   'emailAddressHint': '通知の送信先',
   'security': 'セキュリティ',
-  'securitySubtitle': 'すべてが保護されていることを確認しましょう。',
   'changePassword': 'パスワードを変更',
-  'changePasswordSubtitle':
-      'Supabaseのパスワードを更新し、保存されたチャットを再暗号化します。',
   'currentPassword': '現在のパスワード',
   'newPassword': '新しいパスワード',
   'minCharsPassword': '8文字以上。',
@@ -206,9 +192,6 @@ const Map<String, String> stringsJa = {
   'lockedChatsSingular': '{count} 件のチャットが以前のパスワードで暗号化されています。',
   'lockedChatsPlural': '{count} 件のチャットが以前のパスワードで暗号化されています。',
   'recoverChats': 'チャットを復旧',
-  'dangerZone': '危険ゾーン',
-  'dangerZoneSubtitle':
-      'アカウント全体に影響する取り消し不能な操作。',
   'deleteAccountWarning':
       'アカウントを削除すると、すべてのサブスクリプションがキャンセルされ、データが削除され、元に戻すことはできません。',
   'deleteAccount': 'アカウントを削除',
@@ -274,7 +257,6 @@ const Map<String, String> stringsJa = {
   'openSourceLicenses': 'オープンソースライセンス',
   'openSourceLicensesSubtitle':
       'このビルドに含まれるすべての依存関係のライセンスを確認できます。',
-  'legalDocuments': '法的文書',
   'termsOfService': '利用規約',
   'privacyPolicy': 'プライバシーポリシー',
   'versionText': 'バージョン {version}',
@@ -303,9 +285,6 @@ const Map<String, String> stringsJa = {
   'manageBilling': '請求管理',
   'manageBillingSubtitle':
       '請求ポータルを使用して、サブスクリプションのキャンセルや支払い方法の更新ができます。',
-  'subscribeToGetCredits': 'AIクレジットを取得するには登録',
-  'subscriptionDesktopOnly':
-      'サブスクリプション管理はデスクトップでのみ利用可能です。',
   'active': '有効',
   'getCreditsMonthly': '毎月\u20ac16のAIクレジットを取得',
   'accessAllModels': 'すべてのAIモデルにアクセス',
@@ -330,9 +309,6 @@ const Map<String, String> stringsJa = {
   'createAccountWithEmail': 'メールアドレスとパスワードでアカウントを作成',
   'supabaseNotConfigured':
       'Supabaseの認証情報が設定されていません。本番ビルドの前に更新してください。',
-  'confirmEmailToContinue': '続行するにはメールを確認してください',
-  'confirmEmailBody':
-      '確認リンクをメールアドレスに送信しました。サインインする前にメールを開いてリンクをクリックしてください。',
   'howOthersSeeYou': '他の人に表示される名前',
   'email': 'メール',
   'emailPlaceholder': 'you@example.com',
@@ -406,7 +382,6 @@ const Map<String, String> stringsJa = {
       'リリースビルドで動作。ラグやトレイの問題のトラブルシューティング用にアプリ/ランタイムのメタデータを記録します。',
   'diagnosticsEnabled': '診断ログが有効になりました',
   'diagnosticsDisabled': '診断ログが無効になりました',
-  'logFile': 'ログファイル',
   'notInitializedYet': 'まだ初期化されていません',
   'refresh': '更新',
   'copyRecent': '最近のログをコピー',
@@ -423,7 +398,6 @@ const Map<String, String> stringsJa = {
   'failedToShareLog': '診断ログの共有に失敗しました: {error}',
   'diagnosticsLogCleared': '診断ログをクリアしました',
   'failedToClearLog': '診断ログのクリアに失敗しました: {error}',
-  'recentLogLines': '最近のログ行',
   'devOptionsDisabledMsg': '開発者オプションが無効になりました。',
   'noLogsYet':
       'まだログがありません。診断ログを有効にし、アプリを使用してデータを収集してください。',
@@ -453,45 +427,20 @@ const Map<String, String> stringsJa = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'セッションが期限切れです。もう一度サインインしてください。',
-  'offlineMessage':
-      'オフラインのようです。インターネット接続を確認してください。',
-  'cannotReachApi': 'APIサーバーに接続できません。',
-  'maintenanceMessage':
-      '現在メンテナンス中です。まもなく復旧します。',
   'free': '無料',
-  'perMillion': '/M',
-  'perRequest': '/リクエスト',
   'best': 'おすすめ',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'メールアプリで開く',
-  'costLabel': 'コスト: {cost}',
-  'generatedLabel': '生成: {label}',
-  'unableToCopyImage': '画像をコピーできません',
   'unableToSaveImage': '画像を保存できません',
   'image': '画像',
-  'openLink': 'リンクを開く',
-  'openLinkConfirm':
-      'アプリを離れて{url}を開きますか？',
   'open': '開く',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'コンテンツをクリップボードにコピーしました',
-  'artifactCopied': 'アーティファクトをクリップボードにコピーしました',
-  'fileSaved': 'ファイルを保存しました',
-  'failedToExportArtifact': 'アーティファクトのエクスポートに失敗しました: {error}',
-  'failedToSave': '保存に失敗しました: {error}',
-  'markdownSaved': 'Markdownを保存しました',
   'original': 'オリジナル',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Markdownサマリーを表示',
-  'addSummary': 'サマリーを追加',
-  'deletedFile': '削除されたファイル',
   'deleteFile': 'ファイルを削除',
-  'deleteFileConfirm': '「{name}」を削除しますか？',
   'deleteFailed': '削除に失敗しました: {error}',
-  'uploadedFile': 'アップロード: {name}',
-  'freeMessagePlaceholder': '無料: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '何でも聞いてください！',
@@ -501,8 +450,6 @@ const Map<String, String> stringsJa = {
   'addMessageOrDocs': 'メッセージを追加またはドキュメントを送信',
   'micAccessFailed': 'マイクへのアクセスに失敗しました',
   'transcriptionFailed': '文字起こしに失敗しました',
-  'replyTargetSelected': '返信先を選択しました',
-  'clearReply': '返信をクリア',
   'nothingToResend': '再送信するものがありません',
   'freeMessagesUsed': '無料メッセージを使い切りました',
   'ok': 'OK',
@@ -516,16 +463,9 @@ const Map<String, String> stringsJa = {
   'modelError': 'エラー: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': '画像をコピー',
-  'downloadImage': '画像をダウンロード',
-  'imageDetails': '画像の詳細',
-  'imageCopied': '画像をコピーしました',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': '無料メッセージ',
-  'freeUsed': '使用済み: {count}',
   'freeTotal': '合計: {count}',
-  'subscribeToContinue': 'チャットを続けるには登録してください',
   'freeRemaining': '無料: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -575,5 +515,4 @@ const Map<String, String> stringsJa = {
   'close': '閉じる',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'また今度',
 };

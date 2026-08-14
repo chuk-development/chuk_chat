@@ -157,7 +157,6 @@ Complete map of all Dart files in the codebase.
 | `token_estimator.dart` | Token counting |
 | `secure_token_handler.dart` | Token handling |
 | `api_rate_limiter.dart` | Rate limiting |
-| `api_request_queue.dart` | Request queuing |
 | `exponential_backoff.dart` | Retry logic |
 | `file_upload_validator.dart` | File validation |
 | `upload_rate_limiter.dart` | Upload rate limiting (DoS protection) |
