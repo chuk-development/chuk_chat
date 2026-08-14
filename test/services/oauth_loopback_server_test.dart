@@ -21,12 +21,18 @@ OAuthLoopbackServer _server(int port) => OAuthLoopbackServer(
   theme: _theme,
 );
 
-Future<String> _get(Uri uri) async {
+/// Status code and body of one callback request.
+typedef _Response = ({int status, String body});
+
+Future<_Response> _get(Uri uri) async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(uri);
     final response = await request.close();
-    return await response.transform(const SystemEncoding().decoder).join();
+    final body = await response
+        .transform(const SystemEncoding().decoder)
+        .join();
+    return (status: response.statusCode, body: body);
   } finally {
     client.close();
   }
@@ -49,12 +55,13 @@ void main() {
     await server.start(expectedState: 'abc');
     addTearDown(server.stop);
 
-    final body = await _get(
+    final response = await _get(
       Uri.parse('${server.redirectUri}?code=xyz&state=abc'),
     );
 
     expect(await server.code, 'xyz');
-    expect(body, contains('Test Connected!'));
+    expect(response.status, HttpStatus.ok);
+    expect(response.body, contains('Test Connected!'));
   });
 
   test('a mismatched state fails the code future', () async {
@@ -63,11 +70,11 @@ void main() {
     addTearDown(server.stop);
 
     final pending = expectLater(server.code, throwsA(isA<Exception>()));
-    final body = await _get(
+    final response = await _get(
       Uri.parse('${server.redirectUri}?code=xyz&state=wrong'),
     );
 
-    expect(body, contains('Security Error'));
+    expect(response.body, contains('Security Error'));
     await pending;
   });
 
@@ -77,11 +84,11 @@ void main() {
     addTearDown(server.stop);
 
     final pending = expectLater(server.code, throwsA(isA<Exception>()));
-    final body = await _get(
+    final response = await _get(
       Uri.parse('${server.redirectUri}?error=access_denied&state=abc'),
     );
 
-    expect(body, contains('Authorization Failed'));
+    expect(response.body, contains('Authorization Failed'));
     await pending;
   });
 
@@ -90,8 +97,9 @@ void main() {
     await server.start(expectedState: 'abc');
     addTearDown(server.stop);
 
-    final body = await _get(Uri.parse('${server.redirectUri}?state=abc'));
-    expect(body, contains('Missing authorization code'));
+    final response = await _get(Uri.parse('${server.redirectUri}?state=abc'));
+    expect(response.status, HttpStatus.badRequest);
+    expect(response.body, contains('Missing authorization code'));
 
     await _get(Uri.parse('${server.redirectUri}?code=late&state=abc'));
     expect(await server.code, 'late');
