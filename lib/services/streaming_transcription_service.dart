@@ -38,8 +38,6 @@ class StreamingTranscriptionService {
   bool _isConnected = false;
   bool _disposed = false;
 
-  /// Whether the WebSocket is connected and ready to receive audio.
-  bool get isConnected => _isConnected;
 
   /// Construct the WebSocket URL from the HTTP API base URL.
   static Uri get _wsUrl {

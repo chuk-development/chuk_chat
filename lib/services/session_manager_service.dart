@@ -222,7 +222,6 @@ class SessionManagerService extends ChangeNotifier {
     await PasswordRevisionService.clearCachedRevision();
 
     // Reset theme to local prefs
-    AppThemeService.instance.resetSupabaseThemeFlag();
     await AppThemeService.instance.loadFromPrefs();
   }
 
