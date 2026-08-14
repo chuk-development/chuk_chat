@@ -173,9 +173,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SettingsSectionHeader(
-          'Chat Recovery',
-          padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+        SettingsSectionHeader(
+          l.encryptedChatRecovery,
+          padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
         ),
         SettingsInfoCard(
           lockedCount > 0
@@ -532,9 +532,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             ),
 
           // Profile
-          const SettingsSectionHeader(
-            'Profile',
-            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          SettingsSectionHeader(
+            l.profile,
+            padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
           ),
           _FieldLabel(l.displayName),
           TextFormField(
@@ -579,9 +579,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ),
 
           // Security
-          const SettingsSectionHeader(
-            'Security',
-            padding: EdgeInsets.fromLTRB(20, 20, 0, 8),
+          SettingsSectionHeader(
+            l.security,
+            padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
           ),
           if (_passwordChangeError != null)
             Padding(
