@@ -125,3 +125,6 @@ report.xml
 demo/.auth-state.json
 demo/recordings/
 demo/node_modules/
+
+# Local analysis scratch (not part of the app)
+_scratch/
