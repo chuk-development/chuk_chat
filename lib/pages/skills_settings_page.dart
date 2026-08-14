@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/user_skills_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Lists built-in skills and lets the user author their own.
 ///
@@ -349,7 +350,6 @@ message.
             minLines: 18,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
             decoration: InputDecoration(
-              border: const OutlineInputBorder(),
               filled: true,
               fillColor: theme.m3.surfaceContainer,
             ),
@@ -374,6 +374,7 @@ class _SkillRow extends StatelessWidget {
     final m3 = theme.m3;
 
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -394,7 +395,7 @@ class _SkillRow extends StatelessWidget {
                   Text(
                     skill.name,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: cs.onSurface,
                     ),
@@ -435,9 +436,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: Theme.of(context).colorScheme.primary,
         ),
       ),

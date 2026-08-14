@@ -710,7 +710,8 @@ class ModelSelectionRow extends StatefulWidget {
 }
 
 class _ModelSelectionRowState extends State<ModelSelectionRow> {
-  static const int _descriptionToggleThreshold = 100;
+  /// Lines shown while the description is collapsed.
+  static const int _collapsedMaxLines = 1;
   bool _descriptionExpanded = false;
 
   @override
@@ -723,6 +724,9 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final bool isDesktop = screenWidth >= kTabletBreakpoint;
 
     final Widget pill = _ProviderPill(
+      // On mobile the pill owns its row, so it may use the card's full
+      // width instead of the narrow leftover next to the model name.
+      maxWidth: isDesktop ? null : math.max(160.0, screenWidth - 64.0),
       model: widget.model,
       selectedProvider: widget.selectedProvider,
       isAutoSelected: widget.isAutoSelected,
@@ -730,18 +734,22 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
       onAutoSelected: widget.onAutoSelected,
       buildIconWidget: widget.buildIconWidget,
     );
+    final Widget keyedPill = widget.isFirstRow
+        ? KeyedSubtree(
+            key: TourKeyRegistry.instance.keyFor(TourSlots.modelProviderPill),
+            child: pill,
+          )
+        : pill;
+
+    // On a phone the pill and the model name were fighting over one row and
+    // the name lost — it ellipsised to two or three characters. The pill
+    // gets its own full-width row below the name instead.
     final Widget nameRow = _NameRow(
       model: widget.model,
       buildIconWidget: widget.buildIconWidget,
       promptConfig: widget.promptConfig,
       onEditPrompt: widget.onEditPrompt,
-      trailing: widget.isFirstRow
-          ? KeyedSubtree(
-              key: TourKeyRegistry.instance
-                  .keyFor(TourSlots.modelProviderPill),
-              child: pill,
-            )
-          : pill,
+      trailing: isDesktop ? keyedPill : const SizedBox.shrink(),
     );
 
     final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
@@ -749,6 +757,8 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
 
     final List<Widget> mobileChildren = <Widget>[
       nameRow,
+      const SizedBox(height: 10),
+      Align(alignment: Alignment.centerLeft, child: keyedPill),
       if (descriptionBlock != null) ...[
         const SizedBox(height: 10),
         descriptionBlock,
@@ -792,70 +802,83 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
   Widget? _buildDescriptionBlock(ThemeData theme, dynamic m3) {
     final description = widget.model.description;
     if (description == null || description.isEmpty) return null;
-    final bool needsToggle = description.length > _descriptionToggleThreshold;
     final Color descColor = m3.onSurfaceVariant as Color;
     final Color primary = theme.colorScheme.primary;
-
-    if (!needsToggle) {
-      return Text(
-        description,
-        style:
-            theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
-      );
-    }
-
     final TextStyle? descStyle =
         theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4);
 
-    return SizedBox(
-      width: double.infinity,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () =>
-                setState(() => _descriptionExpanded = !_descriptionExpanded),
-            child: Text(
-              description,
-              style: descStyle,
-              maxLines: _descriptionExpanded ? null : 1,
-              overflow: _descriptionExpanded
-                  ? TextOverflow.visible
-                  : TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(height: 2),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () =>
-                setState(() => _descriptionExpanded = !_descriptionExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _descriptionExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 16,
-                    color: primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _descriptionExpanded ? 'Show less' : 'Show more',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        // Measure at the width the text actually gets. The old rule was
+        // "longer than 100 characters", which offers a Show more on a wide
+        // desktop window where the whole description already fits on one
+        // line — a toggle that toggles nothing.
+        final TextPainter painter = TextPainter(
+          text: TextSpan(text: description, style: descStyle),
+          maxLines: _collapsedMaxLines,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final bool needsToggle = painter.didExceedMaxLines;
+        painter.dispose();
+
+        if (!needsToggle) {
+          return Text(description, style: descStyle);
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(
+                  () => _descriptionExpanded = !_descriptionExpanded,
+                ),
+                child: Text(
+                  description,
+                  style: descStyle,
+                  maxLines: _descriptionExpanded ? null : _collapsedMaxLines,
+                  overflow: _descriptionExpanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                ),
               ),
-            ),
+              const SizedBox(height: 2),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(
+                  () => _descriptionExpanded = !_descriptionExpanded,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _descriptionExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 16,
+                        color: primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _descriptionExpanded ? 'Show less' : 'Show more',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -968,9 +991,13 @@ class _ProviderPill extends StatelessWidget {
   final VoidCallback? onAutoSelected;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
 
+  /// Overrides the derived cap on the closed face's width.
+  final double? maxWidth;
+
   static const String _kDisabledValue = '__disabled__';
 
   const _ProviderPill({
+    this.maxWidth,
     required this.model,
     required this.selectedProvider,
     this.isAutoSelected = false,
@@ -992,9 +1019,8 @@ class _ProviderPill extends StatelessWidget {
     // full provider names + prices stay readable — a plain DropdownButton
     // can't do that since its closed face and menu share one width.
     final double screenWidth = MediaQuery.of(context).size.width;
-    final double pillMaxWidth = screenWidth < 400
-        ? math.max(140.0, screenWidth - 200.0)
-        : 280.0;
+    final double pillMaxWidth = maxWidth ??
+        (screenWidth < 400 ? math.max(140.0, screenWidth - 200.0) : 280.0);
     final double menuWidth =
         math.min(340.0, screenWidth - 48.0).clamp(220.0, 340.0).toDouble();
 
@@ -1317,18 +1343,6 @@ class _SearchField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),
     );

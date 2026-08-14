@@ -239,7 +239,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                           _logPath ?? l.notInitializedYet,
                           style: TextStyle(
                             fontFamily: 'monospace',
-                            fontSize: 12,
+                            fontSize: 13,
                             color: m3.onSurfaceVariant,
                           ),
                         ),
@@ -351,9 +351,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: Theme.of(context).colorScheme.primary,
         ),
       ),
@@ -421,7 +421,7 @@ class _SwitchRow extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: cs.onSurface,
                   ),
@@ -430,7 +430,7 @@ class _SwitchRow extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: m3.onSurfaceVariant,
                   ),
                 ),

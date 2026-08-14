@@ -14,6 +14,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/constants.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -313,6 +314,7 @@ class _RemoveButton extends StatelessWidget {
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: onTap,
         child: Tooltip(
           message: tooltip ?? 'Remove',
@@ -915,18 +917,6 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
         decoration: InputDecoration(
           filled: true,
           fillColor: textColor.withValues(alpha: 0.04),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: accent.withValues(alpha: 0.3)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: textColor.withValues(alpha: 0.1)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: accent, width: 1.5),
-          ),
           contentPadding: const EdgeInsets.all(16),
         ),
         cursorColor: accent,

@@ -7,6 +7,7 @@ import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Sort options for workspace list
 enum ProjectSortMode { recentlyUpdated, name, mostFiles, mostChats }
@@ -264,24 +265,6 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                         onPressed: () => _searchController.clear(),
                       )
                     : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide(
-                    color: iconFg.withValues(alpha: 0.25),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide(
-                    color: iconFg.withValues(alpha: 0.18),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide(
-                    color: iconFg.withValues(alpha: 0.35),
-                  ),
-                ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 isDense: true,
               ),
@@ -411,7 +394,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                       vertical: 12,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: kBorderRadiusPill,
                     ),
                   ),
                 ),
@@ -749,9 +732,6 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                           labelText: 'Workspace Name',
                           hintText: 'e.g., AI Research, Website Redesign',
                           prefixIcon: const Icon(Icons.folder_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
                         autofocus: true,
                         textInputAction: TextInputAction.next,
@@ -772,9 +752,6 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                           labelText: 'Description (optional)',
                           hintText: 'What is this workspace about?',
                           prefixIcon: const Icon(Icons.notes_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
                         maxLines: 2,
                         textInputAction: TextInputAction.next,
@@ -837,9 +814,6 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                               hintText:
                                   'Special instructions for AI in this workspace...',
                               alignLabelWithHint: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                             ),
                             maxLines: 4,
                           ),
@@ -873,7 +847,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                             vertical: 12,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: kBorderRadiusPill,
                           ),
                         ),
                         child: const Text('Create Workspace'),

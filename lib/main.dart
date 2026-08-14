@@ -32,7 +32,6 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
-import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -386,30 +385,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             // Apply user-chosen UI scale to all text in the app via MediaQuery.
             // This is the safest scaling approach — it doesn't break layout
             // calculations the way Transform.scale would.
-            final scaled = MediaQuery(
+            return MediaQuery(
               data: MediaQuery.of(
                 context,
               ).copyWith(textScaler: TextScaler.linear(_themeService.uiScale)),
               child: child,
-            );
-
-            // Linux: skip film-grain overlay to avoid startup and interaction jank.
-            if (!_themeService.grainEnabled || _isLinuxDesktop) return scaled;
-
-            return Stack(
-              children: [
-                scaled,
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: GrainOverlay(
-                      opacity: 0.10,
-                      speedMs: 160,
-                      noiseSize: 140,
-                      blendMode: BlendMode.overlay,
-                    ),
-                  ),
-                ),
-              ],
             );
           },
           home: AuthGate(
@@ -440,8 +420,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       setAccentColor: _themeService.setAccentColor,
       setIconFgColor: _themeService.setIconFgColor,
       setBgColor: _themeService.setBgColor,
-      grainEnabled: _themeService.grainEnabled,
-      setGrainEnabled: _themeService.setGrainEnabled,
       dynamicColorEnabled: _themeService.dynamicColorEnabled,
       setDynamicColorEnabled: _themeService.setDynamicColorEnabled,
       showReasoningTokens: _themeService.showReasoningTokens,

@@ -21,7 +21,6 @@ class _ThemePageState extends State<ThemePage> {
   late Color _selectedAccentColor;
   late Color _selectedIconFgColor;
   late Color _selectedBgColor;
-  late bool _selectedGrain;
   late bool _selectedDynamicColor;
 
   final TextEditingController _accentHexController = TextEditingController();
@@ -102,7 +101,6 @@ class _ThemePageState extends State<ThemePage> {
     _selectedAccentColor = widget.config.currentAccentColor;
     _selectedIconFgColor = widget.config.currentIconFgColor;
     _selectedBgColor = widget.config.currentBgColor;
-    _selectedGrain = widget.config.grainEnabled;
     _selectedDynamicColor = widget.config.dynamicColorEnabled;
 
     _accentHexController.text = _selectedAccentColor.toHexString();
@@ -123,7 +121,6 @@ class _ThemePageState extends State<ThemePage> {
     widget.config.setAccentColor(_selectedAccentColor);
     widget.config.setIconFgColor(_selectedIconFgColor);
     widget.config.setBgColor(_selectedBgColor);
-    widget.config.setGrainEnabled(_selectedGrain);
   }
 
   void _updateThemeMode(bool useDarkMode) {
@@ -133,13 +130,6 @@ class _ThemePageState extends State<ThemePage> {
           ? kDefaultBgColor
           : kDefaultBgColor.lighten(0.8);
       _bgHexController.text = _selectedBgColor.toHexString();
-      _applyThemeChanges();
-    });
-  }
-
-  void _updateGrainEnabled(bool enabled) {
-    setState(() {
-      _selectedGrain = enabled;
       _applyThemeChanges();
     });
   }
@@ -170,7 +160,7 @@ class _ThemePageState extends State<ThemePage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Mode section: dark toggle + film grain grouped in one card.
+          // Mode section: dark toggle + dynamic colour grouped in one card.
           const _SectionHeader('Mode'),
           _GroupedCard(
             children: [
@@ -180,14 +170,6 @@ class _ThemePageState extends State<ThemePage> {
                 subtitle: l.darkModeSubtitle,
                 value: isDarkMode,
                 onChanged: _updateThemeMode,
-              ),
-              _divider(context),
-              _SwitchRow(
-                icon: Icons.blur_on_outlined,
-                title: l.filmGrainEffect,
-                subtitle: l.filmGrainSubtitle,
-                value: _selectedGrain,
-                onChanged: _updateGrainEnabled,
               ),
               _divider(context),
               _SwitchRow(
@@ -330,9 +312,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: cs.primary,
         ),
       ),
@@ -378,6 +360,7 @@ class _SwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final m3 = Theme.of(context).m3;
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: () => onChanged(!value),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -392,7 +375,7 @@ class _SwitchRow extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -401,7 +384,7 @@ class _SwitchRow extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: m3.onSurfaceVariant,
                       ),
                     ),

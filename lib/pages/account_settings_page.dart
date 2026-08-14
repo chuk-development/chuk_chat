@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/constants.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -794,9 +795,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: Theme.of(context).colorScheme.primary,
         ),
       ),
@@ -890,6 +891,7 @@ class _SettingsRow extends StatelessWidget {
     final cs = theme.colorScheme;
     final m3 = theme.m3;
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -904,7 +906,7 @@ class _SettingsRow extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: cs.onSurface,
                     ),
@@ -914,7 +916,7 @@ class _SettingsRow extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: m3.onSurfaceVariant,
                       ),
                     ),

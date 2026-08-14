@@ -517,6 +517,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: DropdownButton<int>(
+                    focusColor: Colors.transparent,
                     value: _versions.any((v) => v.version == _selectedVersion)
                         ? _selectedVersion
                         : null,
@@ -761,6 +762,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: DropdownButton<int>(
+                            focusColor: Colors.transparent,
                             value:
                                 _versions.any(
                                   (v) => v.version == _selectedVersion,

@@ -88,8 +88,6 @@ const Map<String, String> stringsEs = {
   'iconFgColorSubtitle': 'Elige el color de los iconos y el texto principal',
   'backgroundColor': 'Color de fondo',
   'backgroundColorSubtitle': 'Elige el color de fondo principal de la app',
-  'filmGrainEffect': 'Efecto de grano de película',
-  'filmGrainSubtitle': 'Añadir una textura sutil de película analógica',
   'customHexColor': 'Color hexadecimal personalizado (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

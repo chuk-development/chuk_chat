@@ -24,6 +24,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:chuk_chat/constants.dart';
 
 class WorkspaceFilesPage extends StatefulWidget {
   final String workspaceId;
@@ -486,6 +487,7 @@ class _SheetTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
+          borderRadius: kBorderRadiusRow,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -544,6 +546,7 @@ class _FileTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: () => WorkspaceFileViewer.show(context, file, workspaceId),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -778,18 +781,6 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
               filled: true,
               fillColor: m3.surfaceContainer,
               contentPadding: const EdgeInsets.all(16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: cs.primary, width: 2),
-              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -806,18 +797,6 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
               filled: true,
               fillColor: m3.surfaceContainer,
               contentPadding: const EdgeInsets.all(16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: cs.primary, width: 2),
-              ),
             ),
           ),
           const SizedBox(height: 24),

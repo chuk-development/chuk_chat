@@ -17,10 +17,6 @@ class AppShellConfig {
   final Function(Color) setIconFgColor;
   final Function(Color) setBgColor;
 
-  // ── Film grain ─────────────────────────────────────────────
-  final bool grainEnabled;
-  final Function(bool) setGrainEnabled;
-
   // ── Material You / dynamic colour ──────────────────────────
   final bool dynamicColorEnabled;
   final Future<void> Function(bool) setDynamicColorEnabled;
@@ -94,8 +90,6 @@ class AppShellConfig {
     required this.setAccentColor,
     required this.setIconFgColor,
     required this.setBgColor,
-    required this.grainEnabled,
-    required this.setGrainEnabled,
     required this.dynamicColorEnabled,
     required this.setDynamicColorEnabled,
     required this.showReasoningTokens,

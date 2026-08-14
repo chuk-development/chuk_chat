@@ -250,7 +250,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       Text(
                         l.language,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -258,7 +258,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       Text(
                         l.languageSubtitle,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: m3.onSurfaceVariant,
                         ),
                       ),
@@ -270,7 +270,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   value: _selectedLocale,
                   underline: const SizedBox.shrink(),
                   dropdownColor: m3.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: kBorderRadiusMenu,
+                  focusColor: Colors.transparent,
                   items: const [
                     DropdownMenuItem(value: 'en', child: Text('English')),
                     DropdownMenuItem(value: 'de', child: Text('Deutsch')),
@@ -375,7 +376,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 Text(
                   l.chatFontSize,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -383,7 +384,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 Text(
                   l.chatFontSizeSubtitle,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: m3.onSurfaceVariant,
                   ),
                 ),
@@ -426,7 +427,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 Text(
                   l.chatFontFamily,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -434,7 +435,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 Text(
                   l.chatFontFamilySubtitle,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: m3.onSurfaceVariant,
                   ),
                 ),
@@ -494,7 +495,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     (_selectedUiScale * 100).round().toString(),
                   ),
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -502,7 +503,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 Text(
                   l.uiScaleSubtitle,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: m3.onSurfaceVariant,
                   ),
                 ),
@@ -715,6 +716,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
+            borderRadius: kBorderRadiusRow,
             onTap: () {
               setState(() {
                 _isPromptExpanded = !_isPromptExpanded;
@@ -734,7 +736,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         Text(
                           l.titleGenerationPrompt,
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -744,7 +746,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                               ? l.usingCustomPrompt
                               : l.usingDefaultPrompt,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             color: m3.onSurfaceVariant,
                           ),
                         ),
@@ -769,7 +771,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   Text(
                     'System prompt used to generate titles:',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: m3.onSurfaceVariant,
                     ),
                   ),
@@ -824,9 +826,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: cs.primary,
         ),
       ),
@@ -890,6 +892,7 @@ class _SwitchRow extends StatelessWidget {
     final m3 = Theme.of(context).m3;
     final enabled = onChanged != null;
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: enabled ? () => onChanged!(!value) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -904,7 +907,7 @@ class _SwitchRow extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -913,7 +916,7 @@ class _SwitchRow extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: m3.onSurfaceVariant,
                       ),
                     ),
@@ -947,6 +950,7 @@ class _NavRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final m3 = Theme.of(context).m3;
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -961,7 +965,7 @@ class _NavRow extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -970,7 +974,7 @@ class _NavRow extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: m3.onSurfaceVariant,
                       ),
                     ),
@@ -1009,7 +1013,7 @@ class _InfoCard extends StatelessWidget {
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 color: m3.onSurfaceVariant,
                 height: 1.4,
               ),
@@ -1038,17 +1042,21 @@ class _FontFamilyField extends StatelessWidget {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: m3.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        color: m3.surfaceContainerLow,
+        borderRadius: kBorderRadiusField,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
           dropdownColor: m3.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: kBorderRadiusMenu,
+          // The default focus tint is a full-bleed rectangle drawn behind
+          // the rounded container — it is what makes a focused dropdown
+          // look square. The container already carries the shape.
+          focusColor: Colors.transparent,
           items: items,
           onChanged: onChanged,
         ),

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
-/// Opens a fullscreen text composition sheet.
+/// Opens a fullscreen text composition sheet for the chat composer.
 /// Returns the edited text, or null if dismissed.
+///
+/// Settings fields use [showFullscreenTextEditor] instead — a real route,
+/// because those hold paragraphs rather than one message.
 Future<String?> showFullscreenComposer(
   BuildContext context, {
   required String initialText,
@@ -50,18 +54,18 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
     final Color iconFg = theme.resolvedIconColor;
     final Color accent = theme.colorScheme.primary;
     final Color borderColor = iconFg.withValues(alpha: 0.15);
-    final double sheetHeight = MediaQuery.of(context).size.height * 0.75;
+    final double sheetHeight = MediaQuery.sizeOf(context).height * 0.75;
 
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
       ),
       child: Container(
         height: sheetHeight,
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         decoration: BoxDecoration(
           color: bg.withValues(alpha: 0.98),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: kBorderRadiusCard,
           border: Border.all(color: borderColor, width: 1),
           boxShadow: [
             BoxShadow(
@@ -135,6 +139,9 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
                       fontSize: 15,
                     ),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   cursorColor: accent,
@@ -146,20 +153,9 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: SizedBox(
                 width: double.infinity,
-                child: TextButton(
+                child: FilledButton(
                   onPressed: () => Navigator.of(context).pop(_controller.text),
-                  style: TextButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('Done'),
                 ),
               ),
             ),

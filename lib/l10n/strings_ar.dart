@@ -88,8 +88,6 @@ const Map<String, String> stringsAr = {
   'iconFgColorSubtitle': 'اختر لون الأيقونات والنصوص الرئيسية',
   'backgroundColor': 'لون الخلفية',
   'backgroundColorSubtitle': 'اختر لون الخلفية الرئيسي للتطبيق',
-  'filmGrainEffect': 'تأثير حبيبات الفيلم',
-  'filmGrainSubtitle': 'إضافة ملمس فيلم خفيف',
   'customHexColor': 'لون سداسي مخصص (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

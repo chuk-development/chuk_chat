@@ -102,8 +102,6 @@ const Map<String, String> stringsFr = {
   'backgroundColor': 'Couleur de fond',
   'backgroundColorSubtitle':
       'Choisir la couleur de fond principale de l\'application',
-  'filmGrainEffect': 'Effet grain de film',
-  'filmGrainSubtitle': 'Ajouter une texture subtile de film argentique',
   'customHexColor': 'Couleur hexadécimale personnalisée (#RRVVBB)',
 
   // ── Tool calling page ──────────────────────────────────────

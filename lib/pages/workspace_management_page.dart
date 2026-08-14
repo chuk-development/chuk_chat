@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Mobile-friendly workspace management page
 /// Allows managing files, instructions, chats, and starting new chats with workspace context
@@ -436,7 +437,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: kBorderRadiusPill,
                 ),
                 side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
@@ -668,7 +669,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: kBorderRadiusPill,
                 ),
                 side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
@@ -876,9 +877,6 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                       maxLines: 6,
                       decoration: InputDecoration(
                         hintText: 'Enter custom instructions for the AI...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -965,7 +963,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                         side: const BorderSide(color: Colors.red),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: kBorderRadiusPill,
                         ),
                       ),
                     ),
@@ -997,9 +995,6 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               controller: nameController,
               decoration: InputDecoration(
                 labelText: 'Workspace Name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1007,9 +1002,6 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               controller: descController,
               decoration: InputDecoration(
                 labelText: 'Description (optional)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
               maxLines: 2,
             ),

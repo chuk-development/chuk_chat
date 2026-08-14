@@ -527,7 +527,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
+    // sizeOf, not of(): this sits above the Scaffold, so `of` would see the
+    // raw animating viewInsets and rebuild the app bar, the chat screen and
+    // the whole sidebar on every keyboard frame.
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final Color iconFg = Theme.of(context).resolvedIconColor;
 
     // Mobile sidebar fills the entire screen — a full-page panel instead
@@ -666,6 +669,34 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       ),
     );
 
+    // Built once per build, not once per animation frame. Constructing
+    // SidebarMobile inside the AnimatedBuilder handed the framework a new
+    // widget instance 60 times a second, and the sidebar rebuilds its whole
+    // chat list, time buckets and footer every time — while it is off
+    // screen.
+    final Widget sidebar = GestureDetector(
+      onHorizontalDragEnd: (DragEndDetails details) {
+        // Swipe left on sidebar to close it
+        if (_isSidebarExpanded &&
+            details.primaryVelocity != null &&
+            details.primaryVelocity! < -500) {
+          _toggleSidebar();
+        }
+      },
+      child: SidebarMobile(
+        onChatSelected: _handleChatSelected,
+        onSettingsTapped: _openSettingsPage,
+        onWorkspacesTapped: _openWorkspacesPage,
+        onMediaTapped: _openMediaPage,
+        onNewChatTapped: _newChatFromSidebar,
+        onChatDeleted: _handleChatDeleted,
+        selectedChatId: ChatStorageService.selectedChatId,
+        isCompactMode: true,
+        mode: _mode,
+        onModeChanged: (m) => setState(() => _mode = m),
+      ),
+    );
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: AnimatedBuilder(
@@ -690,28 +721,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 top: 0,
                 bottom: 0,
                 width: sidebarVisibleWidth,
-                child: GestureDetector(
-                  onHorizontalDragEnd: (DragEndDetails details) {
-                    // Swipe left on sidebar to close it
-                    if (_isSidebarExpanded &&
-                        details.primaryVelocity != null &&
-                        details.primaryVelocity! < -500) {
-                      _toggleSidebar();
-                    }
-                  },
-                  child: SidebarMobile(
-                    onChatSelected: _handleChatSelected,
-                    onSettingsTapped: _openSettingsPage,
-                    onWorkspacesTapped: _openWorkspacesPage,
-                    onMediaTapped: _openMediaPage,
-                    onNewChatTapped: _newChatFromSidebar,
-                    onChatDeleted: _handleChatDeleted,
-                    selectedChatId: ChatStorageService.selectedChatId,
-                    isCompactMode: true,
-                    mode: _mode,
-                    onModeChanged: (m) => setState(() => _mode = m),
-                  ),
-                ),
+                child: sidebar,
               ),
             ],
           );

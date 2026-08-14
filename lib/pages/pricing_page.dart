@@ -3,6 +3,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
@@ -115,19 +116,14 @@ Future<void> syncSubscription() async {
   }
 }
 
+/// Always a live read — used before opening Stripe checkout, where a stale
+/// answer would let a subscriber buy a second subscription.
 Future<Map<String, dynamic>> getUserStatus() async {
-  final token = await _getAccessToken();
-
-  final response = await http.get(
-    Uri.parse('$_apiBaseUrl/v1/user/status'),
-    headers: {'Authorization': 'Bearer $token'},
-  );
-
-  if (response.statusCode != 200) {
-    throw Exception('Failed to get user status: ${response.body}');
+  final Map<String, dynamic>? status = await UserStatusService.refresh();
+  if (status == null) {
+    throw Exception('Failed to get user status');
   }
-
-  return jsonDecode(response.body) as Map<String, dynamic>;
+  return status;
 }
 
 class PricingPage extends StatefulWidget {
@@ -160,18 +156,32 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Refresh when user returns from browser (Stripe checkout/portal)
     if (state == AppLifecycleState.resumed) {
-      _loadUserStatus();
+      // Coming back from Stripe: the plan may have changed one second ago,
+      // so this path ignores the cache window.
+      _loadUserStatus(force: true);
     }
   }
 
-  Future<void> _loadUserStatus() async {
-    setState(() => _isLoading = true);
+  /// Cache-first. A returning subscriber sees their plan immediately; the
+  /// spinner is only for a cold cache.
+  Future<void> _loadUserStatus({bool force = false}) async {
+    final Map<String, dynamic>? cached = UserStatusService.status.value;
+    if (cached != null) {
+      setState(() {
+        _userStatus = cached;
+        _isLoading = false;
+      });
+    } else if (_userStatus == null) {
+      // Spinner only on a cold cache. A forced refresh keeps the plan on
+      // screen and swaps it when the fresh answer arrives.
+      setState(() => _isLoading = true);
+    }
 
     try {
-      final status = await getUserStatus();
+      final status = await UserStatusService.load(forceRefresh: force);
       if (!mounted) return;
       setState(() {
-        _userStatus = status;
+        _userStatus = status ?? _userStatus;
         _isLoading = false;
       });
     } catch (error) {
@@ -325,18 +335,15 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 16),
-                FilledButton.tonalIcon(
-                  icon: const Icon(Icons.query_stats, size: 18),
-                  label: Text(l.openUsageDetails),
-                  onPressed: _openUsageDetails,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+                // Full width rather than hugging the left edge — it is the
+                // only action in this section, so it should not read as an
+                // afterthought parked under the paragraph.
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    icon: const Icon(Icons.query_stats, size: 18),
+                    label: Text(l.openUsageDetails),
+                    onPressed: _openUsageDetails,
                   ),
                 ),
               ],
@@ -584,9 +591,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: colorScheme.primary,
         ),
       ),

@@ -163,10 +163,6 @@ class _PerModelSystemPromptEditorState
                   hintText: l.perModelPromptPlaceholder,
                   filled: true,
                   fillColor: m3.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
               ),

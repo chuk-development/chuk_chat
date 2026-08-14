@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/build_info.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/constants.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -433,6 +434,7 @@ class _LicenseListTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -636,9 +638,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
           color: colorScheme.primary,
         ),
       ),
@@ -696,6 +698,7 @@ class _SettingsRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -614,17 +614,21 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final stopwatch = Stopwatch()..start();
+    // The timing is reported at most once per bubble, so stop paying for a
+    // Stopwatch on every later rebuild.
+    final Stopwatch? stopwatch =
+        _complexBubbleLogged ? null : (Stopwatch()..start());
 
     final bool isUserMessage = widget.isUser;
     final Widget result = isUserMessage
         ? _buildUserBubble(context)
         : _buildAiBubble(context);
 
-    stopwatch.stop();
+    stopwatch?.stop();
     final imageCount = widget.images?.length ?? 0;
     final isComplex = imageCount > 0 || widget.message.length > 3000;
-    if (isComplex &&
+    if (stopwatch != null &&
+        isComplex &&
         !_complexBubbleLogged &&
         stopwatch.elapsedMilliseconds >= 8) {
       _complexBubbleLogged = true;
@@ -1720,6 +1724,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
+                borderRadius: kBorderRadiusRow,
                 onTap: () => _openImagePreview(
                   imageSource: rawUrl,
                   images: [rawUrl],
@@ -2050,6 +2055,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           // Header chrome (label, preview, chevron) stays out of the selection.
           SelectionContainer.disabled(
             child: InkWell(
+              borderRadius: kBorderRadiusRow,
               onTap: () => setState(() {
                 if (_expandedCards.contains(key)) {
                   _expandedCards.remove(key);
@@ -2057,7 +2063,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                   _expandedCards.add(key);
                 }
               }),
-              borderRadius: BorderRadius.circular(10),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -3423,6 +3428,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       runSpacing: 8,
       children: attachments.map((attachment) {
         return InkWell(
+          borderRadius: kBorderRadiusRow,
           onTap: () {
             // Open document viewer
             Navigator.of(context).push(

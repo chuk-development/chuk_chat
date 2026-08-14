@@ -90,8 +90,6 @@ const Map<String, String> stringsRu = {
   'iconFgColorSubtitle': 'Выберите цвет для иконок и ключевого текста',
   'backgroundColor': 'Цвет фона',
   'backgroundColorSubtitle': 'Выберите основной цвет фона приложения',
-  'filmGrainEffect': 'Эффект плёночного зерна',
-  'filmGrainSubtitle': 'Добавить лёгкую текстуру плёночной съёмки',
   'customHexColor': 'Пользовательский HEX-цвет (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

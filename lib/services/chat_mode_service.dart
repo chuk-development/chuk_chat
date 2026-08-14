@@ -30,7 +30,7 @@ class ChatModeService {
   ///
   /// Pinned rather than routed: the picker's job is availability, and one
   /// known-good provider beats a cheaper one that may be saturated.
-  static const String defaultModelId = 'deepseek/deepseek-v4-flash';
+  static const String defaultModelId = 'deepseek/deepseek-v4-flash-0731';
   static const String defaultProviderSlug = 'fireworks';
 
   /// What a fresh install starts with. Fast, because most questions are
@@ -44,13 +44,45 @@ class ChatModeService {
 
   /// The value the chat API expects for `reasoning_effort`.
   ///
-  /// Fast switches reasoning off; thinking asks for the deep pass.
+  /// Whether [mode] reasons by default. The reader can flip this per mode
+  /// — a fast answer that thinks briefly is sometimes worth the wait, and a
+  /// deep model without a reasoning pass is sometimes exactly right.
+  static bool defaultReasoning(ChatMode mode) => mode == ChatMode.thinking;
+
+  /// The value the chat API expects for `reasoning_effort`.
   ///
-  /// Reasoning-off must still use tools — a model that skips the search
-  /// and then says it searched is a bug in how the tools are offered, not
-  /// a reason to force a reasoning pass on every question.
-  static String reasoningEffort(ChatMode mode) =>
-      mode == ChatMode.fast ? 'none' : 'high';
+  /// Reasoning off must still use tools — a model that skips the search and
+  /// then says it searched is a bug in how the tools are offered, not a
+  /// reason to force a reasoning pass on every question.
+  static String reasoningEffort(ChatMode mode, {required bool reasoning}) {
+    if (!reasoning) return 'none';
+    return mode == ChatMode.fast ? 'low' : 'high';
+  }
+
+  static const String _reasoningPrefsKey = 'chat_mode_reasoning_v1';
+
+  /// Read the stored reasoning switch for [mode].
+  static Future<bool> loadReasoning(ChatMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('${_reasoningPrefsKey}_${mode.name}') ??
+          defaultReasoning(mode);
+    } catch (_) {
+      return defaultReasoning(mode);
+    }
+  }
+
+  /// Persist the reasoning switch for [mode].
+  static Future<void> saveReasoning(ChatMode mode, bool reasoning) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('${_reasoningPrefsKey}_${mode.name}', reasoning);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatMode] Could not store the reasoning switch: $e');
+      }
+    }
+  }
 
   /// Read the stored mode, falling back to [fallbackMode].
   static Future<ChatMode> load() async {
@@ -78,6 +110,18 @@ class ChatModeService {
     }
   }
 
+  /// Put the mode's own pinned model back in use, whatever was picked by
+  /// hand before. Picking a model leaves the modes behind; picking a mode
+  /// comes back to them.
+  static Future<String> useDefaultModel() async {
+    await UserPreferencesService.saveSelectedModel(defaultModelId);
+    await UserPreferencesService.saveSelectedProvider(
+      defaultModelId,
+      defaultProviderSlug,
+    );
+    return defaultModelId;
+  }
+
   /// Make sure the reader has a model selected, and return it.
   ///
   /// Order: an existing choice wins, then whatever the account carries,
@@ -92,11 +136,7 @@ class ChatModeService {
     final fromAccount = await UserPreferencesService.forceLoadSelectedModel();
     if (fromAccount != null && fromAccount.isNotEmpty) return fromAccount;
 
-    await UserPreferencesService.saveSelectedModel(defaultModelId);
-    await UserPreferencesService.saveSelectedProvider(
-      defaultModelId,
-      defaultProviderSlug,
-    );
+    await useDefaultModel();
     if (kDebugMode) {
       debugPrint(
         '🎯 [ChatMode] No model chosen yet — defaulting to $defaultModelId '

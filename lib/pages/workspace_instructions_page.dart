@@ -167,18 +167,6 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
                 filled: true,
                 fillColor: m3.surfaceContainer,
                 contentPadding: const EdgeInsets.all(16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(color: cs.primary, width: 2),
-                ),
               ),
             ),
             const SizedBox(height: 8),

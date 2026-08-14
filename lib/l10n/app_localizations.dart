@@ -214,8 +214,6 @@ class AppLocalizations {
   String get iconFgColorSubtitle => _get('iconFgColorSubtitle');
   String get backgroundColor => _get('backgroundColor');
   String get backgroundColorSubtitle => _get('backgroundColorSubtitle');
-  String get filmGrainEffect => _get('filmGrainEffect');
-  String get filmGrainSubtitle => _get('filmGrainSubtitle');
   String get dynamicColor => _get('dynamicColor');
   String get dynamicColorSubtitle => _get('dynamicColorSubtitle');
   String get colorDynamicNote => _get('colorDynamicNote');
