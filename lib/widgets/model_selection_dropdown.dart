@@ -19,6 +19,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -942,20 +943,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _selectedModelName = message;
       _isLoadingModels = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    NiceSnackBar.show(context, message);
     _startApiAvailabilityPolling();
   }
 

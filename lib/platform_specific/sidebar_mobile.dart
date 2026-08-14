@@ -20,6 +20,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
 import 'package:chuk_chat/models/app_mode.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
@@ -328,39 +329,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       await _filterRecentChats();
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, 'Error: $error');
     }
   }
 
@@ -376,22 +347,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       final displayTitle = title != null && title.length > 30
           ? '${title.substring(0, 30)}...'
           : title;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '"$displayTitle" deleted',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, '"$displayTitle" deleted');
     });
   }
 
@@ -438,39 +394,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       }
       _showDebouncedDeleteNotification(chatTitle);
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, 'Error: $error');
     }
   }
 
@@ -1299,39 +1225,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       await _filterRecentChats();
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to rename chat: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      NiceSnackBar.showOn(messenger, 'Failed to rename chat: $error');
     }
   }
 }
