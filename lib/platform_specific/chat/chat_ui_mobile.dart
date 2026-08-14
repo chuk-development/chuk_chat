@@ -31,6 +31,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -56,6 +57,19 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+
+/// What the plus menu can start.
+enum _AttachChoice { camera, photos, files, workspace }
+
+/// A row in the workspace menu: a workspace to switch to (null clears it),
+/// or the way to make a new one.
+class _WorkspaceChoice {
+  const _WorkspaceChoice.pick(this.workspaceId) : create = false;
+  const _WorkspaceChoice.create() : workspaceId = null, create = true;
+
+  final String? workspaceId;
+  final bool create;
+}
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -145,7 +159,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
   bool _showFullscreenButton = false;
-  bool _isInputFocused = false;
 
   // Services and handlers
   late ChatApiService _chatApiService;
@@ -175,12 +188,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
   ChatMode _chatMode = ChatModeService.fallbackMode;
 
+  /// Whether the model may reason in the current mode — switchable per
+  /// mode, so "fast" can still think briefly and "thinking" can skip it.
+  bool _reasoningOn = ChatModeService.defaultReasoning(
+    ChatModeService.fallbackMode,
+  );
+
   /// Human name of the selected model, for the mode menu. Null until the
   /// model list has been cached — the menu then shows the raw id.
   String? _selectedModelName;
 
   /// Models the reader picked on the model screen, shown one level deeper.
   List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
+
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
@@ -242,9 +262,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// composer shows the fallback, which is also what a fresh install gets.
   Future<void> _restoreChatMode() async {
     final mode = await ChatModeService.load();
-    if (!mounted || mode == _chatMode) return;
+    final reasoning = await ChatModeService.loadReasoning(mode);
+    if (!mounted) return;
+    if (mode == _chatMode && reasoning == _reasoningOn) return;
     setState(() {
       _chatMode = mode;
+      _reasoningOn = reasoning;
     });
   }
 
@@ -502,7 +525,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.addListener(onScrollChanged);
 
     // Text field focus listener — collapse mic & model buttons while typing
-    _textFieldFocusNode.addListener(_onTextFieldFocusChanged);
 
     // Text controller listener
     _controller.addListener(_onControllerChanged);
@@ -550,15 +572,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
     };
     NetworkStatusService.isOnlineListenable.addListener(_networkStatusListener);
-  }
-
-  void _onTextFieldFocusChanged() {
-    final bool focused = _textFieldFocusNode.hasFocus;
-    if (focused != _isInputFocused) {
-      setState(() {
-        _isInputFocused = focused;
-      });
-    }
   }
 
   void _onControllerChanged() {
@@ -753,7 +766,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _networkStatusListener,
     );
     scrollController.removeListener(onScrollChanged);
-    _textFieldFocusNode.removeListener(_onTextFieldFocusChanged);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     scrollController.dispose();
@@ -1087,13 +1099,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the current model. Debug only.
-  bool get debugReasoningEnabled =>
-      ChatModeService.isDeepThinking(_chatMode);
+  bool get debugReasoningEnabled => _reasoningOn;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
   String get debugReasoningEffort =>
-      ChatModeService.reasoningEffort(_chatMode);
+      ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn);
 
   /// Current active chat id. Debug only.
   String? get debugActiveChatId => _activeChatId;
@@ -1270,206 +1281,230 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   // --- FILE HANDLERS ---
 
-  void _handleAddAttachmentTap() {
+  /// The attachment menu, anchored to the plus button in the same style as
+  /// the mode menu. It used to be a sheet sliding up from the bottom edge,
+  /// which looked like a different app every time it appeared.
+  Future<void> _handleAddAttachmentTap(BuildContext anchorContext) async {
     if (!mounted) return;
-    final theme = Theme.of(context);
     final bool supportsImages = modelSupportsImageInput;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final l10n = AppLocalizations.of(context)!;
 
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final Color indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: indicatorColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (!supportsImages) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.dividerColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 18,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'This model does not support images',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.8,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                Row(
-                  children: [
-                    buildAttachmentSheetOption(
-                      context: sheetContext,
-                      icon: Icons.photo_camera_outlined,
-                      label: AppLocalizations.of(sheetContext)!.camera,
-                      isEnabled: supportsImages,
-                      onTap: () {
-                        if (!supportsImages) return;
-                        Navigator.of(sheetContext).pop();
-                        unawaited(
-                          _fileHandler.pickImageFromSource(
-                            ImageSource.camera,
-                            supportsImages: supportsImages,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    buildAttachmentSheetOption(
-                      context: sheetContext,
-                      icon: Icons.photo_library_outlined,
-                      label: AppLocalizations.of(sheetContext)!.photos,
-                      isEnabled: supportsImages,
-                      onTap: () {
-                        if (!supportsImages) return;
-                        Navigator.of(sheetContext).pop();
-                        unawaited(
-                          _fileHandler.pickImagesFromGallery(
-                            supportsImages: supportsImages,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    buildAttachmentSheetOption(
-                      context: sheetContext,
-                      icon: Icons.attach_file,
-                      label: AppLocalizations.of(sheetContext)!.files,
-                      isEnabled: true,
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        unawaited(
-                          _fileHandler.uploadFiles(
-                            supportsImages: supportsImages,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    buildAttachmentSheetOption(
-                      context: sheetContext,
-                      icon: Icons.tag_rounded,
-                      label: 'Model',
-                      isEnabled: true,
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        // Show model selection as a separate bottom sheet
-                        Future<void>.delayed(
-                          const Duration(milliseconds: 200),
-                          () {
-                            if (!mounted) return;
-                            ModelSelectionDropdown.showModelSelectionSheet(
-                              context,
-                              currentModelId: _selectedModelId,
-                              onModelSelected: (newModelId) {
-                                setState(() {
-                                  _selectedModelId = newModelId;
-                                });
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    // Spacers to keep the single option left-aligned at 1/3 width
-                    const SizedBox(width: 12),
-                    const Spacer(),
-                    const SizedBox(width: 12),
-                    const Spacer(),
-                  ],
-                ),
-                // Workspace selection row (when feature enabled)
-                if (kFeatureWorkspaces) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      buildAttachmentSheetOption(
-                        context: sheetContext,
-                        icon: _selectedWorkspaceId != null
-                            ? Icons.folder_open
-                            : Icons.folder_outlined,
-                        label: 'Workspace',
-                        isEnabled: true,
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          _showProjectSelectionSheet();
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_selectedWorkspaceId != null) ...[
-                    const SizedBox(height: 8),
-                    _buildSelectedProjectBadge(theme),
-                  ],
-                ],
-              ],
-            ),
+    final choice = await _showAnchoredComposerMenu<_AttachChoice>(
+      anchorContext: anchorContext,
+      items: <PopupMenuEntry<_AttachChoice>>[
+        _composerMenuRow(
+          value: _AttachChoice.camera,
+          iconFg: iconFg,
+          icon: Icons.photo_camera_outlined,
+          label: l10n.camera,
+          isEnabled: supportsImages,
+        ),
+        _composerMenuRow(
+          value: _AttachChoice.photos,
+          iconFg: iconFg,
+          icon: Icons.photo_library_outlined,
+          label: l10n.photos,
+          isEnabled: supportsImages,
+        ),
+        _composerMenuRow(
+          value: _AttachChoice.files,
+          iconFg: iconFg,
+          icon: Icons.attach_file,
+          label: l10n.files,
+        ),
+        if (kFeatureWorkspaces) ...[
+          const PopupMenuDivider(),
+          _composerMenuRow(
+            value: _AttachChoice.workspace,
+            iconFg: iconFg,
+            icon: Icons.folder_outlined,
+            label: _selectedWorkspaceId == null ? 'Workspace' : 'Change workspace',
+          ),
+        ],
+      ],
+    );
+
+    if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case _AttachChoice.camera:
+        if (!supportsImages) return;
+        unawaited(
+          _fileHandler.pickImageFromSource(
+            ImageSource.camera,
+            supportsImages: supportsImages,
           ),
         );
-      },
+      case _AttachChoice.photos:
+        if (!supportsImages) return;
+        unawaited(
+          _fileHandler.pickImagesFromGallery(supportsImages: supportsImages),
+        );
+      case _AttachChoice.files:
+        unawaited(_fileHandler.uploadFiles(supportsImages: supportsImages));
+      case _AttachChoice.workspace:
+        if (!anchorContext.mounted) return;
+        await _openWorkspaceMenu(anchorContext);
+    }
+  }
+
+  /// One row of a composer menu — same metrics as the mode menu.
+  PopupMenuItem<T> _composerMenuRow<T>({
+    required T value,
+    required Color iconFg,
+    required IconData icon,
+    required String label,
+    bool isEnabled = true,
+    bool isSelected = false,
+  }) {
+    final Color color = isEnabled
+        ? iconFg
+        : iconFg.withValues(alpha: 0.35);
+
+    return PopupMenuItem<T>(
+      value: value,
+      enabled: isEnabled,
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (isSelected) ...[
+            const SizedBox(width: 12),
+            Icon(Icons.check, size: 18, color: color),
+          ],
+        ],
+      ),
     );
   }
 
-  /// Show workspace selection bottom sheet
-  void _showProjectSelectionSheet() {
-    MobileWorkspaceHandler.showProjectSelectionSheet(
-      context: context,
-      selectedWorkspaceId: _selectedWorkspaceId,
-      activeChatId: _activeChatId,
-      onWorkspaceSelected: (workspaceId) {
-        if (!mounted) return;
-        setState(() {
-          _selectedWorkspaceId = workspaceId;
-        });
-      },
-      onShowSnackBar: _showSnackBar,
-      onStateChanged: () {
-        if (mounted) setState(() {});
-      },
-      onOpenWorkspaceManagement: _openProjectManagement,
+  /// Open a menu anchored to a composer button. It leaves the focus and
+  /// so the keyboard alone.
+  Future<T?> _showAnchoredComposerMenu<T>({
+    required BuildContext anchorContext,
+    required List<PopupMenuEntry<T>> items,
+  }) {
+    final theme = Theme.of(anchorContext);
+    return showAnchoredMenu<T>(
+      anchorContext,
+      items: items,
+      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
+    );
+  }
+  /// The workspace in use, shown beside the mode pill — not floating over
+  /// the middle of the chat, where it covered the conversation. Tapping it
+  /// opens the same workspace menu the plus button does.
+  Widget _buildWorkspaceChip(Color iconFg) {
+    final workspace = WorkspaceStorageService.getWorkspace(
+      _selectedWorkspaceId!,
+    );
+    if (workspace == null) return const SizedBox.shrink();
+
+    return Builder(
+      builder: (anchorContext) => InkWell(
+        onTap: () => _openWorkspaceMenu(anchorContext),
+        borderRadius: BorderRadius.circular(19),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(
+              color: iconFg.withValues(alpha: 0.3),
+              width: 1.8,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_outlined,
+                size: 17,
+                color: workspace.displayColor,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  workspace.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: iconFg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The workspace picker: the same anchored menu one level deeper, not a
+  /// sheet from the bottom of the screen.
+  Future<void> _openWorkspaceMenu(BuildContext anchorContext) async {
+    final Color iconFg = Theme.of(anchorContext).resolvedIconColor;
+    final workspaces = WorkspaceStorageService.activeProjects;
+
+    final choice = await _showAnchoredComposerMenu<_WorkspaceChoice>(
+      anchorContext: anchorContext,
+      items: <PopupMenuEntry<_WorkspaceChoice>>[
+        _composerMenuRow(
+          value: const _WorkspaceChoice.pick(null),
+          iconFg: iconFg,
+          icon: Icons.close,
+          label: 'No workspace',
+          isSelected: _selectedWorkspaceId == null,
+        ),
+        for (final workspace in workspaces)
+          _composerMenuRow(
+            value: _WorkspaceChoice.pick(workspace.id),
+            iconFg: iconFg,
+            icon: Icons.folder_outlined,
+            label: workspace.name,
+            isSelected: workspace.id == _selectedWorkspaceId,
+          ),
+        const PopupMenuDivider(),
+        _composerMenuRow(
+          value: const _WorkspaceChoice.create(),
+          iconFg: iconFg,
+          icon: Icons.add,
+          label: 'New workspace',
+        ),
+      ],
+    );
+
+    if (!mounted || choice == null) return;
+
+    if (choice.create) {
+      await MobileWorkspaceHandler.createNewProject(
+        context: context,
+        onShowSnackBar: _showSnackBar,
+        onOpenWorkspaceManagement: _openProjectManagement,
+      );
+      return;
+    }
+
+    final String? id = choice.workspaceId;
+    setState(() => _selectedWorkspaceId = id);
+    _showSnackBar(
+      id == null
+          ? 'Workspace cleared'
+          : 'Workspace selected: '
+                '${WorkspaceStorageService.getWorkspace(id)?.name ?? id}',
     );
   }
 
@@ -1504,32 +1539,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
-  Widget _buildSelectedProjectBadge(ThemeData theme) {
-    return MobileWorkspaceHandler.buildSelectedProjectBadge(
-      theme: theme,
-      selectedWorkspaceId: _selectedWorkspaceId!,
-      onClearProject: () {
-        setState(() {
-          _selectedWorkspaceId = null;
-        });
-      },
-    );
-  }
-
   /// Build the slim floating pill shown at the top of the chat while a
   /// workspace is selected.
-  Widget _buildTopProjectPill(ThemeData theme) {
-    return MobileWorkspaceHandler.buildTopProjectPill(
-      theme: theme,
-      selectedWorkspaceId: _selectedWorkspaceId!,
-      onClearProject: () {
-        setState(() {
-          _selectedWorkspaceId = null;
-        });
-      },
-    );
-  }
-
   void _handleFileUploadUpdate(
     String fileId,
     String? markdownContent,
@@ -2290,7 +2301,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ? jsonEncode(imageDataUrls)
                 : null,
             maxTokens: validationResult.maxResponseTokens ?? 512,
-            reasoningEffort: ChatModeService.reasoningEffort(_chatMode),
+            reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
           ),
         );
         if (mounted) {
@@ -2470,7 +2481,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode),
+      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
     );
   }
 
@@ -2790,7 +2801,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode),
+      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
     );
   }
 
@@ -3032,7 +3043,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode),
+      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
       continuePriorText: priorText,
       continuePriorContentBlocksJson: priorContentBlocks,
     );
@@ -3144,46 +3155,45 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   Widget build(BuildContext context) {
     const bool isCompactModeForModelDropdown = true;
-    final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
     final Color iconFg = theme.resolvedIconColor;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Use actual available width from constraints, not screen width
-        final double availableWidth = constraints.maxWidth;
+    // No LayoutBuilder here. The hosting Scaffold resizes its body while the
+    // keyboard slides up, so a screen-wide LayoutBuilder re-ran this whole
+    // subtree — composer, list, mode selector — during the layout phase of
+    // every animation frame, for a value (the width) that never changes.
+    //
+    // sizeOf/paddingOf subscribe to one aspect each; MediaQuery.of would
+    // subscribe to viewInsets too and bring the per-frame rebuild back.
+    final double availableWidth = MediaQuery.sizeOf(context).width;
+    final double bottomPadding = MediaQuery.paddingOf(context).bottom;
 
-        const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
-        final double maxPossibleChatContentWidth = math.max(
-          0.0,
-          availableWidth - (effectiveHorizontalPadding * 2),
-        );
-        final double constrainedChatContentWidth = math.min(
-          _kMaxChatContentWidth,
-          maxPossibleChatContentWidth,
-        );
+    const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
+    final double maxPossibleChatContentWidth = math.max(
+      0.0,
+      availableWidth - (effectiveHorizontalPadding * 2),
+    );
+    final double constrainedChatContentWidth = math.min(
+      _kMaxChatContentWidth,
+      maxPossibleChatContentWidth,
+    );
 
-        return _buildChatContent(
-          context: context,
-          mediaQuery: mediaQuery,
-          theme: theme,
-          iconFg: iconFg,
-          keyboardInset: keyboardInset,
-          expandedInputWidth: constrainedChatContentWidth,
-          effectiveHorizontalPadding: effectiveHorizontalPadding,
-          isCompactModeForModelDropdown: isCompactModeForModelDropdown,
-        );
-      },
+    return _buildChatContent(
+      context: context,
+      bottomPadding: bottomPadding,
+      theme: theme,
+      iconFg: iconFg,
+      expandedInputWidth: constrainedChatContentWidth,
+      effectiveHorizontalPadding: effectiveHorizontalPadding,
+      isCompactModeForModelDropdown: isCompactModeForModelDropdown,
     );
   }
 
   Widget _buildChatContent({
     required BuildContext context,
-    required MediaQueryData mediaQuery,
+    required double bottomPadding,
     required ThemeData theme,
     required Color iconFg,
-    required double keyboardInset,
     required double expandedInputWidth,
     required double effectiveHorizontalPadding,
     required bool isCompactModeForModelDropdown,
@@ -3199,7 +3209,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         64.0 +
         (hasAttachments ? 80.0 : 0.0) +
         (_pendingMessageText != null ? 28.0 : 0.0) +
-        mediaQuery.padding.bottom;
+        bottomPadding;
     // Distance from the bottom edge to the top of the composer, plus a small
     // gap so the last message never sits flush against the input box. The
     // composer is offset `effectiveHorizontalPadding` from the bottom edge.
@@ -3222,9 +3232,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          Padding(
-            padding: EdgeInsets.only(bottom: keyboardInset),
-            child: GestureDetector(
+          // No manual keyboard padding: the hosting Scaffold already strips
+          // viewInsets from this subtree and resizes the body, so the old
+          // EdgeInsets.only(bottom: keyboardInset) was always zero — it only
+          // forced this widget to depend on an animating value.
+          Builder(
+            builder: (context) => GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
                 FocusScope.of(context).unfocus();
@@ -3244,8 +3257,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 padding: listPadding,
                                 itemCount: _messages.length,
                                 addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                cacheExtent: 1000.0,
+                                // Each item already wraps itself in a
+                                // RepaintBoundary below; letting the list add
+                                // a second one around it doubled the layers
+                                // for no gain.
+                                addRepaintBoundaries: false,
+                                // 1000 px built roughly two extra tall
+                                // bubbles off each end of the viewport, and
+                                // the viewport resizes while the keyboard
+                                // animates.
+                                cacheExtent: 400.0,
                                 itemBuilder: (_, int i) {
                                   final Map<String, String> raw = _messages[i];
                                   final String sender = raw['sender'] ?? 'ai';
@@ -3492,13 +3513,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       : SizedBox.expand(
                           child: Align(
                             alignment: const Alignment(0.0, -0.3),
-                            child: Opacity(
-                              opacity: 0.08,
+                            // The alpha lives in the tint colour instead of
+                            // an Opacity widget: Opacity pushes an offscreen
+                            // save layer on every paint, and cacheWidth stops
+                            // a 512 px asset being rescaled to 180 each time.
+                            // On an empty chat this watermark is the only
+                            // thing on screen while the keyboard animates.
+                            child: RepaintBoundary(
                               child: Image.asset(
                                 'web/icons/Icon-512.png',
                                 width: 180,
                                 height: 180,
-                                color: theme.colorScheme.onSurface,
+                                cacheWidth: 360,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.08,
+                                ),
                               ),
                             ),
                           ),
@@ -3574,17 +3603,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
             ),
           ),
-          // Floating workspace pill at the top of the chat
-          if (kFeatureWorkspaces && _selectedWorkspaceId != null)
-            Positioned(
-              top: mediaQuery.padding.top + 8,
-              left: effectiveHorizontalPadding,
-              right: effectiveHorizontalPadding,
-              child: IgnorePointer(
-                ignoring: false,
-                child: _buildTopProjectPill(theme),
-              ),
-            ),
           // Loading indicator when switching chats
           if (_isLoadingChat)
             Positioned.fill(
@@ -3618,10 +3636,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
       child: ChatModeSelector(
         mode: _chatMode,
+        showLabel: false,
         selectedModelId: _selectedModelId,
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
         pickedModels: _pickedModels,
+        reasoning: _reasoningOn,
+        onReasoningChanged: _setReasoning,
         onModeChanged: _setChatMode,
         onModelSelected: _applyModelSelection,
         onOpenModelScreen: _openModelScreen,
@@ -3695,10 +3716,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _setChatMode(ChatMode mode) async {
+    final reasoning = await ChatModeService.loadReasoning(mode);
+    if (!mounted) return;
     setState(() {
       _chatMode = mode;
+      _reasoningOn = reasoning;
     });
     await ChatModeService.save(mode);
+    // A mode runs its own pinned model. Whatever was picked by hand is
+    // left behind here, or the pill would name a model no mode selected.
+    if (_selectedModelId != ChatModeService.defaultModelId) {
+      await _applyModelSelection(await ChatModeService.useDefaultModel());
+    }
+  }
+
+  Future<void> _setReasoning(bool reasoning) async {
+    if (!mounted) return;
+    setState(() {
+      _reasoningOn = reasoning;
+    });
+    await ChatModeService.saveReasoning(_chatMode, reasoning);
   }
 
   /// Apply a model picked in the second dropdown: remember it, keep the
@@ -3727,6 +3764,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   //
   // The merged model/reasoning pill (_buildModelControl) is kept — only the
   // layout is reverted.
+  /// The composer: one rounded box, two rows.
+  ///
+  /// Row one is the text, row two the actions — the same shape the desktop
+  /// composer has, so the two platforms stop looking like different apps.
+  /// The mode control shows only its icon here; the words live in its menu,
+  /// where there is room for them.
+  ///
+  /// Height is driven by the number of text lines and nothing else. An
+  /// earlier version of this box measured itself through SafeArea, so every
+  /// keyboard-animation frame re-measured and rebuilt the whole screen and
+  /// the composer lagged behind the keyboard. SafeArea stays outside the
+  /// MeasureSize at the call site — do not move it back in.
   Widget _buildSearchBar({
     required bool isCompactMode,
     required ThemeData theme,
@@ -3739,393 +3788,279 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final bool hasTypedText = _controller.text.trim().isNotEmpty;
     final bool hasText = hasTypedText || hasAttachments;
     final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
+    final bool isRecording = _audioHandler.isMicActive;
 
-    final Color borderColor = _audioHandler.isMicActive
+    final Color borderColor = isRecording
         ? Colors.red.withValues(alpha: 0.4)
         : iconFg.withValues(alpha: 0.25);
 
-    // Uniform pill height for all three groups.
-    const double pillHeight = 46;
-
-    // Shared pill decoration for all three groups.
-    BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
-      color: bg.withValues(alpha: 0.98),
-      borderRadius: BorderRadius.circular(pillHeight / 2),
-      border: Border.all(
-        color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
-        width: 2,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    );
-
-    // Whether to show the mic inside the text field pill.
-    // Shown when: typed text is empty, not recording, not streaming.
-    // Attachments must not hide the mic (user can dictate with images attached).
-    final bool showInlineMic =
-        !hasTypedText && !_audioHandler.isMicActive && !showStopAction;
-    final bool rightPillHasMultipleActions = _audioHandler.isMicActive;
-
-    // Three-part layout: [+]  [TextField + mic]  [Send]
-    // With optional attachment previews and editing indicator above.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (hasAttachments)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: AttachmentPreviewBar(
-              files: _fileHandler.attachedFiles,
-              onRemove: _removeComposerAttachment,
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: bg.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // ── Left pill: +, Model selector ──
-            // When collapsed (only +), minWidth == pillHeight keeps it circular.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: pillHeight,
-                constraints: const BoxConstraints(minWidth: pillHeight),
-                decoration: pillDecoration(),
-                padding: EdgeInsets.symmetric(
-                  horizontal: _controller.text.isNotEmpty ? 7 : 4,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    buildTinyIconButton(
-                      icon: Icons.add_rounded,
-                      iconSize: 22,
-                      onTap: _handleAddAttachmentTap,
-                      isActive: hasAttachments,
-                      color: iconFg,
-                    ),
-                    Offstage(
-                      offstage: _controller.text.isNotEmpty,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(width: 1),
-                          _buildModelControl(
-                            isCompactMode: isCompactMode,
-                            iconFg: iconFg,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasAttachments)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6, right: 6),
+              child: AttachmentPreviewBar(
+                files: _fileHandler.attachedFiles,
+                onRemove: _removeComposerAttachment,
               ),
             ),
-            const SizedBox(width: 6),
-
-            // ── Middle: TextField + inline mic (grows upward for multi-line) ──
-            Expanded(
-              child: Container(
-                height: _audioHandler.isMicActive ? pillHeight : null,
-                constraints: _audioHandler.isMicActive
-                    ? null
-                    : const BoxConstraints(minHeight: pillHeight),
-                decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: _audioHandler.isMicActive
-                    ? SizedBox(
-                        height: pillHeight - 6, // minus border + padding
-                        child: Row(
-                          children: [
-                            buildRecordingIndicator(),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: buildAudioVisualizer(
-                                audioLevels: _audioHandler.audioLevels,
-                                accentColor: Colors.red,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // ── Editing indicator (inside the pill) ──
-                          if (_messageActionsHandler.isEditing)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.edit,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Editing message',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary
-                                          .withValues(alpha: 0.7),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelEditMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        'Cancel',
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── Queued message indicator ──
-                          // Shown when the user sent while the AI was still
-                          // streaming; it auto-sends on completion.
-                          if (_pendingMessageText != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.schedule,
-                                    size: 12,
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      '${AppLocalizations.of(context)!.queuedLabel}: '
-                                      '"${_pendingMessageText!}"',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: theme.colorScheme.primary
-                                            .withValues(alpha: 0.7),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _cancelPendingMessage,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(context)!.cancel,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // ── TextField ──
-                          buildKeyboardListener(
-                            focusNode: _rawKeyboardListenerFocusNode,
-                            controller: _controller,
-                            onSend: _sendOrSubmitEdit,
-                            child: KeyedSubtree(
-                              key: TourKeyRegistry.instance.keyFor(
-                                TourSlots.chatInput,
-                              ),
-                              child: Scrollbar(
-                                controller: _composerScrollController,
-                                child: Semantics(
-                                  identifier: 'message_input',
-                                  child: TextField(
-                                  controller: _controller,
-                                  focusNode: _textFieldFocusNode,
-                                  autofocus: false,
-                                  keyboardType: TextInputType.multiline,
-                                  textInputAction: TextInputAction.newline,
-                                  scrollController: _composerScrollController,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
-                                    fontSize: 15,
-                                    height: 1.3,
-                                  ),
-                                  minLines: 1,
-                                  maxLines: 6,
-                                  decoration: InputDecoration(
-                                    hintText: _messageActionsHandler.isEditing
-                                        ? AppLocalizations.of(
-                                            context,
-                                          )!.editYourMessage
-                                        : AppLocalizations.of(
-                                            context,
-                                          )!.askMeAnything,
-                                    hintStyle: TextStyle(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.5),
-                                      fontSize: 15,
-                                    ),
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 0,
-                                      vertical: 10,
-                                    ),
-                                    isDense: true,
-                                    // Mic or fullscreen button as suffix icon.
-                                    // Mic shown when text is empty; fullscreen
-                                    // shown when text is long; otherwise nothing.
-                                    suffixIcon: showInlineMic
-                                        ? GestureDetector(
-                                            onTap: _handleMicTap,
-                                            child: Semantics(
-                                              identifier: 'mic_button',
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  left: 4,
-                                                ),
-                                                child: Icon(
-                                                  Icons.mic,
-                                                  size: 20,
-                                                  color: iconFg.withValues(
-                                                    alpha: 0.6,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : _showFullscreenButton
-                                        ? GestureDetector(
-                                            onTap: _openFullscreenEditor,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 4,
-                                              ),
-                                              child: Icon(
-                                                Icons.open_in_full_rounded,
-                                                size: 14,
-                                                color: iconFg.withValues(
-                                                  alpha: 0.4,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : null,
-                                    suffixIconConstraints: const BoxConstraints(
-                                      minWidth: 24,
-                                      minHeight: 24,
-                                    ),
-                                  ),
-                                  cursorColor: accent,
-                                  cursorWidth: 1.5,
-                                ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
+          if (_messageActionsHandler.isEditing)
+            _buildComposerNotice(
+              theme: theme,
+              icon: Icons.edit,
+              label: 'Editing message',
+              actionLabel: 'Cancel',
+              onAction: _cancelEditMessage,
             ),
-            const SizedBox(width: 6),
+          if (_pendingMessageText != null)
+            _buildComposerNotice(
+              theme: theme,
+              icon: Icons.schedule,
+              label:
+                  '${AppLocalizations.of(context)!.queuedLabel}: '
+                  '"${_pendingMessageText!}"',
+              actionLabel: AppLocalizations.of(context)!.cancel,
+              onAction: _cancelPendingMessage,
+            ),
 
-            // ── Right pill: Send / Stop / Voice Mode ──
-            Container(
-              height: pillHeight,
-              width: rightPillHasMultipleActions ? null : pillHeight,
-              decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-              padding: rightPillHasMultipleActions
-                  ? const EdgeInsets.symmetric(horizontal: 5)
-                  : EdgeInsets.zero,
-              alignment: Alignment.center,
+          // ── Row one: what you are saying ──
+          if (isRecording)
+            SizedBox(
+              height: 40,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // When mic is recording: stop + send buttons
-                  if (_audioHandler.isMicActive) ...[
-                    buildTinyIconButton(
-                      icon: Icons.stop_rounded,
-                      iconSize: 20,
-                      onTap: _handleMicTap,
-                      isActive: true,
-                      color: Colors.red,
-                      semanticsId: 'mic_button',
+                  buildRecordingIndicator(),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: buildAudioVisualizer(
+                      audioLevels: _audioHandler.audioLevels,
+                      accentColor: Colors.red,
                     ),
-                    const SizedBox(width: 3),
-                  ],
-                  buildTinyActionButton(
-                    icon: _audioHandler.isMicActive
-                        ? Icons.north_rounded
-                        : (showStopAction
-                              ? Icons.stop_rounded
-                              : (showVoiceModeAction
-                                    ? Icons.graphic_eq_rounded
-                                    : Icons.north_rounded)),
-                    buttonSize: 36,
-                    iconSize: 16,
-                    onTap: _audioHandler.isMicActive
-                        ? _handleAudioSend
-                        : (showStopAction
-                              ? _cancelCurrentOperation
-                              : (showVoiceModeAction
-                                    ? () => _openComingSoonFeature('Voice Mode')
-                                    : _sendOrSubmitEdit)),
-                    color: _audioHandler.isMicActive
-                        ? accent
-                        : (showStopAction ? Colors.red : accent),
-                    isLoading: _audioHandler.isTranscribingAudio,
-                    semanticsId: 'send_button',
                   ),
                 ],
               ),
+            )
+          else
+            buildKeyboardListener(
+              focusNode: _rawKeyboardListenerFocusNode,
+              controller: _controller,
+              onSend: _sendOrSubmitEdit,
+              child: KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
+                child: Scrollbar(
+                  controller: _composerScrollController,
+                  child: Semantics(
+                    identifier: 'message_input',
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _textFieldFocusNode,
+                      autofocus: false,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      scrollController: _composerScrollController,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 15,
+                        height: 1.35,
+                      ),
+                      minLines: 1,
+                      maxLines: 6,
+                      decoration: InputDecoration(
+                        hintText: _messageActionsHandler.isEditing
+                            ? AppLocalizations.of(context)!.editYourMessage
+                            : AppLocalizations.of(context)!.askMeAnything,
+                        hintStyle: TextStyle(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                          fontSize: 15,
+                        ),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.only(
+                          left: 8,
+                          top: 6,
+                          bottom: 6,
+                          right: 6,
+                        ),
+                        isDense: true,
+                        suffixIcon: _showFullscreenButton
+                            ? GestureDetector(
+                                onTap: _openFullscreenEditor,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: Icon(
+                                    Icons.open_in_full_rounded,
+                                    size: 14,
+                                    color: iconFg.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              )
+                            : null,
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 24,
+                        ),
+                      ),
+                      cursorColor: accent,
+                      cursorWidth: 1.5,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
-      ],
+
+          const SizedBox(height: 4),
+
+          // ── Row two: what you can do about it ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Builder(
+                builder: (anchorContext) => buildTinyIconButton(
+                  icon: Icons.add_rounded,
+                  iconSize: 22,
+                  buttonSize: 38,
+                  // Round, so the tap ink is a circle and not a square
+                  // patch behind a round icon.
+                  cornerRadius: 19,
+                  onTap: () => _handleAddAttachmentTap(anchorContext),
+                  isActive: hasAttachments,
+                  color: iconFg,
+                ),
+              ),
+              const SizedBox(width: 4),
+              _buildModelControl(
+                isCompactMode: isCompactMode,
+                iconFg: iconFg,
+              ),
+              if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
+                const SizedBox(width: 4),
+                Flexible(child: _buildWorkspaceChip(iconFg)),
+              ],
+              const Spacer(),
+              if (isRecording) ...[
+                buildTinyIconButton(
+                  icon: Icons.stop_rounded,
+                  iconSize: 20,
+                  buttonSize: 36,
+                  cornerRadius: 18,
+                  onTap: _handleMicTap,
+                  isActive: true,
+                  color: Colors.red,
+                  semanticsId: 'mic_button',
+                ),
+                const SizedBox(width: 4),
+              ] else if (!hasTypedText && !showStopAction) ...[
+                buildTinyIconButton(
+                  icon: Icons.mic,
+                  iconSize: 20,
+                  buttonSize: 36,
+                  cornerRadius: 18,
+                  onTap: _handleMicTap,
+                  isActive: false,
+                  color: iconFg,
+                  semanticsId: 'mic_button',
+                ),
+                const SizedBox(width: 4),
+              ],
+              buildTinyActionButton(
+                icon: isRecording
+                    ? Icons.north_rounded
+                    : (showStopAction
+                          ? Icons.stop_rounded
+                          : (showVoiceModeAction
+                                ? Icons.graphic_eq_rounded
+                                : Icons.north_rounded)),
+                buttonSize: 38,
+                iconSize: 17,
+                onTap: isRecording
+                    ? _handleAudioSend
+                    : (showStopAction
+                          ? _cancelCurrentOperation
+                          : (showVoiceModeAction
+                                ? () => _openComingSoonFeature('Voice Mode')
+                                : _sendOrSubmitEdit)),
+                color: isRecording
+                    ? accent
+                    : (showStopAction ? Colors.red : accent),
+                isLoading: _audioHandler.isTranscribingAudio,
+                semanticsId: 'send_button',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A one-line notice inside the composer: editing, or a queued message.
+  Widget _buildComposerNotice({
+    required ThemeData theme,
+    required IconData icon,
+    required String label,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    final Color color = theme.colorScheme.primary.withValues(alpha: 0.75);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4, right: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onAction,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                actionLabel,
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

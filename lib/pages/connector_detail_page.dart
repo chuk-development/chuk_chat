@@ -169,18 +169,8 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
             onChanged: (_) => setState(() {}),
             style: TextStyle(fontSize: 13, color: iconFg.lighten(0.3)),
             decoration: InputDecoration(
-              border: const OutlineInputBorder(),
               isDense: true,
               contentPadding: const EdgeInsets.all(14),
-              enabledBorder: OutlineInputBorder(
-                borderSide:
-                    BorderSide(color: iconFg.withValues(alpha: 0.2)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: primary),
-                borderRadius: BorderRadius.circular(10),
-              ),
             ),
           ),
           const SizedBox(height: 10),

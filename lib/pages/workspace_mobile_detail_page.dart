@@ -24,6 +24,7 @@ import 'package:chuk_chat/pages/workspace_instructions_page.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/constants.dart';
 
 class WorkspaceMobileDetailPage extends StatefulWidget {
   final String workspaceId;
@@ -165,9 +166,6 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
                   onChanged: (_) => setDialogState(() {}),
                   decoration: InputDecoration(
                     labelText: l.projectName,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -176,9 +174,6 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
                   maxLines: 3,
                   decoration: InputDecoration(
                     labelText: l.projectDescriptionLabel,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                   ),
                 ),
               ],
@@ -488,6 +483,7 @@ class _InfoCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 140),

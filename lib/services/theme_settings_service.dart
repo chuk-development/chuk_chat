@@ -13,7 +13,6 @@ class ThemeSettings {
     required this.accentColor,
     required this.iconColor,
     required this.backgroundColor,
-    required this.grainEnabled,
   });
 
   final String userId;
@@ -21,14 +20,12 @@ class ThemeSettings {
   final Color accentColor;
   final Color iconColor;
   final Color backgroundColor;
-  final bool grainEnabled;
 
   ThemeSettings copyWith({
     Brightness? themeMode,
     Color? accentColor,
     Color? iconColor,
     Color? backgroundColor,
-    bool? grainEnabled,
   }) {
     return ThemeSettings(
       userId: userId,
@@ -36,7 +33,6 @@ class ThemeSettings {
       accentColor: accentColor ?? this.accentColor,
       iconColor: iconColor ?? this.iconColor,
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      grainEnabled: grainEnabled ?? this.grainEnabled,
     );
   }
 
@@ -47,7 +43,6 @@ class ThemeSettings {
       'accent_color': accentColor.toHexString(),
       'icon_color': iconColor.toHexString(),
       'background_color': backgroundColor.toHexString(),
-      'grain_enabled': grainEnabled,
     };
   }
 
@@ -58,7 +53,6 @@ class ThemeSettings {
       accentColor: kDefaultAccentColor,
       iconColor: kDefaultIconFgColor,
       backgroundColor: kDefaultBgColor,
-      grainEnabled: kDefaultGrainEnabled,
     );
   }
 
@@ -79,7 +73,6 @@ class ThemeSettings {
         map['background_color'] as String?,
         fallback: kDefaultBgColor,
       ),
-      grainEnabled: (map['grain_enabled'] as bool?) ?? kDefaultGrainEnabled,
     );
   }
 }

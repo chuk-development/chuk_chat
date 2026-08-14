@@ -842,39 +842,54 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IgnorePointer(
-                        child: Container(
-                          height: 22,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                sidebarBg.withValues(alpha: 0),
-                                sidebarBg,
-                              ],
+                      // One long fade instead of a thin fade plus a solid
+                      // slab. The chat list stays faintly visible under the
+                      // name pill — the footer floats over the list rather
+                      // than cutting it off with a hard edge.
+                      //
+                      // The fade is a Positioned.fill behind the footer and
+                      // wrapped in IgnorePointer: painted as a Container
+                      // around the column it would swallow taps meant for
+                      // the chat rows showing through it.
+                      Stack(
+                        children: [
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      sidebarBg.withValues(alpha: 0),
+                                      sidebarBg.withValues(alpha: 0.35),
+                                      sidebarBg.withValues(alpha: 0.6),
+                                    ],
+                                    stops: const [0.0, 0.55, 1.0],
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Container(
-                        color: sidebarBg,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const UpdateBanner(),
-                            KeyedSubtree(
-                              key: TourKeyRegistry.instance.keyFor(
-                                TourSlots.settingsEntry,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 34),
+                              const UpdateBanner(),
+                              KeyedSubtree(
+                                key: TourKeyRegistry.instance.keyFor(
+                                  TourSlots.settingsEntry,
+                                ),
+                                child: _buildFooterRow(
+                                  iconColorDefault,
+                                  textColorDefault,
+                                  accentColor,
+                                  sidebarBg,
+                                ),
                               ),
-                              child: _buildFooterRow(
-                                iconColorDefault,
-                                textColorDefault,
-                                accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -902,24 +917,37 @@ class _SidebarMobileState extends State<SidebarMobile> {
           iconColor: iconColor,
           textColor: textColor,
         );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SbSectionLabel(
-          label: 'Pinned',
-          padding: EdgeInsets.fromLTRB(20, 8, 16, 4),
-        ),
-        Flexible(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: pinned.map(chatTile).toList(),
+    // A tinted box, not just a label: pinned chats are a place, and the
+    // reader should see where that place ends without reading anything.
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SbSectionLabel(
+            label: 'Pinned',
+            count: pinned.length,
+            color: accent,
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: pinned.map(chatTile).toList(),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1046,12 +1074,24 @@ class _SidebarMobileState extends State<SidebarMobile> {
     return slivers;
   }
 
-  Widget _buildFooterRow(Color iconColor, Color textColor, Color accent) {
+  Widget _buildFooterRow(
+    Color iconColor,
+    Color textColor,
+    Color accent,
+    Color sidebarBg,
+  ) {
     final String name = _displayNameFor(_profile);
+    // The pill itself is opaque. Only the space around it fades into the
+    // list — a translucent pill let chat titles show through the user's
+    // own name, which is the one thing that must stay legible.
+    final Color pillColor = Color.alphaBlend(
+      accent.withValues(alpha: 0.08),
+      sidebarBg,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
       child: Material(
-        color: accent.withValues(alpha: 0.08),
+        color: pillColor,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),

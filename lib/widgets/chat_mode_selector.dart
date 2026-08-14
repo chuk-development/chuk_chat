@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/constants.dart';
 
 class ChatModeSelector extends StatelessWidget {
   const ChatModeSelector({
@@ -20,7 +22,10 @@ class ChatModeSelector extends StatelessWidget {
     this.selectedModelId,
     this.modelLabel,
     this.pickedModels = const <ChatModelChoice>[],
-    this.height = 36,
+    this.showLabel = true,
+    this.reasoning = true,
+    this.onReasoningChanged,
+    this.height = 40,
   });
 
   final ChatMode mode;
@@ -45,6 +50,19 @@ class ChatModeSelector extends StatelessWidget {
   /// Human name of that model, shown next to "Choose model".
   final String? modelLabel;
 
+  /// Whether the model may reason in the current mode. Independent of the
+  /// mode itself: a fast answer can still think briefly, and the deep mode
+  /// can be told to skip it.
+  final bool reasoning;
+
+  /// Called when the reader flips the reasoning switch.
+  final ValueChanged<bool>? onReasoningChanged;
+
+  /// Whether the pill spells the mode out. The mobile composer sets this
+  /// false: the icon carries it, and the words are in the menu where there
+  /// is room for them.
+  final bool showLabel;
+
   final double height;
 
   /// Longest model list shown in the second dropdown. Beyond this the list
@@ -62,20 +80,33 @@ class ChatModeSelector extends StatelessWidget {
       ? 'Answers right away'
       : 'Thinks first, then answers';
 
+  /// Whether a model was picked by hand. Fast and Thinking each run their
+  /// own pinned model, so picking one from the list is a third state, not
+  /// a mode: the pill then names the model, and no mode is ticked.
+  bool get usesPickedModel {
+    final String? id = selectedModelId;
+    return id != null && id.isNotEmpty && id != ChatModeService.defaultModelId;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
+    final String pillLabel = usesPickedModel
+        ? stripLabPrefix(modelLabel ?? selectedModelId!)
+        : labelFor(mode);
+    final IconData pillIcon = usesPickedModel ? Icons.tune : iconFor(mode);
+
     return Semantics(
       button: true,
-      label: 'Mode: ${labelFor(mode)}',
+      label: 'Mode: $pillLabel',
       child: InkWell(
         onTap: () => _openModeMenu(context),
         borderRadius: BorderRadius.circular(height / 2),
         child: Container(
           height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(height / 2),
             border: Border.all(
@@ -86,15 +117,17 @@ class ChatModeSelector extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(iconFor(mode), size: 17, color: iconFg),
-              const SizedBox(width: 5),
-              Text(
-                labelFor(mode),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: iconFg,
-                  fontWeight: FontWeight.w600,
+              Icon(pillIcon, size: 19, color: iconFg),
+              if (showLabel) ...[
+                const SizedBox(width: 5),
+                Text(
+                  pillLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: iconFg,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(width: 2),
               Icon(
                 Icons.keyboard_arrow_down,
@@ -122,8 +155,12 @@ class ChatModeSelector extends StatelessWidget {
             iconFg: iconFg,
             icon: iconFor(option),
             label: labelFor(option),
-            isSelected: option == mode,
+            isSelected: !usesPickedModel && option == mode,
           ),
+        if (onReasoningChanged != null) ...[
+          const PopupMenuDivider(),
+          _reasoningRow<_MenuChoice>(iconFg: iconFg),
+        ],
         if (onModelSelected != null || onOpenModelScreen != null) ...[
           const PopupMenuDivider(),
           _menuRow<_MenuChoice>(
@@ -150,8 +187,13 @@ class ChatModeSelector extends StatelessWidget {
       return;
     }
 
+    // Also reported when the mode is unchanged: coming back from a
+    // hand-picked model to Fast or Thinking is a change of what runs, even
+    // when the mode name stays the same.
     final picked = choice.mode;
-    if (picked != null && picked != mode) onModeChanged(picked);
+    if (picked != null && (picked != mode || usesPickedModel)) {
+      onModeChanged(picked);
+    }
   }
 
   // ─── Level 2: the model ───────────────────────────────────────────────
@@ -202,6 +244,67 @@ class ChatModeSelector extends StatelessWidget {
 
   // ─── Shared menu look ─────────────────────────────────────────────────
 
+  /// The thinking switch. It is a setting, not a choice, so tapping it
+  /// flips the switch in place instead of closing the menu — closing on
+  /// every flip was what made the row feel broken. `enabled: false` only
+  /// takes the row's own tap away; the switch and its ink are the child's.
+  PopupMenuItem<T> _reasoningRow<T>({required Color iconFg}) {
+    // Lives as long as the open menu does: the row keeps showing what the
+    // reader just did, whoever owns the setting underneath.
+    bool on = reasoning;
+    return PopupMenuItem<T>(
+      enabled: false,
+      height: 40,
+      padding: EdgeInsets.zero,
+      child: StatefulBuilder(
+        builder: (context, setLocalState) {
+          return InkWell(
+            borderRadius: kBorderRadiusRow,
+            onTap: () {
+              setLocalState(() => on = !on);
+              onReasoningChanged?.call(on);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(
+                    on ? Icons.psychology_alt : Icons.psychology_alt_outlined,
+                    size: 18,
+                    color: iconFg,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      // Not "Thinking": that is the name of a mode one row
+                      // above, and two rows with one name is a riddle.
+                      'Reasoning',
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IgnorePointer(
+                    child: Switch(
+                      value: on,
+                      onChanged: (_) {},
+                      activeThumbColor: iconFg,
+                      activeTrackColor: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   /// One row, matching the model dropdown: 40 high, 16 of side padding,
   /// bold label, a tick on the right when it is the current choice.
   PopupMenuItem<T> _menuRow<T>({
@@ -242,40 +345,20 @@ class ChatModeSelector extends StatelessWidget {
   }
 
   /// Open a menu anchored to this control, styled like the model dropdown.
+  /// Nothing here touches the focus: the menu route is opened with
+  /// `requestFocus: false`, so the text field keeps whatever it had and the
+  /// keyboard stays open or stays closed, exactly as the reader left it.
   Future<T?> _showAnchoredMenu<T>(
     BuildContext context, {
     required List<PopupMenuEntry<T>> items,
-  }) async {
+  }) {
     final theme = Theme.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return null;
-
-    final Offset topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final Offset bottomRight = box.localToGlobal(
-      box.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-
-    return showMenu<T>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        topLeft.dx,
-        topLeft.dy,
-        overlay.size.width - bottomRight.dx,
-        overlay.size.height - topLeft.dy,
-      ),
-      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
-      constraints: const BoxConstraints(minWidth: 220),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: theme.resolvedIconColor.withValues(alpha: 0.3),
-          width: 2,
-        ),
-      ),
+    return showAnchoredMenu<T>(
+      context,
       items: items,
+      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
+      minWidth: 220,
     );
   }
 
@@ -307,6 +390,8 @@ class _ModelChoice {
 }
 
 /// What a row in the first menu stands for: a mode, or the model list.
+/// The thinking switch is not here — it flips in place and never closes
+/// the menu, so it returns nothing.
 class _MenuChoice {
   const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false;
   const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true;

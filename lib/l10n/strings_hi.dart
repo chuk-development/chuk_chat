@@ -88,8 +88,6 @@ const Map<String, String> stringsHi = {
   'iconFgColorSubtitle': 'आइकन और मुख्य टेक्स्ट के लिए रंग चुनें',
   'backgroundColor': 'पृष्ठभूमि रंग',
   'backgroundColorSubtitle': 'ऐप के लिए मुख्य पृष्ठभूमि रंग चुनें',
-  'filmGrainEffect': 'फ़िल्म ग्रेन इफ़ेक्ट',
-  'filmGrainSubtitle': 'एक सूक्ष्म फ़िल्म-शॉट बनावट जोड़ें',
   'customHexColor': 'कस्टम हेक्स रंग (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

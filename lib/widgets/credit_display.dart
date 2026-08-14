@@ -358,172 +358,125 @@ class _CreditDisplayState extends State<CreditDisplay>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color iconFg = theme.resolvedIconColor;
+    final m3 = theme.m3;
     final Color accent = theme.colorScheme.primary;
+    final Color muted = m3.onSurfaceVariant;
 
     if (creditLoading) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Center(child: CircularProgressIndicator(color: accent)),
-        ),
+      return SizedBox(
+        height: 96,
+        child: Center(child: CircularProgressIndicator(color: accent)),
       );
     }
 
     final double percentage = creditBalances.remainingRatio;
+    final Color barColor = percentage > 0.5
+        ? m3.success
+        : percentage > 0.2
+            ? m3.warning
+            : theme.colorScheme.error;
 
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // No Card here. This block is placed inside a rounded section on the
+    // subscription page, and a card inside a card gave it two borders, two
+    // corner radii and a shadow that belonged to neither.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Remaining',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: muted,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 4),
+        // The number is the point of this block, so it is the biggest thing
+        // in it rather than a value squeezed opposite a wallet icon.
+        Text(
+          '\u20ac${creditBalances.remainingCredits.toStringAsFixed(2)}',
+          style: theme.textTheme.displaySmall?.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w700,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 14),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: percentage,
+            minHeight: 6,
+            backgroundColor: m3.surfaceContainerHighest,
+            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _MetaLine(
+          left: 'Used \u20ac${creditBalances.usedCredits.toStringAsFixed(2)}',
+          right: 'of \u20ac${creditBalances.totalCredits.toStringAsFixed(2)}',
+        ),
+        if (creditBalances.billingPeriodStart != null &&
+            creditBalances.billingPeriodEnd != null) ...[
+          const SizedBox(height: 18),
+          Divider(height: 1, color: m3.outlineVariant),
+          const SizedBox(height: 14),
+          Builder(builder: (context) {
+            final now = DateTime.now().toUtc();
+            final start = creditBalances.billingPeriodStart!;
+            final end = creditBalances.billingPeriodEnd!;
+            final int daysLeft = end.difference(now).inDays;
+            final double totalDuration =
+                end.difference(start).inSeconds.toDouble();
+            final double elapsed = now.difference(start).inSeconds.toDouble();
+            final double progress = totalDuration > 0
+                ? (elapsed / totalDuration).clamp(0.0, 1.0)
+                : 0.0;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.account_balance_wallet, color: accent),
+                    Icon(Icons.event_repeat_outlined, color: muted, size: 16),
                     const SizedBox(width: 8),
                     Text(
-                      'Credits',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: iconFg,
+                      'Billing cycle',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: muted,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      daysLeft > 0 ? '$daysLeft days left' : 'Renews soon',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-                Text(
-                  '€${creditBalances.remainingCredits.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: percentage,
-                minHeight: 8,
-                backgroundColor: iconFg.withValues(alpha: 0.2),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  percentage > 0.5
-                      ? Colors.green
-                      : percentage > 0.2
-                      ? Colors.orange
-                      : Colors.red,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Used: €${creditBalances.usedCredits.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
-                Text(
-                  'Total: €${creditBalances.totalCredits.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-            // Billing cycle progress
-            if (creditBalances.billingPeriodStart != null &&
-                creditBalances.billingPeriodEnd != null) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, color: accent, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Billing Cycle',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: iconFg,
-                    ),
-                  ),
-                  const Spacer(),
-                  Builder(builder: (context) {
-                    final now = DateTime.now().toUtc();
-                    final end = creditBalances.billingPeriodEnd!;
-                    final daysLeft = end.difference(now).inDays;
-                    return Text(
-                      daysLeft > 0
-                          ? '$daysLeft days left'
-                          : 'Renews soon',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: accent,
-                      ),
-                    );
-                  }),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Builder(builder: (context) {
-                  final now = DateTime.now().toUtc();
-                  final start = creditBalances.billingPeriodStart!;
-                  final end = creditBalances.billingPeriodEnd!;
-                  final totalDuration =
-                      end.difference(start).inSeconds.toDouble();
-                  final elapsed =
-                      now.difference(start).inSeconds.toDouble();
-                  final progress = totalDuration > 0
-                      ? (elapsed / totalDuration).clamp(0.0, 1.0)
-                      : 0.0;
-                  return LinearProgressIndicator(
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
                     value: progress,
-                    minHeight: 8,
-                    backgroundColor: iconFg.withValues(alpha: 0.2),
+                    minHeight: 6,
+                    backgroundColor: m3.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      accent.withValues(alpha: 0.7),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _formatDate(creditBalances.billingPeriodStart!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: iconFg.withValues(alpha: 0.7),
+                      accent.withValues(alpha: 0.6),
                     ),
                   ),
-                  Text(
-                    'Renews ${_formatDate(creditBalances.billingPeriodEnd!)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: iconFg.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
+                ),
+                const SizedBox(height: 10),
+                _MetaLine(
+                  left: _formatDate(start),
+                  right: 'Renews ${_formatDate(end)}',
+                ),
+              ],
+            );
+          }),
+        ],
+      ],
     );
   }
 
@@ -862,6 +815,29 @@ class _BalanceBadgeState extends State<BalanceBadge> {
         padding: resolvedPadding,
         child: Text(formatted, style: resolvedTextStyle),
       ),
+    );
+  }
+}
+
+/// Two small captions on one line — the pattern used under both bars.
+class _MetaLine extends StatelessWidget {
+  final String left;
+  final String right;
+
+  const _MetaLine({required this.left, required this.right});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final TextStyle? style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.m3.onSurfaceVariant,
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(left, style: style),
+        Text(right, style: style),
+      ],
     );
   }
 }

@@ -85,8 +85,6 @@ const Map<String, String> stringsJa = {
   'iconFgColorSubtitle': 'アイコンと主要テキストの色を選択',
   'backgroundColor': '背景色',
   'backgroundColorSubtitle': 'アプリのメイン背景色を選択',
-  'filmGrainEffect': 'フィルムグレインエフェクト',
-  'filmGrainSubtitle': 'フィルム撮影風の微妙なテクスチャを追加',
   'customHexColor': 'カスタムHEXカラー (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

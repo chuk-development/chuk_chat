@@ -66,7 +66,10 @@ class RootWrapper extends StatelessWidget {
     if (!isMobilePlatform) return false;
 
     // For mobile platforms, check screen size
-    final double screenWidth = MediaQuery.of(context).size.width;
+    // sizeOf, not of(): `of` subscribes to every MediaQuery aspect, so the
+    // whole signed-in tree would rebuild on each frame of the keyboard
+    // slide-up (viewInsets ticks ~60 times a second).
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     return screenWidth < kTabletBreakpoint;
   }
 }

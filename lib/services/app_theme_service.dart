@@ -28,7 +28,6 @@ class AppThemeService extends ChangeNotifier {
   Color _accentColor = kDefaultAccentColor;
   Color _iconFgColor = kDefaultIconFgColor;
   Color _bgColor = kDefaultBgColor;
-  bool _grainEnabled = kDefaultGrainEnabled;
   bool _dynamicColorEnabled = kDefaultDynamicColorEnabled;
 
   // Message display preferences
@@ -80,7 +79,6 @@ class AppThemeService extends ChangeNotifier {
   static const String _kAccentColorKey = 'accentColor';
   static const String _kIconFgColorKey = 'iconFgColor';
   static const String _kBgColorKey = 'bgColor';
-  static const String _kGrainEnabledKey = 'grainEnabled';
   static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
@@ -135,7 +133,6 @@ class AppThemeService extends ChangeNotifier {
   Color get accentColor => _accentColor;
   Color get iconFgColor => _iconFgColor;
   Color get bgColor => _bgColor;
-  bool get grainEnabled => _grainEnabled;
   bool get dynamicColorEnabled => _dynamicColorEnabled;
   bool get showReasoningTokens => _showReasoningTokens;
   bool get showModelInfo => _showModelInfo;
@@ -188,7 +185,6 @@ class AppThemeService extends ChangeNotifier {
       prefs.getString(_kBgColorKey),
       fallback: kDefaultBgColor,
     );
-    _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
     _dynamicColorEnabled =
         prefs.getBool(_kDynamicColorEnabledKey) ?? kDefaultDynamicColorEnabled;
     _showReasoningTokens =
@@ -305,7 +301,6 @@ class AppThemeService extends ChangeNotifier {
         _accentColor != settings.accentColor ||
         _iconFgColor != settings.iconColor ||
         _bgColor != settings.backgroundColor ||
-        _grainEnabled != settings.grainEnabled ||
         _showReasoningTokens != customizationPrefs.showReasoningTokens ||
         _showModelInfo != customizationPrefs.showModelInfo ||
         _showTps != customizationPrefs.showTps ||
@@ -337,7 +332,6 @@ class AppThemeService extends ChangeNotifier {
     _accentColor = settings.accentColor;
     _iconFgColor = settings.iconColor;
     _bgColor = settings.backgroundColor;
-    _grainEnabled = settings.grainEnabled;
     _showReasoningTokens = customizationPrefs.showReasoningTokens;
     _showModelInfo = customizationPrefs.showModelInfo;
     _showTps = customizationPrefs.showTps;
@@ -404,7 +398,6 @@ class AppThemeService extends ChangeNotifier {
       prefs.setString(_kAccentColorKey, _accentColor.toHexString()),
       prefs.setString(_kIconFgColorKey, _iconFgColor.toHexString()),
       prefs.setString(_kBgColorKey, _bgColor.toHexString()),
-      prefs.setBool(_kGrainEnabledKey, _grainEnabled),
       prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens),
       prefs.setBool(_kShowModelInfoKey, _showModelInfo),
       prefs.setBool(_kShowTpsKey, _showTps),
@@ -463,7 +456,6 @@ class AppThemeService extends ChangeNotifier {
       accentColor: _accentColor,
       iconColor: _iconFgColor,
       backgroundColor: _bgColor,
-      grainEnabled: _grainEnabled,
     );
 
     try {
@@ -539,12 +531,6 @@ class AppThemeService extends ChangeNotifier {
   void setBgColor(Color color) {
     _bgColor = color;
     _cachedThemeData = null;
-    notifyListeners();
-    _debouncedSyncTheme();
-  }
-
-  void setGrainEnabled(bool enabled) {
-    _grainEnabled = enabled;
     notifyListeners();
     _debouncedSyncTheme();
   }

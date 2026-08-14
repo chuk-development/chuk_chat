@@ -88,8 +88,6 @@ const Map<String, String> stringsBn = {
   'iconFgColorSubtitle': 'আইকন এবং প্রধান টেক্সটের রঙ বেছে নিন',
   'backgroundColor': 'পটভূমির রঙ',
   'backgroundColorSubtitle': 'অ্যাপের প্রধান পটভূমির রঙ বেছে নিন',
-  'filmGrainEffect': 'ফিল্ম গ্রেইন ইফেক্ট',
-  'filmGrainSubtitle': 'একটি সূক্ষ্ম ফিল্ম-শট টেক্সচার যোগ করুন',
   'customHexColor': 'কাস্টম হেক্স রঙ (#RRGGBB)',
 
   // ── Tool calling page ──────────────────────────────────────

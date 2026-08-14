@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'app_palette.dart';
 import 'demo_data.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Brand row: optional logo square + name. Trailing widget on the right.
 class SbBrand extends StatelessWidget {
@@ -406,6 +407,7 @@ class SbNavItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: onTap,
         child: Padding(
           padding:

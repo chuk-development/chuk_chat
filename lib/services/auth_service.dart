@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_status_service.dart';
 
 class AuthService {
   const AuthService();
@@ -162,6 +163,8 @@ class AuthService {
       // that if EncryptionService.clearKey() throws, the cache is still
       // wiped (the user is already signed out at this point).
       SandboxSessionCache.clearAll();
+      // The cached plan belongs to the user who just left.
+      UserStatusService.clear();
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally

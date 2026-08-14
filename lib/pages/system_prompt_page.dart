@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/pages/fullscreen_text_editor_page.dart';
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
@@ -501,6 +503,26 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     _showSnackBar('Imported to memory');
   }
 
+  /// Hand a field the whole screen. A six-line box is fine for a name and
+  /// hopeless for a memory file, and this is the page where people write
+  /// paragraphs.
+  Future<void> _editFullscreen(
+    TextEditingController controller, {
+    required String title,
+    required String hint,
+    bool monospace = false,
+  }) async {
+    final String? result = await showFullscreenTextEditor(
+      context,
+      initialText: controller.text,
+      title: title,
+      hintText: hint,
+      monospace: monospace,
+    );
+    if (result == null || !mounted) return;
+    setState(() => controller.text = result);
+  }
+
   void _showSnackBar(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -579,14 +601,21 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── Soul ─────────────────────────────────────────
-                  const _SectionHeader('SOUL'),
+                  _SectionHeader(
+                    'SOUL',
+                    onExpand: () => _editFullscreen(
+                      _soulCtrl,
+                      title: 'Soul',
+                      hint: l.soulExample,
+                    ),
+                  ),
                   _InfoCard(l.soulHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _soulCtrl,
                     hintText: l.soulExample,
-                    minLines: 3,
-                    maxLines: 10,
+                    minLines: 6,
+                    maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -594,14 +623,21 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 24),
 
                   // ── User ─────────────────────────────────────────
-                  const _SectionHeader('USER'),
+                  _SectionHeader(
+                    'USER',
+                    onExpand: () => _editFullscreen(
+                      _userInfoCtrl,
+                      title: 'User',
+                      hint: l.userExample,
+                    ),
+                  ),
                   _InfoCard(l.userHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _userInfoCtrl,
                     hintText: l.userExample,
-                    minLines: 3,
-                    maxLines: 10,
+                    minLines: 6,
+                    maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -609,14 +645,21 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 24),
 
                   // ── Memory ───────────────────────────────────────
-                  const _SectionHeader('MEMORY'),
+                  _SectionHeader(
+                    'MEMORY',
+                    onExpand: () => _editFullscreen(
+                      _memoryCtrl,
+                      title: 'Memory',
+                      hint: l.memoryExample,
+                    ),
+                  ),
                   _InfoCard(l.memoryHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _memoryCtrl,
                     hintText: l.memoryExample,
-                    minLines: 3,
-                    maxLines: 10,
+                    minLines: 6,
+                    maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -654,14 +697,23 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           const SizedBox(height: 24),
 
           // ── Raw System Prompt ───────────────────────────────────
-          const _SectionHeader('RAW SYSTEM PROMPT'),
+          _SectionHeader(
+            'RAW SYSTEM PROMPT',
+            onExpand: () => _editFullscreen(
+              _systemPromptCtrl,
+              title: 'System prompt',
+              hint: l.systemPromptExample,
+              monospace: true,
+            ),
+          ),
           _InfoCard(l.systemPromptHint),
           const SizedBox(height: 12),
           _MaterialTextField(
             controller: _systemPromptCtrl,
             hintText: l.systemPromptExample,
-            minLines: 3,
-            maxLines: 16,
+            minLines: 8,
+            maxLines: 24,
+            monospace: true,
             contextMenuBuilder: _isDesktopPlatform
                 ? _buildDesktopTextContextMenu
                 : null,
@@ -731,21 +783,47 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
 class _SectionHeader extends StatelessWidget {
   final String label;
-  const _SectionHeader(this.label);
+
+  /// When set, the header carries a Fullscreen action for the field that
+  /// follows it.
+  final VoidCallback? onExpand;
+
+  const _SectionHeader(this.label, {this.onExpand});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: colorScheme.primary,
-        ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+              color: colorScheme.primary,
+            ),
+          ),
+          if (onExpand != null) ...[
+            const Spacer(),
+            TextButton.icon(
+              onPressed: onExpand,
+              icon: const Icon(Icons.open_in_full, size: 15),
+              label: const Text('Fullscreen'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 32),
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -917,13 +995,15 @@ class _MaterialTextField extends StatelessWidget {
   final String hintText;
   final int minLines;
   final int maxLines;
+  final bool monospace;
   final EditableTextContextMenuBuilder? contextMenuBuilder;
 
   const _MaterialTextField({
     required this.controller,
     required this.hintText,
-    this.minLines = 4,
-    this.maxLines = 8,
+    this.minLines = 6,
+    this.maxLines = 18,
+    this.monospace = false,
     this.contextMenuBuilder,
   });
 
@@ -939,6 +1019,8 @@ class _MaterialTextField extends StatelessWidget {
       contextMenuBuilder: contextMenuBuilder,
       style: theme.textTheme.bodyMedium?.copyWith(
         color: colorScheme.onSurface,
+        height: 1.45,
+        fontFamily: monospace ? 'monospace' : null,
       ),
       decoration: InputDecoration(
         hintText: hintText,
@@ -949,15 +1031,15 @@ class _MaterialTextField extends StatelessWidget {
         fillColor: m3.surfaceContainer,
         contentPadding: const EdgeInsets.all(16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: kBorderRadiusField,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: kBorderRadiusField,
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: kBorderRadiusField,
           borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),

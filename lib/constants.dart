@@ -9,9 +9,6 @@ const Color kDefaultAccentColor = Color(0xFFA8C7FA);
 const Color kDefaultIconFgColor = Color(0xFFE2E2E9);
 const Brightness kDefaultThemeMode = Brightness.dark;
 
-/* ---------- FILM GRAIN DEFAULT ---------- */
-const bool kDefaultGrainEnabled = false;
-
 /* ---------- MATERIAL YOU / DYNAMIC COLOUR DEFAULT ---------- */
 /// When enabled, the entire palette (accent, background and foreground) is
 /// taken from the system's Material You palette (Android 12+, and some
@@ -69,6 +66,39 @@ const List<String> kSupportedChatFontFamilies = <String>[
   kChatFontFamilyMerriweather,
   kChatFontFamilyJetBrainsMono,
 ];
+
+/* ---------- SHAPE SCALE ----------
+   One radius per role, used by the theme below and by hand-rolled
+   surfaces. Anything a pointer can hover, focus or press must round its
+   ink to one of these — a square highlight inside a rounded card is the
+   single most visible inconsistency in the app. */
+const double kRadiusCard = 20.0;
+const double kRadiusField = 16.0;
+const double kRadiusMenu = 16.0;
+const double kRadiusRow = 14.0;
+const double kRadiusDialog = 28.0;
+
+/// Stadium radius for every button. Buttons are pills app-wide.
+const double kRadiusPill = 999.0;
+
+/// One padding, one minimum height and one label style for every button
+/// role — the reason a Save and a Reset side by side look like siblings.
+const EdgeInsets _kButtonPadding = EdgeInsets.symmetric(
+  horizontal: 20,
+  vertical: 14,
+);
+const Size _kButtonMinSize = Size(0, 48);
+const TextStyle _kButtonTextStyle = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 0.1,
+);
+
+final BorderRadius kBorderRadiusCard = BorderRadius.circular(kRadiusCard);
+final BorderRadius kBorderRadiusField = BorderRadius.circular(kRadiusField);
+final BorderRadius kBorderRadiusMenu = BorderRadius.circular(kRadiusMenu);
+final BorderRadius kBorderRadiusRow = BorderRadius.circular(kRadiusRow);
+final BorderRadius kBorderRadiusPill = BorderRadius.circular(kRadiusPill);
 
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
@@ -195,11 +225,29 @@ ThemeData buildAppTheme({
     iconTheme: IconThemeData(color: iconFg),
     colorScheme: colorScheme,
     extensions: <ThemeExtension<dynamic>>[m3Tokens],
+    // Ink is rounded everywhere. A ListTile without a shape paints its
+    // hover/press fill as a full-bleed rectangle, which is what makes a
+    // rounded settings card turn square the moment you touch it.
     listTileTheme: ListTileThemeData(
       iconColor: iconFg,
       textColor: iconFg,
       selectedColor: accent,
       selectedTileColor: accent.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
+    ),
+    expansionTileTheme: ExpansionTileThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: kBorderRadiusField,
+        side: BorderSide.none,
+      ),
+      collapsedShape: RoundedRectangleBorder(
+        borderRadius: kBorderRadiusField,
+        side: BorderSide.none,
+      ),
+      iconColor: accent,
+      collapsedIconColor: onSurfaceVariant,
+      textColor: iconFg,
+      collapsedTextColor: iconFg,
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: bg,
@@ -230,43 +278,169 @@ ThemeData buildAppTheme({
         return outline;
       }),
     ),
+    // ── Buttons ───────────────────────────────────────────────────────
+    // One shape, one height, one padding for every button role, so a
+    // Save next to a Reset next to a Cancel reads as one family. Pages
+    // must not re-declare shape or padding; only colour, if they must.
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: accent,
         foregroundColor: colorScheme.onPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        disabledBackgroundColor: iconFg.withValues(alpha: 0.12),
+        disabledForegroundColor: iconFg.withValues(alpha: 0.38),
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+        padding: _kButtonPadding,
+        minimumSize: _kButtonMinSize,
+        textStyle: _kButtonTextStyle,
+        elevation: 0,
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: surfaceHigh,
+        foregroundColor: iconFg,
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+        padding: _kButtonPadding,
+        minimumSize: _kButtonMinSize,
+        textStyle: _kButtonTextStyle,
+        elevation: 0,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: iconFg,
         side: BorderSide(color: outline),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+        padding: _kButtonPadding,
+        minimumSize: _kButtonMinSize,
+        textStyle: _kButtonTextStyle,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: accent),
+      style: TextButton.styleFrom(
+        foregroundColor: accent,
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        minimumSize: const Size(0, 44),
+        textStyle: _kButtonTextStyle,
+      ),
     ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: iconFg,
+        shape: const CircleBorder(),
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(
+        foregroundColor: iconFg,
+        selectedForegroundColor: onPrimaryContainer,
+        selectedBackgroundColor: primaryContainer,
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        textStyle: _kButtonTextStyle,
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: surfaceHigh,
+      selectedColor: primaryContainer,
+      side: BorderSide(color: outlineVariant),
+      shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
+      labelStyle: TextStyle(color: iconFg, fontSize: 13),
+    ),
+
+    // ── Menus & dialogs ───────────────────────────────────────────────
+    // The vertical menu padding matters: without it a highlighted first
+    // or last item paints square into the menu's rounded corner.
+    popupMenuTheme: PopupMenuThemeData(
+      color: surfaceHigh,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: kBorderRadiusMenu),
+      menuPadding: const EdgeInsets.symmetric(vertical: 8),
+      textStyle: TextStyle(color: iconFg, fontSize: 14),
+    ),
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll<Color>(surfaceHigh),
+        elevation: const WidgetStatePropertyAll<double>(3),
+        padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+          EdgeInsets.symmetric(vertical: 8),
+        ),
+        shape: WidgetStatePropertyAll<OutlinedBorder>(
+          RoundedRectangleBorder(borderRadius: kBorderRadiusMenu),
+        ),
+      ),
+    ),
+    dropdownMenuTheme: DropdownMenuThemeData(
+      menuStyle: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll<Color>(surfaceHigh),
+        elevation: const WidgetStatePropertyAll<double>(3),
+        padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+          EdgeInsets.symmetric(vertical: 8),
+        ),
+        shape: WidgetStatePropertyAll<OutlinedBorder>(
+          RoundedRectangleBorder(borderRadius: kBorderRadiusMenu),
+        ),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: surfaceHigh,
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kRadiusDialog),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: surfaceLow,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusDialog)),
+      ),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: surfaceHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: TextStyle(color: iconFg, fontSize: 12),
+    ),
+
+    // ── Text fields ───────────────────────────────────────────────────
+    // Filled, borderless at rest, and a 2 px accent ring on focus. The
+    // resting outline was fighting the fill and made every field look
+    // like a 2014 form.
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: surfaceHigh,
+      fillColor: surfaceLow,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: outlineVariant, width: 1),
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: outlineVariant, width: 1),
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: accent, width: 1.5),
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide(color: accent, width: 2),
       ),
-      labelStyle: TextStyle(color: onSurfaceVariant),
-      hintStyle: TextStyle(color: onSurfaceVariant),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      errorBorder: OutlineInputBorder(
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide(color: errorColor, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide(color: errorColor, width: 2),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: kBorderRadiusField,
+        borderSide: BorderSide.none,
+      ),
+      labelStyle: TextStyle(color: onSurfaceVariant, fontSize: 15),
+      floatingLabelStyle: TextStyle(color: accent, fontSize: 14),
+      hintStyle: TextStyle(color: onSurfaceVariant, fontSize: 15),
+      helperStyle: TextStyle(color: onSurfaceVariant, fontSize: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
   );
 }

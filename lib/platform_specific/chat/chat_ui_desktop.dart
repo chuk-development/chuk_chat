@@ -170,6 +170,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   ChatMode _chatMode = ChatModeService.fallbackMode;
 
+  /// Whether the model may reason in the current mode — switchable per
+  /// mode, so "fast" can still think briefly and "thinking" can skip it.
+  bool _reasoningOn = ChatModeService.defaultReasoning(
+    ChatModeService.fallbackMode,
+  );
+
   /// Human name of the selected model, for the mode menu. Null until the
   /// model list has been cached — the menu then shows the raw id.
   String? _selectedModelName;
@@ -985,13 +991,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the current model. Debug only.
-  bool get debugReasoningEnabled =>
-      ChatModeService.isDeepThinking(_chatMode);
+  bool get debugReasoningEnabled => _reasoningOn;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
   String get debugReasoningEffort =>
-      ChatModeService.reasoningEffort(_chatMode);
+      ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn);
 
   /// Current active chat id. Debug only.
   String? get debugActiveChatId => _activeChatId;
@@ -2593,6 +2598,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
         pickedModels: _pickedModels,
+        reasoning: _reasoningOn,
+        onReasoningChanged: _setReasoning,
         onModeChanged: _setChatMode,
         onModelSelected: _applyModelSelection,
         onOpenModelScreen: _openModelScreen,
@@ -2666,10 +2673,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<void> _setChatMode(ChatMode mode) async {
+    final reasoning = await ChatModeService.loadReasoning(mode);
+    if (!mounted) return;
     setState(() {
       _chatMode = mode;
+      _reasoningOn = reasoning;
     });
     await ChatModeService.save(mode);
+    // A mode runs its own pinned model. Whatever was picked by hand is
+    // left behind here, or the pill would name a model no mode selected.
+    if (_selectedModelId != ChatModeService.defaultModelId) {
+      await _applyModelSelection(await ChatModeService.useDefaultModel());
+    }
+  }
+
+  Future<void> _setReasoning(bool reasoning) async {
+    if (!mounted) return;
+    setState(() {
+      _reasoningOn = reasoning;
+    });
+    await ChatModeService.saveReasoning(_chatMode, reasoning);
   }
 
   /// Apply a model picked in the second dropdown: remember it, keep the
@@ -2690,9 +2713,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Bring back the mode the reader last used.
   Future<void> _restoreChatMode() async {
     final mode = await ChatModeService.load();
-    if (!mounted || mode == _chatMode) return;
+    final reasoning = await ChatModeService.loadReasoning(mode);
+    if (!mounted) return;
+    if (mode == _chatMode && reasoning == _reasoningOn) return;
     setState(() {
       _chatMode = mode;
+      _reasoningOn = reasoning;
     });
   }
 

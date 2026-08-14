@@ -15,6 +15,7 @@ import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants.dart';
 
 class WorkspaceDetailPage extends StatelessWidget {
   final String workspaceId;
@@ -566,7 +567,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: kBorderRadiusPill,
                 ),
                 side: BorderSide(
                   color: isOverBudget
@@ -875,7 +876,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: kBorderRadiusPill,
                 ),
                 side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
@@ -1040,9 +1041,6 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                   TextFormField(
                     controller: _nameController,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       hintText: 'Workspace name',
                     ),
                     onChanged: (_) =>
@@ -1063,9 +1061,6 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                   TextFormField(
                     controller: _descriptionController,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       hintText: 'What is this workspace about?',
                     ),
                     maxLines: 3,
@@ -1116,9 +1111,6 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                   TextFormField(
                     controller: _systemPromptController,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       hintText:
                           'e.g., You are a senior developer helping with a '
                           'Flutter workspace. Use Dart best practices...',
@@ -1147,7 +1139,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: kBorderRadiusPill,
                   ),
                 ),
               ),
@@ -1234,7 +1226,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                         side: const BorderSide(color: Colors.red),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: kBorderRadiusPill,
                         ),
                       ),
                     ),
@@ -1445,9 +1437,6 @@ class _ChatSelectorDialogState extends State<_ChatSelectorDialog> {
                   decoration: InputDecoration(
                     hintText: 'Search chats...',
                     prefixIcon: const Icon(Icons.search, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),

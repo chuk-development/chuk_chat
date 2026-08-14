@@ -81,8 +81,6 @@ const Map<String, String> stringsZh = {
   'iconFgColorSubtitle': '选择图标和关键文字的颜色',
   'backgroundColor': '背景颜色',
   'backgroundColorSubtitle': '选择应用的主背景颜色',
-  'filmGrainEffect': '胶片颗粒效果',
-  'filmGrainSubtitle': '添加微妙的胶片质感纹理',
   'customHexColor': '自定义十六进制颜色（#RRGGBB）',
 
   // ── Tool calling page ──────────────────────────────────────

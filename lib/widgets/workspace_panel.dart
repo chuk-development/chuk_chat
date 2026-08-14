@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Right-side panel for workspace settings (Instructions + Files)
 class WorkspacePanel extends StatefulWidget {
@@ -574,18 +575,6 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             decoration: InputDecoration(
               hintText: 'Enter custom instructions for the AI...',
               hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.4)),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.15)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.15)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
-              ),
               contentPadding: const EdgeInsets.all(12),
             ),
             style: TextStyle(fontSize: 13, color: iconFg, height: 1.5),
@@ -618,6 +607,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
     if (!_project!.hasCustomPrompt) {
       return InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: () => setState(() => _isEditingInstructions = true),
         child: Text(
           'Click to add instructions...',
@@ -631,6 +621,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     }
 
     return InkWell(
+      borderRadius: kBorderRadiusRow,
       onTap: () => setState(() => _isEditingInstructions = true),
       child: Text(
         _project!.customSystemPrompt!,
@@ -732,6 +723,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
     if (_project!.files.isEmpty) {
       return InkWell(
+        borderRadius: kBorderRadiusRow,
         onTap: _pickAndUploadFile,
         child: Column(
           children: [

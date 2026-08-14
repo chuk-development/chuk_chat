@@ -173,8 +173,6 @@ const Map<String, String> stringsDe = {
   'iconFgColorSubtitle': 'Farbe für Symbole und wichtigen Text wählen',
   'backgroundColor': 'Hintergrundfarbe',
   'backgroundColorSubtitle': 'Haupt-Hintergrundfarbe der App wählen',
-  'filmGrainEffect': 'Filmkorn-Effekt',
-  'filmGrainSubtitle': 'Subtile Filmkorn-Textur hinzufügen',
   'dynamicColor': 'Material You',
   'dynamicColorSubtitle':
       'Systemfarben verwenden und Theme-Änderungen automatisch übernehmen',
