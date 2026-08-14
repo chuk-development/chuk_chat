@@ -130,7 +130,6 @@ const Map<String, String> stringsHi = {
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (कैलेंडर / Gmail)',
   'catEmailImapSmtp': 'ईमेल (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'सैंडबॉक्स / कोड',
   'catSearchWebDesc':
@@ -149,8 +148,6 @@ const Map<String, String> stringsHi = {
   'catGoogleCalGmailDesc':
       'Google Calendar और Gmail से अपना शेड्यूल और ईमेल प्रबंधित करें',
   'catEmailImapSmtpDesc': 'IMAP और SMTP के माध्यम से ईमेल भेजें और प्राप्त करें',
-  'catWhoopDesc':
-      'WHOOP से रिकवरी, स्ट्रेन, नींद और वर्कआउट डेटा देखें',
   'catNextcloudDesc':
       'Nextcloud पर फ़ाइलें, कैलेंडर और संपर्क ब्राउज़ करें',
   'catSandboxDesc':
@@ -185,7 +182,6 @@ const Map<String, String> stringsHi = {
   'toolUuidGen': 'UUID जनरेटर',
   'toolNotes': 'नोट्स',
   'toolQrGen': 'QR जनरेटर',
-  'toolWhoopHealth': 'WHOOP स्वास्थ्य',
   'resetToolSettingsTitle': 'टूल सेटिंग्स रीसेट करें?',
   'resetToolSettingsBody':
       'इससे सभी टूल पुनः सक्षम होंगे और सभी कस्टम टूल प्रॉम्प्ट रीसेट होंगे।',

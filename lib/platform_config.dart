@@ -112,13 +112,6 @@ const bool kFeatureSpotify = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// WHOOP health/fitness tool. Disabled by default — integration removed
-/// alongside Spotify. Set `--dart-define=FEATURE_WHOOP=true` to re-enable.
-const bool kFeatureWhoop = bool.fromEnvironment(
-  'FEATURE_WHOOP',
-  defaultValue: false,
-);
-
 /// Direct payment integration via Stripe (web + mobile + desktop).
 /// Defaults to true for direct distribution.
 /// MUST be set false for Google Play Store builds to comply with Google's billing policy.

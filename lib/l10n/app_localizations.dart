@@ -263,7 +263,6 @@ class AppLocalizations {
   String get catSlack => _get('catSlack');
   String get catGoogleCalGmail => _get('catGoogleCalGmail');
   String get catEmailImapSmtp => _get('catEmailImapSmtp');
-  String get catWhoop => _get('catWhoop');
   String get catNextcloud => _get('catNextcloud');
   String get catSandbox => _get('catSandbox');
   String get catSearchWebDesc => _get('catSearchWebDesc');
@@ -276,7 +275,6 @@ class AppLocalizations {
   String get catSlackDesc => _get('catSlackDesc');
   String get catGoogleCalGmailDesc => _get('catGoogleCalGmailDesc');
   String get catEmailImapSmtpDesc => _get('catEmailImapSmtpDesc');
-  String get catWhoopDesc => _get('catWhoopDesc');
   String get catNextcloudDesc => _get('catNextcloudDesc');
   String get catSandboxDesc => _get('catSandboxDesc');
   String get connect => _get('connect');
@@ -312,7 +310,6 @@ class AppLocalizations {
   String get toolUuidGen => _get('toolUuidGen');
   String get toolNotes => _get('toolNotes');
   String get toolQrGen => _get('toolQrGen');
-  String get toolWhoopHealth => _get('toolWhoopHealth');
   String get resetToolSettingsTitle => _get('resetToolSettingsTitle');
   String get resetToolSettingsBody => _get('resetToolSettingsBody');
   String get resetAllToolPrefs => _get('resetAllToolPrefs');
