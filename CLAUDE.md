@@ -113,7 +113,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_MEDIA_MANAGER` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Voice mode button |
-| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
+| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar (need backend OAuth) |
 | `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
 | `FEATURE_COWORK` | `false` | Chat↔CoWork switcher (M0 placeholder) |
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray on desktop. **Also suppresses `window_close_service`** — with it on, closing the window minimises to tray instead of quitting |

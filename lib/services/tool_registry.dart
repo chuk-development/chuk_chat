@@ -15,8 +15,6 @@ const Set<String> _serverBackedToolNames = {
   'slack',
   'google_calendar',
   'gmail',
-  'email',
-  'nextcloud',
   // Sandbox tools — proxy through the api_server to the chuk-chat-sandbox
   // upstream. Gating them with kFeatureServerTools keeps offline /
   // server-free builds from advertising tools they cannot fulfil.
@@ -60,8 +58,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'slack': ToolCategory.slack,
   'google_calendar': ToolCategory.google,
   'gmail': ToolCategory.google,
-  'email': ToolCategory.email,
-  'nextcloud': ToolCategory.nextcloud,
   'device': ToolCategory.device,
   'calendar': ToolCategory.device,
   'reminder': ToolCategory.device,
@@ -883,83 +879,11 @@ final List<ClientTool> builtinTools = [
     tags: [
       'gmail',
       'google',
-      'email',
-      'mail',
+          'mail',
       'send',
       'senden',
       'inbox',
       'posteingang',
-    ],
-  ),
-
-  // -- Email (IMAP/SMTP) --
-  ClientTool(
-    name: 'email',
-    description:
-        'Universal email via IMAP/SMTP. Actions: list_mailboxes, '
-        'list_emails, search_emails, read_email, send_email, unread_count. '
-        'Sending requires user approval.',
-    parameters: {
-      'action': 'string (required)',
-      'mailbox': 'string (default: INBOX)',
-      'sequence_id': 'int (for read/delete/move/mark)',
-      'to': 'string (recipient for send)',
-      'subject': 'string (for send)',
-      'body': 'string (for send)',
-      'cc': 'string (for send)',
-      'bcc': 'string (for send)',
-      'from': 'string (search filter)',
-      'text': 'string (search query)',
-      'since': 'string (date YYYY-MM-DD)',
-      'before': 'string (date YYYY-MM-DD)',
-      'unread_only': 'boolean (search filter)',
-      'limit': 'int (default: 20)',
-      'offset': 'int (default: 0)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'email',
-      'mail',
-      'imap',
-      'smtp',
-      'inbox',
-      'posteingang',
-      'send',
-      'senden',
-      'read',
-      'lesen',
-      'message',
-      'nachricht',
-    ],
-  ),
-
-  // -- Nextcloud --
-  ClientTool(
-    name: 'nextcloud',
-    description:
-        'Nextcloud files & calendar. Actions: list_files, download_file, '
-        'upload_file, delete_file, create_directory, get_calendars, '
-        'get_events, get_contacts',
-    parameters: {
-      'action': 'string (required)',
-      'path': 'string (file path)',
-      'content': 'string (for upload)',
-      'calendar_id': 'string (for events)',
-      'start_date': 'string (ISO date)',
-      'end_date': 'string (ISO date)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'nextcloud',
-      'cloud',
-      'files',
-      'dateien',
-      'upload',
-      'download',
-      'calendar',
-      'kalender',
-      'contacts',
-      'kontakte',
     ],
   ),
 

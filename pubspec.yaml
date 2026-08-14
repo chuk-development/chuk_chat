@@ -60,7 +60,7 @@ dependencies:
   desktop_drop: ^0.7.0
   tray_manager: ^0.5.1
   window_manager: ^0.5.1
-  image: ^4.8.0  # 4.9.x needs xml ^7; blocked by enough_mail (xml ^6)
+  image: ^4.8.0  # 4.9.x needs xml ^7 — worth a try now that enough_mail is gone
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
   pdfrx: ^2.2.24  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
   pdf: ^3.11.0  # PDF generation (export markdown responses). 3.13.0 needs Dart >=3.12 — see SDK ceiling note above.
@@ -78,7 +78,6 @@ dependencies:
   # but file_picker 11.0.2 (latest) pins win32 ^5.9.0. Unblocks only when file_picker ships win32 6.
   geolocator: ^14.0.2
   add_2_calendar: ^3.0.1        # Native calendar event creation
-  enough_mail: ^2.1.6           # IMAP/SMTP email
   timezone: ^0.11.0             # Timezone data for notifications
   pretty_qr_code: ^3.6.0
   sqflite: ^2.4.2  # 2.4.3 needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.

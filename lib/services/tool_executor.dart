@@ -27,8 +27,6 @@ import 'package:chuk_chat/tool_handlers/web_tools.dart' as web_tools;
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
-import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
-    as nextcloud_tools;
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -109,8 +107,6 @@ class ToolExecutor {
     'slack',
     'google_calendar',
     'gmail',
-    'email',
-    'nextcloud',
     'device',
     'calendar',
     'reminder',
@@ -487,10 +483,6 @@ class ToolExecutor {
         return platform_tools.isPlatformServiceConnected('slack');
       case ToolCategory.google:
         return platform_tools.isPlatformServiceConnected('google');
-      case ToolCategory.email:
-        return platform_tools.isPlatformServiceConnected('email');
-      case ToolCategory.nextcloud:
-        return nextcloud_tools.isNextcloudConnected();
       case ToolCategory.sandbox:
         return true; // Server-managed Docker sandbox
     }
@@ -751,17 +743,12 @@ class ToolExecutor {
         return _wrapOutput(await platform_tools.executeGoogleCalendar(args));
       case 'gmail':
         return _wrapOutput(await platform_tools.executeGmail(args));
-      case 'email':
-        return _wrapOutput(await platform_tools.executeEmail(args));
       case 'device':
         return _wrapOutput(await platform_tools.executeDevice(args));
       case 'calendar':
         return _wrapOutput(await platform_tools.executeCalendar(args));
       case 'reminder':
         return _wrapOutput(await platform_tools.executeReminder(args));
-      // -- Nextcloud (web-safe) --
-      case 'nextcloud':
-        return _wrapOutput(await nextcloud_tools.executeNextcloud(args));
 
       // -- Workspace management --
       case 'artifact_manager':
