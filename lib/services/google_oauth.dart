@@ -60,34 +60,37 @@ class GoogleOAuth {
 
     await _callback.start(expectedState: state);
 
-    final response = await http.get(
-      Uri.parse('$_backendUrl/google/auth-url').replace(
-        queryParameters: {
-          'redirect_uri': redirectUri,
-          'state': state,
-          'scopes': scopes.join(' '),
-        },
-      ),
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/google/auth-url').replace(
+          queryParameters: {
+            'redirect_uri': redirectUri,
+            'state': state,
+            'scopes': scopes.join(' '),
+          },
+        ),
+      );
 
-    if (response.statusCode != 200) {
-      await _callback.stop();
-      throw Exception('Failed to get auth URL: ${response.statusCode}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('Failed to get auth URL: ${response.statusCode}');
+      }
 
-    final data = jsonDecode(response.body);
-    final authUrl = data['auth_url'] as String?;
-    if (authUrl == null) {
-      await _callback.stop();
-      throw Exception('Backend did not return auth_url');
-    }
+      final data = jsonDecode(response.body);
+      final authUrl = data['auth_url'] as String?;
+      if (authUrl == null) {
+        throw Exception('Backend did not return auth_url');
+      }
 
-    final uri = Uri.parse(authUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+      final uri = Uri.parse(authUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch Google authorization URL');
+      }
+    } catch (_) {
+      // A failure here leaves the port bound with nobody to answer it.
       await _callback.stop();
-      throw Exception('Could not launch Google authorization URL');
+      rethrow;
     }
   }
 
