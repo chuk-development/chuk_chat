@@ -8,6 +8,18 @@
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_client.dart';
 
+/// How a connection proves who it is.
+enum McpAuth {
+  /// The server signs the reader in through the browser and hands back a
+  /// token of its own. Every third-party connector works this way.
+  oauth,
+
+  /// The server is ours, so the reader is already signed in: the app's own
+  /// session token is the credential. Used by the connectors that our API
+  /// server fronts, where the upstream credential never reaches the device.
+  appSession,
+}
+
 class McpConnection {
   const McpConnection({
     required this.id,
@@ -17,6 +29,7 @@ class McpConnection {
     this.iconUrl,
     this.tools = const <McpTool>[],
     this.addedByHand = false,
+    this.auth = McpAuth.oauth,
   });
 
   final String id;
@@ -32,6 +45,9 @@ class McpConnection {
   /// True when the reader typed the URL instead of picking a connector.
   final bool addedByHand;
 
+  /// Where the token for this server comes from.
+  final McpAuth auth;
+
   String get icon => iconUrl ?? McpCatalogueEntry.faviconFor(url);
 
   McpConnection copyWith({List<McpTool>? tools, String? name, String? iconUrl}) =>
@@ -43,6 +59,7 @@ class McpConnection {
         iconUrl: iconUrl ?? this.iconUrl,
         tools: tools ?? this.tools,
         addedByHand: addedByHand,
+        auth: auth,
       );
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +69,7 @@ class McpConnection {
     'description': description,
     'icon_url': iconUrl,
     'added_by_hand': addedByHand,
+    'auth': auth.name,
     'tools': tools.map((t) => t.toJson()).toList(),
   };
 
@@ -62,6 +80,9 @@ class McpConnection {
     description: (json['description'] ?? '').toString(),
     iconUrl: json['icon_url']?.toString(),
     addedByHand: json['added_by_hand'] == true,
+    auth: json['auth'] == McpAuth.appSession.name
+        ? McpAuth.appSession
+        : McpAuth.oauth,
     tools: [
       for (final tool in (json['tools'] as List? ?? const []))
         if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),

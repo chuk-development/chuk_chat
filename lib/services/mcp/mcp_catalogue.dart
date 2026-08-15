@@ -15,6 +15,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+
 /// A connector as offered to the reader.
 class McpCatalogueEntry {
   const McpCatalogueEntry({
@@ -24,6 +27,7 @@ class McpCatalogueEntry {
     required this.category,
     this.description = '',
     this.iconUrl,
+    this.auth = McpAuth.oauth,
   });
 
   /// Stable id, used as the tool-name prefix and the storage key.
@@ -33,6 +37,10 @@ class McpCatalogueEntry {
   final String category;
   final String description;
   final String? iconUrl;
+
+  /// Where the token comes from. Everything in the catalogue signs in
+  /// through the browser except the connectors our own server fronts.
+  final McpAuth auth;
 
   /// The logo. Servers rarely publish one in `serverInfo.icons`, so the
   /// site's own favicon is the fallback that works for every host.
@@ -74,15 +82,41 @@ const List<String> kMcpCategories = [
   'Finance',
 ];
 
+/// Connectors our own API server fronts.
+///
+/// Not in [kMcpCatalogue] because their address is not a constant — it
+/// follows whichever API server this build talks to — and because they are
+/// the one case that needs no browser sign-in: the reader is already signed
+/// in to us, so the app session is the credential.
+///
+/// GitHub is here rather than in the catalogue for a concrete reason. Its
+/// MCP server takes an ordinary GitHub token but offers no dynamic client
+/// registration, and this app carries no pre-registered OAuth app, so it
+/// cannot be connected directly. It does not have to be: the device flow in
+/// Settings → Sandboxes → GitHub already left a token on our server, and
+/// `/v1/mcp/github` uses that one. The token never reaches the device.
+List<McpCatalogueEntry> firstPartyConnectors() => <McpCatalogueEntry>[
+  McpCatalogueEntry(
+    id: 'github',
+    name: 'GitHub',
+    url: '${ApiConfigService.apiBaseUrl}/v1/mcp/github',
+    category: 'Developer',
+    description:
+        'Issues, pull requests, code search and Actions on your own '
+        'repositories. Connect GitHub under Sandboxes first.',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=github.com&sz=128',
+    auth: McpAuth.appSession,
+  ),
+];
+
 /// The offered connectors. Only servers that speak Streamable HTTP and sign
 /// in through OAuth, because that is what a phone can do.
 ///
 /// They must also register clients dynamically (RFC 7591): no client id is
 /// baked into this app, so a server that expects a pre-registered one
-/// cannot be connected and must not be listed. GitHub's MCP server is the
-/// known case — it points at `github.com/login/oauth`, which has no
-/// registration endpoint. `mcp_endpoints_live_test.dart` checks this
-/// against the real servers.
+/// cannot be connected and must not be listed. GitHub used to be the known
+/// case; it is now reachable through [firstPartyConnectors] instead.
+/// `mcp_endpoints_live_test.dart` checks the rest against the real servers.
 const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Recommended ───────────────────────────────────────────────────────
   McpCatalogueEntry(

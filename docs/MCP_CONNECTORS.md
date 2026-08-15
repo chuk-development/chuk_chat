@@ -55,20 +55,52 @@ single definition; `McpService.resolve` maps a name back to its server.
 | `lib/services/mcp/mcp_catalogue.dart` | The offered connectors and the registry search |
 | `lib/services/mcp/mcp_tool_bridge.dart` | Registers connected tools with the executor |
 | `lib/pages/mcp_connectors_page.dart` | The Connectors screen and one connector's detail |
+| api_server `routers/mcp_github.py` | The GitHub relay: our session in, the user's GitHub token out |
+| api_server `mcp_proxy.py` | Which headers may cross that hop, in each direction |
 
 ## What cannot be listed
 
 A catalogue entry must support **dynamic client registration** (RFC 7591).
 The app carries no client id, so a server whose authorization server has no
-`registration_endpoint` cannot be connected at all. GitHub is the known
-case: `api.githubcopilot.com` points at `github.com/login/oauth`, which
-expects a pre-registered OAuth app. Listing it only produces an error at
-Connect, so it is not listed. GitHub tools stay available through
-`FEATURE_SERVER_TOOLS` instead.
+`registration_endpoint` cannot be connected the ordinary way. GitHub is the
+known case: `api.githubcopilot.com` points at `github.com/login/oauth`,
+which expects a pre-registered OAuth app.
 
 `test/mcp/mcp_endpoints_live_test.dart` checks every catalogue entry against
 the real server and fails on exactly this. It is skipped unless run with
 `--dart-define=MCP_LIVE=true`.
+
+A server that cannot be listed here can still be reached through a
+first-party connector, below — which is what GitHub now is.
+
+## First-party connectors
+
+`firstPartyConnectors()` in `mcp_catalogue.dart` lists the servers our own
+API server fronts. They differ from the catalogue in two ways: their
+address follows whichever API server the build talks to, so it is not a
+constant; and they need no browser sign-in, because the reader is signed in
+to us already. `McpConnection.auth` records which of the two a connection
+is, and `McpService` reads the app's Supabase session token fresh on every
+call — it rotates, so a stored copy would be stale within the hour.
+
+**GitHub** is the one that exists today, at `/v1/mcp/github`:
+
+1. The reader connects GitHub once under Settings → Sandboxes → GitHub.
+   That is the device flow (RFC 8628) that was already there for `git` and
+   `gh` inside the sandbox; the token is encrypted and stored server-side.
+2. The Connectors screen offers GitHub like any other connector. Connect
+   sends `initialize` to our API server with the app's session token.
+3. `routers/mcp_github.py` on the API server relays the MCP conversation to
+   `api.githubcopilot.com/mcp/` and puts the user's GitHub token on it.
+   Session id, protocol version and SSE replies pass through; our own
+   `Authorization` header, cookies and forwarding headers do not.
+4. Not connected yet → **403** with a sentence saying so, and a rejected
+   GitHub token → 403 as well. Never 401: the client reads a 401 on an MCP
+   endpoint as "this needs OAuth" and would start a discovery against an
+   authorization server that is ours, not GitHub's.
+
+The GitHub token never reaches the device — the same property the sandbox
+injection relies on. One token, two consumers.
 
 ## Adding a connector to the catalogue
 

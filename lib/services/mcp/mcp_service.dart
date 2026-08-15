@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/mcp/mcp_client.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_redirect.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// What a connect attempt ended in, for the UI to show.
 enum McpConnectStatus { connected, cancelled, failed }
@@ -156,9 +157,10 @@ class McpService {
     String description = '',
     String? iconUrl,
     bool addedByHand = false,
+    McpAuth auth = McpAuth.oauth,
   }) async {
     final endpoint = Uri.tryParse(url);
-    if (endpoint == null || !endpoint.isScheme('https')) {
+    if (endpoint == null || !_isAcceptableEndpoint(endpoint)) {
       return const McpConnectResult(
         McpConnectStatus.failed,
         message: 'That is not an https address.',
@@ -166,25 +168,43 @@ class McpService {
     }
 
     try {
-      // Some servers need no sign-in at all. Try without a token first.
       McpServerInfo? info;
       String? accessToken;
-      try {
-        info = await McpClient(endpoint: endpoint).initialize();
-      } on McpUnauthorized catch (unauthorized) {
-        final authorized = await _authorize(
-          id: id,
-          endpoint: endpoint,
-          wwwAuthenticate: unauthorized.wwwAuthenticate,
-        );
-        if (authorized == null) {
-          return const McpConnectResult(McpConnectStatus.cancelled);
+
+      if (auth == McpAuth.appSession) {
+        // Our own server. The reader is signed in already, so there is
+        // nothing to authorize — and a 401 here means the app session
+        // expired, not that a browser sign-in is due.
+        accessToken = await _appSessionToken();
+        if (accessToken == null) {
+          return const McpConnectResult(
+            McpConnectStatus.failed,
+            message: 'Sign in to Chuk Chat first.',
+          );
         }
-        accessToken = authorized;
         info = await McpClient(
           endpoint: endpoint,
           accessToken: accessToken,
         ).initialize();
+      } else {
+        // Some servers need no sign-in at all. Try without a token first.
+        try {
+          info = await McpClient(endpoint: endpoint).initialize();
+        } on McpUnauthorized catch (unauthorized) {
+          final authorized = await _authorize(
+            id: id,
+            endpoint: endpoint,
+            wwwAuthenticate: unauthorized.wwwAuthenticate,
+          );
+          if (authorized == null) {
+            return const McpConnectResult(McpConnectStatus.cancelled);
+          }
+          accessToken = authorized;
+          info = await McpClient(
+            endpoint: endpoint,
+            accessToken: accessToken,
+          ).initialize();
+        }
       }
 
       final client = McpClient(endpoint: endpoint, accessToken: accessToken);
@@ -201,6 +221,7 @@ class McpService {
         iconUrl: iconUrl ?? info.iconUrl,
         tools: tools,
         addedByHand: addedByHand,
+        auth: auth,
       );
 
       connections.value = [
@@ -404,10 +425,49 @@ class McpService {
     }
   }
 
+  /// https everywhere, except a server on this machine.
+  ///
+  /// A debug build points at `http://localhost:8000`, which is where the
+  /// first-party connectors live while their API server is being worked on.
+  /// Loopback never leaves the device, so plaintext there costs nothing —
+  /// the same reasoning the OAuth redirect listener runs on.
+  static bool _isAcceptableEndpoint(Uri endpoint) {
+    if (endpoint.isScheme('https')) return true;
+    if (!endpoint.isScheme('http')) return false;
+    const loopback = {
+      'localhost',
+      '127.0.0.1',
+      '::1',
+      // The host machine, seen from the Android emulator.
+      '10.0.2.2',
+    };
+    return loopback.contains(endpoint.host);
+  }
+
+  /// The app's own session token, refreshed when it is about to lapse.
+  ///
+  /// Read fresh on every call rather than stored: it rotates, and a copy
+  /// kept next to the connection would be stale within the hour.
+  static Future<String?> _appSessionToken() async {
+    var session = SupabaseService.auth.currentSession;
+    if (session == null) return null;
+    if (session.isExpired) {
+      session = await SupabaseService.refreshSession();
+    }
+    final token = session?.accessToken ?? '';
+    return token.isEmpty ? null : token;
+  }
+
   /// A client carrying a valid token, refreshing it first when it is stale.
   static Future<McpClient?> _clientFor(McpConnection connection) async {
     final endpoint = Uri.tryParse(connection.url);
     if (endpoint == null) return null;
+
+    if (connection.auth == McpAuth.appSession) {
+      final token = await _appSessionToken();
+      if (token == null) return null;
+      return McpClient(endpoint: endpoint, accessToken: token);
+    }
 
     final secrets = await _readSecrets(connection.id);
     if (secrets == null) {
