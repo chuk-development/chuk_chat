@@ -68,7 +68,9 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
         valueListenable: McpService.connections,
         builder: (context, connections, _) {
           final connectedIds = {for (final c in connections) c.id};
-          final catalogue = kMcpCatalogue
+          // The connectors our own server fronts come first: they are the
+          // ones that need no browser sign-in.
+          final catalogue = [...firstPartyConnectors(), ...kMcpCatalogue]
               .where(
                 (entry) =>
                     !connectedIds.contains(entry.id) &&
@@ -420,6 +422,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       url: url,
       description: widget.entry?.description ?? '',
       iconUrl: widget.entry?.iconUrl,
+      auth: widget.entry?.auth ?? McpAuth.oauth,
     );
     if (!mounted) return;
     setState(() => _busy = false);
