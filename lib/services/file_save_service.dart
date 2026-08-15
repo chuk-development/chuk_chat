@@ -91,26 +91,22 @@ class FileSaveService {
     }
 
     try {
-      final selectedPath = await FilePicker.saveFile(
+      final savedUri = await FilePicker.saveFile(
         dialogTitle: dialogTitle ?? 'Save file',
         fileName: suggestedName,
         type: allowedExtensions == null ? FileType.any : FileType.custom,
         allowedExtensions: allowedExtensions,
         bytes: bytes,
       );
-      if (selectedPath == null || selectedPath.isEmpty) {
+      if (savedUri == null) {
         return const SaveResult._(outcome: SaveOutcome.cancelled);
       }
-      // On some platforms (e.g. Android) FilePicker writes the bytes itself
-      // when the `bytes` arg is provided; on others (desktop) we still need
-      // to write the file ourselves. Writing again is a no-op overwrite.
-      final file = File(selectedPath);
-      if (!await file.exists() || (await file.length()) != bytes.length) {
-        await file.writeAsBytes(bytes, flush: true);
-      }
+      // file_picker writes the bytes itself on every platform now. Only a
+      // `file:` URI carries a path we can hand back — Android SAF returns
+      // `content:`, which is saved but has no filesystem location.
       return SaveResult._(
         outcome: SaveOutcome.savedViaPicker,
-        path: selectedPath,
+        path: savedUri.scheme == 'file' ? savedUri.toFilePath() : null,
       );
     } catch (error, stack) {
       if (kDebugMode) {

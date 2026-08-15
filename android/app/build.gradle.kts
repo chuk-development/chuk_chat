@@ -24,6 +24,14 @@ if (!useEnvVars && keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Kotlin 2.2 removed the `kotlinOptions` block inside `android {}`; the JVM
+// target now goes through the top-level Kotlin `compilerOptions` DSL.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "dev.chuk.chat"
     compileSdk = flutter.compileSdkVersion
@@ -33,10 +41,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {

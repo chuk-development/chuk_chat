@@ -643,21 +643,22 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<String?> _saveExportToLinux(Uint8List data, String fileName) async {
     final l = AppLocalizations.of(context)!;
     final Directory? initialDirectory = await _linuxInitialDirectory();
-    final String? outputPath = await FilePicker.saveFile(
+    final Uri? savedUri = await FilePicker.saveFile(
       dialogTitle: l.saveChatExport,
       fileName: fileName,
+      bytes: data,
+      mimeType: 'application/json',
       initialDirectory: initialDirectory?.path,
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
 
-    if (outputPath == null) {
+    if (savedUri == null) {
       return null;
     }
 
-    final file = File(outputPath);
-    await file.writeAsBytes(data, flush: true);
-    return file.path;
+    // file_picker writes the bytes; on Linux the result is always a file URI.
+    return savedUri.scheme == 'file' ? savedUri.toFilePath() : null;
   }
 
   Future<Directory?> _linuxInitialDirectory() async {

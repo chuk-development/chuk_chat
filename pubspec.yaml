@@ -20,7 +20,14 @@ environment:
 # Also: keep constraint FLOORS low. The Android job (Dart 3.10.7) ignores pubspec.lock
 # and re-resolves, downgrading anything needing Dart 3.11 (e.g. add_2_calendar 3.1.1 ->
 # 3.0.1, pdfrx -> the ^2.2.24 floor). Raising a floor to a Dart-3.11-only version makes
-# that job unsolvable, since pub cannot downgrade below a declared floor.
+# that job unsolvable, since pub cannot downgrade below a declared floor. Every floor
+# raised here resolves on Dart 3.10.7 / Flutter 3.38.1.
+#
+# Second ceiling, from the other direction: Flutter 3.41 is too OLD for plugins whose
+# Gradle script uses a top-level `kotlin { compilerOptions }` block without applying the
+# Kotlin plugin — Flutter's plugin loader does not apply it, so the script fails to
+# compile. dynamic_color 1.9.0, add_2_calendar 3.1.1 and permission_handler_android 14
+# are all capped for this reason; they unblock together on a newer Flutter.
 
 dependencies:
   flutter:
@@ -30,22 +37,33 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^2.6.1  # State management for chat runtime / streaming (perf re-architecture)
-  dynamic_color: ^1.7.0  # Material You / system accent colour (Android 12+, some desktops)
+  # Material You / system accent colour (Android 12+, some desktops).
+  # Capped below 1.9.0 for the same reason as add_2_calendar: 1.9.0 uses a
+  # top-level `kotlin { compilerOptions }` block in its own Gradle script without
+  # applying the Kotlin plugin, and Flutter's plugin loader does not apply it for
+  # them, so the script fails to compile.
+  dynamic_color: ">=1.7.0 <1.9.0"
   web: ^1.1.1
   shared_preferences: ^2.5.3
   http: ^1.5.0
   dio: ^5.4.0
   flutter_svg: ^2.2.2
-  file_picker: ^11.0.2
+  file_picker: ^12.0.0  # federated rewrite; drops the win32 ^5 pin that blocked share_plus/package_info_plus/geolocator
   image_picker: ^1.1.2
   uuid: ^4.5.2
-  permission_handler: ^12.0.1
+  # Held at 12.x: permission_handler_android 14.0.0 (pulled by 13.0.1) has the
+  # same unusable Gradle script as dynamic_color 1.9.0 — a top-level
+  # `kotlin { compilerOptions }` block with no Kotlin plugin applied.
+  permission_handler: ">=12.0.1 <13.0.0"
   supabase_flutter: ^2.10.3
   crypto: ^3.0.6
   cryptography: ^2.7.0
-  flutter_secure_storage: ^10.0.0
-  share_plus: ^12.0.1  # 13.x blocked by file_picker 11 → win32 5 conflict
-  package_info_plus: ^9.0.0  # 10.x blocked by file_picker 11 → win32 5 conflict
+  # Held at 10.x: 11.0.0 compiles against API 37, and API 37 needs AGP 9.1 /
+  # Gradle 9.3 — a toolchain jump this app is not on. 10.3.1 already migrated
+  # the ciphers, so the move to 11 is free whenever the toolchain catches up.
+  flutter_secure_storage: ">=10.0.0 <11.0.0"
+  share_plus: ^13.3.0
+  package_info_plus: ^10.2.1
   record: ^6.1.2  # 7.x needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
@@ -74,10 +92,14 @@ dependencies:
   maplibre: ^0.3.2             # 3D-capable interactive maps
   latlong2: ^0.10.1             # Coordinate math (LatLng type) — flutter_map 8.3.1 widened to >=0.9.1 <0.11.0
   fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
-  # 14.0.3 -> geolocator_linux ^0.2.6 -> package_info_plus ^10 -> win32 ^6,
-  # but file_picker 11.0.2 (latest) pins win32 ^5.9.0. Unblocks only when file_picker ships win32 6.
-  geolocator: ^14.0.2
-  add_2_calendar: ^3.0.1        # Native calendar event creation
+  geolocator: ^14.0.3
+  # Native calendar event creation. Capped below 3.1.0: that release's own
+  # android/build.gradle.kts uses a top-level `kotlin { compilerOptions }` block
+  # without applying the Kotlin plugin, so it only compiles under AGP 9 / Kotlin
+  # 2.3.20. Any local Android build resolving 3.1.1 fails at Gradle script
+  # compilation. The Android CI job never hit it because it re-resolves down to
+  # 3.0.1 on Dart 3.10.7.
+  add_2_calendar: ">=3.0.1 <3.1.0"
   enough_mail: ^2.1.6           # IMAP/SMTP email
   timezone: ^0.11.0             # Timezone data for notifications
   pretty_qr_code: ^3.6.0
@@ -102,6 +124,14 @@ dependencies:
   # markdraw requires re-vendoring + re-applying these patches.
   markdraw:
     path: vendor/markdraw
+
+# super_native_extensions (via markdraw -> super_clipboard) caps device_info_plus
+# at <12.0.0, which pins win32 to 5.x and blocks file_picker 12, share_plus 13,
+# package_info_plus 10 and geolocator 14.0.3. It only reads
+# `AndroidDeviceInfo.version.sdkInt`, an API unchanged in 12 and 13, so the cap is
+# stale rather than real. Drop this override once super_clipboard widens its range.
+dependency_overrides:
+  device_info_plus: ^13.2.0
 
 dev_dependencies:
   flutter_test:
