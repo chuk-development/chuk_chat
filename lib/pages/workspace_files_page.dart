@@ -158,13 +158,11 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage> {
   }
 
   Future<void> _pickFromDevice() async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
-      allowMultiple: false,
     );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
+    if (file == null) return;
     if (file.path == null) {
       if (mounted) {
         final l = AppLocalizations.of(context)!;

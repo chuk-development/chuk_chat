@@ -123,16 +123,12 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   Future<void> _pickAndUploadFile() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: FileConstants.allowedExtensions,
-        allowMultiple: false,
       );
 
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      if (file.path == null) return;
+      if (file == null || file.path == null) return;
 
       final filePath = file.path!;
       final fileName = file.name;

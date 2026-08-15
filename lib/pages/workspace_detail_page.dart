@@ -246,15 +246,13 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
 
   Future<void> _pickAndUploadFile() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: FileConstants.allowedExtensions,
-        allowMultiple: false,
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (file == null) return;
 
-      final file = result.files.first;
       if (file.path == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

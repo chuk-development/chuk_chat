@@ -204,18 +204,16 @@ class DesktopFileHandler {
 
   /// Opens file picker and processes selected files.
   Future<void> uploadFiles() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
+    final List<PlatformFile> pickedFiles = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
-      allowMultiple: true,
-      withData: kIsWeb, // On web, we need bytes since paths aren't available
     );
 
-    if (result != null && result.files.isNotEmpty) {
+    if (pickedFiles.isNotEmpty) {
       if (kIsWeb) {
-        await processWebFiles(result.files);
+        await processWebFiles(pickedFiles);
       } else {
-        List<String> filePaths = result.files
+        List<String> filePaths = pickedFiles
             .where((f) => f.path != null)
             .map((f) => f.path!)
             .toList();
@@ -240,11 +238,10 @@ class DesktopFileHandler {
     }
 
     for (final platformFile in platformFiles) {
-      final Uint8List? bytes = platformFile.bytes;
-      if (bytes == null) continue;
-
       final String fileName = platformFile.name;
-      final int fileSize = platformFile.size;
+      // Ask for the size, not the content: a file rejected below must never
+      // have been loaded into the browser heap first.
+      final int fileSize = await platformFile.length();
       final String fileExtension = fileName.contains('.')
           ? fileName.split('.').last.toLowerCase()
           : '';
@@ -275,6 +272,8 @@ class DesktopFileHandler {
           maxConcurrentUploads) {
         continue;
       }
+
+      final Uint8List bytes = await platformFile.readAsBytes();
 
       String fileId = _uuid.v4();
 

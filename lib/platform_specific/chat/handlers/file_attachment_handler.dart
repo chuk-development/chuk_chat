@@ -113,28 +113,26 @@ class FileAttachmentHandler {
       return;
     }
 
-    FilePickerResult? result = await FilePicker.pickFiles(
+    final List<PlatformFile> pickedFiles = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
-      allowMultiple: true,
-      withData: kIsWeb,
     );
 
-    if (result == null || result.files.isEmpty) {
+    if (pickedFiles.isEmpty) {
       if (kDebugMode) {
         debugPrint('File picking canceled.');
       }
       return;
     }
 
-    for (final platformFile in result.files) {
+    for (final platformFile in pickedFiles) {
       if (kIsWeb) {
-        final Uint8List? bytes = platformFile.bytes;
-        if (bytes == null) continue;
+        // Size first, bytes only once the file passed the checks — reading a
+        // rejected 200 MB selection would take the browser heap with it.
         await _handleWebFileAttachment(
-          bytes: bytes,
+          readBytes: platformFile.readAsBytes,
           fileName: platformFile.name,
-          fileSizeBytes: platformFile.size,
+          fileSizeBytes: await platformFile.length(),
           supportsImages: supportsImages,
         );
       } else {
@@ -143,7 +141,7 @@ class FileAttachmentHandler {
         await _handleFileAttachment(
           file: File(path),
           fileName: platformFile.name,
-          fileSizeBytes: platformFile.size,
+          fileSizeBytes: await platformFile.length(),
           supportsImages: supportsImages,
         );
       }
@@ -222,9 +220,12 @@ class FileAttachmentHandler {
     }
   }
 
-  /// Handle file attachment from bytes (web)
+  /// Handle file attachment from bytes (web).
+  ///
+  /// [readBytes] is called only after the file passed the type and size
+  /// checks, so a rejected file is never loaded into memory.
   Future<void> _handleWebFileAttachment({
-    required Uint8List bytes,
+    required Future<Uint8List> Function() readBytes,
     required String fileName,
     required int fileSizeBytes,
     required bool supportsImages,
@@ -249,6 +250,8 @@ class FileAttachmentHandler {
       onError?.call('Image uploads are not supported by the selected model.');
       return;
     }
+
+    final Uint8List bytes = await readBytes();
 
     final String fileId = _uuid.v4();
     final bool isImage = _isImageExtension(extension);
