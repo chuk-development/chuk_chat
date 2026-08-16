@@ -5,9 +5,10 @@
 // list is the catalogue, the registry search, and a field to paste any
 // other MCP address into.
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+// Carries both PlatformException and the Uint8List the icon cache hands back.
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
@@ -28,6 +29,15 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   List<McpCatalogueEntry> _registryHits = const [];
   bool _searchingRegistry = false;
 
+  /// The query the shown hits belong to. Without it an empty result and a
+  /// registry never asked look the same, and the reader is offered a button
+  /// they already pressed.
+  String? _searchedQuery;
+
+  /// The query of the search still in flight. An older answer arriving late
+  /// must not take the spinner down from under the newer one.
+  String? _inFlightQuery;
+
   @override
   void initState() {
     super.initState();
@@ -47,14 +57,18 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   Future<void> _searchRegistry() async {
     final query = _query;
     if (query.length < 3) return;
+    _inFlightQuery = query;
     setState(() => _searchingRegistry = true);
     final hits = await searchMcpRegistry(query);
-    if (!mounted) return;
+    if (!mounted || _inFlightQuery != query) return;
     // The flag has to fall even when the reader typed on: leaving it up
     // pins a spinner over the section and the button never comes back.
     setState(() {
       _searchingRegistry = false;
-      if (_query == query) _registryHits = hits;
+      if (_query == query) {
+        _registryHits = hits;
+        _searchedQuery = query;
+      }
     });
   }
 
@@ -131,17 +145,32 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                 ],
 
               if (_query.length >= 3) ...[
-                const ExpressiveSectionHeader('From the MCP registry'),
+                const ExpressiveSectionHeader('Verified in the MCP registry'),
                 if (_searchingRegistry)
                   const Padding(
                     padding: EdgeInsets.all(16),
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (_registryHits.isEmpty)
-                  TextButton(
-                    onPressed: _searchRegistry,
-                    child: const Text('Search the registry'),
-                  )
+                  _searchedQuery == _query
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                          child: Text(
+                            'No server whose own publisher serves it. Only '
+                            'servers hosted by the domain that published '
+                            'them are offered here; anything else can be '
+                            'added under "Add by URL".',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.resolvedIconColor.withValues(
+                                alpha: 0.7,
+                              ),
+                            ),
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _searchRegistry,
+                          child: const Text('Search the registry'),
+                        )
                 else
                   ExpressiveGroup(
                     children: [
@@ -150,7 +179,14 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                           _row(
                             url: entry.url,
                             name: entry.name,
-                            subtitle: entry.description,
+                            // The publisher leads the line: the reader is
+                            // about to sign in to whoever runs that domain,
+                            // and the name alone does not say who that is.
+                            subtitle: [
+                              if (entry.publisher != null) entry.publisher!,
+                              if (entry.description.isNotEmpty)
+                                entry.description,
+                            ].join(' · '),
                             trailing: 'Connect',
                             onTap: () => _open(entry.id, entry),
                           ),
@@ -182,6 +218,8 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       onChanged: (_) => setState(() {
         _registryHits = const [];
         _searchingRegistry = false;
+        _searchedQuery = null;
+        _inFlightQuery = null;
       }),
       onSubmitted: (_) => _searchRegistry(),
       decoration: InputDecoration(
@@ -334,7 +372,12 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                   ),
                 ),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+              // Before the button, not after it: a disclosure the reader
+              // meets only once they have already signed in is no
+              // disclosure at all.
+              if (connection == null) _legalNote(theme, url),
+              const SizedBox(height: 12),
               SizedBox(
                 height: 52,
                 child: _busy
@@ -412,6 +455,91 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
         );
       },
     );
+  }
+
+  /// Who the reader is about to hand their data to, and where their terms
+  /// are. Connecting signs in to another company's service: whatever the
+  /// assistant sends through this connector leaves our servers and lands
+  /// under that company's terms, so the name and the link belong on the
+  /// screen before the button, not in a help page afterwards.
+  Widget _legalNote(ThemeData theme, String url) {
+    final entry = widget.entry;
+    final host = Uri.tryParse(url)?.host ?? '';
+    final party = entry?.publisher ?? McpCatalogueEntry.brandDomain(host);
+    if (party.isEmpty) return const SizedBox.shrink();
+
+    final legal = entry?.legalUrl ?? (host.isEmpty ? null : 'https://$party');
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.resolvedIconColor.withValues(alpha: 0.7),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        children: [
+          Text(
+            'Connecting signs you in to $party. What you send through this '
+            'connector is handled by them, under their terms and privacy '
+            'policy.',
+            textAlign: TextAlign.center,
+            style: muted,
+          ),
+          // The two documents by name where they are known, and only the
+          // publisher's own page where they are not — a guessed `/terms`
+          // that 404s reads as if we made the promise up.
+          if (entry?.termsUrl != null || entry?.privacyUrl != null)
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                if (entry?.termsUrl != null)
+                  TextButton(
+                    onPressed: () => _openLegal(entry!.termsUrl!),
+                    child: const Text('Terms'),
+                  ),
+                if (entry?.privacyUrl != null)
+                  TextButton(
+                    onPressed: () => _openLegal(entry!.privacyUrl!),
+                    child: const Text('Privacy policy'),
+                  ),
+              ],
+            )
+          else if (legal != null)
+            TextButton(
+              onPressed: () => _openLegal(legal),
+              child: Text('Terms and privacy at $party'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openLegal(String url) async {
+    // The address can come from the registry, which is written by strangers.
+    // Anything but https would hand the platform a scheme of their choosing —
+    // a deep link into another app, a dialler, a mail composer.
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open legal information.')),
+        );
+      }
+      return;
+    }
+    // A missing browser reaches us as a thrown PlatformException, not as a
+    // false — both mean the same thing to the reader, so both end up in the
+    // same message rather than in an uncaught error.
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on PlatformException {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $url')),
+      );
+    }
   }
 
   Future<void> _connect(String url, String name) async {
