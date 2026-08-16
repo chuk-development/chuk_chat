@@ -27,6 +27,10 @@ class McpCatalogueEntry {
     required this.category,
     this.description = '',
     this.iconUrl,
+    this.publisher,
+    this.websiteUrl,
+    this.termsUrl,
+    this.privacyUrl,
     this.auth = McpAuth.oauth,
   });
 
@@ -37,6 +41,48 @@ class McpCatalogueEntry {
   final String category;
   final String description;
   final String? iconUrl;
+
+  /// The domain that publishes this server, for entries that come out of the
+  /// registry. Shown to the reader because the name alone does not say who
+  /// is on the other end — `notion.com` does.
+  final String? publisher;
+
+  /// The publisher's own page, where their terms and privacy policy live.
+  /// Connecting sends the reader's data to that company, under their terms
+  /// and not ours, so the page has to be reachable before the sign-in.
+  final String? websiteUrl;
+
+  /// The two documents the reader agrees to by connecting. Filled in by
+  /// hand for the offered connectors, because no server publishes them:
+  /// RFC 9728 reserves `resource_tos_uri` and `resource_policy_uri` in the
+  /// protected-resource metadata, and every server checked leaves both out.
+  /// Each address here was fetched and answered 200 —
+  /// `mcp_legal_links_live_test.dart` keeps it that way.
+  final String? termsUrl;
+  final String? privacyUrl;
+
+  /// Where to send a reader who wants the terms before signing in. The
+  /// registry carries `websiteUrl`; for everything else the publishing
+  /// domain is the honest answer. Never a guessed `/terms` path — a link
+  /// that 404s is worse than the home page.
+  String? get legalUrl {
+    final domain = publisher ?? Uri.tryParse(url)?.host;
+    final site = websiteUrl?.trim();
+    if (site != null && site.startsWith('https://')) {
+      // The registry's `websiteUrl` is written by the publisher but checked
+      // by no one, so a row that passed the endpoint filter could still
+      // send the reader to a legal page on someone else's domain. It only
+      // counts when it sits on the domain the namespace proves.
+      final host = Uri.tryParse(site)?.host.toLowerCase();
+      if (host != null &&
+          domain != null &&
+          (host == domain || host.endsWith('.$domain'))) {
+        return site;
+      }
+    }
+    if (domain == null || domain.isEmpty) return null;
+    return 'https://$domain';
+  }
 
   /// Where the token comes from. Everything in the catalogue signs in
   /// through the browser except the connectors our own server fronts.
@@ -98,6 +144,8 @@ const List<String> kMcpCategories = [
 List<McpCatalogueEntry> firstPartyConnectors() => <McpCatalogueEntry>[
   McpCatalogueEntry(
     id: 'github',
+    termsUrl: 'https://docs.github.com/en/site-policy/github-terms/github-terms-of-service',
+    privacyUrl: 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
     name: 'GitHub',
     url: '${ApiConfigService.apiBaseUrl}/v1/mcp/github',
     category: 'Developer',
@@ -121,6 +169,11 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Recommended ───────────────────────────────────────────────────────
   McpCatalogueEntry(
     id: 'excalidraw',
+    // Not `excalidraw.com/terms`: that host is the drawing app itself and
+    // answers 200 with the canvas for any path. The documents live on the
+    // Plus site.
+    termsUrl: 'https://plus.excalidraw.com/terms-of-service',
+    privacyUrl: 'https://plus.excalidraw.com/privacy-policy',
     name: 'Excalidraw',
     url: 'https://mcp.excalidraw.com/mcp',
     category: 'Recommended',
@@ -128,6 +181,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'canva',
+    termsUrl: 'https://www.canva.com/policies/terms-of-use/',
+    privacyUrl: 'https://www.canva.com/policies/privacy-policy/',
     name: 'Canva',
     url: 'https://mcp.canva.com/mcp',
     category: 'Recommended',
@@ -135,6 +190,13 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'notion',
+    // Notion's own terms page is a Notion page — `notion.com/terms`
+    // redirects here. `notion.com/privacy` redirects into the app and
+    // answers 401 to anyone not signed in, so the trust site is used for
+    // the policy instead.
+    termsUrl:
+        'https://notion.notion.site/Terms-and-Privacy-28ffdd083dc3473e9c2da6ec011b58ac',
+    privacyUrl: 'https://www.notion.com/trust/privacy-policy',
     name: 'Notion',
     url: 'https://mcp.notion.com/mcp',
     category: 'Recommended',
@@ -142,6 +204,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'stripe',
+    termsUrl: 'https://stripe.com/legal/ssa',
+    privacyUrl: 'https://stripe.com/privacy',
     name: 'Stripe',
     url: 'https://mcp.stripe.com',
     category: 'Recommended',
@@ -153,6 +217,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Productivity ──────────────────────────────────────────────────────
   McpCatalogueEntry(
     id: 'linear',
+    termsUrl: 'https://linear.app/terms',
+    privacyUrl: 'https://linear.app/privacy',
     name: 'Linear',
     url: 'https://mcp.linear.app/mcp',
     category: 'Productivity',
@@ -160,6 +226,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'atlassian',
+    termsUrl: 'https://www.atlassian.com/legal/atlassian-customer-agreement',
+    privacyUrl: 'https://www.atlassian.com/legal/privacy-policy',
     name: 'Atlassian',
     url: 'https://mcp.atlassian.com/v1/mcp',
     category: 'Productivity',
@@ -167,6 +235,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'asana',
+    termsUrl: 'https://asana.com/terms',
+    privacyUrl: 'https://asana.com/privacy',
     name: 'Asana',
     url: 'https://mcp.asana.com/sse',
     category: 'Productivity',
@@ -175,6 +245,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
 
   McpCatalogueEntry(
     id: 'monday',
+    termsUrl: 'https://monday.com/l/legal/tos/',
+    privacyUrl: 'https://monday.com/l/privacy/privacy-policy/',
     name: 'monday.com',
     url: 'https://mcp.monday.com/sse',
     category: 'Productivity',
@@ -182,6 +254,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'airtable',
+    termsUrl: 'https://www.airtable.com/company/tos',
+    privacyUrl: 'https://www.airtable.com/company/privacy',
     name: 'Airtable',
     url: 'https://mcp.airtable.com/mcp',
     category: 'Productivity',
@@ -189,6 +263,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'zapier',
+    termsUrl: 'https://zapier.com/legal/terms-of-service',
+    privacyUrl: 'https://zapier.com/privacy',
     name: 'Zapier',
     url: 'https://mcp.zapier.com/api/mcp/mcp',
     category: 'Productivity',
@@ -198,6 +274,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Developer ─────────────────────────────────────────────────────────
   McpCatalogueEntry(
     id: 'sentry',
+    termsUrl: 'https://sentry.io/terms/',
+    privacyUrl: 'https://sentry.io/privacy/',
     name: 'Sentry',
     url: 'https://mcp.sentry.dev/mcp',
     category: 'Developer',
@@ -205,6 +283,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'vercel',
+    termsUrl: 'https://vercel.com/legal/terms',
+    privacyUrl: 'https://vercel.com/legal/privacy-notice',
     name: 'Vercel',
     url: 'https://mcp.vercel.com',
     category: 'Developer',
@@ -212,20 +292,17 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'supabase',
+    termsUrl: 'https://supabase.com/terms',
+    privacyUrl: 'https://supabase.com/privacy',
     name: 'Supabase',
     url: 'https://mcp.supabase.com/mcp',
     category: 'Developer',
     description: 'Projects, tables, SQL and logs.',
   ),
   McpCatalogueEntry(
-    id: 'neon',
-    name: 'Neon',
-    url: 'https://mcp.neon.tech/mcp',
-    category: 'Developer',
-    description: 'Postgres branches, queries and migrations.',
-  ),
-  McpCatalogueEntry(
     id: 'webflow',
+    termsUrl: 'https://webflow.com/legal/terms',
+    privacyUrl: 'https://webflow.com/legal/privacy',
     name: 'Webflow',
     url: 'https://mcp.webflow.com/sse',
     category: 'Developer',
@@ -233,6 +310,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'huggingface',
+    termsUrl: 'https://huggingface.co/terms-of-service',
+    privacyUrl: 'https://huggingface.co/privacy',
     name: 'Hugging Face',
     url: 'https://huggingface.co/mcp',
     category: 'Developer',
@@ -242,6 +321,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Creative ──────────────────────────────────────────────────────────
   McpCatalogueEntry(
     id: 'figma',
+    termsUrl: 'https://www.figma.com/legal/tos/',
+    privacyUrl: 'https://www.figma.com/legal/privacy/',
     name: 'Figma',
     url: 'https://mcp.figma.com/mcp',
     category: 'Creative',
@@ -250,13 +331,40 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
   McpCatalogueEntry(
     id: 'higgsfield',
+    termsUrl: 'https://higgsfield.ai/terms-of-use-agreement',
+    privacyUrl: 'https://higgsfield.ai/privacy-policy',
     name: 'Higgsfield',
     url: 'https://mcp.higgsfield.ai/mcp',
     category: 'Creative',
     description: 'Generate images and video across 30+ models.',
   ),
   McpCatalogueEntry(
+    id: 'fal',
+    termsUrl: 'https://fal.ai/legal/terms-of-service',
+    privacyUrl: 'https://fal.ai/legal/privacy-policy',
+    name: 'fal.ai',
+    url: 'https://mcp.fal.ai/mcp',
+    category: 'Creative',
+    description:
+        'Run image, video and audio models, and check what a run cost.',
+    websiteUrl: 'https://fal.ai',
+  ),
+  McpCatalogueEntry(
+    id: 'vidiq',
+    termsUrl: 'https://vidiq.com/terms/',
+    privacyUrl: 'https://vidiq.com/privacy/',
+    name: 'vidIQ',
+    url: 'https://mcp.vidiq.com/mcp',
+    category: 'Creative',
+    description:
+        'YouTube keyword research, channel and video stats, titles and '
+        'thumbnails.',
+    websiteUrl: 'https://vidiq.com',
+  ),
+  McpCatalogueEntry(
     id: 'heygen-hyperframes',
+    termsUrl: 'https://www.heygen.com/terms',
+    privacyUrl: 'https://www.heygen.com/privacy',
     name: 'HyperFrames by HeyGen',
     url: 'https://mcp.heygen.com/mcp/hyperframes/',
     category: 'Creative',
@@ -266,6 +374,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Finance ───────────────────────────────────────────────────────────
   McpCatalogueEntry(
     id: 'paypal',
+    termsUrl: 'https://www.paypal.com/us/legalhub/useragreement-full',
+    privacyUrl: 'https://www.paypal.com/us/legalhub/paypal/privacy-full',
     name: 'PayPal',
     url: 'https://mcp.paypal.com/mcp',
     category: 'Finance',
@@ -273,14 +383,61 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
 ];
 
+/// The domain a registry namespace stands for: `com.notion` → `notion.com`.
+///
+/// The registry hands out namespaces only to whoever proves they own the
+/// domain, so the namespace is the one field in a registry entry that a
+/// stranger cannot claim.
+String? namespaceDomain(String serverName) {
+  final namespace = serverName.split('/').first.trim().toLowerCase();
+  if (namespace.isEmpty) return null;
+  final parts = namespace.split('.').where((p) => p.isNotEmpty).toList();
+  if (parts.length < 2) return null;
+  return parts.reversed.join('.');
+}
+
+/// Whether [remoteUrl] is served by the same domain that publishes
+/// [serverName] — the check that separates a company's own server from a
+/// stranger's server that merely mentions the company.
+///
+/// `io.github.<user>` namespaces are refused outright. They prove only that
+/// someone holds a GitHub account, and the endpoint behind them can point
+/// anywhere, so a reader searching for "notion" could be handed a look-alike
+/// that collects the sign-in instead.
+bool isFirstPartyRemote(String serverName, String remoteUrl) {
+  final namespace = serverName.split('/').first.trim().toLowerCase();
+  if (namespace.startsWith('io.github.')) return false;
+
+  final domain = namespaceDomain(serverName);
+  final host = Uri.tryParse(remoteUrl)?.host.toLowerCase();
+  if (domain == null || host == null || host.isEmpty) return false;
+  return host == domain || host.endsWith('.$domain');
+}
+
+/// Whether the registry still stands behind this entry — `active`, and the
+/// newest version published. Deleted and superseded rows stay queryable.
+bool _isCurrentRegistryEntry(Object? meta) {
+  if (meta is! Map) return true;
+  final official = meta['io.modelcontextprotocol.registry/official'];
+  if (official is! Map) return true;
+  final status = official['status'];
+  if (status != null && status != 'active') return false;
+  return official['isLatest'] != false;
+}
+
 /// Search the official MCP registry for anything not in the catalogue.
 ///
 /// Only entries with a remote endpoint come back: a package that has to be
-/// run locally is of no use to this app.
+/// run locally is of no use to this app. Of those, only the ones the
+/// publishing domain serves itself survive [isFirstPartyRemote] — the
+/// registry is open to anyone, so an unfiltered list is a list of
+/// look-alikes waiting to be signed in to. Pass [firstPartyOnly] as false
+/// to see the rest.
 Future<List<McpCatalogueEntry>> searchMcpRegistry(
   String query, {
   http.Client? httpClient,
   int limit = 20,
+  bool firstPartyOnly = true,
 }) async {
   if (query.trim().isEmpty) return const [];
   final client = httpClient ?? http.Client();
@@ -302,9 +459,14 @@ Future<List<McpCatalogueEntry>> searchMcpRegistry(
     if (servers is! List) return const [];
 
     final results = <McpCatalogueEntry>[];
+    // The registry answers with every published version of a server, so the
+    // same connector arrives several times over. Keeping the first is enough:
+    // ids are what the rest of the app connects by.
+    final seen = <String>{};
     for (final entry in servers) {
       final server = entry is Map ? entry['server'] : null;
       if (server is! Map) continue;
+      if (entry is Map && !_isCurrentRegistryEntry(entry['_meta'])) continue;
 
       final remotes = server['remotes'];
       if (remotes is! List) continue;
@@ -317,15 +479,22 @@ Future<List<McpCatalogueEntry>> searchMcpRegistry(
       if (url == null || !url.startsWith('https://')) continue;
 
       final name = server['name']?.toString() ?? url;
+      if (firstPartyOnly && !isFirstPartyRemote(name, url)) continue;
+
+      final id = slugFor(name);
+      if (!seen.add(id)) continue;
+
       results.add(
         McpCatalogueEntry(
-          id: slugFor(name),
+          id: id,
           name: server['title']?.toString().trim().isNotEmpty == true
               ? server['title'].toString()
               : name.split('/').last,
           url: url,
           category: 'Registry',
           description: server['description']?.toString() ?? '',
+          publisher: namespaceDomain(name),
+          websiteUrl: server['websiteUrl']?.toString(),
         ),
       );
     }

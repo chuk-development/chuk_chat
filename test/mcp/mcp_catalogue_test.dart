@@ -141,6 +141,132 @@ void main() {
       expect(results.single.url, 'https://mcp.linear.app/mcp');
     });
 
+    test('refuses a server the publishing domain does not serve', () async {
+      final results = await searchMcpRegistry(
+        'notion',
+        httpClient: client({
+          'servers': [
+            {
+              'server': {
+                'name': 'com.notion/mcp',
+                'title': 'Notion',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://mcp.notion.com/mcp'},
+                ],
+              },
+            },
+            {
+              // A GitHub account proves nothing about notion.com.
+              'server': {
+                'name': 'io.github.someone/notion-plus',
+                'title': 'Notion Plus',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://notion-mcp.xyz/mcp'},
+                ],
+              },
+            },
+            {
+              // A verified domain, but pointing somewhere else entirely.
+              'server': {
+                'name': 'com.example/notion-bridge',
+                'title': 'Notion Bridge',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://collect.evil.tld/mcp'},
+                ],
+              },
+            },
+          ],
+        }),
+      );
+
+      expect(results, hasLength(1));
+      expect(results.single.url, 'https://mcp.notion.com/mcp');
+      expect(results.single.publisher, 'notion.com');
+    });
+
+    test('lets the unverified through when asked to', () async {
+      final results = await searchMcpRegistry(
+        'notion',
+        firstPartyOnly: false,
+        httpClient: client({
+          'servers': [
+            {
+              'server': {
+                'name': 'io.github.someone/notion-plus',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://notion-mcp.xyz/mcp'},
+                ],
+              },
+            },
+          ],
+        }),
+      );
+
+      expect(results, hasLength(1));
+    });
+
+    test('shows a server once, not once per published version', () async {
+      Map<String, Object?> version(String v) => {
+        'server': {
+          'name': 'com.notion/mcp',
+          'title': 'Notion',
+          'version': v,
+          'remotes': [
+            {'type': 'streamable-http', 'url': 'https://mcp.notion.com/mcp'},
+          ],
+        },
+      };
+
+      final results = await searchMcpRegistry(
+        'notion',
+        httpClient: client({
+          'servers': [version('1.0.0'), version('1.0.1'), version('1.1.0')],
+        }),
+      );
+
+      expect(results, hasLength(1));
+    });
+
+    test('skips what the registry has withdrawn or superseded', () async {
+      final results = await searchMcpRegistry(
+        'notion',
+        httpClient: client({
+          'servers': [
+            {
+              'server': {
+                'name': 'com.notion/mcp',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://mcp.notion.com/mcp'},
+                ],
+              },
+              '_meta': {
+                'io.modelcontextprotocol.registry/official': {
+                  'status': 'deleted',
+                  'isLatest': true,
+                },
+              },
+            },
+            {
+              'server': {
+                'name': 'com.linear/mcp',
+                'remotes': [
+                  {'type': 'streamable-http', 'url': 'https://mcp.linear.com/mcp'},
+                ],
+              },
+              '_meta': {
+                'io.modelcontextprotocol.registry/official': {
+                  'status': 'active',
+                  'isLatest': false,
+                },
+              },
+            },
+          ],
+        }),
+      );
+
+      expect(results, isEmpty);
+    });
+
     test('an empty query asks nothing at all', () async {
       expect(await searchMcpRegistry('   '), isEmpty);
     });
