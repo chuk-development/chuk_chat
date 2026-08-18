@@ -13,6 +13,9 @@ import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/phone_linkify.dart';
+
 class MarkdownMessage extends StatefulWidget {
   const MarkdownMessage({
     super.key,
@@ -76,6 +79,27 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
   Future<void> _onTapLink(String href) async {
     final Uri? parsed = Uri.tryParse(href);
+    final String scheme = parsed?.scheme.toLowerCase() ?? '';
+
+    // A `tel:` or `sms:` tap only hands the number to the dialer / messaging
+    // app — it never places the call by itself, so a confirm dialog buys
+    // nothing and costs a tap. The number still goes through the validator:
+    // it must be a plain number, never a USSD/MMI string like `*#06#`.
+    if (parsed != null && (scheme == 'tel' || scheme == 'sms')) {
+      final String raw = Uri.decodeComponent(parsed.path);
+      final String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+      if (InputValidator.safeTelUri(raw) != null &&
+          digits.length >= 3 &&
+          digits.length <= 15) {
+        final String prefix = raw.trimLeft().startsWith('+') ? '+' : '';
+        await launchUrl(
+          Uri(scheme: scheme, path: '$prefix$digits'),
+          mode: LaunchMode.externalApplication,
+        );
+        return;
+      }
+    }
+
     if (parsed == null ||
         !_allowedLinkSchemes.contains(parsed.scheme.toLowerCase())) {
       if (!mounted) return;
@@ -374,7 +398,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
     List<Widget> builtWidgets;
     try {
-      builtWidgets = generator.buildWidgets(widget.text, config: config);
+      builtWidgets = generator.buildWidgets(
+        linkifyPhoneNumbers(widget.text),
+        config: config,
+      );
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Markdown parsing error: $error');
