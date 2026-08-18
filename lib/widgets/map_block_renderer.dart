@@ -188,11 +188,55 @@ List<Map<String, dynamic>> _filterValidCoordItems(
   List<dynamic>? items,
 ) {
   if (items == null) return const [];
-  return items
+  final valid = items
       .whereType<Map<String, dynamic>>()
       .where((m) => _isValidLatLon(m['lat'], m['lon']))
       .toList();
+  return _dedupeCoordItems(valid);
 }
+
+/// Drops repeated places / markers from one block. A multi-pass answer often
+/// lists the same restaurant twice — once per tool round — which put the same
+/// pin and the same card on screen twice.
+///
+/// Two entries are the same when they carry the same name (case-insensitive),
+/// or, when neither is named, the same coordinates to five decimals (~1 m).
+/// Two different shops at one address stay separate. The first entry wins and
+/// the later copy only fills fields the first one is missing, so a duplicate
+/// that carries the phone number is not thrown away.
+List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items) {
+  final byKey = <String, Map<String, dynamic>>{};
+  final ordered = <Map<String, dynamic>>[];
+
+  for (final item in items) {
+    final name = (item['name'] ?? item['label'] ?? '').toString().trim();
+    final key = name.isNotEmpty
+        ? 'n:${name.toLowerCase()}'
+        : 'c:${_toDouble(item['lat']).toStringAsFixed(5)},'
+              '${_toDouble(item['lon']).toStringAsFixed(5)}';
+
+    final existing = byKey[key];
+    if (existing == null) {
+      final copy = Map<String, dynamic>.of(item);
+      byKey[key] = copy;
+      ordered.add(copy);
+      continue;
+    }
+    item.forEach((field, value) {
+      final present = existing[field];
+      final isEmpty = present == null ||
+          (present is String && present.trim().isEmpty);
+      if (isEmpty && value != null) existing[field] = value;
+    });
+  }
+
+  return ordered;
+}
+
+/// Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
+@visibleForTesting
+List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(List<dynamic>? items) =>
+    _filterValidCoordItems(items);
 
 double _mapPreviewHeight(BuildContext context) {
   final h = MediaQuery.of(context).size.height;

@@ -945,6 +945,13 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln(
       '**Image routing rules:** `web_search type:"images"` finds URLs; `<image>` renders one selected URL; `fetch_image` is only for fetch/store/vision workflows.',
     );
+    buffer.writeln(
+      '**One link per thing.** When a tool result carries both a page URL '
+      'and a preview/thumbnail URL for the same item (design candidates, '
+      'products, videos), link the page ONCE and show the preview with an '
+      '`<image>` block. Never print the thumbnail URL as a second link '
+      'beside the first — it reads as two different results.',
+    );
 
     buffer.writeln();
     buffer.writeln('### Emails');
@@ -1209,6 +1216,12 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
       );
       buffer.writeln(
         '${ruleNumber++}. Prefer `{"type":"places"...}` for destination lists; the app can compute routing after the user taps a place.',
+      );
+      buffer.writeln(
+        '${ruleNumber++}. List each place ONCE in a <map>. When several tool passes return the same place, merge into one entry with the fullest set of fields — never repeat the same name or coordinates.',
+      );
+      buffer.writeln(
+        '${ruleNumber++}. Write phone numbers in international form with a leading `+` and country code (e.g. `+41 61 317 40 00`). The app turns them into tap-to-dial links; a number without `+` is not linked.',
       );
     }
 
