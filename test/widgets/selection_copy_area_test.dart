@@ -214,6 +214,62 @@ void main() {
       expect(copied, isNot(contains(message)));
     });
 
+    /// Long-press, then drag to the end of [message]: a bare long-press only
+    /// selects the word under the finger, which is not what the toolbar copy
+    /// has to survive.
+    Future<void> selectByLongPress(
+      WidgetTester tester,
+      String message,
+    ) async {
+      final Rect box = tester.getRect(find.text(message));
+      final TestGesture gesture = await tester.startGesture(
+        Offset(box.left + 2, box.center.dy),
+      );
+      addTearDown(gesture.removePointer);
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await gesture.moveTo(Offset(box.right - 2, box.center.dy));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'long-press toolbar opens instead of throwing',
+      (tester) async {
+        // SelectionArea installs its default context menu only when the
+        // argument is omitted. Forwarding a null builder left
+        // SelectableRegionState force-unwrapping it, which threw inside
+        // drawFrame on Android and left the half-built overlay frozen on
+        // screen.
+        const String message = 'press and hold me';
+        await pumpChatLike(tester, message: message);
+
+        await selectByLongPress(tester, message);
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Copy'), findsOneWidget);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets(
+      'toolbar copy sanitizes the selection',
+      (tester) async {
+        const String message =
+            'before data:image/png;base64,AAAABBBBCCCCDDDD after';
+        await pumpChatLike(tester, message: message);
+
+        await selectByLongPress(tester, message);
+        await tester.tap(find.text('Copy'));
+        await tester.pumpAndSettle();
+
+        expect(copied, isNotEmpty);
+        expect(copied.first, contains('[image removed]'));
+        expect(copied.first, isNot(contains('base64,')));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
     testWidgets('removes its keyboard handler when disposed', (tester) async {
       await pumpChatLike(tester, message: 'gone soon');
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));

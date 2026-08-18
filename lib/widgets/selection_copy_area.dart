@@ -183,11 +183,58 @@ class SelectionCopyAreaState extends State<SelectionCopyArea> {
     await ClipboardTextSanitizer.sanitizeClipboardInPlace();
   }
 
+  /// Fallback selection toolbar, used when no builder was handed in.
+  ///
+  /// [SelectionArea] installs its own default only when the argument is
+  /// omitted — the default sits on the constructor parameter. Passing `null`
+  /// through leaves `contextMenuBuilder` null, and
+  /// `SelectableRegionState._showToolbar` force-unwraps it. On Android, where
+  /// the long-press toolbar is the normal way to copy, that threw "Null check
+  /// operator used on a null value" inside `drawFrame`: the half-built overlay
+  /// stayed on screen and the UI stopped responding.
+  ///
+  /// The copy entry sanitizes here rather than after the native copy, so the
+  /// raw selection — base64 image data included — never reaches the clipboard.
+  Widget _fallbackContextMenuBuilder(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    final List<ContextMenuButtonItem> buttonItems = selectableRegionState
+        .contextMenuButtonItems
+        .map((ContextMenuButtonItem item) {
+          final String? text = _selectedText;
+          if (item.type != ContextMenuButtonType.copy ||
+              text == null ||
+              text.isEmpty) {
+            return item;
+          }
+          return ContextMenuButtonItem(
+            type: ContextMenuButtonType.copy,
+            onPressed: () {
+              unawaited(
+                Clipboard.setData(
+                  ClipboardData(text: ClipboardTextSanitizer.sanitize(text)),
+                ),
+              );
+              selectableRegionState.hideToolbar();
+              selectableRegionState.clearSelection();
+            },
+          );
+        })
+        .toList();
+
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: selectableRegionState.contextMenuAnchors,
+      buttonItems: buttonItems,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SelectionArea(
       focusNode: widget.focusNode,
-      contextMenuBuilder: widget.contextMenuBuilder,
+      contextMenuBuilder:
+          widget.contextMenuBuilder ?? _fallbackContextMenuBuilder,
       onSelectionChanged: _handleSelectionChanged,
       child: widget.child,
     );
