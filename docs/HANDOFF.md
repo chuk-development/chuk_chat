@@ -262,7 +262,7 @@ taken. Full suite re-verified green:
 | manager | 93 pass (serial; the "flake" was parallel-load only) |
 | host | 63 pass |
 | sandbox | 58 pass (serial; the "flake" was parallel-load only) |
-| app (Flutter) | 169 pass, 3 skip (was 160; +9 tests) |
+| app (Flutter) | 172 pass, 3 skip (was 160; +12 tests) |
 
 The two "failures" are real-Docker tests starved when all 5 Python suites spin
 containers at once; each passes in isolation. Worth a fix (serialize the
@@ -325,6 +325,9 @@ credits.
    the `subagents` table persists handles and `subagent` frames already reach
    the controller, but the app drops them (`default: break`); needs an event
    class + a compact per-child view (state/progress/result/spend).
+5c. **Per-child token spend on the subagent line** — thread `tokens_spent`
+   from a child's `LoopResult` into the supervisor's `subagent_state` summary,
+   then show it on the child's line like the run's done card does.
 8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
    list (the SESSIONS tab); the BOTS tab is today's roster.
 

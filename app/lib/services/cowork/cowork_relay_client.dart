@@ -321,6 +321,41 @@ class CoworkRelayDone extends CoworkRelayInbound {
   bool get wasStopped => reason == 'estop' || reason == 'interrupted';
 }
 
+/// A child agent's lifecycle step (§7.6). Only state transitions surface here —
+/// `queued` → `running` → `succeeded`/`failed`/`cancelled` — so the thread shows
+/// the shape of a delegated fan-out without drowning in each child's own
+/// streamed output. Built from a `subagent_state` event; a `subagent_output`
+/// event (a child's delta/tool) is not turned into one of these.
+class CoworkRelaySubagent extends CoworkRelayInbound {
+  const CoworkRelaySubagent({
+    required this.subagentId,
+    required this.title,
+    required this.state,
+    this.result,
+    this.error,
+  });
+
+  /// The child's stable id (`sa_…`).
+  final String subagentId;
+
+  /// The child's title, as the parent named it. May be empty.
+  final String title;
+
+  /// The lifecycle state string the runtime reported: `queued`, `running`,
+  /// `succeeded`, `failed`, `cancelled`. Read from the protocol, never guessed.
+  final String state;
+
+  /// The child's final result, on success. Null until then.
+  final String? result;
+
+  /// The child's error text, on failure. Null otherwise.
+  final String? error;
+
+  /// True once the child has reached a terminal state.
+  bool get isTerminal =>
+      state == 'succeeded' || state == 'failed' || state == 'cancelled';
+}
+
 /// The executor reported an error.
 class CoworkRelayRunError extends CoworkRelayInbound {
   const CoworkRelayRunError(this.message);
@@ -868,9 +903,35 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         _inbound.add(
           CoworkRelayRunError('${payload['message'] ?? 'Unknown error'}'),
         );
+      case 'subagent':
+        final sub = _subagentFromPayload(payload);
+        if (sub != null) _inbound.add(sub);
       default:
         break;
     }
+  }
+
+  /// Turns a `subagent` frame into a [CoworkRelaySubagent], or null when the
+  /// wrapped event is not a `subagent_state` (a `subagent_output` delta carries
+  /// no lifecycle transition to show). Malformed frames are dropped, not thrown,
+  /// so a bad child event never breaks the socket read loop.
+  static CoworkRelaySubagent? _subagentFromPayload(Map<String, dynamic> payload) {
+    final event = payload['event'];
+    if (event is! Map) return null;
+    if (event['type'] != 'subagent_state') return null;
+    final id = event['subagent_id'];
+    final state = event['state'];
+    if (id is! String || state is! String) return null;
+    final rawTitle = event['title'];
+    final rawResult = event['result'];
+    final rawError = event['error'];
+    return CoworkRelaySubagent(
+      subagentId: id,
+      title: rawTitle is String ? rawTitle : '',
+      state: state,
+      result: rawResult is String ? rawResult : null,
+      error: rawError is String ? rawError : null,
+    );
   }
 
   /// Turns a `file` payload into a [CoworkRelayFile], decoding the base64 body
