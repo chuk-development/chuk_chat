@@ -152,6 +152,9 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
                 environment=env,
                 workspace=ctx.workspace,
                 max_iterations=config.max_iterations,
+                # Per-child spend cap (§7.6): a child stops at its token budget
+                # so a wedged or looping subagent cannot burn credits unwatched.
+                token_budget=config.limits.max_child_tokens,
                 system_prompt=config.system_prompt,
                 kill_switch=ctx.kill_switch,
                 version_workspace=config.version_workspace and ctx.branch is not None,
@@ -208,6 +211,7 @@ def build_runtime(
     environment: Environment | None = None,
     max_iterations: int = 50,
     budget: int | None = None,
+    token_budget: int | None = None,
     estop_path: str | None = None,
     system_prompt: str | None = None,
     workspace: str | None = None,
@@ -456,6 +460,7 @@ def build_runtime(
         store,
         max_iterations=max_iterations,
         budget=IterationBudget(budget if budget is not None else max_iterations),
+        token_budget=token_budget,
         kill_switch=kill,
         system_prompt=prompt,
         context_providers=[library.pending_context],

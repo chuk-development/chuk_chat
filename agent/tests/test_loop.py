@@ -137,6 +137,92 @@ def test_housekeeping_round_is_refunded(tmp_path):
     assert result.final_answer == "done"
 
 
+# -- token budget (§7.6) --------------------------------------------------
+
+
+def _usage_turn(content, total):
+    """A tool-call turn that reports ``total`` tokens spent, so a token budget
+    can be driven deterministically."""
+    r = response_from_content(content)
+    r.raw = dict(r.raw)
+    r.raw["usage"] = {"total_tokens": total}
+    return r
+
+
+def test_token_budget_stops_before_the_next_round(tmp_path):
+    # Each round costs 40 tokens; the cap is 100. Round 1 (0 spent) runs, round 2
+    # (40 spent) runs, round 3 (80 spent) runs, then 120 >= 100 stops it. So the
+    # run makes exactly 3 model calls and the overshoot is one round, never more.
+    class Spender:
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages):
+            self.calls += 1
+            return _usage_turn(ECHO_CALL_EMPTY, 40)
+
+    model = Spender()
+    loop = AgentLoop(
+        model,
+        _reg_with_echo(),
+        _store(tmp_path),
+        max_iterations=100,
+        token_budget=100,
+    )
+    result = loop.run("tk1", "go")
+    assert result.reason is StopReason.TOKEN_BUDGET_EXHAUSTED
+    assert model.calls == 3
+    assert result.tokens_spent == 120
+    assert loop.tokens_spent == 120
+
+
+def test_no_token_budget_means_no_token_stop(tmp_path):
+    model = MockModelClient([_usage_turn(ECHO_CALL_EMPTY, 10_000), "done"])
+    loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path))
+    result = loop.run("tk2", "go")
+    assert result.reason is StopReason.FINISHED
+    # Spend is still tracked even without a cap, so the app can show a cost.
+    assert result.tokens_spent == 10_000
+
+
+def test_prompt_plus_completion_counts_when_no_total(tmp_path):
+    def turn(p, c):
+        r = response_from_content(ECHO_CALL_EMPTY)
+        r.raw = {"usage": {"prompt_tokens": p, "completion_tokens": c}}
+        return r
+
+    model = MockModelClient([turn(30, 30), turn(30, 30), "done"])
+    loop = AgentLoop(
+        model, _reg_with_echo(), _store(tmp_path), max_iterations=100, token_budget=100
+    )
+    result = loop.run("tk3", "go")
+    # 0 -> run(+60) -> 60 run(+60) -> 120 >= 100 stop. Two model calls.
+    assert result.reason is StopReason.TOKEN_BUDGET_EXHAUSTED
+    assert result.tokens_spent == 120
+
+
+def test_missing_usage_does_not_advance_the_budget(tmp_path):
+    # A backend that sends no usage frame must not silently exhaust the cap; the
+    # run instead ends on its own terms (here, the bare-text answer).
+    model = MockModelClient([ECHO_CALL_EMPTY, "done"])
+    loop = AgentLoop(
+        model, _reg_with_echo(), _store(tmp_path), max_iterations=100, token_budget=50
+    )
+    result = loop.run("tk4", "go")
+    assert result.reason is StopReason.FINISHED
+    assert result.tokens_spent == 0
+
+
+def test_negative_token_budget_is_refused(tmp_path):
+    with pytest.raises(ValueError):
+        AgentLoop(
+            MockModelClient(["x"]),
+            _reg_with_echo(),
+            _store(tmp_path),
+            token_budget=-1,
+        )
+
+
 # -- two-tier kill switch -------------------------------------------------
 
 

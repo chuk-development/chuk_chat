@@ -33,7 +33,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
-from .context import ContextLadder
+from .context import ContextLadder, total_tokens_from_usage
 from .model import ModelClient, ModelResponse
 from .registry import ToolRegistry
 from .state import StateStore
@@ -176,6 +176,9 @@ class StopReason(str, Enum):
     FINISHED = "finished"
     MAX_ITERATIONS = "max_iterations"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    #: A cumulative *token* spend cap was reached — used to bound a subagent's
+    #: cost (§7.6). Distinct from BUDGET_EXHAUSTED, which counts iterations.
+    TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
     ESTOP = "estop"
     INTERRUPTED = "interrupted"
 
@@ -186,6 +189,10 @@ class LoopResult:
     final_answer: str | None
     iterations: int
     session_id: int
+    #: Total tokens (prompt + completion) the run spent, as reported by the
+    #: backend usage frames. Zero when the backend sent no usage. Lets a parent
+    #: and the app see what a child cost (§7.6).
+    tokens_spent: int = 0
 
 
 def _to_model_messages(store: StateStore, session_id: int) -> list[dict]:
@@ -202,6 +209,7 @@ class AgentLoop:
         *,
         max_iterations: int = 50,
         budget: IterationBudget | None = None,
+        token_budget: int | None = None,
         kill_switch: KillSwitch | None = None,
         system_prompt: str | Callable[[], str] | None = None,
         context_providers: Sequence[Callable[[], list[dict]]] | None = None,
@@ -212,6 +220,10 @@ class AgentLoop:
         self._store = store
         self._max_iterations = max_iterations
         self._budget = budget or IterationBudget(max_iterations)
+        if token_budget is not None and token_budget < 0:
+            raise ValueError("token_budget must be >= 0")
+        self._token_budget = token_budget
+        self._tokens_spent = 0
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
         self._context_providers = list(context_providers or [])
@@ -220,6 +232,14 @@ class AgentLoop:
     @property
     def budget(self) -> IterationBudget:
         return self._budget
+
+    @property
+    def tokens_spent(self) -> int:
+        return self._tokens_spent
+
+    @property
+    def token_budget(self) -> int | None:
+        return self._token_budget
 
     @property
     def kill_switch(self) -> KillSwitch:
@@ -286,6 +306,16 @@ class AgentLoop:
             if self._budget.exhausted():
                 reason = StopReason.BUDGET_EXHAUSTED
                 break
+            # A spend cap stops the run *before* the next model call, so the
+            # overshoot is at most the one round that crossed the line — never a
+            # further expensive turn. Checked here, accumulated after each
+            # response below.
+            if (
+                self._token_budget is not None
+                and self._tokens_spent >= self._token_budget
+            ):
+                reason = StopReason.TOKEN_BUDGET_EXHAUSTED
+                break
 
             iterations += 1
             self._budget.consume()
@@ -306,8 +336,13 @@ class AgentLoop:
 
             # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
             # prompt tokens are read — reasoning tokens must not move pressure.
+            usage = response.raw.get("usage")
             if self._ladder is not None:
-                self._ladder.record_usage(response.raw.get("usage"))
+                self._ladder.record_usage(usage)
+            # Spend accounting (§7.6): prompt + completion, for the token budget.
+            # A housekeeping round still cost tokens, so it counts here even
+            # though it is refunded against the iteration budget above.
+            self._tokens_spent += total_tokens_from_usage(usage)
 
             # A housekeeping/preflight round is refunded so it does not eat the
             # model's real thinking budget (§7.1).
@@ -362,6 +397,7 @@ class AgentLoop:
             final_answer=final_answer,
             iterations=iterations,
             session_id=session_id,
+            tokens_spent=self._tokens_spent,
         )
 
     def _drain_context(self, session_id: int) -> None:

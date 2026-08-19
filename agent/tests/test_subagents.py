@@ -17,7 +17,7 @@ import pytest
 
 from cowork_agent.environment import LocalEnvironment
 from cowork_agent.loop import KillSwitch, LoopResult, StopReason
-from cowork_agent.model import MockModelClient
+from cowork_agent.model import MockModelClient, response_from_content
 from cowork_agent.registry import ToolRegistry
 from cowork_agent.runtime import SubagentConfig, build_runtime
 from cowork_agent.state import StateStore
@@ -219,6 +219,71 @@ def test_child_runs_a_real_runtime_isolated_from_the_parent(tmp_path):
         and event["payload"].get("type") == "delta"
     ]
     assert "the child's answer" in deltas
+    config.supervisor.shutdown()
+
+
+def test_max_child_tokens_caps_a_looping_child(tmp_path):
+    """A child that never finishes and reports token usage stops at its token
+    budget instead of running to max_iterations — the §7.6 cost guard for a
+    fan-out the parent has stopped waiting on."""
+    ECHO = '<tool_call>{"name":"echo","arguments":{}}</tool_call>'
+
+    class Spender:
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages):
+            self.calls += 1
+            r = response_from_content(ECHO)
+            r.raw = dict(r.raw)
+            r.raw["usage"] = {"total_tokens": 50}
+            return r
+
+    children: list[Spender] = []
+
+    def child_model():
+        c = Spender()
+        children.append(c)
+        return c
+
+    def env_factory(task_id: str):
+        return LocalEnvironment()
+
+    config = SubagentConfig(
+        model_factory=child_model,
+        env_factory=env_factory,
+        task_id="root",
+        root=str(tmp_path / "kids"),
+        # Cap of 120 tokens: 0 -> +50 -> 50 -> +50 -> 100 -> stop before the 4th
+        # round. A child at max_iterations=30 spending 50/round would otherwise
+        # run all 30.
+        max_iterations=30,
+        limits=SubagentLimits(max_child_tokens=120),
+    )
+    parent_model = MockModelClient(
+        [
+            '<tool_call>{"name":"delegate_task","arguments":{"tasks":'
+            '[{"prompt":"loop forever","title":"kid"}]}}</tool_call>',
+            "parent is done",
+        ]
+    )
+    loop = build_runtime(
+        parent_model,
+        db_path=str(tmp_path / "parent.db"),
+        workspace=str(tmp_path / "ws"),
+        version_workspace=False,
+        enable_terminal=False,
+        subagents=config,
+    )
+    # The child's ECHO tool call misses the child's builtin registry and comes
+    # back as an error result, but the loop still spends a round each time —
+    # which is all this test needs: a child that never reaches a bare-text
+    # answer, so only the token budget can stop it.
+    result = loop.run("root", "delegate this")
+    assert result.reason is StopReason.FINISHED
+    assert len(children) == 1
+    # Capped well below max_iterations (30). Exactly 3 rounds: the 4th is stopped.
+    assert children[0].calls == 3
     config.supervisor.shutdown()
 
 
