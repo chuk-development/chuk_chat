@@ -108,6 +108,57 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
 _PROMPT_TOKEN_KEYS = ("prompt_tokens", "input_tokens", "promptTokens", "inputTokens")
 
 
+# Keys that carry a pre-summed *total* for the turn, if the backend reports one.
+_TOTAL_TOKEN_KEYS = ("total_tokens", "totalTokens")
+
+# Keys that carry *output* tokens, summed with the prompt tokens when no total
+# is reported. Cost is driven by both halves, so a spend budget counts both —
+# unlike the context-pressure figure, which reads prompt tokens only.
+_COMPLETION_TOKEN_KEYS = (
+    "completion_tokens",
+    "output_tokens",
+    "completionTokens",
+    "outputTokens",
+)
+
+
+def _first_int(usage: dict, keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        value = usage.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)) and value >= 0:
+            return int(value)
+        if isinstance(value, str):
+            try:
+                parsed = int(value.strip())
+            except ValueError:
+                continue
+            if parsed >= 0:
+                return parsed
+    return None
+
+
+def total_tokens_from_usage(usage: dict | None) -> int:
+    """Total tokens a turn spent — prompt + completion — for a **spend** budget.
+
+    Prefers a backend-reported ``total_tokens``; otherwise sums the prompt and
+    completion halves. Missing or unparseable fields count as zero, so a usage
+    frame the backend forgot to send cannot silently exhaust a budget — it just
+    does not advance it. This is deliberately different from
+    :func:`prompt_tokens_from_usage`, which the context ladder uses and which
+    must read input tokens only.
+    """
+    if not isinstance(usage, dict):
+        return 0
+    total = _first_int(usage, _TOTAL_TOKEN_KEYS)
+    if total is not None:
+        return total
+    prompt = _first_int(usage, _PROMPT_TOKEN_KEYS) or 0
+    completion = _first_int(usage, _COMPLETION_TOKEN_KEYS) or 0
+    return prompt + completion
+
+
 def prompt_tokens_from_usage(usage: dict | None) -> int | None:
     """Pull **prompt tokens only** out of a backend ``usage`` payload.
 

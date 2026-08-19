@@ -24,7 +24,10 @@ Five properties, each enforced here rather than hoped for:
    :class:`ActivityMonitor` for as long as at least one child is alive, so the
    inactivity timeout that exists to kill stalled runs cannot kill a parent that
    is doing the most useful thing it can do — waiting.
-4. **Bounded by depth, by concurrency and by pause.** ``max_depth`` stops a child
+4. **Bounded by depth, by concurrency, by pause and by token spend.** A
+   per-child ``max_child_tokens`` caps what one child may spend (§7.6 — a parent
+   that fans out and stops waiting must not let a looping child burn credits
+   unwatched); ``max_depth`` stops a child
    from recursively spawning a tree; a **per-level** semaphore caps how many
    children run at once *at each depth* (per level, not global, because a global
    gate deadlocks the moment parents hold slots while waiting for children);
@@ -95,6 +98,13 @@ DEFAULT_MAX_WAIT_S = 900.0
 #: Heartbeat period while children are alive.
 DEFAULT_HEARTBEAT_S = 5.0
 
+#: Default per-child token spend cap (prompt + completion), or ``None`` for no
+#: cap. A subagent is the one place an unbounded run is most likely — a parent
+#: fans out work and stops waiting, so a wedged or looping child would otherwise
+#: burn credits with nobody watching. ``None`` keeps the historical behaviour
+#: (bounded only by iterations); an executor sets a real number to cap spend.
+DEFAULT_MAX_CHILD_TOKENS: int | None = None
+
 #: How long a wait keeps running after the children were told to stop, so the
 #: caller sees the cancellation instead of a stale "running".
 CANCEL_GRACE_S = 30.0
@@ -148,6 +158,8 @@ class SubagentLimits:
     max_batch: int = DEFAULT_MAX_BATCH
     max_wait_s: float = DEFAULT_MAX_WAIT_S
     heartbeat_s: float = DEFAULT_HEARTBEAT_S
+    #: Per-child token spend cap (prompt + completion). ``None`` = uncapped.
+    max_child_tokens: int | None = DEFAULT_MAX_CHILD_TOKENS
 
 
 # -- the serializable handle ------------------------------------------------

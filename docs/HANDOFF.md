@@ -295,8 +295,15 @@ credits.
    (clone, per-agent model/provider, skill toggles, persona file).
 4. **Group rooms** — the §20 model, with Hermes caps (≤6 / ≤3 / ≤10), caps
    server-side/config so they tune per tier. Manager + protocol + app.
-5. **Per-subagent token budget** (§7.6 open) and **surface the subagent list in
-   the app** (handles already persist in the `subagents` table).
+5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
+   cumulative `token_budget` (prompt + completion, `StopReason.token_budget_
+   exhausted`, one-round overshoot max) and reports `LoopResult.tokens_spent`
+   even when uncapped; `build_runtime(token_budget=)` and
+   `SubagentLimits.max_child_tokens` thread it to children, so a wedged/looping
+   child cannot burn credits unwatched. Default stays uncapped (a real cap is a
+   pricing decision, not a code default); the executor's `subagent_limits` sets
+   one. **Still open:** surface the subagent list + per-child spend in the app
+   (the `subagents` table + `tokens_spent` now carry the data) — item 5b.
 6. **Wire `browser_model` in `executor.py`** — DONE. `_handle_task` now passes
    `browser_model=self._model_factory()`, a separate lazy client (opens no
    socket unless `browser_task` runs, which needs a Chromium in the sandbox), so
@@ -304,6 +311,9 @@ credits.
    unaffected. Fixed the one test that assumed exactly 2 factory calls per
    delegating task (now 3: stream, browser, child).
 7. **De-flake the parallel Docker fixture** (container fixture serialization).
+5b. **Surface the subagent list + per-child token spend in the app** — the
+   `subagents` table persists handles and `LoopResult.tokens_spent` is now on
+   the wire; the app needs a view.
 8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
    list (the SESSIONS tab); the BOTS tab is today's roster.
 
