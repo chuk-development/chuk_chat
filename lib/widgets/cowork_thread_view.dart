@@ -821,7 +821,6 @@ class _DoneEntry extends _ThreadEntry {
     final theme = Theme.of(context);
     // The label comes from the protocol's reason, never from the text.
     final label = done.wasStopped ? 'stopped' : 'done';
-    final rounds = done.iterations;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -830,7 +829,7 @@ class _DoneEntry extends _ThreadEntry {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              rounds == null ? label : '$label · $rounds rounds',
+              _summaryOf(done, label),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -838,6 +837,30 @@ class _DoneEntry extends _ThreadEntry {
         ],
       ),
     );
+  }
+
+  /// "done", "done · 3 rounds", "done · 3 rounds · 1,234 tokens" — each part
+  /// added only when the runtime actually reported it. Tokens are shown even at
+  /// zero only when the field is present, so a real "0 tokens" (no usage frame)
+  /// reads differently from an old host that never sends the field.
+  static String _summaryOf(CoworkRelayDone done, String label) {
+    final parts = <String>[label];
+    final rounds = done.iterations;
+    if (rounds != null) parts.add('$rounds rounds');
+    final tokens = done.tokensSpent;
+    if (tokens != null && tokens > 0) parts.add('${_grouped(tokens)} tokens');
+    return parts.join(' · ');
+  }
+
+  /// 1234 -> "1,234". A plain thousands separator, no locale dependency.
+  static String _grouped(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
   }
 }
 

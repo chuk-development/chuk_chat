@@ -468,6 +468,7 @@ class Executor:
                 final_answer=result.final_answer,
                 reason=result.reason.value,
                 iterations=result.iterations,
+                tokens_spent=result.tokens_spent,
             ),
         )
 

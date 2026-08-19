@@ -36,3 +36,19 @@ def test_recv_times_out_to_none():
 def test_isinstance_endpoint():
     controller, _ = loopback_pair()
     assert isinstance(controller, LoopbackEndpoint)
+
+
+def test_done_payload_carries_token_spend():
+    """The done frame reports the run's token spend so the app can show a cost
+    (§7.6). Default 0 for a run that reported no usage; the field is always
+    present so an old client's `?? 0` is never needed on a fresh host."""
+    from cowork_executor.protocol import done_payload
+
+    p = done_payload(
+        final_answer="ok", reason="finished", iterations=2, tokens_spent=1234
+    )
+    assert p["type"] == "done"
+    assert p["tokens_spent"] == 1234
+
+    default = done_payload(final_answer=None, reason="finished", iterations=1)
+    assert default["tokens_spent"] == 0

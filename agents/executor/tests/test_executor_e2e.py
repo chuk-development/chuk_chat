@@ -107,6 +107,9 @@ def test_encrypted_end_to_end_local(tmp_path):
     assert done["final_answer"] == "done"
     assert done["reason"] == "finished"
     assert done["iterations"] >= 2
+    # The spend field always rides the done frame (0 here: the mock model
+    # reports no usage), so the app never has to guess whether the host sends it.
+    assert done["tokens_spent"] == 0
 
     assert supervisor.status(agent.id).status is RuntimeStatus.STOPPED
 

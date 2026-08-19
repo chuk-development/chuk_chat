@@ -410,6 +410,38 @@ void main() {
       expect(runStates, <bool>[true, false]);
     });
 
+    testWidgets('the done card shows the run token spend when reported',
+        (tester) async {
+      final controller = await pumpView(tester);
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'host-1',
+        ),
+      );
+      controller.emit(
+        const CoworkRelayDone(reason: 'finished', iterations: 3, tokensSpent: 1234),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('done · 3 rounds · 1,234 tokens'), findsOneWidget);
+    });
+
+    testWidgets('a zero or absent token count is not shown', (tester) async {
+      final controller = await pumpView(tester);
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'host-1',
+        ),
+      );
+      // Old host: no tokensSpent field at all.
+      controller.emit(const CoworkRelayDone(reason: 'finished', iterations: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('done · 1 rounds'), findsOneWidget);
+      expect(find.textContaining('tokens'), findsNothing);
+    });
+
     testWidgets('a stop that never leaves goes back to Stop and says why',
         (tester) async {
       final controller = await pumpPaired(tester);
