@@ -54,7 +54,7 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
     {"type": "subagent",                                  # a child agent (§7.6)
      "event": {"type": "subagent_state", ...}}            #   state or streamed output
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
-     "reason": "finished", "iterations": 3}
+     "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
 
 The ``file`` event (§9, ``send_file_to_user``) is how a produced file reaches the
@@ -181,13 +181,16 @@ def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def done_payload(
-    *, final_answer: str | None, reason: str, iterations: int
+    *, final_answer: str | None, reason: str, iterations: int, tokens_spent: int = 0
 ) -> dict[str, Any]:
     return {
         "type": "done",
         "final_answer": final_answer,
         "reason": reason,
         "iterations": iterations,
+        # Prompt + completion tokens the run spent, so the app can show a cost
+        # (§7.6). Zero when the backend reported no usage.
+        "tokens_spent": tokens_spent,
     }
 
 

@@ -262,7 +262,7 @@ taken. Full suite re-verified green:
 | manager | 93 pass (serial; the "flake" was parallel-load only) |
 | host | 63 pass |
 | sandbox | 58 pass (serial; the "flake" was parallel-load only) |
-| app (Flutter) | 167 pass, 3 skip (was 160; +7 roster tests) |
+| app (Flutter) | 169 pass, 3 skip (was 160; +9 tests) |
 
 The two "failures" are real-Docker tests starved when all 5 Python suites spin
 containers at once; each passes in isolation. Worth a fix (serialize the
@@ -318,9 +318,13 @@ credits.
    this does not bite there. If a single loaded box ever runs them together, add
    a cross-process container lock or `-p no:xdist`; until then it is a
    test-harness note, not a bug.
-5b. **Surface the subagent list + per-child token spend in the app** — the
-   `subagents` table persists handles and `LoopResult.tokens_spent` is now on
-   the wire; the app needs a view.
+5b. **Surface token spend in the app** — DONE for a **run**: `done_payload`
+   carries `tokens_spent`, the relay client parses it, and the done card shows
+   "done · 3 rounds · 1,234 tokens" (hidden at zero/absent so an old host reads
+   differently from a real 0). **Still open:** the subagent *roster/list* view —
+   the `subagents` table persists handles and `subagent` frames already reach
+   the controller, but the app drops them (`default: break`); needs an event
+   class + a compact per-child view (state/progress/result/spend).
 8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
    list (the SESSIONS tab); the BOTS tab is today's roster.
 

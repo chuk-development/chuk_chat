@@ -295,7 +295,12 @@ class CoworkRelayFile extends CoworkRelayInbound {
 
 /// The run finished. The executor reports why, and how many rounds it took.
 class CoworkRelayDone extends CoworkRelayInbound {
-  const CoworkRelayDone({this.finalAnswer, this.reason, this.iterations});
+  const CoworkRelayDone({
+    this.finalAnswer,
+    this.reason,
+    this.iterations,
+    this.tokensSpent,
+  });
 
   /// The loop's own final answer, when it sent one.
   final String? finalAnswer;
@@ -306,6 +311,10 @@ class CoworkRelayDone extends CoworkRelayInbound {
 
   /// How many rounds the loop ran.
   final int? iterations;
+
+  /// Tokens the run spent (prompt + completion), for a cost readout. Null for a
+  /// host too old to report it; zero when the backend sent no usage.
+  final int? tokensSpent;
 
   /// True when the run ended because the kill switch fired, not because the
   /// agent finished. Read from the protocol's reason, never from text.
@@ -842,6 +851,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         final iterations = payload['iterations'];
         final finalAnswer = payload['final_answer'];
         final reason = payload['reason'];
+        final tokens = payload['tokens_spent'] ?? payload['tokensSpent'];
         _inbound.add(
           CoworkRelayDone(
             finalAnswer: finalAnswer is String ? finalAnswer : null,
@@ -849,6 +859,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
             iterations: iterations is int
                 ? iterations
                 : (iterations is num ? iterations.toInt() : null),
+            tokensSpent: tokens is int
+                ? tokens
+                : (tokens is num ? tokens.toInt() : null),
           ),
         );
       case 'error':
