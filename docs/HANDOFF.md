@@ -284,10 +284,13 @@ password/OAuth, no pairing).
 Ordered; each lands with tests + a commit. NONE of these touch prod or spend
 credits.
 
-1. **Roster `SESSIONS | BOTS` tab strip** in `app/` + per-bot hide/unhide.
-2. **Agent avatars** — name-derived generated face / geometric mark / uploaded /
-   AI-portrait; roster row = avatar + last-message preview + timestamp + status;
-   "Active now" strip.
+1. **Per-bot hide/unhide** — DONE (roster source + view + tests). The
+   `SESSIONS | BOTS` tab strip itself is deferred: SESSIONS needs a cross-agent
+   thread-aggregation model the app does not have; opened as its own item 1b.
+2. **Agent avatars** — DONE (name-derived `AgentAvatar`: stable hue from the
+   agent id, monogram; roster row + "Active now" strip use it). No fabricated
+   last-message preview — the codebase never invents data; the row keeps real
+   activity + timestamp. Uploaded/AI-portrait tiers wait on a byte store.
 3. **Three-field agent creation** (name, title, description) with advanced fold
    (clone, per-agent model/provider, skill toggles, persona file).
 4. **Group rooms** — the §20 model, with Hermes caps (≤6 / ≤3 / ≤10), caps
@@ -297,6 +300,8 @@ credits.
 6. **Wire `browser_model` in `executor.py`** (one line the browser milestone
    deliberately left) so `browser_task` registers when a sandbox has Chromium.
 7. **De-flake the parallel Docker fixture** (container fixture serialization).
+8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
+   list (the SESSIONS tab); the BOTS tab is today's roster.
 
 ### Gates that STILL need the user (not auto-run)
 

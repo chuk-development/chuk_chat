@@ -22,6 +22,25 @@ import 'package:cowork/services/cowork/schedule_spec.dart';
 abstract class AgentRosterSource extends ChangeNotifier {
   List<CoworkAgent> get agents;
 
+  /// The ids the user has hidden from the roster (§16.1). Hiding is a view
+  /// preference, not a delete: the agent, its threads and any live run stay
+  /// exactly as they were, so unhiding brings back the same coworker.
+  Set<String> get hiddenIds;
+
+  /// The agents that show in the roster — [agents] minus [hiddenIds].
+  List<CoworkAgent> get visibleAgents =>
+      <CoworkAgent>[for (final a in agents) if (!hiddenIds.contains(a.id)) a];
+
+  /// The agents the user has hidden, in roster order.
+  List<CoworkAgent> get hiddenAgents =>
+      <CoworkAgent>[for (final a in agents) if (hiddenIds.contains(a.id)) a];
+
+  /// Hides [id] from the roster. A no-op for an unknown or already-hidden id.
+  void hideAgent(String id);
+
+  /// Brings [id] back into the roster. A no-op if it was not hidden.
+  void unhideAgent(String id);
+
   CoworkAgent? byId(String id);
 
   /// Makes sure the agent that really runs on the paired host is listed, and
@@ -65,10 +84,25 @@ class LocalAgentRosterSource extends AgentRosterSource {
 
   final List<CoworkAgent> _agents;
   final Random _random;
+  final Set<String> _hidden = <String>{};
   int _threadCounter = 0;
 
   @override
   List<CoworkAgent> get agents => List<CoworkAgent>.unmodifiable(_agents);
+
+  @override
+  Set<String> get hiddenIds => Set<String>.unmodifiable(_hidden);
+
+  @override
+  void hideAgent(String id) {
+    if (byId(id) == null) return;
+    if (_hidden.add(id)) notifyListeners();
+  }
+
+  @override
+  void unhideAgent(String id) {
+    if (_hidden.remove(id)) notifyListeners();
+  }
 
   @override
   CoworkAgent? byId(String id) {
@@ -177,7 +211,10 @@ class LocalAgentRosterSource extends AgentRosterSource {
   void removeAgent(String id) {
     final before = _agents.length;
     _agents.removeWhere((agent) => agent.id == id);
-    if (_agents.length != before) notifyListeners();
+    // Drop any hidden mark too: an id that returns later must not inherit a
+    // stale "hidden" state from an agent that no longer exists.
+    final wasHidden = _hidden.remove(id);
+    if (_agents.length != before || wasHidden) notifyListeners();
   }
 
   int _indexOf(String agentId, {bool orNull = false}) {
