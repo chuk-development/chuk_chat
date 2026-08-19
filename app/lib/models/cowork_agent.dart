@@ -54,6 +54,7 @@ class CoworkAgent {
     required this.id,
     required this.name,
     required this.threads,
+    this.role,
     this.brief,
     this.schedule,
     this.attachmentNames = const <String>[],
@@ -64,6 +65,12 @@ class CoworkAgent {
 
   final String id;
   final String name;
+
+  /// An optional short role the user gave the coworker — "researcher",
+  /// "release manager" (§16.1 Bot Mode's "title"). Display only, exactly like
+  /// [name]: it labels the agent in the roster, it does not change what the host
+  /// runs. Null when the user left it blank.
+  final String? role;
 
   /// The standing job the user gave it at onboarding (§4). Null when the user
   /// never wrote one.
@@ -99,6 +106,7 @@ class CoworkAgent {
 
   CoworkAgent copyWith({
     String? name,
+    String? role,
     String? brief,
     ScheduleSpec? schedule,
     List<String>? attachmentNames,
@@ -110,6 +118,7 @@ class CoworkAgent {
       CoworkAgent(
         id: id,
         name: name ?? this.name,
+        role: role ?? this.role,
         brief: brief ?? this.brief,
         schedule: schedule ?? this.schedule,
         attachmentNames: attachmentNames ?? this.attachmentNames,

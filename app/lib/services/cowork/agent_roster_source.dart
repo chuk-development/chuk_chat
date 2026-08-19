@@ -51,6 +51,7 @@ abstract class AgentRosterSource extends ChangeNotifier {
   /// thread, so selecting it opens a conversation immediately.
   CoworkAgent addAgent({
     required String name,
+    String? role,
     String? brief,
     ScheduleSpec? schedule,
     List<String> attachmentNames,
@@ -139,6 +140,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
   @override
   CoworkAgent addAgent({
     required String name,
+    String? role,
     String? brief,
     ScheduleSpec? schedule,
     List<String> attachmentNames = const <String>[],
@@ -147,6 +149,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
     final agent = CoworkAgent(
       id: id,
       name: name.trim(),
+      role: (role != null && role.trim().isNotEmpty) ? role.trim() : null,
       brief: (brief != null && brief.trim().isNotEmpty) ? brief.trim() : null,
       schedule: schedule,
       attachmentNames: List<String>.unmodifiable(attachmentNames),

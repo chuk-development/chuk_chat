@@ -145,6 +145,7 @@ class _MessengerShellState extends State<MessengerShell> {
         onSubmit: (draft) {
           final agent = _roster.addAgent(
             name: draft.name,
+            role: draft.role,
             brief: draft.brief,
             schedule: draft.schedule,
             attachmentNames: draft.attachmentNames,
