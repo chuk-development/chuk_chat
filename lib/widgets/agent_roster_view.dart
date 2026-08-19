@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 
 class AgentRosterView extends StatefulWidget {
@@ -48,19 +49,26 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     return AnimatedBuilder(
       animation: widget.source,
       builder: (context, _) {
-        final agents = widget.source.agents;
+        final agents = widget.source.visibleAgents;
+        final hidden = widget.source.hiddenAgents;
+        final working = <CoworkAgent>[
+          for (final a in agents)
+            if (a.activity == AgentActivity.working) a,
+        ];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(context),
+            if (working.isNotEmpty) _activeNowStrip(context, working),
             const Divider(height: 1),
             Expanded(
-              child: agents.isEmpty
+              child: agents.isEmpty && hidden.isEmpty
                   ? _emptyState(context)
-                  : ListView.builder(
-                      itemCount: agents.length,
-                      itemBuilder: (context, index) =>
-                          _agentTile(context, agents[index]),
+                  : ListView(
+                      children: [
+                        for (final agent in agents) _agentTile(context, agent),
+                        if (hidden.isNotEmpty) _hiddenSection(context, hidden),
+                      ],
                     ),
             ),
           ],
@@ -125,12 +133,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       children: [
         ListTile(
           selected: selected,
-          leading: CircleAvatar(
-            radius: 16,
-            child: Text(
-              agent.name.isEmpty ? '?' : agent.name.characters.first.toUpperCase(),
-            ),
-          ),
+          leading: AgentAvatar(seed: agent.id, label: agent.name, radius: 16),
           title: Text(agent.name, overflow: TextOverflow.ellipsis),
           subtitle: Row(
             children: [
@@ -146,9 +149,31 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               ),
             ],
           ),
-          trailing: threads.length > 1
-              ? Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 18)
-              : null,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (threads.length > 1)
+                Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 18),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: const Icon(Icons.more_vert, size: 18),
+                onSelected: (value) {
+                  if (value == 'hide') widget.source.hideAgent(agent.id);
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(
+                    value: 'hide',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.visibility_off_outlined, size: 18),
+                      title: Text('Hide'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           onTap: () {
             setState(() {
               if (expanded && !selected) {
@@ -177,6 +202,85 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               ),
             ),
         const Divider(height: 1),
+      ],
+    );
+  }
+
+  /// A row of the coworkers working right now (§16.1 "Active now"). It is the
+  /// same truth as the activity dot in each row, hoisted to the top so a glance
+  /// answers "is anything running" without scrolling a long roster. Shown only
+  /// when something is actually working; never a placeholder.
+  Widget _activeNowStrip(BuildContext context, List<CoworkAgent> working) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Active now',
+            style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: working.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final agent = working[i];
+                return Tooltip(
+                  message: agent.name,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (agent.threads.isNotEmpty) {
+                        widget.onSelect(agent.id, agent.threads.first.key);
+                      }
+                    },
+                    child: AgentAvatar(
+                      seed: agent.id,
+                      label: agent.name,
+                      radius: 16,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The hidden coworkers, folded away at the bottom (§16.1 hide/unhide). A
+  /// hidden agent is not gone — this is where the user brings it back.
+  Widget _hiddenSection(BuildContext context, List<CoworkAgent> hidden) {
+    final theme = Theme.of(context);
+    return ExpansionTile(
+      key: const ValueKey('hidden-section'),
+      leading: const Icon(Icons.visibility_off_outlined, size: 18),
+      title: Text(
+        'Hidden (${hidden.length})',
+        style: theme.textTheme.bodyMedium,
+      ),
+      childrenPadding: EdgeInsets.zero,
+      children: [
+        for (final agent in hidden)
+          ListTile(
+            dense: true,
+            leading: AgentAvatar(
+              seed: agent.id,
+              label: agent.name,
+              radius: 14,
+              dimmed: true,
+            ),
+            title: Text(agent.name, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              onPressed: () => widget.source.unhideAgent(agent.id),
+              child: const Text('Unhide'),
+            ),
+          ),
       ],
     );
   }

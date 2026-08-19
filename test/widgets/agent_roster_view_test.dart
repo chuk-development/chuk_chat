@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/schedule_spec.dart';
+import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 
 void main() {
@@ -204,6 +205,124 @@ void main() {
       source.setSchedule('nope', ScheduleSpec.parse('every 5m'));
       source.removeAgent('nope');
       expect(source.agents, isEmpty);
+    });
+  });
+
+  group('hide / unhide (§16.1)', () {
+    test('hiding removes an agent from the visible roster, keeps it in agents',
+        () {
+      final source = LocalAgentRosterSource(random: Random(3));
+      final a = source.addAgent(name: 'amber-otter');
+      source.addAgent(name: 'cobalt-lynx');
+
+      var notified = 0;
+      source.addListener(() => notified++);
+
+      source.hideAgent(a.id);
+      expect(notified, 1);
+      expect(source.hiddenIds, contains(a.id));
+      expect(source.visibleAgents.map((e) => e.name), ['cobalt-lynx']);
+      expect(source.hiddenAgents.map((e) => e.name), ['amber-otter']);
+      // The agent itself is untouched — hiding is a view preference.
+      expect(source.byId(a.id), isNotNull);
+      expect(source.agents, hasLength(2));
+
+      source.unhideAgent(a.id);
+      expect(notified, 2);
+      expect(source.hiddenIds, isEmpty);
+      expect(source.visibleAgents, hasLength(2));
+    });
+
+    test('hiding an unknown or already-hidden id does not notify', () {
+      final source = LocalAgentRosterSource(random: Random(4));
+      final a = source.addAgent(name: 'amber-otter');
+      var notified = 0;
+      source.addListener(() => notified++);
+
+      source.hideAgent('nope');
+      expect(notified, 0);
+
+      source.hideAgent(a.id);
+      expect(notified, 1);
+      source.hideAgent(a.id); // already hidden
+      expect(notified, 1);
+    });
+
+    test('removing a hidden agent drops the hidden mark', () {
+      final source = LocalAgentRosterSource(random: Random(5));
+      final a = source.addAgent(name: 'amber-otter');
+      source.hideAgent(a.id);
+      expect(source.hiddenIds, contains(a.id));
+      source.removeAgent(a.id);
+      expect(source.hiddenIds, isEmpty);
+    });
+
+    testWidgets('the roster hides a picked agent and unhides it again',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(6));
+      source.addAgent(name: 'amber-otter');
+      source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+
+      expect(find.text('amber-otter'), findsOneWidget);
+
+      // Open the first row's menu and hide it.
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hide'));
+      await tester.pumpAndSettle();
+
+      expect(source.hiddenIds, hasLength(1));
+      expect(find.text('Hidden (1)'), findsOneWidget);
+
+      // Expand the hidden section and unhide.
+      await tester.tap(find.text('Hidden (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Unhide'));
+      await tester.pumpAndSettle();
+
+      expect(source.hiddenIds, isEmpty);
+      expect(find.text('Hidden (1)'), findsNothing);
+    });
+  });
+
+  group('active now strip (§16.1)', () {
+    testWidgets('shows the working agents and nothing when none work',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(7));
+      final a = source.addAgent(name: 'amber-otter');
+      source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+
+      expect(find.text('Active now'), findsNothing);
+
+      source.markRunning(a.id, true);
+      await tester.pumpAndSettle();
+      expect(find.text('Active now'), findsOneWidget);
+
+      source.markRunning(a.id, false);
+      await tester.pumpAndSettle();
+      expect(find.text('Active now'), findsNothing);
+    });
+  });
+
+  group('AgentAvatar (§16.1)', () {
+    test('the colour is stable for a seed and the monogram is the initial', () {
+      expect(AgentAvatar.hueOf('host:cowork-host'),
+          AgentAvatar.hueOf('host:cowork-host'));
+      expect(AgentAvatar.monogramOf('amber-otter'), 'A');
+      expect(AgentAvatar.monogramOf('  '), '?');
+      expect(AgentAvatar.monogramOf(''), '?');
+    });
+
+    test('different seeds generally differ in hue', () {
+      final hues = {
+        for (final s in ['a', 'b', 'c', 'amber-otter', 'cobalt-lynx'])
+          AgentAvatar.hueOf(s),
+      };
+      // Not a guarantee of no collision ever, but five distinct short seeds
+      // must not all fold to one hue.
+      expect(hues.length, greaterThan(1));
     });
   });
 
