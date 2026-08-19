@@ -297,8 +297,12 @@ credits.
    server-side/config so they tune per tier. Manager + protocol + app.
 5. **Per-subagent token budget** (§7.6 open) and **surface the subagent list in
    the app** (handles already persist in the `subagents` table).
-6. **Wire `browser_model` in `executor.py`** (one line the browser milestone
-   deliberately left) so `browser_task` registers when a sandbox has Chromium.
+6. **Wire `browser_model` in `executor.py`** — DONE. `_handle_task` now passes
+   `browser_model=self._model_factory()`, a separate lazy client (opens no
+   socket unless `browser_task` runs, which needs a Chromium in the sandbox), so
+   the chat stream stays free of browser-step JSON and the base image is
+   unaffected. Fixed the one test that assumed exactly 2 factory calls per
+   delegating task (now 3: stream, browser, child).
 7. **De-flake the parallel Docker fixture** (container fixture serialization).
 8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
    list (the SESSIONS tab); the BOTS tab is today's roster.
