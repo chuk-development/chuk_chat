@@ -164,11 +164,13 @@ void main() {
 
     // The suggested name is an adjective-noun; keep it and give it a job. Scope
     // the finder to the sheet: the connect bar behind it has fields too.
-    final sheetFields = find.descendant(
+    // Target the Job field by its label, not by index — the form gained a Role
+    // field, so positional indices are brittle.
+    final jobField = find.descendant(
       of: find.byType(AgentOnboardingSheet),
-      matching: find.byType(TextField),
+      matching: find.widgetWithText(TextField, 'Job'),
     );
-    await tester.enterText(sheetFields.at(1), 'weekly crypto news');
+    await tester.enterText(jobField, 'weekly crypto news');
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 

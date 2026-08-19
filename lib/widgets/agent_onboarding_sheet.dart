@@ -18,12 +18,14 @@ import 'package:cowork/services/cowork/schedule_spec.dart';
 class AgentDraft {
   const AgentDraft({
     required this.name,
+    this.role,
     this.brief,
     this.attachmentNames = const <String>[],
     this.schedule,
   });
 
   final String name;
+  final String? role;
   final String? brief;
   final List<String> attachmentNames;
   final ScheduleSpec? schedule;
@@ -50,6 +52,7 @@ class AgentOnboardingSheet extends StatefulWidget {
 class _AgentOnboardingSheetState extends State<AgentOnboardingSheet> {
   late final TextEditingController _nameController =
       TextEditingController(text: widget.suggestedName);
+  final TextEditingController _roleController = TextEditingController();
   final TextEditingController _briefController = TextEditingController();
   final TextEditingController _scheduleController = TextEditingController();
   final TextEditingController _attachmentController = TextEditingController();
@@ -63,6 +66,7 @@ class _AgentOnboardingSheetState extends State<AgentOnboardingSheet> {
   @override
   void dispose() {
     _nameController.dispose();
+    _roleController.dispose();
     _briefController.dispose();
     _scheduleController.dispose();
     _attachmentController.dispose();
@@ -105,6 +109,9 @@ class _AgentOnboardingSheetState extends State<AgentOnboardingSheet> {
     widget.onSubmit(
       AgentDraft(
         name: name,
+        role: _roleController.text.trim().isEmpty
+            ? null
+            : _roleController.text.trim(),
         brief: brief,
         attachmentNames: List<String>.unmodifiable(_attachments),
         schedule: _schedule,
@@ -130,6 +137,16 @@ class _AgentOnboardingSheetState extends State<AgentOnboardingSheet> {
                 border: const OutlineInputBorder(),
                 isDense: true,
                 errorText: _nameError,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _roleController,
+              decoration: const InputDecoration(
+                labelText: 'Role (optional)',
+                hintText: 'researcher · release manager · news editor',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
             ),
             const SizedBox(height: 12),

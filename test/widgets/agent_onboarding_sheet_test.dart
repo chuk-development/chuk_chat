@@ -23,14 +23,18 @@ void main() {
     return drafts;
   }
 
+  // Find a form field by its label, so the test does not break when the field
+  // order changes (it did when the Role field was added between Name and Job).
+  Finder field(String label) => find.widgetWithText(TextField, label);
+
   testWidgets('the auto-assigned name is prefilled and can be changed',
       (tester) async {
     final drafts = await pumpSheet(tester);
 
     expect(find.text('amber-otter'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).at(0), 'cobalt-lynx');
-    await tester.enterText(find.byType(TextField).at(1), 'watch the build');
+    await tester.enterText(field('Name'), 'cobalt-lynx');
+    await tester.enterText(field('Job'), 'watch the build');
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
@@ -38,6 +42,29 @@ void main() {
     expect(drafts.single.brief, 'watch the build');
     expect(drafts.single.schedule, isNull);
     expect(drafts.single.attachmentNames, isEmpty);
+  });
+
+  testWidgets('an optional role rides along and is trimmed', (tester) async {
+    final drafts = await pumpSheet(tester);
+
+    await tester.enterText(field('Name'), 'cobalt-lynx');
+    await tester.enterText(field('Role (optional)'), '  researcher  ');
+    await tester.enterText(field('Job'), 'watch the build');
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(drafts.single.role, 'researcher');
+  });
+
+  testWidgets('a blank role is left null, not an empty string', (tester) async {
+    final drafts = await pumpSheet(tester);
+
+    await tester.enterText(field('Name'), 'cobalt-lynx');
+    await tester.enterText(field('Job'), 'watch the build');
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(drafts.single.role, isNull);
   });
 
   testWidgets('a coworker without a job is refused', (tester) async {
@@ -53,8 +80,8 @@ void main() {
   testWidgets('a nameless coworker is refused', (tester) async {
     final drafts = await pumpSheet(tester);
 
-    await tester.enterText(find.byType(TextField).at(0), '  ');
-    await tester.enterText(find.byType(TextField).at(1), 'do a thing');
+    await tester.enterText(field('Name'), '  ');
+    await tester.enterText(field('Job'), 'do a thing');
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
@@ -66,9 +93,8 @@ void main() {
       (tester) async {
     final drafts = await pumpSheet(tester);
 
-    await tester.enterText(find.byType(TextField).at(1), 'weekly news');
-    // The schedule field is the last one on the form.
-    await tester.enterText(find.byType(TextField).last, 'every 2h');
+    await tester.enterText(field('Job'), 'weekly news');
+    await tester.enterText(field('Schedule (optional)'), 'every 2h');
     await tester.pumpAndSettle();
 
     expect(find.textContaining('every 2 hours'), findsOneWidget);
@@ -84,8 +110,8 @@ void main() {
       (tester) async {
     final drafts = await pumpSheet(tester);
 
-    await tester.enterText(find.byType(TextField).at(1), 'weekly news');
-    await tester.enterText(find.byType(TextField).last, 'every blue moon');
+    await tester.enterText(field('Job'), 'weekly news');
+    await tester.enterText(field('Schedule (optional)'), 'every blue moon');
     await tester.pumpAndSettle();
 
     expect(find.text('Not a schedule this app understands.'), findsOneWidget);
@@ -106,8 +132,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.enterText(find.byType(TextField).at(1), 'read the sheet');
-    await tester.enterText(find.byType(TextField).at(2), 'prices.xlsx');
+    await tester.enterText(field('Job'), 'read the sheet');
+    await tester.enterText(field('File name'), 'prices.xlsx');
     await tester.tap(find.widgetWithText(TextButton, 'Add'));
     await tester.pumpAndSettle();
 

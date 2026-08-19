@@ -208,6 +208,21 @@ void main() {
     });
   });
 
+  group('role (§16.1)', () {
+    testWidgets('a role shows under the name; no role means no extra line',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      source.addAgent(name: 'amber-otter', role: 'researcher');
+      source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+
+      expect(find.text('researcher'), findsOneWidget);
+      // The second agent has no role, so only the one label exists.
+      expect(find.text('amber-otter'), findsOneWidget);
+      expect(find.text('cobalt-lynx'), findsOneWidget);
+    });
+  });
+
   group('hide / unhide (§16.1)', () {
     test('hiding removes an agent from the visible roster, keeps it in agents',
         () {

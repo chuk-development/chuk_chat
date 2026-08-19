@@ -262,7 +262,7 @@ taken. Full suite re-verified green:
 | manager | 93 pass (serial; the "flake" was parallel-load only) |
 | host | 63 pass |
 | sandbox | 58 pass (serial; the "flake" was parallel-load only) |
-| app (Flutter) | 172 pass, 3 skip (was 160; +12 tests) |
+| app (Flutter) | 175 pass, 3 skip (was 160; +15 tests) |
 
 The two "failures" are real-Docker tests starved when all 5 Python suites spin
 containers at once; each passes in isolation. Worth a fix (serialize the
@@ -291,8 +291,16 @@ credits.
    agent id, monogram; roster row + "Active now" strip use it). No fabricated
    last-message preview — the codebase never invents data; the row keeps real
    activity + timestamp. Uploaded/AI-portrait tiers wait on a byte store.
-3. **Three-field agent creation** (name, title, description) with advanced fold
-   (clone, per-agent model/provider, skill toggles, persona file).
+3. **Three-field agent creation** — DONE, the honest subset. The onboarding
+   sheet already had Name + Job + optional Files/Schedule; added an optional
+   **Role** (§16.1 Bot Mode's "title"), shown under the name in the roster.
+   Role is display-only metadata the user typed, exactly like the name — it
+   does NOT fake a host-side model/skill config the executor cannot consume, so
+   the deliberately-not-faked fields (per-agent model, skill toggles) stay out
+   until the host has an agent-config API. Made the onboarding/shell tests find
+   fields by label instead of brittle positional indices while here.
+
+
 4. **Group rooms** — the §20 model, with Hermes caps (≤6 / ≤3 / ≤10), caps
    server-side/config so they tune per tier. Manager + protocol + app.
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a

@@ -135,17 +135,30 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           selected: selected,
           leading: AgentAvatar(seed: agent.id, label: agent.name, radius: 16),
           title: Text(agent.name, overflow: TextOverflow.ellipsis),
-          subtitle: Row(
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _activityDot(context, agent.activity),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '${activityLabel(agent.activity)} · '
-                  '${lastActivityLabel(agent.lastActivity, now: _now())}',
-                  style: theme.textTheme.bodySmall,
+              if (agent.role != null)
+                Text(
+                  agent.role!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
+              Row(
+                children: [
+                  _activityDot(context, agent.activity),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${activityLabel(agent.activity)} · '
+                      '${lastActivityLabel(agent.lastActivity, now: _now())}',
+                      style: theme.textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
