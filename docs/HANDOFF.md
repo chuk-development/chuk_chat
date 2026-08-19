@@ -239,3 +239,70 @@ Terse German. Money-focused (flag only money risks: bans/chargebacks/broken
 prod). No Artifact tool. Verify before claiming done; re-run subagent proofs
 (they've reported false greens here). One capable Opus subagent per focused piece,
 orchestrated; the user is fine spending tokens on subagents when asked.
+
+---
+
+## Overnight autonomous session (2026-08-20 → 21)
+
+Context: user away, "merge das all, launch subagents, build a very good working
+version by morning, set an hourly cron, keep building, research what the
+competitors have." No questions; local cron only (never cloud).
+
+**Merge: DONE.** All 15 agent branches are in `master`. The last open one,
+`agent/live-verify`, merged as `d3ce819` — its `cowork_thread_view` change
+(remove the status strip) was already achieved by `pairing-persist` on master,
+so master's superset was kept and live-verify's more descriptive test name
+taken. Full suite re-verified green:
+
+| Suite | Result |
+|-------|--------|
+| common/cowork_crypto | 65 pass |
+| agent | all pass |
+| executor | 34 pass |
+| manager | 92 pass (1 docker test flaky only under parallel load) |
+| host | 63 pass |
+| sandbox | 57 pass (1 docker test flaky only under parallel load) |
+| app (Flutter) | 160 pass, 3 skip |
+
+The two "failures" are real-Docker tests starved when all 5 Python suites spin
+containers at once; each passes in isolation. Worth a fix (serialize the
+container fixture, or a session-scoped lock) so CI on a loaded box is not red.
+
+**Competitive research (2026-08-20): Hermes shipped our moat.** Nous Research
+bundled **Bot Mode** default-on in Hermes Desktop v0.20.3 (2026-08-16), sidebar
+`SESSIONS | BOTS` in v0.20.4 (2026-08-18): agent profiles become a roster of
+named bots — role, model, memory, skills, avatar each — persistent per-bot
+thread, @mention between bots, group rooms (≤6 bots, ≤3 rounds, ≤10 msgs/send),
+per-bot routines. That is §1 of our plan, shipped first, in a GUI. Plan §16.1 +
+§17 rewritten: the "real GUI vs CLI bot" moat is dead; what still stands is
+phone-native control (they have NO mobile app), zero self-hosting, and the
+device trust model (E2E + Ed25519 + client-side approval; they use URL +
+password/OAuth, no pairing).
+
+### Overnight build backlog (from §16.1, safe to build without the user)
+
+Ordered; each lands with tests + a commit. NONE of these touch prod or spend
+credits.
+
+1. **Roster `SESSIONS | BOTS` tab strip** in `app/` + per-bot hide/unhide.
+2. **Agent avatars** — name-derived generated face / geometric mark / uploaded /
+   AI-portrait; roster row = avatar + last-message preview + timestamp + status;
+   "Active now" strip.
+3. **Three-field agent creation** (name, title, description) with advanced fold
+   (clone, per-agent model/provider, skill toggles, persona file).
+4. **Group rooms** — the §20 model, with Hermes caps (≤6 / ≤3 / ≤10), caps
+   server-side/config so they tune per tier. Manager + protocol + app.
+5. **Per-subagent token budget** (§7.6 open) and **surface the subagent list in
+   the app** (handles already persist in the `subagents` table).
+6. **Wire `browser_model` in `executor.py`** (one line the browser milestone
+   deliberately left) so `browser_task` registers when a sandbox has Chromium.
+7. **De-flake the parallel Docker fixture** (container fixture serialization).
+
+### Gates that STILL need the user (not auto-run)
+
+- Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
+  (Note: the chat-side `cowork_peers.py` fix already shipped there as `d0732c1`,
+  verified live 2026-08-20; this gate is about pointing CoWork at the prod relay,
+  not the fix itself.)
+- Any real-credit task run.
+- The by-hand release-client pairing pass (release build has burned us twice).
