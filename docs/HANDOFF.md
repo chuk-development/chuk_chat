@@ -259,10 +259,10 @@ taken. Full suite re-verified green:
 | common/cowork_crypto | 65 pass |
 | agent | all pass |
 | executor | 34 pass |
-| manager | 92 pass (1 docker test flaky only under parallel load) |
+| manager | 93 pass (serial; the "flake" was parallel-load only) |
 | host | 63 pass |
-| sandbox | 57 pass (1 docker test flaky only under parallel load) |
-| app (Flutter) | 160 pass, 3 skip |
+| sandbox | 58 pass (serial; the "flake" was parallel-load only) |
+| app (Flutter) | 167 pass, 3 skip (was 160; +7 roster tests) |
 
 The two "failures" are real-Docker tests starved when all 5 Python suites spin
 containers at once; each passes in isolation. Worth a fix (serialize the
@@ -310,7 +310,14 @@ credits.
    the chat stream stays free of browser-step JSON and the base image is
    unaffected. Fixed the one test that assumed exactly 2 factory calls per
    delegating task (now 3: stream, browser, child).
-7. **De-flake the parallel Docker fixture** (container fixture serialization).
+7. **De-flake the parallel Docker fixture** — ROOT-CAUSED, no code change
+   needed. Every package suite is green run on its own (`uv run pytest` per
+   package). The only failures appear when 5 Python suites spin Docker
+   containers **at the same time** (the overnight verifier did this) and a
+   container is starved before its first `exec`. CI runs packages separately, so
+   this does not bite there. If a single loaded box ever runs them together, add
+   a cross-process container lock or `-p no:xdist`; until then it is a
+   test-harness note, not a bug.
 5b. **Surface the subagent list + per-child token spend in the app** — the
    `subagents` table persists handles and `LoopResult.tokens_spent` is now on
    the wire; the app needs a view.
