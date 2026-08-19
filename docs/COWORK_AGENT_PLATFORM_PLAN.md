@@ -715,10 +715,52 @@ trust and brings the code form back.
 - **UI:** a messenger — roster of agents, one thread per conversation,
   Hermes-style streaming run with collapsible tool lines and **Stop**, file/
   screenshot cards.
-- **In-UI control surface (the moat, §17):** activate/deactivate skills,
-  connect/disconnect integrations, pick/see the model, live **token usage**,
-  **session runtime**, and the **cron schedule / next runs** — all in the GUI,
-  not a CLI. Slash-commands optional, never the boundary.
+- **In-UI control surface:** activate/deactivate skills, connect/disconnect
+  integrations, pick/see the model, live **token usage**, **session runtime**,
+  and the **cron schedule / next runs** — all in the GUI, not a CLI.
+  Slash-commands optional, never the boundary. (Called "the moat" until
+  2026-08-20; now table stakes — see §17.)
+
+### 16.1 Borrowed from Hermes Bot Mode (verified 2026-08-20)
+
+Nous shipped **Bot Mode** bundled and default-on in **Hermes Desktop v0.20.3
+(2026-08-16)**, with a `SESSIONS | BOTS` sidebar in **v0.20.4 (2026-08-18)**.
+It is the same product shape as §1, and it is MIT, so the design is ours to
+take rather than to re-derive. What to copy into `app/`:
+
+- **Roster as a sidebar tab strip, not a list under the sessions** — Hermes
+  ships `SESSIONS | BOTS` tabs with per-bot hide/unhide. A roster nested under
+  a session list stops scaling at ~10 agents. Our `agent_roster_view` already
+  exists; give it the tab strip.
+- **One canonical, permanent thread per agent.** In Hermes, `/new` on a bot
+  silently becomes `/compact`: a coworker you have to "start a new chat" with
+  is not a coworker. Our §7.3 context ladder is exactly the machinery that
+  makes this affordable — wire it to compaction, not to a new thread.
+- **Roster row = avatar + latest-message preview + timestamp + status**, plus
+  an "Active now" strip for agents currently working. The run view already
+  streams tool lines; the roster needs the one-line version of the same state.
+- **Avatars are identity, cheap to build, carry the whole illusion:**
+  name-derived generated face, geometric mark, uploaded image, or an
+  AI-generated portrait. Image generation is already in the backend.
+- **Creation asks three fields only** (name, title, description), with
+  clone-an-existing-agent, per-agent model/provider, per-agent skill toggles,
+  and a persona file behind an "advanced" fold. The Workspace entity (§4)
+  already holds all of it — the win is the three-field front door.
+- **Group rooms with hard caps, not free-for-all.** Hermes caps a room at
+  **six** bots, **three** serial rounds per message, **ten** messages per send.
+  Those caps are a cost control as much as a UX one, and they answer the §20
+  open question ("multi-agent group-thread model") with numbers someone has
+  already load-tested. Adopt the shape; keep the caps server-side so they tune
+  per plan tier.
+- **Scheduled work belongs to an agent, not a global cron page** — Hermes
+  namespaces routines `[bot:<name>]`. Same list, same runner (§13); the
+  ownership is what makes it legible.
+- **Cross-machine handles `@name-device`.** Needed the moment a user runs
+  agents on a laptop *and* a server; costs nothing to reserve the shape now.
+
+Deliberately **not** copied: bot-to-bot DMs via temp files (we have the frame
+protocol) and `hermes peer` as a CLI-only cross-machine path (our transport is
+the relay, §14).
 
 ---
 
@@ -729,16 +771,44 @@ sandbox, `SKILL.md` skills, cron, MCP, subagent delegation, agent memory. We are
 not inventing an unproven shape; we are **borrowing a proven one under a
 permissive licence** (§18).
 
-Where we win:
+**Correction, 2026-08-20 — the GUI moat is gone.** This section claimed "a real
+GUI control surface, not a CLI/slash-command bot" as the differentiator. Nous
+shipped **Bot Mode** in Hermes Desktop v0.20.3 (2026-08-16): agent profiles
+become a roster of named bots, each with role, model, memory, skills and avatar,
+each with a persistent thread, able to @mention each other, meet in group rooms
+and run routines — in a desktop GUI. That is §1, shipped by someone else, in a
+plugin reportedly prototyped in a day. **"We have a real app and they have a
+CLI" is no longer true and no plan may lean on it again.**
 
-- **We own the whole pipeline front to back** — the app, the backend, the relay,
-  the sandbox, model routing. Hermes is a bring-your-own-provider CLI plus
-  messaging gateways. Owning the pipeline = one integrated account, billing, and
-  experience, and control over every layer.
-- **A real GUI control surface, not a CLI/slash-command bot** (§16). Hermes is a
-  terminal/TUI + messaging platforms configured with CLI commands. Ours is a full
-  app. This is the "real app" vs "bot bolted onto Telegram" difference.
-- **API-first over browser, and no VNC credential handoff** (§8, §10).
+What still differentiates us, hardest-to-copy first:
+
+1. **The phone is the product, not a bridge.** Hermes has **no native mobile
+   app** (verified 2026-08-20). Remote access is `hermes dashboard` in a
+   browser, or a Telegram/Discord/Slack bot fronting `hermes serve`. Our whole
+   premise — message your coworkers from your phone, the work runs on your own
+   machine, the run streams into the thread — is the surface they reach through
+   someone else's messenger, where the message also crosses that platform's
+   servers in the clear.
+2. **Nothing to self-host.** Hermes remote means running `hermes serve` on a
+   VPS or a home server with provider keys in `~/.hermes/.env`. Ours: one
+   install script on the laptop, sign in with the account you already have; one
+   bill, model routing included (§7.4). Product vs distribution.
+3. **A real device trust model.** Their desktop reaches a remote gateway with a
+   URL + username/password or OAuth via the Nous Portal — **no device approval,
+   no pairing** (verified 2026-08-20). Ours: E2E frames the relay cannot read,
+   per-device Ed25519 identity, client-side approval the server cannot flip
+   (§14, §15). Stolen credentials alone do not get code execution on the
+   laptop. This is architectural, not cosmetic — they cannot bolt it on without
+   redoing their gateway auth.
+4. **We own the pipeline front to back** — app, backend, relay, sandbox, model
+   routing — so the cost levers (§7.3, §7.9) and margins are ours. Hermes is
+   bring-your-own-provider by design.
+
+Stated plainly: the roster/messenger UI is now a **known shape with a free
+reference implementation**, so it earns no premium and buys no time. Build it
+from their design (§16.1) rather than exploring it, and spend the saved effort
+on 1–3, which they cannot answer without shipping a mobile app and redoing
+their auth.
 
 ---
 
