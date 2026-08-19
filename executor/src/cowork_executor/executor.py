@@ -438,6 +438,14 @@ class Executor:
                 ),
             ),
             media_mount=self._media_mount,
+            # The browser fallback (§8) spends its rounds on a SEPARATE client:
+            # `model` above is wrapped to stream deltas into the chat, and a
+            # browser session's per-step JSON has no place in the thread. A fresh
+            # factory client is lazy — it opens no socket unless `browser_task`
+            # actually runs, which itself needs a Chromium in the sandbox
+            # (`check_fn`), so this stays out of the prompt on the browser-free
+            # base image and costs nothing there.
+            browser_model=self._model_factory(),
         )
 
         try:

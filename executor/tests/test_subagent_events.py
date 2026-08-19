@@ -27,9 +27,14 @@ def test_a_delegated_child_streams_back_over_the_sealed_channel(tmp_path):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
 
+    # The factory is called once per logical client, in order: the parent's
+    # streaming client, the browser fallback's separate client (§8 — built per
+    # task, never used here because the local sandbox has no Chromium, so its
+    # script is never read), then the delegated child's client.
     scripts = iter(
         [
             MockModelClient([DELEGATE, "the parent is done"]),  # parent
+            MockModelClient([]),  # browser (unused: no Chromium)
             MockModelClient(["the child is done"]),  # child
         ]
     )
