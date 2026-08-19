@@ -95,6 +95,11 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 
   /// One log per thread, so switching threads keeps both conversations.
   final Map<String, List<_ThreadEntry>> _logs = <String, List<_ThreadEntry>>{};
+
+  /// One line per child agent, keyed "threadKey\u0000subagentId", so a child's
+  /// state transitions update its own line instead of appending a new one each
+  /// time (§7.6). Kept beside the log because the log is append-only.
+  final Map<String, _SubagentEntry> _subagents = <String, _SubagentEntry>{};
   _AssistantEntry? _currentAssistant;
   _ReasoningEntry? _currentReasoning;
 
@@ -313,6 +318,10 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           _currentAssistant = null;
           _currentReasoning = null;
           log.add(_FileEntry(event));
+        case CoworkRelaySubagent():
+          // Asynchronous to the parent's own turn: do not close the parent's
+          // streaming bubble, just add or update the child's line.
+          _handleSubagent(log, target, event);
         case CoworkRelayDone():
           log.add(_DoneEntry(event));
           _currentAssistant = null;
@@ -337,6 +346,22 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     final entry = _AssistantEntry();
     log.add(entry);
     return entry;
+  }
+
+  void _handleSubagent(
+    List<_ThreadEntry> log,
+    String threadKey,
+    CoworkRelaySubagent event,
+  ) {
+    final key = '$threadKey\u0000${event.subagentId}';
+    final existing = _subagents[key];
+    if (existing != null) {
+      existing.update(event);
+    } else {
+      final entry = _SubagentEntry(event);
+      _subagents[key] = entry;
+      log.add(entry);
+    }
   }
 
   _ReasoningEntry _startReasoning(List<_ThreadEntry> log) {
@@ -861,6 +886,58 @@ class _DoneEntry extends _ThreadEntry {
       buffer.write(digits[i]);
     }
     return buffer.toString();
+  }
+}
+
+class _SubagentEntry extends _ThreadEntry {
+  _SubagentEntry(CoworkRelaySubagent event)
+      : title = event.title,
+        state = event.state,
+        result = event.result,
+        error = event.error;
+
+  final String title;
+  String state;
+  String? result;
+  String? error;
+
+  void update(CoworkRelaySubagent event) {
+    state = event.state;
+    if (event.result != null) result = event.result;
+    if (event.error != null) error = event.error;
+  }
+
+  @override
+  Widget build(BuildContext context, CoworkThreadView view) {
+    final theme = Theme.of(context);
+    final name = title.isEmpty ? 'subagent' : title;
+    final color = switch (state) {
+      'succeeded' => theme.colorScheme.primary,
+      'failed' => theme.colorScheme.error,
+      'cancelled' => theme.hintColor,
+      _ => theme.colorScheme.tertiary,
+    };
+    // Failure shows the child's error text; success stays a one-liner (the
+    // child's result already came back to the parent as a tool result).
+    final detail = state == 'failed' && error != null ? ' — $error' : '';
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 6),
+            child: Icon(Icons.subdirectory_arrow_right, size: 14, color: color),
+          ),
+          Expanded(
+            child: Text(
+              '$name · $state$detail',
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

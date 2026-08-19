@@ -308,6 +308,54 @@ void main() {
     await client.dispose();
   });
 
+  test('a subagent_state frame surfaces; a subagent_output frame does not',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'subagent',
+      'event': <String, dynamic>{
+        'type': 'subagent_state',
+        'subagent_id': 'sa_1',
+        'title': 'writer',
+        'state': 'running',
+      },
+    });
+    // An output delta from the child carries no lifecycle transition — dropped.
+    await host.emit(<String, dynamic>{
+      'type': 'subagent',
+      'event': <String, dynamic>{
+        'type': 'subagent_output',
+        'subagent_id': 'sa_1',
+        'title': 'writer',
+        'payload': <String, dynamic>{'type': 'delta', 'text': 'x'},
+      },
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'subagent',
+      'event': <String, dynamic>{
+        'type': 'subagent_state',
+        'subagent_id': 'sa_1',
+        'title': 'writer',
+        'state': 'succeeded',
+        'result': 'the summary',
+      },
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final subs = events.whereType<CoworkRelaySubagent>().toList();
+    expect(subs, hasLength(2));
+    expect(subs.first.state, 'running');
+    expect(subs.last.state, 'succeeded');
+    expect(subs.last.result, 'the summary');
+    expect(subs.last.isTerminal, isTrue);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
   test('a hostile frame from an unapproved device is dropped, not rendered',
       () async {
     final (client, host, socket) = await paired();

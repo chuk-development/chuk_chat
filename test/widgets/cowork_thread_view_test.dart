@@ -410,6 +410,76 @@ void main() {
       expect(runStates, <bool>[true, false]);
     });
 
+    testWidgets('a subagent line appears and updates in place, not duplicated',
+        (tester) async {
+      final controller = await pumpView(tester);
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'host-1',
+        ),
+      );
+
+      controller.emit(
+        const CoworkRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'writer',
+          state: 'running',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('writer · running'), findsOneWidget);
+
+      // Same child transitions: the one line updates, it does not stack.
+      controller.emit(
+        const CoworkRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'writer',
+          state: 'succeeded',
+          result: 'the summary',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('writer · running'), findsNothing);
+      expect(find.text('writer · succeeded'), findsOneWidget);
+    });
+
+    testWidgets('a failed subagent shows its error; a second child is its own line',
+        (tester) async {
+      final controller = await pumpView(tester);
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'host-1',
+        ),
+      );
+      controller.emit(
+        const CoworkRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'writer',
+          state: 'running',
+        ),
+      );
+      controller.emit(
+        const CoworkRelaySubagent(
+          subagentId: 'sa_2',
+          title: 'checker',
+          state: 'running',
+        ),
+      );
+      controller.emit(
+        const CoworkRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'writer',
+          state: 'failed',
+          error: 'boom',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('writer · failed — boom'), findsOneWidget);
+      expect(find.text('checker · running'), findsOneWidget);
+    });
+
     testWidgets('the done card shows the run token spend when reported',
         (tester) async {
       final controller = await pumpView(tester);
