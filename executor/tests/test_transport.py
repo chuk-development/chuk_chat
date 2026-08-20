@@ -52,3 +52,26 @@ def test_done_payload_carries_token_spend():
 
     default = done_payload(final_answer=None, reason="finished", iterations=1)
     assert default["tokens_spent"] == 0
+
+
+def test_room_turn_and_done_payloads():
+    """The room-relay frame contract (§16.1/4b): a member's turn and the end of
+    the exchange, so the app can render a room live and name why it stopped."""
+    from cowork_executor.protocol import room_done_payload, room_turn_payload
+
+    turn = room_turn_payload(round=2, agent_id="id-amber", handle="amber", text="hi")
+    assert turn == {
+        "type": "room_turn",
+        "round": 2,
+        "agent_id": "id-amber",
+        "handle": "amber",
+        "text": "hi",
+    }
+
+    done = room_done_payload(reason="rounds_exhausted", messages_sent=3, rounds=3)
+    assert done == {
+        "type": "room_done",
+        "reason": "rounds_exhausted",
+        "messages_sent": 3,
+        "rounds": 3,
+    }

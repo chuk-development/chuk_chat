@@ -87,11 +87,13 @@ class RoomRunner:
         *,
         caps: RoomCaps | None = None,
         stop: Callable[[], bool] | None = None,
+        on_turn: Callable[[RoomTurn], None] | None = None,
     ) -> None:
         self._room = room
         self._turn_fn = turn_fn
         self._caps = caps
         self._stop = stop
+        self._on_turn = on_turn
 
     def run(self, user_message: str) -> RoomOutcome:
         session = RoomSession(self._room, user_message, caps=self._caps)
@@ -128,6 +130,10 @@ class RoomRunner:
                     rounds=session.round,
                 )
             session.submit(reply)
+            if self._on_turn is not None:
+                # The turn just recorded is the last one; stream it live so the
+                # app shows the exchange as it unfolds, not only at the end.
+                self._on_turn(session.transcript[-1])
         return RoomOutcome(
             transcript=tuple(session.transcript),
             stop_reason=session.stop_reason or "finished",

@@ -116,3 +116,32 @@ def test_caps_override_lowers_the_ceiling_for_this_run():
     outcome = RoomRunner(room, turn, caps=RoomCaps(max_rounds=1)).run("@amber go")
     assert [t.handle for t in outcome.transcript] == ["amber"]
     assert outcome.stop_reason == "rounds_exhausted"
+
+
+def test_on_turn_streams_each_turn_live():
+    room = _room(["amber", "cobalt"])
+
+    def turn(ctx: RoomContext) -> str:
+        return "over to @cobalt" if ctx.speaker.handle == "amber" else "done"
+
+    streamed = []
+    outcome = RoomRunner(
+        room, turn, on_turn=lambda t: streamed.append((t.round, t.handle, t.text))
+    ).run("@amber go")
+    # Streamed live, in order, and matching the final transcript.
+    assert streamed == [(1, "amber", "over to @cobalt"), (2, "cobalt", "done")]
+    assert [(t.round, t.handle, t.text) for t in outcome.transcript] == streamed
+
+
+def test_on_turn_does_not_fire_for_a_crashed_turn():
+    room = _room(["amber", "cobalt"])
+
+    def turn(ctx: RoomContext) -> str:
+        raise RuntimeError("boom")
+
+    streamed = []
+    RoomRunner(room, turn, on_turn=streamed.append).run("everyone")
+    # The crashed turn recorded an empty transcript entry but never streamed —
+    # on_turn only fires for a real reply, so the app is not told of a turn that
+    # did not happen.
+    assert streamed == []

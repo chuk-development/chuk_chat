@@ -322,6 +322,12 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           // Asynchronous to the parent's own turn: do not close the parent's
           // streaming bubble, just add or update the child's line.
           _handleSubagent(log, target, event);
+        case CoworkRelayRoomTurn():
+        case CoworkRelayRoomDone():
+          // Group-room events belong to the room thread (RoomThreadView), not a
+          // one-agent conversation. Ignored here so the sealed switch stays
+          // exhaustive without pulling room rendering into the agent thread.
+          break;
         case CoworkRelayDone():
           log.add(_DoneEntry(event));
           _currentAssistant = null;

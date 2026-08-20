@@ -53,6 +53,11 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "data": "<base64>"}
     {"type": "subagent",                                  # a child agent (§7.6)
      "event": {"type": "subagent_state", ...}}            #   state or streamed output
+    {"type": "room_turn",                                 # one member's turn (§16.1)
+     "round": 1, "agent_id": "...", "handle": "amber",
+     "text": "..."}
+    {"type": "room_done",                                 # the room exchange ended
+     "reason": "no_more_mentions", "messages_sent": 3, "rounds": 2}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
@@ -178,6 +183,34 @@ def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
     renders the subagent list from ``event``.
     """
     return {"type": "subagent", "event": event}
+
+
+def room_turn_payload(
+    *, round: int, agent_id: str, handle: str, text: str
+) -> dict[str, Any]:
+    """One member's turn in a group room (§16.1). Streamed as it happens, so the
+    app renders the back-and-forth live rather than after the whole exchange."""
+    return {
+        "type": "room_turn",
+        "round": round,
+        "agent_id": agent_id,
+        "handle": handle,
+        "text": text,
+    }
+
+
+def room_done_payload(
+    *, reason: str, messages_sent: int, rounds: int
+) -> dict[str, Any]:
+    """The room exchange ended. ``reason`` is a RoomSession/RoomRunner stop
+    string (``no_more_mentions`` / ``rounds_exhausted`` / ``messages_exhausted``
+    / ``stopped`` / ``turn_failed``) so the app can name why without guessing."""
+    return {
+        "type": "room_done",
+        "reason": reason,
+        "messages_sent": messages_sent,
+        "rounds": rounds,
+    }
 
 
 def done_payload(

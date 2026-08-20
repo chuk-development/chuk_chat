@@ -319,9 +319,15 @@ credits.
        reads (`RoomContext.as_prompt()` = user message + prior `@handle: text`
        replies), checks a `stop()` predicate between turns (reason `stopped`),
        and turns a crashing turn into `turn_failed` instead of raising. 7 tests.
-       **Still open (4b-relay):** the real `turn_fn` that runs a member's
-       executor turn over the relay and seals each reply as a frame — the last
-       mile, needs a live executor per member.
+       4b-relay: the wire contract is DONE both ends. Executor protocol gains
+       `room_turn_payload` / `room_done_payload` (the frames a room streams);
+       `RoomRunner` gains an `on_turn` hook that fires a `RoomTurn` live after
+       each reply (never for a crashed turn); the app parses `room_turn` /
+       `room_done` into `CoworkRelayRoomTurn` / `CoworkRelayRoomDone` inbound
+       events. +2 manager, +1 executor, +2 app tests. **Still open
+       (4b-drive):** the Manager driver that binds `RoomRunner.turn_fn` /
+       `on_turn` to a live per-member executor over the relay — the last mile,
+       needs live executors, closest to the transport gate.
    4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
        (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
