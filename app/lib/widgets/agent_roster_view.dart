@@ -12,6 +12,11 @@ import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 
+/// The two ways to look at the roster (§16.1 Bot Mode's `SESSIONS | BOTS`).
+/// BOTS is the coworker list; SESSIONS is a flat, most-recent-first list of
+/// every conversation across all coworkers.
+enum RosterTab { bots, sessions }
+
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
     super.key,
@@ -43,6 +48,7 @@ class AgentRosterView extends StatefulWidget {
 
 class _AgentRosterViewState extends State<AgentRosterView> {
   final Set<String> _expanded = <String>{};
+  RosterTab _tab = RosterTab.bots;
 
   @override
   Widget build(BuildContext context) {
@@ -59,19 +65,103 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(context),
-            if (working.isNotEmpty) _activeNowStrip(context, working),
+            _tabStrip(context),
+            if (_tab == RosterTab.bots && working.isNotEmpty)
+              _activeNowStrip(context, working),
             const Divider(height: 1),
             Expanded(
-              child: agents.isEmpty && hidden.isEmpty
-                  ? _emptyState(context)
-                  : ListView(
-                      children: [
-                        for (final agent in agents) _agentTile(context, agent),
-                        if (hidden.isNotEmpty) _hiddenSection(context, hidden),
-                      ],
-                    ),
+              child: _tab == RosterTab.bots
+                  ? (agents.isEmpty && hidden.isEmpty
+                      ? _emptyState(context)
+                      : ListView(
+                          children: [
+                            for (final agent in agents)
+                              _agentTile(context, agent),
+                            if (hidden.isNotEmpty)
+                              _hiddenSection(context, hidden),
+                          ],
+                        ))
+                  : _sessionsList(context, agents),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  /// The `SESSIONS | BOTS` selector (§16.1). A plain segmented control rather
+  /// than a TabController — the two views share this widget's state, so a
+  /// separate controller lifecycle would only be ceremony.
+  Widget _tabStrip(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: SegmentedButton<RosterTab>(
+        segments: const [
+          ButtonSegment<RosterTab>(
+            value: RosterTab.bots,
+            label: Text('Bots'),
+            icon: Icon(Icons.people_alt_outlined, size: 16),
+          ),
+          ButtonSegment<RosterTab>(
+            value: RosterTab.sessions,
+            label: Text('Sessions'),
+            icon: Icon(Icons.forum_outlined, size: 16),
+          ),
+        ],
+        selected: <RosterTab>{_tab},
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        onSelectionChanged: (sel) => setState(() => _tab = sel.first),
+      ),
+    );
+  }
+
+  /// Every conversation across every (visible) coworker, most-recent first —
+  /// the SESSIONS view. Built from the roster the app already holds: agent +
+  /// thread + the thread's own last-activity. A thread that never saw activity
+  /// sorts to the bottom, never gets a fabricated time.
+  Widget _sessionsList(BuildContext context, List<CoworkAgent> agents) {
+    final theme = Theme.of(context);
+    final rows = <(CoworkAgent, CoworkThreadInfo)>[
+      for (final agent in agents)
+        for (final thread in agent.threads) (agent, thread),
+    ];
+    rows.sort((a, b) {
+      final at = a.$2.lastActivity;
+      final bt = b.$2.lastActivity;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1; // no-activity threads sink
+      if (bt == null) return -1;
+      return bt.compareTo(at); // most recent first
+    });
+    if (rows.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No conversations yet.',
+            style: TextStyle(color: theme.hintColor),
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final (agent, thread) = rows[i];
+        final selected = agent.id == widget.selectedAgentId &&
+            thread.key == widget.selectedThreadKey;
+        return ListTile(
+          selected: selected,
+          leading: AgentAvatar(seed: agent.id, label: agent.name, radius: 16),
+          title: Text(agent.name, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            '${thread.title} · '
+            '${lastActivityLabel(thread.lastActivity, now: _now())}',
+            style: theme.textTheme.bodySmall,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () => widget.onSelect(agent.id, thread.key),
         );
       },
     );

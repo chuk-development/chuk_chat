@@ -208,6 +208,48 @@ void main() {
     });
   });
 
+  group('SESSIONS | BOTS tabs (§16.1)', () {
+    testWidgets('Bots is the default; Sessions lists threads most-recent first',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(11));
+      final a = source.addAgent(name: 'amber-otter');
+      final b = source.addAgent(name: 'cobalt-lynx');
+      // Give each a distinct thread activity time.
+      source.markActivity(a.id, a.threads.first.key, DateTime(2026, 8, 13, 9));
+      source.markActivity(b.id, b.threads.first.key, DateTime(2026, 8, 13, 11));
+      final picks = await pumpRoster(tester, source);
+
+      // Default tab: Bots. The activity-dot subtitle from a bot row is present.
+      expect(find.text('waiting · 3h ago'), findsWidgets);
+
+      // Switch to Sessions.
+      await tester.tap(find.text('Sessions'));
+      await tester.pumpAndSettle();
+
+      // Both threads listed, each labelled "General · <when>".
+      expect(find.textContaining('General · '), findsNWidgets(2));
+
+      // The two agent names appear; the most recent (cobalt-lynx, 11:00) is
+      // above the older (amber-otter, 09:00).
+      final cobaltY = tester.getTopLeft(find.text('cobalt-lynx')).dy;
+      final amberY = tester.getTopLeft(find.text('amber-otter')).dy;
+      expect(cobaltY, lessThan(amberY));
+
+      // Tapping a session selects that agent's thread.
+      await tester.tap(find.text('amber-otter'));
+      expect(picks.last.$1, a.id);
+      expect(picks.last.$2, a.threads.first.key);
+    });
+
+    testWidgets('an empty Sessions tab says so', (tester) async {
+      final source = LocalAgentRosterSource(random: Random(12));
+      await pumpRoster(tester, source);
+      await tester.tap(find.text('Sessions'));
+      await tester.pumpAndSettle();
+      expect(find.text('No conversations yet.'), findsOneWidget);
+    });
+  });
+
   group('role (§16.1)', () {
     testWidgets('a role shows under the name; no role means no extra line',
         (tester) async {
