@@ -41,3 +41,59 @@ class CoworkRoomDraft {
   final String name;
   final List<CoworkRoomMember> members;
 }
+
+/// One agent turn in a room exchange, as the app shows it. Mirrors the manager's
+/// `RoomTurn`: which round it belonged to, who spoke, and what they said.
+@immutable
+class CoworkRoomTurn {
+  const CoworkRoomTurn({
+    required this.round,
+    required this.agentId,
+    required this.handle,
+    required this.text,
+  });
+
+  final int round;
+  final String agentId;
+  final String handle;
+  final String text;
+}
+
+/// Why a room exchange ended, as the host reported it. The strings match the
+/// manager's `RoomSession`/`RoomRunner` stop reasons so the UI never invents a
+/// state the host did not send.
+enum CoworkRoomStop {
+  /// No unanswered @mention was left — the exchange ran itself out.
+  noMoreMentions,
+
+  /// The three-round cap was hit.
+  roundsExhausted,
+
+  /// The ten-message-per-send cap was hit.
+  messagesExhausted,
+
+  /// The user stopped it.
+  stopped,
+
+  /// A member's turn crashed.
+  turnFailed;
+
+  /// Parse the wire string, or null for one this build does not know.
+  static CoworkRoomStop? fromWire(String? reason) => switch (reason) {
+        'no_more_mentions' => CoworkRoomStop.noMoreMentions,
+        'rounds_exhausted' => CoworkRoomStop.roundsExhausted,
+        'messages_exhausted' => CoworkRoomStop.messagesExhausted,
+        'stopped' => CoworkRoomStop.stopped,
+        'turn_failed' => CoworkRoomStop.turnFailed,
+        _ => null,
+      };
+
+  /// A short human line for the thread footer.
+  String get label => switch (this) {
+        CoworkRoomStop.noMoreMentions => 'Everyone has weighed in',
+        CoworkRoomStop.roundsExhausted => 'Reached the round limit',
+        CoworkRoomStop.messagesExhausted => 'Reached the message limit',
+        CoworkRoomStop.stopped => 'Stopped',
+        CoworkRoomStop.turnFailed => 'A coworker\'s turn failed',
+      };
+}

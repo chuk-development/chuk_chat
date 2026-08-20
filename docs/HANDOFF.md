@@ -327,9 +327,13 @@ credits.
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
        coworkers, the six-member cap enforced in the form (the rest disable at
        6, re-enable on uncheck), Create gated on a name + ≥2 members. 6 tests.
-       **Still open (4c-thread):** the room thread view — render the turns
-       grouped by round with the speaker's handle and the stop reason; wire the
-       create sheet into the messenger shell (a "＋ room" affordance).
+       4c-thread: room thread view DONE. `cowork_room.dart` gains `CoworkRoomTurn`
+       + `CoworkRoomStop` (wire-string parser + human label, matching the
+       manager's stop reasons), and `room_thread_view.dart` renders the user
+       message, each turn grouped by round with the speaker's avatar/@handle, a
+       running indicator, and a footer naming why it ended. 6 tests.
+       **Still open (4c-wire):** wire the create sheet + a room thread into the
+       messenger shell (a "＋ room" affordance, a room entry in the roster).
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
