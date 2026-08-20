@@ -361,6 +361,36 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
       state == 'succeeded' || state == 'failed' || state == 'cancelled';
 }
 
+/// One member's turn in a group room (§16.1). Streamed live as the room talks.
+class CoworkRelayRoomTurn extends CoworkRelayInbound {
+  const CoworkRelayRoomTurn({
+    required this.round,
+    required this.agentId,
+    required this.handle,
+    required this.text,
+  });
+
+  final int round;
+  final String agentId;
+  final String handle;
+  final String text;
+}
+
+/// A group-room exchange ended. [reason] is a raw stop string from the host
+/// (`no_more_mentions` / `rounds_exhausted` / `messages_exhausted` / `stopped` /
+/// `turn_failed`); the UI maps it through `CoworkRoomStop.fromWire`.
+class CoworkRelayRoomDone extends CoworkRelayInbound {
+  const CoworkRelayRoomDone({
+    required this.reason,
+    this.messagesSent,
+    this.rounds,
+  });
+
+  final String reason;
+  final int? messagesSent;
+  final int? rounds;
+}
+
 /// The executor reported an error.
 class CoworkRelayRunError extends CoworkRelayInbound {
   const CoworkRelayRunError(this.message);
@@ -911,6 +941,20 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       case 'subagent':
         final sub = _subagentFromPayload(payload);
         if (sub != null) _inbound.add(sub);
+      case 'room_turn':
+        final turn = _roomTurnFromPayload(payload);
+        if (turn != null) _inbound.add(turn);
+      case 'room_done':
+        final reason = payload['reason'];
+        if (reason is String) {
+          _inbound.add(
+            CoworkRelayRoomDone(
+              reason: reason,
+              messagesSent: CoworkRelayTool._asInt(payload['messages_sent']),
+              rounds: CoworkRelayTool._asInt(payload['rounds']),
+            ),
+          );
+        }
       default:
         break;
     }
@@ -940,6 +984,22 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       tokensSpent: rawTokens is int
           ? rawTokens
           : (rawTokens is num ? rawTokens.toInt() : null),
+    );
+  }
+
+  /// Turns a `room_turn` frame into a [CoworkRelayRoomTurn], or null when a
+  /// field is missing or the wrong type. Dropped, never thrown.
+  static CoworkRelayRoomTurn? _roomTurnFromPayload(Map<String, dynamic> payload) {
+    final agentId = payload['agent_id'];
+    final handle = payload['handle'];
+    final text = payload['text'];
+    final round = CoworkRelayTool._asInt(payload['round']);
+    if (agentId is! String || handle is! String || round == null) return null;
+    return CoworkRelayRoomTurn(
+      round: round,
+      agentId: agentId,
+      handle: handle,
+      text: text is String ? text : '',
     );
   }
 

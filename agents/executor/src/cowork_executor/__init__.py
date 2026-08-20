@@ -36,6 +36,8 @@ from .protocol import (
     stop_ack_payload,
     stop_payload,
     subagent_payload,
+    room_turn_payload,
+    room_done_payload,
     task_payload,
     tool_payload,
 )
@@ -68,6 +70,8 @@ __all__ = [
     "stop_ack_payload",
     "stop_payload",
     "subagent_payload",
+    "room_turn_payload",
+    "room_done_payload",
     "loopback_pair",
     "make_backend_model_factory",
     "resolve_backend_model_factory",

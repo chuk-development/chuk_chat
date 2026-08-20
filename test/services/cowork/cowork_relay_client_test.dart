@@ -359,6 +359,68 @@ void main() {
     await client.dispose();
   });
 
+  test('room_turn and room_done frames surface as room events', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'room_turn',
+      'round': 1,
+      'agent_id': 'id-amber',
+      'handle': 'amber',
+      'text': 'ship it',
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'room_turn',
+      'round': 2,
+      'agent_id': 'id-cobalt',
+      'handle': 'cobalt',
+      'text': 'agreed',
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'room_done',
+      'reason': 'no_more_mentions',
+      'messages_sent': 2,
+      'rounds': 2,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final turns = events.whereType<CoworkRelayRoomTurn>().toList();
+    expect(turns, hasLength(2));
+    expect(turns.first.round, 1);
+    expect(turns.first.handle, 'amber');
+    expect(turns.first.text, 'ship it');
+    expect(turns.last.agentId, 'id-cobalt');
+
+    final done = events.whereType<CoworkRelayRoomDone>().single;
+    expect(done.reason, 'no_more_mentions');
+    expect(done.messagesSent, 2);
+    expect(done.rounds, 2);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('a malformed room_turn is dropped, not surfaced', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    // Missing agent_id -> dropped.
+    await host.emit(<String, dynamic>{
+      'type': 'room_turn',
+      'round': 1,
+      'handle': 'amber',
+      'text': 'x',
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(events.whereType<CoworkRelayRoomTurn>(), isEmpty);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
   test('a hostile frame from an unapproved device is dropped, not rendered',
       () async {
     final (client, host, socket) = await paired();
