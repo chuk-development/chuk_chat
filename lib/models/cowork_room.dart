@@ -32,6 +32,32 @@ class CoworkRoomMember {
   int get hashCode => Object.hash(agentId, handle);
 }
 
+/// A group room the app knows about: an id, a name, and its members in order.
+/// Mirrors the manager's `GroupRoom`; the orchestration (turn order, caps) lives
+/// on the host, so this holds only what the app shows.
+@immutable
+class CoworkRoom {
+  const CoworkRoom({
+    required this.id,
+    required this.name,
+    required this.members,
+  });
+
+  final String id;
+  final String name;
+  final List<CoworkRoomMember> members;
+
+  /// The members' handles, in room order — the "everyone speaks" sequence.
+  List<String> get handles => <String>[for (final m in members) m.handle];
+
+  CoworkRoom copyWith({String? name, List<CoworkRoomMember>? members}) =>
+      CoworkRoom(
+        id: id,
+        name: name ?? this.name,
+        members: members ?? this.members,
+      );
+}
+
 /// What the create-room form produces: a name and the chosen members. It is not
 /// a live room yet — the host makes it real — so it carries no id.
 @immutable
