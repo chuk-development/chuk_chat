@@ -322,8 +322,14 @@ credits.
        **Still open (4b-relay):** the real `turn_fn` that runs a member's
        executor turn over the relay and seals each reply as a frame — the last
        mile, needs a live executor per member.
-   4c. **App UI** — a room thread that shows who is speaking each round and the
-       stop reason; a create-room flow (pick ≤6 coworkers).
+   4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
+       (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
+       + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
+       coworkers, the six-member cap enforced in the form (the rest disable at
+       6, re-enable on uncheck), Create gated on a name + ≥2 members. 6 tests.
+       **Still open (4c-thread):** the room thread view — render the turns
+       grouped by round with the speaker's handle and the stop reason; wire the
+       create sheet into the messenger shell (a "＋ room" affordance).
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
