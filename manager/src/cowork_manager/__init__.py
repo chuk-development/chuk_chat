@@ -14,6 +14,11 @@ from cowork_manager.containers import (
 from cowork_manager.names import random_name
 from cowork_manager.roster import Agent, RosterStore
 from cowork_manager.room_store import RoomStore
+from cowork_manager.room_runner import (
+    RoomContext,
+    RoomOutcome,
+    RoomRunner,
+)
 from cowork_manager.group_room import (
     DEFAULT_MAX_MEMBERS,
     DEFAULT_MAX_ROUNDS,
@@ -77,6 +82,9 @@ __all__ = [
     "RosterStore",
     "GroupRoom",
     "RoomStore",
+    "RoomRunner",
+    "RoomContext",
+    "RoomOutcome",
     "RoomCaps",
     "RoomError",
     "RoomMember",
