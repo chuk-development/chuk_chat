@@ -262,7 +262,7 @@ taken. Full suite re-verified green:
 | manager | 93 pass (serial; the "flake" was parallel-load only) |
 | host | 63 pass |
 | sandbox | 58 pass (serial; the "flake" was parallel-load only) |
-| app (Flutter) | 175 pass, 3 skip (was 160; +15 tests) |
+| app (Flutter) | 177 pass, 3 skip (was 160; +17 tests) |
 
 The two "failures" are real-Docker tests starved when all 5 Python suites spin
 containers at once; each passes in isolation. Worth a fix (serialize the
@@ -341,8 +341,14 @@ credits.
    state, same as the other ceilings. +2 Python tests; app tests extended.
 
 
-8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
-   list (the SESSIONS tab); the BOTS tab is today's roster.
+8. **1b: `SESSIONS | BOTS` tab strip** — DONE. The roster gained a segmented
+   `Bots | Sessions` strip (§16.1). BOTS is the coworker list (default, so all
+   existing behaviour is unchanged); SESSIONS is a flat, most-recent-first list
+   of every conversation across every visible coworker, built from the roster
+   the app already holds (agent + thread + the thread's own last-activity — a
+   thread with no activity sinks, never gets a fabricated time). Tapping a
+   session selects that thread. +2 tests (24 in the roster file).
+
 
 ### Gates that STILL need the user (not auto-run)
 
