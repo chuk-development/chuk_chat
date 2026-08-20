@@ -332,8 +332,14 @@ credits.
        manager's stop reasons), and `room_thread_view.dart` renders the user
        message, each turn grouped by round with the speaker's avatar/@handle, a
        running indicator, and a footer naming why it ended. 6 tests.
-       **Still open (4c-wire):** wire the create sheet + a room thread into the
-       messenger shell (a "＋ room" affordance, a room entry in the roster).
+       4c-wire (part 1): `CoworkRoom` model (id + name + members) +
+       `LocalRoomSource` (a ChangeNotifier room store mirroring
+       `LocalAgentRosterSource`: addRoom assigns an id and enforces the
+       ≥2/≤6/unique rules defensively, byId, removeRoom). 7 tests. **Still open
+       (4c-shell):** wire the create sheet + `RoomSource` + a room-thread pane
+       into the messenger shell — a delicate widget (layout/socket lifecycle),
+       and a room cannot run turns until 4b-relay, so the shell wiring waits on
+       the room-relay contract rather than half-wiring a room that cannot talk.
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
