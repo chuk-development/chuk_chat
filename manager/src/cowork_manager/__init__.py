@@ -23,6 +23,7 @@ from cowork_manager.room_driver import (
     OFFLINE_REPLY,
     RoomDriver,
 )
+from cowork_manager.room_binding import RoomBinding
 from cowork_manager.group_room import (
     DEFAULT_MAX_MEMBERS,
     DEFAULT_MAX_ROUNDS,
@@ -88,6 +89,7 @@ __all__ = [
     "RoomStore",
     "RoomRunner",
     "RoomDriver",
+    "RoomBinding",
     "OFFLINE_REPLY",
     "RoomContext",
     "RoomOutcome",
