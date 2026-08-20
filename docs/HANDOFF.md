@@ -308,8 +308,11 @@ credits.
    cross-machine `@name-device`), and `RoomSession` — the turn driver that
    enforces the caps and reports why it stopped (`no_more_mentions` /
    `rounds_exhausted` / `messages_exhausted`). 19 tests. **Still open:**
-   4a. **Room store** — persist rooms/membership in the manager (a `rooms` +
-       `room_members` table beside the roster), CRUD, the ≤6 cap at the DB edge.
+   4a. **Room store** — DONE. `manager/room_store.py`: `rooms` + `room_members`
+       tables, CRUD, member order by `position`, the ≤6 cap enforced at the DB
+       edge (count before insert) and again by `GroupRoom` on rehydration, caps
+       persisted per-room, `ON DELETE CASCADE` so deleting a room drops its
+       members. 10 tests.
    4b. **Executor wiring** — a room turn = one executor turn per speaker; feed
        `RoomSession` real outputs, seal each turn as a frame, respect Stop.
    4c. **App UI** — a room thread that shows who is speaking each round and the
