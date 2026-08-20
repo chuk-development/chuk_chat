@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from .backend import make_backend_model_factory, resolve_backend_model_factory
 from .controller import ControllerSession
+from .room_sender import make_room_task_sender
 from .environment import SandboxEnvironment
 from .executor import Executor, ModelFactory, StreamingModelClient
 from .protocol import (
@@ -46,6 +47,7 @@ from .transport import LoopbackEndpoint, loopback_pair
 
 __all__ = [
     "ControllerSession",
+    "make_room_task_sender",
     "INBOUND_METHODS",
     "Executor",
     "ExecutorFactory",
