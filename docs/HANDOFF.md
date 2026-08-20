@@ -325,9 +325,15 @@ credits.
        each reply (never for a crashed turn); the app parses `room_turn` /
        `room_done` into `CoworkRelayRoomTurn` / `CoworkRelayRoomDone` inbound
        events. +2 manager, +1 executor, +2 app tests. **Still open
-       (4b-drive):** the Manager driver that binds `RoomRunner.turn_fn` /
-       `on_turn` to a live per-member executor over the relay — the last mile,
-       needs live executors, closest to the transport gate.
+       (4b-drive):** DONE (routing + offline handling). `manager/room_driver.py`
+       `RoomDriver` fills `RoomRunner`'s turn seam with per-member routing —
+       each turn goes to *that member's* agent via a `member_runner(member,
+       prompt) -> reply|None` seam — and an offline member (None) gets a fixed
+       `OFFLINE_REPLY` placeholder that carries no @mention, so a member whose
+       executor is down neither crashes the room nor drags a coworker into a
+       fresh round. Streams via on_turn, honours stop + caps. 7 tests.
+       **Still open (4b-exec):** the real `member_runner` that runs a member's
+       executor turn over the relay — needs live executors, the transport gate.
    4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
        (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of

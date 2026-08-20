@@ -19,6 +19,10 @@ from cowork_manager.room_runner import (
     RoomOutcome,
     RoomRunner,
 )
+from cowork_manager.room_driver import (
+    OFFLINE_REPLY,
+    RoomDriver,
+)
 from cowork_manager.group_room import (
     DEFAULT_MAX_MEMBERS,
     DEFAULT_MAX_ROUNDS,
@@ -83,6 +87,8 @@ __all__ = [
     "GroupRoom",
     "RoomStore",
     "RoomRunner",
+    "RoomDriver",
+    "OFFLINE_REPLY",
     "RoomContext",
     "RoomOutcome",
     "RoomCaps",
