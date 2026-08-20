@@ -336,7 +336,15 @@ credits.
        is the host's registry of reachable members — register/unregister,
        reconnect last-writer-wins, thread-safe; member_runner() reads it per call
        and returns None for an offline member. TaskSender stays the seam. 7
-       tests. **Still open (4b-exec-relay):** the real TaskSender over the relay.
+       tests. 4b-exec-relay: DONE. `executor/room_sender.py`
+       `make_room_task_sender` wraps one ControllerSession into the TaskSender
+       RoomBinding registers — send the room prompt as a task, return the done
+       frame's final_answer (None on error/timeout/empty -> offline placeholder);
+       room turns ride a `room:<id>` session_key. 3 tests incl. a full
+       RoomBinding -> RoomDriver -> two real encrypted executors end-to-end over
+       the sealed loopback. The room path is proven end to end **locally**; the
+       only remaining gate is pointing the members' controllers at live executors
+       over the prod relay — the user-gated transport deploy.
    4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
        (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
