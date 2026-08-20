@@ -347,11 +347,14 @@ credits.
        4c-wire (part 1): `CoworkRoom` model (id + name + members) +
        `LocalRoomSource` (a ChangeNotifier room store mirroring
        `LocalAgentRosterSource`: addRoom assigns an id and enforces the
-       ≥2/≤6/unique rules defensively, byId, removeRoom). 7 tests. **Still open
-       (4c-shell):** wire the create sheet + `RoomSource` + a room-thread pane
-       into the messenger shell — a delicate widget (layout/socket lifecycle),
-       and a room cannot run turns until 4b-relay, so the shell wiring waits on
-       the room-relay contract rather than half-wiring a room that cannot talk.
+       ≥2/≤6/unique rules defensively, byId, removeRoom). 7 tests.
+       4c-shell (part 1): `RoomListView` DONE — a thin view over `RoomSource`
+       (like `AgentRosterView`): one row per room with name, an overlapped stack
+       of member avatars + a "+N" chip, a member count, a ＋ New-room affordance,
+       and live updates. 5 tests. **Still open (4c-mount):** mount `RoomListView`
+       + the create sheet into the messenger shell and render the selected room
+       in the detail pane (`RoomThreadView`) — the delicate socket/layout rewire,
+       best done alongside 4b-exec so an opened room can actually stream.
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
