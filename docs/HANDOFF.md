@@ -313,8 +313,15 @@ credits.
        edge (count before insert) and again by `GroupRoom` on rehydration, caps
        persisted per-room, `ON DELETE CASCADE` so deleting a room drops its
        members. 10 tests.
-   4b. **Executor wiring** — a room turn = one executor turn per speaker; feed
-       `RoomSession` real outputs, seal each turn as a frame, respect Stop.
+   4b. **Room runner** — DONE (orchestration + context + stop seam).
+       `manager/room_runner.py`: `RoomRunner` drives a `RoomSession` through a
+       `turn_fn(RoomContext) -> str` seam, builds the shared context each speaker
+       reads (`RoomContext.as_prompt()` = user message + prior `@handle: text`
+       replies), checks a `stop()` predicate between turns (reason `stopped`),
+       and turns a crashing turn into `turn_failed` instead of raising. 7 tests.
+       **Still open (4b-relay):** the real `turn_fn` that runs a member's
+       executor turn over the relay and seals each reply as a frame — the last
+       mile, needs a live executor per member.
    4c. **App UI** — a room thread that shows who is speaking each round and the
        stop reason; a create-room flow (pick ≤6 coworkers).
 
