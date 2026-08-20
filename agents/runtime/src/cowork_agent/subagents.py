@@ -186,6 +186,9 @@ class SubagentRecord:
     finished_at: float | None = None
     events: int = 0
     iterations: int = 0
+    #: Tokens (prompt + completion) this child spent, from its LoopResult. Lets
+    #: the app show a per-child cost next to the run's own (§7.6).
+    tokens_spent: int = 0
     result: str | None = None
     error: str | None = None
     stop_reason: str | None = None
@@ -221,6 +224,8 @@ class SubagentRecord:
             "title": self.title,
             "state": self.state.value,
         }
+        if self.tokens_spent > 0:
+            out["tokens_spent"] = self.tokens_spent
         if self.result is not None:
             out["result"] = _cap(self.result, RESULT_TEXT_CAP)
         if self.error is not None:
@@ -347,6 +352,7 @@ _TERMINAL_STATE = {
     StopReason.ESTOP: SubagentState.CANCELLED,
     StopReason.MAX_ITERATIONS: SubagentState.FAILED,
     StopReason.BUDGET_EXHAUSTED: SubagentState.FAILED,
+    StopReason.TOKEN_BUDGET_EXHAUSTED: SubagentState.FAILED,
 }
 
 
@@ -652,6 +658,7 @@ class SubagentSupervisor:
             error=error,
             stop_reason=result.reason.value,
             iterations=result.iterations,
+            tokens_spent=result.tokens_spent,
         )
 
     def _finish(
@@ -663,6 +670,7 @@ class SubagentSupervisor:
         error: str | None = None,
         stop_reason: str | None = None,
         iterations: int = 0,
+        tokens_spent: int = 0,
     ) -> None:
         record = live.record
         record.state = state
@@ -671,6 +679,7 @@ class SubagentSupervisor:
         record.error = _cap(error, ERROR_TEXT_CAP) if error else None
         record.stop_reason = stop_reason
         record.iterations = iterations
+        record.tokens_spent = tokens_spent
         self._collect_git(live)
         self._persist(live, force=True)
         self._emit_state(record)

@@ -341,6 +341,7 @@ void main() {
         'title': 'writer',
         'state': 'succeeded',
         'result': 'the summary',
+        'tokens_spent': 4321,
       },
     });
     await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -348,8 +349,10 @@ void main() {
     final subs = events.whereType<CoworkRelaySubagent>().toList();
     expect(subs, hasLength(2));
     expect(subs.first.state, 'running');
+    expect(subs.first.tokensSpent, isNull);
     expect(subs.last.state, 'succeeded');
     expect(subs.last.result, 'the summary');
+    expect(subs.last.tokensSpent, 4321);
     expect(subs.last.isTerminal, isTrue);
 
     await sub.cancel();

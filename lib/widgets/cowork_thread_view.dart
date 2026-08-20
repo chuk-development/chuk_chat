@@ -894,17 +894,20 @@ class _SubagentEntry extends _ThreadEntry {
       : title = event.title,
         state = event.state,
         result = event.result,
-        error = event.error;
+        error = event.error,
+        tokensSpent = event.tokensSpent;
 
   final String title;
   String state;
   String? result;
   String? error;
+  int? tokensSpent;
 
   void update(CoworkRelaySubagent event) {
     state = event.state;
     if (event.result != null) result = event.result;
     if (event.error != null) error = event.error;
+    if (event.tokensSpent != null) tokensSpent = event.tokensSpent;
   }
 
   @override
@@ -918,8 +921,13 @@ class _SubagentEntry extends _ThreadEntry {
       _ => theme.colorScheme.tertiary,
     };
     // Failure shows the child's error text; success stays a one-liner (the
-    // child's result already came back to the parent as a tool result).
+    // child's result already came back to the parent as a tool result). The
+    // token spend rides along once the child reports it (§7.6).
     final detail = state == 'failed' && error != null ? ' — $error' : '';
+    final tokens = tokensSpent;
+    final cost = (tokens != null && tokens > 0)
+        ? ' · ${_groupedTokens(tokens)} tokens'
+        : '';
     return Padding(
       padding: const EdgeInsets.only(left: 12, bottom: 6),
       child: Row(
@@ -931,13 +939,25 @@ class _SubagentEntry extends _ThreadEntry {
           ),
           Expanded(
             child: Text(
-              '$name · $state$detail',
+              '$name · $state$cost$detail',
               style: theme.textTheme.bodySmall?.copyWith(color: color),
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// 1234 -> "1,234". Mirrors the done card's grouping; kept local so the two
+  /// entry classes stay independent.
+  static String _groupedTokens(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
   }
 }
 
