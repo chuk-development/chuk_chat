@@ -332,8 +332,11 @@ credits.
        `OFFLINE_REPLY` placeholder that carries no @mention, so a member whose
        executor is down neither crashes the room nor drags a coworker into a
        fresh round. Streams via on_turn, honours stop + caps. 7 tests.
-       **Still open (4b-exec):** the real `member_runner` that runs a member's
-       executor turn over the relay — needs live executors, the transport gate.
+       4b-exec (routing layer): DONE. `manager/room_binding.py` `RoomBinding`
+       is the host's registry of reachable members — register/unregister,
+       reconnect last-writer-wins, thread-safe; member_runner() reads it per call
+       and returns None for an offline member. TaskSender stays the seam. 7
+       tests. **Still open (4b-exec-relay):** the real TaskSender over the relay.
    4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
        (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
