@@ -301,8 +301,21 @@ credits.
    fields by label instead of brittle positional indices while here.
 
 
-4. **Group rooms** — the §20 model, with Hermes caps (≤6 / ≤3 / ≤10), caps
-   server-side/config so they tune per tier. Manager + protocol + app.
+4. **Group rooms** — orchestration core DONE; wiring is split out below.
+   `manager/group_room.py` is the pure, transport-free heart: `GroupRoom`
+   (immutable, ≤6 members, unique handles/ids), `RoomCaps` (Hermes 6/3/10,
+   configurable), `parse_mentions` (known-handle-only, ordered, deduped, honours
+   cross-machine `@name-device`), and `RoomSession` — the turn driver that
+   enforces the caps and reports why it stopped (`no_more_mentions` /
+   `rounds_exhausted` / `messages_exhausted`). 19 tests. **Still open:**
+   4a. **Room store** — persist rooms/membership in the manager (a `rooms` +
+       `room_members` table beside the roster), CRUD, the ≤6 cap at the DB edge.
+   4b. **Executor wiring** — a room turn = one executor turn per speaker; feed
+       `RoomSession` real outputs, seal each turn as a frame, respect Stop.
+   4c. **App UI** — a room thread that shows who is speaking each round and the
+       stop reason; a create-room flow (pick ≤6 coworkers).
+
+
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
    cumulative `token_budget` (prompt + completion, `StopReason.token_budget_
    exhausted`, one-round overshoot max) and reports `LoopResult.tokens_spent`
