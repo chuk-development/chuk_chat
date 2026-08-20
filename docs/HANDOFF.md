@@ -333,9 +333,14 @@ credits.
    the `subagents` table persists handles and `subagent` frames already reach
    the controller, but the app drops them (`default: break`); needs an event
    class + a compact per-child view (state/progress/result/spend).
-5c. **Per-child token spend on the subagent line** — thread `tokens_spent`
-   from a child's `LoopResult` into the supervisor's `subagent_state` summary,
-   then show it on the child's line like the run's done card does.
+5c. **Per-child token spend on the subagent line** — DONE. A child's
+   `LoopResult.tokens_spent` now flows into its `SubagentRecord` and its
+   `subagent_state` summary (omitted at zero), the relay client parses it onto
+   `CoworkRelaySubagent.tokensSpent`, and the child's line reads "writer ·
+   succeeded · 4,321 tokens". `TOKEN_BUDGET_EXHAUSTED` maps to a FAILED child
+   state, same as the other ceilings. +2 Python tests; app tests extended.
+
+
 8. **1b: `SESSIONS | BOTS` tab strip** — needs a flat cross-agent recent-thread
    list (the SESSIONS tab); the BOTS tab is today's roster.
 

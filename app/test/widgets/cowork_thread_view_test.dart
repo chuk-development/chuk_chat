@@ -430,18 +430,20 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('writer · running'), findsOneWidget);
 
-      // Same child transitions: the one line updates, it does not stack.
+      // Same child transitions: the one line updates, it does not stack, and
+      // the child's token spend shows once reported.
       controller.emit(
         const CoworkRelaySubagent(
           subagentId: 'sa_1',
           title: 'writer',
           state: 'succeeded',
           result: 'the summary',
+          tokensSpent: 4321,
         ),
       );
       await tester.pumpAndSettle();
       expect(find.text('writer · running'), findsNothing);
-      expect(find.text('writer · succeeded'), findsOneWidget);
+      expect(find.text('writer · succeeded · 4,321 tokens'), findsOneWidget);
     });
 
     testWidgets('a failed subagent shows its error; a second child is its own line',

@@ -333,6 +333,7 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
     required this.state,
     this.result,
     this.error,
+    this.tokensSpent,
   });
 
   /// The child's stable id (`sa_…`).
@@ -350,6 +351,10 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
 
   /// The child's error text, on failure. Null otherwise.
   final String? error;
+
+  /// Tokens (prompt + completion) the child spent. Null when the runtime did
+  /// not report any (a child that reported no usage omits it).
+  final int? tokensSpent;
 
   /// True once the child has reached a terminal state.
   bool get isTerminal =>
@@ -925,12 +930,16 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     final rawTitle = event['title'];
     final rawResult = event['result'];
     final rawError = event['error'];
+    final rawTokens = event['tokens_spent'] ?? event['tokensSpent'];
     return CoworkRelaySubagent(
       subagentId: id,
       title: rawTitle is String ? rawTitle : '',
       state: state,
       result: rawResult is String ? rawResult : null,
       error: rawError is String ? rawError : null,
+      tokensSpent: rawTokens is int
+          ? rawTokens
+          : (rawTokens is num ? rawTokens.toInt() : null),
     );
   }
 

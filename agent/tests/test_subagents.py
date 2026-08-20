@@ -134,6 +134,36 @@ def test_child_result_reaches_the_parent(tmp_path):
     supervisor.shutdown()
 
 
+def test_child_token_spend_reaches_the_parent(tmp_path):
+    """A child's LoopResult.tokens_spent flows into its record and its
+    subagent_state summary, so the app can show a per-child cost (§7.6)."""
+
+    def spender(ctx: ChildContext) -> LoopResult:
+        return LoopResult(
+            reason=StopReason.FINISHED,
+            final_answer="done",
+            iterations=2,
+            session_id=1,
+            tokens_spent=4321,
+        )
+
+    supervisor = _supervisor(tmp_path, spender)
+    out = supervisor.delegate([{"prompt": "crunch", "title": "worker"}])
+    supervisor.shutdown()
+
+    assert out["subagents"][0]["tokens_spent"] == 4321
+    record = supervisor.records()[0]
+    assert record.tokens_spent == 4321
+    # A zero-spend child omits the field (kept out of the model-facing summary).
+
+
+def test_zero_spend_child_omits_tokens_in_the_summary(tmp_path):
+    supervisor = _supervisor(tmp_path, _echo_runner)  # _done -> tokens_spent 0
+    out = supervisor.delegate([{"prompt": "x", "title": "t"}])
+    supervisor.shutdown()
+    assert "tokens_spent" not in out["subagents"][0]
+
+
 def test_child_gets_its_own_task_id_db_and_session(tmp_path):
     seen: list[ChildContext] = []
 
