@@ -366,6 +366,7 @@ void main() {
 
     await host.emit(<String, dynamic>{
       'type': 'room_turn',
+      'room_id': 'r1',
       'round': 1,
       'agent_id': 'id-amber',
       'handle': 'amber',
@@ -373,6 +374,7 @@ void main() {
     });
     await host.emit(<String, dynamic>{
       'type': 'room_turn',
+      'room_id': 'r1',
       'round': 2,
       'agent_id': 'id-cobalt',
       'handle': 'cobalt',
@@ -380,6 +382,7 @@ void main() {
     });
     await host.emit(<String, dynamic>{
       'type': 'room_done',
+      'room_id': 'r1',
       'reason': 'no_more_mentions',
       'messages_sent': 2,
       'rounds': 2,
@@ -388,12 +391,14 @@ void main() {
 
     final turns = events.whereType<CoworkRelayRoomTurn>().toList();
     expect(turns, hasLength(2));
+    expect(turns.first.roomId, 'r1');
     expect(turns.first.round, 1);
     expect(turns.first.handle, 'amber');
     expect(turns.first.text, 'ship it');
     expect(turns.last.agentId, 'id-cobalt');
 
     final done = events.whereType<CoworkRelayRoomDone>().single;
+    expect(done.roomId, 'r1');
     expect(done.reason, 'no_more_mentions');
     expect(done.messagesSent, 2);
     expect(done.rounds, 2);
@@ -407,10 +412,11 @@ void main() {
     final events = <CoworkRelayInbound>[];
     final sub = client.inbound.listen(events.add);
 
-    // Missing agent_id -> dropped.
+    // Missing room_id -> dropped.
     await host.emit(<String, dynamic>{
       'type': 'room_turn',
       'round': 1,
+      'agent_id': 'id-amber',
       'handle': 'amber',
       'text': 'x',
     });

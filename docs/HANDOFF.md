@@ -374,10 +374,10 @@ credits.
        accumulates `room_turn` frames into turns and `room_done` into the stop,
        and renders `RoomThreadView` live (running until done); non-room events are
        ignored. Injected stream = testable with a fake controller (4 tests) and
-       drivable by the real relay socket unchanged. **Single open room:** a
-       `room_turn` carries no room id, so it accumulates every room turn on the
-       stream — correct while one room runs at a time; a room id on the frame +
-       a filter closes it when rooms run concurrently. **Still open
+       drivable by the real relay socket unchanged. **Concurrent rooms:** DONE — `room_turn`/`room_done` now carry a `room_id`
+       (executor protocol + app parser require it), and `RoomThreadPage` keeps
+       only frames for its own `roomId`, so several rooms stream over one socket
+       without crossing wires. **Still open
        (4c-stream-wire):** hand `RoomThreadPage` the real socket in the shell —
        needs the controller shared out of `CoworkThreadView` (a socket-lifecycle
        refactor), best done with a live host driving a room so it can be seen

@@ -59,18 +59,24 @@ def test_room_turn_and_done_payloads():
     the exchange, so the app can render a room live and name why it stopped."""
     from cowork_executor.protocol import room_done_payload, room_turn_payload
 
-    turn = room_turn_payload(round=2, agent_id="id-amber", handle="amber", text="hi")
+    turn = room_turn_payload(
+        room_id="r1", round=2, agent_id="id-amber", handle="amber", text="hi"
+    )
     assert turn == {
         "type": "room_turn",
+        "room_id": "r1",
         "round": 2,
         "agent_id": "id-amber",
         "handle": "amber",
         "text": "hi",
     }
 
-    done = room_done_payload(reason="rounds_exhausted", messages_sent=3, rounds=3)
+    done = room_done_payload(
+        room_id="r1", reason="rounds_exhausted", messages_sent=3, rounds=3
+    )
     assert done == {
         "type": "room_done",
+        "room_id": "r1",
         "reason": "rounds_exhausted",
         "messages_sent": 3,
         "rounds": 3,
