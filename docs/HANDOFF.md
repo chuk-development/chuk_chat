@@ -480,6 +480,17 @@ credits.
   register real per-member `TaskSender`s as executors connect — the live
   transport wiring, which is the user-gated deploy.
 
+- **Room transcripts persist (§16.1)** — DONE. A group room is a persistent
+  thread, not a throwaway exchange. `manager/room_transcript.py`
+  `RoomTranscriptStore` (SQLite, append-only, ordered by a per-room `seq` so
+  repeated round numbers cannot mis-order it) keeps a room's turns; `RoomService`
+  clears the room at the start of each new user message and appends every turn as
+  it streams, so the stored history is always the current conversation. 7 store
+  tests + 1 service test; manager 164, host 69 green. **Still open
+  (room-history-wire):** an app request to replay a reopened room's history over
+  the relay (a `room_history` frame) — small, and gated only by the live host
+  loop that would answer it.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

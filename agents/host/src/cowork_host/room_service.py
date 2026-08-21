@@ -19,7 +19,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from cowork_manager import RoomBinding, RoomCaps, RoomDriver, RoomStore, RoomTurn
+from cowork_manager import (
+    RoomBinding,
+    RoomCaps,
+    RoomDriver,
+    RoomStore,
+    RoomTranscriptStore,
+    RoomTurn,
+)
 
 from cowork_executor import room_done_payload, room_turn_payload
 
@@ -43,11 +50,13 @@ class RoomService:
         binding: RoomBinding,
         emit: RoomEmit,
         caps: RoomCaps | None = None,
+        transcript: RoomTranscriptStore | None = None,
     ) -> None:
         self._rooms = room_store
         self._binding = binding
         self._emit = emit
         self._caps = caps
+        self._transcript = transcript
 
     def handle_room_task(self, room_id: str, message: str) -> None:
         """Drive one room exchange to completion, streaming its turns out.
@@ -68,7 +77,15 @@ class RoomService:
             )
             return
 
+        # A room is a persistent thread, but each user message starts a fresh
+        # exchange — clear the last one so the stored history is the current
+        # conversation, not every conversation ever concatenated.
+        if self._transcript is not None:
+            self._transcript.clear(room_id)
+
         def on_turn(turn: RoomTurn) -> None:
+            if self._transcript is not None:
+                self._transcript.append(room_id, turn)
             self._emit(
                 room_turn_payload(
                     room_id=room_id,
