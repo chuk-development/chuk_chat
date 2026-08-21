@@ -377,11 +377,14 @@ credits.
        drivable by the real relay socket unchanged. **Concurrent rooms:** DONE — `room_turn`/`room_done` now carry a `room_id`
        (executor protocol + app parser require it), and `RoomThreadPage` keeps
        only frames for its own `roomId`, so several rooms stream over one socket
-       without crossing wires. **Still open
-       (4c-stream-wire):** hand `RoomThreadPage` the real socket in the shell —
-       needs the controller shared out of `CoworkThreadView` (a socket-lifecycle
-       refactor), best done with a live host driving a room so it can be seen
-       working, not just unit-tested.
+       without crossing wires. 4c-stream-wire: DONE. `CoworkThreadView` hands its live controller up
+       through a new `onController` callback (fired on build and rebuild; the
+       parent must not dispose it). The shell keeps that `_sharedController` and,
+       when a room is opened, feeds `RoomThreadPage` its `inbound` so the room
+       streams over the *same* socket the agent thread uses — no second
+       connection. A shell test proves it end to end: open a room, emit a
+       `room_turn` from the fake controller, see it render in the room page.
+       Falls back to the static waiting view if the transport is not built yet.
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a

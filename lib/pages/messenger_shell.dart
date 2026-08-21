@@ -14,6 +14,7 @@ import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
 import 'package:cowork/widgets/room_list_view.dart';
+import 'package:cowork/widgets/room_thread_page.dart';
 import 'package:cowork/widgets/room_thread_view.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 
@@ -91,6 +92,10 @@ class _MessengerShellState extends State<MessengerShell> {
   late final AgentRosterSource _roster =
       widget.rosterSource ?? LocalAgentRosterSource();
   late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource();
+
+  /// The live transport, handed up by the thread view so a room can stream over
+  /// the same socket. Null until the thread view has built it.
+  CoworkRelayController? _sharedController;
   late final AgentControlSource _controlSource =
       widget.controlSource ?? HostUnavailableControlSource();
 
@@ -216,18 +221,28 @@ class _MessengerShellState extends State<MessengerShell> {
   void _openRoom(String roomId) {
     final room = _rooms.byId(roomId);
     if (room == null) return;
+    final controller = _sharedController;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
           appBar: AppBar(title: Text(room.name)),
-          // No turns yet: a room is driven by the host, and streaming a room
-          // over the relay is the host-gated step. The view renders whatever
-          // turns arrive; today that is none, shown honestly.
-          body: RoomThreadView(
-            roomName: room.name,
-            userMessage: 'Send this room a task from your host to start.',
-            turns: const <CoworkRoomTurn>[],
-          ),
+          // With a live socket the room streams over it (RoomThreadPage keeps
+          // only its own room's frames); without one — the thread view has not
+          // built the transport yet — it shows an honest waiting state. Driving
+          // a room is still the host-gated step; the page renders whatever
+          // turns the host sends.
+          body: controller == null
+              ? RoomThreadView(
+                  roomName: room.name,
+                  userMessage: 'Connect your host to start this room.',
+                  turns: const <CoworkRoomTurn>[],
+                )
+              : RoomThreadPage(
+                  roomId: room.id,
+                  roomName: room.name,
+                  userMessage: 'Waiting for the room to start on your host.',
+                  inbound: controller.inbound,
+                ),
         ),
       ),
     );
@@ -274,6 +289,7 @@ class _MessengerShellState extends State<MessengerShell> {
               _roster.markActivity(agentId, threadKey, when);
             }
           },
+          onController: (controller) => _sharedController = controller,
         );
 
         return Scaffold(

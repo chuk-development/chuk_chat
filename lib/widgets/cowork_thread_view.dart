@@ -40,6 +40,7 @@ class CoworkThreadView extends StatefulWidget {
     this.onRunStateChanged,
     this.onActivity,
     this.onPaired,
+    this.onController,
   });
 
   /// Builds the transport controller. Async because a real client generates a
@@ -49,6 +50,12 @@ class CoworkThreadView extends StatefulWidget {
 
   /// Supplies the account session that gets provisioned once paired.
   final AccountSessionSource sessionSource;
+
+  /// Called with the live transport controller whenever it is built or rebuilt,
+  /// so a parent (the shell) can share the one socket — e.g. to feed a room
+  /// thread the same inbound stream. The parent must not dispose it; this view
+  /// owns its lifecycle.
+  final void Function(CoworkRelayController controller)? onController;
 
   /// Persistent trust store. When provided and a pairing is stored, the view
   /// auto-reconnects with no code and offers a separate "Forget" action. When
@@ -198,6 +205,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       _controller = controller;
       _inboundSub = controller.inbound.listen(_onInbound);
     });
+    widget.onController?.call(controller);
   }
 
   /// Watches the transport state for an unexpected drop after being paired, and
@@ -291,6 +299,7 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       _currentReasoning = null;
       _inboundSub = controller.inbound.listen(_onInbound);
     });
+    widget.onController?.call(controller);
     // Tear the old transport down in the background: it is fully detached now.
     if (old != null) unawaited(old.dispose());
   }

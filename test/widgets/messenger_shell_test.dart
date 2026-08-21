@@ -289,7 +289,7 @@ void main() {
   testWidgets('the Rooms button opens the rooms screen and lists rooms',
       (tester) async {
     final rooms = LocalRoomSource();
-    rooms.addRoom(
+    final room = rooms.addRoom(
       const CoworkRoomDraft(
         name: 'launch',
         members: [
@@ -320,13 +320,30 @@ void main() {
     expect(find.text('launch'), findsOneWidget);
     expect(find.text('2 members'), findsOneWidget);
 
-    // Opening a room shows its thread with the honest waiting state.
+    // Opening a room shows its thread. The fake controller is live (the thread
+    // view handed it up), so the room streams over that same socket. The room
+    // renders a running spinner, so advance frames with pump, not pumpAndSettle.
     await tester.tap(find.text('launch'));
-    await tester.pumpAndSettle();
+    await tester.pump(); // start the route
+    await tester.pump(const Duration(milliseconds: 400)); // finish the transition
     expect(
-      find.text('Send this room a task from your host to start.'),
+      find.text('Waiting for the room to start on your host.'),
       findsOneWidget,
     );
+
+    // A room_turn for this room streams into the open page.
+    controller.emit(
+      CoworkRelayRoomTurn(
+        roomId: room.id,
+        round: 1,
+        agentId: 'a',
+        handle: 'amber',
+        text: 'ship it',
+      ),
+    );
+    await tester.pump();
+    expect(find.text('@amber'), findsOneWidget);
+    expect(find.text('ship it'), findsOneWidget);
   });
 
   testWidgets('creating a room from the shell adds it to the source',
