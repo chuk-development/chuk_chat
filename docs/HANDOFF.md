@@ -508,6 +508,15 @@ credits.
   the room drivable. +1 executor, +2 store, +3 service, +1 shell tests; app 218,
   manager 166, host 74 green.
 
+- **Delete a room (§16.1)** — DONE, and it cascades cleanly. A `room_delete`
+  frame (app -> host); `RoomService.handle_room_delete` drops the room from the
+  `RoomStore` **and** clears its transcript, so a deleted room leaves no orphan
+  behind (and it is a no-op on an unknown room). `RoomListView` gains a per-row
+  delete menu (shown only when `onDelete` is set); the shell removes the room
+  from its `RoomSource` and tells the host to forget it over the shared socket.
+  So room management is complete: create, list, open, message, delete. +1
+  executor, +2 host, +2 app tests; app 220, executor 43, host 76 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

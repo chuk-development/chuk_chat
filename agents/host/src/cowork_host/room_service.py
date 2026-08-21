@@ -87,6 +87,14 @@ class RoomService:
                 # Over the cap or a duplicate: skip this member, keep the room.
                 continue
 
+    def handle_room_delete(self, room_id: str) -> None:
+        """Forget a room: drop it from the store and clear its transcript, so a
+        deleted room leaves no orphaned history behind. Safe on an unknown room —
+        deleting what is already gone is a no-op, not an error."""
+        self._rooms.delete(room_id)
+        if self._transcript is not None:
+            self._transcript.clear(room_id)
+
     def handle_room_task(self, room_id: str, message: str) -> None:
         """Drive one room exchange to completion, streaming its turns out.
 

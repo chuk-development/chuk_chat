@@ -58,6 +58,7 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "members": [{"agent_id": "...", "handle": "amber"}]}
     {"type": "room_task",                                 # app -> host: start a room
      "room_id": "...", "message": "..."}
+    {"type": "room_delete", "room_id": "..."}             # app -> host: forget a room
     {"type": "room_history_request", "room_id": "..."}    # app -> host: replay it
     {"type": "room_history",                              # host -> app: stored turns
      "room_id": "...", "turns": [{"round": 1, ...}]}
@@ -206,6 +207,12 @@ def room_create_payload(
         "name": name,
         "members": members,
     }
+
+
+def room_delete_payload(*, room_id: str) -> dict[str, Any]:
+    """App -> host: forget a room (§16.1) — drop it from the store and its stored
+    transcript, so nothing about it is left behind."""
+    return {"type": "room_delete", "room_id": room_id}
 
 
 def room_history_request_payload(*, room_id: str) -> dict[str, Any]:

@@ -19,6 +19,7 @@ class RoomListView extends StatelessWidget {
     required this.source,
     required this.onSelect,
     this.onCreate,
+    this.onDelete,
     this.selectedRoomId,
   });
 
@@ -29,6 +30,9 @@ class RoomListView extends StatelessWidget {
 
   /// Opens the create-room flow. Hidden when null.
   final VoidCallback? onCreate;
+
+  /// Deletes a room. When null, no delete affordance is shown.
+  final void Function(String roomId)? onDelete;
 
   final String? selectedRoomId;
 
@@ -112,6 +116,26 @@ class RoomListView extends StatelessWidget {
         count == 1 ? '1 member' : '$count members',
         style: theme.textTheme.bodySmall,
       ),
+      trailing: onDelete == null
+          ? null
+          : PopupMenuButton<String>(
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert, size: 18),
+              onSelected: (value) {
+                if (value == 'delete') onDelete!(room.id);
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(
+                  value: 'delete',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_outline, size: 18),
+                    title: Text('Delete room'),
+                  ),
+                ),
+              ],
+            ),
       onTap: () => onSelect(room.id),
     );
   }
