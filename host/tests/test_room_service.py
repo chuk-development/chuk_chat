@@ -100,3 +100,34 @@ def test_caps_override_reaches_the_service():
     turns = [f for f in frames if f["type"] == "room_turn"]
     assert [t["handle"] for t in turns] == ["amber"]
     assert frames[-1]["reason"] == "rounds_exhausted"
+
+
+def test_the_service_records_the_transcript_and_starts_fresh_each_time():
+    from cowork_manager import RoomTranscriptStore
+
+    store, room_id = _store_with_room(["amber", "cobalt"])
+    binding = RoomBinding()
+    binding.register("id-amber", lambda p: "amber says hi")
+    binding.register("id-cobalt", lambda p: "cobalt says hi")
+    transcript = RoomTranscriptStore()
+
+    service = RoomService(
+        room_store=store,
+        binding=binding,
+        emit=lambda f: None,
+        transcript=transcript,
+    )
+    service.handle_room_task(room_id, "first message")
+    assert [t.text for t in transcript.history(room_id)] == [
+        "amber says hi",
+        "cobalt says hi",
+    ]
+
+    # A second message starts a fresh exchange: the history is the new one only.
+    binding.register("id-amber", lambda p: "amber again")
+    binding.register("id-cobalt", lambda p: "cobalt again")
+    service.handle_room_task(room_id, "second message")
+    assert [t.text for t in transcript.history(room_id)] == [
+        "amber again",
+        "cobalt again",
+    ]
