@@ -12,6 +12,8 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/models/cowork_room.dart';
+import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 
 class _MemoryStore implements CoworkSecureKeyValueStore {
@@ -282,5 +284,88 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.arrow_back), findsNothing);
+  });
+
+  testWidgets('the Rooms button opens the rooms screen and lists rooms',
+      (tester) async {
+    final rooms = LocalRoomSource();
+    rooms.addRoom(
+      const CoworkRoomDraft(
+        name: 'launch',
+        members: [
+          CoworkRoomMember(agentId: 'a', handle: 'amber'),
+          CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+        ],
+      ),
+    );
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MessengerShell(
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Rooms'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rooms'), findsWidgets);
+    expect(find.text('launch'), findsOneWidget);
+    expect(find.text('2 members'), findsOneWidget);
+
+    // Opening a room shows its thread with the honest waiting state.
+    await tester.tap(find.text('launch'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Send this room a task from your host to start.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('creating a room from the shell adds it to the source',
+      (tester) async {
+    final rooms = LocalRoomSource();
+    final roster = LocalAgentRosterSource()
+      ..addAgent(name: 'amber')
+      ..addAgent(name: 'cobalt');
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MessengerShell(
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Rooms'));
+    await tester.pumpAndSettle();
+    // Empty -> the New room button is offered.
+    await tester.tap(find.widgetWithText(FilledButton, 'New room'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'planning');
+    await tester.tap(find.text('amber'));
+    await tester.tap(find.text('cobalt'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(rooms.rooms, hasLength(1));
+    expect(rooms.rooms.single.name, 'planning');
+    // Back on the rooms list, the new room shows.
+    expect(find.text('planning'), findsOneWidget);
   });
 }
