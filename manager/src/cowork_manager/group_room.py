@@ -148,6 +148,63 @@ def parse_mentions(text: str, known_handles) -> list[str]:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentIdentity:
+    """A coworker as the roster knows it, before it becomes a room member: its
+    id, its display name, and which device (host) it runs on. Two coworkers on
+    two machines can share a name — that is what handle disambiguation resolves.
+    """
+
+    agent_id: str
+    name: str
+    device: str
+
+
+# Handle characters: what a mention can contain after '@' (see _MENTION). A name
+# or device is slugged to these so the produced handle is always mentionable.
+_HANDLE_CHARS = re.compile(r"[^a-z0-9-]+")
+
+
+def _slug(value: str) -> str:
+    slug = _HANDLE_CHARS.sub("-", value.strip().lower()).strip("-")
+    return slug or "agent"
+
+
+def assign_room_handles(agents) -> list["RoomMember"]:
+    """Turn coworkers into room members with **unique** mention handles (§16.1).
+
+    A handle is the coworker's name when that name is unique in the set, and
+    ``name-device`` when two coworkers share a name across machines — the exact
+    cross-machine form ``parse_mentions`` already understands. If even
+    ``name-device`` still collides (the same name on the same device — a
+    same-account squat), a numeric suffix breaks the tie, because
+    :class:`GroupRoom` rejects a room with two equal handles and a room is more
+    useful with a disambiguated member than refused outright.
+
+    Order is preserved, so the room speaks in the order the caller listed its
+    members.
+    """
+    items = list(agents)
+    name_counts: dict[str, int] = {}
+    for a in items:
+        name_counts[_slug(a.name)] = name_counts.get(_slug(a.name), 0) + 1
+
+    members: list[RoomMember] = []
+    used: set[str] = set()
+    for a in items:
+        base = _slug(a.name)
+        # A shared base name disambiguates by device; a unique one stays clean.
+        handle = base if name_counts[base] == 1 else f"{base}-{_slug(a.device)}"
+        if handle in used:
+            n = 2
+            while f"{handle}-{n}" in used:
+                n += 1
+            handle = f"{handle}-{n}"
+        used.add(handle)
+        members.append(RoomMember(agent_id=a.agent_id, handle=handle))
+    return members
+
+
+@dataclass(frozen=True, slots=True)
 class RoomTurn:
     """One agent turn in a room exchange: which round, which member spoke."""
 

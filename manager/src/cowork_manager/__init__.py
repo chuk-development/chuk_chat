@@ -28,6 +28,7 @@ from cowork_manager.group_room import (
     DEFAULT_MAX_MEMBERS,
     DEFAULT_MAX_ROUNDS,
     DEFAULT_MAX_MESSAGES_PER_SEND,
+    AgentIdentity,
     GroupRoom,
     RoomCaps,
     RoomError,
@@ -35,6 +36,7 @@ from cowork_manager.group_room import (
     RoomSession,
     RoomTurn,
     parse_mentions,
+    assign_room_handles,
 )
 from cowork_manager.supervisor import (
     AgentSupervisor,
@@ -85,6 +87,8 @@ __all__ = [
     "random_name",
     "Agent",
     "RosterStore",
+    "AgentIdentity",
+    "assign_room_handles",
     "GroupRoom",
     "RoomStore",
     "RoomRunner",

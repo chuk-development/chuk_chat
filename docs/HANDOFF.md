@@ -437,6 +437,16 @@ credits.
    session selects that thread. +2 tests (24 in the roster file).
 
 
+### Follow-ups picked from plan §20 (safe, local)
+
+- **Cross-machine handle disambiguation (§16.1)** — DONE. `assign_room_handles`
+  in `manager/group_room.py` turns coworkers (`AgentIdentity`: id, name, device)
+  into room members with unique mention handles: a plain name when unique,
+  `@name-device` when two share a name across machines (the exact form
+  `parse_mentions` understands), a numeric suffix on a same-name-same-device
+  squat. Names are slugged to mentionable handles, order preserved, and the
+  result always builds a valid GroupRoom. 7 tests, manager 152 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
