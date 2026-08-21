@@ -243,6 +243,7 @@ class _MessengerShellState extends State<MessengerShell> {
                   userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
                   onSend: (message) => controller.sendRoomTask(room.id, message),
+                  onReady: () => controller.requestRoomHistory(room.id),
                 ),
         ),
       ),

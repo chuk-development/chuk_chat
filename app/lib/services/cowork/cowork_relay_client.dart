@@ -400,6 +400,15 @@ class CoworkRelayRoomDone extends CoworkRelayInbound {
   final int? rounds;
 }
 
+/// A room's stored transcript, replayed on request (§16.1). Replaces whatever
+/// the page currently shows for [roomId] with [turns].
+class CoworkRelayRoomHistory extends CoworkRelayInbound {
+  const CoworkRelayRoomHistory({required this.roomId, required this.turns});
+
+  final String roomId;
+  final List<CoworkRelayRoomTurn> turns;
+}
+
 /// The executor reported an error.
 class CoworkRelayRunError extends CoworkRelayInbound {
   const CoworkRelayRunError(this.message);
@@ -444,6 +453,10 @@ abstract interface class CoworkRelayController {
   /// Seals and sends a group-room task (§16.1): the host looks [roomId]'s
   /// members up and drives them, streaming `room_turn` / `room_done` back.
   Future<void> sendRoomTask(String roomId, String message);
+
+  /// Asks the host to replay [roomId]'s stored transcript; the host answers with
+  /// a `room_history` event (§16.1).
+  Future<void> requestRoomHistory(String roomId);
 
   /// Asks the executor to abort the run in [sessionKey] — the controller side of
   /// the two-tier kill switch (§7.1).
@@ -772,6 +785,13 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       });
 
   @override
+  Future<void> requestRoomHistory(String roomId) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_history_request',
+        'room_id': roomId,
+      });
+
+  @override
   Future<void> requestStop({String sessionKey = 'default'}) =>
       _sendFramePayload(<String, dynamic>{
         'type': 'stop',
@@ -965,6 +985,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       case 'room_turn':
         final turn = _roomTurnFromPayload(payload);
         if (turn != null) _inbound.add(turn);
+      case 'room_history':
+        final hist = _roomHistoryFromPayload(payload);
+        if (hist != null) _inbound.add(hist);
       case 'room_done':
         final roomId = payload['room_id'];
         final reason = payload['reason'];
@@ -1031,6 +1054,36 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       handle: handle,
       text: text is String ? text : '',
     );
+  }
+
+  /// Turns a `room_history` frame into a [CoworkRelayRoomHistory], or null when
+  /// malformed. Each turn is parsed like a live `room_turn`; a bad turn in the
+  /// list is skipped, not fatal.
+  static CoworkRelayRoomHistory? _roomHistoryFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    final roomId = payload['room_id'];
+    final rawTurns = payload['turns'];
+    if (roomId is! String || rawTurns is! List) return null;
+    final turns = <CoworkRelayRoomTurn>[];
+    for (final raw in rawTurns) {
+      if (raw is! Map) continue;
+      final round = CoworkRelayTool._asInt(raw['round']);
+      final agentId = raw['agent_id'];
+      final handle = raw['handle'];
+      final text = raw['text'];
+      if (round == null || agentId is! String || handle is! String) continue;
+      turns.add(
+        CoworkRelayRoomTurn(
+          roomId: roomId,
+          round: round,
+          agentId: agentId,
+          handle: handle,
+          text: text is String ? text : '',
+        ),
+      );
+    }
+    return CoworkRelayRoomHistory(roomId: roomId, turns: turns);
   }
 
   /// Turns a `file` payload into a [CoworkRelayFile], decoding the base64 body

@@ -77,6 +77,12 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> sendRoomTask(String roomId, String message) async =>
       roomTasks.add((roomId, message));
 
+  final List<String> historyRequests = <String>[];
+
+  @override
+  Future<void> requestRoomHistory(String roomId) async =>
+      historyRequests.add(roomId);
+
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {}
 
@@ -336,6 +342,8 @@ void main() {
       find.text('Message the room to start.'),
       findsOneWidget,
     );
+    // Opening the room asks the host to replay its stored history.
+    expect(controller.historyRequests, [room.id]);
 
     // A room_turn for this room streams into the open page.
     controller.emit(

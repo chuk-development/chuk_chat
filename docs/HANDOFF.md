@@ -486,10 +486,15 @@ credits.
   repeated round numbers cannot mis-order it) keeps a room's turns; `RoomService`
   clears the room at the start of each new user message and appends every turn as
   it streams, so the stored history is always the current conversation. 7 store
-  tests + 1 service test; manager 164, host 69 green. **Still open
-  (room-history-wire):** an app request to replay a reopened room's history over
-  the relay (a `room_history` frame) — small, and gated only by the live host
-  loop that would answer it.
+  tests + 1 service test; manager 164, host 69 green. room-history-wire: DONE. `room_history_request` (app -> host) and
+  `room_history` (host -> app) frames; `RoomService.handle_room_history` replays
+  the stored transcript (empty, never silent, when there is none); the app parses
+  `room_history` into `CoworkRelayRoomHistory`, `RoomThreadPage` replaces its view
+  with the stored turns (marking the exchange over) and asks for it via a new
+  `onReady` once its listener is attached, and the shell wires `onReady` to
+  `controller.requestRoomHistory`. So reopening a room now shows its last
+  conversation. +4 app, +2 executor, +2 host tests; app 218, executor 41,
+  host 71 green.
 
 ### Gates that STILL need the user (not auto-run)
 

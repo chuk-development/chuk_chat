@@ -427,6 +427,36 @@ void main() {
     await client.dispose();
   });
 
+  test('a room_history frame surfaces its stored turns', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'room_history',
+      'room_id': 'r1',
+      'turns': <dynamic>[
+        <String, dynamic>{
+          'round': 1,
+          'agent_id': 'id-amber',
+          'handle': 'amber',
+          'text': 'stored',
+        },
+        <String, dynamic>{'bad': 'turn'}, // skipped, not fatal
+      ],
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final hist = events.whereType<CoworkRelayRoomHistory>().single;
+    expect(hist.roomId, 'r1');
+    expect(hist.turns, hasLength(1));
+    expect(hist.turns.first.handle, 'amber');
+    expect(hist.turns.first.roomId, 'r1');
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
   test('a hostile frame from an unapproved device is dropped, not rendered',
       () async {
     final (client, host, socket) = await paired();
