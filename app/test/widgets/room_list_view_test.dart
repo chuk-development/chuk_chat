@@ -20,6 +20,7 @@ void main() {
     WidgetTester tester,
     RoomSource source, {
     VoidCallback? onCreate,
+    void Function(String)? onDelete,
     String? selectedRoomId,
   }) async {
     final picks = <String>[];
@@ -29,6 +30,7 @@ void main() {
           body: RoomListView(
             source: source,
             onCreate: onCreate,
+            onDelete: onDelete,
             selectedRoomId: selectedRoomId,
             onSelect: picks.add,
           ),
@@ -88,5 +90,26 @@ void main() {
     source.addRoom(_draft('launch', 2));
     await tester.pumpAndSettle();
     expect(find.text('launch'), findsOneWidget);
+  });
+
+  testWidgets('the delete menu reports the room and no menu without onDelete',
+      (tester) async {
+    final source = LocalRoomSource(random: Random(8));
+    final a = source.addRoom(_draft('launch', 2));
+    final deleted = <String>[];
+
+    await pump(tester, source, onDelete: deleted.add);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete room'));
+    await tester.pumpAndSettle();
+    expect(deleted, [a.id]);
+  });
+
+  testWidgets('no delete affordance when onDelete is null', (tester) async {
+    final source = LocalRoomSource(random: Random(9));
+    source.addRoom(_draft('launch', 2));
+    await pump(tester, source);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
   });
 }

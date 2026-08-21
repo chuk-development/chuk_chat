@@ -119,3 +119,9 @@ def test_room_create_payload():
         "name": "launch",
         "members": [{"agent_id": "a", "handle": "amber"}],
     }
+
+
+def test_room_delete_payload():
+    from cowork_executor.protocol import room_delete_payload
+
+    assert room_delete_payload(room_id="r1") == {"type": "room_delete", "room_id": "r1"}

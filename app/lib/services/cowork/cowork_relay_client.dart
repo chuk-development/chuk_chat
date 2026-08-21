@@ -462,6 +462,9 @@ abstract interface class CoworkRelayController {
   /// members up and drives them, streaming `room_turn` / `room_done` back.
   Future<void> sendRoomTask(String roomId, String message);
 
+  /// Tells the host to forget [roomId] — drop it and its transcript (§16.1).
+  Future<void> deleteRoom(String roomId);
+
   /// Asks the host to replay [roomId]'s stored transcript; the host answers with
   /// a `room_history` event (§16.1).
   Future<void> requestRoomHistory(String roomId);
@@ -803,6 +806,13 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         'type': 'room_task',
         'room_id': roomId,
         'message': message,
+      });
+
+  @override
+  Future<void> deleteRoom(String roomId) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_delete',
+        'room_id': roomId,
       });
 
   @override

@@ -208,3 +208,29 @@ def test_handle_room_create_skips_members_over_the_cap():
     service.handle_room_create("room:1", "big", members)
     # Six taken, the rest skipped; the room is still valid.
     assert len(store.get("room:1").members) == 6
+
+
+def test_handle_room_delete_drops_the_room_and_its_transcript():
+    from cowork_manager import RoomTranscriptStore
+
+    store, room_id = _store_with_room(["amber", "cobalt"])
+    binding = RoomBinding()
+    binding.register("id-amber", lambda p: "amber hi")
+    binding.register("id-cobalt", lambda p: "cobalt hi")
+    transcript = RoomTranscriptStore()
+    service = RoomService(
+        room_store=store, binding=binding, emit=lambda f: None, transcript=transcript
+    )
+    service.handle_room_task(room_id, "go")
+    assert transcript.history(room_id)  # some history exists
+
+    service.handle_room_delete(room_id)
+    assert store.get(room_id) is None
+    assert transcript.history(room_id) == []  # no orphaned transcript
+
+
+def test_handle_room_delete_of_an_unknown_room_is_a_noop():
+    store = RoomStore()
+    RoomService(
+        room_store=store, binding=RoomBinding(), emit=lambda f: None
+    ).handle_room_delete("ghost")  # must not raise
