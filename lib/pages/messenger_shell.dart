@@ -240,8 +240,9 @@ class _MessengerShellState extends State<MessengerShell> {
               : RoomThreadPage(
                   roomId: room.id,
                   roomName: room.name,
-                  userMessage: 'Waiting for the room to start on your host.',
+                  userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
+                  onSend: (message) => controller.sendRoomTask(room.id, message),
                 ),
         ),
       ),

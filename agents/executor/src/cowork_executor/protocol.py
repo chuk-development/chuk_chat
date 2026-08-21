@@ -53,6 +53,8 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "data": "<base64>"}
     {"type": "subagent",                                  # a child agent (§7.6)
      "event": {"type": "subagent_state", ...}}            #   state or streamed output
+    {"type": "room_task",                                 # app -> host: start a room
+     "room_id": "...", "message": "..."}
     {"type": "room_turn",                                 # one member's turn (§16.1)
      "room_id": "...", "round": 1, "agent_id": "...",
      "handle": "amber", "text": "..."}
@@ -184,6 +186,13 @@ def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
     renders the subagent list from ``event``.
     """
     return {"type": "subagent", "event": event}
+
+
+def room_task_payload(*, room_id: str, message: str) -> dict[str, Any]:
+    """The app -> host frame that starts a group-room exchange (§16.1). Names the
+    room and carries the user's message; the host looks the room's members up in
+    its RoomStore and drives them, streaming ``room_turn`` / ``room_done`` back."""
+    return {"type": "room_task", "room_id": room_id, "message": message}
 
 
 def room_turn_payload(
