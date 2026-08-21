@@ -46,6 +46,21 @@ DEFAULT_MAX_MESSAGES_PER_SEND = 10
 # decorator) is ignored unless it exactly names a member.
 _MENTION = re.compile(r"@([A-Za-z0-9][A-Za-z0-9-]*)")
 
+#: Broadcast handles: `@all` / `@everyone` / `@room` address the whole room at
+#: once, the group-chat convention for "everyone weigh in again". They are not
+#: real member handles, so they are recognised separately from `parse_mentions`.
+BROADCAST_HANDLES = frozenset({"all", "everyone", "room"})
+
+
+def has_broadcast_mention(text: str) -> bool:
+    """True when ``text`` contains a broadcast mention (`@all`/`@everyone`/`@room`)."""
+    if not text:
+        return False
+    for match in _MENTION.finditer(text):
+        if match.group(1).lower() in BROADCAST_HANDLES:
+            return True
+    return False
+
 
 @dataclass(frozen=True, slots=True)
 class RoomCaps:
@@ -241,10 +256,11 @@ class RoomSession:
 
         # Round 1: the user's mentions, or everyone in room order.
         mentioned = parse_mentions(user_message, self._handles)
-        if mentioned:
+        if mentioned and not has_broadcast_mention(user_message):
             order = [room.member_by_handle(h) for h in mentioned]
             self._queue: deque[RoomMember] = deque(m for m in order if m)
         else:
+            # No mention, or an explicit @all/@everyone/@room: everyone speaks.
             self._queue = deque(room.members)
         if not self._queue:
             self._stop_reason = "no_members"
@@ -310,6 +326,15 @@ class RoomSession:
             )
         )
         self._messages_sent += 1
+        if has_broadcast_mention(text):
+            # @all re-engages the whole room: every other member, in room order,
+            # for the next round (still bounded by the round and message caps).
+            for member in self._room.members:
+                if (
+                    member.handle != speaker.handle
+                    and member.handle not in self._next_round
+                ):
+                    self._next_round.append(member.handle)
         for handle in parse_mentions(text, self._handles):
             if handle != speaker.handle and handle not in self._next_round:
                 self._next_round.append(handle)

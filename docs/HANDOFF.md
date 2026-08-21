@@ -447,6 +447,14 @@ credits.
   squat. Names are slugged to mentionable handles, order preserved, and the
   result always builds a valid GroupRoom. 7 tests, manager 152 green.
 
+- **`@all` / `@everyone` broadcast mentions in rooms (§16.1)** — DONE.
+  `has_broadcast_mention` recognises `@all` / `@everyone` / `@room`
+  (case-insensitive); in round 1 an `@all` seeds everyone (same as no mention),
+  and in a reply it re-engages the whole room for the next round — every other
+  member in room order, still bounded by the round and message caps, never
+  re-triggering the speaker. The group-chat "everyone, again" convention. 5
+  tests, manager 157 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
