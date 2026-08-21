@@ -465,6 +465,9 @@ abstract interface class CoworkRelayController {
   /// Tells the host to forget [roomId] — drop it and its transcript (§16.1).
   Future<void> deleteRoom(String roomId);
 
+  /// Renames [roomId] on the host (§16.1).
+  Future<void> renameRoom(String roomId, String name);
+
   /// Asks the host to replay [roomId]'s stored transcript; the host answers with
   /// a `room_history` event (§16.1).
   Future<void> requestRoomHistory(String roomId);
@@ -813,6 +816,14 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       _sendFramePayload(<String, dynamic>{
         'type': 'room_delete',
         'room_id': roomId,
+      });
+
+  @override
+  Future<void> renameRoom(String roomId, String name) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_rename',
+        'room_id': roomId,
+        'name': name,
       });
 
   @override

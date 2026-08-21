@@ -90,4 +90,22 @@ void main() {
     final room = source.addRoom(_draft('launch'));
     expect(() => room.members.add(_m('c', 'jade')), throwsUnsupportedError);
   });
+
+  test('renameRoom updates the name, trims, and notifies on a real change', () {
+    final source = LocalRoomSource(random: Random(8));
+    final room = source.addRoom(_draft('old'));
+    var notified = 0;
+    source.addListener(() => notified++);
+
+    source.renameRoom(room.id, '  new  ');
+    expect(source.byId(room.id)!.name, 'new');
+    expect(notified, 1);
+
+    source.renameRoom(room.id, 'new'); // same -> no notify
+    expect(notified, 1);
+    source.renameRoom(room.id, '   '); // blank -> ignored
+    expect(notified, 1);
+    source.renameRoom('nope', 'x'); // unknown -> ignored
+    expect(notified, 1);
+  });
 }

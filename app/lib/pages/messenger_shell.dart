@@ -196,6 +196,7 @@ class _MessengerShellState extends State<MessengerShell> {
             onCreate: _openRoomCreate,
             onSelect: _openRoom,
             onDelete: _deleteRoom,
+            onRename: _renameRoom,
           ),
         ),
       ),
@@ -266,6 +267,11 @@ class _MessengerShellState extends State<MessengerShell> {
     _rooms.removeRoom(roomId);
     // Tell the host to forget it too, so no room or transcript is orphaned there.
     _sharedController?.deleteRoom(roomId);
+  }
+
+  void _renameRoom(String roomId, String name) {
+    _rooms.renameRoom(roomId, name);
+    _sharedController?.renameRoom(roomId, name);
   }
 
   void _newThread() {

@@ -525,6 +525,15 @@ credits.
   firing at nothing), and `Job.routine_label(agent_name)` → `[bot:<name>] <id>`,
   the exact namespaced display Bot Mode uses. 3 tests, manager 169 green.
 
+- **Rename a room (§16.1)** — DONE, completing room management (create, rename,
+  delete). A `room_rename` frame (app -> host); `RoomStore.rename_room` (unknown
+  room -> RoomError); `RoomService.handle_room_rename` (no-op on an unknown room,
+  which just has not synced yet); `LocalRoomSource.renameRoom` (trims, ignores
+  blank/unknown/no-change); a Rename item in `RoomListView`'s row menu opening a
+  small stateful dialog (owns its controller so it survives the exit animation);
+  the shell renames locally and tells the host. +1 executor, +2 store, +2 host,
+  +2 app tests; app 222, executor 44, manager 171, host 78 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

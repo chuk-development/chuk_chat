@@ -87,6 +87,12 @@ class RoomService:
                 # Over the cap or a duplicate: skip this member, keep the room.
                 continue
 
+    def handle_room_rename(self, room_id: str, name: str) -> None:
+        """Rename a room the host holds (§16.1). A no-op on an unknown room —
+        the host simply does not have it yet (it syncs on the next create)."""
+        if self._rooms.get(room_id) is not None:
+            self._rooms.rename_room(room_id, name)
+
     def handle_room_delete(self, room_id: str) -> None:
         """Forget a room: drop it from the store and clear its transcript, so a
         deleted room leaves no orphaned history behind. Safe on an unknown room —

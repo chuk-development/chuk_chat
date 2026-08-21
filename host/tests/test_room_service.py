@@ -234,3 +234,17 @@ def test_handle_room_delete_of_an_unknown_room_is_a_noop():
     RoomService(
         room_store=store, binding=RoomBinding(), emit=lambda f: None
     ).handle_room_delete("ghost")  # must not raise
+
+
+def test_handle_room_rename_renames_a_held_room():
+    store, room_id = _store_with_room(["amber", "cobalt"])
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    service.handle_room_rename(room_id, "renamed")
+    assert store.get(room_id).name == "renamed"
+
+
+def test_handle_room_rename_of_an_unknown_room_is_a_noop():
+    store = RoomStore()
+    RoomService(
+        room_store=store, binding=RoomBinding(), emit=lambda f: None
+    ).handle_room_rename("ghost", "x")  # must not raise

@@ -125,3 +125,13 @@ def test_room_delete_payload():
     from cowork_executor.protocol import room_delete_payload
 
     assert room_delete_payload(room_id="r1") == {"type": "room_delete", "room_id": "r1"}
+
+
+def test_room_rename_payload():
+    from cowork_executor.protocol import room_rename_payload
+
+    assert room_rename_payload(room_id="r1", name="launch v2") == {
+        "type": "room_rename",
+        "room_id": "r1",
+        "name": "launch v2",
+    }

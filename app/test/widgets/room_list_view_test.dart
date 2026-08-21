@@ -21,6 +21,7 @@ void main() {
     RoomSource source, {
     VoidCallback? onCreate,
     void Function(String)? onDelete,
+    void Function(String, String)? onRename,
     String? selectedRoomId,
   }) async {
     final picks = <String>[];
@@ -31,6 +32,7 @@ void main() {
             source: source,
             onCreate: onCreate,
             onDelete: onDelete,
+            onRename: onRename,
             selectedRoomId: selectedRoomId,
             onSelect: picks.add,
           ),
@@ -111,5 +113,24 @@ void main() {
     source.addRoom(_draft('launch', 2));
     await pump(tester, source);
     expect(find.byIcon(Icons.more_vert), findsNothing);
+  });
+
+  testWidgets('the rename menu opens a dialog and reports the new name',
+      (tester) async {
+    final source = LocalRoomSource(random: Random(11));
+    final a = source.addRoom(_draft('launch', 2));
+    final renamed = <(String, String)>[];
+
+    await pump(tester, source, onRename: (id, name) => renamed.add((id, name)));
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename room'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'launch v2');
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    expect(renamed, [(a.id, 'launch v2')]);
   });
 }

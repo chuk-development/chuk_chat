@@ -21,6 +21,9 @@ abstract class RoomSource extends ChangeNotifier {
 
   CoworkRoom? byId(String id);
 
+  /// Renames a room. A no-op for an unknown id or an empty/blank name.
+  void renameRoom(String id, String name);
+
   /// Creates a room from a draft, assigning an id. Throws [ArgumentError] if the
   /// draft breaks a rule (fewer than two members, more than [kRoomMaxMembers],
   /// a duplicate handle or agent) — the same rules the host enforces, checked
@@ -87,6 +90,20 @@ class LocalRoomSource extends RoomSource {
     _rooms.add(room);
     notifyListeners();
     return room;
+  }
+
+  @override
+  void renameRoom(String id, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    for (var i = 0; i < _rooms.length; i++) {
+      if (_rooms[i].id == id) {
+        if (_rooms[i].name == trimmed) return;
+        _rooms[i] = _rooms[i].copyWith(name: trimmed);
+        notifyListeners();
+        return;
+      }
+    }
   }
 
   @override

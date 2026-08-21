@@ -123,3 +123,17 @@ def test_create_room_with_a_clashing_id_is_refused():
     store.create_room(name="x", room_id="room:abc")
     with pytest.raises(RoomError):
         store.create_room(name="y", room_id="room:abc")
+
+
+def test_rename_room():
+    store = RoomStore()
+    room = store.create_room(name="old")
+    renamed = store.rename_room(room.room_id, "new")
+    assert renamed.name == "new"
+    assert store.get(room.room_id).name == "new"
+
+
+def test_rename_unknown_room_raises():
+    store = RoomStore()
+    with pytest.raises(RoomError):
+        store.rename_room("ghost", "x")
