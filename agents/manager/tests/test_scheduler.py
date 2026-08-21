@@ -432,3 +432,37 @@ def test_ticker_survives_a_failing_action() -> None:
 
     assert ticker.tick_once() == []
     assert len(seen) == 1 and isinstance(seen[0], RuntimeError)
+
+
+# -- per-agent routines (§16.1) -------------------------------------------
+
+_ROUTINE_NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def test_jobs_for_returns_only_an_agents_routines():
+    sch = Scheduler()
+    sch.schedule("j1", "every 1h", now=_ROUTINE_NOW, agent_id="amber")
+    sch.schedule("j2", "every 1h", now=_ROUTINE_NOW, agent_id="cobalt")
+    sch.schedule("j3", "every 1h", now=_ROUTINE_NOW, agent_id="amber")
+    sch.schedule("j4", "every 1h", now=_ROUTINE_NOW)  # no owner
+
+    amber = {j.id for j in sch.jobs_for("amber")}
+    assert amber == {"j1", "j3"}
+    assert sch.jobs_for("nobody") == []
+
+
+def test_remove_agent_jobs_drops_only_that_agents_and_counts_them():
+    sch = Scheduler()
+    sch.schedule("j1", "every 1h", now=_ROUTINE_NOW, agent_id="amber")
+    sch.schedule("j2", "every 1h", now=_ROUTINE_NOW, agent_id="cobalt")
+    sch.schedule("j3", "every 1h", now=_ROUTINE_NOW, agent_id="amber")
+
+    assert sch.remove_agent_jobs("amber") == 2
+    assert {j.id for j in sch.jobs()} == {"j2"}
+    assert sch.remove_agent_jobs("amber") == 0  # already gone
+
+
+def test_routine_label_is_namespaced_to_the_bot():
+    sch = Scheduler()
+    job = sch.schedule("weekly-news", "every 1d", now=_ROUTINE_NOW, agent_id="amber")
+    assert job.routine_label("amber-otter") == "[bot:amber-otter] weekly-news"

@@ -517,6 +517,14 @@ credits.
   So room management is complete: create, list, open, message, delete. +1
   executor, +2 host, +2 app tests; app 220, executor 43, host 76 green.
 
+- **Per-agent routines (§16.1 Bot Mode)** — DONE. A routine belongs to a bot;
+  the scheduler already tagged jobs with `agent_id`, so this adds the per-agent
+  view and cleanup: `Scheduler.jobs_for(agent_id)` (an agent's routines),
+  `remove_agent_jobs(agent_id)` (drop them when the agent is deleted — the
+  scheduler's twin of the room-delete cascade, so a gone agent leaves no routine
+  firing at nothing), and `Job.routine_label(agent_name)` → `[bot:<name>] <id>`,
+  the exact namespaced display Bot Mode uses. 3 tests, manager 169 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
