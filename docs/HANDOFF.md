@@ -496,6 +496,18 @@ credits.
   conversation. +4 app, +2 executor, +2 host tests; app 218, executor 41,
   host 71 green.
 
+- **App-created rooms sync to the host (§16.1)** — DONE, and it closes the room
+  loop's real gap: rooms were built in the app's `LocalRoomSource` but the host's
+  `RoomStore` never learned of them, so `room_task` would hit `no_such_room`.
+  Now a `room_create` frame (app -> host) carries `{room_id, name, members}`;
+  `RoomStore.create_room` accepts an explicit id (the app owns room identity, a
+  clash is refused not overwritten); `RoomService.handle_room_create` builds the
+  room on the host — idempotent (a reconnect re-send does nothing), skipping any
+  member over the six-cap while keeping the room; and the shell sends it over the
+  shared socket the moment a room is created. So create-in-app now really makes
+  the room drivable. +1 executor, +2 store, +3 service, +1 shell tests; app 218,
+  manager 166, host 74 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

@@ -72,6 +72,15 @@ class _FakeRelayController implements CoworkRelayController {
       sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
+  final List<String> createdRooms = <String>[];
+
+  @override
+  Future<void> createRoom(
+    String roomId,
+    String name,
+    List<Map<String, String>> members,
+  ) async =>
+      createdRooms.add(roomId);
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async =>
@@ -402,6 +411,8 @@ void main() {
 
     expect(rooms.rooms, hasLength(1));
     expect(rooms.rooms.single.name, 'planning');
+    // The room was pushed to the host so a later message can drive it.
+    expect(controller.createdRooms, [rooms.rooms.single.id]);
     // Back on the rooms list, the new room shows.
     expect(find.text('planning'), findsOneWidget);
   });

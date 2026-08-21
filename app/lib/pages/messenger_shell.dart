@@ -211,7 +211,18 @@ class _MessengerShellState extends State<MessengerShell> {
         agents: agents,
         onCancel: () => Navigator.of(sheetContext).pop(),
         onSubmit: (draft) {
-          _rooms.addRoom(draft);
+          final room = _rooms.addRoom(draft);
+          // Push the room to the host so a later message can drive it. It rides
+          // the shared socket if the transport is up; if not, the create sheet
+          // still succeeds locally and the room syncs on the next open/send.
+          _sharedController?.createRoom(
+            room.id,
+            room.name,
+            <Map<String, String>>[
+              for (final m in room.members)
+                <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+            ],
+          );
           Navigator.of(sheetContext).pop();
         },
       ),

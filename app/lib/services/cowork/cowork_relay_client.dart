@@ -450,6 +450,14 @@ abstract interface class CoworkRelayController {
   /// append-only session that key routes to.
   Future<void> sendTask(String prompt, {String sessionKey});
 
+  /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
+  /// [members] is `[{agent_id, handle}]` in room order.
+  Future<void> createRoom(
+    String roomId,
+    String name,
+    List<Map<String, String>> members,
+  );
+
   /// Seals and sends a group-room task (§16.1): the host looks [roomId]'s
   /// members up and drives them, streaming `room_turn` / `room_done` back.
   Future<void> sendRoomTask(String roomId, String message);
@@ -774,6 +782,19 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         'type': 'task',
         'prompt': prompt,
         'session_key': sessionKey,
+      });
+
+  @override
+  Future<void> createRoom(
+    String roomId,
+    String name,
+    List<Map<String, String>> members,
+  ) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_create',
+        'room_id': roomId,
+        'name': name,
+        'members': members,
       });
 
   @override
