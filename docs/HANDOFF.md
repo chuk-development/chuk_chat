@@ -455,6 +455,16 @@ credits.
   re-triggering the speaker. The group-chat "everyone, again" convention. 5
   tests, manager 157 green.
 
+- **Room task input (app -> host) + composer (§16.1)** — DONE. `room_task_payload`
+  (`{type:room_task, room_id, message}`) is the frame that starts a room; the app
+  seals it via `CoworkRelayController.sendRoomTask(roomId, message)`, and
+  `RoomThreadPage` gains a composer (when `onSend` is set) that sends it and
+  resets the thread for the new exchange. The shell wires the composer to the
+  shared socket, so a room round-trips on the app side: send a message, watch the
+  turns stream back. The host acting on `room_task` (look the room up, drive it)
+  is the one user-gated step left. +3 page tests, +1 executor test, shell test
+  extended; app 213, executor 40 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

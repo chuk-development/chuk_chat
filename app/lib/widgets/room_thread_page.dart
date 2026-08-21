@@ -27,6 +27,7 @@ class RoomThreadPage extends StatefulWidget {
     required this.roomName,
     required this.userMessage,
     required this.inbound,
+    this.onSend,
   });
 
   /// The room this page shows. Frames for any other room on the shared socket
@@ -43,15 +44,23 @@ class RoomThreadPage extends StatefulWidget {
   /// agent thread).
   final Stream<CoworkRelayInbound> inbound;
 
+  /// Sends a message to the room (starts an exchange). When null the composer is
+  /// hidden — the page is read-only.
+  final void Function(String message)? onSend;
+
   @override
   State<RoomThreadPage> createState() => _RoomThreadPageState();
 }
 
 class _RoomThreadPageState extends State<RoomThreadPage> {
   final List<CoworkRoomTurn> _turns = <CoworkRoomTurn>[];
+  final TextEditingController _composer = TextEditingController();
   CoworkRoomStop? _stop;
   bool _running = true;
   StreamSubscription<CoworkRelayInbound>? _sub;
+  // The message the user actually sent, shown at the top once sent. Until then
+  // the caller's placeholder ([userMessage]) stands in.
+  String? _sentMessage;
 
   @override
   void initState() {
@@ -62,7 +71,23 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   @override
   void dispose() {
     _sub?.cancel();
+    _composer.dispose();
     super.dispose();
+  }
+
+  void _send() {
+    final text = _composer.text.trim();
+    final onSend = widget.onSend;
+    if (text.isEmpty || onSend == null) return;
+    onSend(text);
+    setState(() {
+      _sentMessage = text;
+      // A new exchange: clear the previous turns and re-enter the running state.
+      _turns.clear();
+      _stop = null;
+      _running = true;
+      _composer.clear();
+    });
   }
 
   void _onInbound(CoworkRelayInbound event) {
@@ -100,12 +125,46 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
 
   @override
   Widget build(BuildContext context) {
-    return RoomThreadView(
+    final thread = RoomThreadView(
       roomName: widget.roomName,
-      userMessage: widget.userMessage,
+      userMessage: _sentMessage ?? widget.userMessage,
       turns: _turns,
       stop: _stop,
       running: _running,
+    );
+    if (widget.onSend == null) return thread;
+    return Column(
+      children: [
+        Expanded(child: thread),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _composer,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'Message the room…',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  icon: const Icon(Icons.send),
+                  onPressed: _send,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

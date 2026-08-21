@@ -81,3 +81,11 @@ def test_room_turn_and_done_payloads():
         "messages_sent": 3,
         "rounds": 3,
     }
+
+
+def test_room_task_payload():
+    """The app -> host frame that starts a room (§16.1)."""
+    from cowork_executor.protocol import room_task_payload
+
+    p = room_task_payload(room_id="r1", message="what's the plan?")
+    assert p == {"type": "room_task", "room_id": "r1", "message": "what's the plan?"}

@@ -441,6 +441,10 @@ abstract interface class CoworkRelayController {
   /// append-only session that key routes to.
   Future<void> sendTask(String prompt, {String sessionKey});
 
+  /// Seals and sends a group-room task (§16.1): the host looks [roomId]'s
+  /// members up and drives them, streaming `room_turn` / `room_done` back.
+  Future<void> sendRoomTask(String roomId, String message);
+
   /// Asks the executor to abort the run in [sessionKey] — the controller side of
   /// the two-tier kill switch (§7.1).
   ///
@@ -757,6 +761,14 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         'type': 'task',
         'prompt': prompt,
         'session_key': sessionKey,
+      });
+
+  @override
+  Future<void> sendRoomTask(String roomId, String message) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_task',
+        'room_id': roomId,
+        'message': message,
       });
 
   @override

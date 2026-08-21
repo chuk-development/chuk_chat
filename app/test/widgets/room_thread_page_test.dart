@@ -7,7 +7,10 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/room_thread_page.dart';
 
 void main() {
-  Future<StreamController<CoworkRelayInbound>> pump(WidgetTester tester) async {
+  Future<StreamController<CoworkRelayInbound>> pump(
+    WidgetTester tester, {
+    void Function(String)? onSend,
+  }) async {
     final ctrl = StreamController<CoworkRelayInbound>.broadcast();
     addTearDown(ctrl.close);
     await tester.pumpWidget(
@@ -18,6 +21,7 @@ void main() {
             roomName: 'launch',
             userMessage: 'what is the plan?',
             inbound: ctrl.stream,
+            onSend: onSend,
           ),
         ),
       ),
@@ -120,5 +124,46 @@ void main() {
     // fromWire returns null -> no footer, and not running (no indicator).
     expect(find.text('the room is talking…'), findsNothing);
     expect(find.textContaining('Reached'), findsNothing);
+  });
+
+  testWidgets('no composer when onSend is null', (tester) async {
+    await pump(tester);
+    expect(find.byIcon(Icons.send), findsNothing);
+  });
+
+  testWidgets('the composer sends and resets the thread', (tester) async {
+    final sent = <String>[];
+    final ctrl = await pump(tester, onSend: sent.add);
+
+    // A turn from a prior exchange is on screen.
+    ctrl.add(
+      const CoworkRelayRoomTurn(
+        roomId: 'r1',
+        round: 1,
+        agentId: 'a',
+        handle: 'amber',
+        text: 'old turn',
+      ),
+    );
+    await tester.pump();
+    expect(find.text('old turn'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'new question');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+
+    expect(sent, ['new question']);
+    // Sending resets: the old turn is gone, the sent message is the subject.
+    expect(find.text('old turn'), findsNothing);
+    expect(find.text('new question'), findsOneWidget);
+  });
+
+  testWidgets('an empty message does not send', (tester) async {
+    final sent = <String>[];
+    await pump(tester, onSend: sent.add);
+    await tester.enterText(find.byType(TextField), '   ');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+    expect(sent, isEmpty);
   });
 }

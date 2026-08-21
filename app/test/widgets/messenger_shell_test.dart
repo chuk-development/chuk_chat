@@ -71,6 +71,12 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async =>
       sessionKeys.add(sessionKey);
 
+  final List<(String, String)> roomTasks = <(String, String)>[];
+
+  @override
+  Future<void> sendRoomTask(String roomId, String message) async =>
+      roomTasks.add((roomId, message));
+
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {}
 
@@ -327,7 +333,7 @@ void main() {
     await tester.pump(); // start the route
     await tester.pump(const Duration(milliseconds: 400)); // finish the transition
     expect(
-      find.text('Waiting for the room to start on your host.'),
+      find.text('Message the room to start.'),
       findsOneWidget,
     );
 
@@ -344,6 +350,12 @@ void main() {
     await tester.pump();
     expect(find.text('@amber'), findsOneWidget);
     expect(find.text('ship it'), findsOneWidget);
+
+    // The composer routes to sendRoomTask with the room id.
+    await tester.enterText(find.byType(TextField).last, 'kick off');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+    expect(controller.roomTasks, [(room.id, 'kick off')]);
   });
 
   testWidgets('creating a room from the shell adds it to the source',
