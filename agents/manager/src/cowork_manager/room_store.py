@@ -72,10 +72,19 @@ class RoomStore:
 
     # -- CRUD ------------------------------------------------------------
 
-    def create_room(self, *, name: str, caps: RoomCaps | None = None) -> GroupRoom:
-        """Insert an empty room and return it."""
+    def create_room(
+        self, *, name: str, caps: RoomCaps | None = None, room_id: str | None = None
+    ) -> GroupRoom:
+        """Insert an empty room and return it.
+
+        ``room_id`` lets the caller supply the id — the app owns room identity, so
+        the host stores the room under the same id the app created it with. A
+        clashing id is a :class:`RoomError`, not a silent overwrite."""
         caps = caps or RoomCaps()
-        room_id = uuid.uuid4().hex
+        if room_id is None:
+            room_id = uuid.uuid4().hex
+        elif self.get(room_id) is not None:
+            raise RoomError(f"room already exists: {room_id}")
         self._conn.execute(
             "INSERT INTO rooms "
             "(id, name, max_members, max_rounds, max_messages, created_at) "

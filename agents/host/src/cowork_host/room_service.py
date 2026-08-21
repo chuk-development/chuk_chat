@@ -23,6 +23,7 @@ from cowork_manager import (
     RoomBinding,
     RoomCaps,
     RoomDriver,
+    RoomError,
     RoomStore,
     RoomTranscriptStore,
     RoomTurn,
@@ -61,6 +62,30 @@ class RoomService:
         self._emit = emit
         self._caps = caps
         self._transcript = transcript
+
+    def handle_room_create(
+        self, room_id: str, name: str, members: list[dict]
+    ) -> None:
+        """Create an app-built room on the host so ``room_task`` can find it
+        (§16.1). Idempotent: a room that already exists is left as it is, because
+        the app re-sends its rooms on reconnect and a re-create must not fail or
+        duplicate members. A member the room cannot take (over the cap, a bad
+        row) is skipped; the rest of the room is still usable."""
+        if self._rooms.get(room_id) is not None:
+            return
+        self._rooms.create_room(name=name, room_id=room_id)
+        for m in members:
+            if not isinstance(m, dict):
+                continue
+            agent_id = m.get("agent_id")
+            handle = m.get("handle")
+            if not isinstance(agent_id, str) or not isinstance(handle, str):
+                continue
+            try:
+                self._rooms.add_member(room_id, agent_id, handle)
+            except RoomError:
+                # Over the cap or a duplicate: skip this member, keep the room.
+                continue
 
     def handle_room_task(self, room_id: str, message: str) -> None:
         """Drive one room exchange to completion, streaming its turns out.

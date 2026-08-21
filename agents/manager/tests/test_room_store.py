@@ -109,3 +109,17 @@ def test_persists_across_reopen(tmp_path):
     assert got.name == "keep"
     assert got.handles == ("amber",)
     reopened.close()
+
+
+def test_create_room_with_an_explicit_id():
+    store = RoomStore()
+    room = store.create_room(name="x", room_id="room:abc")
+    assert room.room_id == "room:abc"
+    assert store.get("room:abc") is not None
+
+
+def test_create_room_with_a_clashing_id_is_refused():
+    store = RoomStore()
+    store.create_room(name="x", room_id="room:abc")
+    with pytest.raises(RoomError):
+        store.create_room(name="y", room_id="room:abc")

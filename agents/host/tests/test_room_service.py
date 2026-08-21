@@ -167,3 +167,44 @@ def test_handle_room_history_is_empty_without_a_transcript_store():
         room_store=store, binding=RoomBinding(), emit=frames.append
     ).handle_room_history(room_id)
     assert frames == [{"type": "room_history", "room_id": room_id, "turns": []}]
+
+
+def test_handle_room_create_makes_the_room_drivable():
+    store = RoomStore()
+    binding = RoomBinding()
+    binding.register("id-amber", lambda p: "amber hi")
+    binding.register("id-cobalt", lambda p: "cobalt hi")
+    frames = []
+    service = RoomService(room_store=store, binding=binding, emit=frames.append)
+
+    service.handle_room_create(
+        "room:1",
+        "launch",
+        [
+            {"agent_id": "id-amber", "handle": "amber"},
+            {"agent_id": "id-cobalt", "handle": "cobalt"},
+        ],
+    )
+    # Now a task finds the room and drives it (instead of no_such_room).
+    service.handle_room_task("room:1", "go")
+    turns = [f for f in frames if f["type"] == "room_turn"]
+    assert [t["handle"] for t in turns] == ["amber", "cobalt"]
+
+
+def test_handle_room_create_is_idempotent():
+    store = RoomStore()
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    members = [{"agent_id": "id-amber", "handle": "amber"}]
+    service.handle_room_create("room:1", "launch", members)
+    # A re-create (reconnect) does not raise or duplicate.
+    service.handle_room_create("room:1", "launch", members)
+    assert len(store.get("room:1").members) == 1
+
+
+def test_handle_room_create_skips_members_over_the_cap():
+    store = RoomStore()
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    members = [{"agent_id": f"id-{i}", "handle": f"h{i}"} for i in range(8)]
+    service.handle_room_create("room:1", "big", members)
+    # Six taken, the rest skipped; the room is still valid.
+    assert len(store.get("room:1").members) == 6

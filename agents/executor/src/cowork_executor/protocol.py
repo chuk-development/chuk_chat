@@ -53,6 +53,9 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "data": "<base64>"}
     {"type": "subagent",                                  # a child agent (§7.6)
      "event": {"type": "subagent_state", ...}}            #   state or streamed output
+    {"type": "room_create",                               # app -> host: create a room
+     "room_id": "...", "name": "...",
+     "members": [{"agent_id": "...", "handle": "amber"}]}
     {"type": "room_task",                                 # app -> host: start a room
      "room_id": "...", "message": "..."}
     {"type": "room_history_request", "room_id": "..."}    # app -> host: replay it
@@ -189,6 +192,20 @@ def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
     renders the subagent list from ``event``.
     """
     return {"type": "subagent", "event": event}
+
+
+def room_create_payload(
+    *, room_id: str, name: str, members: list[dict]
+) -> dict[str, Any]:
+    """App -> host: create a room on the host so ``room_task`` can drive it
+    (§16.1). ``members`` is ``[{"agent_id": ..., "handle": ...}]`` in room order;
+    the app owns the ``room_id`` and the host stores the room under it."""
+    return {
+        "type": "room_create",
+        "room_id": room_id,
+        "name": name,
+        "members": members,
+    }
 
 
 def room_history_request_payload(*, room_id: str) -> dict[str, Any]:

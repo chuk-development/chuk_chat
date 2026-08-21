@@ -103,3 +103,19 @@ def test_room_history_payloads():
     turns = [{"round": 1, "agent_id": "a", "handle": "amber", "text": "hi"}]
     hist = room_history_payload(room_id="r1", turns=turns)
     assert hist == {"type": "room_history", "room_id": "r1", "turns": turns}
+
+
+def test_room_create_payload():
+    from cowork_executor.protocol import room_create_payload
+
+    p = room_create_payload(
+        room_id="r1",
+        name="launch",
+        members=[{"agent_id": "a", "handle": "amber"}],
+    )
+    assert p == {
+        "type": "room_create",
+        "room_id": "r1",
+        "name": "launch",
+        "members": [{"agent_id": "a", "handle": "amber"}],
+    }
