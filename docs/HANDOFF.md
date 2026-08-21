@@ -301,13 +301,16 @@ credits.
    fields by label instead of brittle positional indices while here.
 
 
-4. **Group rooms** — orchestration core DONE; wiring is split out below.
+4. **Group rooms** — DONE end to end, locally proven. Every sub-item (4a–4c,
+   4b-relay/-drive/-exec/-exec-relay, 4c-shell/-mount/-stream/-stream-wire) is
+   built and green; the only remaining step is the user-gated prod transport
+   (driving a room from a real host over the prod relay). Detail below.
    `manager/group_room.py` is the pure, transport-free heart: `GroupRoom`
    (immutable, ≤6 members, unique handles/ids), `RoomCaps` (Hermes 6/3/10,
    configurable), `parse_mentions` (known-handle-only, ordered, deduped, honours
    cross-machine `@name-device`), and `RoomSession` — the turn driver that
    enforces the caps and reports why it stopped (`no_more_mentions` /
-   `rounds_exhausted` / `messages_exhausted`). 19 tests. **Still open:**
+   `rounds_exhausted` / `messages_exhausted`). 19 tests. Sub-items, all DONE:
    4a. **Room store** — DONE. `manager/room_store.py`: `rooms` + `room_members`
        tables, CRUD, member order by `position`, the ≤6 cap enforced at the DB
        edge (count before insert) and again by `GroupRoom` on rehydration, caps
