@@ -161,6 +161,16 @@ class RoomStore:
         ).fetchall()
         return [self.get(row["id"]) for row in rows]  # type: ignore[misc]
 
+    def rename_room(self, room_id: str, name: str) -> GroupRoom:
+        """Rename a room, returning it. A no-such-room is a :class:`RoomError`."""
+        cur = self._conn.execute(
+            "UPDATE rooms SET name = ? WHERE id = ?", (name, room_id)
+        )
+        self._conn.commit()
+        if cur.rowcount == 0:
+            raise RoomError(f"no such room: {room_id}")
+        return self.get(room_id)  # type: ignore[return-value]
+
     def delete(self, room_id: str) -> bool:
         cur = self._conn.execute("DELETE FROM rooms WHERE id = ?", (room_id,))
         self._conn.commit()

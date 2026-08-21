@@ -20,6 +20,7 @@ class RoomListView extends StatelessWidget {
     required this.onSelect,
     this.onCreate,
     this.onDelete,
+    this.onRename,
     this.selectedRoomId,
   });
 
@@ -33,6 +34,10 @@ class RoomListView extends StatelessWidget {
 
   /// Deletes a room. When null, no delete affordance is shown.
   final void Function(String roomId)? onDelete;
+
+  /// Renames a room (called with its id and the chosen name). When null, no
+  /// rename affordance is shown.
+  final void Function(String roomId, String name)? onRename;
 
   final String? selectedRoomId;
 
@@ -116,28 +121,50 @@ class RoomListView extends StatelessWidget {
         count == 1 ? '1 member' : '$count members',
         style: theme.textTheme.bodySmall,
       ),
-      trailing: onDelete == null
+      trailing: (onDelete == null && onRename == null)
           ? null
           : PopupMenuButton<String>(
               tooltip: 'More',
               icon: const Icon(Icons.more_vert, size: 18),
               onSelected: (value) {
-                if (value == 'delete') onDelete!(room.id);
+                if (value == 'delete') onDelete?.call(room.id);
+                if (value == 'rename') _promptRename(context, room);
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem<String>(
-                  value: 'delete',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.delete_outline, size: 18),
-                    title: Text('Delete room'),
+              itemBuilder: (context) => [
+                if (onRename != null)
+                  const PopupMenuItem<String>(
+                    value: 'rename',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_outlined, size: 18),
+                      title: Text('Rename room'),
+                    ),
                   ),
-                ),
+                if (onDelete != null)
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline, size: 18),
+                      title: Text('Delete room'),
+                    ),
+                  ),
               ],
             ),
       onTap: () => onSelect(room.id),
     );
+  }
+
+  Future<void> _promptRename(BuildContext context, CoworkRoom room) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _RenameDialog(initial: room.name),
+    );
+    if (name != null && name.trim().isNotEmpty) {
+      onRename?.call(room.id, name.trim());
+    }
   }
 
   /// Up to three member avatars, overlapped, with a "+N" chip when the room has
@@ -174,6 +201,52 @@ class RoomListView extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The rename dialog. A StatefulWidget so it owns and disposes its own text
+/// controller — disposing one during the dialog's exit animation, from a
+/// stateless helper, throws "used after disposed".
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename room'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Room name'),
+        onSubmitted: (v) => Navigator.of(context).pop(v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Rename'),
+        ),
+      ],
     );
   }
 }
