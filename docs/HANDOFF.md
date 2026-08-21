@@ -362,10 +362,17 @@ credits.
        4c-shell (part 1): `RoomListView` DONE — a thin view over `RoomSource`
        (like `AgentRosterView`): one row per room with name, an overlapped stack
        of member avatars + a "+N" chip, a member count, a ＋ New-room affordance,
-       and live updates. 5 tests. **Still open (4c-mount):** mount `RoomListView`
-       + the create sheet into the messenger shell and render the selected room
-       in the detail pane (`RoomThreadView`) — the delicate socket/layout rewire,
-       best done alongside 4b-exec so an opened room can actually stream.
+       and live updates. 5 tests. 4c-mount: DONE. The shell gains a "Rooms" app-bar button that opens the
+       rooms screen (`RoomListView`) as its own route — so the agent thread and
+       its live socket stay mounted underneath, untouched. New-room opens
+       `RoomCreateSheet` (members from the roster) and adds to the shell's
+       `RoomSource`; opening a room pushes a `RoomThreadView` page. A room shows
+       an honest waiting state (no turns) because driving a room streams over the
+       relay from the host, which is the user-gated transport step. +2 shell
+       tests (app 205 green). **Room streaming into that page** (feeding the
+       relay client's `room_turn`/`room_done` into the open RoomThreadView) is
+       the one remaining wire, and it lights up the moment a host drives a room
+       — no app change needed beyond subscribing the page to the inbound.
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a

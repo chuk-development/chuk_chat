@@ -9,7 +9,12 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
 import 'package:cowork/widgets/agent_onboarding_sheet.dart';
+import 'package:cowork/models/cowork_room.dart';
+import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/widgets/room_create_sheet.dart';
+import 'package:cowork/widgets/room_list_view.dart';
+import 'package:cowork/widgets/room_thread_view.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 
 /// Builds the default production relay controller: a real [CoworkRelayClient]
@@ -42,6 +47,7 @@ class MessengerShell extends StatefulWidget {
     this.sessionSource = const SupabaseAccountSession(),
     this.pairingStore,
     this.rosterSource,
+    this.roomSource,
     this.controlSource,
     this.onSignOut,
   });
@@ -60,6 +66,9 @@ class MessengerShell extends StatefulWidget {
 
   /// The roster of coworkers. Built by the state when omitted.
   final AgentRosterSource? rosterSource;
+
+  /// The group rooms the user has built. Built by the state when omitted.
+  final RoomSource? roomSource;
 
   /// The control surface's data source. The default reports every block as not
   /// connected, because the host serves none of it yet.
@@ -81,6 +90,7 @@ class _MessengerShellState extends State<MessengerShell> {
       widget.pairingStore ?? CoworkPairingStore();
   late final AgentRosterSource _roster =
       widget.rosterSource ?? LocalAgentRosterSource();
+  late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource();
   late final AgentControlSource _controlSource =
       widget.controlSource ?? HostUnavailableControlSource();
 
@@ -153,6 +163,72 @@ class _MessengerShellState extends State<MessengerShell> {
           Navigator.of(sheetContext).pop();
           _select(agent.id, agent.threads.first.key);
         },
+      ),
+    );
+  }
+
+  /// Opens the rooms screen as its own route, so the agent thread and its live
+  /// socket stay mounted underneath — a room never disturbs the one-to-one
+  /// connection. Group rooms run on the host; until one is connected and driving
+  /// a room, the room thread shows an honest waiting state rather than faking
+  /// turns.
+  void _openRooms() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Rooms'),
+            actions: [
+              IconButton(
+                tooltip: 'New room',
+                icon: const Icon(Icons.group_add_outlined),
+                onPressed: _openRoomCreate,
+              ),
+            ],
+          ),
+          body: RoomListView(
+            source: _rooms,
+            onCreate: _openRoomCreate,
+            onSelect: _openRoom,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRoomCreate() async {
+    // Only coworkers the app can actually name can join a room.
+    final agents = _roster.visibleAgents;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => RoomCreateSheet(
+        agents: agents,
+        onCancel: () => Navigator.of(sheetContext).pop(),
+        onSubmit: (draft) {
+          _rooms.addRoom(draft);
+          Navigator.of(sheetContext).pop();
+        },
+      ),
+    );
+  }
+
+  void _openRoom(String roomId) {
+    final room = _rooms.byId(roomId);
+    if (room == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: Text(room.name)),
+          // No turns yet: a room is driven by the host, and streaming a room
+          // over the relay is the host-gated step. The view renders whatever
+          // turns arrive; today that is none, shown honestly.
+          body: RoomThreadView(
+            roomName: room.name,
+            userMessage: 'Send this room a task from your host to start.',
+            turns: const <CoworkRoomTurn>[],
+          ),
+        ),
       ),
     );
   }
@@ -247,6 +323,11 @@ class _MessengerShellState extends State<MessengerShell> {
             icon: const Icon(Icons.tune),
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
           ),
+        IconButton(
+          tooltip: 'Rooms',
+          icon: const Icon(Icons.groups_outlined),
+          onPressed: _openRooms,
+        ),
         IconButton(
           tooltip: 'Sign out',
           icon: const Icon(Icons.logout),
