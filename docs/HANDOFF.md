@@ -369,10 +369,19 @@ credits.
        `RoomSource`; opening a room pushes a `RoomThreadView` page. A room shows
        an honest waiting state (no turns) because driving a room streams over the
        relay from the host, which is the user-gated transport step. +2 shell
-       tests (app 205 green). **Room streaming into that page** (feeding the
-       relay client's `room_turn`/`room_done` into the open RoomThreadView) is
-       the one remaining wire, and it lights up the moment a host drives a room
-       — no app change needed beyond subscribing the page to the inbound.
+       tests (app 205 green). 4c-stream: DONE (the accumulator). `app/lib/widgets/room_thread_page.dart`
+       `RoomThreadPage` subscribes to an injected `Stream<CoworkRelayInbound>`,
+       accumulates `room_turn` frames into turns and `room_done` into the stop,
+       and renders `RoomThreadView` live (running until done); non-room events are
+       ignored. Injected stream = testable with a fake controller (4 tests) and
+       drivable by the real relay socket unchanged. **Single open room:** a
+       `room_turn` carries no room id, so it accumulates every room turn on the
+       stream — correct while one room runs at a time; a room id on the frame +
+       a filter closes it when rooms run concurrently. **Still open
+       (4c-stream-wire):** hand `RoomThreadPage` the real socket in the shell —
+       needs the controller shared out of `CoworkThreadView` (a socket-lifecycle
+       refactor), best done with a live host driving a room so it can be seen
+       working, not just unit-tested.
 
 
 5. **Per-subagent token budget** — DONE (mechanism). The loop now takes a
