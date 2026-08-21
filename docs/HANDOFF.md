@@ -465,6 +465,21 @@ credits.
   is the one user-gated step left. +3 page tests, +1 executor test, shell test
   extended; app 213, executor 40 green.
 
+- **Host room handler (§16.1/4b)** — DONE. `host/room_service.py` `RoomService`
+  turns a `room_task` frame into a running exchange: looks the room up in the
+  `RoomStore`, drives its members with a `RoomDriver` over the `RoomBinding`
+  (each member routed to its own executor), and emits the turns and the end as
+  `room_turn` / `room_done` payloads through an `emit` seam (the host binds it to
+  seal-and-send; a test captures the dicts). An unknown room ends with
+  `no_such_room` rather than silence; an offline member shows the offline
+  placeholder; a reply `@mention` drives the next round; caps override honoured.
+  5 tests, host 68 green. So the **whole room round-trip is now built and locally
+  proven** — app composes `room_task` → host drives the room → `room_turn`/`room_done`
+  stream back → app renders. **Still open (host-wire):** call
+  `RoomService.handle_room_task` from the host's actual frame dispatch and
+  register real per-member `TaskSender`s as executors connect — the live
+  transport wiring, which is the user-gated deploy.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
