@@ -206,6 +206,12 @@ class Job:
     claimed_at: datetime | None = None
     heartbeat_at: datetime | None = None
 
+    def routine_label(self, agent_name: str) -> str:
+        """The Bot Mode display name for a routine: ``[bot:<name>] <job id>``
+        (§16.1). Namespaced so an agent's routines read as its own; the caller
+        passes the agent's display name because the job holds only the id."""
+        return f"[bot:{agent_name}] {self.id}"
+
     def advance(self, after: datetime) -> None:
         """Move ``next_run`` to the next occurrence after ``after``.
 
@@ -346,6 +352,22 @@ class Scheduler:
     def jobs(self) -> list[Job]:
         with self._lock:
             return list(self._jobs.values())
+
+    def jobs_for(self, agent_id: str) -> list[Job]:
+        """An agent's routines (§16.1 Bot Mode: routines belong to a bot). The
+        list a per-agent view shows — every job whose ``agent_id`` is this one."""
+        with self._lock:
+            return [j for j in self._jobs.values() if j.agent_id == agent_id]
+
+    def remove_agent_jobs(self, agent_id: str) -> int:
+        """Drop all of an agent's routines, returning how many. A deleted agent
+        must not leave its routines firing at nothing — the scheduler's twin of
+        the room-delete cascade."""
+        with self._lock:
+            ids = [jid for jid, j in self._jobs.items() if j.agent_id == agent_id]
+            for jid in ids:
+                del self._jobs[jid]
+            return len(ids)
 
     def due_jobs(self, now: datetime) -> list[Job]:
         """Return jobs that are due *and* free to run at ``now``.
