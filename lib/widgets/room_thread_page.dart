@@ -7,11 +7,9 @@
 /// is injected, so a test drives it with a fake controller and the shell drives
 /// it with the real relay socket — the same widget either way.
 ///
-/// **Single open room, for now.** A `room_turn` frame carries no room id (§16.1
-/// 4b-relay), so this accumulates every room turn on the stream. That is correct
-/// while one room runs at a time — the room the user opened — which is the
-/// product model today. When rooms can run concurrently, a room id on the frame
-/// and a filter here close the gap; the accumulator does not otherwise change.
+/// Frames carry a `room_id` (§16.1 4b-relay), so this keeps only the ones for
+/// [roomId] and ignores the rest — several rooms can stream over the one socket
+/// without crossing wires.
 library;
 
 import 'dart:async';
@@ -25,10 +23,15 @@ import 'package:cowork/widgets/room_thread_view.dart';
 class RoomThreadPage extends StatefulWidget {
   const RoomThreadPage({
     super.key,
+    required this.roomId,
     required this.roomName,
     required this.userMessage,
     required this.inbound,
   });
+
+  /// The room this page shows. Frames for any other room on the shared socket
+  /// are ignored, so several rooms can stream at once without crossing wires.
+  final String roomId;
 
   final String roomName;
 
@@ -66,11 +69,13 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     if (!mounted) return;
     switch (event) {
       case CoworkRelayRoomTurn(
+          :final roomId,
           :final round,
           :final agentId,
           :final handle,
           :final text,
         ):
+        if (roomId != widget.roomId) break; // another room on the same socket
         setState(() {
           _turns.add(
             CoworkRoomTurn(
@@ -81,7 +86,8 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             ),
           );
         });
-      case CoworkRelayRoomDone(:final reason):
+      case CoworkRelayRoomDone(:final roomId, :final reason):
+        if (roomId != widget.roomId) break;
         setState(() {
           _stop = CoworkRoomStop.fromWire(reason);
           _running = false;

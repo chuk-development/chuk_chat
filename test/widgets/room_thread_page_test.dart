@@ -14,6 +14,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: RoomThreadPage(
+            roomId: 'r1',
             roomName: 'launch',
             userMessage: 'what is the plan?',
             inbound: ctrl.stream,
@@ -35,6 +36,7 @@ void main() {
 
     ctrl.add(
       const CoworkRelayRoomTurn(
+        roomId: 'r1',
         round: 1,
         agentId: 'a',
         handle: 'amber',
@@ -47,6 +49,7 @@ void main() {
 
     ctrl.add(
       const CoworkRelayRoomTurn(
+        roomId: 'r1',
         round: 2,
         agentId: 'b',
         handle: 'cobalt',
@@ -64,13 +67,14 @@ void main() {
     final ctrl = await pump(tester);
     ctrl.add(
       const CoworkRelayRoomTurn(
+        roomId: 'r1',
         round: 1,
         agentId: 'a',
         handle: 'amber',
         text: 'x',
       ),
     );
-    ctrl.add(const CoworkRelayRoomDone(reason: 'rounds_exhausted'));
+    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'rounds_exhausted'));
     await tester.pump();
 
     expect(find.text('the room is talking…'), findsNothing);
@@ -88,10 +92,30 @@ void main() {
     expect(find.textContaining('agent-thread text'), findsNothing);
   });
 
+  testWidgets('a turn for another room is ignored', (tester) async {
+    final ctrl = await pump(tester); // this page is room r1
+    ctrl.add(
+      const CoworkRelayRoomTurn(
+        roomId: 'r2',
+        round: 1,
+        agentId: 'z',
+        handle: 'zed',
+        text: 'other room',
+      ),
+    );
+    await tester.pump();
+    expect(find.text('@zed'), findsNothing);
+    expect(find.text('other room'), findsNothing);
+    // A done for another room does not stop this one either.
+    ctrl.add(const CoworkRelayRoomDone(roomId: 'r2', reason: 'stopped'));
+    await tester.pump();
+    expect(find.text('the room is talking…'), findsOneWidget);
+  });
+
   testWidgets('an unknown stop reason leaves no footer but stops running',
       (tester) async {
     final ctrl = await pump(tester);
-    ctrl.add(const CoworkRelayRoomDone(reason: 'who_knows'));
+    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'who_knows'));
     await tester.pump();
     // fromWire returns null -> no footer, and not running (no indicator).
     expect(find.text('the room is talking…'), findsNothing);

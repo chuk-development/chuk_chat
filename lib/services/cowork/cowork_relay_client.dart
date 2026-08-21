@@ -364,11 +364,16 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
 /// One member's turn in a group room (§16.1). Streamed live as the room talks.
 class CoworkRelayRoomTurn extends CoworkRelayInbound {
   const CoworkRelayRoomTurn({
+    required this.roomId,
     required this.round,
     required this.agentId,
     required this.handle,
     required this.text,
   });
+
+  /// Which room this turn belongs to, so the app routes it to the right open
+  /// room when several run at once.
+  final String roomId;
 
   final int round;
   final String agentId;
@@ -381,10 +386,14 @@ class CoworkRelayRoomTurn extends CoworkRelayInbound {
 /// `turn_failed`); the UI maps it through `CoworkRoomStop.fromWire`.
 class CoworkRelayRoomDone extends CoworkRelayInbound {
   const CoworkRelayRoomDone({
+    required this.roomId,
     required this.reason,
     this.messagesSent,
     this.rounds,
   });
+
+  /// Which room ended.
+  final String roomId;
 
   final String reason;
   final int? messagesSent;
@@ -945,10 +954,12 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         final turn = _roomTurnFromPayload(payload);
         if (turn != null) _inbound.add(turn);
       case 'room_done':
+        final roomId = payload['room_id'];
         final reason = payload['reason'];
-        if (reason is String) {
+        if (roomId is String && reason is String) {
           _inbound.add(
             CoworkRelayRoomDone(
+              roomId: roomId,
               reason: reason,
               messagesSent: CoworkRelayTool._asInt(payload['messages_sent']),
               rounds: CoworkRelayTool._asInt(payload['rounds']),
@@ -990,12 +1001,19 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   /// Turns a `room_turn` frame into a [CoworkRelayRoomTurn], or null when a
   /// field is missing or the wrong type. Dropped, never thrown.
   static CoworkRelayRoomTurn? _roomTurnFromPayload(Map<String, dynamic> payload) {
+    final roomId = payload['room_id'];
     final agentId = payload['agent_id'];
     final handle = payload['handle'];
     final text = payload['text'];
     final round = CoworkRelayTool._asInt(payload['round']);
-    if (agentId is! String || handle is! String || round == null) return null;
+    if (roomId is! String ||
+        agentId is! String ||
+        handle is! String ||
+        round == null) {
+      return null;
+    }
     return CoworkRelayRoomTurn(
+      roomId: roomId,
       round: round,
       agentId: agentId,
       handle: handle,
