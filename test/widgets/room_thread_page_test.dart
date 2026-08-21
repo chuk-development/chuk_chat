@@ -10,6 +10,7 @@ void main() {
   Future<StreamController<CoworkRelayInbound>> pump(
     WidgetTester tester, {
     void Function(String)? onSend,
+    VoidCallback? onReady,
   }) async {
     final ctrl = StreamController<CoworkRelayInbound>.broadcast();
     addTearDown(ctrl.close);
@@ -22,6 +23,7 @@ void main() {
             userMessage: 'what is the plan?',
             inbound: ctrl.stream,
             onSend: onSend,
+            onReady: onReady,
           ),
         ),
       ),
@@ -165,5 +167,85 @@ void main() {
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
     expect(sent, isEmpty);
+  });
+
+  testWidgets('onReady fires once the page is up', (tester) async {
+    var ready = 0;
+    await pump(tester, onReady: () => ready++);
+    await tester.pump(); // let the post-frame callback run
+    expect(ready, 1);
+  });
+
+  testWidgets('room_history replaces the thread and marks it not running',
+      (tester) async {
+    final ctrl = await pump(tester);
+    ctrl.add(
+      const CoworkRelayRoomTurn(
+        roomId: 'r1',
+        round: 1,
+        agentId: 'a',
+        handle: 'amber',
+        text: 'live turn',
+      ),
+    );
+    await tester.pump();
+    expect(find.text('live turn'), findsOneWidget);
+
+    ctrl.add(
+      const CoworkRelayRoomHistory(
+        roomId: 'r1',
+        turns: [
+          CoworkRelayRoomTurn(
+            roomId: 'r1',
+            round: 1,
+            agentId: 'a',
+            handle: 'amber',
+            text: 'stored one',
+          ),
+          CoworkRelayRoomTurn(
+            roomId: 'r1',
+            round: 2,
+            agentId: 'b',
+            handle: 'cobalt',
+            text: 'stored two',
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    // The live turn is replaced by the stored history; the exchange is over.
+    expect(find.text('live turn'), findsNothing);
+    expect(find.text('stored one'), findsOneWidget);
+    expect(find.text('stored two'), findsOneWidget);
+    expect(find.text('the room is talking…'), findsNothing);
+  });
+
+  testWidgets('an empty room_history leaves the page running and empty',
+      (tester) async {
+    final ctrl = await pump(tester);
+    ctrl.add(const CoworkRelayRoomHistory(roomId: 'r1', turns: []));
+    await tester.pump();
+    expect(find.text('the room is talking…'), findsOneWidget);
+  });
+
+  testWidgets('history for another room is ignored', (tester) async {
+    final ctrl = await pump(tester);
+    ctrl.add(
+      const CoworkRelayRoomHistory(
+        roomId: 'r2',
+        turns: [
+          CoworkRelayRoomTurn(
+            roomId: 'r2',
+            round: 1,
+            agentId: 'z',
+            handle: 'zed',
+            text: 'other',
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(find.text('other'), findsNothing);
   });
 }

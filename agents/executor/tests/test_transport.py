@@ -89,3 +89,17 @@ def test_room_task_payload():
 
     p = room_task_payload(room_id="r1", message="what's the plan?")
     assert p == {"type": "room_task", "room_id": "r1", "message": "what's the plan?"}
+
+
+def test_room_history_payloads():
+    from cowork_executor.protocol import (
+        room_history_payload,
+        room_history_request_payload,
+    )
+
+    req = room_history_request_payload(room_id="r1")
+    assert req == {"type": "room_history_request", "room_id": "r1"}
+
+    turns = [{"round": 1, "agent_id": "a", "handle": "amber", "text": "hi"}]
+    hist = room_history_payload(room_id="r1", turns=turns)
+    assert hist == {"type": "room_history", "room_id": "r1", "turns": turns}

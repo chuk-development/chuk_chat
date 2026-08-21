@@ -28,6 +28,7 @@ class RoomThreadPage extends StatefulWidget {
     required this.userMessage,
     required this.inbound,
     this.onSend,
+    this.onReady,
   });
 
   /// The room this page shows. Frames for any other room on the shared socket
@@ -48,6 +49,10 @@ class RoomThreadPage extends StatefulWidget {
   /// hidden — the page is read-only.
   final void Function(String message)? onSend;
 
+  /// Called once after the page subscribes, so the caller can request the stored
+  /// history (which then arrives as a `room_history` event on [inbound]).
+  final VoidCallback? onReady;
+
   @override
   State<RoomThreadPage> createState() => _RoomThreadPageState();
 }
@@ -66,6 +71,9 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   void initState() {
     super.initState();
     _sub = widget.inbound.listen(_onInbound);
+    // Subscribe first, then ask — so a fast history reply cannot arrive before
+    // the listener is attached.
+    WidgetsBinding.instance.addPostFrameCallback((_) => widget.onReady?.call());
   }
 
   @override
@@ -110,6 +118,24 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
               text: text,
             ),
           );
+        });
+      case CoworkRelayRoomHistory(:final roomId, :final turns):
+        if (roomId != widget.roomId) break;
+        setState(() {
+          // History replaces the view: it is the last exchange, and it is over.
+          _turns
+            ..clear()
+            ..addAll(
+              turns.map(
+                (t) => CoworkRoomTurn(
+                  round: t.round,
+                  agentId: t.agentId,
+                  handle: t.handle,
+                  text: t.text,
+                ),
+              ),
+            );
+          if (_turns.isNotEmpty) _running = false;
         });
       case CoworkRelayRoomDone(:final roomId, :final reason):
         if (roomId != widget.roomId) break;

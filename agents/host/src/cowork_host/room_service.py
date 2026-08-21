@@ -28,7 +28,11 @@ from cowork_manager import (
     RoomTurn,
 )
 
-from cowork_executor import room_done_payload, room_turn_payload
+from cowork_executor import (
+    room_done_payload,
+    room_history_payload,
+    room_turn_payload,
+)
 
 #: Emits one room payload (``room_turn`` / ``room_done``) toward the app. The
 #: host binds this to seal-and-send; a test captures the dicts.
@@ -106,3 +110,21 @@ class RoomService:
                 rounds=outcome.rounds,
             )
         )
+
+    def handle_room_history(self, room_id: str) -> None:
+        """Answer a ``room_history_request`` with the room's stored transcript
+        (§16.1). Emits an empty history when nothing is stored (or no transcript
+        store is configured) rather than staying silent, so the app can tell
+        "no history" from "still waiting"."""
+        turns: list[dict] = []
+        if self._transcript is not None:
+            turns = [
+                {
+                    "round": t.round,
+                    "agent_id": t.agent_id,
+                    "handle": t.handle,
+                    "text": t.text,
+                }
+                for t in self._transcript.history(room_id)
+            ]
+        self._emit(room_history_payload(room_id=room_id, turns=turns))

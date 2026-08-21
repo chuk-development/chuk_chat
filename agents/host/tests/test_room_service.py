@@ -131,3 +131,39 @@ def test_the_service_records_the_transcript_and_starts_fresh_each_time():
         "amber again",
         "cobalt again",
     ]
+
+
+def test_handle_room_history_replays_the_stored_transcript():
+    from cowork_manager import RoomTranscriptStore
+
+    store, room_id = _store_with_room(["amber", "cobalt"])
+    binding = RoomBinding()
+    binding.register("id-amber", lambda p: "amber hi")
+    binding.register("id-cobalt", lambda p: "cobalt hi")
+    transcript = RoomTranscriptStore()
+
+    frames = []
+    service = RoomService(
+        room_store=store,
+        binding=binding,
+        emit=frames.append,
+        transcript=transcript,
+    )
+    service.handle_room_task(room_id, "go")
+
+    frames.clear()
+    service.handle_room_history(room_id)
+    assert len(frames) == 1
+    hist = frames[0]
+    assert hist["type"] == "room_history"
+    assert hist["room_id"] == room_id
+    assert [t["text"] for t in hist["turns"]] == ["amber hi", "cobalt hi"]
+
+
+def test_handle_room_history_is_empty_without_a_transcript_store():
+    store, room_id = _store_with_room(["amber", "cobalt"])
+    frames = []
+    RoomService(
+        room_store=store, binding=RoomBinding(), emit=frames.append
+    ).handle_room_history(room_id)
+    assert frames == [{"type": "room_history", "room_id": room_id, "turns": []}]

@@ -55,6 +55,9 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "event": {"type": "subagent_state", ...}}            #   state or streamed output
     {"type": "room_task",                                 # app -> host: start a room
      "room_id": "...", "message": "..."}
+    {"type": "room_history_request", "room_id": "..."}    # app -> host: replay it
+    {"type": "room_history",                              # host -> app: stored turns
+     "room_id": "...", "turns": [{"round": 1, ...}]}
     {"type": "room_turn",                                 # one member's turn (§16.1)
      "room_id": "...", "round": 1, "agent_id": "...",
      "handle": "amber", "text": "..."}
@@ -186,6 +189,18 @@ def subagent_payload(event: dict[str, Any]) -> dict[str, Any]:
     renders the subagent list from ``event``.
     """
     return {"type": "subagent", "event": event}
+
+
+def room_history_request_payload(*, room_id: str) -> dict[str, Any]:
+    """App -> host: replay a reopened room's stored transcript (§16.1). The host
+    answers with one ``room_history`` frame."""
+    return {"type": "room_history_request", "room_id": room_id}
+
+
+def room_history_payload(*, room_id: str, turns: list[dict]) -> dict[str, Any]:
+    """Host -> app: a room's stored turns, in spoken order. Each turn is the same
+    shape a live ``room_turn`` carries, minus its own ``type`` wrapper."""
+    return {"type": "room_history", "room_id": room_id, "turns": turns}
 
 
 def room_task_payload(*, room_id: str, message: str) -> dict[str, Any]:
