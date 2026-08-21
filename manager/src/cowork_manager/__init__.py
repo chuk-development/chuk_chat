@@ -36,6 +36,8 @@ from cowork_manager.group_room import (
     RoomSession,
     RoomTurn,
     parse_mentions,
+    has_broadcast_mention,
+    BROADCAST_HANDLES,
     assign_room_handles,
 )
 from cowork_manager.supervisor import (
@@ -103,6 +105,8 @@ __all__ = [
     "RoomSession",
     "RoomTurn",
     "parse_mentions",
+    "has_broadcast_mention",
+    "BROADCAST_HANDLES",
     "DEFAULT_MAX_MEMBERS",
     "DEFAULT_MAX_ROUNDS",
     "DEFAULT_MAX_MESSAGES_PER_SEND",

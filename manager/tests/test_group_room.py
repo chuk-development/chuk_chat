@@ -221,3 +221,55 @@ def test_bad_caps_are_refused():
         RoomCaps(max_members=0)
     with pytest.raises(ValueError):
         RoomCaps(max_rounds=0)
+
+
+# -- @all / broadcast mentions (§16.1) ------------------------------------
+
+
+def test_has_broadcast_mention_detects_the_keywords():
+    from cowork_manager import has_broadcast_mention
+
+    assert has_broadcast_mention("hey @all thoughts?")
+    assert has_broadcast_mention("@everyone")
+    assert has_broadcast_mention("what does the @room think")
+    assert has_broadcast_mention("@ALL uppercase too")
+    assert not has_broadcast_mention("@amber only")
+    assert not has_broadcast_mention("no mention")
+    assert not has_broadcast_mention("")
+
+
+def test_user_at_all_seeds_everyone_in_round_one():
+    room = _room(["amber", "cobalt", "jade"])
+    session = RoomSession(room, "@all please weigh in")
+    order = _run(session, {})
+    assert order == [(1, "amber"), (1, "cobalt"), (1, "jade")]
+
+
+def test_a_reply_at_all_re_engages_the_whole_room_next_round():
+    room = _room(["amber", "cobalt", "jade"])
+    # amber addresses only jade in round 1... no: amber broadcasts.
+    session = RoomSession(room, "@amber kick off")
+    order = _run(
+        session,
+        {"amber": "let's hear from @all", "cobalt": "ok", "jade": "ok"},
+    )
+    # Round 1: amber. Round 2: everyone except amber, in room order.
+    assert order == [(1, "amber"), (2, "cobalt"), (2, "jade")]
+    assert session.stop_reason == "no_more_mentions"
+
+
+def test_at_all_never_re_triggers_the_speaker():
+    room = _room(["amber", "cobalt"])
+    session = RoomSession(room, "@amber go")
+    order = _run(session, {"amber": "@all what do you think", "cobalt": "done"})
+    assert order == [(1, "amber"), (2, "cobalt")]  # amber not requeued
+
+
+def test_at_all_still_obeys_the_round_cap():
+    room = _room(["amber", "cobalt"])
+    session = RoomSession(
+        room, "@amber go", caps=RoomCaps(max_rounds=1)
+    )
+    order = _run(session, {"amber": "@all thoughts?"})
+    assert order == [(1, "amber")]
+    assert session.stop_reason == "rounds_exhausted"
