@@ -338,8 +338,20 @@ class _MessengerShellState extends State<MessengerShell> {
     // deleted room so nothing is orphaned. If the deleted agent was selected,
     // clear the selection so the thread pane does not point at a ghost.
     _roster.removeAgent(agentId);
-    for (final roomId in _rooms.removeAgentFromRooms(agentId)) {
-      _sharedController?.deleteRoom(roomId);
+    // The rooms the agent was in, captured before the cascade rewrites them.
+    final wasIn = <String>[
+      for (final room in _rooms.rooms)
+        if (room.members.any((m) => m.agentId == agentId)) room.id,
+    ];
+    final deleted = _rooms.removeAgentFromRooms(agentId).toSet();
+    // Keep the host consistent: a room that survived lost one member (sync the
+    // removal); a room that fell below two members was deleted (sync that).
+    for (final roomId in wasIn) {
+      if (deleted.contains(roomId)) {
+        _sharedController?.deleteRoom(roomId);
+      } else {
+        _sharedController?.removeRoomMember(roomId, agentId);
+      }
     }
     if (_selectedAgentId == agentId) {
       setState(() {

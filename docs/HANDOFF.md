@@ -607,6 +607,14 @@ credits.
   change (or stops if a removal dropped the room below two and deleted it). +7
   sheet, +1 list tests; app 238 green.
 
+- **Fix: agent-delete now syncs surviving rooms to the host** — the earlier
+  agent-delete cascade told the host to forget rooms that fell below two members,
+  but a room that *survived* (lost one member, kept ≥2) had the member removed
+  only in the app's `LocalRoomSource` — the host still held the phantom member.
+  `_deleteAgent` now captures the rooms the agent was in before the cascade and
+  syncs each: a deleted room -> `deleteRoom`, a survivor -> `removeRoomMember`.
+  +1 shell test driving the real roster-delete path; app 239 green.
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 After the room build-out (~37 commits this session across 6 packages), the whole
