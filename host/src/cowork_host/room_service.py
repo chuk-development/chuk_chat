@@ -167,3 +167,35 @@ class RoomService:
                 for t in self._transcript.history(room_id)
             ]
         self._emit(room_history_payload(room_id=room_id, turns=turns))
+
+
+def dispatch_room_frame(service: RoomService, payload: dict) -> None:
+    """Route one decoded ``room_*`` payload to the right :class:`RoomService`
+    method (§16.1). The executor hands these up via ``on_room_frame``; this is
+    the one place the room wire types map to service calls. An unknown type or a
+    payload missing its ``room_id`` is ignored — the executor already validated
+    the frame's authenticity, so a malformed body is a client bug, not an attack,
+    and dropping it is safer than guessing."""
+    room_id = payload.get("room_id")
+    if not isinstance(room_id, str) or not room_id:
+        return
+    kind = payload.get("type")
+    if kind == "room_create":
+        name = payload.get("name")
+        members = payload.get("members")
+        service.handle_room_create(
+            room_id,
+            name if isinstance(name, str) else "",
+            members if isinstance(members, list) else [],
+        )
+    elif kind == "room_task":
+        message = payload.get("message")
+        service.handle_room_task(room_id, message if isinstance(message, str) else "")
+    elif kind == "room_rename":
+        name = payload.get("name")
+        if isinstance(name, str) and name.strip():
+            service.handle_room_rename(room_id, name)
+    elif kind == "room_delete":
+        service.handle_room_delete(room_id)
+    elif kind == "room_history_request":
+        service.handle_room_history(room_id)

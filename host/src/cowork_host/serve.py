@@ -64,6 +64,7 @@ class TaskServer:
         workspace: str | None = None,
         max_iterations: int = 50,
         estop_path: str | None = None,
+        on_room_frame=None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -83,6 +84,7 @@ class TaskServer:
                 workspace=workspace or agent.workspace_dir or None,
                 max_iterations=max_iterations,
                 estop_path=estop_path,
+                on_room_frame=on_room_frame,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)
