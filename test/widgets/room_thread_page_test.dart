@@ -284,4 +284,39 @@ void main() {
     );
     expect(find.text('the room is talking…'), findsNothing);
   });
+
+  testWidgets('the composer is disabled after the stream closes', (tester) async {
+    final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
+    final sent = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoomThreadPage(
+            roomId: 'r1',
+            roomName: 'launch',
+            userMessage: 'hi',
+            inbound: ctrl.stream,
+            onSend: sent.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Enabled before the drop.
+    expect(
+      tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send)).onPressed,
+      isNotNull,
+    );
+
+    unawaited(ctrl.close());
+    await tester.pump();
+
+    // Disabled after: the send button is dead and typing hits nothing.
+    expect(
+      tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send)).onPressed,
+      isNull,
+    );
+    expect(find.text('Reopen the room to send'), findsOneWidget);
+  });
 }
