@@ -114,7 +114,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   void _send() {
     final text = _composer.text.trim();
     final onSend = widget.onSend;
-    if (text.isEmpty || onSend == null) return;
+    if (text.isEmpty || onSend == null || _disconnected) return;
     onSend(text);
     setState(() {
       _sentMessage = text;
@@ -220,9 +220,14 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                     controller: _composer,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Message the room…',
-                      border: OutlineInputBorder(),
+                    // Once the socket is gone there is nowhere to send: disable
+                    // the field so the user is not typing into a dead room.
+                    enabled: !_disconnected,
+                    decoration: InputDecoration(
+                      hintText: _disconnected
+                          ? 'Reopen the room to send'
+                          : 'Message the room…',
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     onSubmitted: (_) => _send(),
@@ -231,7 +236,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                 const SizedBox(width: 8),
                 IconButton.filled(
                   icon: const Icon(Icons.send),
-                  onPressed: _send,
+                  onPressed: _disconnected ? null : _send,
                 ),
               ],
             ),
