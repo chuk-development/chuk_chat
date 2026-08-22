@@ -487,4 +487,45 @@ void main() {
     expect(rooms.byId(b.id), isNull);
     expect(rooms.byId(a.id)!.members.length, 2);
   });
+
+  testWidgets('removing a member from the sheet syncs removeRoomMember',
+      (tester) async {
+    final roster = LocalAgentRosterSource();
+    final rooms = LocalRoomSource();
+    // Three members, so Remove is enabled (it disables at two).
+    final room = rooms.addRoom(const CoworkRoomDraft(name: 'trio', members: [
+      CoworkRoomMember(agentId: 'a', handle: 'amber'),
+      CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+      CoworkRoomMember(agentId: 'c', handle: 'jade'),
+    ]));
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MessengerShell(
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Rooms'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage members'));
+    await tester.pumpAndSettle();
+
+    // Remove the first member: the room survives (3 -> 2), host told to drop it.
+    await tester.tap(find.byIcon(Icons.remove_circle_outline).first);
+    await tester.pumpAndSettle();
+
+    expect(rooms.byId(room.id)!.members.length, 2);
+    expect(controller.removedMembers, [(room.id, 'a')]);
+    expect(controller.deletedRooms, isEmpty);
+  });
 }

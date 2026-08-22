@@ -308,10 +308,16 @@ class _MessengerShellState extends State<MessengerShell> {
           },
           onRemove: (agentId) {
             final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
-            _sharedController?.removeRoomMember(roomId, agentId);
+            // Keep the host consistent: if the room fell below two members it was
+            // deleted locally, so the host must delete it, not just drop a
+            // member (which would strand a one-member room there).
+            if (roomDeleted) {
+              _sharedController?.deleteRoom(roomId);
+            } else {
+              _sharedController?.removeRoomMember(roomId, agentId);
+            }
             Navigator.of(sheetContext).pop();
-            // If the room survived, reopen the sheet; if it fell below two
-            // members and was deleted, stop.
+            // If the room survived, reopen the sheet; if it was deleted, stop.
             if (!roomDeleted) showSheet(ctx);
           },
         ),

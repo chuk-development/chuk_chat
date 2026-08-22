@@ -615,6 +615,15 @@ credits.
   syncs each: a deleted room -> `deleteRoom`, a survivor -> `removeRoomMember`.
   +1 shell test driving the real roster-delete path; app 239 green.
 
+- **Members-sheet remove: defensive host-delete + test** — audited the
+  member-remove path for the same sync class as the agent-delete fix. Via the
+  sheet a removal can only *shrink* a room, not delete it (Remove is disabled at
+  two members), so the survivor path (host told `removeRoomMember`) was already
+  correct — now covered by a test that drives the sheet. Added a defensive
+  branch anyway: if `removeMemberFromRoom` ever deletes the room (guard changed,
+  or another caller), the host is told `deleteRoom`, not left with a stranded
+  one-member room — matching the agent-delete cascade. app 240 green.
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 After the room build-out (~37 commits this session across 6 packages), the whole
