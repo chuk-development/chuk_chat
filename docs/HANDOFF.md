@@ -672,6 +672,12 @@ persistence. Everything below the live transport is built and tested.
 
 ### Gates that STILL need the user (not auto-run)
 
+**Runbook for the one remaining room step: `docs/ROOMS_GOING_LIVE.md`** — a
+turnkey spec for making rooms drive real members (register per-member
+`TaskSender`s in the host's `RoomBinding`; needs a multi-agent host — one executor
+per member, not the serving one — plus the prod relay). All the pieces it wires
+already exist and are tested; only the credit-spending / prod parts are gated.
+
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
   (Note: the chat-side `cowork_peers.py` fix already shipped there as `d0732c1`,
   verified live 2026-08-20; this gate is about pointing CoWork at the prod relay,
