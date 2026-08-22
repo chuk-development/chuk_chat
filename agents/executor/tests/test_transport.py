@@ -135,3 +135,22 @@ def test_room_rename_payload():
         "room_id": "r1",
         "name": "launch v2",
     }
+
+
+def test_room_member_payloads():
+    from cowork_executor.protocol import (
+        room_add_member_payload,
+        room_remove_member_payload,
+    )
+
+    assert room_add_member_payload(room_id="r1", agent_id="a", handle="amber") == {
+        "type": "room_add_member",
+        "room_id": "r1",
+        "agent_id": "a",
+        "handle": "amber",
+    }
+    assert room_remove_member_payload(room_id="r1", agent_id="a") == {
+        "type": "room_remove_member",
+        "room_id": "r1",
+        "agent_id": "a",
+    }

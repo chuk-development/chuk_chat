@@ -58,6 +58,10 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "members": [{"agent_id": "...", "handle": "amber"}]}
     {"type": "room_task",                                 # app -> host: start a room
      "room_id": "...", "message": "..."}
+    {"type": "room_add_member",                           # app -> host: add member
+     "room_id": "...", "agent_id": "...", "handle": "..."}
+    {"type": "room_remove_member",                        # app -> host: remove member
+     "room_id": "...", "agent_id": "..."}
     {"type": "room_rename", "room_id": "...", "name": "..."}  # app -> host: rename
     {"type": "room_delete", "room_id": "..."}             # app -> host: forget a room
     {"type": "room_history_request", "room_id": "..."}    # app -> host: replay it
@@ -208,6 +212,23 @@ def room_create_payload(
         "name": name,
         "members": members,
     }
+
+
+def room_add_member_payload(
+    *, room_id: str, agent_id: str, handle: str
+) -> dict[str, Any]:
+    """App -> host: add a coworker to an existing room (§16.1)."""
+    return {
+        "type": "room_add_member",
+        "room_id": room_id,
+        "agent_id": agent_id,
+        "handle": handle,
+    }
+
+
+def room_remove_member_payload(*, room_id: str, agent_id: str) -> dict[str, Any]:
+    """App -> host: remove a coworker from a room (§16.1)."""
+    return {"type": "room_remove_member", "room_id": room_id, "agent_id": agent_id}
 
 
 def room_rename_payload(*, room_id: str, name: str) -> dict[str, Any]:

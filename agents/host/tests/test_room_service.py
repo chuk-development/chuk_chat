@@ -303,3 +303,35 @@ def test_dispatch_ignores_a_payload_without_a_room_id():
     dispatch_room_frame(service, {"type": "room_unknown", "room_id": "r1"})
     assert frames == []
     assert store.list() == []
+
+
+def test_add_and_remove_member_via_dispatch():
+    from cowork_host import dispatch_room_frame
+
+    service, store, frames = _service_capturing()
+    dispatch_room_frame(service, {
+        "type": "room_create", "room_id": "r1", "name": "x",
+        "members": [
+            {"agent_id": "id-a", "handle": "amber"},
+            {"agent_id": "id-b", "handle": "cobalt"},
+        ],
+    })
+    dispatch_room_frame(service, {
+        "type": "room_add_member", "room_id": "r1",
+        "agent_id": "id-c", "handle": "jade",
+    })
+    assert [m.handle for m in store.get("r1").members] == ["amber", "cobalt", "jade"]
+
+    dispatch_room_frame(service, {
+        "type": "room_remove_member", "room_id": "r1", "agent_id": "id-b",
+    })
+    assert [m.handle for m in store.get("r1").members] == ["amber", "jade"]
+
+
+def test_add_member_over_the_cap_is_ignored():
+    service, store, _ = _service_capturing()
+    service.handle_room_create("r1", "x", [
+        {"agent_id": f"id{i}", "handle": f"h{i}"} for i in range(6)
+    ])
+    service.handle_room_add_member("r1", "id6", "h6")  # 7th -> ignored
+    assert len(store.get("r1").members) == 6

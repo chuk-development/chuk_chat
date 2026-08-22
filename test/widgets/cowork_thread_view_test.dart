@@ -108,6 +108,12 @@ class FakeRelayController implements CoworkRelayController {
   Future<void> renameRoom(String roomId, String name) async {}
 
   @override
+  Future<void> addRoomMember(String roomId, String agentId, String handle) async {}
+
+  @override
+  Future<void> removeRoomMember(String roomId, String agentId) async {}
+
+  @override
   Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);

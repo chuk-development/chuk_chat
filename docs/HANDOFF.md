@@ -591,6 +591,18 @@ credits.
   below the lazy ListView's viewport and broke an unrelated widget-count test;
   not worth the fragility.)
 
+- **Room membership editing (§16.1)** — DONE (data/protocol/service/source),
+  the last room-management gap: create/rename/delete existed but you could not
+  change who is in a room. `room_add_member` / `room_remove_member` frames;
+  `RoomService.handle_room_add_member/remove_member` (ignore an unknown room,
+  a full room, or a duplicate/non-member — the room stays valid);
+  `dispatch_room_frame` routes them; `LocalRoomSource.addMemberToRoom`
+  (refuses full/duplicate) and `removeMemberFromRoom` (deletes a room that drops
+  below two members); controller `addRoomMember`/`removeRoomMember`. +1 executor,
+  +2 host, +2 app-source tests; app 231, host 82 green. **Still open
+  (member-edit-UI):** an affordance on the room to add/remove members — the
+  RoomCreateSheet's picker, reused for an existing room.
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 After the room build-out (~37 commits this session across 6 packages), the whole

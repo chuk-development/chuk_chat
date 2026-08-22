@@ -24,6 +24,14 @@ abstract class RoomSource extends ChangeNotifier {
   /// Renames a room. A no-op for an unknown id or an empty/blank name.
   void renameRoom(String id, String name);
 
+  /// Adds a member to a room. A no-op for an unknown room, a full room
+  /// ([kRoomMaxMembers]), or a duplicate agent/handle.
+  void addMemberToRoom(String roomId, CoworkRoomMember member);
+
+  /// Removes a member from a room. A room that drops below two members is
+  /// deleted; returns true if the room itself was deleted.
+  bool removeMemberFromRoom(String roomId, String agentId);
+
   /// Removes [agentId] from every room it is in. A room that drops below two
   /// members is deleted (a room of one is not a room). Called when an agent is
   /// deleted, so no room keeps a phantom member. Returns the ids of rooms that
@@ -132,6 +140,48 @@ class LocalRoomSource extends RoomSource {
     }
     if (changed) notifyListeners();
     return deleted;
+  }
+
+  @override
+  void addMemberToRoom(String roomId, CoworkRoomMember member) {
+    for (var i = 0; i < _rooms.length; i++) {
+      final room = _rooms[i];
+      if (room.id != roomId) continue;
+      if (room.members.length >= kRoomMaxMembers) return;
+      if (room.members.any(
+        (m) => m.agentId == member.agentId || m.handle == member.handle,
+      )) {
+        return;
+      }
+      _rooms[i] = room.copyWith(
+        members: List<CoworkRoomMember>.unmodifiable(
+          <CoworkRoomMember>[...room.members, member],
+        ),
+      );
+      notifyListeners();
+      return;
+    }
+  }
+
+  @override
+  bool removeMemberFromRoom(String roomId, String agentId) {
+    for (var i = 0; i < _rooms.length; i++) {
+      final room = _rooms[i];
+      if (room.id != roomId) continue;
+      if (!room.members.any((m) => m.agentId == agentId)) return false;
+      final kept = <CoworkRoomMember>[
+        for (final m in room.members) if (m.agentId != agentId) m,
+      ];
+      if (kept.length < 2) {
+        _rooms.removeAt(i);
+        notifyListeners();
+        return true;
+      }
+      _rooms[i] = room.copyWith(members: List<CoworkRoomMember>.unmodifiable(kept));
+      notifyListeners();
+      return false;
+    }
+    return false;
   }
 
   @override
