@@ -624,6 +624,16 @@ credits.
   or another caller), the host is told `deleteRoom`, not left with a stranded
   one-member room — matching the agent-delete cascade. app 240 green.
 
+- **Room resilience: reconnect banner (§16.1, mobile)** — an open room page is
+  bound to the controller's inbound stream it had at open time. On a reconnect
+  (a changing mobile network) the transport is rebuilt and that stream closes,
+  so the room would silently receive nothing. `RoomThreadPage` now listens for
+  the stream's `onDone` and shows "Connection changed. Reopen the room to
+  continue." instead of hanging on a dead room — the user knows to reopen, which
+  rebinds to the live socket. +1 test; app 241 green. (A fuller auto-rebind is
+  possible but needs the page to observe controller swaps; the honest banner is
+  the safe minimal fix.)
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 After the room build-out (~37 commits this session across 6 packages), the whole
