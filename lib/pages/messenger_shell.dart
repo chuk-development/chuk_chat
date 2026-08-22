@@ -95,8 +95,10 @@ class _MessengerShellState extends State<MessengerShell> {
   late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource();
 
   /// The live transport, handed up by the thread view so a room can stream over
-  /// the same socket. Null until the thread view has built it.
-  CoworkRelayController? _sharedController;
+  /// the same socket. Null until the thread view has built it; it changes on a
+  /// reconnect, which is what lets an open room re-bind to the new socket.
+  final ValueNotifier<CoworkRelayController?> _controller =
+      ValueNotifier<CoworkRelayController?>(null);
   late final AgentControlSource _controlSource =
       widget.controlSource ?? HostUnavailableControlSource();
 
@@ -118,6 +120,7 @@ class _MessengerShellState extends State<MessengerShell> {
 
   @override
   void dispose() {
+    _controller.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     super.dispose();
   }
@@ -219,7 +222,7 @@ class _MessengerShellState extends State<MessengerShell> {
           // Push the room to the host so a later message can drive it. It rides
           // the shared socket if the transport is up; if not, the create sheet
           // still succeeds locally and the room syncs on the next open/send.
-          _sharedController?.createRoom(
+          _controller.value?.createRoom(
             room.id,
             room.name,
             <Map<String, String>>[
@@ -236,7 +239,7 @@ class _MessengerShellState extends State<MessengerShell> {
   void _openRoom(String roomId) {
     final room = _rooms.byId(roomId);
     if (room == null) return;
-    final controller = _sharedController;
+    final controller = _controller.value;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
@@ -259,8 +262,18 @@ class _MessengerShellState extends State<MessengerShell> {
                   members: room.members,
                   userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
-                  onSend: (message) => controller.sendRoomTask(room.id, message),
-                  onReady: () => _onRoomOpened(controller, room),
+                  // Re-bind to the new socket on a reconnect: the page follows
+                  // _controller, re-subscribes to the fresh inbound and re-runs
+                  // onReady (re-create + re-request history) automatically.
+                  rebind: _controller,
+                  // Read the live controller each time, not the one captured at
+                  // open, so a send after a reconnect goes to the new socket.
+                  onSend: (message) =>
+                      _controller.value?.sendRoomTask(room.id, message),
+                  onReady: () {
+                    final c = _controller.value;
+                    if (c != null) _onRoomOpened(c, room);
+                  },
                 ),
         ),
       ),
@@ -302,7 +315,7 @@ class _MessengerShellState extends State<MessengerShell> {
           candidates: candidates,
           onAdd: (member) {
             _rooms.addMemberToRoom(roomId, member);
-            _sharedController?.addRoomMember(roomId, member.agentId, member.handle);
+            _controller.value?.addRoomMember(roomId, member.agentId, member.handle);
             Navigator.of(sheetContext).pop();
             showSheet(ctx); // reopen with the updated room
           },
@@ -312,9 +325,9 @@ class _MessengerShellState extends State<MessengerShell> {
             // deleted locally, so the host must delete it, not just drop a
             // member (which would strand a one-member room there).
             if (roomDeleted) {
-              _sharedController?.deleteRoom(roomId);
+              _controller.value?.deleteRoom(roomId);
             } else {
-              _sharedController?.removeRoomMember(roomId, agentId);
+              _controller.value?.removeRoomMember(roomId, agentId);
             }
             Navigator.of(sheetContext).pop();
             // If the room survived, reopen the sheet; if it was deleted, stop.
@@ -330,12 +343,12 @@ class _MessengerShellState extends State<MessengerShell> {
   void _deleteRoom(String roomId) {
     _rooms.removeRoom(roomId);
     // Tell the host to forget it too, so no room or transcript is orphaned there.
-    _sharedController?.deleteRoom(roomId);
+    _controller.value?.deleteRoom(roomId);
   }
 
   void _renameRoom(String roomId, String name) {
     _rooms.renameRoom(roomId, name);
-    _sharedController?.renameRoom(roomId, name);
+    _controller.value?.renameRoom(roomId, name);
   }
 
   void _deleteAgent(String agentId) {
@@ -354,9 +367,9 @@ class _MessengerShellState extends State<MessengerShell> {
     // removal); a room that fell below two members was deleted (sync that).
     for (final roomId in wasIn) {
       if (deleted.contains(roomId)) {
-        _sharedController?.deleteRoom(roomId);
+        _controller.value?.deleteRoom(roomId);
       } else {
-        _sharedController?.removeRoomMember(roomId, agentId);
+        _controller.value?.removeRoomMember(roomId, agentId);
       }
     }
     if (_selectedAgentId == agentId) {
@@ -409,7 +422,7 @@ class _MessengerShellState extends State<MessengerShell> {
               _roster.markActivity(agentId, threadKey, when);
             }
           },
-          onController: (controller) => _sharedController = controller,
+          onController: (controller) => _controller.value = controller,
         );
 
         return Scaffold(

@@ -319,4 +319,66 @@ void main() {
     );
     expect(find.text('Reopen the room to send'), findsOneWidget);
   });
+
+  testWidgets('following the rebind, a new controller re-subscribes the room',
+      (tester) async {
+    final first = _FakeController();
+    final notifier = ValueNotifier<CoworkRelayController?>(first);
+    addTearDown(notifier.dispose);
+    addTearDown(first.close);
+    var readyCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoomThreadPage(
+            roomId: 'r1',
+            roomName: 'launch',
+            userMessage: 'hi',
+            inbound: first.inbound,
+            rebind: notifier,
+            onReady: () => readyCalls++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    first.emit(const CoworkRelayRoomTurn(
+      roomId: 'r1', round: 1, agentId: 'a', handle: 'amber', text: 'on first'));
+    await tester.pump();
+    expect(find.text('on first'), findsOneWidget);
+
+    // Reconnect: a new controller arrives. The page follows it.
+    final second = _FakeController();
+    addTearDown(second.close);
+    notifier.value = second;
+    await tester.pump();
+
+    // onReady re-ran on the swap (re-create + re-request history).
+    expect(readyCalls, greaterThanOrEqualTo(1));
+    // A turn on the NEW controller renders -> we re-subscribed.
+    second.emit(const CoworkRelayRoomTurn(
+      roomId: 'r1', round: 1, agentId: 'b', handle: 'cobalt', text: 'on second'));
+    await tester.pump();
+    expect(find.text('on second'), findsOneWidget);
+    // No dead-room banner: the rebind recovered it.
+    expect(find.textContaining('Connection changed'), findsNothing);
+  });
+}
+
+/// A minimal CoworkRelayController for the rebind test: only [inbound] is real;
+/// every other member is a no-op via noSuchMethod.
+class _FakeController implements CoworkRelayController {
+  final StreamController<CoworkRelayInbound> _c =
+      StreamController<CoworkRelayInbound>.broadcast(sync: true);
+
+  @override
+  Stream<CoworkRelayInbound> get inbound => _c.stream;
+
+  void emit(CoworkRelayInbound e) => _c.add(e);
+  Future<void> close() => _c.close();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

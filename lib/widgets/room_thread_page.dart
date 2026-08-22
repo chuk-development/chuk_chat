@@ -14,6 +14,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_room.dart';
@@ -28,6 +29,7 @@ class RoomThreadPage extends StatefulWidget {
     required this.userMessage,
     required this.inbound,
     this.members = const <CoworkRoomMember>[],
+    this.rebind,
     this.onSend,
     this.onReady,
   });
@@ -48,6 +50,13 @@ class RoomThreadPage extends StatefulWidget {
   /// picked out of it; every other event is ignored here (they belong to the
   /// agent thread).
   final Stream<CoworkRelayInbound> inbound;
+
+  /// The shared transport, if the caller wants the page to follow it. When set,
+  /// a reconnect (the value changes to a fresh controller) makes the page
+  /// re-subscribe to the new inbound and re-run [onReady] — seamless recovery on
+  /// a changing network. When null the page uses [inbound] once and shows the
+  /// reconnect banner if that stream dies (the tests' path).
+  final ValueListenable<CoworkRelayController?>? rebind;
 
   /// Sends a message to the room (starts an exchange). When null the composer is
   /// hidden — the page is read-only.
@@ -75,7 +84,8 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.inbound.listen(_onInbound, onDone: _onStreamClosed);
+    _subscribe(_currentInbound());
+    widget.rebind?.addListener(_onRebind);
     // Subscribe first, then ask — so a fast history reply cannot arrive before
     // the listener is attached.
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onReady?.call());
@@ -83,9 +93,42 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
 
   @override
   void dispose() {
+    widget.rebind?.removeListener(_onRebind);
     _sub?.cancel();
     _composer.dispose();
     super.dispose();
+  }
+
+  /// The inbound to listen to now: the live controller's when following one,
+  /// else the fixed stream passed in.
+  Stream<CoworkRelayInbound> _currentInbound() =>
+      widget.rebind != null ? _fromRebind() : widget.inbound;
+
+  Stream<CoworkRelayInbound> _fromRebind() {
+    final controller = widget.rebind!.value;
+    // No controller yet -> a stream that never emits; the rebind listener will
+    // swap us onto the real one the moment it arrives.
+    return controller?.inbound ?? const Stream<CoworkRelayInbound>.empty();
+  }
+
+  void _subscribe(Stream<CoworkRelayInbound> stream) {
+    _sub?.cancel();
+    _sub = stream.listen(_onInbound, onDone: _onStreamClosed);
+  }
+
+  void _onRebind() {
+    // The transport changed (a reconnect). Follow it: re-subscribe to the new
+    // inbound, drop the disconnected state, and re-run onReady so the room is
+    // re-synced and its history re-requested on the fresh socket.
+    if (!mounted) return;
+    final controller = widget.rebind!.value;
+    if (controller == null) {
+      _onStreamClosed();
+      return;
+    }
+    setState(() => _disconnected = false);
+    _subscribe(controller.inbound);
+    widget.onReady?.call();
   }
 
   Widget _reconnectBanner(BuildContext context) {
