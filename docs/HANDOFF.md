@@ -551,6 +551,22 @@ credits.
   clears the selection if the deleted agent was open. +2 source, +1 roster tests;
   app 227 green.
 
+- **Executor routes room frames to the host (§16.1)** — DONE, and it is the
+  low-risk half of the host wiring I had deferred. The executor already opens
+  and validates every frame with its one opener; its dispatch now has a
+  `room_*` branch that hands the decoded payload up through a new `on_room_frame`
+  callback instead of trying to run it as a task (no request-scoped terminal —
+  a room's replies are the host's to stream). No crypto change, no second opener,
+  no pairing-path change: the whole worry about the transport was avoidable by
+  branching at the point the frame is already open. With no handler a room frame
+  errors cleanly ("rooms not enabled"); ordinary tasks are untouched. Added
+  `ControllerSession.send_payload` (the generic seal-and-send room frames ride).
+  3 tests incl. a real sealed-loopback route; executor 47 green. **Still open
+  (host-room-wire):** the host builds a `RoomService` (RoomStore + RoomBinding +
+  a seal-and-send `emit`) and points `on_room_frame` at a dispatcher over its
+  types — this is now a plain wiring job in `serve.py`/`party.py`, no transport
+  surgery, and lights up room_create/rename/delete/history on the live host.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

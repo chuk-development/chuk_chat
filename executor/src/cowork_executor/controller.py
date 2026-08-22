@@ -75,6 +75,21 @@ class ControllerSession:
         self._endpoint.send(encode_frame(envelope))
         return request_id
 
+    def send_payload(self, payload: dict) -> str:
+        """Seal and dispatch an arbitrary payload dict, returning its
+        ``requestId``. The generic path room frames (§16.1) ride, and what a test
+        uses to send anything the typed helpers do not cover."""
+        request_id = f"req-{next(self._ids)}"
+        sealed = self._sealer.seal(encode_payload(payload))
+        envelope = make_request(
+            METHOD_RUN_TASK,
+            {"frame": frame_to_b64(sealed.to_bytes())},
+            request_id,
+        )
+        self._corr.register(envelope)
+        self._endpoint.send(encode_frame(envelope))
+        return request_id
+
     def send_stop(
         self, *, request_id: str | None = None, session_key: str | None = None
     ) -> str:
