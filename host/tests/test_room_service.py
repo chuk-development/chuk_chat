@@ -335,3 +335,35 @@ def test_add_member_over_the_cap_is_ignored():
     ])
     service.handle_room_add_member("r1", "id6", "h6")  # 7th -> ignored
     assert len(store.get("r1").members) == 6
+
+
+def test_handle_room_create_reconciles_membership_on_re_send():
+    """A room re-sent with a changed membership (an edit made while the host was
+    offline) is reconciled to the payload on the next open."""
+    store = RoomStore()
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    service.handle_room_create("r1", "launch", [
+        {"agent_id": "id-a", "handle": "amber"},
+        {"agent_id": "id-b", "handle": "cobalt"},
+    ])
+    # The app dropped cobalt and added jade, and renamed the room, while offline.
+    service.handle_room_create("r1", "launch v2", [
+        {"agent_id": "id-a", "handle": "amber"},
+        {"agent_id": "id-c", "handle": "jade"},
+    ])
+    room = store.get("r1")
+    assert room.name == "launch v2"
+    assert sorted(m.handle for m in room.members) == ["amber", "jade"]
+
+
+def test_handle_room_create_re_send_with_same_members_is_a_no_op():
+    store = RoomStore()
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    members = [
+        {"agent_id": "id-a", "handle": "amber"},
+        {"agent_id": "id-b", "handle": "cobalt"},
+    ]
+    service.handle_room_create("r1", "launch", members)
+    service.handle_room_create("r1", "launch", members)  # re-open
+    room = store.get("r1")
+    assert [m.handle for m in room.members] == ["amber", "cobalt"]
