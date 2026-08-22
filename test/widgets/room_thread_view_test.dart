@@ -8,6 +8,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     required List<CoworkRoomTurn> turns,
+    List<CoworkRoomMember> members = const <CoworkRoomMember>[],
     CoworkRoomStop? stop,
     bool running = false,
   }) async {
@@ -18,6 +19,7 @@ void main() {
             roomName: 'launch',
             userMessage: 'what is the plan?',
             turns: turns,
+            members: members,
             stop: stop,
             running: running,
           ),
@@ -109,5 +111,23 @@ void main() {
     expect(CoworkRoomStop.fromWire('who knows'), isNull);
     expect(CoworkRoomStop.fromWire(null), isNull);
     expect(CoworkRoomStop.messagesExhausted.label, 'Reached the message limit');
+  });
+
+  testWidgets('the member strip shows each members handle', (tester) async {
+    await pump(
+      tester,
+      turns: const [],
+      members: const [
+        CoworkRoomMember(agentId: 'a', handle: 'amber'),
+        CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+      ],
+    );
+    expect(find.text('@amber'), findsOneWidget);
+    expect(find.text('@cobalt'), findsOneWidget);
+  });
+
+  testWidgets('no member strip when there are no members', (tester) async {
+    await pump(tester, turns: const []);
+    expect(find.textContaining('@'), findsNothing);
   });
 }

@@ -534,6 +534,13 @@ credits.
   the shell renames locally and tells the host. +1 executor, +2 store, +2 host,
   +2 app tests; app 222, executor 44, manager 171, host 78 green.
 
+- **Room member strip (§16.1)** — DONE. The room thread now shows who is in the
+  room: `RoomThreadView` renders a compact horizontal strip of member avatars +
+  `@handle` under the room name (hidden when empty); `RoomThreadPage` passes the
+  members through and the shell supplies `room.members`. So the user sees the
+  coworkers they are addressing, not just the room name. +2 view tests; app 224
+  green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

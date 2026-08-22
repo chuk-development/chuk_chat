@@ -27,6 +27,7 @@ class RoomThreadPage extends StatefulWidget {
     required this.roomName,
     required this.userMessage,
     required this.inbound,
+    this.members = const <CoworkRoomMember>[],
     this.onSend,
     this.onReady,
   });
@@ -36,6 +37,9 @@ class RoomThreadPage extends StatefulWidget {
   final String roomId;
 
   final String roomName;
+
+  /// The room's members, shown in the header strip.
+  final List<CoworkRoomMember> members;
 
   /// What the user posted to the room, shown at the top.
   final String userMessage;
@@ -155,6 +159,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
       roomName: widget.roomName,
       userMessage: _sentMessage ?? widget.userMessage,
       turns: _turns,
+      members: widget.members,
       stop: _stop,
       running: _running,
     );
