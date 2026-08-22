@@ -248,4 +248,12 @@ void main() {
     await tester.pump();
     expect(find.text('other'), findsNothing);
   });
+
+  testWidgets('a no_such_room done names the missing-room reason',
+      (tester) async {
+    final ctrl = await pump(tester);
+    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'no_such_room'));
+    await tester.pump();
+    expect(find.text('This room is not on your host yet'), findsOneWidget);
+  });
 }

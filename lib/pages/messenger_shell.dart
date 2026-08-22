@@ -258,11 +258,27 @@ class _MessengerShellState extends State<MessengerShell> {
                   userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
                   onSend: (message) => controller.sendRoomTask(room.id, message),
-                  onReady: () => controller.requestRoomHistory(room.id),
+                  onReady: () => _onRoomOpened(controller, room),
                 ),
         ),
       ),
     );
+  }
+
+  /// Called once a room page is ready. Re-sync the room to the host first — it
+  /// is idempotent there, and it repairs the case where the room was created
+  /// while the host was offline, so the host has it before any task or history
+  /// request lands. Then ask for its stored history.
+  void _onRoomOpened(CoworkRelayController controller, CoworkRoom room) {
+    controller.createRoom(
+      room.id,
+      room.name,
+      <Map<String, String>>[
+        for (final m in room.members)
+          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+      ],
+    );
+    controller.requestRoomHistory(room.id);
   }
 
   void _deleteRoom(String roomId) {
