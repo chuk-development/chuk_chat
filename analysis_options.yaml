@@ -17,6 +17,13 @@ analyzer:
     # does not try to resolve `package:webview_cef` (absent from the slim
     # pubspec).
     - ci/linux_full/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   # The lint rules applied to this project can be customized in the

@@ -24,6 +24,17 @@ claude --resume 158acccf-96ca-4c7a-b7de-d202bc552ce5
 claude --resume 7cd0fff2-8f0d-4cdd-a544-a693d23679f5  # Überarbeite Sidebar, Einstellungen und UI-Komponenten
 claude --resume 26ae5b91-3c2b-4ce1-8dd7-7bd652229ab7
 claude --resume aac74d5a-1450-4be4-b537-d32313710395  # Redesign Chat UI und Mode-Auswahl
-claude --resume 20d69f7a-cba1-435c-b67b-01256b66548e  # Code-Reduktion und Refaktorierung in Chat-UI
 claude --resume 1c8622ce-81a8-4a2c-a59b-fa27cde9d188
 claude --resume d87da99c-385d-4811-92ac-79368f21389a
+claude --resume b17bc7dd-d9c9-4175-bd91-234a43b0d818
+claude --resume 20d69f7a-cba1-435c-b67b-01256b66548e  # Code-Reduktion und Refaktorierung in Chat-UI
+claude --resume dda6e630-5403-4e05-9476-8f4dee7a74ff  # Debug Booking.com MCP server public URL error
+claude --resume bbef4e91-7755-4148-892c-9e8b69c9f5c5
+claude --resume f1825f96-dede-4d96-94ad-c9ab873ab4d3
+claude --resume 732251ee-f973-4e1d-a4aa-bc054c871d77  # Investigate PostHoc logs for issue diagnosis
+claude --resume 446ea573-0d8a-4fbd-9ca1-7577e28c1b50
+claude --resume 89d99b73-5b5f-4340-b70c-ea9c91f63058
+claude --resume 55159fc8-a15c-4e20-be2c-e5ba9d376bf5  # Conspiracy theory puzzle decode
+claude --resume 8a5da15d-f632-4bc9-b7b1-0c6bb280eab8  # Hermes gant bot update
+claude --resume f49858fd-649d-49f6-816f-88376a64d678  # Magic link empfangen
+claude --resume 9e173d42-13a7-4834-90b6-86085ad98bfd  # message_bubble.dart
