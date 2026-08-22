@@ -2274,6 +2274,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': _selectedModelId,
         'provider': _selectedProviderSlug ?? '',
+        'startedAt': DateTime.now().toIso8601String(),
       });
     });
 
@@ -2771,6 +2772,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'modelId': modelIdToUse,
         'provider': providerToUse ?? '',
         'messageId': assistantMessageId,
+        'startedAt': DateTime.now().toIso8601String(),
       });
       placeholderIndex = _messages.length - 1;
     });
@@ -3150,6 +3152,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? _formatModelInfo(String? modelId, String? provider) =>
       ChatUiHelpers.formatModelInfo(modelId, provider);
 
+  /// The turn's recorded length, or null on a message saved before it was
+  /// written down — the header then counts from the tool stamps as before.
+  static Duration? _workedForOf(Map<String, String> raw, bool isAiMessage) {
+    if (!isAiMessage) return null;
+    final ms = int.tryParse(raw['generationMs'] ?? '');
+    if (ms == null || ms < 0) return null;
+    return Duration(milliseconds: ms);
+  }
+
   // --- BUILD METHOD ---
 
   @override
@@ -3401,6 +3412,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     showToolCalls: widget.showToolCalls,
                                     contentBlocks: parsedContentBlocks,
                                     isStreamingMessage: isStreamingMessage,
+                                    turnStartedAt: isAiMessage
+                                        ? DateTime.tryParse(
+                                            raw['startedAt'] ?? '',
+                                          )
+                                        : null,
+                                    workedFor: _workedForOf(raw, isAiMessage),
                                     images: images,
                                     imageMetas: imageMetas,
                                     attachments: attachments,

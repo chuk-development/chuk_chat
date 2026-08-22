@@ -78,6 +78,8 @@ class ChatPersistenceHandler {
 
     if (messagesCopy.isEmpty) return null;
 
+    stampWorkedFor(messagesCopy);
+
     // Land any pending per-message patch first. Otherwise a debounced patch
     // written afterwards can overwrite this full save with what it knew a
     // moment ago — which is how a finished answer lost its text.
@@ -106,6 +108,35 @@ class ChatPersistenceHandler {
             }
           });
       return null;
+    }
+  }
+
+  /// Write down how long each answer took, so a reopened chat shows the
+  /// same number it showed while it ran.
+  ///
+  /// The turn's start is stamped on the placeholder; the end is this save,
+  /// which follows the last token closely enough for a number shown in
+  /// whole seconds. Only the newest answer may be restamped: a turn that
+  /// runs tools is saved once per round, and each of those saves is a
+  /// better estimate than the one before — but an older message must keep
+  /// the number it settled on, or every later save would inflate it.
+  @visibleForTesting
+  static void stampWorkedFor(List<Map<String, String>> messages) {
+    final now = DateTime.now();
+    for (var i = 0; i < messages.length; i++) {
+      final message = messages[i];
+      final isAssistant =
+          message['sender'] == 'ai' || message['role'] == 'assistant';
+      if (!isAssistant) continue;
+
+      final startedAt = DateTime.tryParse(message['startedAt'] ?? '');
+      if (startedAt == null) continue;
+
+      final isNewest = i == messages.length - 1;
+      if (message['generationMs'] != null && !isNewest) continue;
+
+      final elapsed = now.difference(startedAt).inMilliseconds;
+      if (elapsed >= 0) message['generationMs'] = '$elapsed';
     }
   }
 

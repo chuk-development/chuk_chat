@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
@@ -49,6 +50,23 @@ class StreamingManager {
   /// Check if ANY chat is currently streaming
   bool get hasActiveStreams {
     return _activeStreams.values.any((stream) => stream.isActive);
+  }
+
+  /// What the running turn in [chatId] is doing, or null when nothing runs.
+  /// Read once a second by the header above the answer, so it is a plain
+  /// lookup rather than a stream of its own.
+  StreamPhase? phaseOf(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.phase;
+  }
+
+  /// When the running turn in [chatId] began — the moment the request went
+  /// out, not the moment the first token arrived.
+  DateTime? startedAtOf(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.startedAt;
   }
 
   /// Start a new stream for a chat
@@ -260,6 +278,19 @@ class StreamingManager {
   }) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
+
+    // The first event of any kind — usually the meta frame — is the proof
+    // that the server is there. Everything before it was still connecting.
+    activeStream.firstEventAt ??= DateTime.now();
+    activeStream.phase = switch (event) {
+      ReasoningEvent() => StreamPhase.thinking,
+      ContentEvent() => StreamPhase.writing,
+      // A frame that carries no token says only that the connection stands.
+      _ =>
+        activeStream.phase == StreamPhase.connecting
+            ? StreamPhase.processing
+            : activeStream.phase,
+    };
 
     // Reset idle timer on every event — connection is still alive
     activeStream.cancelIdleTimer();
@@ -655,6 +686,13 @@ class _ActiveStream {
   // firstTokenAt = when the first content/reasoning delta arrives.
   final DateTime startedAt = DateTime.now();
   DateTime? firstTokenAt;
+
+  /// The first event of any kind, token or not — when the server proved it
+  /// was there. Separates "connecting" from "reading the prompt".
+  DateTime? firstEventAt;
+
+  /// What this turn is doing, for the header above the answer.
+  StreamPhase phase = StreamPhase.connecting;
 
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;

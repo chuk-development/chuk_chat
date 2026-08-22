@@ -2016,6 +2016,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           contentBlocks: data.contentBlocks,
                                           isStreamingMessage:
                                               data.isStreamingMessage,
+                                          turnStartedAt: data.turnStartedAt,
+                                          workedFor: data.workedFor,
                                           images: data.images,
                                           imageMetas: data.imageMetas,
                                           imageCostEur: data.imageCostEur,

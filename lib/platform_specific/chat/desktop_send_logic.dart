@@ -267,6 +267,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': modelIdToUse,
           'provider': providerToUse ?? '',
           'messageId': assistantMessageId,
+          // The turn's clock starts here — at the request, not at the first
+          // token. The wait before the first token is the one the reader
+          // feels most, and it used to be counted as nothing.
+          'startedAt': DateTime.now().toIso8601String(),
         });
         placeholderIndex = _messages.length - 1;
       });
@@ -1382,6 +1386,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'reasoning': '',
           'modelId': _selectedModelId,
           'provider': providerSlug,
+          'startedAt': DateTime.now().toIso8601String(),
         });
         placeholderIndex = _messages.length - 1;
       });
