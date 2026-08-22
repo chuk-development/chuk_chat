@@ -180,10 +180,12 @@ class ChatHistoryBuilder {
           final content = entry['markdownContent'];
           if (content is! String || content.isEmpty) continue;
           final rawName = entry['fileName']?.toString() ?? 'document';
-          final escaped = InputValidator.escapeFileNameForDisplay(
-            InputValidator.sanitizeFileName(rawName),
-          );
-          sections.add('Document: "$escaped"\n```\n$content\n```');
+          // This text is the model's history, not a markdown-rendered bubble,
+          // so the name is only path-sanitised — markdown-escaping it here
+          // would show the model `note\.txt` while the body right below it
+          // goes in raw.
+          final safeName = InputValidator.sanitizeFileName(rawName);
+          sections.add('Document: "$safeName"\n```\n$content\n```');
         }
       }
     } catch (_) {
