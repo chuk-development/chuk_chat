@@ -249,10 +249,12 @@ class _MessengerShellState extends State<MessengerShell> {
                   roomName: room.name,
                   userMessage: 'Connect your host to start this room.',
                   turns: const <CoworkRoomTurn>[],
+                  members: room.members,
                 )
               : RoomThreadPage(
                   roomId: room.id,
                   roomName: room.name,
+                  members: room.members,
                   userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
                   onSend: (message) => controller.sendRoomTask(room.id, message),

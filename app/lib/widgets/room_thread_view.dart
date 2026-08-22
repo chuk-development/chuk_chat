@@ -19,11 +19,16 @@ class RoomThreadView extends StatelessWidget {
     required this.roomName,
     required this.userMessage,
     required this.turns,
+    this.members = const <CoworkRoomMember>[],
     this.stop,
     this.running = false,
   });
 
   final String roomName;
+
+  /// The room's members, shown as a compact strip under the name so the user
+  /// sees who is in the room they are talking to. Empty hides the strip.
+  final List<CoworkRoomMember> members;
 
   /// What the user posted to the room. Shown at the top so the replies have a
   /// subject.
@@ -73,6 +78,10 @@ class RoomThreadView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(roomName, style: theme.textTheme.titleSmall),
+          if (members.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _memberStrip(context),
+          ],
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerRight,
@@ -86,6 +95,28 @@ class RoomThreadView extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _memberStrip(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 24,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: members.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final m = members[i];
+          return Row(
+            children: [
+              AgentAvatar(seed: m.agentId, label: m.handle, radius: 9),
+              const SizedBox(width: 4),
+              Text('@${m.handle}', style: theme.textTheme.bodySmall),
+            ],
+          );
+        },
       ),
     );
   }

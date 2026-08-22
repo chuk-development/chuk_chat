@@ -375,7 +375,9 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('@amber'), findsOneWidget);
+    // "@amber" appears both in the member strip and the turn, so assert on the
+    // unique turn text.
+    expect(find.text('@amber'), findsWidgets);
     expect(find.text('ship it'), findsOneWidget);
 
     // The composer routes to sendRoomTask with the room id.
