@@ -583,6 +583,14 @@ credits.
   gained `noSuchRoom` → "This room is not on your host yet", so the footer names
   it instead of showing nothing. +1 page test, shell test extended; app 228 green.
 
+- **Agent role in the control panel (§16.1/§16)** — DONE. The panel showed the
+  brief but not the role (the Bot Mode "title" the model and roster already
+  carry); it now shows the role under the name, in the accent colour, matching
+  the roster. Small consistency fix; +1 test, app 229 green. (Also tried a live
+  conversation-count line but dropped it — an always-on line pushed a section
+  below the lazy ListView's viewport and broke an unrelated widget-count test;
+  not worth the fragility.)
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 After the room build-out (~37 commits this session across 6 packages), the whole

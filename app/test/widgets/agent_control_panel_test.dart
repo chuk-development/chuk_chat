@@ -225,6 +225,23 @@ void main() {
       expect(formatRuntime(const Duration(hours: 1, minutes: 4)), '1h 04m');
     });
   });
+
+  testWidgets('the panel shows the agent role',
+      (tester) async {
+    final source = HostUnavailableControlSource();
+    final agent = CoworkAgent(
+      id: 'local:amber',
+      name: 'amber-otter',
+      role: 'researcher',
+      threads: const <CoworkThreadInfo>[
+        CoworkThreadInfo(key: 'a', title: 'General'),
+        CoworkThreadInfo(key: 'b', title: 'Side'),
+      ],
+    );
+    await _pump(tester, source, agent: agent);
+    expect(find.text('researcher'), findsOneWidget);
+  });
+
 }
 
 /// Wraps a source and refuses the skill toggle, to prove the failure surfaces.
