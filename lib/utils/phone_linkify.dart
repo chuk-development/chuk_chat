@@ -35,8 +35,9 @@ final RegExp _scanPattern = RegExp(
   // Bare URL.
   r'|(?:https?://|www\.)\S+'
   // Phone number: `+`, country code, then digits and the usual separators,
-  // ending on a digit.
-  r'|(?<phone>(?<![\w+./-])\+\d[\d ()./-]{4,20}\d)',
+  // ending on a digit. A right boundary keeps `+1234567beta` from linking its
+  // numeric head as a number.
+  r'|(?<phone>(?<![\w+./-])\+\d[\d ()./-]{4,20}\d)(?![\w])',
   multiLine: true,
 );
 

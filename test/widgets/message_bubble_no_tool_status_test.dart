@@ -1,6 +1,7 @@
-import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:chuk_chat/widgets/message_bubble.dart';
 
 void main() {
   // A turn with no tool call renders its status through _buildInfoStatusBar,

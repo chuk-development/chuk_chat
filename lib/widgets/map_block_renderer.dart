@@ -199,21 +199,22 @@ List<Map<String, dynamic>> _filterValidCoordItems(
 /// lists the same restaurant twice — once per tool round — which put the same
 /// pin and the same card on screen twice.
 ///
-/// Two entries are the same when they carry the same name (case-insensitive),
-/// or, when neither is named, the same coordinates to five decimals (~1 m).
-/// Two different shops at one address stay separate. The first entry wins and
-/// the later copy only fills fields the first one is missing, so a duplicate
-/// that carries the phone number is not thrown away.
+/// Two entries are the same when they carry the same name (case-insensitive)
+/// AND sit at the same coordinates to five decimals (~1 m); when neither is
+/// named, the coordinates alone decide. So a chain's two branches with one
+/// name stay separate — merging them by name would drop a marker — while the
+/// same place returned twice at one spot folds into one. The first entry wins
+/// and the later copy only fills fields the first one is missing, so a
+/// duplicate that carries the phone number is not thrown away.
 List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items) {
   final byKey = <String, Map<String, dynamic>>{};
   final ordered = <Map<String, dynamic>>[];
 
   for (final item in items) {
     final name = (item['name'] ?? item['label'] ?? '').toString().trim();
-    final key = name.isNotEmpty
-        ? 'n:${name.toLowerCase()}'
-        : 'c:${_toDouble(item['lat']).toStringAsFixed(5)},'
-              '${_toDouble(item['lon']).toStringAsFixed(5)}';
+    final coordKey = '${_toDouble(item['lat']).toStringAsFixed(5)},'
+        '${_toDouble(item['lon']).toStringAsFixed(5)}';
+    final key = name.isNotEmpty ? 'n:${name.toLowerCase()}:$coordKey' : 'c:$coordKey';
 
     final existing = byKey[key];
     if (existing == null) {

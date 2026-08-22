@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
 
 void main() {
@@ -30,6 +31,14 @@ void main() {
       final out = debugFilterAndDedupeCoordItems([
         {'name': 'Cafe A', 'lat': 47.5, 'lon': 7.5},
         {'name': 'Bar B', 'lat': 47.5, 'lon': 7.5},
+      ]);
+      expect(out, hasLength(2));
+    });
+
+    test('keeps two branches with one name at different coordinates', () {
+      final out = debugFilterAndDedupeCoordItems([
+        {'name': 'Starbucks', 'lat': 47.5497, 'lon': 7.5843},
+        {'name': 'Starbucks', 'lat': 47.5561, 'lon': 7.5924},
       ]);
       expect(out, hasLength(2));
     });
