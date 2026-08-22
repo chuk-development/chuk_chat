@@ -99,6 +99,11 @@ class _MessengerShellState extends State<MessengerShell> {
   /// reconnect, which is what lets an open room re-bind to the new socket.
   final ValueNotifier<CoworkRelayController?> _controller =
       ValueNotifier<CoworkRelayController?>(null);
+
+  /// Rooms deleted while the socket was down. The host never heard the delete
+  /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
+  /// would keep an orphan. These flush the moment a transport arrives.
+  final Set<String> _pendingHostDeletes = <String>{};
   late final AgentControlSource _controlSource =
       widget.controlSource ?? HostUnavailableControlSource();
 
@@ -325,7 +330,7 @@ class _MessengerShellState extends State<MessengerShell> {
             // deleted locally, so the host must delete it, not just drop a
             // member (which would strand a one-member room there).
             if (roomDeleted) {
-              _controller.value?.deleteRoom(roomId);
+              _hostDeleteRoom(roomId);
             } else {
               _controller.value?.removeRoomMember(roomId, agentId);
             }
@@ -340,10 +345,32 @@ class _MessengerShellState extends State<MessengerShell> {
     showSheet(context);
   }
 
+  void _onController(CoworkRelayController controller) {
+    _controller.value = controller;
+    // A transport arrived: flush any room deletes made while it was down.
+    if (_pendingHostDeletes.isNotEmpty) {
+      final pending = List<String>.of(_pendingHostDeletes);
+      _pendingHostDeletes.clear();
+      for (final roomId in pending) {
+        controller.deleteRoom(roomId);
+      }
+    }
+  }
+
+  /// Delete a room on the host, or queue it if the socket is down so it is not
+  /// silently dropped and left as an orphan on the host.
+  void _hostDeleteRoom(String roomId) {
+    final controller = _controller.value;
+    if (controller != null) {
+      controller.deleteRoom(roomId);
+    } else {
+      _pendingHostDeletes.add(roomId);
+    }
+  }
+
   void _deleteRoom(String roomId) {
     _rooms.removeRoom(roomId);
-    // Tell the host to forget it too, so no room or transcript is orphaned there.
-    _controller.value?.deleteRoom(roomId);
+    _hostDeleteRoom(roomId);
   }
 
   void _renameRoom(String roomId, String name) {
@@ -367,7 +394,7 @@ class _MessengerShellState extends State<MessengerShell> {
     // removal); a room that fell below two members was deleted (sync that).
     for (final roomId in wasIn) {
       if (deleted.contains(roomId)) {
-        _controller.value?.deleteRoom(roomId);
+        _hostDeleteRoom(roomId);
       } else {
         _controller.value?.removeRoomMember(roomId, agentId);
       }
@@ -422,7 +449,7 @@ class _MessengerShellState extends State<MessengerShell> {
               _roster.markActivity(agentId, threadKey, when);
             }
           },
-          onController: (controller) => _controller.value = controller,
+          onController: _onController,
         );
 
         return Scaffold(

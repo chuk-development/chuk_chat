@@ -645,6 +645,17 @@ credits.
   (the open-time re-sync already carries the current membership). +2 host tests;
   host 84 green.
 
+- **Offline room-delete flushes to the host on connect (§16.1)** — the last
+  room-sync gap. Create/rename/member edits made offline are repaired by the
+  reconcile on the next open, but a *deleted* room has no later open, so the host
+  was left holding an orphan. The shell now routes every host delete through
+  `_hostDeleteRoom`: sent if the socket is up, else queued in
+  `_pendingHostDeletes` and flushed the moment a transport arrives (in
+  `_onController`). +1 shell test that deletes while the controller's future is
+  unresolved, then completes it and asserts the delete flushed; app 244 green.
+  So the app→host room sync is now complete: every offline op (create, rename,
+  member edit, delete) reaches the host once it reconnects.
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 Re-run after the whole room build-out and the shell's ValueNotifier refactor

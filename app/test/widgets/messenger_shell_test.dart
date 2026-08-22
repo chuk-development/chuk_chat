@@ -528,4 +528,46 @@ void main() {
     expect(controller.removedMembers, [(room.id, 'a')]);
     expect(controller.deletedRooms, isEmpty);
   });
+
+  testWidgets('a room deleted while offline is flushed to the host on connect',
+      (tester) async {
+    final rooms = LocalRoomSource();
+    final room = rooms.addRoom(const CoworkRoomDraft(name: 'gone', members: [
+      CoworkRoomMember(agentId: 'a', handle: 'amber'),
+      CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+    ]));
+    final controller = _FakeRelayController();
+    // The transport is not ready yet: its builder waits on this completer, so
+    // _controller.value stays null and a delete must be queued.
+    final gate = Completer<CoworkRelayController>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MessengerShell(
+          relayControllerBuilder: () => gate.future,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Delete the room while offline (via the Rooms screen menu).
+    await tester.tap(find.byTooltip('Rooms'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete room'));
+    await tester.pumpAndSettle();
+
+    expect(rooms.byId(room.id), isNull);
+    expect(controller.deletedRooms, isEmpty); // not sent yet — offline
+
+    // The transport arrives: the queued delete flushes.
+    gate.complete(controller);
+    await tester.pumpAndSettle();
+    expect(controller.deletedRooms, [room.id]);
+  });
 }
