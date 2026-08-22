@@ -197,4 +197,76 @@ void main() {
       expect(ChatHistoryBuilder.entryText({'content': 42}), '');
     });
   });
+
+  group('document attachments stay in context for every later turn', () {
+    // The stored user `text` is only the display line; the document body lives
+    // in `message['attachments']`. The builder must fold the body back into the
+    // history text so a follow-up ("solve it") still sees the document.
+    List<Map<String, String>> withDoc({
+      required String display,
+      required String fileName,
+      required String content,
+    }) => [
+      {
+        'sender': 'user',
+        'text': display,
+        'attachments': '[{"fileName":"$fileName","markdownContent":"$content"}]',
+      },
+      {'sender': 'ai', 'text': 'analysed it'},
+      {'sender': 'user', 'text': 'solve it'},
+    ];
+
+    test('the document body reaches history on a later turn', () async {
+      final history = await build(
+        withDoc(
+          display: 'Documents: "note.txt"',
+          fileName: 'note.txt',
+          content: 'ICELAND IS THE KEY',
+        ),
+        'solve it',
+      );
+
+      final firstUser = history.firstWhere((h) => h['role'] == 'user');
+      final content = firstUser['content'] as String;
+      expect(content, contains('ICELAND IS THE KEY'));
+      expect(content, contains('Document: "note.txt"'));
+      // The display line is kept too.
+      expect(content, contains('Documents: "note.txt"'));
+    });
+
+    test('a document-only turn (no typed text) still carries the body',
+        () async {
+      final history = await build([
+        {
+          'sender': 'user',
+          'text': '',
+          'attachments':
+              '[{"fileName":"a.txt","markdownContent":"BODY TEXT"}]',
+        },
+      ], '');
+
+      expect(history, hasLength(1));
+      expect(history.first['content'], contains('BODY TEXT'));
+    });
+
+    test('messages without attachments are left untouched', () async {
+      expect(
+        ChatHistoryBuilder.foldAttachmentsIntoText(
+          {'sender': 'user', 'text': 'plain'},
+          'plain',
+        ),
+        'plain',
+      );
+    });
+
+    test('malformed attachments JSON falls back to the display text', () {
+      expect(
+        ChatHistoryBuilder.foldAttachmentsIntoText(
+          {'attachments': 'not json'},
+          'shown',
+        ),
+        'shown',
+      );
+    });
+  });
 }

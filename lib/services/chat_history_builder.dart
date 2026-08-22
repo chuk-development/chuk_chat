@@ -23,6 +23,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/tool_history_formatter.dart';
 
 class ChatHistoryBuilder {
@@ -82,6 +83,14 @@ class ChatHistoryBuilder {
       final String? text = message['text'];
 
       if (sender == 'user') {
+        // Document attachments live in `message['attachments']` (their markdown
+        // body), never in `message['text']` — which stores only the display
+        // line ("Documents: foo.txt"). Fold the bodies back in so an attached
+        // file stays in context for every later turn, not just the turn it was
+        // sent on. Without this, "solve it" three turns later reaches a model
+        // that can no longer see the document.
+        final String userText = _foldAttachmentsIntoText(message, text);
+
         final bool hasImages =
             message['images'] != null && message['images']!.isNotEmpty;
         final bool shouldAddImages =
@@ -91,8 +100,8 @@ class ChatHistoryBuilder {
 
         if (shouldAddImages) {
           final content = <Map<String, dynamic>>[];
-          if (text != null && text.trim().isNotEmpty) {
-            content.add({'type': 'text', 'text': text});
+          if (userText.trim().isNotEmpty) {
+            content.add({'type': 'text', 'text': userText});
           }
 
           final imageDataUrls = await resolveHistoryImages(message['images']!);
@@ -121,8 +130,8 @@ class ChatHistoryBuilder {
           if (content.isNotEmpty) {
             history.add({'role': 'user', 'content': content});
           }
-        } else if (text != null && text.trim().isNotEmpty) {
-          history.add({'role': 'user', 'content': text});
+        } else if (userText.trim().isNotEmpty) {
+          history.add({'role': 'user', 'content': userText});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
         // Prior tool calls + results ride along so a follow-up question that
@@ -139,6 +148,55 @@ class ChatHistoryBuilder {
 
     _dropPendingUserTurn(history, pendingUserText);
     return history;
+  }
+
+  /// Prepends any document attachments' markdown bodies to a user turn's text,
+  /// mirroring how [MessageCompositionService] builds the prompt on send. The
+  /// stored `message['text']` is only the display line; the bodies live in
+  /// `message['attachments']` as JSON. Returns the display text unchanged when
+  /// there are no document attachments.
+  @visibleForTesting
+  static String foldAttachmentsIntoText(
+    Map<String, String> message,
+    String? text,
+  ) => _foldAttachmentsIntoText(message, text);
+
+  static String _foldAttachmentsIntoText(
+    Map<String, String> message,
+    String? text,
+  ) {
+    final String displayText = text?.trim() ?? '';
+    final String? attachmentsJson = message['attachments'];
+    if (attachmentsJson == null || attachmentsJson.trim().isEmpty) {
+      return displayText;
+    }
+
+    final List<String> sections = <String>[];
+    try {
+      final decoded = jsonDecode(attachmentsJson);
+      if (decoded is List) {
+        for (final entry in decoded) {
+          if (entry is! Map) continue;
+          final content = entry['markdownContent'];
+          if (content is! String || content.isEmpty) continue;
+          final rawName = entry['fileName']?.toString() ?? 'document';
+          final escaped = InputValidator.escapeFileNameForDisplay(
+            InputValidator.sanitizeFileName(rawName),
+          );
+          sections.add('Document: "$escaped"\n```\n$content\n```');
+        }
+      }
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatHistoryBuilder] attachments JSON parse failed');
+      }
+      return displayText;
+    }
+
+    if (sections.isEmpty) return displayText;
+
+    final String docBlock = sections.join('\n\n');
+    return displayText.isEmpty ? docBlock : '$docBlock\n\n$displayText';
   }
 
   /// Removes the turn being sent right now if the caller's list already
