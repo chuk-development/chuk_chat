@@ -583,6 +583,20 @@ credits.
   gained `noSuchRoom` → "This room is not on your host yet", so the footer names
   it instead of showing nothing. +1 page test, shell test extended; app 228 green.
 
+### Verified green baseline (2026-08-22, full cross-package run)
+
+After the room build-out (~37 commits this session across 6 packages), the whole
+tree was run together to catch any cross-package regression. All green:
+crypto 65 · agent 647 · executor 47 · manager 171 · host 80 · sandbox 58 ·
+app 228 (+3 skipped). Working tree clean. No regressions.
+
+**Group rooms are complete on every layer that does not need live multi-agent
+transport:** model → store → session → runner → driver → binding → relay frames
+(create/task/rename/delete/history + turn/done) → executor routing → host
+RoomService wiring → app (list, create, open, compose, stream, history, member
+strip, delete, rename) → cross-machine handles → @all → per-agent routines →
+persistence. Everything below the live transport is built and tested.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
