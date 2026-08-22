@@ -575,6 +575,14 @@ credits.
   member's executor connects, so room_task drives online members instead of the
   offline placeholder. That is the multi-agent host + the prod relay.
 
+- **Room open re-syncs to the host + no_such_room is legible (§16.1)** — DONE,
+  closing a resilience gap: a room created while the host was offline never
+  reached the host, so `room_task` came back `no_such_room` with no explanation.
+  Now opening a room re-sends `room_create` first (idempotent on the host, so it
+  just repairs a missing room) before requesting history, and `CoworkRoomStop`
+  gained `noSuchRoom` → "This room is not on your host yet", so the footer names
+  it instead of showing nothing. +1 page test, shell test extended; app 228 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

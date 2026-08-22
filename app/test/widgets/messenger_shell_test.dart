@@ -361,8 +361,10 @@ void main() {
       find.text('Message the room to start.'),
       findsOneWidget,
     );
-    // Opening the room asks the host to replay its stored history.
+    // Opening the room re-syncs it to the host (idempotent) and asks for its
+    // stored history.
     expect(controller.historyRequests, [room.id]);
+    expect(controller.createdRooms, contains(room.id));
 
     // A room_turn for this room streams into the open page.
     controller.emit(

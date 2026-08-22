@@ -102,7 +102,11 @@ enum CoworkRoomStop {
   stopped,
 
   /// A member's turn crashed.
-  turnFailed;
+  turnFailed,
+
+  /// The host does not have this room (it was never synced, or was deleted on
+  /// the host). The app can re-create it and try again.
+  noSuchRoom;
 
   /// Parse the wire string, or null for one this build does not know.
   static CoworkRoomStop? fromWire(String? reason) => switch (reason) {
@@ -111,6 +115,7 @@ enum CoworkRoomStop {
         'messages_exhausted' => CoworkRoomStop.messagesExhausted,
         'stopped' => CoworkRoomStop.stopped,
         'turn_failed' => CoworkRoomStop.turnFailed,
+        'no_such_room' => CoworkRoomStop.noSuchRoom,
         _ => null,
       };
 
@@ -121,5 +126,6 @@ enum CoworkRoomStop {
         CoworkRoomStop.messagesExhausted => 'Reached the message limit',
         CoworkRoomStop.stopped => 'Stopped',
         CoworkRoomStop.turnFailed => 'A coworker\'s turn failed',
+        CoworkRoomStop.noSuchRoom => 'This room is not on your host yet',
       };
 }
