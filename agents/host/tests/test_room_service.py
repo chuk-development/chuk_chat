@@ -248,3 +248,58 @@ def test_handle_room_rename_of_an_unknown_room_is_a_noop():
     RoomService(
         room_store=store, binding=RoomBinding(), emit=lambda f: None
     ).handle_room_rename("ghost", "x")  # must not raise
+
+
+# -- dispatch_room_frame (§16.1) ------------------------------------------
+
+
+def _service_capturing():
+    from cowork_manager import RoomStore, RoomTranscriptStore
+
+    store = RoomStore()
+    binding = RoomBinding()
+    frames = []
+    service = RoomService(
+        room_store=store,
+        binding=binding,
+        emit=frames.append,
+        transcript=RoomTranscriptStore(),
+    )
+    return service, store, frames
+
+
+def test_dispatch_routes_create_task_rename_delete_history():
+    from cowork_host import dispatch_room_frame
+
+    service, store, frames = _service_capturing()
+
+    dispatch_room_frame(service, {
+        "type": "room_create",
+        "room_id": "r1",
+        "name": "launch",
+        "members": [{"agent_id": "id-amber", "handle": "amber"}],
+    })
+    assert store.get("r1") is not None
+
+    dispatch_room_frame(service, {"type": "room_rename", "room_id": "r1", "name": "renamed"})
+    assert store.get("r1").name == "renamed"
+
+    dispatch_room_frame(service, {"type": "room_history_request", "room_id": "r1"})
+    assert frames[-1]["type"] == "room_history"
+
+    dispatch_room_frame(service, {"type": "room_task", "room_id": "r1", "message": "go"})
+    # amber is offline (no sender) -> the room still ran and ended.
+    assert frames[-1]["type"] == "room_done"
+
+    dispatch_room_frame(service, {"type": "room_delete", "room_id": "r1"})
+    assert store.get("r1") is None
+
+
+def test_dispatch_ignores_a_payload_without_a_room_id():
+    from cowork_host import dispatch_room_frame
+
+    service, store, frames = _service_capturing()
+    dispatch_room_frame(service, {"type": "room_create", "name": "x"})  # no room_id
+    dispatch_room_frame(service, {"type": "room_unknown", "room_id": "r1"})
+    assert frames == []
+    assert store.list() == []

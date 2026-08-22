@@ -561,11 +561,19 @@ credits.
   branching at the point the frame is already open. With no handler a room frame
   errors cleanly ("rooms not enabled"); ordinary tasks are untouched. Added
   `ControllerSession.send_payload` (the generic seal-and-send room frames ride).
-  3 tests incl. a real sealed-loopback route; executor 47 green. **Still open
-  (host-room-wire):** the host builds a `RoomService` (RoomStore + RoomBinding +
-  a seal-and-send `emit`) and points `on_room_frame` at a dispatcher over its
-  types — this is now a plain wiring job in `serve.py`/`party.py`, no transport
-  surgery, and lights up room_create/rename/delete/history on the live host.
+  3 tests incl. a real sealed-loopback route; executor 47 green. host-room-wire: DONE. The host owns persistent room stores (`RoomStore` +
+  `RoomTranscriptStore` files under the workspace, opened per party thread like
+  the roster; a thread-safe `RoomBinding` field). `_build_task_server` builds a
+  `RoomService` whose `emit` seals a reply and sends it over this session's
+  channel (the same path executor results take), and passes
+  `on_room_frame=dispatch_room_frame(service, ·)` down through `TaskServer` to the
+  `Executor`. `dispatch_room_frame` maps each room wire type to its service call.
+  So on a live host, room_create / rename / delete / history now function end to
+  end, and room_task routes (driving members via the binding). +2 dispatcher
+  tests; host 80 green. What is left needs the user only: **multi-executor** —
+  registering a real per-member `TaskSender` in the `RoomBinding` as each
+  member's executor connects, so room_task drives online members instead of the
+  offline placeholder. That is the multi-agent host + the prod relay.
 
 ### Gates that STILL need the user (not auto-run)
 

@@ -25,10 +25,11 @@ from .protocol import (
 )
 from .relay import LocalRelay
 from .serve import TaskServer
-from .room_service import RoomService
+from .room_service import RoomService, dispatch_room_frame
 
 __all__ = [
     "RoomService",
+    "dispatch_room_frame",
     "HOST_DEVICE_ID",
     "HostParty",
     "KEY_VERSION",

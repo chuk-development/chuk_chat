@@ -27,16 +27,29 @@ from cowork_crypto import (
     Pairing,
     ReconnectHandshake,
 )
-from cowork_manager import Agent, ContainerSupervisor, RosterStore
+from cowork_manager import (
+    Agent,
+    ContainerSupervisor,
+    RoomBinding,
+    RoomStore,
+    RoomTranscriptStore,
+    RosterStore,
+)
 from cowork_sandbox import BaseEnvironment, make_environment
 
-from cowork_executor import ModelFactory, resolve_backend_model_factory
+from cowork_executor import (
+    ModelFactory,
+    encode_payload,
+    frame_to_b64,
+    resolve_backend_model_factory,
+)
 
 from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
 from .pairing_store import HostPairingStore, HostTrust
 from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
+from .room_service import RoomService, dispatch_room_frame
 from .serve import TaskServer
 
 DEFAULT_WORKSPACE = "~/.cowork"
@@ -87,6 +100,13 @@ class LocalHost:
 
         self._roster = RosterStore(self._roster_path)
         self._agent = self._load_or_create_agent(agent_name)
+
+        # Group rooms (§16.1). The stores are SQLite files (opened per party
+        # thread, like the roster); the binding is pure-Python and thread-safe,
+        # so it is a persistent field. Rooms outlive a single pairing session.
+        self._room_store_path = str(self._workspace / "rooms.db")
+        self._room_transcript_path = str(self._workspace / "room-transcript.db")
+        self._room_binding = RoomBinding()
 
         # The container lifecycle (§6) is only built for the docker backend: one
         # labelled container per agent, its workspace bind-mounted, reused across
@@ -426,6 +446,23 @@ class LocalHost:
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
         serve_roster = RosterStore(self._roster_path)
+
+        # A RoomService for this session: the room stores are opened here, in the
+        # party thread that will use them (sqlite3 is single-thread), reading the
+        # same files across sessions; the binding is the host's persistent one.
+        # ``emit`` seals a room reply and sends it to the app over this session's
+        # channel, the same path the executor's own results take.
+        def emit(payload: dict) -> None:
+            sealed = sealer.seal(encode_payload(payload))
+            party.send_result_frame(frame_to_b64(sealed.to_bytes()))
+
+        room_service = RoomService(
+            room_store=RoomStore(self._room_store_path),
+            binding=self._room_binding,
+            emit=emit,
+            transcript=RoomTranscriptStore(self._room_transcript_path),
+        )
+
         return TaskServer(
             roster=serve_roster,
             agent_id=self._agent.id,
@@ -438,6 +475,7 @@ class LocalHost:
             system_prompt=self._agent.persona or DEFAULT_SYSTEM_PROMPT,
             workspace=self._agent.workspace_dir or None,
             estop_path=self._estop_path,
+            on_room_frame=lambda payload: dispatch_room_frame(room_service, payload),
         )
 
     @property
