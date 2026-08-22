@@ -14,6 +14,7 @@ import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
 import 'package:cowork/widgets/room_list_view.dart';
+import 'package:cowork/widgets/room_members_sheet.dart';
 import 'package:cowork/widgets/room_thread_page.dart';
 import 'package:cowork/widgets/room_thread_view.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
@@ -197,6 +198,7 @@ class _MessengerShellState extends State<MessengerShell> {
             onSelect: _openRoom,
             onDelete: _deleteRoom,
             onRename: _renameRoom,
+            onManageMembers: _manageRoomMembers,
           ),
         ),
       ),
@@ -279,6 +281,44 @@ class _MessengerShellState extends State<MessengerShell> {
       ],
     );
     controller.requestRoomHistory(room.id);
+  }
+
+  Future<void> _manageRoomMembers(String roomId) async {
+    void showSheet(BuildContext ctx) {
+      final room = _rooms.byId(roomId);
+      if (room == null) {
+        Navigator.of(ctx).pop();
+        return;
+      }
+      final inRoom = room.members.map((m) => m.agentId).toSet();
+      final candidates = <CoworkAgent>[
+        for (final a in _roster.visibleAgents) if (!inRoom.contains(a.id)) a,
+      ];
+      showModalBottomSheet<void>(
+        context: ctx,
+        isScrollControlled: true,
+        builder: (sheetContext) => RoomMembersSheet(
+          room: room,
+          candidates: candidates,
+          onAdd: (member) {
+            _rooms.addMemberToRoom(roomId, member);
+            _sharedController?.addRoomMember(roomId, member.agentId, member.handle);
+            Navigator.of(sheetContext).pop();
+            showSheet(ctx); // reopen with the updated room
+          },
+          onRemove: (agentId) {
+            final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
+            _sharedController?.removeRoomMember(roomId, agentId);
+            Navigator.of(sheetContext).pop();
+            // If the room survived, reopen the sheet; if it fell below two
+            // members and was deleted, stop.
+            if (!roomDeleted) showSheet(ctx);
+          },
+        ),
+      );
+    }
+
+    showSheet(context);
   }
 
   void _deleteRoom(String roomId) {

@@ -22,6 +22,7 @@ void main() {
     VoidCallback? onCreate,
     void Function(String)? onDelete,
     void Function(String, String)? onRename,
+    void Function(String)? onManageMembers,
     String? selectedRoomId,
   }) async {
     final picks = <String>[];
@@ -33,6 +34,7 @@ void main() {
             onCreate: onCreate,
             onDelete: onDelete,
             onRename: onRename,
+            onManageMembers: onManageMembers,
             selectedRoomId: selectedRoomId,
             onSelect: picks.add,
           ),
@@ -132,5 +134,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(renamed, [(a.id, 'launch v2')]);
+  });
+
+  testWidgets('the Manage members item fires onManageMembers', (tester) async {
+    final source = LocalRoomSource(random: Random(14));
+    final a = source.addRoom(_draft('launch', 2));
+    final managed = <String>[];
+    await pump(tester, source, onManageMembers: managed.add);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage members'));
+    await tester.pumpAndSettle();
+    expect(managed, [a.id]);
   });
 }
