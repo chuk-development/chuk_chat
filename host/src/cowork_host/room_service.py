@@ -87,6 +87,30 @@ class RoomService:
                 # Over the cap or a duplicate: skip this member, keep the room.
                 continue
 
+    def handle_room_add_member(
+        self, room_id: str, agent_id: str, handle: str
+    ) -> None:
+        """Add a coworker to a room the host holds (§16.1). Ignored on an unknown
+        room or a member the room cannot take (full, or a duplicate) — the room
+        stays valid rather than the call raising into the frame loop."""
+        if self._rooms.get(room_id) is None:
+            return
+        try:
+            self._rooms.add_member(room_id, agent_id, handle)
+        except RoomError:
+            return
+
+    def handle_room_remove_member(self, room_id: str, agent_id: str) -> None:
+        """Remove a coworker from a room (§16.1). Ignored on an unknown room or a
+        non-member. Removing the transcript is not this call's job — the room
+        lives on with fewer members."""
+        if self._rooms.get(room_id) is None:
+            return
+        try:
+            self._rooms.remove_member(room_id, agent_id)
+        except RoomError:
+            return
+
     def handle_room_rename(self, room_id: str, name: str) -> None:
         """Rename a room the host holds (§16.1). A no-op on an unknown room —
         the host simply does not have it yet (it syncs on the next create)."""
@@ -191,6 +215,15 @@ def dispatch_room_frame(service: RoomService, payload: dict) -> None:
     elif kind == "room_task":
         message = payload.get("message")
         service.handle_room_task(room_id, message if isinstance(message, str) else "")
+    elif kind == "room_add_member":
+        agent_id = payload.get("agent_id")
+        handle = payload.get("handle")
+        if isinstance(agent_id, str) and isinstance(handle, str):
+            service.handle_room_add_member(room_id, agent_id, handle)
+    elif kind == "room_remove_member":
+        agent_id = payload.get("agent_id")
+        if isinstance(agent_id, str):
+            service.handle_room_remove_member(room_id, agent_id)
     elif kind == "room_rename":
         name = payload.get("name")
         if isinstance(name, str) and name.strip():

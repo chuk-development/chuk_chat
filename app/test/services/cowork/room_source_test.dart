@@ -138,4 +138,37 @@ void main() {
     expect(source.removeAgentFromRooms('nobody'), isEmpty);
     expect(notified, 0);
   });
+
+  test('addMemberToRoom adds, and refuses full/duplicate', () {
+    final source = LocalRoomSource(random: Random(30));
+    final room = source.addRoom(_draft('r')); // amber, cobalt
+    source.addMemberToRoom(room.id, _m('c', 'jade'));
+    expect(source.byId(room.id)!.members.map((m) => m.handle),
+        ['amber', 'cobalt', 'jade']);
+
+    // Duplicate agent -> ignored.
+    source.addMemberToRoom(room.id, _m('c', 'other'));
+    expect(source.byId(room.id)!.members.length, 3);
+
+    // Fill to six, then a seventh is refused.
+    source.addMemberToRoom(room.id, _m('d', 'onyx'));
+    source.addMemberToRoom(room.id, _m('e', 'slate'));
+    source.addMemberToRoom(room.id, _m('f', 'teal'));
+    expect(source.byId(room.id)!.members.length, 6);
+    source.addMemberToRoom(room.id, _m('g', 'rust'));
+    expect(source.byId(room.id)!.members.length, 6);
+  });
+
+  test('removeMemberFromRoom shrinks, and deletes a sub-2 room', () {
+    final source = LocalRoomSource(random: Random(31));
+    final big = source.addRoom(CoworkRoomDraft(name: 'big', members: [
+      _m('a', 'amber'), _m('b', 'cobalt'), _m('c', 'jade'),
+    ]));
+    expect(source.removeMemberFromRoom(big.id, 'a'), isFalse);
+    expect(source.byId(big.id)!.members.map((m) => m.handle), ['cobalt', 'jade']);
+
+    // Removing again drops to 1 -> the room is deleted.
+    expect(source.removeMemberFromRoom(big.id, 'b'), isTrue);
+    expect(source.byId(big.id), isNull);
+  });
 }
