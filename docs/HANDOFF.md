@@ -636,10 +636,10 @@ credits.
 
 ### Verified green baseline (2026-08-22, full cross-package run)
 
-After the room build-out (~37 commits this session across 6 packages), the whole
-tree was run together to catch any cross-package regression. All green:
-crypto 65 · agent 647 · executor 47 · manager 171 · host 80 · sandbox 58 ·
-app 228 (+3 skipped). Working tree clean. No regressions.
+Re-run after the whole room build-out and the shell's ValueNotifier refactor
+(auto-rebind), to catch any cross-package regression. All green:
+crypto 65 · agent 647 · executor 48 · manager 171 · host 82 · sandbox 58 ·
+app 243 (+3 skipped) — 1314 tests. Working tree clean. No regressions.
 
 **Group rooms are complete on every layer that does not need live multi-agent
 transport:** model → store → session → runner → driver → binding → relay frames
