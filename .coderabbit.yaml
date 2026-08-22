@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration. Public repo with outside contributors, so reviews
+# are in English. Bots are ignored (their PRs are noise and burn review quota);
+# human contributors are reviewed. This is an E2E-encrypted chat app, so reviews
+# must be strict about secrets, key handling and never logging plaintext.
+
+language: en-US
+
+# Concise, risk-first tone (max 250 chars).
+tone_instructions: "Be concise and direct. Call out first anything that leaks secrets/keys, weakens encryption, logs plaintext, breaks the build, or loses data. No filler."
+
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+
+  # Do not review generated code, build output, binaries, lockfiles, assets.
+  path_filters:
+    - "!**/*.g.dart"
+    - "!**/*.freezed.dart"
+    - "!**/build/**"
+    - "!**/.dart_tool/**"
+    - "!pubspec.lock"
+    - "!**/*.png"
+    - "!**/*.jks"
+    - "!**/*.keystore"
+    - "!ios/Pods/**"
+    - "!macos/Pods/**"
+
+  path_instructions:
+    - path: "lib/**/*.dart"
+      instructions: >
+        Flutter/Dart. Dispose controllers, streams and providers. Never hardcode
+        secrets or API keys. This app is end-to-end encrypted: never log or
+        persist plaintext message content or key material, never weaken or
+        bypass the crypto path, and keep key handling in its dedicated layer.
+        Handle Supabase and network errors defensively; do not crash on a null
+        or absent field.
+    - path: "migrations/**/*.sql"
+      instructions: >
+        Database migrations. Prefer additive, reversible changes. A destructive
+        change (DROP/DELETE/column removal) needs a clear reason and a safe path
+        for existing rows. Watch row-level-security policies on every table.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    # Only bots ignored; exact GitHub bot names carry a "[bot]" suffix.
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+
+chat:
+  auto_reply: true
