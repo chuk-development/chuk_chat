@@ -66,6 +66,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   final TextEditingController _composer = TextEditingController();
   CoworkRoomStop? _stop;
   bool _running = true;
+  bool _disconnected = false;
   StreamSubscription<CoworkRelayInbound>? _sub;
   // The message the user actually sent, shown at the top once sent. Until then
   // the caller's placeholder ([userMessage]) stands in.
@@ -74,7 +75,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.inbound.listen(_onInbound);
+    _sub = widget.inbound.listen(_onInbound, onDone: _onStreamClosed);
     // Subscribe first, then ask — so a fast history reply cannot arrive before
     // the listener is attached.
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.onReady?.call());
@@ -85,6 +86,29 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     _sub?.cancel();
     _composer.dispose();
     super.dispose();
+  }
+
+  Widget _reconnectBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off, size: 16, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Connection changed. Reopen the room to continue.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _send() {
@@ -153,6 +177,18 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     }
   }
 
+  void _onStreamClosed() {
+    // The controller's inbound stream closed — the socket was rebuilt (a
+    // reconnect on a changing network). This page is bound to the dead stream,
+    // so it can receive nothing more; say so plainly rather than hanging on a
+    // silent room. Reopening the room binds to the live socket again.
+    if (!mounted) return;
+    setState(() {
+      _disconnected = true;
+      _running = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final thread = RoomThreadView(
@@ -163,9 +199,15 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
       stop: _stop,
       running: _running,
     );
-    if (widget.onSend == null) return thread;
+    final banner = _disconnected ? _reconnectBanner(context) : null;
+    if (widget.onSend == null) {
+      return banner == null
+          ? thread
+          : Column(children: [banner, Expanded(child: thread)]);
+    }
     return Column(
       children: [
+        ?banner,
         Expanded(child: thread),
         SafeArea(
           top: false,

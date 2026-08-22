@@ -256,4 +256,32 @@ void main() {
     await tester.pump();
     expect(find.text('This room is not on your host yet'), findsOneWidget);
   });
+
+  testWidgets('when the inbound stream closes, a reconnect banner appears',
+      (tester) async {
+    final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoomThreadPage(
+            roomId: 'r1',
+            roomName: 'launch',
+            userMessage: 'hi',
+            inbound: ctrl.stream,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('Connection changed'), findsNothing);
+
+    unawaited(ctrl.close()); // the transport was rebuilt on reconnect
+    await tester.pump();
+
+    expect(
+      find.text('Connection changed. Reopen the room to continue.'),
+      findsOneWidget,
+    );
+    expect(find.text('the room is talking…'), findsNothing);
+  });
 }
