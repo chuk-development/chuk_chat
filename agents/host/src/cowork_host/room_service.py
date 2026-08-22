@@ -66,20 +66,42 @@ class RoomService:
     def handle_room_create(
         self, room_id: str, name: str, members: list[dict]
     ) -> None:
-        """Create an app-built room on the host so ``room_task`` can find it
-        (§16.1). Idempotent: a room that already exists is left as it is, because
-        the app re-sends its rooms on reconnect and a re-create must not fail or
-        duplicate members. A member the room cannot take (over the cap, a bad
-        row) is skipped; the rest of the room is still usable."""
-        if self._rooms.get(room_id) is not None:
-            return
-        self._rooms.create_room(name=name, room_id=room_id)
-        for m in members:
-            if not isinstance(m, dict):
-                continue
-            agent_id = m.get("agent_id")
-            handle = m.get("handle")
-            if not isinstance(agent_id, str) or not isinstance(handle, str):
+        """Create or reconcile an app-built room on the host so ``room_task`` can
+        find it (§16.1). The app owns room identity and membership, and re-sends
+        the room whenever it is opened, so this is idempotent AND self-healing:
+        a room that does not exist is created; a room that does is reconciled to
+        the payload — the name updated, members in the payload but not on the
+        host added, members on the host but not in the payload removed. That is
+        what repairs a membership edit (or a rename) the app made while the host
+        was offline: the next open brings the host back in step. A member the
+        room cannot take (over the cap, a bad row) is skipped; the rest of the
+        room stays usable."""
+        wanted = [
+            (m["agent_id"], m["handle"])
+            for m in members
+            if isinstance(m, dict)
+            and isinstance(m.get("agent_id"), str)
+            and isinstance(m.get("handle"), str)
+        ]
+
+        existing = self._rooms.get(room_id)
+        if existing is None:
+            self._rooms.create_room(name=name, room_id=room_id)
+        else:
+            if existing.name != name:
+                self._rooms.rename_room(room_id, name)
+            wanted_ids = {agent_id for agent_id, _ in wanted}
+            # Remove members the app no longer has.
+            for member in existing.members:
+                if member.agent_id not in wanted_ids:
+                    try:
+                        self._rooms.remove_member(room_id, member.agent_id)
+                    except RoomError:
+                        pass
+
+        have_ids = {m.agent_id for m in (self._rooms.get(room_id).members)}
+        for agent_id, handle in wanted:
+            if agent_id in have_ids:
                 continue
             try:
                 self._rooms.add_member(room_id, agent_id, handle)

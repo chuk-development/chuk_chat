@@ -634,6 +634,17 @@ credits.
   possible but needs the page to observe controller swaps; the honest banner is
   the safe minimal fix.)
 
+- **Host reconciles room membership on re-open (§16.1)** — closes an offline-edit
+  sync gap for free. The app re-sends `room_create` whenever a room is opened
+  (idempotent), but the old handler only *skipped* an existing room, so a
+  membership change or rename made while the host was offline never reached it.
+  `RoomService.handle_room_create` is now create-*or-reconcile*: an existing room
+  has its name updated, members in the payload but not on the host added, and
+  members on the host but not in the payload removed — the app is the authority,
+  and the next open brings the host back in step. No new frames, no app change
+  (the open-time re-sync already carries the current membership). +2 host tests;
+  host 84 green.
+
 ### Verified green baseline (2026-08-22, full cross-package run)
 
 Re-run after the whole room build-out and the shell's ValueNotifier refactor
