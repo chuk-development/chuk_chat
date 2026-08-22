@@ -482,6 +482,12 @@ done
 # FEATURE_IMAGE_GEN and FEATURE_MEDIA_MANAGER are hardcoded true in
 # platform_config.dart — no define to pass.
 
+# A development run must not be turned away by the installed app. The Linux
+# runner takes a single-instance lock, and the installed build holds it for as
+# long as it sits in the tray — the dev build then exits before its first
+# frame and `flutter run` reports a dead log reader, not a busy lock.
+export CHUK_MULTI_INSTANCE=1
+
 # Run Flutter
 echo "Running flutter in debug mode with device: $DEVICE"
 echo "Features on:  $(for _flag in "${ALL_FEATURE_FLAGS[@]}"; do

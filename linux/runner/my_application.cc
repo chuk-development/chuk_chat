@@ -20,6 +20,17 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 namespace {
 int g_single_instance_lock_fd = -1;
 
+// Let a second instance start on purpose. Without this, a development build
+// started while the installed app sits in the tray dies before it draws
+// anything: the lock is held, the process leaves at once, and `flutter run`
+// reports only "The log reader stopped unexpectedly", which names neither
+// the lock nor the app holding it.
+bool multi_instance_allowed() {
+  const gchar* value = g_getenv("CHUK_MULTI_INSTANCE");
+  return value != nullptr && (g_strcmp0(value, "1") == 0 ||
+                              g_strcmp0(value, "true") == 0);
+}
+
 bool acquire_single_instance_lock() {
   if (g_single_instance_lock_fd != -1) {
     return true;
@@ -142,17 +153,31 @@ static gboolean my_application_local_command_line(GApplication* application, gch
      return TRUE;
   }
 
-  // Secondary launches should always activate the existing process.
-  if (g_application_get_is_remote(application)) {
+  // Secondary launches should always activate the existing process — unless
+  // a second one was asked for.
+  if (!multi_instance_allowed() && g_application_get_is_remote(application)) {
     g_application_activate(application);
+    // This is the path a development build actually leaves by: the installed
+    // app owns the name on the bus, so this process is the remote one and is
+    // gone before the lock below is reached. Say so, or the exit is silent.
+    g_printerr(
+        "chuk_chat: another instance owns this application id, so this launch "
+        "raised that window and is exiting. Quit the running app (check the "
+        "system tray), or set CHUK_MULTI_INSTANCE=1 to run a second one.\n");
     *exit_status = 0;
     return TRUE;
   }
 
   // If D-Bus activation is unavailable, guard with a process lock so we
   // never spin up a second full app instance (and second tray icon).
-  if (!acquire_single_instance_lock()) {
-    g_warning("Another Chuk Chat instance is already running.");
+  if (!multi_instance_allowed() && !acquire_single_instance_lock()) {
+    // stderr, not g_warning: `flutter run` swallows the GLib log domain, and
+    // a silent exit here is what sends the reader hunting for a build error
+    // that is not there.
+    g_printerr(
+        "chuk_chat: another instance already holds the single-instance lock, "
+        "so this one is exiting. Quit the running app (check the system "
+        "tray), or set CHUK_MULTI_INSTANCE=1 to run a second one.\n");
     *exit_status = 0;
     return TRUE;
   }
@@ -206,8 +231,14 @@ MyApplication* my_application_new() {
   // the application to be recognized beyond its binary name.
   g_set_prgname(APPLICATION_ID);
 
+  // NON_UNIQUE keeps GTK from handing this launch to the instance already on
+  // the bus, which it would do before the lock above is ever reached.
+  const GApplicationFlags flags = multi_instance_allowed()
+                                      ? G_APPLICATION_NON_UNIQUE
+                                      : G_APPLICATION_DEFAULT_FLAGS;
+
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID,
-                                     "flags", G_APPLICATION_DEFAULT_FLAGS,
+                                     "flags", flags,
                                      nullptr));
 }
