@@ -25,6 +25,7 @@ class AgentRosterView extends StatefulWidget {
     this.selectedAgentId,
     this.selectedThreadKey,
     this.onAddAgent,
+    this.onDeleteAgent,
     this.now,
   });
 
@@ -38,6 +39,10 @@ class AgentRosterView extends StatefulWidget {
 
   /// Opens the onboarding flow. Hidden when null.
   final VoidCallback? onAddAgent;
+
+  /// Deletes a coworker. When set, a Delete item appears for agents that are not
+  /// the paired host (the host agent is the real device, not a bot to delete).
+  final void Function(String agentId)? onDeleteAgent;
 
   /// Clock seam so "5m ago" is deterministic in a test.
   final DateTime Function()? now;
@@ -262,9 +267,10 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                 icon: const Icon(Icons.more_vert, size: 18),
                 onSelected: (value) {
                   if (value == 'hide') widget.source.hideAgent(agent.id);
+                  if (value == 'delete') widget.onDeleteAgent?.call(agent.id);
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem<String>(
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
                     value: 'hide',
                     child: ListTile(
                       dense: true,
@@ -273,6 +279,18 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                       title: Text('Hide'),
                     ),
                   ),
+                  // The paired host is the user's real device, not a bot to
+                  // delete, so Delete is offered only for other coworkers.
+                  if (widget.onDeleteAgent != null && !agent.onHost)
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.delete_outline, size: 18),
+                        title: Text('Delete'),
+                      ),
+                    ),
                 ],
               ),
             ],

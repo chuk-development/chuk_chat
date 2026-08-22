@@ -265,6 +265,52 @@ void main() {
     });
   });
 
+  group('delete an agent (§16.1)', () {
+    testWidgets('a non-host agent offers Delete; the host agent does not',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(30));
+      source.ensureHostAgent('host-laptop'); // onHost = true
+      source.addAgent(name: 'amber-otter'); // local, onHost = false
+      final deleted = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentRosterView(
+              source: source,
+              now: () => DateTime(2026, 8, 22, 12),
+              onSelect: (_, __) {},
+              onDeleteAgent: deleted.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The local agent's menu has Delete.
+      final localMenu = find.descendant(
+        of: find.widgetWithText(ListTile, 'amber-otter'),
+        matching: find.byIcon(Icons.more_vert),
+      );
+      await tester.tap(localMenu);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(deleted, hasLength(1));
+
+      // The host agent's menu has no Delete.
+      final hostMenu = find.descendant(
+        of: find.widgetWithText(ListTile, 'host-laptop'),
+        matching: find.byIcon(Icons.more_vert),
+      );
+      await tester.tap(hostMenu);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsNothing);
+      expect(find.text('Hide'), findsOneWidget);
+    });
+  });
+
   group('hide / unhide (§16.1)', () {
     test('hiding removes an agent from the visible roster, keeps it in agents',
         () {

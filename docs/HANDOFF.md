@@ -541,6 +541,16 @@ credits.
   coworkers they are addressing, not just the room name. +2 view tests; app 224
   green.
 
+- **Delete a coworker, cascading its rooms (§16.1)** — DONE, closing a real gap:
+  agents could be hidden but never deleted. The roster row menu gains Delete —
+  offered only for non-host agents (the paired host is the real device, not a
+  bot to delete). The shell removes the agent and cascades:
+  `LocalRoomSource.removeAgentFromRooms` pulls it out of every room, shrinking
+  those that survive and deleting any that fall below two members (a room of one
+  is not a room), and the shell tells the host to forget each deleted room, and
+  clears the selection if the deleted agent was open. +2 source, +1 roster tests;
+  app 227 green.
+
 ### Gates that STILL need the user (not auto-run)
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.

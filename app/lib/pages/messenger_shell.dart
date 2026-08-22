@@ -276,6 +276,23 @@ class _MessengerShellState extends State<MessengerShell> {
     _sharedController?.renameRoom(roomId, name);
   }
 
+  void _deleteAgent(String agentId) {
+    // Drop the agent, and cascade: pull it out of every room it is in (a room
+    // that falls below two members is deleted), telling the host to forget each
+    // deleted room so nothing is orphaned. If the deleted agent was selected,
+    // clear the selection so the thread pane does not point at a ghost.
+    _roster.removeAgent(agentId);
+    for (final roomId in _rooms.removeAgentFromRooms(agentId)) {
+      _sharedController?.deleteRoom(roomId);
+    }
+    if (_selectedAgentId == agentId) {
+      setState(() {
+        _selectedAgentId = null;
+        _showThreadOnNarrow = false;
+      });
+    }
+  }
+
   void _newThread() {
     final agentId = _selectedAgentId;
     if (agentId == null) return;
@@ -298,6 +315,7 @@ class _MessengerShellState extends State<MessengerShell> {
           selectedThreadKey: _selectedThreadKey,
           onSelect: _select,
           onAddAgent: _openOnboarding,
+          onDeleteAgent: _deleteAgent,
         );
         final thread = CoworkThreadView(
           key: _threadViewKey,

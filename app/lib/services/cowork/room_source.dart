@@ -24,6 +24,12 @@ abstract class RoomSource extends ChangeNotifier {
   /// Renames a room. A no-op for an unknown id or an empty/blank name.
   void renameRoom(String id, String name);
 
+  /// Removes [agentId] from every room it is in. A room that drops below two
+  /// members is deleted (a room of one is not a room). Called when an agent is
+  /// deleted, so no room keeps a phantom member. Returns the ids of rooms that
+  /// were deleted as a result.
+  List<String> removeAgentFromRooms(String agentId);
+
   /// Creates a room from a draft, assigning an id. Throws [ArgumentError] if the
   /// draft breaks a rule (fewer than two members, more than [kRoomMaxMembers],
   /// a duplicate handle or agent) — the same rules the host enforces, checked
@@ -104,6 +110,28 @@ class LocalRoomSource extends RoomSource {
         return;
       }
     }
+  }
+
+  @override
+  List<String> removeAgentFromRooms(String agentId) {
+    final deleted = <String>[];
+    var changed = false;
+    for (var i = _rooms.length - 1; i >= 0; i--) {
+      final room = _rooms[i];
+      if (!room.members.any((m) => m.agentId == agentId)) continue;
+      final kept = <CoworkRoomMember>[
+        for (final m in room.members) if (m.agentId != agentId) m,
+      ];
+      changed = true;
+      if (kept.length < 2) {
+        deleted.add(room.id);
+        _rooms.removeAt(i);
+      } else {
+        _rooms[i] = room.copyWith(members: List<CoworkRoomMember>.unmodifiable(kept));
+      }
+    }
+    if (changed) notifyListeners();
+    return deleted;
   }
 
   @override

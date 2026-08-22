@@ -108,4 +108,34 @@ void main() {
     source.renameRoom('nope', 'x'); // unknown -> ignored
     expect(notified, 1);
   });
+
+  test('removeAgentFromRooms shrinks a big room and deletes a sub-2 one', () {
+    final source = LocalRoomSource(random: Random(20));
+    // Room A: 3 members incl. amber -> shrinks to 2.
+    final a = source.addRoom(CoworkRoomDraft(name: 'A', members: [
+      _m('amber', 'amber'),
+      _m('b', 'cobalt'),
+      _m('c', 'jade'),
+    ]));
+    // Room B: 2 members incl. amber -> falls to 1, deleted.
+    final b = source.addRoom(CoworkRoomDraft(name: 'B', members: [
+      _m('amber', 'amber'),
+      _m('d', 'onyx'),
+    ]));
+
+    final deleted = source.removeAgentFromRooms('amber');
+    expect(deleted, [b.id]);
+    expect(source.byId(b.id), isNull);
+    final roomA = source.byId(a.id)!;
+    expect(roomA.members.map((m) => m.handle), ['cobalt', 'jade']);
+  });
+
+  test('removeAgentFromRooms is a no-op when the agent is in no room', () {
+    final source = LocalRoomSource(random: Random(21));
+    source.addRoom(_draft('A'));
+    var notified = 0;
+    source.addListener(() => notified++);
+    expect(source.removeAgentFromRooms('nobody'), isEmpty);
+    expect(notified, 0);
+  });
 }
