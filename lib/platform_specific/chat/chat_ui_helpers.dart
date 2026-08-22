@@ -43,6 +43,8 @@ class MessageRenderData {
     this.toolCalls,
     this.contentBlocks,
     this.isStreamingMessage = false,
+    this.turnStartedAt,
+    this.workedFor,
     this.status,
     this.queueId,
     this.lastError,
@@ -66,6 +68,14 @@ class MessageRenderData {
   final List<ToolCall>? toolCalls;
   final List<ContentBlock>? contentBlocks;
   final bool isStreamingMessage;
+
+  /// When the request behind this answer went out. The header counts from
+  /// here while the turn runs.
+  final DateTime? turnStartedAt;
+
+  /// How long the finished turn took, as written down when it was saved.
+  /// Null while it still runs, and on messages from before it was recorded.
+  final Duration? workedFor;
 
   /// Local-only delivery status. `pending` / `failed` apply to user
   /// messages (offline queue); `interrupted` applies to assistant
@@ -320,6 +330,16 @@ class ChatUiHelpers {
     }
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
+    }
+    // The turn's clock survives reload: without these two, a reloaded answer
+    // loses the request timestamp and its recorded duration, so the header
+    // falls back to the tool-call stamps for a turn that had already timed
+    // itself.
+    if (message.startedAt != null && message.startedAt!.isNotEmpty) {
+      map['startedAt'] = message.startedAt!;
+    }
+    if (message.generationMs != null && message.generationMs!.isNotEmpty) {
+      map['generationMs'] = message.generationMs!;
     }
     // Preserve local delivery status + offline-queue id so a message that was
     // pending/failed/interrupted keeps its state (and "Continue generation"
@@ -798,6 +818,15 @@ class ChatUiHelpers {
     final bool isStreamingMessage =
         isStreaming && index == messageCount - 1 && isAiMessage;
     final bool hasReasoning = reasoning.isNotEmpty;
+    // The turn's own clock. `startedAt` is stamped on the placeholder and
+    // `generationMs` when the answer is saved, so a running turn counts up
+    // from the first and a finished one shows the second unchanged.
+    final DateTime? turnStartedAt = isAiMessage
+        ? DateTime.tryParse(raw['startedAt'] ?? '')
+        : null;
+    final int? workedForMs = isAiMessage
+        ? int.tryParse(raw['generationMs'] ?? '')
+        : null;
     final String? modelLabel = isAiMessage
         ? formatModelInfo(raw['modelId'], raw['provider'])
         : null;
@@ -886,6 +915,10 @@ class ChatUiHelpers {
       toolCalls: toolCalls,
       contentBlocks: parsedContentBlocks,
       isStreamingMessage: isStreamingMessage,
+      turnStartedAt: turnStartedAt,
+      workedFor: workedForMs == null || workedForMs < 0
+          ? null
+          : Duration(milliseconds: workedForMs),
       status: status,
       queueId: queueId,
       lastError: lastError,

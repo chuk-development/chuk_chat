@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 
@@ -23,6 +24,9 @@ class AgentActivityTimeline extends StatefulWidget {
     this.onStepTap,
     this.onSourceTap,
     this.footer,
+    this.phase,
+    this.startedAt,
+    this.finalDuration,
   });
 
   /// The round's calls, in the order the model made them. Drives the
@@ -55,6 +59,20 @@ class AgentActivityTimeline extends StatefulWidget {
   /// Shown under the last step when the timeline is open. The model line
   /// lives here: it belongs to the round, but it is not a step in it.
   final Widget? footer;
+
+  /// What the turn is doing right now, so the header can name the wait
+  /// instead of calling all of it "Thinking". Null once the turn is over.
+  final StreamPhase? phase;
+
+  /// When the request went out. The clock runs from here, not from the
+  /// first tool call: the wait before the first token is the longest part
+  /// of a slow turn and used to be counted as nothing at all.
+  final DateTime? startedAt;
+
+  /// The turn's measured length, kept with the message. Once it is there
+  /// the header stops recomputing — a reopened chat shows the same number
+  /// it showed when the answer arrived.
+  final Duration? finalDuration;
 
   @override
   State<AgentActivityTimeline> createState() => _AgentActivityTimelineState();
@@ -125,11 +143,19 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     if (entries.isEmpty && widget.footer == null) {
       return const SizedBox.shrink();
     }
-    final duration = agentActivityDuration(
-      widget.toolCalls,
-      now: _now,
-      running: widget.isRunning,
-    );
+    // Three sources, in order of trust: the number measured when the turn
+    // ended, the clock running from the moment the request went out, and —
+    // for messages written before either was recorded — the old guess from
+    // the tool-call stamps.
+    final duration =
+        widget.finalDuration ??
+        (widget.startedAt != null
+            ? _nonNegative(_now.difference(widget.startedAt!))
+            : agentActivityDuration(
+                widget.toolCalls,
+                now: _now,
+                running: widget.isRunning,
+              ));
 
     return SelectionContainer.disabled(
       child: Column(
@@ -158,10 +184,26 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     );
   }
 
+  static Duration _nonNegative(Duration d) => d.isNegative ? Duration.zero : d;
+
   Widget _buildHeader(ThemeData theme, Color muted, Duration? duration) {
-    final String verb = widget.toolCalls.isEmpty
-        ? (widget.isRunning ? 'Thinking' : 'Thought')
-        : (widget.isRunning ? 'Working' : 'Worked');
+    // A running turn is named by what it is doing; a finished one by what
+    // it did. A tool that is still going outranks the stream's own phase —
+    // the model is waiting on the tool, whatever it last sent.
+    final bool toolRunning = widget.toolCalls.any(
+      (t) =>
+          t.status == ToolCallStatus.running ||
+          t.status == ToolCallStatus.pending,
+    );
+    final String verb;
+    if (widget.isRunning) {
+      verb = toolRunning
+          ? StreamPhase.working.label
+          : (widget.phase?.label ??
+                (widget.toolCalls.isEmpty ? 'Thinking' : 'Working'));
+    } else {
+      verb = widget.toolCalls.isEmpty ? 'Thought' : 'Worked';
+    }
     final label = duration == null
         ? verb
         : '$verb for ${formatAgentDuration(duration)}';

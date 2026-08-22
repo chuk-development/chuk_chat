@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 
@@ -26,6 +27,20 @@ class StreamingManager {
   bool isStreaming(String chatId) {
     return _activeStreams.containsKey(chatId) &&
         _activeStreams[chatId]!.isActive;
+  }
+
+  /// What the running turn in [chatId] is doing, or null when nothing runs.
+  StreamPhase? phaseOf(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.phase;
+  }
+
+  /// When the running turn in [chatId] began.
+  DateTime? startedAtOf(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.startedAt;
   }
 
   /// Check if ANY chat is currently streaming
@@ -176,6 +191,15 @@ class StreamingManager {
   }) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
+
+    activeStream.phase = switch (event) {
+      ReasoningEvent() => StreamPhase.thinking,
+      ContentEvent() => StreamPhase.writing,
+      _ =>
+        activeStream.phase == StreamPhase.connecting
+            ? StreamPhase.processing
+            : activeStream.phase,
+    };
 
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
@@ -369,6 +393,11 @@ class _ActiveStream {
   double? tps;
   Map<String, dynamic>? latestMeta;
   DateTime? completedAt;
+
+  /// When the request went out, and what the turn is doing now — the two
+  /// facts the header above the answer counts and names.
+  final DateTime startedAt = DateTime.now();
+  StreamPhase phase = StreamPhase.connecting;
   List<Map<String, dynamic>>? backgroundMessages;
   String? modelId;
   String? provider;

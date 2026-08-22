@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
@@ -40,6 +41,9 @@ Future<void> _pumpTimeline(
   bool? initiallyExpanded,
   void Function(ToolCall)? onStepTap,
   void Function(AgentActivitySource)? onSourceTap,
+  StreamPhase? phase,
+  DateTime? startedAt,
+  Duration? finalDuration,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -51,6 +55,9 @@ Future<void> _pumpTimeline(
           onStepTap: onStepTap,
           onSourceTap: onSourceTap,
           clock: now == null ? null : () => now,
+          phase: phase,
+          startedAt: startedAt,
+          finalDuration: finalDuration,
         ),
       ),
     ),
@@ -542,6 +549,97 @@ void main() {
         running: true,
       );
       expect(elapsed, const Duration(seconds: 21));
+    });
+  });
+
+  group('the header names the wait', () {
+    testWidgets('a request still in flight says so', (tester) async {
+      await _pumpTimeline(
+        tester,
+        calls: [_call('web_search', endSecond: null)],
+        isRunning: true,
+        phase: StreamPhase.connecting,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 3)),
+      );
+
+      expect(find.text('Connecting for 3s'), findsOneWidget);
+    });
+
+    testWidgets('a server reading the prompt is not called thinking', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        calls: [_call('web_search', endSecond: null)],
+        isRunning: true,
+        phase: StreamPhase.processing,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 12)),
+      );
+
+      expect(find.text('Prompt processing for 12s'), findsOneWidget);
+    });
+
+    testWidgets('a running tool outranks the stream phase', (tester) async {
+      // The model last sent reasoning, but it is waiting on a tool — that is
+      // what the reader is waiting for too.
+      await _pumpTimeline(
+        tester,
+        calls: [
+          _call('web_search', status: ToolCallStatus.running, endSecond: null),
+        ],
+        isRunning: true,
+        phase: StreamPhase.thinking,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 5)),
+      );
+
+      expect(find.text('Working for 5s'), findsOneWidget);
+    });
+
+    testWidgets('the clock runs from the request, not the first call', (
+      tester,
+    ) async {
+      // The call starts at +30s. Counting from it would show 2s for a turn
+      // the reader has been waiting 32s for.
+      await _pumpTimeline(
+        tester,
+        calls: [_call('web_search', startSecond: 30, endSecond: null)],
+        isRunning: true,
+        phase: StreamPhase.writing,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 32)),
+      );
+
+      expect(find.text('Writing for 32s'), findsOneWidget);
+    });
+
+    testWidgets('a finished turn shows the length it was saved with', (
+      tester,
+    ) async {
+      // Tool stamps say 4s; the recorded turn took 47s. The recorded one is
+      // what the reader watched, so it is what a reopened chat shows.
+      await _pumpTimeline(
+        tester,
+        calls: [_call('web_search', startSecond: 0, endSecond: 4)],
+        finalDuration: const Duration(seconds: 47),
+        now: _t0.add(const Duration(minutes: 5)),
+      );
+
+      expect(find.text('Worked for 47s'), findsOneWidget);
+    });
+
+    testWidgets('a message from before the stamp still reads sensibly', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        calls: [_call('web_search', startSecond: 0, endSecond: 4)],
+        now: _t0.add(const Duration(minutes: 5)),
+      );
+
+      expect(find.text('Worked for 4s'), findsOneWidget);
     });
   });
 }

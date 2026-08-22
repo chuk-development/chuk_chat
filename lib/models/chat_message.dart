@@ -60,6 +60,8 @@ class ChatMessage {
     this.status,
     this.queueId,
     this.messageId,
+    this.startedAt,
+    this.generationMs,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -81,6 +83,8 @@ class ChatMessage {
       status: _statusFromString(json['status'] as String?),
       queueId: json['queueId'] as String?,
       messageId: json['messageId'] as String?,
+      startedAt: json['startedAt']?.toString(),
+      generationMs: json['generationMs']?.toString(),
     );
   }
 
@@ -125,6 +129,24 @@ class ChatMessage {
   /// creation was introduced).
   final String? messageId;
 
+  /// When the request for this answer went out, ISO-8601. Stamped on the
+  /// placeholder, so the header can count from the send rather than from
+  /// the first tool call.
+  final String? startedAt;
+
+  /// How long the turn took, in whole milliseconds, written down when the
+  /// answer was saved. Absent on messages from before it was recorded —
+  /// the header then falls back to the tool-call stamps.
+  final String? generationMs;
+
+  /// [generationMs] as a duration, or null when it was never recorded or
+  /// cannot be read.
+  Duration? get workedFor {
+    final ms = int.tryParse(generationMs ?? '');
+    if (ms == null || ms < 0) return null;
+    return Duration(milliseconds: ms);
+  }
+
   // Alias for backwards compatibility
   String get sender => role == 'assistant' ? 'ai' : role;
 
@@ -155,6 +177,8 @@ class ChatMessage {
     ChatMessageStatus? status,
     String? queueId,
     String? messageId,
+    String? startedAt,
+    String? generationMs,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -174,6 +198,8 @@ class ChatMessage {
       status: status ?? this.status,
       queueId: queueId ?? this.queueId,
       messageId: messageId ?? this.messageId,
+      startedAt: startedAt ?? this.startedAt,
+      generationMs: generationMs ?? this.generationMs,
     );
   }
 
@@ -201,5 +227,8 @@ class ChatMessage {
     if (_statusToString(status) != null) 'status': _statusToString(status),
     if (queueId != null && queueId!.isNotEmpty) 'queueId': queueId,
     if (messageId != null && messageId!.isNotEmpty) 'messageId': messageId,
+    if (startedAt != null && startedAt!.isNotEmpty) 'startedAt': startedAt,
+    if (generationMs != null && generationMs!.isNotEmpty)
+      'generationMs': generationMs,
   };
 }

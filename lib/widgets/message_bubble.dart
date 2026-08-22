@@ -7,12 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
@@ -21,6 +23,7 @@ import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/diff_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/weather_widget.dart';
+import 'package:chuk_chat/utils/tool_detail_format.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
@@ -219,6 +222,8 @@ class MessageBubble extends StatefulWidget {
     this.showToolCalls = true,
     this.contentBlocks,
     this.isStreamingMessage = false,
+    this.turnStartedAt,
+    this.workedFor,
     this.images,
     this.imageMetas,
     this.attachments,
@@ -264,6 +269,16 @@ class MessageBubble extends StatefulWidget {
   /// Whether this message is currently being streamed. Used with
   /// [contentBlocks] to show trailing text from the active streaming pass.
   final bool isStreamingMessage;
+
+  /// When the request behind this answer went out, so the activity header
+  /// can count real seconds from the send rather than from the first tool
+  /// call — which on a slow turn starts long after the reader began waiting.
+  final DateTime? turnStartedAt;
+
+  /// The finished turn's length as it was written down. Once present the
+  /// header shows it unchanged, so reopening a chat cannot produce a
+  /// different number than the one the reader watched arrive.
+  final Duration? workedFor;
 
   final List<String>? images; // Base64 data URLs of images
 
@@ -1847,8 +1862,26 @@ class _MessageBubbleState extends State<MessageBubble> {
         if (reasoning.trim().isNotEmpty) AgentActivityStep.reasoning(reasoning),
       ],
       isRunning: isStreaming,
+      // A turn with no tool call runs through here, so it needs the same
+      // header the tool path gets: the live phase and a count from the
+      // request, then the settled duration once the answer is there.
+      phase: _currentPhase(isStreaming),
+      startedAt: isStreaming ? widget.turnStartedAt : null,
+      finalDuration: isStreaming ? null : widget.workedFor,
       footer: _hasModelInfo ? _buildModelFooter() : null,
     );
+  }
+
+  /// The phase of the running stream, taken straight from the stream rather
+  /// than guessed from what has arrived so far: "no text yet" cannot tell a
+  /// request still in flight from a server reading a long prompt, and those
+  /// two waits fail for different reasons. Null when this message is not the
+  /// one currently running.
+  StreamPhase? _currentPhase(bool isRunning) {
+    if (!isRunning) return null;
+    final chatId = ArtifactStorageService.activeChatId;
+    if (chatId == null || chatId.isEmpty) return null;
+    return StreamingManager().phaseOf(chatId);
   }
 
   /// The model line: which model answered, on which provider, how fast.
@@ -2013,6 +2046,9 @@ class _MessageBubbleState extends State<MessageBubble> {
       toolCalls: toolCalls,
       steps: steps,
       isRunning: isRunning,
+      phase: _currentPhase(isRunning),
+      startedAt: isRunning ? widget.turnStartedAt : null,
+      finalDuration: isRunning ? null : widget.workedFor,
       onStepTap: _showToolCallDetails,
       onSourceTap: _openSourceUrl,
     );
@@ -2159,6 +2195,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     required String body,
     bool mono = false,
   }) {
+    // ignore: parameter_assignments — the body is reshaped once, in place,
+    // when it turns out to be JSON.
     final colorScheme = Theme.of(context).colorScheme;
     final labelColor = colorScheme.onSurface.withValues(alpha: 0.7);
     final bodyColor = colorScheme.onSurface.withValues(alpha: 0.85);
@@ -2168,6 +2206,31 @@ class _MessageBubbleState extends State<MessageBubble> {
     Widget bodyText(TextStyle style) => widget.useSharedSelectionArea
         ? Text(body, style: style)
         : SelectableText(body, style: style);
+
+    // A tool body is rarely prose: JSON arrives as one unbroken line, and a
+    // brief arrives as markdown with its asterisks showing. Both are worth
+    // recognising before falling back to monospace text.
+    final classified = classifyToolBody(body);
+    if (classified.kind == ToolBodyKind.markdown) {
+      return _buildToolSectionFrame(
+        label: label,
+        labelColor: labelColor,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: MarkdownMessage(
+            text: classified.text,
+            textColor: bodyColor,
+            backgroundColor: colorScheme.surface,
+            wrapWithSelectionArea: !widget.useSharedSelectionArea,
+            paragraphFontSize: 12,
+          ),
+        ),
+      );
+    }
+    if (classified.kind == ToolBodyKind.json) {
+      body = classified.text;
+      mono = true;
+    }
 
     final Widget bodyWidget = mono
         ? Container(
@@ -2201,6 +2264,19 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
           );
 
+    return _buildToolSectionFrame(
+      label: label,
+      labelColor: labelColor,
+      child: bodyWidget,
+    );
+  }
+
+  /// The label above a tool-detail body, and the spacing around the pair.
+  Widget _buildToolSectionFrame({
+    required String label,
+    required Color labelColor,
+    required Widget child,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -2215,7 +2291,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               letterSpacing: 0.3,
             ),
           ),
-          bodyWidget,
+          child,
         ],
       ),
     );
