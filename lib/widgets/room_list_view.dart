@@ -21,6 +21,7 @@ class RoomListView extends StatelessWidget {
     this.onCreate,
     this.onDelete,
     this.onRename,
+    this.onManageMembers,
     this.selectedRoomId,
   });
 
@@ -38,6 +39,9 @@ class RoomListView extends StatelessWidget {
   /// Renames a room (called with its id and the chosen name). When null, no
   /// rename affordance is shown.
   final void Function(String roomId, String name)? onRename;
+
+  /// Opens member management for a room. When null, no such affordance is shown.
+  final void Function(String roomId)? onManageMembers;
 
   final String? selectedRoomId;
 
@@ -121,7 +125,7 @@ class RoomListView extends StatelessWidget {
         count == 1 ? '1 member' : '$count members',
         style: theme.textTheme.bodySmall,
       ),
-      trailing: (onDelete == null && onRename == null)
+      trailing: (onDelete == null && onRename == null && onManageMembers == null)
           ? null
           : PopupMenuButton<String>(
               tooltip: 'More',
@@ -129,8 +133,19 @@ class RoomListView extends StatelessWidget {
               onSelected: (value) {
                 if (value == 'delete') onDelete?.call(room.id);
                 if (value == 'rename') _promptRename(context, room);
+                if (value == 'members') onManageMembers?.call(room.id);
               },
               itemBuilder: (context) => [
+                if (onManageMembers != null)
+                  const PopupMenuItem<String>(
+                    value: 'members',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.group_outlined, size: 18),
+                      title: Text('Manage members'),
+                    ),
+                  ),
                 if (onRename != null)
                   const PopupMenuItem<String>(
                     value: 'rename',

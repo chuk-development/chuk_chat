@@ -599,9 +599,13 @@ credits.
   `dispatch_room_frame` routes them; `LocalRoomSource.addMemberToRoom`
   (refuses full/duplicate) and `removeMemberFromRoom` (deletes a room that drops
   below two members); controller `addRoomMember`/`removeRoomMember`. +1 executor,
-  +2 host, +2 app-source tests; app 231, host 82 green. **Still open
-  (member-edit-UI):** an affordance on the room to add/remove members — the
-  RoomCreateSheet's picker, reused for an existing room.
+  +2 host, +2 app-source tests; app 231, host 82 green.
+- **Member-edit UI (§16.1)** — DONE. `RoomMembersSheet` lists the room's members
+  (Remove, disabled at two) and the roster agents not in it (Add, disabled at
+  six); a "Manage members" item in `RoomListView`'s row menu opens it; the shell
+  wires add/remove to `LocalRoomSource` + the host and reopens the sheet on each
+  change (or stops if a removal dropped the room below two and deleted it). +7
+  sheet, +1 list tests; app 238 green.
 
 ### Verified green baseline (2026-08-22, full cross-package run)
 
