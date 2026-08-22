@@ -102,11 +102,14 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> renameRoom(String roomId, String name) async =>
       renamedRooms.add((roomId, name));
 
+  final List<(String, String)> removedMembers = <(String, String)>[];
+
   @override
   Future<void> addRoomMember(String roomId, String agentId, String handle) async {}
 
   @override
-  Future<void> removeRoomMember(String roomId, String agentId) async {}
+  Future<void> removeRoomMember(String roomId, String agentId) async =>
+      removedMembers.add((roomId, agentId));
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {}
@@ -435,5 +438,53 @@ void main() {
     expect(controller.createdRooms, [rooms.rooms.single.id]);
     // Back on the rooms list, the new room shows.
     expect(find.text('planning'), findsOneWidget);
+  });
+
+  testWidgets('deleting an agent syncs its rooms to the host', (tester) async {
+    final roster = LocalAgentRosterSource()..addAgent(name: 'amber');
+    final amberId = roster.agents.single.id; // local agent -> Delete offered
+    final rooms = LocalRoomSource();
+    // Room A survives amber's removal (3 -> 2); room B is deleted (2 -> 1).
+    final a = rooms.addRoom(CoworkRoomDraft(name: 'A', members: [
+      CoworkRoomMember(agentId: amberId, handle: 'amber'),
+      const CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+      const CoworkRoomMember(agentId: 'c', handle: 'jade'),
+    ]));
+    final b = rooms.addRoom(CoworkRoomDraft(name: 'B', members: [
+      CoworkRoomMember(agentId: amberId, handle: 'amber'),
+      const CoworkRoomMember(agentId: 'd', handle: 'onyx'),
+    ]));
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MessengerShell(
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Delete amber via its roster row menu.
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'amber'),
+        matching: find.byIcon(Icons.more_vert),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    // Room B fell below two members -> deleted on the host; room A survived ->
+    // amber removed from it on the host.
+    expect(controller.deletedRooms, [b.id]);
+    expect(controller.removedMembers, [(a.id, amberId)]);
+    expect(rooms.byId(b.id), isNull);
+    expect(rooms.byId(a.id)!.members.length, 2);
   });
 }
