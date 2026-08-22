@@ -156,6 +156,7 @@ class Executor:
         subagent_sandbox: str | None = None,
         subagent_sandbox_options: dict | None = None,
         subagent_limits: SubagentLimits | None = None,
+        on_room_frame: Callable[[dict], None] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -185,6 +186,13 @@ class Executor:
         self._subagent_sandbox = subagent_sandbox
         self._subagent_sandbox_options = dict(subagent_sandbox_options or {})
         self._subagent_limits = subagent_limits
+        # Group-room frames (§16.1) are not this agent's own work: they carry no
+        # prompt for the loop, and their responses are the host's to stream (the
+        # room drives several agents, not just this one). So the executor opens
+        # and validates them like any frame — default deny still applies — then
+        # hands the decoded payload up to the host, which routes it to the
+        # RoomService. None means rooms are not enabled on this host.
+        self._on_room_frame = on_room_frame
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -319,6 +327,16 @@ class Executor:
             # ``None`` keeps the original contract: the first frames of this
             # protocol carried a prompt and no type.
             self._accept_task(request_id, payload)
+            return
+        if isinstance(kind, str) and kind.startswith("room_"):
+            # Forwarded to the host, which owns the room. No request-scoped
+            # terminal here: a room's replies (room_turn / room_done /
+            # room_history) are streamed by the host on their own, not as this
+            # frame's response.
+            if self._on_room_frame is not None:
+                self._on_room_frame(payload)
+            else:
+                self._terminal(request_id, error_payload("rooms not enabled"))
             return
         self._terminal(request_id, error_payload(f"unknown payload type: {kind!r}"))
 
