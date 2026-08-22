@@ -62,6 +62,15 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(widget.agent.name, style: theme.textTheme.titleMedium),
+            if (widget.agent.role != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  widget.agent.role!,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.primary),
+                ),
+              ),
             if (!widget.agent.onHost)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
