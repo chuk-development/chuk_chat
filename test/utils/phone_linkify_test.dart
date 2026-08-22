@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:chuk_chat/utils/phone_linkify.dart';
 
 void main() {
@@ -40,6 +41,13 @@ void main() {
 
     test('rejects a digit run that is too long to dial', () {
       const input = 'ref +1234567890123456789';
+      expect(linkifyPhoneNumbers(input), input);
+    });
+
+    test('does not link a numeric head glued to a word suffix', () {
+      // Space on the left clears the left boundary, so only the new right
+      // boundary can keep this from linking `+15551234567` and leaving `beta`.
+      const input = 'Call +15551234567beta now';
       expect(linkifyPhoneNumbers(input), input);
     });
 
