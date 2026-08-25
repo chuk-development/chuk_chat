@@ -488,6 +488,13 @@ done
 # frame and `flutter run` reports a dead log reader, not a busy lock.
 export CHUK_MULTI_INSTANCE=1
 
+# Print the assembled --dart-define string and exit. Lets run-hot.sh reuse the
+# exact same defines (single source of truth) instead of duplicating them.
+if [ -n "$PRINT_DEFINES" ]; then
+  printf '%s\n' "$DART_DEFINES"
+  exit 0
+fi
+
 # Run Flutter
 echo "Running flutter in debug mode with device: $DEVICE"
 echo "Features on:  $(for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
