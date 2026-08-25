@@ -189,11 +189,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
   ChatMode _chatMode = ChatModeService.fallbackMode;
 
-  /// Whether the model may reason in the current mode — switchable per
-  /// mode, so "fast" can still think briefly and "thinking" can skip it.
-  bool _reasoningOn = ChatModeService.defaultReasoning(
-    ChatModeService.fallbackMode,
-  );
+  /// The active mode's reasoning level (`none` … `xhigh`, `none` = off).
+  /// Loaded from the mode's config; each mode remembers its own.
+  String _reasoningEffort =
+      ChatModeService.defaultConfig(ChatModeService.fallbackMode).reasoningEffort;
 
   /// Human name of the selected model, for the mode menu. Null until the
   /// model list has been cached — the menu then shows the raw id.
@@ -255,21 +254,50 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _initializeListeners();
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
+    // Mode + its config (model, provider, reasoning) restore once, via
+    // _loadSavedModelPreference in _loadInitialData's post-frame pass — the
+    // single entry point, so startup writes and picked-model refreshes run
+    // only once.
     _loadInitialData();
-    unawaited(_restoreChatMode());
   }
 
-  /// Bring back the mode the reader last used. Until it arrives the
-  /// composer shows the fallback, which is also what a fresh install gets.
+  /// Bring back the mode the reader last used, and with it that mode's own
+  /// model, provider and reasoning level. The mode config is the single
+  /// source of truth for what a send uses; this projects it into the live
+  /// fields and keeps the shared selected-model plumbing in step.
   Future<void> _restoreChatMode() async {
     final mode = await ChatModeService.load();
-    final reasoning = await ChatModeService.loadReasoning(mode);
+    final config = await ChatModeService.loadConfig(mode);
+    await _applyModeConfig(mode, config);
+  }
+
+  /// Project [config] for [mode] into the live fields and the shared
+  /// selected-model plumbing, then refresh the derived UI. Safe to call more
+  /// than once — it is idempotent.
+  Future<void> _applyModeConfig(ChatMode mode, ModeConfig config) async {
     if (!mounted) return;
-    if (mode == _chatMode && reasoning == _reasoningOn) return;
     setState(() {
       _chatMode = mode;
-      _reasoningOn = reasoning;
+      _reasoningEffort = config.reasoningEffort;
+      _selectedModelId = config.modelId;
+      _selectedProviderSlug = config.providerSlug;
     });
+    ModelSelectionDropdown.selectedModelNotifier.value = config.modelId;
+    await UserPreferencesService.saveSelectedModel(config.modelId);
+    // The per-model provider pin is owned by the model screen. Read it here
+    // rather than overwrite it, and fall back to the mode's stored provider
+    // only when nothing is pinned. Awaited so it cannot race the unawaited
+    // read the model-selection listener starts from the notifier above.
+    if (!mounted) return;
+    await loadProviderSlugForModel(config.modelId, forceFromPrefs: true);
+    if (mounted && (_selectedProviderSlug ?? '').isEmpty) {
+      setState(() {
+        _selectedProviderSlug = config.providerSlug;
+      });
+    }
+    if (!mounted) return;
+    await _refreshSelectedModelName(config.modelId);
+    await _refreshPickedModels();
   }
 
   void _initializeHandlers() {
@@ -1099,13 +1127,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Current workspace id, if any. Debug only.
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
-  /// Whether reasoning is enabled for the current model. Debug only.
-  bool get debugReasoningEnabled => _reasoningOn;
+  /// Whether reasoning is enabled for the active mode. Debug only.
+  bool get debugReasoningEnabled => _reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
-  String get debugReasoningEffort =>
-      ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn);
+  String get debugReasoningEffort => _reasoningEffort;
 
   /// Current active chat id. Debug only.
   String? get debugActiveChatId => _activeChatId;
@@ -2302,7 +2329,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ? jsonEncode(imageDataUrls)
                 : null,
             maxTokens: validationResult.maxResponseTokens ?? 512,
-            reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+            reasoningEffort: _reasoningEffort,
           ),
         );
         if (mounted) {
@@ -2482,7 +2509,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+      reasoningEffort: _reasoningEffort,
     );
   }
 
@@ -2803,7 +2830,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+      reasoningEffort: _reasoningEffort,
     );
   }
 
@@ -3045,7 +3072,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-      reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+      reasoningEffort: _reasoningEffort,
       continuePriorText: priorText,
       continuePriorContentBlocksJson: priorContentBlocks,
     );
@@ -3093,37 +3120,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   /// Load the user's saved model preference
   Future<void> _loadSavedModelPreference() async {
+    // The active mode's config is the single source of truth for the model,
+    // provider and reasoning level. It always yields a model (baked
+    // defaults), so this simply projects it — no separate saved-vs-default
+    // branch to keep in step.
     try {
-      final savedModelId = await UserPreferencesService.loadSelectedModel();
-      if (!mounted) return;
-
-      if (savedModelId != null && savedModelId.isNotEmpty) {
-        setState(() {
-          _selectedModelId = savedModelId;
-        });
-        if (kDebugMode) {
-          debugPrint('Loaded saved model preference: $savedModelId');
-        }
-        // Update the global notifier so dropdown stays in sync
-        ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
-        await loadProviderSlugForModel(savedModelId);
-        await _refreshSelectedModelName();
-        await _refreshPickedModels();
-      } else {
-        // Nothing cached: take whatever the account carries, and fall back
-        // to the pinned default so a first-time reader can just type.
-        final defaultModelId = await ChatModeService.ensureModelSelected();
-        if (!mounted) return;
-        if (defaultModelId.isNotEmpty) {
-          setState(() {
-            _selectedModelId = defaultModelId;
-          });
-          ModelSelectionDropdown.selectedModelNotifier.value = defaultModelId;
-          await loadProviderSlugForModel(defaultModelId);
-        await _refreshSelectedModelName();
-        await _refreshPickedModels();
-        }
-      }
+      await _restoreChatMode();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading saved model preference: $e');
@@ -3664,8 +3666,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
         pickedModels: _pickedModels,
-        reasoning: _reasoningOn,
-        onReasoningChanged: _setReasoning,
+        reasoningEffort: _reasoningEffort,
+        reasoningLevels: ChatModeService.reasoningLevelsFor(
+          // Before the provider resolves, use the mode's own default provider
+          // so a Fireworks-pinned mode never briefly offers Minimal or Max.
+          providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
+              ? _selectedProviderSlug!
+              : ChatModeService.defaultConfig(_chatMode).providerSlug,
+        ),
+        onReasoningEffortChanged: _setReasoningEffort,
         onModeChanged: _setChatMode,
         onModelSelected: _applyModelSelection,
         onOpenModelScreen: _openModelScreen,
@@ -3720,7 +3729,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Turn provider preferences into the menu's model list.
   Future<void> _applyPickedModels(Map<String, String> prefs) async {
     final ids = <String>{
-      ChatModeService.defaultModelId,
+      // Each mode's own default model, so both stay reachable in the menu.
+      ChatModeService.defaultConfig(ChatMode.fast).modelId,
+      ChatModeService.defaultConfig(ChatMode.thinking).modelId,
       if (_selectedModelId.isNotEmpty) _selectedModelId,
       // Only models that still have a provider pinned. An empty slug means
       // the pin was taken away, and the model is no longer picked.
@@ -3774,32 +3785,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     await _refreshPickedModels();
   }
 
+  /// Switch mode, swapping in that mode's own model, provider and reasoning
+  /// level. The next send uses them.
   Future<void> _setChatMode(ChatMode mode) async {
-    final reasoning = await ChatModeService.loadReasoning(mode);
-    if (!mounted) return;
-    setState(() {
-      _chatMode = mode;
-      _reasoningOn = reasoning;
-    });
     await ChatModeService.save(mode);
-    // A mode runs its own pinned model. Whatever was picked by hand is
-    // left behind here, or the pill would name a model no mode selected.
-    if (_selectedModelId != ChatModeService.defaultModelId) {
-      await _applyModelSelection(await ChatModeService.useDefaultModel());
-    }
+    final config = await ChatModeService.loadConfig(mode);
+    await _applyModeConfig(mode, config);
   }
 
-  Future<void> _setReasoning(bool reasoning) async {
+  /// Set the reasoning level for the active mode. The store clamps it to what
+  /// the mode's stored provider allows and hands back the result, which is
+  /// the single source of truth — adopt it rather than a locally clamped copy.
+  Future<void> _setReasoningEffort(String level) async {
+    final config = await ChatModeService.setReasoningForMode(_chatMode, level);
     if (!mounted) return;
     setState(() {
-      _reasoningOn = reasoning;
+      _reasoningEffort = config.reasoningEffort;
     });
-    await ChatModeService.saveReasoning(_chatMode, reasoning);
   }
 
-  /// Apply a model picked in the second dropdown: remember it, keep the
-  /// shared notifier in step, and reload the pinned provider so model and
-  /// provider cannot drift apart on the next send.
+  /// Apply a model picked in the second menu: remember it, keep the shared
+  /// notifier in step, reload the pinned provider so model and provider
+  /// cannot drift apart on the next send, and record model+provider against
+  /// the active mode so switching back to it returns here.
   Future<void> _applyModelSelection(String modelId) async {
     setState(() {
       _selectedModelId = modelId;
@@ -3808,6 +3816,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     await UserPreferencesService.saveSelectedModel(modelId);
     if (!mounted) return;
     await loadProviderSlugForModel(modelId, forceFromPrefs: true);
+    final config = await ChatModeService.setModelForMode(
+      _chatMode,
+      modelId: modelId,
+      providerSlug: _selectedProviderSlug ?? '',
+    );
+    if (mounted && config.reasoningEffort != _reasoningEffort) {
+      setState(() {
+        _reasoningEffort = config.reasoningEffort;
+      });
+    }
     await _refreshSelectedModelName(modelId);
     await _refreshPickedModels();
   }

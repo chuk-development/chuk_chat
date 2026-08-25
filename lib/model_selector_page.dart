@@ -888,10 +888,13 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         label: 'Ctx',
         value: widget.formatContextLength(provider.contextLength),
       ),
-      _StatChip(
-        label: 'Max Out',
-        value: widget.formatContextLength(provider.maxCompletionTokens),
-      ),
+      // Many providers do not report this — show it only when known, rather
+      // than a bare "N/A" chip that says nothing.
+      if (provider.maxCompletionTokens != null)
+        _StatChip(
+          label: 'Max output',
+          value: widget.formatContextLength(provider.maxCompletionTokens),
+        ),
       _StatChip(
         label: 'In',
         value: provider.pricing.formatTokenPrice(provider.pricing.prompt),
