@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
@@ -218,6 +219,10 @@ class ChatSyncService {
     if (user == null) return;
 
     if (!EncryptionService.hasKey) return;
+
+    // Piggyback the MCP connector pull on the same online + signed-in + keyed
+    // tick. Fire-and-forget so a slow reconcile never holds up chat sync.
+    unawaited(McpSyncService.pullAndReconcile());
 
     _isSyncing = true;
     final stopwatch = Stopwatch()..start();
