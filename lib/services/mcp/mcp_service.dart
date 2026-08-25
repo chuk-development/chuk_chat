@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/mcp/mcp_client.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_redirect.dart';
+import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// What a connect attempt ended in, for the UI to show.
@@ -229,6 +230,17 @@ class McpService {
         connection,
       ];
       await _persist();
+      // Reconnecting clears any leftover tombstone, then shares it, encrypted,
+      // so the reader's other devices pick it up. A failure here is only a
+      // resilience gap — the next reconcile re-pushes — so log, don't leak an
+      // unhandled async error.
+      unawaited(
+        McpSyncService.clearPendingDelete(id)
+            .then((_) => McpSyncService.push(connection))
+            .catchError((Object e) {
+          if (kDebugMode) debugPrint('⚠️ [MCP] Could not share $id: $e');
+        }),
+      );
       return McpConnectResult(
         McpConnectStatus.connected,
         connection: connection,
@@ -330,8 +342,26 @@ class McpService {
     }
   }
 
-  /// Forget a server: its tokens, its tools and its entry.
+  /// Forget a server: its tokens, its tools and its entry — here and on the
+  /// reader's other devices.
   static Future<void> disconnect(String id) async {
+    // Tombstone first so a surviving remote row can never re-add the
+    // connection, token and all, on the next reconcile. Then forget it here at
+    // once — the reader does not wait on the network — and delete the remote
+    // row in the background, clearing the tombstone once that lands. A delete
+    // that never lands is retried by the next pull.
+    final epoch = await McpSyncService.markPendingDelete(id);
+    await _forgetLocal(id);
+    // Delete the remote row in the background, but only while this disconnect's
+    // tombstone is still the current one — a reconnect (or a later disconnect)
+    // bumps the epoch and this older request then steps aside.
+    unawaited(McpSyncService.deleteIfStillPending(id, epoch));
+  }
+
+  /// Forget a server on this device only: entry, tools and stored token. Used
+  /// both by [disconnect] and by the sync reconcile when the server dropped a
+  /// connection another device had already deleted remotely.
+  static Future<void> _forgetLocal(String id) async {
     connections.value = [
       for (final c in connections.value)
         if (c.id != id) c,
@@ -489,6 +519,8 @@ class McpService {
       if (refreshed == null) return null;
       tokens = refreshed;
       await _writeSecrets(connection.id, secrets.withTokens(refreshed));
+      // The token rotated: push the new one so other devices refresh too.
+      unawaited(McpSyncService.push(connection));
     }
 
     return McpClient(endpoint: endpoint, accessToken: tokens.accessToken);
@@ -504,5 +536,66 @@ class McpService {
       url: trimmed,
       addedByHand: true,
     );
+  }
+
+  // ─── Internal API for McpSyncService ───────────────────────────────────────
+  //
+  // The sync service works in plain JSON maps; _McpSecrets and the storage
+  // keys stay private here. These methods are the whole surface it touches, so
+  // the secret type and the shared-preferences shape never escape this file.
+  // (@internal is not usable here — it is only valid under lib/src/, and this
+  // package keeps its sources directly under lib/. The `internal` prefix and
+  // these docs mark the boundary instead.)
+
+  /// True when [url] is one this device will send a token to — https, or a
+  /// loopback address. Mirrors the check `connect()` applies, for connections
+  /// that arrive by sync: the URL decides where key material travels, so both
+  /// entry paths must validate it.
+  static bool internalIsAcceptableUrl(String url) {
+    final endpoint = Uri.tryParse(url);
+    return endpoint != null && _isAcceptableEndpoint(endpoint);
+  }
+
+  /// The connection's secrets as a plain map, or null when it has none.
+  static Future<Map<String, dynamic>?> internalReadSecretsJson(String id) async {
+    final secrets = await _readSecrets(id);
+    return secrets?.toJson();
+  }
+
+  /// Write a connection's secrets from a plain map (from a synced blob).
+  static Future<void> internalWriteSecretsJson(
+    String id,
+    Map<String, dynamic> json,
+  ) => _writeSecrets(id, _McpSecrets.fromJson(json));
+
+  /// Add or replace [connection] in the live list and persist. Registers its
+  /// tools through the existing connections listener.
+  static Future<void> internalUpsertConnection(McpConnection connection) async {
+    connections.value = [
+      ...connections.value.where((c) => c.id != connection.id),
+      connection,
+    ];
+    await _persist();
+  }
+
+  /// Forget a connection on this device without touching the remote row —
+  /// used when the reconcile honours a deletion made on another device.
+  static Future<void> internalForgetLocal(String id) => _forgetLocal(id);
+
+  /// List a connection's tools live, building a client from its stored token
+  /// (or the app session, for our own servers). Null on any failure — the
+  /// caller keeps the connection and retries on the next tick.
+  static Future<List<McpTool>?> internalFetchTools(
+    McpConnection connection,
+  ) async {
+    final client = await _clientFor(connection);
+    if (client == null) return null;
+    try {
+      await client.initialize();
+      return await client.listTools();
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [MCP] Could not list synced tools: $e');
+      return null;
+    }
   }
 }
