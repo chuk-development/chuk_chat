@@ -438,6 +438,154 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
   }
 
+  /// Title of the chat in view, or null for a fresh/unsaved chat.
+  String? _currentChatTitle() {
+    final String? id = ChatStorageService.selectedChatId;
+    if (id == null) return null;
+    for (final c in ChatStorageService.savedChats) {
+      if (c.id == id) {
+        final t = c.title?.trim();
+        return (t == null || t.isEmpty) ? null : t;
+      }
+    }
+    return null;
+  }
+
+  /// The composer's top row, rebuilt as free-floating blocks: a round menu
+  /// chip, a translucent title pill that carries the chat name, and round
+  /// action chips — each lifted off the background instead of sitting in one
+  /// solid app bar.
+  Widget _buildFloatingTopBar(Color iconFg, double titleAvailableWidth) {
+    final ThemeData theme = Theme.of(context);
+    final Color bg = theme.scaffoldBackgroundColor;
+    final Color chipBg = Color.alphaBlend(
+      theme.colorScheme.surface.withValues(alpha: 0.62),
+      bg,
+    ).withValues(alpha: 0.86);
+    final Color pillBg = Color.alphaBlend(
+      theme.colorScheme.surface.withValues(alpha: 0.42),
+      bg,
+    ).withValues(alpha: 0.55);
+    final Color shadowColor = Colors.black.withValues(alpha: 0.30);
+    final String? title = _currentChatTitle();
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
+                child: _floatIconChip(
+                  icon: Icons.menu,
+                  onTap: _toggleSidebar,
+                  iconFg: iconFg,
+                  chipBg: chipBg,
+                  shadowColor: shadowColor,
+                  tooltip: 'Open menu',
+                  semanticsId: 'menu_button',
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!_isSidebarExpanded)
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: titleAvailableWidth),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: pillBg,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: shadowColor,
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      child: (title != null)
+                          ? Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: iconFg.withValues(alpha: 0.92),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            )
+                          : BrandWordmark(
+                              color: iconFg.withValues(alpha: 0.92)),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              const SizedBox(width: 8),
+              _floatIconChip(
+                icon: Icons.copy_all,
+                onTap: _copyDebugChat,
+                iconFg: iconFg,
+                chipBg: chipBg,
+                shadowColor: shadowColor,
+                tooltip: 'Copy full chat',
+                semanticsId: 'copy_debug_chat_button',
+              ),
+              const SizedBox(width: 8),
+              _floatIconChip(
+                icon: Icons.edit_square,
+                onTap: _newChatFromAppBar,
+                iconFg: iconFg,
+                chipBg: chipBg,
+                shadowColor: shadowColor,
+                tooltip: 'New Chat',
+                semanticsId: 'new_chat_button',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One round, lifted icon chip for the floating top bar.
+  Widget _floatIconChip({
+    required IconData icon,
+    required VoidCallback onTap,
+    required Color iconFg,
+    required Color chipBg,
+    required Color shadowColor,
+    required String tooltip,
+    required String semanticsId,
+  }) {
+    return Semantics(
+      identifier: semanticsId,
+      button: true,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: chipBg,
+          shape: const CircleBorder(),
+          elevation: 3,
+          shadowColor: shadowColor,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Icon(icon, size: 22, color: iconFg),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _newChatFromSidebar() {
     // Mirrors the close-then-act pattern of _openSettingsPage etc. — the
     // sidebar's "new chat" button needs to collapse the drawer, otherwise
@@ -563,57 +711,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         ignoring: _isSidebarExpanded,
         child: Column(
           children: [
-            AppBar(
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-              elevation: 0,
-              leading: KeyedSubtree(
-                key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
-                child: Semantics(
-                  identifier: 'menu_button',
-                  child: IconButton(
-                    icon: Icon(Icons.menu, color: iconFg, size: 24),
-                    onPressed: _toggleSidebar,
-                    tooltip: 'Open menu',
-                  ),
-                ),
-              ),
-              title: SizedBox(
-                width: _isSidebarExpanded ? 0 : titleAvailableWidth,
-                child: ClipRect(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4.0),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      // The CoWork switcher used to replace the wordmark here.
-                      // It now lives in the sidebar under the New chat pill,
-                      // so the app bar keeps the brand.
-                      child: BrandWordmark(color: iconFg),
-                    ),
-                  ),
-                ),
-              ),
-              actions: [
-                Semantics(
-                  identifier: 'copy_debug_chat_button',
-                  child: IconButton(
-                    icon: Icon(Icons.copy_all, color: iconFg),
-                    onPressed: _copyDebugChat,
-                    tooltip: 'Copy full chat',
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Semantics(
-                    identifier: 'new_chat_button',
-                    child: IconButton(
-                      icon: Icon(Icons.edit_square, color: iconFg),
-                      onPressed: _newChatFromAppBar,
-                      tooltip: 'New Chat',
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            _buildFloatingTopBar(iconFg, titleAvailableWidth),
             Expanded(
               child: (kFeatureCoWork && _mode == AppMode.cowork)
                   ? const CoWorkSurface()

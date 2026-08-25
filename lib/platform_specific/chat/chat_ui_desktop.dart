@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/measure_size.dart';
+import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
@@ -160,6 +161,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late AnimationController _animCtrl;
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
+
+  /// UI key of the message that was just sent, so its list item plays the
+  /// fly-up entrance once. Transient, never persisted.
+  String? _flyInKey;
 
   // Bridge the private fields above to ModelProviderResolutionMixin.
   @override
@@ -2109,6 +2114,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 ),
                                           );
                                         }
+                                        final String uiKey =
+                                            ChatUiHelpers.stableUiKey(
+                                          _messages[i],
+                                          _uuid,
+                                        );
+                                        if (data.isUser &&
+                                            uiKey == _flyInKey) {
+                                          return RepaintBoundary(
+                                            child: MessageFlyIn(
+                                              key: ValueKey('flyin_$uiKey'),
+                                              child: buildBubble(
+                                                data.displayText,
+                                                reasoningText,
+                                              ),
+                                            ),
+                                          );
+                                        }
                                         return RepaintBoundary(
                                           child: buildBubble(
                                             data.displayText,
@@ -2597,6 +2619,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
       child: ChatModeSelector(
         mode: _chatMode,
+        // Match the round composer icon buttons (mic, voice, attach) beside
+        // it — the default 40 made the pill stand taller than the row.
+        height: 36,
         // Always upwards here: the composer sits at the bottom of a tall
         // window, and a menu dropping down covers the box it belongs to.
         menuAbove: true,

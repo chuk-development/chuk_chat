@@ -1369,6 +1369,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
 
         _messages.add(userMessage);
+        // Mark this message so its list item flies up on entrance.
+        _flyInKey = ChatUiHelpers.stableUiKey(userMessage, _uuid);
         if (kDebugMode) {
           debugPrint(
             '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
