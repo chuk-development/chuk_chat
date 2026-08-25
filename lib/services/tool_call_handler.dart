@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
@@ -317,7 +318,14 @@ class ToolCallHandler {
     // Connected MCP servers add their tools to the same executor, and keep
     // adding and removing them as the reader connects and disconnects.
     watchMcpConnections(_toolExecutor);
-    unawaited(McpService.load().then((_) => syncMcpTools(_toolExecutor)));
+    unawaited(
+      McpService.load().then((_) {
+        syncMcpTools(_toolExecutor);
+        // Pull connectors synced from other devices. A no-op until the reader
+        // is signed in with an encryption key; the chat-sync tick retries.
+        return McpSyncService.pullAndReconcile();
+      }),
+    );
     unawaited(_toolExecutor.loadPreferences());
     unawaited(platform_tools.initPlatformServices());
     if (kFeatureSkills) {
