@@ -1083,77 +1083,90 @@ class _SidebarMobileState extends State<SidebarMobile> {
     Color sidebarBg,
   ) {
     final String name = _displayNameFor(_profile);
-    // The pill itself is opaque. Only the space around it fades into the
-    // list — a translucent pill let chat titles show through the user's
-    // own name, which is the one thing that must stay legible.
-    final Color pillColor = Color.alphaBlend(
-      accent.withValues(alpha: 0.08),
+    final ThemeData theme = Theme.of(context);
+    // Each control is its own floating block now — the name, the balance and
+    // the gear no longer share one bar. Translucent so the chat list drifts
+    // faintly behind them, with a soft shadow so they read as lifted.
+    final Color floatBg = Color.alphaBlend(
+      theme.colorScheme.surface.withValues(alpha: 0.62),
       sidebarBg,
-    );
+    ).withValues(alpha: 0.86);
+    final Color shadowColor = Colors.black.withValues(alpha: 0.35);
+    const double elevation = 4;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
-      child: Material(
-        color: pillColor,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: widget.onSettingsTapped,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 5, 4, 5),
-            child: Row(
-              children: [
-                Expanded(
+      child: Row(
+        children: [
+          // Name — the widest block, taps through to settings.
+          Expanded(
+            child: Material(
+              color: floatBg,
+              borderRadius: BorderRadius.circular(20),
+              elevation: elevation,
+              shadowColor: shadowColor,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: widget.onSettingsTapped,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 11),
                   child: Text(
                     name,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: textColor,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.20),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: BalanceBadge(
-                    textStyle: TextStyle(
-                      color: accent,
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
-                    placeholderStyle: TextStyle(
-                      color: textColor.withValues(alpha: 0.55),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    padding: EdgeInsets.zero,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: widget.onSettingsTapped,
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(Icons.settings_rounded,
-                          size: 22, color: iconColor),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+          const SizedBox(width: 8),
+          // Balance — its own accent-tinted floating block.
+          Material(
+            color: Color.alphaBlend(accent.withValues(alpha: 0.24), floatBg),
+            borderRadius: BorderRadius.circular(20),
+            elevation: elevation,
+            shadowColor: shadowColor,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: BalanceBadge(
+                textStyle: TextStyle(
+                  color: accent,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+                placeholderStyle: TextStyle(
+                  color: textColor.withValues(alpha: 0.55),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Settings — its own round floating block.
+          Material(
+            color: floatBg,
+            shape: const CircleBorder(),
+            elevation: elevation,
+            shadowColor: shadowColor,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: widget.onSettingsTapped,
+              child: Padding(
+                padding: const EdgeInsets.all(11),
+                child: Icon(Icons.settings_rounded,
+                    size: 22, color: iconColor),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

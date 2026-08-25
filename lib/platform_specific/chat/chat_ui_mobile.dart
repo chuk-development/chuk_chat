@@ -23,6 +23,7 @@ import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
@@ -179,6 +180,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
   String? _systemPrompt;
+
+  /// UI key of the message that was just sent, so its list item plays the
+  /// fly-up entrance once. Transient, never persisted.
+  String? _flyInKey;
 
   // Bridge the private fields above to ModelProviderResolutionMixin.
   @override
@@ -2256,6 +2261,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
 
       _messages.add(userMessage);
+      // Mark this message so its list item flies up on entrance.
+      _flyInKey = ChatUiHelpers.stableUiKey(userMessage, _uuid);
       if (kDebugMode) {
         debugPrint(
           '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
@@ -3520,6 +3527,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                               );
                                             },
                                           ),
+                                    );
+                                  }
+                                  final String uiKey =
+                                      ChatUiHelpers.stableUiKey(
+                                    _messages[i],
+                                    _uuid,
+                                  );
+                                  if (isUser && uiKey == _flyInKey) {
+                                    return RepaintBoundary(
+                                      child: MessageFlyIn(
+                                        key: ValueKey('flyin_$uiKey'),
+                                        child: buildBubble(
+                                          displayText,
+                                          reasoningText,
+                                        ),
+                                      ),
                                     );
                                   }
                                   return RepaintBoundary(

@@ -759,11 +759,18 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         label,
         math.max(0.0, cursor - _kStickyHeaderHeight),
       ));
+      // Fixed to the overlay's height so the sticky overlay header lands
+      // exactly on top of this inline label and never spills onto the first
+      // item below it — that overlap was clipping the first row's hover and
+      // selection highlight at the top.
       slivers.add(SliverToBoxAdapter(
-        child: SbSectionLabel(
-          label: label,
-          color: accent,
-          padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+        child: SizedBox(
+          height: _kStickyHeaderHeight,
+          child: SbSectionLabel(
+            label: label,
+            color: accent,
+            padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+          ),
         ),
       ));
       cursor += _kStickyHeaderHeight;
