@@ -1,9 +1,13 @@
 // lib/widgets/chat_mode_selector.dart
 //
 // The composer's primary control: Fast or Thinking, as the same dropdown
-// the model selector has always used. One level deeper sits a second
-// dropdown of the same kind listing the models the reader has actually
-// picked — not the full catalogue, which is what the model screen is for.
+// the model selector has always used.
+//
+// Level 1 (the pill menu) shows only the two modes plus a way one level
+// deeper. Level 2 (the model-and-reasoning menu) configures the mode that is
+// active: the reasoning level (Off plus the levels the model+provider
+// supports), a quick pick from the models the reader has picked, and the way
+// out to the full model screen where the whole catalogue lives.
 
 import 'package:flutter/material.dart';
 
@@ -22,8 +26,9 @@ class ChatModeSelector extends StatelessWidget {
     this.modelLabel,
     this.pickedModels = const <ChatModelChoice>[],
     this.showLabel = true,
-    this.reasoning = true,
-    this.onReasoningChanged,
+    this.reasoningEffort = ChatModeService.reasoningOff,
+    this.reasoningLevels = const <String>[ChatModeService.reasoningOff],
+    this.onReasoningEffortChanged,
     this.height = 40,
     this.menuAbove = false,
   });
@@ -31,49 +36,46 @@ class ChatModeSelector extends StatelessWidget {
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
 
-  /// Called with the model id the reader picked in the second dropdown.
-  /// Omit to hide the model row entirely.
+  /// Called with the model id the reader picked in the second menu. Omit to
+  /// hide the quick model rows.
   final ValueChanged<String>? onModelSelected;
 
-  /// Opens the full model screen, where models are added and providers are
-  /// pinned. Reachable from the bottom of the second dropdown.
+  /// Opens the full model screen, where the whole catalogue is browsed and
+  /// providers are pinned. The deepest entry of the second menu.
   final VoidCallback? onOpenModelScreen;
 
-  /// The models this reader has picked, in display order. The mode's own
-  /// default is always among them and cannot be removed here — taking it
-  /// away belongs on the model screen, not in a composer menu.
+  /// The models this reader has picked, in display order.
   final List<ChatModelChoice> pickedModels;
 
-  /// Id of the model in use, ticked in the model dropdown.
+  /// Id of the model in use for the active mode, ticked in the model rows.
   final String? selectedModelId;
 
-  /// Human name of that model, shown next to "Choose model".
+  /// Human name of that model, shown on the second-menu opener.
   final String? modelLabel;
 
-  /// Whether the model may reason in the current mode. Independent of the
-  /// mode itself: a fast answer can still think briefly, and the deep mode
-  /// can be told to skip it.
-  final bool reasoning;
+  /// The active mode's reasoning level, ticked in the reasoning rows.
+  final String reasoningEffort;
 
-  /// Called when the reader flips the reasoning switch.
-  final ValueChanged<bool>? onReasoningChanged;
+  /// The reasoning levels the active mode's model+provider allow, `none`
+  /// (off) first. A single-entry list (off only) hides the level choice.
+  final List<String> reasoningLevels;
+
+  /// Called with the reasoning level the reader picked for the active mode.
+  /// Omit to hide the reasoning rows.
+  final ValueChanged<String>? onReasoningEffortChanged;
 
   /// Whether the pill spells the mode out. The mobile composer sets this
-  /// false: the icon carries it, and the words are in the menu where there
-  /// is room for them.
+  /// false: the icon carries it, and the words are in the menu.
   final bool showLabel;
 
   final double height;
 
-  /// Open the menus above the pill whenever they fit there. The desktop
-  /// composer sets it: its window is tall, so a menu is free to drop down
-  /// over the composer it was opened from, which reads as the wrong thing
-  /// moving.
+  /// Open the menus above the pill whenever they fit there.
   final bool menuAbove;
 
-  /// Longest model list shown in the second dropdown. Beyond this the list
-  /// stops being a menu and becomes a screen — that is what the model page
-  /// is for, reachable from the row underneath.
+  /// Longest model list shown in the second menu. Beyond this the list stops
+  /// being a menu and becomes a screen — the model page, reachable from the
+  /// row underneath.
   static const int kMaxModelsInMenu = 40;
 
   static IconData iconFor(ChatMode mode) =>
@@ -86,23 +88,21 @@ class ChatModeSelector extends StatelessWidget {
       ? 'Answers right away'
       : 'Thinks first, then answers';
 
-  /// Whether a model was picked by hand. Fast and Thinking each run their
-  /// own pinned model, so picking one from the list is a third state, not
-  /// a mode: the pill then names the model, and no mode is ticked.
-  bool get usesPickedModel {
-    final String? id = selectedModelId;
-    return id != null && id.isNotEmpty && id != ChatModeService.defaultModelId;
-  }
+  /// Whether the second menu has anything to show.
+  bool get _hasDeeperMenu =>
+      onModelSelected != null ||
+      onOpenModelScreen != null ||
+      onReasoningEffortChanged != null;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
-    final String pillLabel = usesPickedModel
-        ? stripLabPrefix(modelLabel ?? selectedModelId!)
-        : labelFor(mode);
-    final IconData pillIcon = usesPickedModel ? Icons.tune : iconFor(mode);
+    // The pill always names the mode: each mode carries its own model, so
+    // there is no third state that renames it.
+    final String pillLabel = labelFor(mode);
+    final IconData pillIcon = iconFor(mode);
 
     return Semantics(
       button: true,
@@ -161,10 +161,9 @@ class ChatModeSelector extends StatelessWidget {
             iconFg: iconFg,
             icon: iconFor(option),
             label: labelFor(option),
-            isSelected: !usesPickedModel && option == mode,
+            isSelected: option == mode,
           ),
-        if (onReasoningChanged != null) _reasoningRow<_MenuChoice>(iconFg: iconFg),
-        if (onModelSelected != null || onOpenModelScreen != null)
+        if (_hasDeeperMenu)
           _menuRow<_MenuChoice>(
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
@@ -188,53 +187,76 @@ class ChatModeSelector extends StatelessWidget {
       return;
     }
 
-    // Also reported when the mode is unchanged: coming back from a
-    // hand-picked model to Fast or Thinking is a change of what runs, even
-    // when the mode name stays the same.
     final picked = choice.mode;
-    if (picked != null && (picked != mode || usesPickedModel)) {
-      onModeChanged(picked);
-    }
+    if (picked != null && picked != mode) onModeChanged(picked);
   }
 
-  // ─── Level 2: the model ───────────────────────────────────────────────
+  // ─── Level 2: reasoning + model, for the active mode ──────────────────
 
   Future<void> _openModelMenu(BuildContext context) async {
     final iconFg = Theme.of(context).resolvedIconColor;
 
-    if (pickedModels.isEmpty) {
-      onOpenModelScreen?.call();
-      return;
-    }
+    final bool showReasoning =
+        onReasoningEffortChanged != null && reasoningLevels.length > 1;
+    final models = pickedModels.take(kMaxModelsInMenu).toList();
+    final bool showModels = onModelSelected != null && models.isNotEmpty;
 
-    final picked = await _showAnchoredMenu<_ModelChoice>(
-      context,
-      items: <PopupMenuEntry<_ModelChoice>>[
-        for (final model in pickedModels.take(kMaxModelsInMenu))
-          _menuRow<_ModelChoice>(
-            value: _ModelChoice.model(model.id),
+    final items = <PopupMenuEntry<_DeeperChoice>>[
+      if (showReasoning) ...[
+        _headerRow<_DeeperChoice>(iconFg: iconFg, label: 'Reasoning'),
+        for (final level in reasoningLevels)
+          _menuRow<_DeeperChoice>(
+            value: _DeeperChoice.reasoning(level),
+            iconFg: iconFg,
+            label: ChatModeService.reasoningLabel(level),
+            isSelected: level == reasoningEffort,
+          ),
+      ],
+      if (showReasoning && (showModels || onOpenModelScreen != null))
+        const PopupMenuDivider(),
+      if (showModels)
+        for (final model in models)
+          _menuRow<_DeeperChoice>(
+            value: _DeeperChoice.model(model.id),
             iconFg: iconFg,
             label: stripLabPrefix(model.name),
             isSelected: model.id == selectedModelId,
           ),
-        if (onOpenModelScreen != null)
-          _menuRow<_ModelChoice>(
-            value: const _ModelChoice.openScreen(),
-            iconFg: iconFg,
-            icon: Icons.add,
-            label: 'More models',
-            trailing: Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: iconFg.withValues(alpha: 0.8),
-            ),
+      if (onOpenModelScreen != null)
+        _menuRow<_DeeperChoice>(
+          value: const _DeeperChoice.openScreen(),
+          iconFg: iconFg,
+          icon: Icons.add,
+          label: 'More models',
+          trailing: Icon(
+            Icons.chevron_right,
+            size: 18,
+            color: iconFg.withValues(alpha: 0.8),
           ),
-      ],
+        ),
+    ];
+
+    // Nothing to configure and only the way out: skip the near-empty menu
+    // and go straight to the model screen.
+    if (!showReasoning && !showModels && onOpenModelScreen != null) {
+      onOpenModelScreen!.call();
+      return;
+    }
+    if (items.isEmpty) return;
+
+    final picked = await _showAnchoredMenu<_DeeperChoice>(
+      context,
+      items: items,
     );
 
     if (picked == null) return;
     if (picked.openScreen) {
       onOpenModelScreen?.call();
+      return;
+    }
+    final level = picked.reasoningLevel;
+    if (level != null) {
+      if (level != reasoningEffort) onReasoningEffortChanged?.call(level);
       return;
     }
     final id = picked.modelId;
@@ -243,79 +265,23 @@ class ChatModeSelector extends StatelessWidget {
 
   // ─── Shared menu look ─────────────────────────────────────────────────
 
-  /// The thinking switch. It is a setting, not a choice, so tapping it
-  /// flips the switch in place instead of closing the menu — closing on
-  /// every flip was what made the row feel broken. `enabled: false` only
-  /// takes the row's own tap away; the switch and its ink are the child's.
-  PopupMenuItem<T> _reasoningRow<T>({required Color iconFg}) {
-    // Lives as long as the open menu does: the row keeps showing what the
-    // reader just did, whoever owns the setting underneath.
-    bool on = reasoning;
-    bool flash = false;
+  /// A non-interactive section header, dimmer and lighter than a choice.
+  PopupMenuItem<T> _headerRow<T>({
+    required Color iconFg,
+    required String label,
+  }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: 40,
-      padding: EdgeInsets.zero,
-      child: StatefulBuilder(
-        builder: (context, setLocalState) {
-          return InkWell(
-            onTap: () {
-              setLocalState(() {
-                on = !on;
-                flash = true;
-              });
-              onReasoningChanged?.call(on);
-              // Picking a model flashes the row on its way out. This row
-              // stays, so it flashes on its own — the same short answer to
-              // the same tap.
-              Future<void>.delayed(const Duration(milliseconds: 220), () {
-                if (context.mounted) setLocalState(() => flash = false);
-              });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              color: flash ? iconFg.withValues(alpha: 0.16) : null,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(
-                    on ? Icons.psychology_alt : Icons.psychology_alt_outlined,
-                    size: 18,
-                    color: iconFg,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      // Not "Thinking": that is the name of a mode one row
-                      // above, and two rows with one name is a riddle.
-                      'Reasoning',
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: on ? iconFg : iconFg.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // A tick, like every other row that is on. The switch was
-                  // taller than a row and behaved like nothing else here.
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 160),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: on
-                        ? Icon(Icons.check, color: iconFg, size: 18)
-                        : const SizedBox(width: 18, height: 18),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: iconFg.withValues(alpha: 0.6),
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }
@@ -410,7 +376,7 @@ String prettyModelId(String id) {
   return name.isEmpty ? id : name;
 }
 
-/// A model the reader has picked, as shown in the second dropdown.
+/// A model the reader has picked, as shown in the second menu.
 class ChatModelChoice {
   const ChatModelChoice({required this.id, required this.name});
 
@@ -418,23 +384,31 @@ class ChatModelChoice {
   final String name;
 }
 
-/// What a row in the second menu stands for: a model, or the way to the
-/// model screen.
-class _ModelChoice {
-  const _ModelChoice.model(String this.modelId) : openScreen = false;
-  const _ModelChoice.openScreen() : modelId = null, openScreen = true;
-
-  final String? modelId;
-  final bool openScreen;
-}
-
-/// What a row in the first menu stands for: a mode, or the model list.
-/// The thinking switch is not here — it flips in place and never closes
-/// the menu, so it returns nothing.
+/// What a row in the first menu stands for: a mode, or the way one level
+/// deeper to the model-and-reasoning menu.
 class _MenuChoice {
   const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false;
   const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true;
 
   final ChatMode? mode;
   final bool openModelMenu;
+}
+
+/// What a row in the second menu stands for: a reasoning level, a model, or
+/// the way out to the full model screen.
+class _DeeperChoice {
+  const _DeeperChoice.reasoning(String this.reasoningLevel)
+    : modelId = null,
+      openScreen = false;
+  const _DeeperChoice.model(String this.modelId)
+    : reasoningLevel = null,
+      openScreen = false;
+  const _DeeperChoice.openScreen()
+    : reasoningLevel = null,
+      modelId = null,
+      openScreen = true;
+
+  final String? reasoningLevel;
+  final String? modelId;
+  final bool openScreen;
 }

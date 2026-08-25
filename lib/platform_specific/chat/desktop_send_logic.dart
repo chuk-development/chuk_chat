@@ -438,7 +438,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: resendMaxTokens,
           images: passImages,
-          reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+          reasoningEffort: _reasoningEffort,
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1410,7 +1410,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               ? jsonEncode(imageDataUrls)
               : null,
           maxTokens: maxResponseTokens,
-          reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+          reasoningEffort: _reasoningEffort,
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1545,7 +1545,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
-          reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+          reasoningEffort: _reasoningEffort,
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1957,7 +1957,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       ? jsonEncode(imageDataUrls)
                       : null,
                   maxTokens: maxResponseTokens,
-                  reasoningEffort: ChatModeService.reasoningEffort(_chatMode, reasoning: _reasoningOn),
+                  reasoningEffort: _reasoningEffort,
                 );
               } catch (error) {
                 if (kDebugMode) {
