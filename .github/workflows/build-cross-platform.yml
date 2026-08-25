@@ -51,6 +51,11 @@ on:
         required: false
         default: true
         type: boolean
+      prerelease:
+        description: 'Cut a pre-release: tag v<ver>-pre.N, marked pre-release, up to 20 per version (bump pubspec for the 21st)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -98,6 +103,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
       version_short: ${{ steps.bump.outputs.version_short }}
       tag: ${{ steps.bump.outputs.tag }}
+      prerelease: ${{ steps.bump.outputs.prerelease }}
       build_timestamp: ${{ steps.bump.outputs.build_timestamp }}
 
     steps:
@@ -111,11 +117,31 @@ jobs:
           CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
           VER=$(echo "$CURRENT" | cut -d'+' -f1)
           BUILD_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
+          if [ "$PRERELEASE" = "true" ]; then
+            # Next pre-release number for this base version. Pre-releases share
+            # one base version and only the -pre.N suffix advances, so we can
+            # cut many without bumping — capped at 20; the 21st must bump
+            # pubspec.yaml to the next version.
+            MAXN=$(git ls-remote --tags origin "refs/tags/v$VER-pre.*" 2>/dev/null \
+              | sed -E 's#.*/v'"$VER"'-pre\.([0-9]+)$#\1#' \
+              | grep -E '^[0-9]+$' | sort -n | tail -1)
+            N=$(( ${MAXN:-0} + 1 ))
+            if [ "$N" -gt 20 ]; then
+              echo "::error::Reached 20 pre-releases for v$VER. Bump the version in pubspec.yaml before cutting another."
+              exit 1
+            fi
+            TAG="v$VER-pre.$N"
+          else
+            PRERELEASE="false"
+            TAG="v$VER"
+          fi
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "version_short=$VER" >> $GITHUB_OUTPUT
-          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
           echo "build_timestamp=$BUILD_TS" >> $GITHUB_OUTPUT
-          echo "Using version: $VER"
+          echo "Using tag: $TAG (prerelease=$PRERELEASE)"
           echo "Using build timestamp: $BUILD_TS"
 
       - name: Create and push git tag
@@ -158,6 +184,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.bump.outputs.tag }}
+          PRE_FLAG=""
+          [ "${{ steps.bump.outputs.prerelease }}" = "true" ] && PRE_FLAG="--prerelease"
 
           # Heal any existing draft whose tag_name got stuck as "untagged-*".
           # Happens when the tag wasn't visible to the API at release-create time.
@@ -174,6 +202,7 @@ jobs:
           else
             gh release create "$TAG" \
               --draft \
+              $PRE_FLAG \
               --title "Chuk Chat $TAG" \
               --notes "$(cat <<'EOF'
           ## Downloads
@@ -216,6 +245,7 @@ jobs:
             gh api -X DELETE "repos/${{ github.repository }}/releases/$BAD_ID"
             gh release create "$TAG" \
               --draft \
+              $PRE_FLAG \
               --title "Chuk Chat $TAG" \
               --notes "See commit history for changes."
           fi
@@ -1401,7 +1431,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
-          gh release edit "$TAG" --draft=false --repo ${{ github.repository }}
+          PRE_ARGS="--draft=false"
+          if [ "${{ needs.version-bump.outputs.prerelease }}" = "true" ]; then
+            # Keep pre-releases out of the "Latest" slot so the newest stable
+            # stays the default download.
+            PRE_ARGS="--draft=false --prerelease --latest=false"
+          fi
+          gh release edit "$TAG" $PRE_ARGS --repo ${{ github.repository }}
           echo "Published release $TAG"
           gh release view "$TAG" --repo ${{ github.repository }}
 
