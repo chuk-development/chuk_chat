@@ -8,7 +8,6 @@ import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
@@ -457,14 +456,19 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// chip, a translucent title pill that carries the chat name, and round
   /// action chips — each lifted off the background instead of sitting in one
   /// solid app bar.
-  Widget _buildFloatingTopBar(Color iconFg, double titleAvailableWidth) {
+  Widget _buildFloatingTopBar(Color iconFg) {
     final ThemeData theme = Theme.of(context);
     // Genuinely translucent so the chat shows through — no alpha-blend onto
     // the opaque scaffold background (that baked the background colour in and
     // made the chips read as solid). A BackdropFilter blur behind each chip
     // keeps the icons and title legible over whatever scrolls underneath.
     final Color chipBg = theme.colorScheme.surface.withValues(alpha: 0.55);
-    final Color pillBg = theme.colorScheme.surface.withValues(alpha: 0.40);
+    // The title pill is a flat, uniform translucent fill — no BackdropFilter.
+    // The blur bled a soft halo outside the pill's edge, which read as "more
+    // transparent around it"; a plain fill keeps the see-through even across
+    // the whole pill. Slightly more opaque than a frosted fill so the title
+    // stays legible without the blur.
+    final Color pillBg = theme.colorScheme.surface.withValues(alpha: 0.55);
     final Color shadowColor = Colors.black.withValues(alpha: 0.30);
     final String? title = _currentChatTitle();
 
@@ -489,32 +493,30 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 ),
               ),
               const SizedBox(width: 8),
-              if (!_isSidebarExpanded)
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: titleAvailableWidth),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: shadowColor,
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              // Expanded, not a fixed width + Spacer: the title takes exactly
+              // the room left after the two right-hand buttons, so a long
+              // title ellipsises with "…" instead of pushing the buttons off
+              // the right edge. Left-aligned so a short title hugs the menu.
+              Expanded(
+                child: _isSidebarExpanded
+                    ? const SizedBox.shrink()
+                    : Align(
+                        alignment: Alignment.centerLeft,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: pillBg,
                             borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: shadowColor,
+                                blurRadius: 12,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
+                                horizontal: 16, vertical: 11),
                             child: (title != null)
                                 ? Text(
                                     title,
@@ -531,10 +533,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              const Spacer(),
+              ),
               const SizedBox(width: 8),
               _floatIconChip(
                 icon: Icons.copy_all,
@@ -703,12 +702,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // of a partial drawer. Desktop is unaffected (sidebar_desktop.dart is
     // hosted by root_wrapper_desktop.dart in its own layout).
     final double sidebarVisibleWidth = screenWidth;
-    final double titleAvailableWidth =
-        screenWidth -
-        kFixedLeftPadding -
-        kMenuButtonHeight -
-        (3 * kFixedLeftPadding) -
-        (ChatStorageService.savedChats.isNotEmpty ? kButtonVisualHeight : 0);
 
     // The floating top bar overlays the chat so the conversation shows
     // through its translucent chips. That means the chat has to reserve
@@ -798,7 +791,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               top: 0,
               left: 0,
               right: 0,
-              child: _buildFloatingTopBar(iconFg, titleAvailableWidth),
+              child: _buildFloatingTopBar(iconFg),
             ),
           ],
         ),

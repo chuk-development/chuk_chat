@@ -851,52 +851,27 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // One long fade instead of a thin fade plus a solid
-                      // slab. The chat list stays faintly visible under the
-                      // name pill — the footer floats over the list rather
-                      // than cutting it off with a hard edge.
-                      //
-                      // The fade is a Positioned.fill behind the footer and
-                      // wrapped in IgnorePointer: painted as a Container
-                      // around the column it would swallow taps meant for
-                      // the chat rows showing through it.
-                      Stack(
+                      // No gradient scrim behind the footer any more. The
+                      // top-to-bottom fade banded into visible lines on some
+                      // screens and made the transparency crawl unevenly as
+                      // the list scrolled under it. The blocks now carry their
+                      // own uniform translucency (see _buildFooterRow) and
+                      // float over the list with nothing painted around them.
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      sidebarBg.withValues(alpha: 0),
-                                      sidebarBg.withValues(alpha: 0.35),
-                                      sidebarBg.withValues(alpha: 0.6),
-                                    ],
-                                    stops: const [0.0, 0.55, 1.0],
-                                  ),
-                                ),
-                              ),
+                          const SizedBox(height: 34),
+                          const UpdateBanner(),
+                          KeyedSubtree(
+                            key: TourKeyRegistry.instance.keyFor(
+                              TourSlots.settingsEntry,
                             ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 34),
-                              const UpdateBanner(),
-                              KeyedSubtree(
-                                key: TourKeyRegistry.instance.keyFor(
-                                  TourSlots.settingsEntry,
-                                ),
-                                child: _buildFooterRow(
-                                  iconColorDefault,
-                                  textColorDefault,
-                                  accentColor,
-                                  sidebarBg,
-                                ),
-                              ),
-                            ],
+                            child: _buildFooterRow(
+                              iconColorDefault,
+                              textColorDefault,
+                              accentColor,
+                              sidebarBg,
+                            ),
                           ),
                         ],
                       ),
@@ -1099,15 +1074,14 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final String name = _displayNameFor(_profile);
     final ThemeData theme = Theme.of(context);
     // Each control is its own floating block now — the name, the balance and
-    // the gear no longer share one bar. Lightly translucent so the list drifts
-    // faintly behind them, with a soft shadow so they read as lifted. Alpha
-    // 0.93 (transparency ~0.07) — half as see-through as the old 0.86, which
-    // read as too faint over the list. The balance and the gear both build on
-    // floatBg, so this one value sets all three blocks.
+    // the gear no longer share one bar. Only faintly translucent (alpha 0.96)
+    // so it reads as a near-solid block, uniform across its whole face, with a
+    // soft shadow so it lifts. The balance and the gear both build on floatBg,
+    // so this one value sets all three blocks.
     final Color floatBg = Color.alphaBlend(
       theme.colorScheme.surface.withValues(alpha: 0.62),
       sidebarBg,
-    ).withValues(alpha: 0.93);
+    ).withValues(alpha: 0.96);
     final Color shadowColor = Colors.black.withValues(alpha: 0.35);
     const double elevation = 4;
     return Padding(
