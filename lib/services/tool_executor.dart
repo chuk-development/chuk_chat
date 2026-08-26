@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
@@ -690,7 +691,9 @@ class ToolExecutor {
             tools: _tools,
             getDescription: getToolDescription,
             isAvailable: isToolAvailable,
-            unconnectedMcpServers: unconnectedCatalogueEntries(),
+            unconnectedMcpServers: unconnectedCatalogueEntries(
+              includeCoworkOnly: isCoworkActive,
+            ),
           ),
         );
 
