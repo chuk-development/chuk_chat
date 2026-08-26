@@ -374,28 +374,26 @@ class _SkillRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
+    final l = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
 
     return ExpressiveRow(
       icon: skill.isBuiltin ? Icons.lock_outline : Icons.auto_awesome_outlined,
-      // A built-in cannot be edited, so its tile stays quiet.
-      tone: skill.isBuiltin ? m3.surfaceContainerHighest : null,
       title: skill.name,
       subtitle: skill.description,
       onTap: onTap,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (onDelete != null)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: onDelete,
-              color: m3.onSurfaceVariant,
-            ),
-          if (onTap != null)
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-        ],
-      ),
+      // A built-in is read-only: a state pill says so, in place of an action.
+      // A user skill carries its one action, delete, and taps open to edit.
+      trailing: skill.isBuiltin
+          ? ExpressiveBadge(l.skillsBuiltin)
+          : (onDelete == null
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: onDelete,
+                    color: cs.onSurfaceVariant,
+                    tooltip: l.delete,
+                  )),
     );
   }
 }

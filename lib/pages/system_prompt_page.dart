@@ -560,13 +560,20 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       bodyContent = ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          Text(
+            'Give the assistant a lasting identity and memory: who it is, '
+            'who you are, and what it should carry across every chat.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.resolvedIconColor.withValues(alpha: 0.7),
+            ),
+          ),
           if (_errorMessage != null) ...[
+            const SizedBox(height: 16),
             ExpressiveInfoCard(
               text: _errorMessage!,
               icon: Icons.error_outline,
               tone: colorScheme.errorContainer,
             ),
-            const SizedBox(height: 16),
           ],
 
           // ── Identity System (master toggle) ─────────────────────
@@ -769,14 +776,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     }
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(l.aiIdentityMemory),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: AppBar(title: Text(l.aiIdentityMemory)),
       body: bodyContent,
     );
   }
@@ -784,7 +784,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
 
-/// Opens the field under a section header in the fullscreen editor.
+/// Opens the field under a section header in the fullscreen editor. A quiet
+/// icon over the field — the affordance is there when wanted, never a button
+/// bolted across the header.
 class _FullscreenAction extends StatelessWidget {
   const _FullscreenAction({required this.onPressed});
 
@@ -792,16 +794,14 @@ class _FullscreenAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    return IconButton(
       onPressed: onPressed,
-      icon: const Icon(Icons.open_in_full, size: 15),
-      label: const Text('Fullscreen'),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        minimumSize: const Size(0, 32),
-        visualDensity: VisualDensity.compact,
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      ),
+      icon: const Icon(Icons.open_in_full_rounded, size: 18),
+      tooltip: 'Fullscreen',
+      color: Theme.of(context).colorScheme.primary,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
     );
   }
 }

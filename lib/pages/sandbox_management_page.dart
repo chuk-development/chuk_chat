@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/pages/github_connection_page.dart';
+import 'package:chuk_chat/services/github_connection_service.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class SandboxManagementPage extends StatefulWidget {
@@ -20,14 +22,41 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
   List<SandboxInfo> _sandboxes = const [];
   final Set<String> _destroying = <String>{};
 
+  // Code hosting: the GitHub connection lives on this screen. We fetch its
+  // status only to show the trailing badge — the full flow stays on
+  // [GitHubConnectionPage].
+  GitHubConnectionStatus _github = GitHubConnectionStatus.disconnected;
+
   @override
   void initState() {
     super.initState();
     unawaited(_refresh());
+    unawaited(_loadGitHubStatus());
   }
 
   Future<String?> _accessToken() async {
     return SupabaseService.auth.currentSession?.accessToken;
+  }
+
+  Future<void> _loadGitHubStatus() async {
+    try {
+      final token = await _accessToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) {
+          setState(() => _github = GitHubConnectionStatus.disconnected);
+        }
+        return;
+      }
+      final status = await GitHubConnectionService.status(accessToken: token);
+      if (!mounted) return;
+      setState(() => _github = status);
+    } catch (_) {
+      // The badge falls back to "Connect" if the status cannot be read, so a
+      // stale connected state from an earlier load never lingers on failure.
+      if (mounted) {
+        setState(() => _github = GitHubConnectionStatus.disconnected);
+      }
+    }
   }
 
   Future<void> _refresh() async {
@@ -59,6 +88,17 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _openGitHub() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const GitHubConnectionPage(),
+      ),
+    );
+    // The connection may have changed while the page was open.
+    await _loadGitHubStatus();
   }
 
   Future<void> _destroy(SandboxInfo info) async {
@@ -119,8 +159,9 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
     }
   }
 
-  String _shortId(String id) =>
-      id.length <= 12 ? id : '${id.substring(0, 6)}…${id.substring(id.length - 6)}';
+  String _shortId(String id) => id.length <= 12
+      ? id
+      : '${id.substring(0, 6)}…${id.substring(id.length - 6)}';
 
   String _formatTime(DateTime dt) {
     if (dt.millisecondsSinceEpoch == 0) return '—';
@@ -133,7 +174,13 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final m3 = theme.m3;
+
+    final bool githubConnected = _github.connected;
+    final String? login = _github.githubLogin;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sandboxes'),
@@ -146,7 +193,10 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _refresh,
+        onRefresh: () async {
+          await _refresh();
+          await _loadGitHubStatus();
+        },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
@@ -170,17 +220,17 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
                 ExpressiveRow(
                   icon: Icons.code,
                   title: 'GitHub',
-                  subtitle: 'Let the AI clone your repos, push, and open PRs '
+                  subtitle:
+                      'Let the AI clone your repos, push, and open PRs '
                       'in the sandbox',
-                  trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const GitHubConnectionPage(),
-                      ),
-                    );
-                  },
+                  trailing: githubConnected
+                      ? ExpressiveBadge(
+                          login == null || login.isEmpty ? 'Connected' : '@$login',
+                          tone: m3.successContainer,
+                          icon: Icons.check,
+                        )
+                      : const ExpressiveBadge('Connect'),
+                  onTap: _openGitHub,
                 ),
               ],
             ),
@@ -197,25 +247,24 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
                 tone: scheme.errorContainer,
               )
             else if (_sandboxes.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    'No active sandboxes.',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
+              const ExpressiveInfoCard(
+                text: 'No active sandboxes. One starts the next time a chat '
+                    'runs code.',
+                icon: Icons.dns_outlined,
               )
             else
-              ..._sandboxes.map((s) => _SandboxRow(
-                    info: s,
-                    isDestroying: _destroying.contains(s.sessionId),
-                    onDestroy: () => _destroy(s),
-                    shortId: _shortId(s.sessionId),
-                    formatTime: _formatTime,
-                  )),
+              ExpressiveGroup(
+                children: [
+                  for (final s in _sandboxes)
+                    _SandboxRow(
+                      info: s,
+                      isDestroying: _destroying.contains(s.sessionId),
+                      onDestroy: () => _destroy(s),
+                      shortId: _shortId(s.sessionId),
+                      formatTime: _formatTime,
+                    ),
+                ],
+              ),
           ],
         ),
       ),
@@ -240,69 +289,31 @@ class _SandboxRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final m3 = theme.m3;
     final running = info.status.toLowerCase() == 'running';
-    final statusColor = running ? Colors.green : Colors.orange;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: ExpressiveGroup(
-        children: [
-          ExpressiveTile(
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shortId,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${info.status} · created ${formatTime(info.createdAt)}'
-                        ' · active ${formatTime(info.lastActivity)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: scheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isDestroying)
-                  const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Padding(
-                      padding: EdgeInsets.all(6),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                else
-                  IconButton(
-                    tooltip: 'Destroy sandbox',
-                    icon: Icon(Icons.delete_outline, color: scheme.error),
-                    onPressed: onDestroy,
-                  ),
-              ],
+
+    return ExpressiveRow(
+      icon: running ? Icons.dns : Icons.dns_outlined,
+      tone: running ? m3.successContainer : m3.warningContainer,
+      title: shortId,
+      subtitle: '${info.status} · created ${formatTime(info.createdAt)}'
+          ' · active ${formatTime(info.lastActivity)}',
+      trailing: isDestroying
+          ? const SizedBox(
+              width: 32,
+              height: 32,
+              child: Padding(
+                padding: EdgeInsets.all(6),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : IconButton(
+              tooltip: 'Destroy sandbox',
+              icon: Icon(Icons.delete_outline, color: scheme.error),
+              onPressed: onDestroy,
             ),
-          ),
-        ],
-      ),
     );
   }
 }
-

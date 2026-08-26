@@ -485,6 +485,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 
   List<Widget> _buildToolSections() {
     final l = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
     final tools = _visibleTools();
     if (tools.isEmpty) {
       return [ExpressiveInfoCard(text: l.noToolsRegistered)];
@@ -504,30 +506,53 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     for (final category in orderedCategories) {
       final connectable = _isCategoryConnectable(category);
       final connected = _isCategoryConnected(category);
+      final description = _categoryDescription(category);
       final toolsInCategory = grouped[category]!;
 
-      widgets.add(_CategoryHeader(
-        icon: _categoryIcon(category),
-        label: _categoryLabel(category),
-        description: _categoryDescription(category),
-        connectable: connectable,
-        connected: connected,
-        onConnect: () => _connectService(category),
-        onDisconnect: () => _disconnectService(category),
-      ));
-      widgets.add(const SizedBox(height: 10));
+      widgets.add(ExpressiveSectionHeader(_categoryLabel(category)));
 
-      final rows = <Widget>[];
-      for (final tool in toolsInCategory) {
-        final isEnabled = _toolExecutor.isToolEnabled(tool.name);
-        rows.add(
+      // A category the assistant signs in to carries its state as a pill and
+      // flips it on tap; the rest just get a quiet line of context under the
+      // header so the description is never lost.
+      if (!connectable) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),
+            child: Text(
+              description,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
+      }
+
+      final rows = <Widget>[
+        if (connectable)
+          ExpressiveRow(
+            icon: connected
+                ? Icons.check_circle_outline
+                : _categoryIcon(category),
+            tone: connected ? m3.successContainer : null,
+            title: connected ? l.disconnect : l.connect,
+            subtitle: description,
+            trailing: connected
+                ? ExpressiveBadge('Connected', tone: m3.successContainer)
+                : const ExpressiveBadge('Not connected'),
+            onTap: connected
+                ? () => _disconnectService(category)
+                : () => _connectService(category),
+          ),
+        for (final tool in toolsInCategory)
           _ToolRow(
             icon: _toolIcons[tool.name] ?? Icons.extension,
-            iconEnabled: isEnabled,
+            iconEnabled: _toolExecutor.isToolEnabled(tool.name),
             title: _displayName(tool.name),
-            subtitle:
-                _trimDescription(_toolExecutor.getToolDescription(tool.name)),
-            value: isEnabled,
+            subtitle: _trimDescription(
+              _toolExecutor.getToolDescription(tool.name),
+            ),
+            value: _toolExecutor.isToolEnabled(tool.name),
             onChanged: (value) async {
               await _toolExecutor.setToolEnabled(tool.name, value);
               if (!mounted) return;
@@ -535,10 +560,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
             },
             onTap: () => _openToolDetail(tool),
           ),
-        );
-      }
+      ];
+
       widgets.add(ExpressiveGroup(children: rows));
-      widgets.add(const SizedBox(height: 22));
     }
 
     return widgets;
@@ -774,111 +798,6 @@ class _ToolRow extends StatelessWidget {
           Switch.adaptive(value: value, onChanged: onChanged),
           const SizedBox(width: 4),
           Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryHeader extends StatelessWidget {
-  const _CategoryHeader({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.connectable,
-    required this.connected,
-    required this.onConnect,
-    required this.onDisconnect,
-  });
-
-  final IconData icon;
-  final String label;
-  final String description;
-  final bool connectable;
-  final bool connected;
-  final VoidCallback onConnect;
-  final VoidCallback onDisconnect;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final l = AppLocalizations.of(context)!;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(kExpressiveOuterRadius),
-      ),
-      child: Row(
-        children: [
-          ExpressiveIconTile(
-            icon: icon,
-            size: 40,
-            tone: m3.primaryContainer.withValues(alpha: 0.4),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (connectable) ...[
-            const SizedBox(width: 8),
-            if (connected)
-              ExpressiveBadge('Connected', tone: m3.successContainer)
-            else
-              const ExpressiveBadge('Not connected'),
-            const SizedBox(width: 8),
-            connected
-                ? OutlinedButton(
-                    onPressed: onDisconnect,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      minimumSize: const Size(0, 32),
-                      shape: const StadiumBorder(),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      l.disconnect,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  )
-                : FilledButton.tonal(
-                    onPressed: onConnect,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      minimumSize: const Size(0, 32),
-                      shape: const StadiumBorder(),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      l.connect,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-          ],
         ],
       ),
     );

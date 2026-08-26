@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Opens [initialText] in a fullscreen editor.
 ///
@@ -128,25 +129,24 @@ class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage> {
         if (!didPop) _confirmDiscard();
       },
       child: Scaffold(
-        backgroundColor: cs.surface,
         appBar: AppBar(
-          backgroundColor: cs.surface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close_rounded),
             tooltip: 'Cancel',
             onPressed: _confirmDiscard,
           ),
           title: Text(widget.title),
-          centerTitle: false,
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: TextButton(
+              child: FilledButton(
                 onPressed: _isDirty
                     ? () => Navigator.of(context).pop(_controller.text)
                     : null,
+                style: FilledButton.styleFrom(
+                  shape: const StadiumBorder(),
+                  visualDensity: VisualDensity.compact,
+                ),
                 child: const Text('Save'),
               ),
             ),
@@ -154,38 +154,47 @@ class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage> {
         ),
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // The editor owns the screen inside one tidy filled card, so
+                // the text sits in a surface of its own instead of floating
+                // on the bare page.
                 Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    // expands + maxLines null is what makes the field own
-                    // the screen instead of growing line by line.
-                    maxLines: null,
-                    expands: true,
-                    keyboardType: TextInputType.multiline,
-                    textCapitalization: TextCapitalization.sentences,
-                    textAlignVertical: TextAlignVertical.top,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurface,
-                      height: 1.5,
-                      fontFamily: widget.monospace ? 'monospace' : null,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: widget.hintText,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
+                  child: ExpressiveCard(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      // expands + maxLines null is what makes the field own
+                      // the card instead of growing line by line.
+                      maxLines: null,
+                      expands: true,
+                      keyboardType: TextInputType.multiline,
+                      textCapitalization: TextCapitalization.sentences,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface,
+                        height: 1.5,
+                        fontFamily: widget.monospace ? 'monospace' : null,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: widget.hintText,
+                        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                          color: m3.onSurfaceVariant,
+                        ),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.fromLTRB(6, 12, 6, 4),
                   child: Text(
                     '${_controller.text.length} characters',
                     textAlign: TextAlign.end,

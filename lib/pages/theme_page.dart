@@ -317,9 +317,30 @@ class _ColorCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            description,
-            style: TextStyle(fontSize: 13, color: m3.onSurfaceVariant),
+          // Description on the left, a live preview of the current colour on
+          // the right so the choice is visible without hunting the grid.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: currentColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: m3.outlineVariant),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           LayoutBuilder(
@@ -347,31 +368,36 @@ class _ColorCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             hexLabel,
-            style: TextStyle(
-              fontSize: 12,
+            style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w500,
               color: m3.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 6),
-          TextFormField(
-            controller: hexController,
-            decoration: InputDecoration(
-              prefixIcon: Icon(
-                Icons.colorize_outlined,
-                color: m3.onSurfaceVariant,
+          // Wrapped in an ExpressiveField so the input carries the same
+          // rounded, filled shape as the fields on the other settings pages.
+          ExpressiveField(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextFormField(
+              controller: hexController,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                prefixIcon: Icon(
+                  Icons.colorize_outlined,
+                  color: m3.onSurfaceVariant,
+                ),
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.check_circle, color: cs.primary),
+                  onPressed: () => onHexChanged(hexController.text),
+                ),
+                hintText: '#RRGGBB',
               ),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.check_circle, color: cs.primary),
-                onPressed: () => onHexChanged(hexController.text),
-              ),
-              hintText: '#RRGGBB',
+              onFieldSubmitted: onHexChanged,
+              keyboardType: TextInputType.text,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^[#0-9a-fA-F]+$')),
+              ],
             ),
-            onFieldSubmitted: onHexChanged,
-            keyboardType: TextInputType.text,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^[#0-9a-fA-F]+$')),
-            ],
           ),
           const SizedBox(height: 10),
           Align(
@@ -640,7 +666,8 @@ class _Swatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     // Check mark uses a contrast-aware foreground so it stays legible
     // on both light and dark swatches.
     final checkColor =
@@ -658,9 +685,11 @@ class _Swatch extends StatelessWidget {
           color: color,
           border: selected
               ? Border.all(color: cs.onSurface, width: 2)
+              // The spacer ring must match the card the swatch sits in, not
+              // the scaffold surface, or the selected swatch shows a halo.
               : Border.all(color: Colors.transparent, width: 2),
           boxShadow: selected
-              ? [BoxShadow(color: cs.surface, spreadRadius: 3)]
+              ? [BoxShadow(color: theme.m3.surfaceContainer, spreadRadius: 3)]
               : null,
         ),
         child: selected
