@@ -1,5 +1,4 @@
 import 'package:flutter/painting.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Font category for the quick-access font picker buttons.
 enum FontCategory { handDrawn, normal, code }
@@ -15,26 +14,6 @@ enum FontCategory { handDrawn, normal, code }
 class FontResolver {
   /// The default font family used for new text elements.
   static const defaultFontFamily = 'Excalifont';
-
-  /// Bundled font families (declared in pubspec.yaml).
-  static const _bundledFonts = {'Excalifont', 'Virgil'};
-
-  /// Google Fonts families we explicitly support.
-  static const _googleFonts = {
-    'Nunito',
-    'Lilita One',
-    'Assistant',
-    'Roboto',
-    'Open Sans',
-    'Lato',
-    'Montserrat',
-    'Playfair Display',
-    'Source Code Pro',
-    'Fira Code',
-    'Caveat',
-    'Pacifico',
-    'Dancing Script',
-  };
 
   /// All known font families (for serialization compatibility).
   static const allFonts = [
@@ -116,25 +95,14 @@ class FontResolver {
 
   /// Resolves a font family name to a [TextStyle].
   ///
-  /// Merges the resolved font into [baseStyle] if provided.
-  /// Attempts dynamic Google Fonts resolution for unknown font names.
+  /// Merges the resolved font into [baseStyle] if provided. Every family is
+  /// resolved as a plain [TextStyle.fontFamily]: the bundled families
+  /// (`Excalifont`, `Virgil`) render from the pubspec font assets, and any
+  /// other family falls back to the platform font stack. The runtime Google
+  /// Fonts download path was removed with the `google_fonts` dependency to
+  /// drop its font metadata table from the release snapshot.
   static TextStyle resolve(String fontFamily, {TextStyle? baseStyle}) {
     final base = baseStyle ?? const TextStyle();
-
-    if (_bundledFonts.contains(fontFamily)) {
-      return base.copyWith(fontFamily: fontFamily);
-    }
-
-    if (_googleFonts.contains(fontFamily)) {
-      return GoogleFonts.getFont(fontFamily, textStyle: base);
-    }
-
-    // Try dynamic Google Fonts resolution for unknown fonts
-    try {
-      return GoogleFonts.getFont(fontFamily, textStyle: base);
-    } on Exception {
-      // System font fallback
-      return base.copyWith(fontFamily: fontFamily);
-    }
+    return base.copyWith(fontFamily: fontFamily);
   }
 }
