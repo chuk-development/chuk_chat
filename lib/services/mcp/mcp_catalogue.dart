@@ -638,6 +638,17 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     publisher: 'webull.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=webull.com&sz=128',
   ),
+  McpCatalogueEntry(
+    id: 'ibkr',
+    name: 'Interactive Brokers',
+    url: 'https://api.ibkr.com/v1/api/mcp',
+    category: 'Finance',
+    description:
+        'Portfolio positions, balances, P&L, open orders, real-time quotes '
+        'and historical market data.',
+    publisher: 'ibkr.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=ibkr.com&sz=128',
+  ),
 ];
 
 /// The domain a registry namespace stands for: `com.notion` → `notion.com`.

@@ -37,6 +37,17 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // Compress native .so libraries inside the APK instead of storing them
+    // uncompressed. Trades a slightly larger install / marginally slower first
+    // launch (libs are extracted once) for a much smaller APK download — the
+    // ~40 MB of libapp/libflutter/libpdfium/libsqlite compress to roughly half.
+    // Right choice for direct (non-Play-Store) APK distribution.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
