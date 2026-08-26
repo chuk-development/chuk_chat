@@ -32,6 +32,7 @@ class McpCatalogueEntry {
     this.termsUrl,
     this.privacyUrl,
     this.auth = McpAuth.oauth,
+    this.coworkOnly = false,
   });
 
   /// Stable id, used as the tool-name prefix and the storage key.
@@ -88,6 +89,12 @@ class McpCatalogueEntry {
   /// through the browser except the connectors our own server fronts.
   final McpAuth auth;
 
+  /// True for servers that only make sense in CoWork mode — they duplicate a
+  /// built-in (web search / crawl) or need command execution the normal chat
+  /// cannot use. Kept in the catalogue so Add-by-URL and CoWork still reach
+  /// them, but hidden from the normal chat UI and the model-awareness list.
+  final bool coworkOnly;
+
   /// The logo. Servers rarely publish one in `serverInfo.icons`, so the
   /// site's own favicon is the fallback that works for every host.
   String get icon => iconUrl ?? faviconFor(url);
@@ -113,19 +120,26 @@ class McpCatalogueEntry {
   static String brandDomain(String host) {
     final parts = host.split('.');
     if (parts.length <= 2) return host;
-    const strip = {'mcp', 'api', 'www', 'server', 'app'};
+    // Service subdomains that only say which service of the brand this is.
+    // `ai` and `mail` join the list so `ai.todoist.net` and `mail.<brand>.com`
+    // resolve to the brand instead of a subdomain a favicon service does not
+    // know. Only the first label is stripped, so a host like
+    // `mcp.mail.superhuman.com` still needs an explicit iconUrl.
+    const strip = {'mcp', 'api', 'www', 'server', 'app', 'ai', 'mail'};
     if (strip.contains(parts.first)) return parts.sublist(1).join('.');
     return host;
   }
 }
 
-/// Categories, in the order they are shown.
+/// Categories, in the order they are shown. Consumer-relevant groups lead;
+/// Developer sits near the end and Registry (search results) is always last.
 const List<String> kMcpCategories = [
   'Recommended',
   'Productivity',
-  'Developer',
-  'Creative',
   'Finance',
+  'Creative',
+  'Developer',
+  'Registry',
 ];
 
 /// Connectors our own API server fronts.
@@ -270,6 +284,9 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     url: 'https://ai.todoist.net/mcp',
     category: 'Productivity',
     description: 'Tasks, projects and due dates.',
+    // The `ai.todoist.net` host resolves the brand only after the subdomain
+    // strip, and the favicon service still misses it — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=todoist.com&sz=128',
   ),
   McpCatalogueEntry(
     id: 'buffer',
@@ -315,6 +332,9 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     name: 'Superhuman Mail',
     url: 'https://mcp.mail.superhuman.com/mcp',
     category: 'Productivity',
+    // `mcp.mail.superhuman.com` keeps a `mail.` label after the first strip,
+    // so the favicon fallback lands on a wrong icon — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=superhuman.com&sz=128',
     // Connectable via dynamic registration, but the account behind the sign-in
     // needs a Superhuman Business plan with Ask AI enabled — a rejected token
     // is the server's to explain, not ours to gate.
@@ -339,6 +359,15 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     url: 'https://mcp.zapier.com/api/mcp/mcp',
     category: 'Productivity',
     description: 'Whatever you wired up in Zapier, across thousands of apps.',
+  ),
+  McpCatalogueEntry(
+    id: 'calcom',
+    name: 'Cal.com',
+    url: 'https://mcp.cal.com/mcp',
+    category: 'Productivity',
+    description: 'Scheduling, availability and bookings.',
+    publisher: 'cal.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=cal.com&sz=128',
   ),
 
   // ─── Developer ─────────────────────────────────────────────────────────
@@ -412,6 +441,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     description:
         'Scrape pages to clean markdown, search the web, map a site\'s URLs '
         'and run multi-page research.',
+    // Duplicates the built-in web search / crawl — only wanted in CoWork.
+    coworkOnly: true,
   ),
   McpCatalogueEntry(
     id: 'posthog',
@@ -422,6 +453,28 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Developer',
     description:
         'Query product analytics, insights, feature flags and error tracking.',
+  ),
+  McpCatalogueEntry(
+    id: 'browserbase',
+    name: 'Browserbase',
+    url: 'https://mcp.browserbase.com/mcp',
+    category: 'Developer',
+    description: 'Headless browser automation and web scraping.',
+    publisher: 'browserbase.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128',
+    // Needs command-style execution — only wanted in CoWork.
+    coworkOnly: true,
+  ),
+  McpCatalogueEntry(
+    id: 'exa',
+    name: 'Exa',
+    url: 'https://mcp.exa.ai/mcp',
+    category: 'Developer',
+    description: 'AI-powered web search and content retrieval.',
+    publisher: 'exa.ai',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=exa.ai&sz=128',
+    // Duplicates the built-in web search — only wanted in CoWork.
+    coworkOnly: true,
   ),
 
   // ─── Creative ──────────────────────────────────────────────────────────
@@ -506,6 +559,17 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     url: 'https://mcp.paypal.com/mcp',
     category: 'Finance',
     description: 'Invoices, orders, payments and disputes.',
+  ),
+  McpCatalogueEntry(
+    id: 'coingecko',
+    name: 'CoinGecko',
+    url: 'https://mcp.api.coingecko.com/mcp',
+    category: 'Finance',
+    description: 'Live crypto prices, market data, coins and exchanges.',
+    publisher: 'coingecko.com',
+    // `mcp.api.coingecko.com` strips to `api.coingecko.com`, a service host the
+    // favicon service does not know — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=coingecko.com&sz=128',
   ),
 ];
 

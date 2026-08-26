@@ -216,7 +216,7 @@ const Map<String, String> stringsDe = {
   'enableChartBlocks': 'Diagrammblöcke aktivieren (<chart>)',
   'enableChartBlocksSubtitle':
       'Dem Modell-Prompt Diagramm-Rendering-Anweisungen erlauben',
-  'connectors': 'Konnektoren',
+  'connectors': 'MCP-Server',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
   'loadingToolSettings': 'Tool-Einstellungen werden geladen...',
   'noToolsRegistered': 'Noch keine Tools registriert.',

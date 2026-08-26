@@ -12,6 +12,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -1505,6 +1506,56 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     };
   }
 
+  /// Returns a callback for the inline MCP Connect card if [index] is the last
+  /// AI message, is idle, and contains a completed request_mcp_server call.
+  /// The callback resumes the same conversation with a fresh send, exactly
+  /// like the ask_user resume — the rebuilt prompt now lists the server as
+  /// connected, so the model continues with its tools available.
+  ValueChanged<String>? _connectMcpCallbackForIndex(
+    int index,
+    MessageRenderData data,
+  ) {
+    if (data.isUser || data.isStreamingMessage || _isStreaming || _isSending) {
+      return null;
+    }
+    if (index != _messages.length - 1) {
+      return null;
+    }
+
+    bool hasRequest = false;
+    if (data.contentBlocks != null) {
+      for (final block in data.contentBlocks!) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          hasRequest = block.toolCalls!.any(
+            (tc) =>
+                tc.name == 'request_mcp_server' &&
+                tc.status == ToolCallStatus.completed,
+          );
+          if (hasRequest) break;
+        }
+      }
+    }
+    if (!hasRequest && data.toolCalls != null) {
+      hasRequest = data.toolCalls!.any(
+        (tc) =>
+            tc.name == 'request_mcp_server' &&
+            tc.status == ToolCallStatus.completed,
+      );
+    }
+    if (!hasRequest) {
+      return null;
+    }
+
+    return (String id) {
+      final name = catalogueEntryById(id)?.name ?? 'the';
+      _controller.text =
+          'Connected the $name server — its tools are now available. '
+          'Continue with what I asked.';
+      _sendMessage();
+    };
+  }
+
   List<MessageBubbleAction> _buildMessageActionsForIndex(
     int index,
     MessageRenderData data,
@@ -2018,6 +2069,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           showTps: widget.showTps,
                                           onAskUserAnswer:
                                               _askUserCallbackForIndex(i, data),
+                                          onConnectMcpServer:
+                                              _connectMcpCallbackForIndex(
+                                                i,
+                                                data,
+                                              ),
                                           useSharedSelectionArea: true,
                                           status: data.status,
                                           lastError: data.lastError,

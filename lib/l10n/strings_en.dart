@@ -210,7 +210,7 @@ const Map<String, String> stringsEn = {
   'enableChartBlocks': 'Enable chart blocks (<chart>)',
   'enableChartBlocksSubtitle':
       'Allow the model prompt to include chart rendering instructions',
-  'connectors': 'Connectors',
+  'connectors': 'MCP servers',
   'connectorsSubtitle': 'Let the assistant use tools from other services',
   'loadingToolSettings': 'Loading tool settings...',
   'noToolsRegistered': 'No tools are registered yet.',

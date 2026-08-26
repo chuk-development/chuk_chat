@@ -43,9 +43,14 @@ Future<int> _statusOf(String url) async {
 void main() {
   final entries = [...firstPartyConnectors(), ...kMcpCatalogue];
 
-  test('every offered connector names its terms and its privacy policy', () {
+  test('every offered connector shows the reader its legal terms', () {
+    // Most offered connectors name both documents by hand. A public server
+    // like CoinGecko publishes neither in a stable place, so it falls back
+    // to the publisher's own site through `legalUrl` — that counts, as long
+    // as a reader still lands on a page before signing in.
     final missing = entries
-        .where((e) => e.termsUrl == null || e.privacyUrl == null)
+        .where((e) =>
+            (e.termsUrl == null || e.privacyUrl == null) && e.legalUrl == null)
         .map((e) => e.id)
         .toList();
     expect(missing, isEmpty, reason: 'connectors without legal links');
