@@ -51,7 +51,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
-  AppMode _mode = AppMode.chat;
+  // CoWork branch: open straight into CoWork mode when the feature is on.
+  AppMode _mode = kFeatureCoWork ? AppMode.cowork : AppMode.chat;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
