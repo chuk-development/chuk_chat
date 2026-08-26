@@ -34,6 +34,7 @@ import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/tool_handlers/cowork_tools.dart' as cowork_tools;
+import 'package:chuk_chat/tool_handlers/artifact_tools.dart' as artifact_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
@@ -119,6 +120,11 @@ class ToolExecutor {
     'search_chats',
     'artifact_manager',
     'artifact_schema',
+    // Artifact hosting (gated in tool_registry by kFeatureArtifactHosting).
+    // Listed here unconditionally: this set asserts an executor exists for the
+    // name, it is not the feature gate.
+    'create_artifact',
+    'update_artifact',
     'update_project',
     'typst_compile',
     'code_run',
@@ -710,6 +716,22 @@ class ToolExecutor {
         return _wrapOutput(
           await web_tools.executeWebCrawl(
             serverHttpUrl: serverHttpUrl,
+            serverHeaders: _serverHeaders(accessToken: accessToken),
+            args: args,
+          ),
+        );
+
+      // -- Artifact hosting --
+      case 'create_artifact':
+        return _wrapOutput(
+          await artifact_tools.executeCreateArtifact(
+            serverHeaders: _serverHeaders(accessToken: accessToken),
+            args: args,
+          ),
+        );
+      case 'update_artifact':
+        return _wrapOutput(
+          await artifact_tools.executeUpdateArtifact(
             serverHeaders: _serverHeaders(accessToken: accessToken),
             args: args,
           ),
