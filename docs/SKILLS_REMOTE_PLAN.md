@@ -264,6 +264,34 @@ non-factual set) + an executor `case`.
   `tools/gen_index.py` generator + 4 seed skills pushed, raw base verified. Left:
   update `CLAUDE.md` and `docs/DATABASE.md` once the client side lands.
 
+### Converting existing inline prompt blocks — audit conclusion (2026-08-26)
+
+Question raised: convert more of the app's always-injected tool/protocol blocks
+into skills? Audit of `tool_prompt_builder.dart` plus the prior design decision:
+**mostly no.** A block's token size is not the deciding factor — its *load-rate*
+is. The big blocks are big because they fire on most turns, and a skill only
+pays off below roughly a 50% load-rate.
+
+- **Artifacts (`_artifactToolProtocol`, ~1100 tok): keep inline.** High load-rate
+  → a skill costs *more* tokens, always adds 2 round-trips of latency
+  (`artifact_schema` still runs), and rule 7 (keep artifacts synced with memory)
+  fires on prompts like "korrigier das" that carry no signal to load the skill —
+  so the model would skip it and silently keep a stale artifact. A regression
+  test ("user-edit drop") locks this behaviour.
+- **Maps (`<map>`, ~620 tok): keep inline.** Always-on reflex and a signature
+  output; charts worked as a skill only because charts are lower-frequency.
+- **Identity / notes: keep inline.** Pure reflex, fires before any load choice.
+- **Worth converting (small, low-frequency):** the `<email>` sub-block (~150
+  tok); optionally the `generate_image` price/model matrix (~250 tok) while a
+  one-line "costs credits" reflex stays inline.
+- **Not worth it (tiny tool defs):** fetch_image, view_chat_images, geocode,
+  ask_user, calculate, get_time. `web_search`/`web_crawl` stay always-on (too
+  frequent). `web_fetch` and a `resources` block do not exist in the builder.
+
+The four already-migrated skills (weather/news/chart/deep-research) were the
+right set. The catalog's value is **new, updatable skills**, not re-skinning
+existing reflexes.
+
 ### Refinements found while building
 
 - **Local rows are plaintext**, not encrypted — the SQLite `skills` table
