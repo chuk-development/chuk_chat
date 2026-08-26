@@ -58,7 +58,7 @@ const bool kFeatureImageGen = true;
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;
 
-/// Server-backed integration tools (Spotify, GitHub, Slack, Google, Email,
+/// Server-backed integration tools (GitHub, Slack, Google, Email,
 /// Nextcloud). OAuth credentials are managed by the API server; tokens are
 /// stored locally on the client.
 const bool kFeatureServerTools = bool.fromEnvironment(
@@ -124,21 +124,6 @@ const bool kFeatureSkills = bool.fromEnvironment(
 /// When disabled, Linux falls back to SharedPreferences instead of keyring.
 const bool kFeatureLinuxKeyring = bool.fromEnvironment(
   'FEATURE_LINUX_KEYRING',
-  defaultValue: false,
-);
-
-/// Spotify playback tool. Disabled by default — API server no longer
-/// exposes Spotify OAuth endpoints. Set `--dart-define=FEATURE_SPOTIFY=true`
-/// only when the backend route is re-enabled.
-const bool kFeatureSpotify = bool.fromEnvironment(
-  'FEATURE_SPOTIFY',
-  defaultValue: false,
-);
-
-/// WHOOP health/fitness tool. Disabled by default — integration removed
-/// alongside Spotify. Set `--dart-define=FEATURE_WHOOP=true` to re-enable.
-const bool kFeatureWhoop = bool.fromEnvironment(
-  'FEATURE_WHOOP',
   defaultValue: false,
 );
 
