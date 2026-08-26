@@ -16,7 +16,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   /// Payloads are gzipped before they hit the `payload` column.
   ///
@@ -96,6 +96,7 @@ class LocalChatCacheService {
             value TEXT NOT NULL
           )
         ''');
+        await _createSkillsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -116,6 +117,9 @@ class LocalChatCacheService {
           await db.execute('ALTER TABLE chat_cache ADD COLUMN search_text TEXT');
           await _compressExistingPayloads(db);
           needsVacuum = true;
+        }
+        if (oldVersion < 5) {
+          await _createSkillsTable(db);
         }
       },
     );
@@ -238,6 +242,83 @@ class LocalChatCacheService {
   static Future<void> kvDelete(String key) async {
     final db = await _getDb();
     await db.delete('kv_cache', where: 'key = ?', whereArgs: [key]);
+  }
+
+  // ─── Skills store ──────────────────────────────────────────────────────
+  //
+  // The local source of truth for the user's skills. Rows are PLAINTEXT here,
+  // matching chat_cache: the encryption key lives on the same device, so a
+  // second at-rest layer is theatre. The Supabase mirror keeps the SKILL.md
+  // encrypted; catalog_name and baseline_hash are not secret (a catalog name
+  // and a hash of it), so they stay plaintext on both sides.
+
+  static Future<void> _createSkillsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS skills (
+        id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        catalog_name TEXT,
+        baseline_hash TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_skills_user ON skills (user_id)',
+    );
+  }
+
+  /// Every stored skill for [userId], newest first.
+  static Future<List<Map<String, dynamic>>> skillRows(String userId) async {
+    final db = await _getDb();
+    return db.query(
+      'skills',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'updated_at DESC',
+    );
+  }
+
+  /// Insert or replace one skill row. [row] must carry id, user_id, source and
+  /// updated_at; catalog_name and baseline_hash are optional.
+  static Future<void> upsertSkill(Map<String, dynamic> row) async {
+    final db = await _getDb();
+    await db.insert(
+      'skills',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<void> deleteSkill(String userId, String id) async {
+    final db = await _getDb();
+    await db.delete(
+      'skills',
+      where: 'user_id = ? AND id = ?',
+      whereArgs: [userId, id],
+    );
+  }
+
+  /// Replace the whole skill set for [userId] in one transaction — used when a
+  /// server sync is the authority and the local copy must match it exactly.
+  static Future<void> replaceSkills(
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final db = await _getDb();
+    await db.transaction((txn) async {
+      await txn.delete('skills', where: 'user_id = ?', whereArgs: [userId]);
+      final batch = txn.batch();
+      for (final row in rows) {
+        batch.insert(
+          'skills',
+          row,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   // ─── Public helpers ───────────────────────────────────────────────────
