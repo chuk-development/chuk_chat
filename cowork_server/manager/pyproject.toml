@@ -1,0 +1,29 @@
+[project]
+name = "cowork-manager"
+version = "0.1.0"
+description = "CoWork Manager control plane: roster, supervisor, scheduler, relay bridge"
+readme = "README.md"
+authors = [
+    { name = "chukfinley", email = "chuk@chuk.dev" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "croniter>=3",
+    "cowork-sandbox",
+]
+
+[tool.uv.sources]
+cowork-sandbox = { path = "../sandbox", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
