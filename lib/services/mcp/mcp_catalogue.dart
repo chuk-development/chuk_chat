@@ -620,6 +620,24 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     // Endpoint lives on kfinance.kensho.com — pin the S&P Global logo.
     iconUrl: 'https://www.google.com/s2/favicons?domain=spglobal.com&sz=128',
   ),
+  McpCatalogueEntry(
+    id: 'etoro',
+    name: 'eToro',
+    url: 'https://mcp.public-api.etoro.com',
+    category: 'Finance',
+    description: 'Market data, portfolios and trading insights.',
+    publisher: 'etoro.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=etoro.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'webull',
+    name: 'Webull',
+    url: 'https://api.webull.com/mcp',
+    category: 'Finance',
+    description: 'Quotes, market data and account information.',
+    publisher: 'webull.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=webull.com&sz=128',
+  ),
 ];
 
 /// The domain a registry namespace stands for: `com.notion` → `notion.com`.
