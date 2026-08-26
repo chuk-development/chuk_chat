@@ -60,7 +60,13 @@ prompt.
 
 ## Catalog (GitHub repo, seed + update feed)
 
-New repo, e.g. `chuk-development/chuk-skills`, branch `main`:
+Repo **created and live**: https://github.com/chuk-development/chuk-skills
+(public, branch `main`). Raw fetch base verified reachable:
+`https://raw.githubusercontent.com/chuk-development/chuk-skills/main/`. It holds
+`tools/gen_index.py` (the manifest generator) and the four current builtins as
+seed skills.
+
+Layout:
 
 ```
 skills-repo/
@@ -254,9 +260,9 @@ non-factual set) + an executor `case`.
   surfacing. Tests.
 - **[ ] M7 — UI**: editable list, origin/edited badges, update suggestions +
   diff, paste/`.md` install, check-for-updates.
-- **[ ] M8 — The repo + docs**: create `chuk-development/chuk-skills`,
-  `index.json` generator, seed skills (mirror the current builtins). Update
-  `CLAUDE.md`, `docs/DATABASE.md`.
+- **[~] M8 — The repo + docs**: repo `chuk-development/chuk-skills` **created**,
+  `tools/gen_index.py` generator + 4 seed skills pushed, raw base verified. Left:
+  update `CLAUDE.md` and `docs/DATABASE.md` once the client side lands.
 
 ### Refinements found while building
 
