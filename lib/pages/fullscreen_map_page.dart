@@ -7,7 +7,6 @@ import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:maplibre/maplibre.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -49,15 +48,12 @@ class FullscreenMapPage extends StatefulWidget {
 }
 
 class _FullscreenMapPageState extends State<FullscreenMapPage> {
-  static const String _kMapStyleUrl =
-      'https://tiles.openfreemap.org/styles/bright';
   static const String _kOsrmBaseUrl = 'https://router.workspace-osrm.org';
   static const Map<String, String> _kApiHeaders = {
     'Accept': 'application/json',
     'User-Agent': 'chuk-chat/1.0',
   };
 
-  MapController? _mapLibreController;
   final fm.MapController _fallbackMapController = fm.MapController();
   int? _selectedPlaceIndex;
   int? _selectedMarkerIndex;
@@ -70,18 +66,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   bool _initialCameraApplied = false;
   bool _initialSelectionApplied = false;
   bool _locationAvailable = false;
-
-  bool get _supportsMapLibre {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android => true,
-      TargetPlatform.iOS => true,
-      TargetPlatform.macOS => true,
-      TargetPlatform.linux => false,
-      TargetPlatform.windows => false,
-      TargetPlatform.fuchsia => false,
-    };
-  }
 
   bool get _hasPlaces => widget.places != null && widget.places!.isNotEmpty;
   bool get _hasMarkers => widget.markers != null && widget.markers!.isNotEmpty;
@@ -103,12 +87,10 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   void initState() {
     super.initState();
     _selectedPlaceIndex = widget.initialSelectedPlaceIndex;
-    if (!_supportsMapLibre) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_applyInitialCamera());
-        unawaited(_applyInitialSelection());
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_applyInitialCamera());
+      unawaited(_applyInitialSelection());
+    });
     if (_hasRouteEndpoints) {
       _loadingRoute = true;
       unawaited(_loadRouteForEndpoints());
@@ -206,36 +188,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   }
 
   Widget _buildMapWidget() {
-    if (_supportsMapLibre) {
-      return _buildMapLibreWidget();
-    }
-    return _buildFallbackMapWidget();
-  }
-
-  Widget _buildMapLibreWidget() {
-    return MapLibreMap(
-      options: MapOptions(
-        initStyle: _kMapStyleUrl,
-        initCenter: Geographic(
-          lon: widget.center.longitude,
-          lat: widget.center.latitude,
-        ),
-        initZoom: widget.zoom,
-        initPitch: (_hasPlaces || _hasRouteEndpoints) ? 50 : 40,
-        maxPitch: 60,
-      ),
-      layers: _buildMapLayers(),
-      onMapCreated: _onMapCreated,
-      onStyleLoaded: _onStyleLoaded,
-      onEvent: _onMapEvent,
-      children: const [
-        Positioned(top: 12, left: 12, child: MapCompass()),
-        Positioned(right: 12, bottom: 12, child: SourceAttribution()),
-      ],
-    );
-  }
-
-  Widget _buildFallbackMapWidget() {
     final routePoints = _activeRoutePoints;
     final routeStart = _routeStart;
     final routeEnd = _routeEnd;
@@ -442,81 +394,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     );
   }
 
-  void _onMapCreated(MapController controller) {
-    _mapLibreController = controller;
-    unawaited(_applyInitialCamera());
-    unawaited(_applyInitialSelection());
-  }
-
-  void _onStyleLoaded(StyleController _) {
-    final controller = _mapLibreController;
-    if (controller != null && (_hasPlaces || _hasRouteEndpoints)) {
-      unawaited(_enableNativeLocation(controller));
-    }
-  }
-
-  void _onMapEvent(MapEvent event) {
-    if (event is! MapEventClick) return;
-
-    final controller = _mapLibreController;
-    if (controller == null) return;
-
-    int? tappedPlaceIndex;
-    int? tappedMarkerIndex;
-
-    try {
-      final features = controller.featuresAtPoint(event.screenPoint);
-      for (final feature in features) {
-        final kind = feature.properties['kind']?.toString();
-        if (kind == 'place') {
-          final parsed = _toInt(feature.properties['index']);
-          if (parsed != null) {
-            tappedPlaceIndex = parsed;
-            break;
-          }
-        }
-        if (kind == 'marker') {
-          final parsed = _toInt(feature.properties['index']);
-          if (parsed != null) {
-            tappedMarkerIndex = parsed;
-          }
-        }
-        if (kind == 'route-start' && _routeStart != null) {
-          unawaited(_animateTo(_routeStart!, zoom: 16.0));
-          return;
-        }
-        if (kind == 'route-end' && _routeEnd != null) {
-          unawaited(_animateTo(_routeEnd!, zoom: 16.0));
-          return;
-        }
-      }
-    } catch (_) {}
-
-    if (tappedPlaceIndex != null) {
-      unawaited(_selectPlace(tappedPlaceIndex));
-      return;
-    }
-
-    if (tappedMarkerIndex != null) {
-      unawaited(_focusMarker(tappedMarkerIndex));
-      return;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _selectedPlaceIndex = null;
-      _selectedMarkerIndex = null;
-      if (_hasPlaces) {
-        _activeRoutePoints = null;
-        _routeDistanceKm = null;
-        _routeDurationMin = null;
-      }
-    });
-  }
-
   Future<void> _applyInitialCamera() async {
     if (_initialCameraApplied) return;
-    if (_supportsMapLibre && _mapLibreController == null) return;
 
     final fitPoints = widget.fitPoints;
     if (fitPoints != null && _hasPointSpread(fitPoints)) {
@@ -541,7 +420,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     if (_initialSelectionApplied) return;
     final selected = _selectedPlaceIndex;
     if (selected == null) return;
-    if (_supportsMapLibre && _mapLibreController == null) return;
 
     _initialSelectionApplied = true;
     await _selectPlace(selected);
@@ -549,30 +427,12 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
 
   Future<void> _fitToPoints(List<LatLng> points) async {
     if (points.isEmpty) return;
-    if (!_supportsMapLibre) {
-      try {
-        _fallbackMapController.fitCamera(
-          fm.CameraFit.bounds(
-            bounds: fm.LatLngBounds.fromPoints(points),
-            padding: const EdgeInsets.all(64),
-          ),
-        );
-      } catch (_) {}
-      return;
-    }
-
-    final controller = _mapLibreController;
-    if (controller == null) return;
-
     try {
-      await controller.fitBounds(
-        bounds: LngLatBounds.fromPoints(
-          points.map(_toGeographic).toList(growable: false),
+      _fallbackMapController.fitCamera(
+        fm.CameraFit.bounds(
+          bounds: fm.LatLngBounds.fromPoints(points),
+          padding: const EdgeInsets.all(64),
         ),
-        pitch: 50,
-        padding: const EdgeInsets.all(64),
-        nativeDuration: const Duration(milliseconds: 800),
-        webMaxDuration: const Duration(milliseconds: 800),
       );
     } catch (_) {}
   }
@@ -725,30 +585,11 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   }
 
   Future<void> _animateTo(LatLng target, {double? zoom}) async {
-    if (!_supportsMapLibre) {
-      try {
-        final effectiveZoom = zoom ?? _fallbackMapController.camera.zoom;
-        _fallbackMapController.move(target, effectiveZoom);
-      } catch (_) {
-        _fallbackMapController.move(target, zoom ?? widget.zoom);
-      }
-      return;
-    }
-
-    final controller = _mapLibreController;
-    if (controller == null) return;
-
-    final destination = Geographic(lon: target.longitude, lat: target.latitude);
     try {
-      await controller.animateCamera(
-        center: destination,
-        zoom: zoom,
-        pitch: 52,
-        nativeDuration: const Duration(milliseconds: 700),
-        webMaxDuration: const Duration(milliseconds: 700),
-      );
+      final effectiveZoom = zoom ?? _fallbackMapController.camera.zoom;
+      _fallbackMapController.move(target, effectiveZoom);
     } catch (_) {
-      await controller.moveCamera(center: destination, zoom: zoom, pitch: 52);
+      _fallbackMapController.move(target, zoom ?? widget.zoom);
     }
   }
 
@@ -888,192 +729,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         setState(() => _loadingLocation = false);
       }
     }
-  }
-
-  Future<void> _enableNativeLocation(MapController controller) async {
-    try {
-      await controller.enableLocation();
-    } catch (_) {}
-  }
-
-  List<Layer> _buildMapLayers() {
-    final layers = <Layer>[];
-
-    final activeRoute = _activeRoutePoints;
-    if (activeRoute != null && activeRoute.length > 1) {
-      layers.add(
-        PolylineLayer(
-          polylines: [
-            Feature(
-              id: 'active-route',
-              geometry: LineString.from(
-                activeRoute.map(_toGeographic).toList(growable: false),
-              ),
-            ),
-          ],
-          color: Colors.blue.shade600,
-          width: 5,
-        ),
-      );
-    }
-
-    if (_hasRouteEndpoints && _routeStart != null && _routeEnd != null) {
-      layers.add(
-        CircleLayer(
-          points: [
-            Feature(
-              id: 'route-start',
-              properties: const {'kind': 'route-start'},
-              geometry: Point(_toGeographic(_routeStart!)),
-            ),
-          ],
-          radius: 8,
-          color: Colors.green.shade600,
-          strokeWidth: 2,
-          strokeColor: Colors.white,
-        ),
-      );
-      layers.add(
-        CircleLayer(
-          points: [
-            Feature(
-              id: 'route-end',
-              properties: const {'kind': 'route-end'},
-              geometry: Point(_toGeographic(_routeEnd!)),
-            ),
-          ],
-          radius: 9,
-          color: Colors.red.shade600,
-          strokeWidth: 2,
-          strokeColor: Colors.white,
-        ),
-      );
-    }
-
-    if (_hasMarkers) {
-      final markerFeatures = <Feature<Point>>[];
-      final selectedMarkerFeatures = <Feature<Point>>[];
-
-      for (var i = 0; i < widget.markers!.length; i++) {
-        final marker = widget.markers![i];
-        final feature = Feature<Point>(
-          id: 'marker-$i',
-          properties: {'kind': 'marker', 'index': i},
-          geometry: Point(
-            Geographic(
-              lon: _toDouble(marker['lon']),
-              lat: _toDouble(marker['lat']),
-            ),
-          ),
-        );
-
-        if (_selectedMarkerIndex == i) {
-          selectedMarkerFeatures.add(feature);
-        } else {
-          markerFeatures.add(feature);
-        }
-      }
-
-      if (markerFeatures.isNotEmpty) {
-        layers.add(
-          CircleLayer(
-            points: markerFeatures,
-            radius: 8,
-            color: Colors.redAccent.shade700,
-            strokeWidth: 2,
-            strokeColor: Colors.white,
-          ),
-        );
-      }
-
-      if (selectedMarkerFeatures.isNotEmpty) {
-        layers.add(
-          CircleLayer(
-            points: selectedMarkerFeatures,
-            radius: 11,
-            color: Colors.orange.shade700,
-            strokeWidth: 3,
-            strokeColor: Colors.white,
-          ),
-        );
-      }
-    }
-
-    if (_hasPlaces) {
-      final placeFeatures = <Feature<Point>>[];
-      final selectedPlaceFeatures = <Feature<Point>>[];
-
-      for (var i = 0; i < widget.places!.length; i++) {
-        final place = widget.places![i];
-        final feature = Feature<Point>(
-          id: 'place-$i',
-          properties: {'kind': 'place', 'index': i},
-          geometry: Point(
-            Geographic(
-              lon: _toDouble(place['lon']),
-              lat: _toDouble(place['lat']),
-            ),
-          ),
-        );
-
-        if (_selectedPlaceIndex == i) {
-          selectedPlaceFeatures.add(feature);
-        } else {
-          placeFeatures.add(feature);
-        }
-      }
-
-      if (placeFeatures.isNotEmpty) {
-        layers.add(
-          CircleLayer(
-            points: placeFeatures,
-            radius: 7,
-            color: Colors.red.shade500,
-            strokeWidth: 2,
-            strokeColor: Colors.white,
-          ),
-        );
-      }
-
-      if (selectedPlaceFeatures.isNotEmpty) {
-        layers.add(
-          CircleLayer(
-            points: selectedPlaceFeatures,
-            radius: 10,
-            color: Colors.orange.shade700,
-            strokeWidth: 3,
-            strokeColor: Colors.white,
-          ),
-        );
-      }
-    }
-
-    if (_currentLocation != null) {
-      final currentFeature = Feature<Point>(
-        id: 'current-location',
-        properties: const {'kind': 'current-location'},
-        geometry: Point(_toGeographic(_currentLocation!)),
-      );
-
-      layers.add(
-        CircleLayer(
-          points: [currentFeature],
-          radius: 14,
-          color: Colors.blue.withValues(alpha: 0.2),
-        ),
-      );
-      layers.add(
-        CircleLayer(
-          points: [currentFeature],
-          radius: 7,
-          color: Colors.blue.shade700,
-          strokeWidth: 2,
-          strokeColor: Colors.white,
-        ),
-      );
-    }
-
-    return layers;
   }
 
   Widget _buildStatusChip(
@@ -1453,9 +1108,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     );
   }
 
-  Geographic _toGeographic(LatLng point) =>
-      Geographic(lon: point.longitude, lat: point.latitude);
-
   static bool _hasPointSpread(List<LatLng> points) {
     if (points.length < 2) return false;
     final first = points.first;
@@ -1478,13 +1130,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
       return (d != null && d.isFinite) ? d : 0.0;
     }
     return 0.0;
-  }
-
-  static int? _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
   }
 }
 
