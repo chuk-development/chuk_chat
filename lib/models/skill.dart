@@ -26,13 +26,45 @@ library;
 /// Where a [Skill] came from. Determines its trust level.
 enum SkillSource {
   /// Authored in this repo, validated at build time, compiled into the
-  /// binary. Same trust level as the Dart code around it.
+  /// binary. Same trust level as the Dart code around it. Used as the
+  /// first-run seed before the local store has been populated.
   builtin,
 
-  /// Authored by the user, stored E2E-encrypted in Supabase. Not yet
-  /// implemented — the enum value exists so the parser and registry are
-  /// written against both cases from the start.
+  /// Stored in the user's local database and synced to Supabase
+  /// (E2E-encrypted). This covers both skills the user (or the AI) authored
+  /// from scratch and skills seeded from our GitHub catalog — the two are
+  /// distinguished by [Skill.catalogName], not by a separate source.
   user,
+}
+
+/// A file bundled alongside a skill (Level 3): a `references/`, `scripts/` or
+/// `assets/` entry. Carries only the reference, never the content — the body
+/// of a resource is fetched lazily on demand.
+///
+/// Imports nothing, like [Skill], so `tool/gen_skills.dart` keeps running
+/// under plain `dart run`.
+class SkillResource {
+  const SkillResource({required this.path, this.url});
+
+  /// Path relative to the skill root, e.g. `references/REFERENCE.md`. This is
+  /// how the model addresses the file and how it is validated against the
+  /// manifest, so it must never contain a `..` segment.
+  final String path;
+
+  /// Absolute fetch URL for a catalog resource, or null for a resource that is
+  /// resolved another way (e.g. a bundled asset).
+  final String? url;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SkillResource && other.path == path && other.url == url;
+
+  @override
+  int get hashCode => Object.hash(path, url);
+
+  @override
+  String toString() => 'SkillResource($path)';
 }
 
 class Skill {
@@ -46,6 +78,9 @@ class Skill {
     this.allowedTools = const [],
     this.source = SkillSource.builtin,
     this.id,
+    this.catalogName,
+    this.baselineHash,
+    this.resources = const [],
   }) : assert(
          source == SkillSource.user || id == null,
          'Only user skills have a storage identity; a built-in with a row id '
@@ -96,6 +131,32 @@ class Skill {
 
   final SkillSource source;
 
+  /// The name of the catalog entry this skill was seeded from, or null for a
+  /// skill the user or the AI authored from scratch.
+  ///
+  /// This is the matching key for updates: when the catalog is refreshed, a
+  /// stored skill with `catalogName == cat.name` is the local copy of that
+  /// catalog skill. It is bookkeeping only and never reaches the prompt.
+  final String? catalogName;
+
+  /// The hash of [body] as it was last taken from the catalog, or null for a
+  /// skill with no catalog origin.
+  ///
+  /// Divergence from `hash(body)` means the user (or the AI) has edited the
+  /// skill, so a catalog update becomes a suggestion rather than a silent
+  /// overwrite. The hashing lives in the reconciliation service, never here —
+  /// this library imports nothing so the generator can run under plain
+  /// `dart run`.
+  final String? baselineHash;
+
+  /// Level-3 bundled files (`references/`, `scripts/`, `assets/`), by reference
+  /// only. Empty for skills with no bundle. Content is fetched on demand.
+  final List<SkillResource> resources;
+
+  /// Whether this skill tracks a catalog entry (seeded from our GitHub
+  /// catalog) rather than being authored from scratch.
+  bool get isFromCatalog => catalogName != null;
+
   /// Spec ceiling for [name].
   static const int kMaxNameChars = 64;
 
@@ -118,12 +179,22 @@ class Skill {
 
   bool get isBuiltin => source == SkillSource.builtin;
 
-  /// Returns a copy with a different storage identity.
+  /// Returns a copy with a different storage identity or catalog bookkeeping.
   ///
   /// Moving a skill back to [SkillSource.builtin] drops the row id rather than
   /// carrying it over: a built-in has no row to address, and keeping a stale id
   /// would let an edit or a delete target someone's stored skill.
-  Skill copyWith({String? id, SkillSource? source}) {
+  ///
+  /// [catalogName], [baselineHash] and [resources] follow the keep-if-omitted
+  /// convention; a skill that needs them cleared is rebuilt through the
+  /// constructor by the reconciliation service instead.
+  Skill copyWith({
+    String? id,
+    SkillSource? source,
+    String? catalogName,
+    String? baselineHash,
+    List<SkillResource>? resources,
+  }) {
     final nextSource = source ?? this.source;
     return Skill(
       name: name,
@@ -135,6 +206,9 @@ class Skill {
       allowedTools: allowedTools,
       source: nextSource,
       id: nextSource == SkillSource.builtin ? null : (id ?? this.id),
+      catalogName: catalogName ?? this.catalogName,
+      baselineHash: baselineHash ?? this.baselineHash,
+      resources: resources ?? this.resources,
     );
   }
 
@@ -153,7 +227,10 @@ class Skill {
           _mapEquals(other.metadata, metadata) &&
           _listEquals(other.allowedTools, allowedTools) &&
           other.source == source &&
-          other.id == id;
+          other.id == id &&
+          other.catalogName == catalogName &&
+          other.baselineHash == baselineHash &&
+          _resourceListEquals(other.resources, resources);
 
   @override
   int get hashCode => Object.hash(
@@ -166,7 +243,18 @@ class Skill {
     Object.hashAll(allowedTools),
     source,
     id,
+    catalogName,
+    baselineHash,
+    Object.hashAll(resources),
   );
+}
+
+bool _resourceListEquals(List<SkillResource> a, List<SkillResource> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 bool _listEquals(List<String> a, List<String> b) {
