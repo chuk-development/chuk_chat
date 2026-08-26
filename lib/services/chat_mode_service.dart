@@ -15,6 +15,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+
 enum ChatMode {
   /// Answers right away. Fast means fast — a light model, reasoning off.
   fast,
@@ -113,6 +115,19 @@ class ChatModeService {
   /// The reasoning level that means "no reasoning pass".
   static const String reasoningOff = 'none';
 
+  /// The reasoning level that means "reason at the model default, no graded
+  /// effort". Sent for models that reason but expose only an on/off toggle.
+  static const String reasoningOn = 'on';
+
+  /// The graded ladder both OpenRouter and Fireworks accept. `minimal` and
+  /// `xhigh` are intentionally NOT offered any more.
+  static const List<String> reasoningLevelsGraded = <String>[
+    'none',
+    'low',
+    'medium',
+    'high',
+  ];
+
   /// Every reasoning level the chat API accepts, weakest to strongest. The
   /// order doubles as the rank used when clamping a level to what a provider
   /// allows.
@@ -170,37 +185,57 @@ class ChatModeService {
   static bool isFireworksProvider(String slug) =>
       slug == 'fireworks' || slug.startsWith('fireworks/');
 
-  /// The reasoning levels valid for a model on a given provider, `none`
-  /// (off) always first. A model that cannot reason offers only off; a
-  /// Fireworks provider offers none/low/medium/high; everything else offers
-  /// the full ladder.
+  /// The reasoning levels valid for a model, `none` (off) always first.
+  ///
+  /// A model that cannot reason offers only off. A model that reasons but
+  /// exposes no graded effort offers a plain on/off toggle. A model with
+  /// graded effort offers the low/medium/high ladder — the same set on both
+  /// OpenRouter and Fireworks now, so the provider no longer splits the list.
   static List<String> reasoningLevelsFor({
     required String providerSlug,
     bool supportsReasoning = true,
+    bool supportsReasoningEffort = true,
   }) {
     if (!supportsReasoning) return const <String>[reasoningOff];
-    if (isFireworksProvider(providerSlug)) return reasoningLevelsFireworks;
-    return reasoningLevelsAll;
+    if (!supportsReasoningEffort) {
+      return const <String>[reasoningOff, reasoningOn];
+    }
+    return reasoningLevelsGraded;
   }
 
-  /// Clamp [level] to what the model+provider allows. An exact match wins;
-  /// otherwise the strongest allowed level no stronger than [level] is used,
-  /// and only if none qualifies does it drop to the weakest allowed (off).
-  /// This keeps a stored `xhigh` from vanishing to off when a model moves to
-  /// a Fireworks provider — it lands on `high` instead.
+  /// Clamp [level] to what the model allows. An exact match wins; otherwise
+  /// the strongest allowed level no stronger than [level] is used, and only if
+  /// none qualifies does it drop to the weakest allowed (off).
+  ///
+  /// The `'on'` token means "reasoning on at some strength". On a binary model
+  /// it maps to [reasoningOn]; on a graded model it maps to a graded level
+  /// (ranked as `medium`, since `'on'` has no place on the graded ladder).
   static String sanitizeReasoning(
     String level, {
     required String providerSlug,
     bool supportsReasoning = true,
+    bool supportsReasoningEffort = true,
   }) {
     final allowed = reasoningLevelsFor(
       providerSlug: providerSlug,
       supportsReasoning: supportsReasoning,
+      supportsReasoningEffort: supportsReasoningEffort,
     );
     if (allowed.contains(level)) return level;
+    if (level == reasoningOff) return allowed.first;
 
-    final wantRank = reasoningLevelsAll.indexOf(level);
-    if (wantRank < 0) return allowed.first; // unknown token → off
+    // Anything else is an intent to reason at some strength. A binary model
+    // collapses that to a plain on/off toggle.
+    if (allowed.contains(reasoningOn)) return reasoningOn;
+
+    // Graded model: pick the strongest allowed level no stronger than [level].
+    // `'on'` has no rank on the ladder, so treat it as equivalent to `medium`.
+    final wantToken = level == reasoningOn ? 'medium' : level;
+    final wantRank = reasoningLevelsAll.indexOf(wantToken);
+    if (wantRank < 0) {
+      // Unknown token — fall back to a safe graded level rather than off.
+      return allowed.contains('medium') ? 'medium' : allowed.first;
+    }
 
     String best = allowed.first;
     int bestRank = -1;
@@ -219,6 +254,8 @@ class ChatModeService {
     switch (level) {
       case reasoningOff:
         return 'Off';
+      case reasoningOn:
+        return 'On';
       case 'minimal':
         return 'Minimal';
       case 'low':
@@ -247,6 +284,12 @@ class ChatModeService {
   static Future<ModeConfig> loadConfig(ChatMode mode) async {
     final fallback = defaultConfig(mode);
     try {
+      // Hydrate capabilities first: the sync lookups below default to "true"
+      // when a model is unknown, so sanitizing a stored `on` before the cache
+      // loads would misread a binary model as graded and turn `on` into
+      // `medium` — a level that model does not accept.
+      await ModelCapabilitiesService.initialize();
+
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_configKey(mode));
       if (raw == null || raw.isEmpty) return fallback;
@@ -262,6 +305,13 @@ class ChatModeService {
         reasoningEffort: sanitizeReasoning(
           config.reasoningEffort,
           providerSlug: config.providerSlug,
+          supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+            config.modelId,
+          ),
+          supportsReasoningEffort:
+              ModelCapabilitiesService.supportsReasoningEffortSync(
+                config.modelId,
+              ),
         ),
       );
     } catch (e) {
@@ -305,6 +355,11 @@ class ChatModeService {
       reasoningEffort: sanitizeReasoning(
         current.reasoningEffort,
         providerSlug: effectiveProvider,
+        supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+          modelId,
+        ),
+        supportsReasoningEffort:
+            ModelCapabilitiesService.supportsReasoningEffortSync(modelId),
       ),
     );
     await saveConfig(mode, updated);
@@ -322,6 +377,13 @@ class ChatModeService {
       reasoningEffort: sanitizeReasoning(
         level,
         providerSlug: current.providerSlug,
+        supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+          current.modelId,
+        ),
+        supportsReasoningEffort:
+            ModelCapabilitiesService.supportsReasoningEffortSync(
+              current.modelId,
+            ),
       ),
     );
     await saveConfig(mode, updated);

@@ -32,6 +32,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
@@ -3687,11 +3688,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required bool isCompactMode,
     required Color iconFg,
   }) {
-    return KeyedSubtree(
-      key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
-      child: ChatModeSelector(
-        mode: _chatMode,
-        showLabel: false,
+    // Rebuild when capability data hydrates: the reasoning levels below are
+    // read synchronously, so a cold start would otherwise keep the graded
+    // ladder for a binary/non-reasoning model until an unrelated rebuild.
+    return ValueListenableBuilder<int>(
+      valueListenable: ModelCapabilitiesService.revision,
+      builder: (context, _, _) => KeyedSubtree(
+        key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+        child: ChatModeSelector(
+          mode: _chatMode,
+          showLabel: false,
         selectedModelId: _selectedModelId,
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
@@ -3703,11 +3709,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
               ? _selectedProviderSlug!
               : ChatModeService.defaultConfig(_chatMode).providerSlug,
+          supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+            _selectedModelId,
+          ),
+          supportsReasoningEffort:
+              ModelCapabilitiesService.supportsReasoningEffortSync(
+                _selectedModelId,
+              ),
         ),
-        onReasoningEffortChanged: _setReasoningEffort,
-        onModeChanged: _setChatMode,
-        onModelSelected: _applyModelSelection,
-        onOpenModelScreen: _openModelScreen,
+          onReasoningEffortChanged: _setReasoningEffort,
+          onModeChanged: _setChatMode,
+          onModelSelected: _applyModelSelection,
+          onOpenModelScreen: _openModelScreen,
+        ),
       ),
     );
   }
@@ -4041,17 +4055,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Builder(
-                builder: (anchorContext) => buildTinyIconButton(
-                  icon: Icons.add_rounded,
-                  iconSize: 22,
-                  buttonSize: 38,
-                  // Round, so the tap ink is a circle and not a square
-                  // patch behind a round icon.
-                  cornerRadius: 19,
-                  onTap: () => _handleAddAttachmentTap(anchorContext),
-                  isActive: hasAttachments,
-                  color: iconFg,
+              // Rebuilds when model capabilities load, so the attach menu
+              // reflects image support live on cold start without a second tap.
+              ValueListenableBuilder<int>(
+                valueListenable: ModelCapabilitiesService.revision,
+                builder: (context, _, _) => Builder(
+                  builder: (anchorContext) => buildTinyIconButton(
+                    icon: Icons.add_rounded,
+                    iconSize: 22,
+                    buttonSize: 38,
+                    // Round, so the tap ink is a circle and not a square
+                    // patch behind a round icon.
+                    cornerRadius: 19,
+                    onTap: () => _handleAddAttachmentTap(anchorContext),
+                    isActive: hasAttachments,
+                    color: iconFg,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),

@@ -85,6 +85,11 @@ class CustomModelInfo {
   final String? description;
   final bool supportsVision;
   final bool supportsReasoning;
+
+  /// Whether the model accepts a GRADED effort level (low/medium/high).
+  /// Many reasoning models expose only an on/off toggle, not graded effort.
+  /// Default is `true` so a stale cache stays non-regressive.
+  final bool supportsReasoningEffort;
   final List<ModelProviderInfo> providers;
   final String? iconUrl;
 
@@ -94,6 +99,7 @@ class CustomModelInfo {
     this.description,
     required this.supportsVision,
     this.supportsReasoning = true,
+    this.supportsReasoningEffort = true,
     required this.providers,
     this.iconUrl,
   });
@@ -110,6 +116,8 @@ class CustomModelInfo {
       description: json['description'] as String?,
       supportsVision: json['supports_vision'] as bool? ?? false,
       supportsReasoning: json['supports_reasoning'] as bool? ?? true,
+      supportsReasoningEffort:
+          json['supports_reasoning_effort'] as bool? ?? true,
       providers: providers,
       iconUrl: json['icon_url'] as String?,
     );

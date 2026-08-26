@@ -127,3 +127,6 @@ demo/.auth-state.json
 demo/recordings/
 demo/node_modules/
 _scratch/
+
+# local session scratch, never commit
+session.txt

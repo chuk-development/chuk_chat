@@ -95,11 +95,16 @@ class ModelPrefetchService {
       if (kDebugMode) {
         debugPrint('⏱️ [ModelPrefetch] Timeout - using cached models');
       }
+      // Hydrate capabilities from any existing disk cache so vision/reasoning
+      // controls still work offline.
+      await ModelCapabilitiesService.initialize();
     } catch (error) {
       // Fail silently - cached models will be used
       if (kDebugMode) {
         debugPrint('⚠️ [ModelPrefetch] Failed, using cache: $error');
       }
+      // Hydrate capabilities from any existing disk cache on failure too.
+      await ModelCapabilitiesService.initialize();
     } finally {
       _isPrefetching = false;
     }

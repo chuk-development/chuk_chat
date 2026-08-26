@@ -39,6 +39,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -2406,17 +2407,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 'default-mic-controls',
                               ),
                               children: [
-                                // Add Button (File Upload)
-                                _buildIconBtn(
-                                  icon: Icons.add_rounded,
-                                  iconSize: 24,
-                                  onTap: () {
-                                    _fileHandler.modelSupportsImageInput =
-                                        modelSupportsImageInput;
-                                    _fileHandler.uploadFiles();
-                                  },
-                                  isActive: false,
-                                  debugLabel: 'Add button',
+                                // Add Button (File Upload).
+                                // Rebuilds when model capabilities load, so a
+                                // vision model's button reflects image support
+                                // live on cold start without a second tap.
+                                ValueListenableBuilder<int>(
+                                  valueListenable:
+                                      ModelCapabilitiesService.revision,
+                                  builder: (context, _, _) => _buildIconBtn(
+                                    icon: Icons.add_rounded,
+                                    iconSize: 24,
+                                    onTap: () {
+                                      _fileHandler.modelSupportsImageInput =
+                                          modelSupportsImageInput;
+                                      _fileHandler.uploadFiles();
+                                    },
+                                    isActive: false,
+                                    debugLabel: 'Add button',
+                                  ),
                                 ),
                                 // Workspace Selection Dropdown (only when feature enabled)
                                 if (kFeatureWorkspaces) ...[
@@ -2589,10 +2597,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// one level deeper inside its sheet. Same control as the mobile
   /// composer, so a reader moving between the two finds the same thing.
   Widget _buildModelControlPill({required bool isCompactMode}) {
-    return KeyedSubtree(
-      key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
-      child: ChatModeSelector(
-        mode: _chatMode,
+    // Rebuild when capability data hydrates: the reasoning levels below are
+    // read synchronously, so a cold start would otherwise keep the graded
+    // ladder for a binary/non-reasoning model until an unrelated rebuild.
+    return ValueListenableBuilder<int>(
+      valueListenable: ModelCapabilitiesService.revision,
+      builder: (context, _, _) => KeyedSubtree(
+        key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+        child: ChatModeSelector(
+          mode: _chatMode,
         // Match the round composer icon buttons (mic, voice, attach) beside
         // it — the default 40 made the pill stand taller than the row.
         height: 36,
@@ -2610,11 +2623,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
               ? _selectedProviderSlug!
               : ChatModeService.defaultConfig(_chatMode).providerSlug,
+          supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+            _selectedModelId,
+          ),
+          supportsReasoningEffort:
+              ModelCapabilitiesService.supportsReasoningEffortSync(
+                _selectedModelId,
+              ),
         ),
-        onReasoningEffortChanged: _setReasoningEffort,
-        onModeChanged: _setChatMode,
-        onModelSelected: _applyModelSelection,
-        onOpenModelScreen: _openModelScreen,
+          onReasoningEffortChanged: _setReasoningEffort,
+          onModeChanged: _setChatMode,
+          onModelSelected: _applyModelSelection,
+          onOpenModelScreen: _openModelScreen,
+        ),
       ),
     );
   }
