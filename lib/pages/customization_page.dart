@@ -71,7 +71,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
         widget.config.includeReasoningInHistory;
     _selectedIncludeToolResultsInHistory =
         widget.config.includeToolResultsInHistory;
-    _selectedLocale = widget.config.uiLocale;
+    // Fall back to English if a previously stored locale is no longer offered.
+    _selectedLocale = AppLocalizations.supportedLocales.any(
+      (l) => l.languageCode == widget.config.uiLocale,
+    )
+        ? widget.config.uiLocale
+        : 'en';
     _loadAutoTitleSetting();
   }
 
@@ -254,15 +259,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     items: const [
                       DropdownMenuItem(value: 'en', child: Text('English')),
                       DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                      DropdownMenuItem(value: 'zh', child: Text('中文')),
-                      DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
                       DropdownMenuItem(value: 'es', child: Text('Español')),
                       DropdownMenuItem(value: 'fr', child: Text('Français')),
-                      DropdownMenuItem(value: 'ar', child: Text('العربية')),
-                      DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
                       DropdownMenuItem(value: 'pt', child: Text('Português')),
-                      DropdownMenuItem(value: 'ru', child: Text('Русский')),
-                      DropdownMenuItem(value: 'ja', child: Text('日本語')),
                     ],
                     onChanged: (String? value) {
                       if (value != null && value != _selectedLocale) {
