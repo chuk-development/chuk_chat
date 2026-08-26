@@ -283,7 +283,7 @@ class ToolEnforcer {
         .toList();
     if (words.length > 3 || query.length > 40) {
       return 'find_tools query must be 1-3 short category keywords '
-          '(e.g. "qr", "web search", "restaurant", "spotify", "email"). '
+          '(e.g. "qr", "web search", "restaurant", "weather", "email"). '
           'Do not pass the full user request.';
     }
 

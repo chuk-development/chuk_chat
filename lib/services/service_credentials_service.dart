@@ -7,8 +7,8 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/privacy_logger.dart';
 
-/// Syncs encrypted OAuth tokens (Spotify, Google, GitHub, etc.) to Supabase
-/// so they are available on every device the user signs into.
+/// Syncs encrypted OAuth tokens (Google, GitHub, MCP connectors, etc.) to
+/// Supabase so they are available on every device the user signs into.
 ///
 /// Credentials are encrypted client-side with the same AES-256-GCM key used
 /// for chats. The Supabase table `service_credentials` stores one row per

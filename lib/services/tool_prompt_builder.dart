@@ -194,8 +194,6 @@ class ToolPromptBuilder {
           'geocode',
           'get_route',
           // Integrations
-          'spotify_control',
-          'whoop',
           'device',
           'calendar',
           'reminder',

@@ -4,8 +4,6 @@ import 'package:chuk_chat/platform_config.dart'
         kFeatureArtifacts,
         kFeatureCoworkDemo,
         kFeatureServerTools,
-        kFeatureSpotify,
-        kFeatureWhoop,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
@@ -64,7 +62,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'search_restaurants': ToolCategory.map,
   'geocode': ToolCategory.map,
   'get_route': ToolCategory.map,
-  'spotify_control': ToolCategory.spotify,
   'bash': ToolCategory.bash,
   'github': ToolCategory.github,
   'slack': ToolCategory.slack,
@@ -72,7 +69,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'gmail': ToolCategory.google,
   'email': ToolCategory.email,
   'nextcloud': ToolCategory.nextcloud,
-  'whoop': ToolCategory.whoop,
   'device': ToolCategory.device,
   'calendar': ToolCategory.device,
   'reminder': ToolCategory.device,
@@ -121,9 +117,6 @@ const Map<String, String> discoveryCatalog = {
       'passwords, UUIDs, notes, QR codes and chat history search / '
       'Rechnen, Uhrzeit, Zufallszahlen, Passwörter, UUIDs, Notizen, QR, '
       'Chat-Verlauf durchsuchen',
-  'Music / Musik':
-      'Spotify: play, pause, search, playlists, volume / '
-      'Spotify steuern: abspielen, pausieren, suchen, Playlists, Lautstärke',
   if (kFeatureServerTools)
     'Productivity / Produktivität':
         'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
@@ -710,101 +703,6 @@ final List<ClientTool> builtinTools = [
       'karte',
       'weg',
       'anfahrt',
-    ],
-  ),
-
-  // -- Spotify --
-  ClientTool(
-    name: 'spotify_control',
-    description:
-        'Control Spotify playback and browse music. '
-        'PRIORITY ORDER: '
-        '1) "what am I listening to" / "was höre ich" → use now_playing FIRST. '
-        '2) "play X" / specific song/artist/playlist → use find_and_play or play with URI. '
-        '3) "my playlists" / "show playlists" → use get_my_playlists. '
-        '4) "recently liked" / "neue songs" → use get_recently_liked. '
-        '5) "stop" / "pause" / "next" / "skip" → use pause/next/previous. '
-        'PLAYLIST MANAGEMENT: create_playlist (name, optional uris list to pre-fill), '
-        'add_to_playlist (playlist_id + uri/uris), remove_from_playlist, '
-        'get_playlist_tracks (playlist_id). '
-        'LIKES: like_track / unlike_track (optional uri, defaults to current track). '
-        'For all liked songs: {"action": "play", "uri": "liked"}',
-    parameters: {
-      'action':
-          'string (now_playing, play, pause, next, previous, volume, search, '
-          'devices, shuffle, repeat, find_and_play, get_my_playlists, '
-          'get_recently_liked, add_to_queue, create_playlist, get_my_playlists, '
-          'get_playlist_tracks, add_to_playlist, remove_from_playlist, '
-          'like_track, unlike_track)',
-      'query': 'string (for search or find_and_play)',
-      'volume': 'int (0-100 for volume)',
-      'uri': 'string (spotify URI for play, add_to_playlist, like_track)',
-      'uris':
-          'list of strings (track URIs for create_playlist, add_to_playlist, '
-          'remove_from_playlist)',
-      'playlist_id':
-          'string (for add_to_playlist, remove_from_playlist, '
-          'get_playlist_tracks)',
-      'state': 'string or boolean (shuffle on/off; repeat track/context/off)',
-      'limit': 'int (for get_recently_liked / get_playlist_tracks, default 20)',
-      'name': 'string (for create_playlist)',
-      'description': 'string (for create_playlist)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'spotify',
-      'music',
-      'musik',
-      'song',
-      'play',
-      'abspielen',
-      'playlist',
-      'album',
-      'artist',
-      'künstler',
-      'pause',
-      'skip',
-      'next',
-      'volume',
-      'lautstärke',
-      'shuffle',
-      'höre',
-      'listening',
-    ],
-  ),
-
-  // -- WHOOP --
-  ClientTool(
-    name: 'whoop',
-    description:
-        'Fetch health and fitness data from WHOOP wearable. '
-        'Actions: status (today\'s recovery, strain, sleep), '
-        'week (7-day summary), days (last N days), '
-        'sleep (detailed sleep data), recovery (recovery scores), '
-        'strain (strain scores), workouts (recent workouts). '
-        'Use "days" param to control how many days of data to fetch.',
-    parameters: {
-      'action':
-          'string (status, week, days, sleep, recovery, strain, workouts)',
-      'days':
-          'int (optional, default 7 — number of days for days/sleep/'
-          'recovery/strain/workouts)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'whoop',
-      'health',
-      'fitness',
-      'recovery',
-      'strain',
-      'sleep',
-      'workout',
-      'gesundheit',
-      'schlaf',
-      'erholung',
-      'training',
-      'wearable',
-      'tracker',
     ],
   ),
 
@@ -1573,14 +1471,6 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
-      continue;
-    }
-    // Spotify / WHOOP: integration removed. Tool definitions stay in the
-    // source so re-enabling later only requires flipping the feature flag.
-    if (!kFeatureSpotify && tool.name == 'spotify_control') {
-      continue;
-    }
-    if (!kFeatureWhoop && tool.name == 'whoop') {
       continue;
     }
     // Device tool: available on all platforms.
