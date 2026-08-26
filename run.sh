@@ -452,13 +452,14 @@ FEATURE_LINUX_KEYRING="${FEATURE_LINUX_KEYRING:-false}"
 FEATURE_SPOTIFY="${FEATURE_SPOTIFY:-false}"
 FEATURE_WHOOP="${FEATURE_WHOOP:-false}"
 
-# Desktop-only; the tray plugin has nothing to attach to on Android/iOS.
+# Off by default everywhere; opt in with FEATURE_SYSTEM_TRAY=true ./run.sh.
+# (The tray plugin also has nothing to attach to on Android/iOS.)
 case "$TARGET" in
   android*|ios*)
     FEATURE_SYSTEM_TRAY="${FEATURE_SYSTEM_TRAY:-false}"
     ;;
   *)
-    FEATURE_SYSTEM_TRAY="${FEATURE_SYSTEM_TRAY:-true}"
+    FEATURE_SYSTEM_TRAY="${FEATURE_SYSTEM_TRAY:-false}"
     ;;
 esac
 
