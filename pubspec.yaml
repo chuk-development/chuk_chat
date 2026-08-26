@@ -144,6 +144,7 @@ flutter:
     - assets/wordmark.svg
     - assets/icons/
     - assets/icons/chuk_chat_tray_brand.png
+    - assets/mcp_icons/
     - web/icons/Icon-512.png
     - windows/runner/resources/app_icon.ico
   # The three selectable chat fonts, bundled locally (previously fetched at

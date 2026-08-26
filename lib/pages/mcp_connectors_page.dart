@@ -124,6 +124,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                       _row(
                         url: connection.url,
                         icon: connection.iconUrl,
+                        assetPath: bundledIconAsset(connection.id),
                         name: connection.name,
                         trailing: '${connection.tools.length} tools',
                         onTap: () => _open(connection.id, null),
@@ -143,6 +144,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                         _row(
                           url: entry.url,
                           icon: entry.iconUrl,
+                          assetPath: bundledIconAsset(entry.id),
                           name: entry.name,
                           subtitle: entry.description,
                           trailing: 'Connect',
@@ -251,6 +253,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     required String trailing,
     required VoidCallback onTap,
     String? icon,
+    String? assetPath,
     String? subtitle,
   }) {
     return ExpressiveRow(
@@ -258,6 +261,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       subtitle: subtitle,
       leading: McpConnectorIcon(
         url: icon,
+        assetPath: assetPath,
         serverUrl: url,
         name: name,
         size: 42,
@@ -361,6 +365,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
               Center(
                 child: McpConnectorIcon(
                   url: connection?.iconUrl ?? widget.entry?.iconUrl,
+                  assetPath: bundledIconAsset(widget.id),
                   serverUrl: url,
                   name: name,
                   size: 72,
@@ -583,18 +588,26 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   }
 }
 
-/// A connector logo. The server's own icon when it publishes one, then the
-/// brand's favicon, then a second favicon service, and finally the initial
-/// on a tinted tile — so a row is never a blank square.
+/// A connector logo. The bundled brand logo first (shipped in the binary for
+/// catalogue servers), then the server's own icon when it publishes one, then
+/// the brand's favicon, then a second favicon service, and finally the initial
+/// on a tinted tile — so a row is never a blank square, and the offered
+/// connectors show a real logo with no network round-trip.
 class McpConnectorIcon extends StatefulWidget {
   const McpConnectorIcon({
     super.key,
     this.url,
+    this.assetPath,
     this.serverUrl,
     this.name,
     this.size = 32,
     this.fallback,
   });
+
+  /// A logo bundled in the binary (`assets/mcp_icons/<id>.png`), if this
+  /// connector has one. Preferred over every network source; a decode failure
+  /// falls through to them.
+  final String? assetPath;
 
   /// An icon the server published, if any.
   final String? url;
@@ -649,6 +662,28 @@ class _McpConnectorIconState extends State<McpConnectorIcon> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Bundled logo first: no network, and a real brand mark for every
+    // catalogue server. A decode failure (asset somehow missing) falls
+    // through to the network sources rather than showing a broken image.
+    final asset = widget.assetPath;
+    if (asset != null && asset.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(widget.size * 0.3),
+        child: Image.asset(
+          asset,
+          width: widget.size,
+          height: widget.size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (context, _, _) => _networkIcon(theme),
+        ),
+      );
+    }
+    return _networkIcon(theme);
+  }
+
+  /// The favicon-cache path: walk the network sources, then the placeholder.
+  Widget _networkIcon(ThemeData theme) {
     return FutureBuilder<Uint8List?>(
       future: _bytes,
       builder: (context, snapshot) {

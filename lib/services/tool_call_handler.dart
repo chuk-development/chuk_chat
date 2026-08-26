@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
@@ -1313,7 +1314,12 @@ class ToolCallHandler {
         .where((t) => t.name == 'request_mcp_server')
         .map((t) => t.toJson())
         .firstOrNull;
-    final unconnectedMcpServers = unconnectedCatalogueEntries();
+    // CoWork-only servers (which duplicate a built-in or need command
+    // execution) are named to the model only while CoWork is active, matching
+    // what the connectors UI offers.
+    final unconnectedMcpServers = unconnectedCatalogueEntries(
+      includeCoworkOnly: isCoworkActive,
+    );
     final connectedMcpServerNames = McpService.connections.value
         .map((c) => c.name)
         .toList();
