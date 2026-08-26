@@ -17,7 +17,7 @@ void main() {
       'Error parsing "1 + ": unexpected end',
       'Error: route lookup failed (503)',
       // "<Thing> error:" — the most common shape across handlers
-      'Spotify error: 401',
+      'Slack error: 401',
       'GitHub error: rate limited',
       'Weather error: Invalid server response',
       'Web search error: upstream refused',
@@ -26,14 +26,14 @@ void main() {
       'Notes error: decrypt failed',
       'Nextcloud error: 404',
       'Calculation error: division by zero',
-      'WHOOP API error (503): upstream down',
+      'Nextcloud API error (503): upstream down',
       // other real prefixes
-      'Failed to get Spotify access token. Please reconnect.',
+      'Failed to get Slack access token. Please reconnect.',
       'Unknown Nextcloud action: frobnicate. Valid actions are …',
       'Unknown operation: frobnicate',
       'Unsupported HTTP method: TRACE',
-      'Spotify not authenticated. Please connect your Spotify account first.',
-      'WHOOP token expired and could not be refreshed.',
+      'Slack not authenticated. Please connect your Slack account first.',
+      'Google token expired and could not be refreshed.',
     ];
 
     for (final failure in failures) {

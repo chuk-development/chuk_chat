@@ -440,17 +440,10 @@ FEATURE_COWORK="${FEATURE_COWORK:-true}"
 # See docs/COWORK_DEMO.md.
 FEATURE_COWORK_DEMO="${FEATURE_COWORK_DEMO:-false}"
 
-# Off by default on purpose — turning these on makes the app worse, not
-# more complete. Set them explicitly if you actually want them:
+# Off by default on purpose — turning this on makes the app worse, not
+# more complete. Set it explicitly if you actually want it:
 #   FEATURE_LINUX_KEYRING  costs 10s+ of startup stall on every single run
-#   FEATURE_SPOTIFY        the API server no longer exposes its OAuth route,
-#                          so the tool registers and then fails at call time
-#   FEATURE_WHOOP          same — the integration was removed server-side
-# A registered-but-broken tool is worse than an absent one: the model reaches
-# for it and the turn dies.
 FEATURE_LINUX_KEYRING="${FEATURE_LINUX_KEYRING:-false}"
-FEATURE_SPOTIFY="${FEATURE_SPOTIFY:-false}"
-FEATURE_WHOOP="${FEATURE_WHOOP:-false}"
 
 # Desktop-only; the tray plugin has nothing to attach to on Android/iOS.
 case "$TARGET" in
@@ -468,7 +461,7 @@ ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
   FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK FEATURE_COWORK_DEMO
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
-  FEATURE_LINUX_KEYRING FEATURE_SPOTIFY FEATURE_WHOOP
+  FEATURE_LINUX_KEYRING
 )
 
 for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
