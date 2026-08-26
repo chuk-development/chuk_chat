@@ -53,6 +53,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'notes': ToolCategory.basic,
   'generate_qr': ToolCategory.basic,
   'ask_user': ToolCategory.basic,
+  'request_mcp_server': ToolCategory.basic,
   'skill': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
@@ -365,6 +366,29 @@ final List<ClientTool> builtinTools = [
       'auswahl',
       'bestätigen',
     ],
+  ),
+  ClientTool(
+    name: 'request_mcp_server',
+    description:
+        'Ask the app to show the user a Connect button for an MCP server '
+        'that is available but NOT connected. Use this when a request needs '
+        'a server listed under "## MCP SERVERS" as not connected: name the '
+        'server to the user and call this tool with its id. The app renders '
+        'an inline Connect button; the user taps it to sign in. You do NOT '
+        'connect the server yourself and MUST NOT claim you did — its tools '
+        'become usable only after the user connects it.',
+    parameters: {
+      'id':
+          'string (required: the catalogue id of the server, exactly as '
+          'shown in the "## MCP SERVERS" list, e.g. "notion", "linear")',
+      'reason':
+          'string (optional: a short note on why it is needed, shown to no '
+          'one but useful for your own planning)',
+    },
+    type: ToolType.builtin,
+    // No tags on purpose: like `skill` and `ask_user`, this tool is always
+    // available and must never surface as a find_tools search hit.
+    tags: [],
   ),
   ClientTool(
     name: 'skill',

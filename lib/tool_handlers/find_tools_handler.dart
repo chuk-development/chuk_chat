@@ -1,4 +1,5 @@
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 
 /// Companion tools that are always bundled together.
 /// When a trigger tool is discovered, its companions are auto-included.
@@ -47,11 +48,15 @@ void _appendToolDefinition(
 /// [tools] - map of all registered tools
 /// [getDescription] - function to get effective description for a tool
 /// [isAvailable] - function to check if a tool is available
+/// [unconnectedMcpServers] - catalogue servers not yet connected, matched
+///   against the query so a relevant one can be surfaced as connectable.
+///   Passed in (rather than read here) to keep the function pure and testable.
 String executeFindTools({
   required Map<String, dynamic> args,
   required Map<String, ClientTool> tools,
   required String Function(String) getDescription,
   required bool Function(String) isAvailable,
+  List<McpCatalogueEntry> unconnectedMcpServers = const [],
 }) {
   final query = (args['query'] as String? ?? '').toLowerCase().trim();
   if (query.isEmpty) {
@@ -110,6 +115,11 @@ String executeFindTools({
     return 'Error: query too vague. Use keywords like "qr", "restaurant", '
         '"web search", "email", "rechnen"';
   }
+
+  // Servers the reader could connect that match the query. Appended to every
+  // real result below, so a request for something only a not-connected server
+  // can do still surfaces the way to get it.
+  final mcpHint = _mcpConnectHints(queryWords, unconnectedMcpServers);
 
   const visualKeywords = {
     'chart',
@@ -261,10 +271,10 @@ String executeFindTools({
         'You can now call these tools using '
         '<tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>',
       );
-      return buf.toString();
+      return '${buf.toString()}$mcpHint';
     }
     return 'No tools matched "$query". Try keywords like "web search", '
-        '"restaurant", "email", "rechnen".';
+        '"restaurant", "email", "rechnen".$mcpHint';
   }
 
   // Sort by score descending, take top 6
@@ -298,5 +308,36 @@ String executeFindTools({
     'You can now call these tools using '
     '<tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>',
   );
+  return '${buf.toString()}$mcpHint';
+}
+
+/// Lines describing not-connected catalogue servers whose id / name / category
+/// / description matches a query word. Empty when nothing matches. Each hit
+/// tells the model how to offer the server: `request_mcp_server(id="…")`.
+String _mcpConnectHints(
+  List<String> queryWords,
+  List<McpCatalogueEntry> unconnected,
+) {
+  if (unconnected.isEmpty) return '';
+  final hits = <McpCatalogueEntry>[];
+  for (final entry in unconnected) {
+    final haystack =
+        '${entry.id} ${entry.name} ${entry.category} ${entry.description}'
+            .toLowerCase();
+    if (queryWords.any((w) => haystack.contains(w))) {
+      hits.add(entry);
+    }
+    if (hits.length >= 4) break;
+  }
+  if (hits.isEmpty) return '';
+
+  final buf = StringBuffer()..writeln();
+  for (final entry in hits) {
+    final desc = entry.description.isEmpty ? entry.name : entry.description;
+    buf.writeln(
+      'AVAILABLE (NOT CONNECTED): ${entry.name} — $desc. '
+      'To use it: request_mcp_server(id="${entry.id}").',
+    );
+  }
   return buf.toString();
 }

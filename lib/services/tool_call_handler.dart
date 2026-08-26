@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
@@ -357,6 +358,10 @@ class ToolCallHandler {
     'find_tools',
     'notes',
     'ask_user',
+    // Returns a Connect-button marker, not a real-world fact. Without this a
+    // turn whose only tool call was request_mcp_server would fire a spurious
+    // [VERIFY] round against nothing.
+    'request_mcp_server',
     'flip_coin',
     'roll_dice',
     'random_number',
@@ -1302,6 +1307,19 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
+    // request_mcp_server is always available: the model must be able to offer
+    // a Connect button for a server the request needs. The unconnected list
+    // and connected names are recomputed on every rebuild, so the turn after a
+    // reconnect sees the server move from "not connected" to "connected".
+    final requestMcpServerToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'request_mcp_server')
+        .map((t) => t.toJson())
+        .firstOrNull;
+    final unconnectedMcpServers = unconnectedCatalogueEntries();
+    final connectedMcpServerNames = McpService.connections.value
+        .map((c) => c.name)
+        .toList();
+
     // web_search and web_crawl are always available in discovery mode.
     // web_search handles image search too (type="images") so the AI can
     // reach for real photos without another tool registration.
@@ -1390,6 +1408,9 @@ class ToolCallHandler {
           memoryText: memoryText,
           notesToolDef: notesToolDef,
           askUserToolDef: askUserToolDef,
+          requestMcpServerToolDef: requestMcpServerToolDef,
+          unconnectedMcpServers: unconnectedMcpServers,
+          connectedMcpServerNames: connectedMcpServerNames,
           webSearchToolDef: webSearchToolDef,
           searchPlacesToolDef: searchPlacesToolDef,
           webCrawlToolDef: webCrawlToolDef,

@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
@@ -89,6 +90,7 @@ class ToolExecutor {
     'notes',
     'generate_qr',
     'ask_user',
+    'request_mcp_server',
     // Unconditional despite kFeatureSkills: this set asserts "an executor
     // exists for this name", it is not a feature gate. registerTool() throws
     // if a registered tool is missing here. Gating happens in tool_registry.
@@ -683,6 +685,8 @@ class ToolExecutor {
         return _wrapOutput(await qr_tools.executeGenerateQr(args));
       case 'ask_user':
         return _wrapOutput(_executeAskUser(args));
+      case 'request_mcp_server':
+        return _wrapOutput(_executeRequestMcpServer(args));
 
       // -- Tool discovery --
       case 'find_tools':
@@ -692,6 +696,7 @@ class ToolExecutor {
             tools: _tools,
             getDescription: getToolDescription,
             isAvailable: isToolAvailable,
+            unconnectedMcpServers: unconnectedCatalogueEntries(),
           ),
         );
 
@@ -1301,6 +1306,36 @@ class ToolExecutor {
       'Wait for their reply before proceeding.',
     );
     return buf.toString().trimRight();
+  }
+
+  /// Validate a `request_mcp_server` call and return a marker the UI keys on.
+  ///
+  /// This does NOT connect anything: connecting needs the browser and the
+  /// user's tap. It only checks the id names a real, not-yet-connected
+  /// catalogue server and hands back `MCP_CONNECT_REQUEST: <id>` so the
+  /// message bubble can render a Connect button. An unknown or already
+  /// connected id returns a short error so the model self-corrects.
+  String _executeRequestMcpServer(Map<String, dynamic> args) {
+    final id = (args['id'] as String? ?? '').trim();
+    if (id.isEmpty) {
+      return 'Error: "id" parameter required — the catalogue id of the MCP '
+          'server, e.g. "notion".';
+    }
+
+    if (McpService.connectionFor(id) != null) {
+      return 'Error: "$id" is already connected — its tools are available '
+          'via find_tools. No Connect button is needed.';
+    }
+
+    final entry = catalogueEntryById(id);
+    if (entry == null) {
+      return 'Error: no catalogue MCP server has id "$id". Use an id exactly '
+          'as shown in the "## MCP SERVERS" list.';
+    }
+
+    return 'MCP_CONNECT_REQUEST: $id\n'
+        '${entry.name} is available but not connected. The app is showing a '
+        'Connect button.';
   }
 
   /// Wraps a handler's string output, inferring whether it reports a failure.

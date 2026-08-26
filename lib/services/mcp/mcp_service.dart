@@ -435,7 +435,7 @@ class McpService {
       return McpCallResult(
         text:
             '${target.connection.name} is not signed in any more. Open '
-            'Connectors and connect it again.',
+            'MCP servers and connect it again.',
         isError: true,
       );
     }
@@ -447,7 +447,7 @@ class McpService {
       return McpCallResult(
         text:
             '${target.connection.name} refused the token. Connect it again '
-            'in Connectors.',
+            'in MCP servers.',
         isError: true,
       );
     } on McpException catch (e) {

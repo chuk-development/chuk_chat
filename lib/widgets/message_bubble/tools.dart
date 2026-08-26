@@ -617,4 +617,79 @@ extension _MessageBubbleTools on _MessageBubbleState {
 
     return [AskUserCard(options: options, onSelect: widget.onAskUserAnswer!)];
   }
+
+  /// Find the last completed request_mcp_server tool call across all sources.
+  ToolCall? _findRequestMcpToolCall() {
+    ToolCall? found;
+
+    if (widget.contentBlocks != null) {
+      for (final block in widget.contentBlocks!) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          for (final tc in block.toolCalls!) {
+            if (tc.name == 'request_mcp_server' &&
+                tc.status == ToolCallStatus.completed) {
+              found = tc;
+            }
+          }
+        }
+      }
+    }
+
+    if (widget.toolCalls != null) {
+      for (final tc in widget.toolCalls!) {
+        if (tc.name == 'request_mcp_server' &&
+            tc.status == ToolCallStatus.completed) {
+          found = tc;
+        }
+      }
+    }
+
+    return found;
+  }
+
+  /// Build the inline MCP Connect card if the last turn asked for a server.
+  /// Returns an empty list when there is no callback, no completed
+  /// request_mcp_server call, or no id. When the id is a real catalogue
+  /// server, a [McpConnectCard] is shown; when it is not (a registry or
+  /// hand-added id the model should not have named), a small fallback points
+  /// the reader at the MCP servers screen.
+  List<Widget> _buildMcpConnectOptions() {
+    if (widget.onConnectMcpServer == null) {
+      return const [];
+    }
+
+    final call = _findRequestMcpToolCall();
+    if (call == null) {
+      return const [];
+    }
+
+    final id = (call.arguments['id'] ?? '').toString().trim();
+    if (id.isEmpty) {
+      return const [];
+    }
+
+    final entry = catalogueEntryById(id);
+    if (entry == null) {
+      final theme = Theme.of(context);
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 4),
+          child: Text(
+            'Open Settings → MCP servers to connect this server.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      McpConnectCard(
+        entry: entry,
+        onConnected: () => widget.onConnectMcpServer!(id),
+      ),
+    ];
+  }
 }

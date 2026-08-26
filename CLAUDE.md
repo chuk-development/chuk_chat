@@ -359,6 +359,16 @@ Alternative: `pLog('message')` from `lib/utils/privacy_logger.dart`
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards
 
+## MCP servers
+
+When adding or editing an MCP server catalogue entry in
+`lib/services/mcp/mcp_catalogue.dart`, set its `iconUrl` explicitly to the
+real verified logo. Do not rely on the auto favicon fallback, which
+mis-resolves service subdomains — `mcp.mail.…` gave Superhuman a Play-Store
+icon, and `ai.todoist.net` gave Todoist none. A reliable choice is
+`https://www.google.com/s2/favicons?domain=<brand.com>&sz=128`. Check the icon
+actually loads before committing. See `docs/MCP_CONNECTORS.md`.
+
 ## Docs Index
 
 | Doc | Topic |
