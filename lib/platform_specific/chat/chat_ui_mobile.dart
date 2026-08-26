@@ -82,6 +82,12 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool showModelInfo;
   final bool showTps;
   final bool autoSendVoiceTranscription;
+
+  /// Extra top padding for the message list so its first row scrolls under
+  /// the host's floating, translucent top bar instead of starting behind it.
+  /// The bar overlays the chat (rather than sitting in its own solid band),
+  /// which is what lets the chat show through the frosted chrome.
+  final double topInset;
   // Image generation settings
   final bool imageGenEnabled;
   final String imageGenDefaultSize;
@@ -109,6 +115,7 @@ class ChukChatUIMobile extends StatefulWidget {
     required this.showModelInfo,
     required this.showTps,
     required this.autoSendVoiceTranscription,
+    this.topInset = 0,
     this.imageGenEnabled = false,
     this.imageGenDefaultSize = 'landscape_4_3',
     this.imageGenCustomWidth = 1024,
@@ -3245,7 +3252,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         16.0;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
-      10,
+      10 + widget.topInset,
       effectiveHorizontalPadding,
       composerReservedSpace,
     );
