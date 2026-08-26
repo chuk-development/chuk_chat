@@ -35,7 +35,6 @@ const Set<String> _readOnlyToolNames = <String>{
   'search_chats',
   'get_time',
   'calculate',
-  'crypto_data',
   'find_tools',
   'view_chat_images',
 };

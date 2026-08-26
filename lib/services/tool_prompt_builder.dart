@@ -203,8 +203,6 @@ class ToolPromptBuilder {
           // Workspace
           'update_project',
           'artifact_manager',
-          // Finance
-          'crypto_data',
           // System
           'bash',
         ];

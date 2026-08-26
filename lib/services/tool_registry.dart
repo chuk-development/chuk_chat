@@ -59,7 +59,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'generate_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
-  'crypto_data': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
   'search_restaurants': ToolCategory.map,
@@ -108,9 +107,6 @@ const Map<String, String> discoveryCatalog = {
       '(costs credits, not private) / '
       'Im Internet suchen, Webseiten lesen, Bilder erzeugen/bearbeiten/holen '
       '(kostet Credits, nicht privat)',
-  'Finance / Finanzen':
-      'Cryptocurrency prices, market data, trending coins (CoinGecko) / '
-      'Kryptowährungspreise, Marktdaten, Trending Coins (CoinGecko)',
   'Domains':
       'Check domain name availability across 1400+ TLDs with WHOIS data / '
       'Domain-Verfügbarkeit über 1400+ TLDs prüfen, WHOIS-Daten',
@@ -603,49 +599,6 @@ final List<ClientTool> builtinTools = [
     type: ToolType.builtin,
     tags: ['image', 'vision', 'analyze', 'inspect', 'describe', 'bildanalyse'],
   ),
-  ClientTool(
-    name: 'crypto_data',
-    description:
-        'Get cryptocurrency data from CoinGecko (free, no API key). Actions: '
-        'price (current price + 24h change), markets (top coins with full '
-        'stats: 24h range, 1h/24h/7d/30d changes, ATH, supply), '
-        'history (time-series price data for charts — specify days), '
-        'trending (trending coins right now), search (find a coin by '
-        'name/symbol). Use CoinGecko coin IDs like "bitcoin", "ethereum", '
-        '"solana" — search first if unsure.',
-    parameters: {
-      'action':
-          'string (optional, default price: price, markets, history, '
-          'trending, search)',
-      'ids':
-          'string or list (for price/markets/history: CoinGecko coin IDs, '
-          'e.g. "bitcoin" or "bitcoin,ethereum,solana")',
-      'currency': 'string (optional, default "usd": target currency)',
-      'days':
-          'string (for history: number of days, e.g. "1", "7", "30", "365")',
-      'query': 'string (required for search: coin name or symbol to find)',
-      'limit': 'int (optional for markets: number of results, default 20)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'crypto',
-      'krypto',
-      'bitcoin',
-      'ethereum',
-      'coin',
-      'token',
-      'price',
-      'preis',
-      'kurs',
-      'market',
-      'markt',
-      'finance',
-      'finanzen',
-      'coingecko',
-      'trending',
-    ],
-  ),
-
   // -- Maps --
   ClientTool(
     name: 'search_places',
@@ -1361,7 +1314,7 @@ final List<ClientTool> builtinTools = [
         'on first call and reused for the rest of this chat; files survive across '
         'calls and a 3-day snapshot keeps them between sessions. '
         'Prefer typst_compile for PDF/document generation, web_crawl for fetching '
-        'URLs, weather/crypto/search tools for their data, and the dedicated '
+        'URLs, weather/search tools for their data, and the dedicated '
         'image tools for image generation/editing — use code_run only when '
         'computation, file manipulation, or library calls (pandas/numpy/'
         'matplotlib/yt-dlp/pypdf) are required. '

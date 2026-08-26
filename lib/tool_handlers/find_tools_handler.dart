@@ -12,7 +12,6 @@ const companions = <String, List<String>>{
   'search_places': ['web_search', 'web_crawl', 'get_route', 'geocode'],
   'get_route': ['geocode'],
   'geocode': ['get_route'],
-  'crypto_data': ['web_search', 'web_crawl'],
   'weather': ['geocode', 'web_search'],
   'whoop': ['web_search'],
   'search_chats': ['notes'],
@@ -151,7 +150,6 @@ String executeFindTools({
       if (hasChartIntent) ...[
         'web_search',
         'web_crawl',
-        'crypto_data',
         'weather',
       ],
       if (hasMapIntent) ...[
