@@ -10,6 +10,10 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/cowork/cowork_avatar.dart';
 import 'package:chuk_chat/cowork/cowork_models.dart';
+import 'package:chuk_chat/cowork/relay/cowork_thread_view.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/cowork/cowork_pairing_store.dart';
+import 'package:chuk_chat/services/cowork/cowork_relay_client.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 
@@ -25,11 +29,36 @@ class _CoworkMessengerState extends State<CoworkMessenger> {
   String? _selectedId;
   String _query = '';
 
+  // Stable long-term device identity + trust store, so the host's stored trust
+  // keeps matching us across restarts (code-free reconnect).
+  final CoworkPairingStore _pairingStore = CoworkPairingStore();
+
   @override
   void initState() {
     super.initState();
     _roster = mockCoworkRoster();
     _selectedId = _roster.isNotEmpty ? _roster.first.id : null;
+  }
+
+  Future<CoworkRelayController> _buildRelayController() async {
+    final identity = await _pairingStore.loadOrCreateIdentity();
+    return CoworkRelayClient(
+      deviceId: identity.deviceId,
+      signingKeyPair: identity.keyPair,
+    );
+  }
+
+  /// The host agent drives a real relay/executor run; others use the mock thread.
+  Widget _threadFor(CoworkAgent agent, {VoidCallback? onBack}) {
+    if (agent.isHost) {
+      return _HostThreadPane(
+        agent: agent,
+        onBack: onBack,
+        controllerBuilder: _buildRelayController,
+        pairingStore: _pairingStore,
+      );
+    }
+    return _ThreadPane(agent: agent, onSend: _send, onBack: onBack);
   }
 
   CoworkAgent? get _selected {
@@ -123,7 +152,7 @@ class _CoworkMessengerState extends State<CoworkMessenger> {
               Expanded(
                 child: _selected == null
                     ? const _EmptyThread()
-                    : _ThreadPane(agent: _selected!, onSend: _send),
+                    : _threadFor(_selected!),
               ),
             ],
           );
@@ -140,9 +169,8 @@ class _CoworkMessengerState extends State<CoworkMessenger> {
             onSelect: (id) => setState(() => _selectedId = id),
           );
         }
-        return _ThreadPane(
-          agent: agent,
-          onSend: _send,
+        return _threadFor(
+          agent,
           onBack: () => setState(() => _selectedId = null),
         );
       },
@@ -650,6 +678,40 @@ class _Composer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The live host thread — a real relay/executor run driven by CoworkThreadView
+/// (connect + pairing, then streamed deltas/tool lines/done).
+class _HostThreadPane extends StatelessWidget {
+  const _HostThreadPane({
+    required this.agent,
+    required this.controllerBuilder,
+    required this.pairingStore,
+    this.onBack,
+  });
+
+  final CoworkAgent agent;
+  final Future<CoworkRelayController> Function() controllerBuilder;
+  final CoworkPairingStore pairingStore;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        _ThreadHeader(agent: agent, onBack: onBack),
+        Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.4)),
+        Expanded(
+          child: CoworkThreadView(
+            controllerBuilder: controllerBuilder,
+            sessionSource: const SupabaseAccountSession(),
+            pairingStore: pairingStore,
+          ),
+        ),
+      ],
     );
   }
 }
