@@ -42,7 +42,8 @@ class RootWrapperDesktop extends StatefulWidget {
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
-  AppMode _mode = AppMode.chat;
+  // CoWork branch: open straight into CoWork mode when the feature is on.
+  AppMode _mode = kFeatureCoWork ? AppMode.cowork : AppMode.chat;
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
   ArtifactDocument? _activeArtifact;
