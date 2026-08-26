@@ -367,6 +367,9 @@ class _ThreadPane extends StatefulWidget {
 class _ThreadPaneState extends State<_ThreadPane> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
+  // Separate node for the KeyboardListener wrapper — sharing the TextField's
+  // node makes it a parent of itself and crashes on build.
+  final _kbFocus = FocusNode();
   final _scroll = ScrollController();
 
   @override
@@ -397,6 +400,7 @@ class _ThreadPaneState extends State<_ThreadPane> {
   void dispose() {
     _controller.dispose();
     _focus.dispose();
+    _kbFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -436,6 +440,7 @@ class _ThreadPaneState extends State<_ThreadPane> {
           agentName: agent.name,
           controller: _controller,
           focus: _focus,
+          kbFocus: _kbFocus,
           onSubmit: _submit,
         ),
       ],
@@ -571,12 +576,14 @@ class _Composer extends StatelessWidget {
     required this.agentName,
     required this.controller,
     required this.focus,
+    required this.kbFocus,
     required this.onSubmit,
   });
 
   final String agentName;
   final TextEditingController controller;
   final FocusNode focus;
+  final FocusNode kbFocus;
   final VoidCallback onSubmit;
 
   @override
@@ -604,7 +611,7 @@ class _Composer extends StatelessWidget {
               ),
               Expanded(
                 child: buildKeyboardListener(
-                  focusNode: focus,
+                  focusNode: kbFocus,
                   controller: controller,
                   onSend: onSubmit,
                   child: TextField(
