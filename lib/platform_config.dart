@@ -74,6 +74,14 @@ const bool kFeatureMcp = bool.fromEnvironment(
   defaultValue: true,
 );
 
+/// Artifact hosting: the `create_artifact` / `update_artifact` tools publish a
+/// self-contained HTML page to the artifacts host and return a public,
+/// unguessable URL. Backed by the artifacts service (see ARTIFACTS_BASE_URL).
+const bool kFeatureArtifactHosting = bool.fromEnvironment(
+  'FEATURE_ARTIFACT_HOSTING',
+  defaultValue: true,
+);
+
 /// Desktop system tray integration (Linux, Windows, macOS).
 /// Disabled by default; enable via --dart-define=FEATURE_SYSTEM_TRAY=true.
 const bool kFeatureSystemTray = bool.fromEnvironment(

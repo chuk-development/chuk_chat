@@ -2,6 +2,7 @@ import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
+        kFeatureArtifactHosting,
         kFeatureCoworkDemo,
         kFeatureServerTools,
         kPlatformDesktop,
@@ -75,6 +76,8 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
   'artifact_schema': ToolCategory.basic,
+  'create_artifact': ToolCategory.basic,
+  'update_artifact': ToolCategory.basic,
   'update_project': ToolCategory.basic,
   'typst_compile': ToolCategory.basic,
   'code_run': ToolCategory.sandbox,
@@ -398,6 +401,41 @@ final List<ClientTool> builtinTools = [
     type: ToolType.builtin,
     // No tags on purpose: `skill` bypasses discovery and is always shown in
     // full, so it must never be a find_tools search hit.
+    tags: [],
+  ),
+
+  // -- Artifact hosting --
+  ClientTool(
+    name: 'create_artifact',
+    description:
+        'Publish a self-contained HTML page and get a public shareable URL. '
+        'The page is hosted at an unguessable, non-indexed URL, PUBLIC to '
+        'anyone with the link. Only inline HTML/CSS/JS, inline SVG and '
+        '<canvas> render; external images, external scripts, external '
+        '<iframe>s, network requests (fetch/XHR) and base64/raster images are '
+        'blocked by the host and will NOT load — build all visuals with '
+        'inline SVG, CSS and canvas. Returns the public URL.',
+    parameters: {
+      'html': 'string (required: a complete standalone HTML document)',
+      'title': 'string (optional: short human title for the page)',
+    },
+    type: ToolType.builtin,
+    tags: [],
+  ),
+  ClientTool(
+    name: 'update_artifact',
+    description:
+        'Replace the HTML of a previously created artifact and get its URL. '
+        'Needs the public_id returned by create_artifact. Same content '
+        'restrictions as create_artifact (self-contained page only; external '
+        'images/scripts/iframes/network requests do not load).',
+    parameters: {
+      'public_id':
+          'string (required: the public_id returned by create_artifact)',
+      'html': 'string (required: the new complete HTML document)',
+      'title': 'string (optional)',
+    },
+    type: ToolType.builtin,
     tags: [],
   ),
 
@@ -1448,6 +1486,11 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
+    // Artifact hosting: publish HTML to the hosting service. Off with the flag.
+    if (!kFeatureArtifactHosting &&
+        (tool.name == 'create_artifact' || tool.name == 'update_artifact')) {
       continue;
     }
     // Device tool: available on all platforms.

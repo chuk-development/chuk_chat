@@ -383,6 +383,11 @@ class ToolCallHandler {
     'read_file',
     'write_file',
     'list_directory',
+    // Artifact hosting returns a published URL, not verifiable facts. Without
+    // these entries a turn whose only tool call was create/update_artifact
+    // would fire a spurious [VERIFY] fact-check round against nothing.
+    'create_artifact',
+    'update_artifact',
   };
 
   static const int _maxDiscoveryContexts = 200;
