@@ -1,31 +1,33 @@
-/// Storage for user-authored Agent Skills.
+/// Storage for the user's Agent Skills.
 ///
-/// Skills are stored E2E-encrypted in Supabase (`user_skills.encrypted_source`)
-/// as their raw SKILL.md source, and parsed on read with the very same
-/// [parseSkillMarkdown] the build-time generator uses for built-ins. One parser,
-/// one set of spec rules, no drift.
+/// **Local SQLite is the source of truth** (the `skills` table, via
+/// [LocalChatCacheService]), holding each skill's SKILL.md source in plaintext —
+/// the same convention as `chat_cache`: the encryption key lives on the device,
+/// so a second at-rest layer is theatre. Supabase is the cross-device mirror and
+/// keeps the body E2E-encrypted.
 ///
-/// **Cache invalidation is keyed by user id, on purpose.** The obvious pattern
-/// here would be a `resetCache()` called from a logout hook — but that hook was
-/// dead code: `AppInitializationService.resetServices()` was its only caller
-/// and nothing ever called `resetServices()` (both have since been deleted, and
-/// `UserPreferencesService` now keys its caches by user id the same way this
-/// service does). Relying on such a hook would leave this service's static
-/// cache alive across a sign-out, so a second user in the same process would
-/// read the first user's skills — and `chat_ui_mobile` signs out via
-/// `SupabaseService.signOut()`, bypassing `AuthService` and any hook in it.
-/// `notes_tools.dart` solves this correctly by comparing the cached user id on
-/// every access; that is the pattern copied here, and it needs no hook to be
-/// wired up.
+/// **Catalog bookkeeping travels inside the encrypted blob.** A stored skill can
+/// carry `catalogName` (which catalog entry it tracks) and `baselineHash` (the
+/// catalog body hash it was seeded from). Rather than add plaintext columns to
+/// Supabase, [encrypted_source] holds a small JSON envelope
+/// `{v, source, catalog_name, baseline_hash}`; a legacy row that is raw SKILL.md
+/// is still read correctly (see [_decodeEnvelope]). Locally these are real
+/// columns so a device can reconcile without decrypting.
+///
+/// **Cache invalidation is keyed by user id, on purpose.** The obvious pattern —
+/// a `resetCache()` on a logout hook — was dead code here; `notes_tools.dart`
+/// compares the cached user id on every access instead, and that is the pattern
+/// copied here. It needs no hook to be wired up.
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -46,8 +48,11 @@ class UserSkillsService {
 
   static const String _kTable = 'user_skills';
 
-  /// Ceiling on user skills. Every one costs a catalog entry in every prompt.
-  static const int kMaxUserSkills = 20;
+  /// Ceiling on stored skills. Every one costs a catalog entry (name +
+  /// description) in every prompt, so this bounds Level-1 prompt weight. Higher
+  /// than before because the catalog can seed many skills, not just the
+  /// handful a user hand-writes.
+  static const int kMaxUserSkills = 200;
 
   static String? _cachedUserId;
   static List<Skill>? _memCache;
@@ -68,19 +73,52 @@ class UserSkillsService {
     }
   }
 
-  /// SharedPreferences key for [userId]'s cached ciphertext.
-  ///
-  /// Namespaced by user id, unlike `cached_system_prompt`, which is not — that
-  /// key survives a sign-out and is only saved from leaking across users by the
-  /// encryption key mismatch happening to throw.
-  static String _cacheKey(String userId) => 'user_skills_cache_$userId';
+  static String _nowIso() => DateTime.now().toUtc().toIso8601String();
 
-  /// Every user skill, newest first. Cache-first: memory, then the local
-  /// SharedPreferences copy, then Supabase.
+  // ─── Envelope ──────────────────────────────────────────────────────────
+
+  /// Wraps a skill's source and catalog bookkeeping into the JSON that gets
+  /// encrypted into `encrypted_source`.
+  static String _encodeEnvelope(
+    String source, {
+    String? catalogName,
+    String? baselineHash,
+  }) {
+    return jsonEncode({
+      'v': 1,
+      'source': source,
+      'catalog_name': ?catalogName,
+      'baseline_hash': ?baselineHash,
+    });
+  }
+
+  /// Reads a decrypted `encrypted_source`. A v1 JSON envelope yields the source
+  /// plus catalog fields; anything else is a legacy raw SKILL.md with no catalog
+  /// bookkeeping.
+  static ({String source, String? catalogName, String? baselineHash})
+  _decodeEnvelope(String plaintext) {
+    try {
+      final decoded = jsonDecode(plaintext);
+      if (decoded is Map && decoded['source'] is String) {
+        return (
+          source: decoded['source'] as String,
+          catalogName: decoded['catalog_name'] as String?,
+          baselineHash: decoded['baseline_hash'] as String?,
+        );
+      }
+    } catch (_) {
+      // Not JSON: a legacy raw-markdown row. Fall through.
+    }
+    return (source: plaintext, catalogName: null, baselineHash: null);
+  }
+
+  // ─── Load ──────────────────────────────────────────────────────────────
+
+  /// Every stored skill, newest first. Local-first: memory, then the SQLite
+  /// store, then a background Supabase refresh that rewrites the local store.
   ///
-  /// Returns an empty list when signed out or when no encryption key is
-  /// available — a user with no skills and a user we cannot decrypt for both
-  /// mean "no user skills in the prompt".
+  /// Returns an empty list when signed out — a user with no skills and a user
+  /// we cannot resolve both mean "no user skills in the prompt".
   static Future<List<Skill>> load({bool forceRefresh = false}) async {
     final userId = _currentUserId();
     _syncCacheToCurrentUser(userId);
@@ -90,7 +128,7 @@ class UserSkillsService {
 
     if (!forceRefresh) {
       final local = await _loadLocal(userId);
-      if (local != null) {
+      if (local.isNotEmpty) {
         _memCache = local;
         unawaited(_refreshFromServer(userId));
         return local;
@@ -98,6 +136,42 @@ class UserSkillsService {
     }
 
     return _refreshFromServer(userId);
+  }
+
+  /// Reads the SQLite store and parses each row. A row that fails to parse is
+  /// skipped, not fatal — one corrupt skill must not take the catalog down.
+  static Future<List<Skill>> _loadLocal(String userId) async {
+    try {
+      final rows = await LocalChatCacheService.skillRows(userId);
+      final skills = <Skill>[];
+      for (final row in rows) {
+        final skill = _rowToSkill(row);
+        if (skill != null) skills.add(skill);
+      }
+      return List.unmodifiable(skills);
+    } catch (error) {
+      if (kDebugMode) debugPrint('[UserSkills] local load failed: $error');
+      return const [];
+    }
+  }
+
+  static Skill? _rowToSkill(Map<String, dynamic> row) {
+    final id = row['id']?.toString();
+    final source = row['source'] as String?;
+    if (id == null || source == null || source.isEmpty) return null;
+    try {
+      return parseSkillMarkdown(source, skillSource: SkillSource.user).copyWith(
+        id: id,
+        catalogName: row['catalog_name'] as String?,
+        baselineHash: row['baseline_hash'] as String?,
+      );
+    } on SkillParseException catch (error) {
+      if (kDebugMode) {
+        debugPrint('[UserSkills] skipping unparseable local skill: '
+            '${error.message}');
+      }
+      return null;
+    }
   }
 
   static Future<List<Skill>> _refreshFromServer(String userId) async {
@@ -108,10 +182,10 @@ class UserSkillsService {
           .eq('user_id', userId)
           .order('updated_at', ascending: false);
 
-      final skills = await _decodeRows(rows);
-      _memCache = skills;
-      await _saveLocal(userId, rows);
-      return skills;
+      final decoded = await _decodeRows(rows);
+      _memCache = decoded.skills;
+      await LocalChatCacheService.replaceSkills(userId, decoded.localRows);
+      return decoded.skills;
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[UserSkills] server refresh failed: $error');
@@ -122,106 +196,86 @@ class UserSkillsService {
     }
   }
 
-  /// Decrypts and parses rows. A row that fails either is skipped, not fatal —
-  /// one corrupt skill must not take the rest of the catalog down with it.
-  static Future<List<Skill>> _decodeRows(List<dynamic> rows) async {
+  /// Decrypts and parses server rows into both [Skill]s (for the prompt) and
+  /// local SQLite rows (plaintext, for the store). A row that fails either step
+  /// is skipped.
+  static Future<({List<Skill> skills, List<Map<String, dynamic>> localRows})>
+  _decodeRows(List<dynamic> rows) async {
     final ciphertexts = <String>[];
     final ids = <String>[];
+    final userIds = <String>[];
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
       final source = map['encrypted_source'] as String?;
       final id = map['id']?.toString();
-      if (source == null || source.isEmpty || id == null) continue;
+      final userId = map['user_id']?.toString() ?? _cachedUserId;
+      if (source == null || source.isEmpty || id == null || userId == null) {
+        continue;
+      }
       ciphertexts.add(source);
       ids.add(id);
+      userIds.add(userId);
     }
-    if (ciphertexts.isEmpty) return const [];
+    if (ciphertexts.isEmpty) {
+      return (skills: const <Skill>[], localRows: const <Map<String, dynamic>>[]);
+    }
 
-    // One isolate for the whole batch; nulls mark per-item failures.
     final List<String?> plaintexts;
     try {
-      plaintexts = await EncryptionService.decryptBatchInBackground(
-        ciphertexts,
-      );
+      plaintexts = await EncryptionService.decryptBatchInBackground(ciphertexts);
     } catch (error) {
       if (kDebugMode) debugPrint('[UserSkills] batch decrypt failed: $error');
-      return const [];
+      return (skills: const <Skill>[], localRows: const <Map<String, dynamic>>[]);
     }
 
     final skills = <Skill>[];
+    final localRows = <Map<String, dynamic>>[];
     for (var i = 0; i < plaintexts.length; i++) {
       final plaintext = plaintexts[i];
       if (plaintext == null) continue;
+      final env = _decodeEnvelope(plaintext);
       try {
         skills.add(
-          parseSkillMarkdown(
-            plaintext,
-            skillSource: SkillSource.user,
-          ).copyWith(id: ids[i]),
+          parseSkillMarkdown(env.source, skillSource: SkillSource.user).copyWith(
+            id: ids[i],
+            catalogName: env.catalogName,
+            baselineHash: env.baselineHash,
+          ),
         );
+        localRows.add({
+          'id': ids[i],
+          'user_id': userIds[i],
+          'source': env.source,
+          'catalog_name': env.catalogName,
+          'baseline_hash': env.baselineHash,
+          'updated_at': _nowIso(),
+        });
       } on SkillParseException catch (error) {
         if (kDebugMode) {
-          debugPrint(
-            '[UserSkills] skipping unparseable skill: ${error.message}',
-          );
+          debugPrint('[UserSkills] skipping unparseable skill: ${error.message}');
         }
       }
     }
-    return List.unmodifiable(skills);
+    return (skills: List<Skill>.unmodifiable(skills), localRows: localRows);
   }
 
-  static Future<List<Skill>?> _loadLocal(String userId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getStringList(_cacheKey(userId));
-      if (raw == null || raw.isEmpty) return null;
-      // Stored as "id\u0000ciphertext" pairs. NUL separates the two because
-      // a UUID cannot contain one and the ciphertext is base64/JSON, so
-      // it can never appear inside either half. Written as an escape and
-      // not a literal: a raw NUL in the source makes git treat the whole
-      // file as binary, so it gets no diff, no blame and no review.
-      final rows = <Map<String, dynamic>>[];
-      for (final entry in raw) {
-        final split = entry.indexOf('\u0000');
-        if (split <= 0) continue;
-        rows.add({
-          'id': entry.substring(0, split),
-          'encrypted_source': entry.substring(split + 1),
-        });
-      }
-      if (rows.isEmpty) return null;
-      return _decodeRows(rows);
-    } catch (_) {
-      return null;
-    }
-  }
+  // ─── Mutations ─────────────────────────────────────────────────────────
 
-  static Future<void> _saveLocal(String userId, List<dynamic> rows) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final encoded = <String>[];
-      for (final row in rows) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final id = map['id']?.toString();
-        final source = map['encrypted_source'] as String?;
-        if (id == null || source == null) continue;
-        encoded.add('$id\u0000$source');
-      }
-      await prefs.setStringList(_cacheKey(userId), encoded);
-    } catch (_) {
-      // Best-effort; the server copy is authoritative.
-    }
-  }
-
-  /// Validates, encrypts and stores [source].
+  /// Validates, stores and returns a skill.
   ///
-  /// Pass [id] to replace an existing skill, omit it to create one. Returns the
-  /// stored [Skill].
+  /// Pass [id] to replace an existing skill, omit it to create one.
+  /// [catalogName] and [baselineHash] carry catalog bookkeeping for a
+  /// reconciliation write; a hand-authored skill leaves them null.
   ///
   /// Throws [SkillParseException] when [source] violates the spec, and
   /// [UserSkillException] for storage problems (signed out, duplicate name,
   /// over the cap, network).
-  static Future<Skill> save(String source, {String? id}) async {
+  static Future<Skill> save(
+    String source, {
+    String? id,
+    String? catalogName,
+    String? baselineHash,
+  }) async {
     final userId = _currentUserId();
     _syncCacheToCurrentUser(userId);
     if (userId == null) {
@@ -259,12 +313,19 @@ class UserSkillsService {
 
     final String encrypted;
     try {
-      encrypted = await EncryptionService.encrypt(source);
+      encrypted = await EncryptionService.encrypt(
+        _encodeEnvelope(
+          source,
+          catalogName: catalogName,
+          baselineHash: baselineHash,
+        ),
+      );
     } catch (error) {
       throw UserSkillException('Could not encrypt the skill: $error');
     }
 
     try {
+      final now = _nowIso();
       final String rowId;
       if (id == null) {
         final inserted = await SupabaseService.client
@@ -281,8 +342,27 @@ class UserSkillsService {
             .eq('user_id', userId);
         rowId = id;
       }
-      await _refreshFromServer(userId);
-      return parsed.copyWith(id: rowId);
+
+      // Write the local store too, so the next read is instant and offline-safe
+      // without waiting for a server round-trip.
+      await LocalChatCacheService.upsertSkill({
+        'id': rowId,
+        'user_id': userId,
+        'source': source,
+        'catalog_name': catalogName,
+        'baseline_hash': baselineHash,
+        'updated_at': now,
+      });
+
+      final stored = parsed.copyWith(
+        id: rowId,
+        catalogName: catalogName,
+        baselineHash: baselineHash,
+      );
+      // Refresh the in-memory cache from the local store rather than the server:
+      // the server refresh is a slower background concern.
+      _memCache = await _loadLocal(userId);
+      return stored;
     } catch (error) {
       if (error is UserSkillException) rethrow;
       throw UserSkillException('Could not save the skill: $error');
@@ -307,13 +387,14 @@ class UserSkillsService {
           .delete()
           .eq('id', id)
           .eq('user_id', userId);
-      await _refreshFromServer(userId);
+      await LocalChatCacheService.deleteSkill(userId, id);
+      _memCache = await _loadLocal(userId);
     } catch (error) {
       throw UserSkillException('Could not delete the skill: $error');
     }
   }
 
-  /// Test seam: drops both cache layers' in-memory state.
+  /// Test seam: drops the in-memory cache state.
   @visibleForTesting
   static void resetForTest() {
     _cachedUserId = null;

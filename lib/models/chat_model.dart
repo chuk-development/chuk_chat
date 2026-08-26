@@ -7,6 +7,8 @@ class ModelItem {
   final String? badge; // Not from API, for potential local use
   final String? iconUrl; // Icon URL from API
   final bool supportsReasoning; // Whether model supports reasoning tokens
+  final bool
+  supportsReasoningEffort; // Whether model accepts a graded effort level
 
   ModelItem({
     required this.name,
@@ -15,6 +17,7 @@ class ModelItem {
     this.badge,
     this.iconUrl,
     this.supportsReasoning = true,
+    this.supportsReasoningEffort = true,
   });
 
   // Factory constructor to create ModelItem from API JSON
@@ -28,6 +31,8 @@ class ModelItem {
       badge: null, // Defaulting as not from API
       iconUrl: json['icon_url'] as String?,
       supportsReasoning: json['supports_reasoning'] as bool? ?? true,
+      supportsReasoningEffort:
+          json['supports_reasoning_effort'] as bool? ?? true,
     );
   }
 

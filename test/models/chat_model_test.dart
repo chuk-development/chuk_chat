@@ -46,6 +46,34 @@ void main() {
       expect(item.iconUrl, isNull);
     });
 
+    test('fromJson parses supports_reasoning_effort', () {
+      final graded = ModelItem.fromJson({
+        'name': 'Graded',
+        'id': 'graded',
+        'supports_reasoning': true,
+        'supports_reasoning_effort': true,
+      });
+      expect(graded.supportsReasoning, isTrue);
+      expect(graded.supportsReasoningEffort, isTrue);
+
+      final binary = ModelItem.fromJson({
+        'name': 'Binary',
+        'id': 'binary',
+        'supports_reasoning': true,
+        'supports_reasoning_effort': false,
+      });
+      expect(binary.supportsReasoning, isTrue);
+      expect(binary.supportsReasoningEffort, isFalse);
+    });
+
+    test('fromJson defaults supports_reasoning_effort to true when absent', () {
+      final item = ModelItem.fromJson({
+        'name': 'No Field',
+        'id': 'no-field',
+      });
+      expect(item.supportsReasoningEffort, isTrue);
+    });
+
     test('equality by value', () {
       final a = ModelItem(name: 'GPT-4', value: 'gpt-4');
       final b = ModelItem(name: 'GPT-4 Turbo', value: 'gpt-4');

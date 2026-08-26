@@ -47,10 +47,11 @@ void main() {
     });
 
     test('a saved config round-trips per mode', () async {
+      // 'high' is a valid graded level, so it survives the load-time clamp.
       const custom = ModeConfig(
         modelId: 'moonshotai/kimi-k3',
         providerSlug: 'openai',
-        reasoningEffort: 'xhigh',
+        reasoningEffort: 'high',
       );
       await ChatModeService.saveConfig(ChatMode.thinking, custom);
       expect(await ChatModeService.loadConfig(ChatMode.thinking), custom);
@@ -188,10 +189,12 @@ void main() {
       }
     });
 
-    test('a non-Fireworks provider offers the full ladder', () {
+    test('a non-Fireworks provider offers the same graded ladder', () {
+      // The Fireworks-vs-all split is gone: a graded model offers
+      // none/low/medium/high on every provider now.
       expect(
         ChatModeService.reasoningLevelsFor(providerSlug: 'openai'),
-        ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+        ['none', 'low', 'medium', 'high'],
       );
     });
 
@@ -202,6 +205,26 @@ void main() {
           supportsReasoning: false,
         ),
         ['none'],
+      );
+    });
+
+    test('a reasoning model without graded effort offers an on/off toggle', () {
+      expect(
+        ChatModeService.reasoningLevelsFor(
+          providerSlug: 'openai',
+          supportsReasoningEffort: false,
+        ),
+        ['none', 'on'],
+      );
+    });
+
+    test('a reasoning model with graded effort offers the graded ladder', () {
+      expect(
+        ChatModeService.reasoningLevelsFor(
+          providerSlug: 'openai',
+          supportsReasoningEffort: true,
+        ),
+        ['none', 'low', 'medium', 'high'],
       );
     });
 
@@ -231,21 +254,82 @@ void main() {
             providerSlug: 'fireworks/serverless'),
         'none',
       );
-      // An unknown token drops to off.
+      // An unknown token on a graded model means "reason on at some strength":
+      // it lands on a safe graded level, never an invalid/empty token.
       expect(
         ChatModeService.sanitizeReasoning('turbo',
             providerSlug: 'fireworks/serverless'),
-        'none',
+        'medium',
       );
-      // On a full-ladder provider the strong levels survive.
+      // xhigh on a graded model clamps to high (no ladder split any more).
       expect(
         ChatModeService.sanitizeReasoning('xhigh', providerSlug: 'openai'),
-        'xhigh',
+        'high',
+      );
+    });
+
+    test('sanitize maps a graded level to on for a binary model', () {
+      // A model that reasons but has no graded effort: any strength → on.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'medium',
+          providerSlug: 'openai',
+          supportsReasoningEffort: false,
+        ),
+        'on',
+      );
+      // Off stays off.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'none',
+          providerSlug: 'openai',
+          supportsReasoningEffort: false,
+        ),
+        'none',
+      );
+      // An unknown token on a binary model still collapses to on.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'turbo',
+          providerSlug: 'openai',
+          supportsReasoningEffort: false,
+        ),
+        'on',
+      );
+    });
+
+    test('sanitize maps the on token to a valid graded level', () {
+      // A stored 'on' on a graded model resolves to a real graded level.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'on',
+          providerSlug: 'openai',
+        ),
+        'medium',
+      );
+      // On a binary model 'on' is valid and survives untouched.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'on',
+          providerSlug: 'openai',
+          supportsReasoningEffort: false,
+        ),
+        'on',
+      );
+      // A non-reasoning model clamps 'on' back to off.
+      expect(
+        ChatModeService.sanitizeReasoning(
+          'on',
+          providerSlug: 'openai',
+          supportsReasoning: false,
+        ),
+        'none',
       );
     });
 
     test('reasoningLabel names each level for the menu', () {
       expect(ChatModeService.reasoningLabel('none'), 'Off');
+      expect(ChatModeService.reasoningLabel('on'), 'On');
       expect(ChatModeService.reasoningLabel('low'), 'Low');
       expect(ChatModeService.reasoningLabel('medium'), 'Medium');
       expect(ChatModeService.reasoningLabel('high'), 'High');

@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -56,6 +57,12 @@ class AppInitializationService {
       // Initialize Supabase (blocking - required for app to function)
       await SupabaseService.initialize();
       _isSupabaseReady = true;
+
+      // Hydrate model capabilities from the on-disk cache early, so returning
+      // users never hit the cold-start race where a vision model shows no image
+      // upload. Reading the cache is offline-safe and fast; a fresh install
+      // just gets an empty map until the first models fetch.
+      unawaited(ModelCapabilitiesService.initialize());
 
       // If already logged in, pre-load encryption key.
       // Full session init (chat loading, sync, model prefetch) is handled
