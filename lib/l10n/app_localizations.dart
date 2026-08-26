@@ -4,15 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/strings_en.dart';
 import 'package:chuk_chat/l10n/strings_de.dart';
-import 'package:chuk_chat/l10n/strings_zh.dart';
-import 'package:chuk_chat/l10n/strings_hi.dart';
 import 'package:chuk_chat/l10n/strings_es.dart';
 import 'package:chuk_chat/l10n/strings_fr.dart';
-import 'package:chuk_chat/l10n/strings_ar.dart';
-import 'package:chuk_chat/l10n/strings_bn.dart';
 import 'package:chuk_chat/l10n/strings_pt.dart';
-import 'package:chuk_chat/l10n/strings_ru.dart';
-import 'package:chuk_chat/l10n/strings_ja.dart';
 
 /// Holds all translated UI strings for the current locale.
 ///
@@ -32,40 +26,22 @@ class AppLocalizations {
   static const List<Locale> supportedLocales = [
     Locale('en'),
     Locale('de'),
-    Locale('zh'),
-    Locale('hi'),
     Locale('es'),
     Locale('fr'),
-    Locale('ar'),
-    Locale('bn'),
     Locale('pt'),
-    Locale('ru'),
-    Locale('ja'),
   ];
 
   static const Map<String, Map<String, String> Function()> _localeMap = {
     'de': _getDe,
-    'zh': _getZh,
-    'hi': _getHi,
     'es': _getEs,
     'fr': _getFr,
-    'ar': _getAr,
-    'bn': _getBn,
     'pt': _getPt,
-    'ru': _getRu,
-    'ja': _getJa,
   };
 
   static Map<String, String> _getDe() => stringsDe;
-  static Map<String, String> _getZh() => stringsZh;
-  static Map<String, String> _getHi() => stringsHi;
   static Map<String, String> _getEs() => stringsEs;
   static Map<String, String> _getFr() => stringsFr;
-  static Map<String, String> _getAr() => stringsAr;
-  static Map<String, String> _getBn() => stringsBn;
   static Map<String, String> _getPt() => stringsPt;
-  static Map<String, String> _getRu() => stringsRu;
-  static Map<String, String> _getJa() => stringsJa;
 
   late final Map<String, String> _strings =
       _localeMap[locale.languageCode]?.call() ?? stringsEn;
@@ -858,15 +834,9 @@ class _AppLocalizationsDelegate
   bool isSupported(Locale locale) => [
     'en',
     'de',
-    'zh',
-    'hi',
     'es',
     'fr',
-    'ar',
-    'bn',
     'pt',
-    'ru',
-    'ja',
   ].contains(locale.languageCode);
 
   @override
