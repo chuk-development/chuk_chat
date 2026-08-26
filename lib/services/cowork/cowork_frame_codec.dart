@@ -14,6 +14,14 @@ import 'package:chuk_chat/services/cowork/cowork_replay_guard.dart';
 /// stores key material; it is handed the key that service owns.
 final AesGcm _cipher = AesGcm.with256bits();
 
+/// Length in bytes of a raw CoWork channel key (an AES-256 key).
+///
+/// Per the transport design (§14) the control channel is sealed under a fresh
+/// channel key stamped at pairing (X25519 ECDH), decoupled from the chat
+/// account key. The frame bytes never depend on how the key was derived, so
+/// the `withChannelKey` paths below are the same codec fed a raw 32-byte key.
+const int kCoworkChannelKeyLength = 32;
+
 /// Seals outgoing CoWork frames: AES-256-GCM under the account key, then an
 /// Ed25519 signature with this device's own key.
 ///
@@ -58,6 +66,37 @@ class CoworkFrameSealer {
     if (nextSeq < 0) {
       throw ArgumentError.value(nextSeq, 'nextSeq', 'must be non-negative');
     }
+  }
+
+  /// Builds a sealer from a raw 32-byte [channelKey] rather than the account
+  /// key. This is the CoWork control-channel path (§14): the frame layout is
+  /// identical, only the key material differs. [keyVersion] labels `kv` and is
+  /// bound into the header/AAD just as [accountKeyVersion] is.
+  factory CoworkFrameSealer.withChannelKey({
+    required List<int> channelKey,
+    required int keyVersion,
+    required String deviceId,
+    required SimpleKeyPair signingKeyPair,
+    int nextSeq = 0,
+    DateTime Function()? clock,
+    Random? random,
+  }) {
+    if (channelKey.length != kCoworkChannelKeyLength) {
+      throw ArgumentError.value(
+        channelKey.length,
+        'channelKey',
+        'must be $kCoworkChannelKeyLength bytes',
+      );
+    }
+    return CoworkFrameSealer(
+      accountKey: SecretKey(channelKey),
+      accountKeyVersion: keyVersion,
+      deviceId: deviceId,
+      signingKeyPair: signingKeyPair,
+      nextSeq: nextSeq,
+      clock: clock,
+      random: random,
+    );
   }
 
   final SecretKey _accountKey;
@@ -163,6 +202,35 @@ class CoworkFrameOpener {
              lastSeq: entry.value,
            ),
        };
+
+  /// Builds an opener from a raw 32-byte [channelKey] rather than the account
+  /// key — the CoWork control-channel path (§14). The verify/replay/decrypt
+  /// pipeline is unchanged; only the AES key differs. [keyVersion] is the `kv`
+  /// this receiver holds.
+  factory CoworkFrameOpener.withChannelKey({
+    required List<int> channelKey,
+    required int keyVersion,
+    required CoworkApprovedDevices approvedDevices,
+    Duration replayWindow = const Duration(seconds: 60),
+    DateTime Function()? clock,
+    Map<String, int>? lastSeqByDevice,
+  }) {
+    if (channelKey.length != kCoworkChannelKeyLength) {
+      throw ArgumentError.value(
+        channelKey.length,
+        'channelKey',
+        'must be $kCoworkChannelKeyLength bytes',
+      );
+    }
+    return CoworkFrameOpener(
+      accountKey: SecretKey(channelKey),
+      accountKeyVersion: keyVersion,
+      approvedDevices: approvedDevices,
+      replayWindow: replayWindow,
+      clock: clock,
+      lastSeqByDevice: lastSeqByDevice,
+    );
+  }
 
   final SecretKey _accountKey;
   final int _accountKeyVersion;
