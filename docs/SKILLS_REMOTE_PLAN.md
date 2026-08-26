@@ -244,16 +244,22 @@ non-factual set) + an executor `case`.
 - **[x] M3a — Local SQLite skills store** (`d15b064`): `skills` table (db v5,
   plaintext local per chat_cache convention) + web SharedPreferences fallback,
   CRUD + transactional `replaceSkills`. Tests.
-- **[ ] M3b — Rework the skill store**: point `UserSkillsService` (or a renamed
-  `SkillsStore`) at the SQLite store as the local source of truth, keep Supabase
-  as the encrypted mirror, carry `catalog_name` + `baseline_hash`. Add those two
-  columns to the Supabase `user_skills` table (Management API, column-before-
-  code). Raise/remove `kMaxUserSkills`. `SkillRegistry.refreshUserSkills` reads
-  the reworked store. Tests.
-- **[ ] M4 — Catalog fetch + reconciliation**: `SkillsCatalogService` (manifest
-  fetch, TTL cache, lazy body). The reconciliation algorithm with the
-  baseline-hash logic. Tests for all four branches (add / auto-update / suggest /
-  user-created-untouched).
+- **[x] M3b — Rework the skill store** (`SQLite-primary`): `UserSkillsService`
+  now reads/writes the local SQLite store as the source of truth, with Supabase
+  as the encrypted mirror. `catalog_name` + `baseline_hash` travel inside the
+  encrypted blob as a JSON envelope — **no Supabase schema change needed**;
+  legacy raw-markdown rows still decode. `kMaxUserSkills` raised to 200. Tests.
+- **[x] M4 — Catalog fetch + reconciliation**: `SkillsCatalogService` (manifest
+  fetch, 24h TTL cache, stale-on-failure fallback, lazy body). Pure
+  `planCatalogReconcile` (add / silent-update / suggest / builtin-skip), fully
+  unit-tested. Wired into startup after the local load.
+  - **Known limit:** catalog entries whose name equals a compiled builtin are
+    **skipped** (the builtin already provides them). So a catalog that only
+    mirrors builtins adds nothing — a skill needs a NON-builtin name to load.
+    Catalog-overrides-builtin (the "remote > builtin" hotfix path) is a later
+    enhancement; today builtins stay authoritative.
+  - **Not yet exercised end-to-end** against a live non-builtin skill — needs
+    real catalog content (below).
 - **[ ] M5 — Level-3 `read_skill_resource`**: registration, lazy resource fetch,
   prompt-rebuild injection, scripts-as-text. Tests.
 - **[ ] M6 — `write_skill` (+ `delete_skill`)**: agent authoring, autonomous-edit
