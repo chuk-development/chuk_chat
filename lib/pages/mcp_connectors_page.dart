@@ -83,7 +83,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MCP servers')),
+      appBar: AppBar(title: const Text('Connectors')),
       body: ValueListenableBuilder<List<McpConnection>>(
         valueListenable: McpService.connections,
         builder: (context, connections, _) {
@@ -106,7 +106,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
-                'MCP servers let the assistant use tools and data from other '
+                'Connectors let the assistant use tools and data from other '
                 'services.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.resolvedIconColor.withValues(alpha: 0.7),
@@ -280,7 +280,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     final url = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Add an MCP server'),
+        title: const Text('Add a connector'),
         content: TextField(
           controller: controller,
           autofocus: true,

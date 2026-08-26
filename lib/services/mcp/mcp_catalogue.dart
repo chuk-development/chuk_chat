@@ -230,6 +230,15 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
 
   // ─── Productivity ──────────────────────────────────────────────────────
   McpCatalogueEntry(
+    id: 'box',
+    name: 'Box',
+    url: 'https://mcp.box.com/mcp',
+    category: 'Productivity',
+    description: 'Files, folders and content in Box.',
+    publisher: 'box.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=box.com&sz=128',
+  ),
+  McpCatalogueEntry(
     id: 'linear',
     termsUrl: 'https://linear.app/terms',
     privacyUrl: 'https://linear.app/privacy',
@@ -536,9 +545,20 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     termsUrl: 'https://www.heygen.com/terms',
     privacyUrl: 'https://www.heygen.com/privacy',
     name: 'HyperFrames by HeyGen',
-    url: 'https://mcp.heygen.com/mcp/hyperframes/',
+    // Direct endpoint — mcp.heygen.com/mcp/hyperframes/ only 307-redirects here.
+    url: 'https://hyperframes.heygen.com/mcp',
     category: 'Creative',
     description: 'Avatar video generation.',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=heygen.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'gamma',
+    name: 'Gamma',
+    url: 'https://mcp.gamma.app/mcp',
+    category: 'Creative',
+    description: 'Generate presentations, decks and documents.',
+    publisher: 'gamma.app',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=gamma.app&sz=128',
   ),
 
   // ─── Finance ───────────────────────────────────────────────────────────
@@ -570,6 +590,35 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     // `mcp.api.coingecko.com` strips to `api.coingecko.com`, a service host the
     // favicon service does not know — pin the real logo.
     iconUrl: 'https://www.google.com/s2/favicons?domain=coingecko.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'whop',
+    name: 'Whop',
+    url: 'https://mcp.whop.com/mcp',
+    category: 'Finance',
+    description: 'Digital products, memberships and payments.',
+    publisher: 'whop.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=whop.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'robinhood',
+    name: 'Robinhood',
+    url: 'https://agent.robinhood.com/mcp/trading',
+    category: 'Finance',
+    description: 'Trading, quotes, positions and portfolio.',
+    publisher: 'robinhood.com',
+    // `agent.robinhood.com` → robinhood.com favicon resolves fine, pinned for safety.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=robinhood.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'spglobal',
+    name: 'S&P Global',
+    url: 'https://kfinance.kensho.com/integrations/mcp',
+    category: 'Finance',
+    description: 'Company financials and market intelligence (Kensho Kfinance).',
+    publisher: 'spglobal.com',
+    // Endpoint lives on kfinance.kensho.com — pin the S&P Global logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=spglobal.com&sz=128',
   ),
 ];
 

@@ -211,7 +211,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       case ToolCategory.sandbox:
         return l.catSandbox;
       case ToolCategory.mcp:
-        return 'MCP servers';
+        return 'Connectors';
     }
   }
 
