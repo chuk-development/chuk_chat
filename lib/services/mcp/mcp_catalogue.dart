@@ -253,6 +253,58 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     description: 'Boards, items and updates.',
   ),
   McpCatalogueEntry(
+    id: 'plane',
+    termsUrl: 'https://app.plane.so/legal/terms',
+    privacyUrl: 'https://plane.so/privacy-policy',
+    name: 'Plane',
+    // The `/http/mcp` OAuth endpoint, not the `/http/api-key/mcp` PAT one.
+    url: 'https://mcp.plane.so/http/mcp',
+    category: 'Productivity',
+    description: 'Issues, cycles, modules and projects.',
+  ),
+  McpCatalogueEntry(
+    id: 'todoist',
+    termsUrl: 'https://todoist.com/terms',
+    privacyUrl: 'https://todoist.com/privacy',
+    name: 'Todoist',
+    url: 'https://ai.todoist.net/mcp',
+    category: 'Productivity',
+    description: 'Tasks, projects and due dates.',
+  ),
+  McpCatalogueEntry(
+    id: 'buffer',
+    termsUrl: 'https://buffer.com/terms',
+    privacyUrl: 'https://buffer.com/privacy',
+    name: 'Buffer',
+    url: 'https://mcp.buffer.com/mcp',
+    category: 'Productivity',
+    description:
+        'Draft, schedule and publish social posts, and read their metrics.',
+  ),
+  McpCatalogueEntry(
+    id: 'fastmail',
+    termsUrl: 'https://www.fastmail.com/about/tos/',
+    privacyUrl: 'https://www.fastmail.com/about/privacy/',
+    name: 'Fastmail',
+    url: 'https://api.fastmail.com/mcp',
+    category: 'Productivity',
+    description: 'Search and read mail, and manage your calendar and contacts.',
+  ),
+  McpCatalogueEntry(
+    id: 'superhuman',
+    termsUrl: 'https://superhuman.com/terms',
+    privacyUrl: 'https://superhuman.com/privacy',
+    name: 'Superhuman Mail',
+    url: 'https://mcp.mail.superhuman.com/mcp',
+    category: 'Productivity',
+    // Connectable via dynamic registration, but the account behind the sign-in
+    // needs a Superhuman Business plan with Ask AI enabled — a rejected token
+    // is the server's to explain, not ours to gate.
+    description:
+        'Search mail, draft and send replies, and manage your calendar. '
+        'Needs a Superhuman Business plan.',
+  ),
+  McpCatalogueEntry(
     id: 'airtable',
     termsUrl: 'https://www.airtable.com/company/tos',
     privacyUrl: 'https://www.airtable.com/company/privacy',
@@ -317,6 +369,33 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Developer',
     description: 'Search models, datasets, spaces and papers.',
   ),
+  McpCatalogueEntry(
+    id: 'firecrawl',
+    termsUrl: 'https://www.firecrawl.dev/terms-of-service',
+    privacyUrl: 'https://www.firecrawl.dev/privacy-policy',
+    name: 'Firecrawl',
+    // The `-oauth` endpoint, not the plain `/v2/mcp` one. The plain endpoint
+    // answers 200 keyless (Search/Scrape/Parse with limits) and never sends a
+    // 401, so the browser sign-in would never start; `-oauth` returns 401 with
+    // the resource-metadata challenge, and its authorization server
+    // (`www.firecrawl.dev`) supports RFC 7591 registration + PKCE, so the
+    // ordinary connect flow signs the reader in and unlocks the account tools.
+    url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    category: 'Developer',
+    description:
+        'Scrape pages to clean markdown, search the web, map a site\'s URLs '
+        'and run multi-page research.',
+  ),
+  McpCatalogueEntry(
+    id: 'posthog',
+    termsUrl: 'https://posthog.com/terms',
+    privacyUrl: 'https://posthog.com/privacy',
+    name: 'PostHog',
+    url: 'https://mcp.posthog.com/mcp',
+    category: 'Developer',
+    description:
+        'Query product analytics, insights, feature flags and error tracking.',
+  ),
 
   // ─── Creative ──────────────────────────────────────────────────────────
   McpCatalogueEntry(
@@ -328,6 +407,17 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Creative',
     description:
         'Read design files and design data, and turn frames into code.',
+  ),
+  McpCatalogueEntry(
+    id: 'mobbin',
+    termsUrl: 'https://mobbin.com/terms',
+    privacyUrl: 'https://mobbin.com/privacy',
+    name: 'Mobbin',
+    url: 'https://api.mobbin.com/mcp',
+    category: 'Creative',
+    description:
+        'Search real app screens, flows and UI patterns from thousands of '
+        'apps.',
   ),
   McpCatalogueEntry(
     id: 'higgsfield',

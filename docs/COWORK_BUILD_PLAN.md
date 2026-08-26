@@ -1,5 +1,13 @@
 # CoWork — Master Build Plan
 
+> **Directional update:** `COWORK_SELF_HOSTED_PIVOT.md` supersedes the
+> server-hosted execution and server-side credential parts of this plan.
+> The relay stays blind store-and-forward (unchanged). What changes: chuk rents
+> no VMs (the user hosts the execution backend), and credentials stay on the
+> client and are forwarded E2E to that backend, never held server-side. Read
+> the pivot doc before touching the E2B Tier-3 sandbox (§4/§7) or the
+> credential model (§5/§8).
+
 **Product definition.** CoWork is a Claude-Cowork-style personal agent (general knowledge/office work, not coding-only) that the user drives *from their phone* while it runs *on their own laptop* with real filesystem/CLI/app access. The laptop runs a persistent, tray-resident daemon that IS the agent (it runs chuk_chat's existing tool loop headlessly, calling OpenRouter directly and executing tools locally inside an OS-level sandbox). The phone is a thin remote control that dispatches tasks, streams back progress, and approves risky steps. Everything routes through api.chuk.chat as a zero-trust, store-and-forward relay that only ever sees signed, E2E-encrypted opaque blobs — so it can delay or drop traffic but can never read, forge, or replay a command. The product's three differentiators vs. Anthropic's Claude Cowork: it runs on the user's *real* machine/toolchain (not a rented VM), the relay is *cryptographically incapable* of reading commands, and the whole thing reuses ~90% of chuk_chat/api_server infra.
 
 ---
