@@ -50,13 +50,13 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'notes': ToolCategory.basic,
   'generate_qr': ToolCategory.basic,
   'ask_user': ToolCategory.basic,
+  'request_mcp_server': ToolCategory.basic,
   'skill': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
-  'crypto_data': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
   'search_restaurants': ToolCategory.map,
@@ -103,9 +103,6 @@ const Map<String, String> discoveryCatalog = {
       '(costs credits, not private) / '
       'Im Internet suchen, Webseiten lesen, Bilder erzeugen/bearbeiten/holen '
       '(kostet Credits, nicht privat)',
-  'Finance / Finanzen':
-      'Cryptocurrency prices, market data, trending coins (CoinGecko) / '
-      'Kryptowährungspreise, Marktdaten, Trending Coins (CoinGecko)',
   'Domains':
       'Check domain name availability across 1400+ TLDs with WHOIS data / '
       'Domain-Verfügbarkeit über 1400+ TLDs prüfen, WHOIS-Daten',
@@ -363,6 +360,29 @@ final List<ClientTool> builtinTools = [
     ],
   ),
   ClientTool(
+    name: 'request_mcp_server',
+    description:
+        'Ask the app to show the user a Connect button for an MCP server '
+        'that is available but NOT connected. Use this when a request needs '
+        'a server listed under "## MCP SERVERS" as not connected: name the '
+        'server to the user and call this tool with its id. The app renders '
+        'an inline Connect button; the user taps it to sign in. You do NOT '
+        'connect the server yourself and MUST NOT claim you did — its tools '
+        'become usable only after the user connects it.',
+    parameters: {
+      'id':
+          'string (required: the catalogue id of the server, exactly as '
+          'shown in the "## MCP SERVERS" list, e.g. "notion", "linear")',
+      'reason':
+          'string (optional: a short note on why it is needed, shown to no '
+          'one but useful for your own planning)',
+    },
+    type: ToolType.builtin,
+    // No tags on purpose: like `skill` and `ask_user`, this tool is always
+    // available and must never surface as a find_tools search hit.
+    tags: [],
+  ),
+  ClientTool(
     name: 'skill',
     description:
         'Load a skill. Its full instructions are added to your system '
@@ -595,49 +615,6 @@ final List<ClientTool> builtinTools = [
     type: ToolType.builtin,
     tags: ['image', 'vision', 'analyze', 'inspect', 'describe', 'bildanalyse'],
   ),
-  ClientTool(
-    name: 'crypto_data',
-    description:
-        'Get cryptocurrency data from CoinGecko (free, no API key). Actions: '
-        'price (current price + 24h change), markets (top coins with full '
-        'stats: 24h range, 1h/24h/7d/30d changes, ATH, supply), '
-        'history (time-series price data for charts — specify days), '
-        'trending (trending coins right now), search (find a coin by '
-        'name/symbol). Use CoinGecko coin IDs like "bitcoin", "ethereum", '
-        '"solana" — search first if unsure.',
-    parameters: {
-      'action':
-          'string (optional, default price: price, markets, history, '
-          'trending, search)',
-      'ids':
-          'string or list (for price/markets/history: CoinGecko coin IDs, '
-          'e.g. "bitcoin" or "bitcoin,ethereum,solana")',
-      'currency': 'string (optional, default "usd": target currency)',
-      'days':
-          'string (for history: number of days, e.g. "1", "7", "30", "365")',
-      'query': 'string (required for search: coin name or symbol to find)',
-      'limit': 'int (optional for markets: number of results, default 20)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'crypto',
-      'krypto',
-      'bitcoin',
-      'ethereum',
-      'coin',
-      'token',
-      'price',
-      'preis',
-      'kurs',
-      'market',
-      'markt',
-      'finance',
-      'finanzen',
-      'coingecko',
-      'trending',
-    ],
-  ),
-
   // -- Maps --
   ClientTool(
     name: 'search_places',
@@ -1258,7 +1235,7 @@ final List<ClientTool> builtinTools = [
         'on first call and reused for the rest of this chat; files survive across '
         'calls and a 3-day snapshot keeps them between sessions. '
         'Prefer typst_compile for PDF/document generation, web_crawl for fetching '
-        'URLs, weather/crypto/search tools for their data, and the dedicated '
+        'URLs, weather/search tools for their data, and the dedicated '
         'image tools for image generation/editing — use code_run only when '
         'computation, file manipulation, or library calls (pandas/numpy/'
         'matplotlib/yt-dlp/pypdf) are required. '

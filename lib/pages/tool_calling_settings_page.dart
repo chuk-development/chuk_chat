@@ -31,7 +31,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'generate_image': Icons.image_outlined,
     'fetch_image': Icons.download_outlined,
     'view_chat_images': Icons.visibility_outlined,
-    'crypto_data': Icons.currency_bitcoin,
     'weather': Icons.cloud_outlined,
     'search_places': Icons.place_outlined,
     'search_restaurants': Icons.restaurant,
@@ -55,7 +54,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'generate_image': l.toolImageGen,
     'fetch_image': l.toolFetchImage,
     'view_chat_images': l.toolViewChatImages,
-    'crypto_data': l.toolCryptoData,
     'weather': l.toolWeather,
     'search_places': l.toolPlaceSearch,
     'search_restaurants': l.toolRestaurantSearch,
@@ -213,7 +211,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       case ToolCategory.sandbox:
         return l.catSandbox;
       case ToolCategory.mcp:
-        return 'Connectors';
+        return 'MCP servers';
     }
   }
 

@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
@@ -22,7 +23,6 @@ import 'package:chuk_chat/tool_handlers/image_tools.dart' as image_tools;
 import 'package:chuk_chat/tool_handlers/map_tools.dart' as map_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart' as notes_tools;
 import 'package:chuk_chat/tool_handlers/qr_tools.dart' as qr_tools;
-import 'package:chuk_chat/tool_handlers/crypto_tools.dart' as crypto_tools;
 import 'package:chuk_chat/tool_handlers/weather_tools.dart' as weather_tools;
 import 'package:chuk_chat/tool_handlers/web_tools.dart' as web_tools;
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
@@ -90,6 +90,7 @@ class ToolExecutor {
     'notes',
     'generate_qr',
     'ask_user',
+    'request_mcp_server',
     // This set asserts "an executor exists for this name", it is not a
     // feature gate. registerTool() throws if a registered tool is missing
     // here.
@@ -99,7 +100,6 @@ class ToolExecutor {
     'generate_image',
     'fetch_image',
     'view_chat_images',
-    'crypto_data',
     'weather',
     'search_places',
     'search_restaurants',
@@ -679,6 +679,8 @@ class ToolExecutor {
         return _wrapOutput(await qr_tools.executeGenerateQr(args));
       case 'ask_user':
         return _wrapOutput(_executeAskUser(args));
+      case 'request_mcp_server':
+        return _wrapOutput(_executeRequestMcpServer(args));
 
       // -- Tool discovery --
       case 'find_tools':
@@ -688,6 +690,7 @@ class ToolExecutor {
             tools: _tools,
             getDescription: getToolDescription,
             isAvailable: isToolAvailable,
+            unconnectedMcpServers: unconnectedCatalogueEntries(),
           ),
         );
 
@@ -720,8 +723,6 @@ class ToolExecutor {
         return _wrapOutput(await image_tools.executeFetchImage(args));
       case 'view_chat_images':
         return _wrapOutput(image_tools.executeViewChatImagesUnsupported());
-      case 'crypto_data':
-        return _wrapOutput(await crypto_tools.executeCryptoData(args));
 
       // -- Maps --
       case 'search_places':
@@ -1295,6 +1296,36 @@ class ToolExecutor {
       'Wait for their reply before proceeding.',
     );
     return buf.toString().trimRight();
+  }
+
+  /// Validate a `request_mcp_server` call and return a marker the UI keys on.
+  ///
+  /// This does NOT connect anything: connecting needs the browser and the
+  /// user's tap. It only checks the id names a real, not-yet-connected
+  /// catalogue server and hands back `MCP_CONNECT_REQUEST: <id>` so the
+  /// message bubble can render a Connect button. An unknown or already
+  /// connected id returns a short error so the model self-corrects.
+  String _executeRequestMcpServer(Map<String, dynamic> args) {
+    final id = (args['id'] as String? ?? '').trim();
+    if (id.isEmpty) {
+      return 'Error: "id" parameter required — the catalogue id of the MCP '
+          'server, e.g. "notion".';
+    }
+
+    if (McpService.connectionFor(id) != null) {
+      return 'Error: "$id" is already connected — its tools are available '
+          'via find_tools. No Connect button is needed.';
+    }
+
+    final entry = catalogueEntryById(id);
+    if (entry == null) {
+      return 'Error: no catalogue MCP server has id "$id". Use an id exactly '
+          'as shown in the "## MCP SERVERS" list.';
+    }
+
+    return 'MCP_CONNECT_REQUEST: $id\n'
+        '${entry.name} is available but not connected. The app is showing a '
+        'Connect button.';
   }
 
   /// Wraps a handler's string output, inferring whether it reports a failure.

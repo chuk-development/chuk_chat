@@ -18,7 +18,13 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class McpConnectorsPage extends StatefulWidget {
-  const McpConnectorsPage({super.key});
+  const McpConnectorsPage({super.key, this.isCoworkActive = false});
+
+  /// Whether CoWork mode is active. CoWork-only servers (which duplicate a
+  /// built-in or need command execution) are hidden in normal chat and only
+  /// shown here when this is true. CoWork is an M0 placeholder today, so the
+  /// effective behaviour is "hidden"; the path is kept so they appear later.
+  final bool isCoworkActive;
 
   @override
   State<McpConnectorsPage> createState() => _McpConnectorsPageState();
@@ -77,7 +83,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Connectors')),
+      appBar: AppBar(title: const Text('MCP servers')),
       body: ValueListenableBuilder<List<McpConnection>>(
         valueListenable: McpService.connections,
         builder: (context, connections, _) {
@@ -88,6 +94,8 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
               .where(
                 (entry) =>
                     !connectedIds.contains(entry.id) &&
+                    // CoWork-only servers stay hidden until CoWork is active.
+                    (widget.isCoworkActive || !entry.coworkOnly) &&
                     (_query.isEmpty ||
                         entry.name.toLowerCase().contains(_query) ||
                         entry.description.toLowerCase().contains(_query)),
@@ -98,7 +106,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
-                'Connectors let the assistant use tools and data from other '
+                'MCP servers let the assistant use tools and data from other '
                 'services.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.resolvedIconColor.withValues(alpha: 0.7),

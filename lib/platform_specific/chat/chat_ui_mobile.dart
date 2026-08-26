@@ -11,6 +11,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -2893,6 +2894,57 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     };
   }
 
+  /// Returns a callback for the inline MCP Connect card if [index] is the last
+  /// AI message, is idle, and contains a completed request_mcp_server call.
+  /// Resumes the same conversation with a fresh send once the server is live.
+  ValueChanged<String>? _connectMcpCallbackForMessage({
+    required int index,
+    required bool isUser,
+    required bool isStreaming,
+    required List<ToolCall>? toolCalls,
+    required List<ContentBlock>? contentBlocks,
+  }) {
+    if (isUser || isStreaming || _isCurrentChatStreaming || _isSendingMessage) {
+      return null;
+    }
+    if (index != _messages.length - 1) {
+      return null;
+    }
+
+    bool hasRequest = false;
+    if (contentBlocks != null) {
+      for (final block in contentBlocks) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          hasRequest = block.toolCalls!.any(
+            (tc) =>
+                tc.name == 'request_mcp_server' &&
+                tc.status == ToolCallStatus.completed,
+          );
+          if (hasRequest) break;
+        }
+      }
+    }
+    if (!hasRequest && toolCalls != null) {
+      hasRequest = toolCalls.any(
+        (tc) =>
+            tc.name == 'request_mcp_server' &&
+            tc.status == ToolCallStatus.completed,
+      );
+    }
+    if (!hasRequest) {
+      return null;
+    }
+
+    return (String id) {
+      final name = catalogueEntryById(id)?.name ?? 'the';
+      _controller.text =
+          'Connected the $name server — its tools are now available. '
+          'Continue with what I asked.';
+      _sendMessage();
+    };
+  }
+
   void _editMessageAt(int index) {
     if (index < 0 || index >= _messages.length) return;
     final String text = (_messages[index]['text'] ?? '').trim();
@@ -3470,6 +3522,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       toolCalls: toolCalls,
                                       contentBlocks: parsedContentBlocks,
                                     ),
+                                    onConnectMcpServer:
+                                        _connectMcpCallbackForMessage(
+                                          index: i,
+                                          isUser: isUser,
+                                          isStreaming: isStreamingMessage,
+                                          toolCalls: toolCalls,
+                                          contentBlocks: parsedContentBlocks,
+                                        ),
                                     useSharedSelectionArea: true,
                                     status: status,
                                     lastError: lastError,

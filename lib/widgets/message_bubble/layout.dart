@@ -386,6 +386,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       ],
       if (!streamingTextBeforeTools) messageBody,
       ..._buildAskUserOptions(),
+      ..._buildMcpConnectOptions(),
     ];
   }
 
@@ -667,6 +668,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // ask_user interactive options.
     children.addAll(_buildAskUserOptions());
+    // Inline MCP Connect card.
+    children.addAll(_buildMcpConnectOptions());
 
     if (children.isEmpty) {
       children.add(const SizedBox.shrink());

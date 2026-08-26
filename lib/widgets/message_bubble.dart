@@ -48,6 +48,8 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/ask_user_card.dart';
+import 'package:chuk_chat/widgets/mcp_connect_card.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/constants.dart';
@@ -164,6 +166,7 @@ class MessageBubble extends StatefulWidget {
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
+    this.onConnectMcpServer,
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
@@ -227,6 +230,12 @@ class MessageBubble extends StatefulWidget {
   /// When non-null, the bubble renders interactive option buttons extracted
   /// from the most recent ask_user tool call in this message.
   final ValueChanged<String>? onAskUserAnswer;
+
+  /// Called with the catalogue id when the user taps Connect on an inline
+  /// MCP connect card (from a completed `request_mcp_server` tool call).
+  /// When non-null, the bubble renders a Connect card for the most recent
+  /// such call in this message.
+  final ValueChanged<String>? onConnectMcpServer;
 
   /// Actions shown in a popup menu on long-press for user messages.
   /// These are hidden by default and only appear on long-press, matching
