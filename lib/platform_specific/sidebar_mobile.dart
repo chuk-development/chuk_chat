@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
+import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -629,7 +630,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
           SbBrand(
             label: 'Chuk Chat',
             padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
-            trailing: SbNewChatPill(onTap: widget.onNewChatTapped),
+            trailing: AccentIconButton(
+              icon: Icons.edit_square,
+              onTap: widget.onNewChatTapped,
+              accent: accentColor,
+              tooltip: 'New Chat',
+              semanticsId: 'sidebar_new_chat_button',
+            ),
           ),
 
           // CoWork switcher — directly under the brand row and its New chat
@@ -1092,12 +1099,15 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final String name = _displayNameFor(_profile);
     final ThemeData theme = Theme.of(context);
     // Each control is its own floating block now — the name, the balance and
-    // the gear no longer share one bar. Translucent so the chat list drifts
-    // faintly behind them, with a soft shadow so they read as lifted.
+    // the gear no longer share one bar. Lightly translucent so the list drifts
+    // faintly behind them, with a soft shadow so they read as lifted. Alpha
+    // 0.93 (transparency ~0.07) — half as see-through as the old 0.86, which
+    // read as too faint over the list. The balance and the gear both build on
+    // floatBg, so this one value sets all three blocks.
     final Color floatBg = Color.alphaBlend(
       theme.colorScheme.surface.withValues(alpha: 0.62),
       sidebarBg,
-    ).withValues(alpha: 0.86);
+    ).withValues(alpha: 0.93);
     final Color shadowColor = Colors.black.withValues(alpha: 0.35);
     const double elevation = 4;
     return Padding(

@@ -25,6 +25,7 @@ import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
@@ -545,12 +546,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 semanticsId: 'copy_debug_chat_button',
               ),
               const SizedBox(width: 8),
-              _floatIconChip(
+              // Accent-filled circle, not a frosted chip: the new-chat button
+              // is the primary action and matches the identical button in the
+              // sidebar (AccentIconButton) so the two read as the same control.
+              AccentIconButton(
                 icon: Icons.edit_square,
                 onTap: _newChatFromAppBar,
-                iconFg: iconFg,
-                chipBg: chipBg,
-                shadowColor: shadowColor,
                 tooltip: 'New Chat',
                 semanticsId: 'new_chat_button',
               ),
