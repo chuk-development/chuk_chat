@@ -1,0 +1,48 @@
+[project]
+name = "cowork-agent"
+version = "0.1.0"
+description = "CoWork Python agent runtime — loop, tools, state, model client."
+requires-python = ">=3.12"
+dependencies = [
+    "firecrawl-anydoc>=0.1.8",
+    "httpx>=0.27",
+    "mcp>=2.0.0",
+    "websockets>=13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+# The browser fallback (§8/§9) is deliberately NOT an extra of this project.
+#
+# browser-use 0.13.7 pins `mcp==1.26.0`; our MCP client (§9) needs `mcp>=2.0.0`
+# (1.x has a different server API and a `timedelta` timeout). The two cannot
+# resolve in one environment, and MCP plus tool search is the load-bearing one —
+# a browser run is the fallback path by design (§8).
+#
+# So browser-use lives in its own environment: `sandbox/docker/Dockerfile.browser`
+# installs it, and the driver reaches a browser over `COWORK_BROWSER_CDP_URL`.
+# `browser_task` gates itself on the import via `check_fn`, so the runtime is
+# complete and honest without it — the tool simply does not appear in the prompt.
+# Revisit when browser-use drops the hard `mcp` pin.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cowork_agent"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "live: hits the real account and spends credits; skipped unless the live env vars are set",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

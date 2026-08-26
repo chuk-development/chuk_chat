@@ -1,0 +1,101 @@
+# CoWork agent image, browser variant (§8, §9).
+#
+# The base image (`Dockerfile`) deliberately has no browser: Chromium plus the
+# X/GTK/font libraries it links against is several hundred MB, and most agents
+# never browse. §8 makes that the normal case — a hand-built API tool first,
+# the browser only as the fallback. So the browser stack lives here, in a
+# variant built ON TOP of the base image, and an agent that never browses does
+# not download it.
+#
+# Why a separate file instead of a second stage in `Dockerfile`:
+# `docker build` without `--target` builds the LAST stage of a Dockerfile.
+# Appending a browser stage there would silently turn the default build — the
+# one `scripts/install.sh` runs — into the heavy one. A separate file keeps the
+# default cheap and makes the choice explicit at the command line.
+#
+# Build (base image first, then this):
+#
+#     docker build -t cowork-base:latest    -f sandbox/docker/Dockerfile    sandbox/docker
+#     docker build -t cowork-browser:latest -f sandbox/docker/Dockerfile.browser sandbox/docker
+#
+# Use it for one agent:
+#
+#     COWORK_SANDBOX_IMAGE=cowork-browser:latest
+#
+# Why Playwright installs the browser when browser-use does not depend on
+# Playwright: browser-use 0.13.7 drives Chromium over the DevTools Protocol
+# (`cdp-use`), and its own `browser-use install` command shells out to
+# `uvx playwright install chromium --with-deps --no-shell`
+# (browser_use/cli.py::_run_install_command). Playwright is the *downloader*
+# here, not the driver — this image does exactly what the library's own
+# installer does, at build time instead of at first use, so no agent run pays
+# for the download (184 MiB, verified in a throwaway container: it yields
+# "Google Chrome for Testing 151.0.7922.34").
+#
+# browser-use finds the result without configuration: its
+# `_find_installed_browser_path` searches
+# `$PLAYWRIGHT_BROWSERS_PATH/chromium-*/chrome-linux*/chrome` and
+# `/usr/local/bin/chromium`, and both point at the same binary here. The same
+# path is exported as COWORK_BROWSER_EXECUTABLE for the agent runtime's own probe
+# (`cowork_agent.browser.find_chromium`).
+
+ARG BASE_IMAGE=cowork-base:latest
+FROM ${BASE_IMAGE}
+
+# Pinned like every other tool in the base image, so two builds install the same
+# Chromium. Playwright's revision is a function of its own version.
+ARG PLAYWRIGHT_VERSION=1.62.0
+
+# Outside the user's home so the browser is shared, readable by any uid the
+# entrypoint remaps `cowork` to, and not lost when a home directory is remapped.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    DEBIAN_FRONTEND=noninteractive
+
+USER root
+
+# `--with-deps` is the reason this runs as root: it apt-installs the shared
+# libraries Chromium links against (fonts, GTK, libnss, libdrm, ...). Without it
+# the binary is present and exits immediately with a missing-library error.
+#
+# `/opt/chromium-path` records which build the symlink points at, so
+# `docker run <image> cat /opt/chromium-path` answers "which Chromium is in
+# here" without repeating the glob. `--version` at the end is the build-time
+# proof that the libraries are complete.
+RUN set -eux; \
+    mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}"; \
+    apt-get update; \
+    uvx --from "playwright==${PLAYWRIGHT_VERSION}" playwright install chromium --with-deps --no-shell; \
+    rm -rf /var/lib/apt/lists/* /root/.cache/uv; \
+    chrome="$(find "${PLAYWRIGHT_BROWSERS_PATH}" -type f -name chrome -path '*chrome-linux*' | sort | tail -n 1)"; \
+    test -n "${chrome}"; \
+    ln -sf "${chrome}" /usr/local/bin/chromium; \
+    chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
+    printf '%s\n' "${chrome}" > /opt/chromium-path; \
+    "${chrome}" --version
+
+# The stable name for the binary, for the runtime's `check_fn` and for
+# browser-use's `executable_path`. It is an ENV and not a profile.d script on
+# purpose: commands arrive as non-interactive `docker exec ... bash -c`, which
+# reads neither /etc/profile.d nor ~/.bashrc — a value set there is invisible to
+# every command the agent runs. `/usr/local/bin/chromium` is also one of the
+# paths browser-use's own search walks, so both agree without configuration.
+ENV COWORK_BROWSER_EXECUTABLE=/usr/local/bin/chromium
+
+# A container gives Chromium no CAP_SYS_ADMIN, so its own sandbox cannot start;
+# the container is the isolation boundary instead. The agent runtime says the
+# same thing in code (`chromium_sandbox=False`), and this marker is what
+# browser-use's own `CONFIG.IN_DOCKER` check reads.
+ENV IN_DOCKER=true \
+    COWORK_BROWSER_VARIANT=1
+
+# No telemetry and no cloud sync from a user's machine: browser-use defaults
+# ANONYMIZED_TELEMETRY to true and lets BROWSER_USE_CLOUD_SYNC follow it
+# (browser_use/config.py). The runtime sets these too; setting them in the image
+# covers a manual `python -c 'import browser_use'` inside the container.
+ENV ANONYMIZED_TELEMETRY=false \
+    BROWSER_USE_CLOUD_SYNC=false \
+    BROWSER_USE_VERSION_CHECK=false
+
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/cowork-entrypoint"]
+CMD ["sleep", "infinity"]
