@@ -1,4 +1,5 @@
 import 'package:chuk_chat/models/skill.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 
 /// Builds system prompts with tool calling protocol for LLM.
 ///
@@ -48,6 +49,9 @@ class ToolPromptBuilder {
     String? memoryText,
     Map<String, dynamic>? notesToolDef,
     Map<String, dynamic>? askUserToolDef,
+    Map<String, dynamic>? requestMcpServerToolDef,
+    List<McpCatalogueEntry> unconnectedMcpServers = const [],
+    List<String> connectedMcpServerNames = const [],
     Map<String, dynamic>? webSearchToolDef,
     Map<String, dynamic>? searchPlacesToolDef,
     Map<String, dynamic>? webCrawlToolDef,
@@ -112,6 +116,9 @@ class ToolPromptBuilder {
       }
       if (askUserToolDef != null) {
         alwaysAvailableTools.add(askUserToolDef);
+      }
+      if (requestMcpServerToolDef != null) {
+        alwaysAvailableTools.add(requestMcpServerToolDef);
       }
       if (webSearchToolDef != null) {
         alwaysAvailableTools.add(webSearchToolDef);
@@ -237,6 +244,15 @@ class ToolPromptBuilder {
       }
     }
 
+    // MCP servers the model should know exist. Names / ids only — never the
+    // per-server tool lists — so the block stays cheap (~170 tokens). Emitted
+    // only when there is at least one server to connect.
+    if (unconnectedMcpServers.isNotEmpty) {
+      buffer.writeln(
+        _buildMcpServersSection(unconnectedMcpServers, connectedMcpServerNames),
+      );
+    }
+
     // Skills, emitted once after the three-branch dispatch above rather than
     // inside each branch. Catalog first (level 1: name + description), then
     // the bodies of whatever is active (level 2) — last, so they sit closest
@@ -268,6 +284,37 @@ class ToolPromptBuilder {
       );
     }
 
+    return buffer.toString();
+  }
+
+  /// The `## MCP SERVERS` awareness block: which servers are connected and
+  /// which exist but are not. Names and ids only — no per-server tool lists —
+  /// so the model can tell the user what is possible and offer a Connect
+  /// button without paying for a full tool dump on every prompt.
+  String _buildMcpServersSection(
+    List<McpCatalogueEntry> unconnected,
+    List<String> connectedNames,
+  ) {
+    final connected = connectedNames.isEmpty
+        ? 'none'
+        : connectedNames.join(', ');
+    final ids = unconnected.map((e) => e.id).join(', ');
+    final buffer = StringBuffer()
+      ..writeln()
+      ..writeln('## MCP SERVERS')
+      ..writeln(
+        'Connected (their tools are available via find_tools): $connected',
+      )
+      ..writeln(
+        'Available but NOT connected — you cannot use these until the user '
+        'activates them:',
+      )
+      ..writeln(ids)
+      ..writeln(
+        'If a request needs a NOT-connected server, tell the user which one '
+        'and call request_mcp_server(id="<id>"). The app shows a Connect '
+        'button. Do NOT claim you connected it.',
+      );
     return buffer.toString();
   }
 
