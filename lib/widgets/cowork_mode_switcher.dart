@@ -38,7 +38,15 @@ class CoWorkModeSwitcher extends StatelessWidget {
         label: label,
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: selected ? null : () => onChanged(value),
+          onTap: selected
+              ? null
+              : () {
+                  // Mirror into the app-global notifier so the service layer
+                  // (prompt builder) sees the mode change, then drive the
+                  // shell's own state as before.
+                  appMode.value = value;
+                  onChanged(value);
+                },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             padding: EdgeInsets.symmetric(

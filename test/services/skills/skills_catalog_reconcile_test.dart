@@ -4,6 +4,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
 
 CatalogSkill _cat(String name, String hash) => CatalogSkill(
@@ -105,6 +106,75 @@ void main() {
       expect(plan.skippedBuiltin.map((c) => c.name), ['weather-cards']);
       expect(plan.toAdd, isEmpty);
     });
+
+    test('a disabled entry the user does not have is a no-op', () {
+      final plan = planCatalogReconcile(
+        catalog: [
+          CatalogSkill(
+            name: 'browser',
+            description: 'd',
+            path: 'skills/browser',
+            hash: 'sha256:a',
+            enabled: false,
+          ),
+        ],
+        localByCatalogName: const {},
+        builtinNames: const {},
+      );
+      expect(plan.isEmpty, isTrue);
+      expect(plan.toAdd, isEmpty);
+    });
+
+    test('a disabled entry the user EDITED is left alone, never removed', () {
+      final plan = planCatalogReconcile(
+        catalog: [
+          CatalogSkill(
+            name: 'browser',
+            description: 'd',
+            path: 'skills/browser',
+            hash: 'sha256:new',
+            enabled: false,
+          ),
+        ],
+        localByCatalogName: {
+          // source hash != baseline hash => the user edited it.
+          'browser': const LocalSkillState(
+            id: 'row-9',
+            sourceHash: 'sha256:mine',
+            baselineHash: 'sha256:old',
+          ),
+        },
+        builtinNames: const {},
+      );
+      expect(plan.toRemove, isEmpty);
+      expect(plan.isEmpty, isTrue);
+    });
+
+    test('a disabled entry the user has stored (pristine) is removed', () {
+      final plan = planCatalogReconcile(
+        catalog: [
+          CatalogSkill(
+            name: 'browser',
+            description: 'd',
+            path: 'skills/browser',
+            hash: 'sha256:new',
+            enabled: false,
+          ),
+        ],
+        localByCatalogName: {
+          'browser': const LocalSkillState(
+            id: 'row-9',
+            sourceHash: 'sha256:old',
+            baselineHash: 'sha256:old',
+          ),
+        },
+        builtinNames: const {},
+      );
+      expect(plan.toRemove, ['row-9']);
+      expect(plan.toAdd, isEmpty);
+      expect(plan.toUpdate, isEmpty);
+      expect(plan.suggestions, isEmpty);
+    });
   });
 
   group('CatalogSkill.fromJson', () {
@@ -122,6 +192,23 @@ void main() {
       expect(skill!.allowedTools, ['bash', 'web_crawl']);
       expect(skill.resources, ['references/R.md']);
       expect(skill.license, 'Apache-2.0');
+      // Toggles default when absent.
+      expect(skill.enabled, isTrue);
+      expect(skill.coworkOnly, isFalse);
+    });
+
+    test('parses the enabled and cowork_only toggles', () {
+      final skill = CatalogSkill.fromJson({
+        'name': 'browser-to-curl',
+        'description': 'd',
+        'path': 'skills/browser-to-curl',
+        'hash': 'sha256:abc',
+        'enabled': false,
+        'cowork_only': true,
+      });
+      expect(skill, isNotNull);
+      expect(skill!.enabled, isFalse);
+      expect(skill.coworkOnly, isTrue);
     });
 
     test('returns null when a required field is missing', () {
@@ -129,6 +216,26 @@ void main() {
         CatalogSkill.fromJson({'name': 'x', 'description': 'y'}),
         isNull,
       );
+    });
+  });
+
+  group('isCoworkOnly', () {
+    Skill mk(Map<String, String> metadata) => Skill(
+      name: 'x',
+      description: 'd',
+      body: 'b',
+      source: SkillSource.user,
+      metadata: metadata,
+    );
+
+    test('true only when metadata cowork_only reads true', () {
+      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'true'})),
+          isTrue);
+      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'TRUE'})),
+          isTrue);
+      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'false'})),
+          isFalse);
+      expect(SkillsCatalogService.isCoworkOnly(mk(const {})), isFalse);
     });
   });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -1370,10 +1371,22 @@ class ToolCallHandler {
           .where((t) => t.name == 'skill')
           .map((t) => t.toJson())
           .firstOrNull;
-      skillCatalog = SkillRegistry.all;
+      // Gate `cowork_only` skills: hide them from the model unless the app is
+      // in CoWork mode. The flag rides on each skill's metadata (stored with
+      // the body), so it reads synchronously and does not depend on a catalog
+      // fetch having completed. In CoWork mode nothing is filtered.
+      final inCoWork = appMode.value == AppMode.cowork;
+      bool visible(Skill s) => inCoWork || !SkillsCatalogService.isCoworkOnly(s);
+
+      skillCatalog = inCoWork
+          ? SkillRegistry.all
+          : SkillRegistry.all.where(visible).toList(growable: false);
       activeSkills = activeSkillNames
           .map(SkillRegistry.byName)
           .whereType<Skill>()
+          // A skill activated in CoWork must not leak its body into a later
+          // Chat-mode prompt, so apply the same predicate here too.
+          .where(visible)
           .toList();
     }
 
