@@ -8,6 +8,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
+import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -330,8 +331,13 @@ class ToolCallHandler {
     unawaited(platform_tools.initPlatformServices());
     // Fire-and-forget: until it lands only built-ins are in the catalog,
     // which costs a capability, never correctness. Signed-out or key-less
-    // starts resolve to an empty list rather than throwing.
-    unawaited(SkillRegistry.refreshUserSkills());
+    // starts resolve to an empty list rather than throwing. After the local
+    // skills load, reconcile against the remote catalog (adds new skills,
+    // silently updates pristine ones, queues suggestions for edited ones).
+    unawaited(
+      SkillRegistry.refreshUserSkills()
+          .then((_) => SkillsCatalogService.reconcile()),
+    );
   }
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();
