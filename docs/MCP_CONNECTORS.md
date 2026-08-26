@@ -102,6 +102,12 @@ call — it rotates, so a stored copy would be stale within the hour.
 The GitHub token never reaches the device — the same property the sandbox
 injection relies on. One token, two consumers.
 
+> **Legacy path.** This server-side token model is being retired. Under
+> `COWORK_SELF_HOSTED_PIVOT.md` the server becomes zero-knowledge: credentials
+> stay on the client (as the ordinary MCP OAuth connectors already do) and are
+> forwarded to a user-hosted backend, never held server-side. Keep this working
+> until that backend ships; do not build new server-side credential consumers.
+
 ## Adding a connector to the catalogue
 
 Add an entry to `kMcpCatalogue` with an `id`, a name, the endpoint and a
