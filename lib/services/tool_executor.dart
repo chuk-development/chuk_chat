@@ -105,7 +105,6 @@ class ToolExecutor {
     'search_restaurants',
     'geocode',
     'get_route',
-    'spotify_control',
     'bash',
     'github',
     'slack',
@@ -113,7 +112,6 @@ class ToolExecutor {
     'gmail',
     'email',
     'nextcloud',
-    'whoop',
     'device',
     'calendar',
     'reminder',
@@ -137,7 +135,7 @@ class ToolExecutor {
     'list_directory',
   };
 
-  static const Set<String> _defaultDisabledTools = {'whoop'};
+  static const Set<String> _defaultDisabledTools = <String>{};
 
   /// Server HTTP base URL for server-proxied tools (Brave search, crawl).
   String? get serverHttpUrl => ApiConfigService.apiBaseUrl;
@@ -489,8 +487,6 @@ class ToolExecutor {
         return true; // Free APIs
       case ToolCategory.device:
         return true;
-      case ToolCategory.spotify:
-        return platform_tools.isPlatformServiceConnected('spotify');
       case ToolCategory.bash:
         return platform_tools.isPlatformServiceConnected('bash');
       case ToolCategory.github:
@@ -503,8 +499,6 @@ class ToolExecutor {
         return platform_tools.isPlatformServiceConnected('email');
       case ToolCategory.nextcloud:
         return nextcloud_tools.isNextcloudConnected();
-      case ToolCategory.whoop:
-        return platform_tools.isPlatformServiceConnected('whoop');
       case ToolCategory.sandbox:
         return true; // Server-managed Docker sandbox
       case ToolCategory.mcp:
@@ -762,8 +756,6 @@ class ToolExecutor {
         );
 
       // -- Platform-specific tools (stub on web) --
-      case 'spotify_control':
-        return _wrapOutput(await platform_tools.executeSpotify(args));
       case 'bash':
         return _wrapOutput(await platform_tools.executeBash(args));
       case 'github':
@@ -782,8 +774,6 @@ class ToolExecutor {
         return _wrapOutput(await platform_tools.executeCalendar(args));
       case 'reminder':
         return _wrapOutput(await platform_tools.executeReminder(args));
-      case 'whoop':
-        return _wrapOutput(await platform_tools.executeWhoop(args));
 
       // -- Nextcloud (web-safe) --
       case 'nextcloud':
@@ -1311,8 +1301,8 @@ class ToolExecutor {
   ///
   /// The old rule was `output.startsWith('Error:')` — exact prefix, colon
   /// required. Around a hundred handler failure paths do not match it
-  /// (`'Error getting route: …'`, `'Spotify error: …'`, `'Weather error: …'`,
-  /// `'Failed to get Spotify access token.'`, …), so every one of them was
+  /// (`'Error getting route: …'`, `'Slack error: …'`, `'Weather error: …'`,
+  /// `'Failed to get Slack access token.'`, …), so every one of them was
   /// reported to the user with a green success check AND handed to the model
   /// as a successful tool result — the model then answered from an error
   /// string as if it were data.
@@ -1351,7 +1341,7 @@ class ToolExecutor {
   /// Leading phrases the handlers actually use to report failure.
   ///
   /// Anchored at the start and deliberately narrow: `<Thing> error:` matches
-  /// `Spotify error:` / `Weather error:` / `Web search error:` but not a
+  /// `Slack error:` / `Weather error:` / `Web search error:` but not a
   /// sentence that merely mentions an error later on.
   static final RegExp toolFailureSniffPattern = RegExp(
     r'^\s*('

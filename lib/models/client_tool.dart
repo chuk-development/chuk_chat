@@ -43,7 +43,6 @@ enum ToolCategory {
   search, // Web search, web crawl, stock data, weather
   map, // Map search, geocoding, routing
   device, // Device features (GPS, calendar, alarms)
-  spotify, // Spotify playback control
   bash, // Sandboxed shell commands (desktop only)
   github, // GitHub repos, issues, PRs
   slack, // Slack messaging
@@ -51,6 +50,5 @@ enum ToolCategory {
   email, // IMAP/SMTP email
   nextcloud, // Nextcloud files, calendar, contacts
   mcp, // Tools from connected remote MCP servers
-  whoop, // WHOOP health/fitness tracker
   sandbox, // Code execution sandbox (Python/shell + files)
 }

@@ -2,10 +2,6 @@
 //
 // These tools require dart:io and are not available on web builds.
 
-Future<String> executeSpotify(Map<String, dynamic> args) async {
-  return 'Spotify control is not available on web.';
-}
-
 Future<String> executeBash(Map<String, dynamic> args) async {
   return 'Bash commands are not available on web.';
 }
@@ -44,10 +40,6 @@ Future<String> executeReminder(Map<String, dynamic> args) async {
 
 Future<String> executeDraftEmail(Map<String, dynamic> args) async {
   return 'Email drafts are not available on web.';
-}
-
-Future<String> executeWhoop(Map<String, dynamic> args) async {
-  return 'WHOOP integration is not available on web.';
 }
 
 /// Initialize platform services (no-op on web).
