@@ -4,7 +4,6 @@ import 'package:chuk_chat/platform_config.dart'
         kFeatureArtifacts,
         kFeatureCoworkDemo,
         kFeatureServerTools,
-        kFeatureSkills,
         kFeatureSpotify,
         kFeatureWhoop,
         kPlatformDesktop,
@@ -1574,11 +1573,6 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
-      continue;
-    }
-    // Skills: when off, the tool never registers, so the prompt never emits
-    // the catalog and the feature costs exactly zero tokens.
-    if (!kFeatureSkills && tool.name == 'skill') {
       continue;
     }
     // Spotify / WHOOP: integration removed. Tool definitions stay in the

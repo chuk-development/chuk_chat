@@ -4,10 +4,8 @@ import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 
-/// Registers just the tools a skill test needs.
-///
-/// `registerBuiltinTools` skips `skill` unless FEATURE_SKILLS is defined, and
-/// tests run with the default flags — so register straight from the catalogue.
+/// Registers just the tools a skill test needs, straight from the catalogue,
+/// so a test controls exactly which tools are present.
 ToolExecutor _executorWith(List<String> toolNames) {
   final executor = ToolExecutor();
   for (final name in toolNames) {

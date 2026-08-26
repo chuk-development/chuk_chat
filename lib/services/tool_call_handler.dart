@@ -328,12 +328,10 @@ class ToolCallHandler {
     );
     unawaited(_toolExecutor.loadPreferences());
     unawaited(platform_tools.initPlatformServices());
-    if (kFeatureSkills) {
-      // Fire-and-forget: until it lands only built-ins are in the catalog,
-      // which costs a capability, never correctness. Signed-out or key-less
-      // starts resolve to an empty list rather than throwing.
-      unawaited(SkillRegistry.refreshUserSkills());
-    }
+    // Fire-and-forget: until it lands only built-ins are in the catalog,
+    // which costs a capability, never correctness. Signed-out or key-less
+    // starts resolve to an empty list rather than throwing.
+    unawaited(SkillRegistry.refreshUserSkills());
   }
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();
@@ -1354,9 +1352,9 @@ class ToolCallHandler {
           .firstOrNull;
     }
 
-    // Skills. The `skill` tool only registers when kFeatureSkills is on, so
-    // its presence is the single source of truth: flag off => no tool, no
-    // catalog, no gating, and a byte-identical prompt.
+    // Skills. The `skill` tool's presence in the executor is the single
+    // source of truth for the catalog: a build that removed it (or a platform
+    // that never registered it) emits no tool, no catalog and no gating.
     final skillsEnabled = _toolExecutor.allTools.any((t) => t.name == 'skill');
     Map<String, dynamic>? skillToolDef;
     List<Skill> skillCatalog = const [];
