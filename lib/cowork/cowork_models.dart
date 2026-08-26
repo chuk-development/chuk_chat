@@ -41,6 +41,7 @@ class CoworkAgent {
     this.seed,
     this.working = false,
     this.thread = const <CoworkTurn>[],
+    this.isHost = false,
   });
 
   final String id;
@@ -69,6 +70,10 @@ class CoworkAgent {
 
   /// The conversation so far.
   final List<CoworkTurn> thread;
+
+  /// The live host connection — its thread is a real relay/executor run
+  /// (pairing + streamed run), not the mock conversation.
+  final bool isHost;
 
   Color get color => seed ?? coworkColorFor(name);
 
@@ -108,8 +113,18 @@ class CoworkTurn {
   final bool working;
 }
 
-/// Seed roster mirroring the reference design. Replaced by the backend later.
+/// Seed roster mirroring the reference design. The first entry is the real
+/// host connection (live relay/executor); the rest are mock until the backend
+/// drives the roster.
 List<CoworkAgent> mockCoworkRoster() => <CoworkAgent>[
+  const CoworkAgent(
+    id: 'host',
+    name: 'Your Host',
+    preview: 'connect your machine to run tasks',
+    time: '',
+    isHost: true,
+    seed: Color(0xFFA8C7FA),
+  ),
   const CoworkAgent(
     id: 'chief',
     name: 'Chief',
