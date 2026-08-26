@@ -33,6 +33,78 @@ class LocalChatCacheService {
     await prefs.remove('kv_$key');
   }
 
+  // ─── Skills store ──────────────────────────────────────────────────
+  // Mirrors the native SQLite `skills` table over a per-user JSON blob. Rows
+  // carry id, user_id, source, catalog_name, baseline_hash, updated_at.
+
+  static const String _skillsKeyPrefix = 'skills_';
+
+  static Future<List<Map<String, dynamic>>> skillRows(String userId) async {
+    final rows = await _loadSkills(userId);
+    rows.sort((a, b) {
+      final au = a['updated_at'] as String? ?? '';
+      final bu = b['updated_at'] as String? ?? '';
+      return bu.compareTo(au);
+    });
+    return rows;
+  }
+
+  static Future<void> upsertSkill(Map<String, dynamic> row) async {
+    final userId = row['user_id'] as String?;
+    final id = row['id'] as String?;
+    if (userId == null || id == null) return;
+    final rows = await _loadSkills(userId);
+    final idx = rows.indexWhere((e) => e['id'] == id);
+    if (idx != -1) {
+      rows[idx] = Map<String, dynamic>.from(row);
+    } else {
+      rows.add(Map<String, dynamic>.from(row));
+    }
+    await _persistSkills(userId, rows);
+  }
+
+  static Future<void> deleteSkill(String userId, String id) async {
+    final rows = await _loadSkills(userId);
+    final before = rows.length;
+    rows.removeWhere((e) => e['id'] == id);
+    if (rows.length == before) return;
+    await _persistSkills(userId, rows);
+  }
+
+  static Future<void> replaceSkills(
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    await _persistSkills(
+      userId,
+      rows.map((r) => Map<String, dynamic>.from(r)).toList(growable: false),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> _loadSkills(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('$_skillsKeyPrefix$userId');
+    if (raw == null || raw.isEmpty) return <Map<String, dynamic>>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(Map<String, dynamic>.from)
+          .toList(growable: true);
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> _persistSkills(
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_skillsKeyPrefix$userId', jsonEncode(rows));
+  }
+
   // ─── Public helpers ───────────────────────────────────────────────
 
   static Map<String, dynamic> buildPlaintextRow({
