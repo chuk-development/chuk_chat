@@ -19,11 +19,15 @@ WORKFLOW="build-cross-platform.yml"
 REF="${PRERELEASE_REF:-master}"
 SCOPE="${1:-default}"
 
+# Slim by default: arm64 Android + x86_64 Linux (.deb/.AppImage). `all` adds
+# the rest for a full pre-release.
 WIN=false
 MAC=false
+LINUX_ARM64=false
 if [ "$SCOPE" = "all" ]; then
   WIN=true
   MAC=true
+  LINUX_ARM64=true
 fi
 
 echo "Triggering pre-release build on ref '$REF' (scope: $SCOPE)..."
@@ -31,7 +35,7 @@ gh workflow run "$WORKFLOW" \
   --ref "$REF" \
   --field build_android=true \
   --field build_linux_x64=true \
-  --field build_linux_arm64=true \
+  --field build_linux_arm64="$LINUX_ARM64" \
   --field build_windows="$WIN" \
   --field build_macos="$MAC" \
   --field build_ios=false \

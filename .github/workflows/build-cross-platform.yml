@@ -321,10 +321,12 @@ jobs:
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
           cd build/app/outputs/flutter-apk
-          mv app-arm64-v8a-release.apk    chuk_chat-${TAG}-android-arm64.apk   || true
-          mv app-armeabi-v7a-release.apk  chuk_chat-${TAG}-android-arm32.apk   || true
-          mv app-x86_64-release.apk       chuk_chat-${TAG}-android-x64.apk     || true
-          gh release upload "$TAG" chuk_chat-*.apk --repo ${{ github.repository }} --clobber
+          # Ship the arm64-v8a APK only — it covers every modern phone. The
+          # file keeps its real ABI name so it is not mistaken for something
+          # else. armeabi-v7a (old 32-bit) and x86_64 (emulator) are still
+          # built by --split-per-abi but not published.
+          mv app-arm64-v8a-release.apk chuk_chat-${TAG}-android-arm64-v8a.apk || true
+          gh release upload "$TAG" chuk_chat-${TAG}-android-arm64-v8a.apk --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # Linux x86_64
@@ -552,7 +554,6 @@ jobs:
           gh release upload "$TAG" \
             chuk_chat-*-linux-amd64.deb \
             chuk_chat-*-linux-x86_64.AppImage \
-            chuk_chat-*-linux-x86_64.rpm \
             --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
