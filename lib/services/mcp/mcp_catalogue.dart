@@ -282,6 +282,24 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
         'Draft, schedule and publish social posts, and read their metrics.',
   ),
   McpCatalogueEntry(
+    id: 'dropbox',
+    termsUrl: 'https://www.dropbox.com/terms',
+    privacyUrl: 'https://www.dropbox.com/privacy',
+    name: 'Dropbox',
+    url: 'https://mcp.dropbox.com/mcp',
+    category: 'Productivity',
+    description: 'Search, read and manage your files and folders.',
+  ),
+  McpCatalogueEntry(
+    id: 'clickup',
+    termsUrl: 'https://clickup.com/terms',
+    privacyUrl: 'https://clickup.com/privacy',
+    name: 'ClickUp',
+    url: 'https://mcp.clickup.com/mcp',
+    category: 'Productivity',
+    description: 'Tasks, lists, docs and spaces.',
+  ),
+  McpCatalogueEntry(
     id: 'fastmail',
     termsUrl: 'https://www.fastmail.com/about/tos/',
     privacyUrl: 'https://www.fastmail.com/about/privacy/',
@@ -341,6 +359,15 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     url: 'https://mcp.vercel.com',
     category: 'Developer',
     description: 'Projects, deployments and logs.',
+  ),
+  McpCatalogueEntry(
+    id: 'gitlab',
+    termsUrl: 'https://about.gitlab.com/terms/',
+    privacyUrl: 'https://about.gitlab.com/privacy/',
+    name: 'GitLab',
+    url: 'https://gitlab.com/api/v4/mcp',
+    category: 'Developer',
+    description: 'Issues, merge requests, pipelines and projects.',
   ),
   McpCatalogueEntry(
     id: 'supabase',
@@ -462,6 +489,15 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   ),
 
   // ─── Finance ───────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'square',
+    termsUrl: 'https://squareup.com/us/en/legal/general/ua',
+    privacyUrl: 'https://squareup.com/us/en/legal/general/privacy-no-account',
+    name: 'Square',
+    url: 'https://mcp.squareup.com/mcp',
+    category: 'Finance',
+    description: 'Payments, orders, customers and catalog.',
+  ),
   McpCatalogueEntry(
     id: 'paypal',
     termsUrl: 'https://www.paypal.com/us/legalhub/useragreement-full',
