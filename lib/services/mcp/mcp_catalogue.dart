@@ -507,6 +507,14 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Finance',
     description: 'Invoices, orders, payments and disputes.',
   ),
+  McpCatalogueEntry(
+    id: 'coingecko',
+    name: 'CoinGecko',
+    url: 'https://mcp.api.coingecko.com/mcp',
+    category: 'Finance',
+    description: 'Live crypto prices, market data, coins and exchanges.',
+    publisher: 'coingecko.com',
+  ),
 ];
 
 /// The domain a registry namespace stands for: `com.notion` → `notion.com`.
