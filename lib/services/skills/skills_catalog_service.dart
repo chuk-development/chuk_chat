@@ -20,6 +20,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/user_skills_service.dart';
@@ -35,6 +36,8 @@ class CatalogSkill {
     this.license,
     this.allowedTools = const [],
     this.resources = const [],
+    this.enabled = true,
+    this.coworkOnly = false,
   });
 
   final String name;
@@ -51,6 +54,16 @@ class CatalogSkill {
 
   /// Repo-relative resource paths (`references/…`, `scripts/…`, `assets/…`).
   final List<String> resources;
+
+  /// Manifest toggle. A `false` entry stays in the catalog but is never exposed
+  /// to the model — the reconciler skips it and drops any local copy. Defaults
+  /// to true so a manifest without the field behaves exactly as before.
+  final bool enabled;
+
+  /// Manifest toggle. A `true` entry is offered only while the app is in CoWork
+  /// mode and hidden from the normal chat UI. Carried through to the stored
+  /// skill so the registry can gate it at prompt-build time.
+  final bool coworkOnly;
 
   static CatalogSkill? fromJson(Map<String, dynamic> json) {
     final name = json['name'];
@@ -74,6 +87,9 @@ class CatalogSkill {
           const [],
       resources:
           (json['resources'] as List?)?.whereType<String>().toList() ?? const [],
+      enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
+      coworkOnly:
+          json['cowork_only'] is bool ? json['cowork_only'] as bool : false,
     );
   }
 }
@@ -116,6 +132,7 @@ class ReconcilePlan {
     required this.toUpdate,
     required this.suggestions,
     required this.skippedBuiltin,
+    this.toRemove = const [],
   });
 
   /// Catalog skills the user does not have — add automatically.
@@ -132,8 +149,16 @@ class ReconcilePlan {
   /// already provides them; catalog-overrides-builtin is a later enhancement).
   final List<CatalogSkill> skippedBuiltin;
 
+  /// Local row ids of stored catalog skills whose catalog entry is now
+  /// `enabled: false` — deleted so a disabled skill vanishes from the prompt.
+  /// It reappears (via [toAdd]) if the entry is re-enabled later.
+  final List<String> toRemove;
+
   bool get isEmpty =>
-      toAdd.isEmpty && toUpdate.isEmpty && suggestions.isEmpty;
+      toAdd.isEmpty &&
+      toUpdate.isEmpty &&
+      suggestions.isEmpty &&
+      toRemove.isEmpty;
 }
 
 /// Pure reconciliation: decide what to do with each catalog entry given the
@@ -147,8 +172,18 @@ ReconcilePlan planCatalogReconcile({
   final toUpdate = <({String id, CatalogSkill catalog})>[];
   final suggestions = <SkillUpdateSuggestion>[];
   final skippedBuiltin = <CatalogSkill>[];
+  final toRemove = <String>[];
 
   for (final entry in catalog) {
+    if (!entry.enabled) {
+      // Disabled: never add. Drop a PRISTINE local copy so it leaves the
+      // prompt, but never an edited one — user edits are sacred here, the same
+      // as the suggestion path never overwrites them. An edited copy the user
+      // wants gone is theirs to delete.
+      final local = localByCatalogName[entry.name];
+      if (local != null && !local.isEdited) toRemove.add(local.id);
+      continue;
+    }
     if (builtinNames.contains(entry.name)) {
       skippedBuiltin.add(entry);
       continue;
@@ -174,6 +209,7 @@ ReconcilePlan planCatalogReconcile({
     toUpdate: toUpdate,
     suggestions: suggestions,
     skippedBuiltin: skippedBuiltin,
+    toRemove: toRemove,
   );
 }
 
@@ -199,6 +235,16 @@ class SkillsCatalogService {
   /// Pending update suggestions from the last reconcile, for the settings UI.
   static List<SkillUpdateSuggestion> _suggestions = const [];
   static List<SkillUpdateSuggestion> get suggestions => _suggestions;
+
+  /// Metadata key a catalog skill carries to mark itself CoWork-only. It rides
+  /// inside the SKILL.md `metadata` block (parsed into [Skill.metadata]), so
+  /// the flag is stored with the skill body and readable synchronously at
+  /// prompt-build time — no dependence on the manifest having been fetched yet.
+  static const String kCoworkOnlyMetaKey = 'cowork_only';
+
+  /// True when a stored skill is marked CoWork-only via its metadata.
+  static bool isCoworkOnly(Skill skill) =>
+      skill.metadata[kCoworkOnlyMetaKey]?.trim().toLowerCase() == 'true';
 
   static String hashOf(String source) =>
       'sha256:${sha256.convert(utf8.encode(source)).toString()}';
@@ -328,6 +374,16 @@ class SkillsCatalogService {
       }
       for (final update in plan.toUpdate) {
         await _applyCatalogSkill(update.catalog, id: update.id);
+      }
+      for (final id in plan.toRemove) {
+        try {
+          await UserSkillsService.delete(id);
+        } catch (error) {
+          // A disabled skill failing to delete must not abort the reconcile.
+          if (kDebugMode) {
+            debugPrint('[SkillsCatalog] removing disabled skill failed: $error');
+          }
+        }
       }
 
       // Refresh the registry so the newly stored skills reach the prompt.
