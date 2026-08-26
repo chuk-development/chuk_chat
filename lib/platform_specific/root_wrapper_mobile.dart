@@ -1,6 +1,7 @@
 // lib/platform_specific/root_wrapper_mobile.dart
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_mode.dart';
@@ -457,15 +458,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// solid app bar.
   Widget _buildFloatingTopBar(Color iconFg, double titleAvailableWidth) {
     final ThemeData theme = Theme.of(context);
-    final Color bg = theme.scaffoldBackgroundColor;
-    final Color chipBg = Color.alphaBlend(
-      theme.colorScheme.surface.withValues(alpha: 0.62),
-      bg,
-    ).withValues(alpha: 0.86);
-    final Color pillBg = Color.alphaBlend(
-      theme.colorScheme.surface.withValues(alpha: 0.42),
-      bg,
-    ).withValues(alpha: 0.55);
+    // Genuinely translucent so the chat shows through — no alpha-blend onto
+    // the opaque scaffold background (that baked the background colour in and
+    // made the chips read as solid). A BackdropFilter blur behind each chip
+    // keeps the icons and title legible over whatever scrolls underneath.
+    final Color chipBg = theme.colorScheme.surface.withValues(alpha: 0.55);
+    final Color pillBg = theme.colorScheme.surface.withValues(alpha: 0.40);
     final Color shadowColor = Colors.black.withValues(alpha: 0.30);
     final String? title = _currentChatTitle();
 
@@ -495,7 +493,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   constraints: BoxConstraints(maxWidth: titleAvailableWidth),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: pillBg,
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
@@ -505,22 +502,34 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      child: (title != null)
-                          ? Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: iconFg.withValues(alpha: 0.92),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            )
-                          : BrandWordmark(
-                              color: iconFg.withValues(alpha: 0.92)),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: pillBg,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            child: (title != null)
+                                ? Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: iconFg.withValues(alpha: 0.92),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  )
+                                : BrandWordmark(
+                                    color: iconFg.withValues(alpha: 0.92)),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -567,18 +576,26 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       button: true,
       child: Tooltip(
         message: tooltip,
-        child: Material(
-          color: chipBg,
-          shape: const CircleBorder(),
-          elevation: 3,
-          shadowColor: shadowColor,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Icon(icon, size: 22, color: iconFg),
+        // Blur behind the chip so it frosts the chat underneath instead of
+        // hiding it: ClipOval bounds the BackdropFilter to the circle, the
+        // Material on top carries the translucent tint, ripple and shadow.
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Material(
+              color: chipBg,
+              shape: const CircleBorder(),
+              elevation: 3,
+              shadowColor: shadowColor,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Icon(icon, size: 22, color: iconFg),
+                ),
+              ),
             ),
           ),
         ),
@@ -692,6 +709,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         (3 * kFixedLeftPadding) -
         (ChatStorageService.savedChats.isNotEmpty ? kButtonVisualHeight : 0);
 
+    // The floating top bar overlays the chat so the conversation shows
+    // through its translucent chips. That means the chat has to reserve
+    // this much space at the top, or its first row starts hidden behind the
+    // bar. Height = safe-area inset + the bar's own padded content
+    // (8 + 48 + 6 == 62, see _buildFloatingTopBar).
+    final double topBarInset = MediaQuery.paddingOf(context).top + 62;
+
     final Widget mainContent = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _isSidebarExpanded ? _toggleSidebar : null,
@@ -709,14 +733,21 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       },
       child: IgnorePointer(
         ignoring: _isSidebarExpanded,
-        child: Column(
+        // Overlay, not a column: the top bar floats on top of the chat so
+        // the conversation scrolls under its translucent chips and shows
+        // through. The chat reserves `topBarInset` at the top so nothing
+        // starts hidden behind the bar.
+        child: Stack(
           children: [
-            _buildFloatingTopBar(iconFg, titleAvailableWidth),
-            Expanded(
+            Positioned.fill(
               child: (kFeatureCoWork && _mode == AppMode.cowork)
-                  ? const CoWorkSurface()
+                  ? Padding(
+                      padding: EdgeInsets.only(top: topBarInset),
+                      child: const CoWorkSurface(),
+                    )
                   : ChukChatUIMobile(
                       key: _chatUIMobileKey,
+                      topInset: topBarInset,
                       onToggleSidebar: _toggleSidebar,
                       selectedChatId: ChatStorageService.selectedChatId,
                       onChatIdChanged: (newId) {
@@ -761,6 +792,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                       allowMarkdownToolCalls:
                           widget.config.allowMarkdownToolCalls,
                     ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildFloatingTopBar(iconFg, titleAvailableWidth),
             ),
           ],
         ),
