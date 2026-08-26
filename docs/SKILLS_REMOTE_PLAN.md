@@ -228,29 +228,45 @@ non-factual set) + an executor `case`.
 - `read_skill_resource` rejects any path not in the manifest `resources` and any
   `..`.
 
-## Build order (milestones — one per session; green tests + CodeRabbit + commit)
+## Build order (milestones — green tests + CodeRabbit + commit each)
 
-- **M1 — Remove the flag + model/storage foundation**: delete `FEATURE_SKILLS`
-  and its 4 gates; add `origin`/`catalogName`/`baselineHash`/`baselineBody`/
-  `resources` to `Skill`; SQLite `skills` table + web fallback; migrate the
-  Supabase `user_skills` columns. Tests + freshness test still green.
-- **M2 — Registry single layer + store service**: collapse `SkillRegistry` to
-  one owned list fed from SQLite; first-run seed from `kBuiltinSkills`; Supabase
-  sync (cache-first). Tests.
-- **M3 — Catalog fetch + reconciliation**: `SkillsCatalogService` (manifest
+- **[x] M1 — Remove the flag** (`3ca59ac`): `FEATURE_SKILLS` and its four gates
+  deleted, `run.sh` plumbing removed, skills always on.
+- **[x] M2 — Skill model extension** (`ac89d7f`): `catalogName`, `baselineHash`,
+  `resources` + `SkillResource` added, additive with safe defaults; freshness
+  test unaffected.
+- **[x] M3a — Local SQLite skills store** (`d15b064`): `skills` table (db v5,
+  plaintext local per chat_cache convention) + web SharedPreferences fallback,
+  CRUD + transactional `replaceSkills`. Tests.
+- **[ ] M3b — Rework the skill store**: point `UserSkillsService` (or a renamed
+  `SkillsStore`) at the SQLite store as the local source of truth, keep Supabase
+  as the encrypted mirror, carry `catalog_name` + `baseline_hash`. Add those two
+  columns to the Supabase `user_skills` table (Management API, column-before-
+  code). Raise/remove `kMaxUserSkills`. `SkillRegistry.refreshUserSkills` reads
+  the reworked store. Tests.
+- **[ ] M4 — Catalog fetch + reconciliation**: `SkillsCatalogService` (manifest
   fetch, TTL cache, lazy body). The reconciliation algorithm with the
   baseline-hash logic. Tests for all four branches (add / auto-update / suggest /
   user-created-untouched).
-- **M4 — Level-3 `read_skill_resource`**: registration, lazy resource fetch,
+- **[ ] M5 — Level-3 `read_skill_resource`**: registration, lazy resource fetch,
   prompt-rebuild injection, scripts-as-text. Tests.
-- **M5 — `write_skill` (+ `delete_skill`)**: agent authoring, autonomous-edit
+- **[ ] M6 — `write_skill` (+ `delete_skill`)**: agent authoring, autonomous-edit
   surfacing. Tests.
-- **M6 — UI**: editable list, origin/edited badges, update suggestions + diff,
-  paste/`.md` install, check-for-updates.
-- **M7 — The repo + docs**: create `chuk-development/chuk-skills`, `index.json`
-  generator, seed skills (mirror the current builtins). Update `CLAUDE.md`,
-  `docs/DATABASE.md`; remove stale `FEATURE_SKILLS` references from `run.sh`
-  etc.
+- **[ ] M7 — UI**: editable list, origin/edited badges, update suggestions +
+  diff, paste/`.md` install, check-for-updates.
+- **[ ] M8 — The repo + docs**: create `chuk-development/chuk-skills`,
+  `index.json` generator, seed skills (mirror the current builtins). Update
+  `CLAUDE.md`, `docs/DATABASE.md`.
+
+### Refinements found while building
+
+- **Local rows are plaintext**, not encrypted — the SQLite `skills` table
+  follows `chat_cache` (the key is on-device, so a second at-rest layer is
+  theatre). Encryption stays only on the Supabase mirror's body.
+- **No `baseline_body` column.** The update suggestion is a 2-way diff of the
+  user's body against the *new* catalog body; the old catalog body is not
+  needed, so only `catalog_name` + `baseline_hash` are persisted. `resources`
+  are re-derived from the live catalog by `catalog_name`, not stored per row.
 
 ## Open items to confirm before M3/M7
 
