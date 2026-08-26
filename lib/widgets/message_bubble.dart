@@ -20,7 +20,6 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
@@ -124,8 +123,7 @@ final RegExp _attachmentHeaderRe = RegExp(
 
 /// Default chat font family, resolved once. Used when the user has explicitly
 /// picked the system font (the historic Arimo default).
-final String _kAiResponseFontFamilyDefault =
-    GoogleFonts.arimo().fontFamily ?? 'Arimo';
+final String _kAiResponseFontFamilyDefault = kFontFamilyArimo;
 
 /// Cross-instance cache of the two display preferences, so a freshly built
 /// bubble can render with the last known value before its own async load
