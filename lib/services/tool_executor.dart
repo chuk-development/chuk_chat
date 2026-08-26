@@ -90,9 +90,9 @@ class ToolExecutor {
     'notes',
     'generate_qr',
     'ask_user',
-    // Unconditional despite kFeatureSkills: this set asserts "an executor
-    // exists for this name", it is not a feature gate. registerTool() throws
-    // if a registered tool is missing here. Gating happens in tool_registry.
+    // This set asserts "an executor exists for this name", it is not a
+    // feature gate. registerTool() throws if a registered tool is missing
+    // here.
     'skill',
     'web_search',
     'web_crawl',

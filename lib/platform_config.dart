@@ -106,20 +106,6 @@ const bool kFeatureCoworkDemo = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Agent Skills — named procedures the AI loads on demand via the `skill`
-/// tool, following the open spec at https://agentskills.io/specification.
-/// Only `name` + description sit in the prompt; the body is disclosed on
-/// activation. Skills are authored in `assets/skills/` and compiled in — none
-/// are fetched at runtime.
-///
-/// Disabled by default; enable via --dart-define=FEATURE_SKILLS=true.
-/// When off, the `skill` tool is never registered and the prompt is
-/// byte-identical to a build without this feature.
-const bool kFeatureSkills = bool.fromEnvironment(
-  'FEATURE_SKILLS',
-  defaultValue: false,
-);
-
 /// Linux secure storage backend for encryption keys.
 /// When disabled, Linux falls back to SharedPreferences instead of keyring.
 const bool kFeatureLinuxKeyring = bool.fromEnvironment(

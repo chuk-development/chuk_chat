@@ -235,20 +235,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
-              if (kFeatureSkills)
-                _SettingsRow(
-                  icon: Icons.auto_awesome_outlined,
-                  title: l.skills,
-                  subtitle: l.skillsSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SkillsSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
+              _SettingsRow(
+                icon: Icons.auto_awesome_outlined,
+                title: l.skills,
+                subtitle: l.skillsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SkillsSettingsPage(),
+                    ),
+                  );
+                },
+              ),
               // Fix C: the standalone GitHub entry was removed and the
               // GitHub connection now lives inside SandboxManagementPage —
               // the GitHub token is only ever used by `git`/`gh` inside the
