@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/cowork/cowork_messenger.dart';
 import 'package:chuk_chat/services/cowork/cowork_executor_bridge.dart';
 
 /// The CoWork surface — shown when the app is in [AppMode.cowork].
@@ -64,7 +64,8 @@ class _CoWorkSurfaceState extends State<CoWorkSurface> {
   @override
   Widget build(BuildContext context) {
     if (!kFeatureCoworkDemo) {
-      return _ComingSoon();
+      // The CoWork messenger — roster of AI coworkers + threads (basic UI).
+      return const CoworkMessenger();
     }
     return _DemoPanel(url: _url, error: _error, connections: _connections);
   }
@@ -243,53 +244,3 @@ class _ErrorBox extends StatelessWidget {
   }
 }
 
-class _ComingSoon extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.hub_outlined, size: 34, color: scheme.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l.coworkComingSoon,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                l.coworkComingSoonBody,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.45,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
