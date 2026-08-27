@@ -45,8 +45,9 @@ class AccentIconButton extends StatelessWidget {
     final Widget button = Material(
       color: fill,
       shape: const CircleBorder(),
-      elevation: 3,
-      shadowColor: Colors.black.withValues(alpha: 0.30),
+      // No elevation: the button ends hard at its edge, no soft shadow
+      // bleeding into the background around it.
+      elevation: 0,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         customBorder: const CircleBorder(),

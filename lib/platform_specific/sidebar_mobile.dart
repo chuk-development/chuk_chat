@@ -1073,17 +1073,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
   ) {
     final String name = _displayNameFor(_profile);
     final ThemeData theme = Theme.of(context);
-    // Each control is its own floating block now — the name, the balance and
-    // the gear no longer share one bar. Only faintly translucent (alpha 0.96)
-    // so it reads as a near-solid block, uniform across its whole face, with a
-    // soft shadow so it lifts. The balance and the gear both build on floatBg,
-    // so this one value sets all three blocks.
+    // Each control is its own block — the name, the balance and the gear no
+    // longer share one bar. Only faintly translucent (alpha 0.96) so it reads
+    // as a near-solid block, uniform across its whole face. No elevation: the
+    // blocks end hard at their edge, no shadow bleeding into the background.
+    // The balance and the gear both build on floatBg, so this one value sets
+    // all three blocks.
     final Color floatBg = Color.alphaBlend(
       theme.colorScheme.surface.withValues(alpha: 0.62),
       sidebarBg,
     ).withValues(alpha: 0.96);
-    final Color shadowColor = Colors.black.withValues(alpha: 0.35);
-    const double elevation = 4;
+    const double elevation = 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
       child: Row(
@@ -1094,7 +1094,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
               color: floatBg,
               borderRadius: BorderRadius.circular(20),
               elevation: elevation,
-              shadowColor: shadowColor,
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: widget.onSettingsTapped,
@@ -1120,7 +1119,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
             color: Color.alphaBlend(accent.withValues(alpha: 0.24), floatBg),
             borderRadius: BorderRadius.circular(20),
             elevation: elevation,
-            shadowColor: shadowColor,
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1145,7 +1143,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
             color: floatBg,
             shape: const CircleBorder(),
             elevation: elevation,
-            shadowColor: shadowColor,
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               customBorder: const CircleBorder(),
