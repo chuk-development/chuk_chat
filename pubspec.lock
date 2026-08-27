@@ -13,10 +13,10 @@ packages:
     dependency: transitive
     description:
       name: android_file_picker
-      sha256: "665a5a57dfca27f91a715d300e4852a784f9f98e503dcff281bec9afb55767be"
+      sha256: "3384b62685e04ce7afeaf57e94bf29bc167e32240be6c6cb382a94632aec0241"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1"
+    version: "1.0.2"
   app_links:
     dependency: transitive
     description:
@@ -221,10 +221,10 @@ packages:
     dependency: "direct main"
     description:
       name: desktop_drop
-      sha256: aa1e797255bfbc76f9eb5aa4f61e5b68dbf69962ab1be6495816d2f251bc0d1f
+      sha256: c65d1f959ccf4bb6803f984303d03e1e0dd4c0f73a3a2eca2d1b46d48ea16999
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.1"
+    version: "0.8.2"
   device_info_plus:
     dependency: "direct overridden"
     description:
@@ -349,18 +349,18 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: afbaa8015d9efabd224f41084ed9fdeddfa65389ebd7cd3a9eb1476aca66b46d
+      sha256: "70e04f5ef83360433ea0099dc18154126536d85ef3cb4f63c2573725e49f608c"
       url: "https://pub.dev"
     source: hosted
-    version: "12.0.0"
+    version: "12.1.1"
   file_picker_darwin:
     dependency: transitive
     description:
       name: file_picker_darwin
-      sha256: "5d87d156c1d63920447a662b7117d3498c67e3444a44d2cb01ed955d6efa62ef"
+      sha256: bdcba9c830f90ecba26020159e6bb90bce862ec58fabf1c41edb9db43e2f0eae
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1"
+    version: "1.0.3"
   file_picker_linux:
     dependency: transitive
     description:
@@ -373,18 +373,18 @@ packages:
     dependency: transitive
     description:
       name: file_picker_platform_interface
-      sha256: "9e7a7e01e179929241f0afeb2c8c69ac95e29e17c0abea36ed193881c6bef90c"
+      sha256: b1ddd7909853c9df0eb4dbc5b388837ff313e28d6d5a9a71a83794b70c4c86bd
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.1"
+    version: "3.1.0"
   file_picker_web:
     dependency: transitive
     description:
       name: file_picker_web
-      sha256: f1af38b3c91fafe0ca97f659b5c6818a057473ef09bb8b722f9f3f5364aa7eed
+      sha256: "067051c42bb6ceb7650f2771206ca4c4908855a786cc03a0cb7240da441106f3"
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.1"
+    version: "3.0.2"
   file_selector_linux:
     dependency: transitive
     description:
@@ -817,10 +817,10 @@ packages:
     dependency: "direct main"
     description:
       name: image
-      sha256: f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce
+      sha256: "1976370a4df3091bb0f72409c187ad1f9132a818bc6b95ca59c0bae1c75c688e"
       url: "https://pub.dev"
     source: hosted
-    version: "4.8.0"
+    version: "4.9.2"
   image_picker:
     dependency: "direct main"
     description:
@@ -1256,26 +1256,26 @@ packages:
     dependency: "direct main"
     description:
       name: pdfrx
-      sha256: acce61944c31bd36f0c3031b1bbf41f59d0b0d4e5e27614fbdc74ff093d55464
+      sha256: "85a87117ae6358e0ef2cc90d4db9f5e689eabbd7f19ab98c97164584d0be4a4a"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.7"
+    version: "2.4.8"
   pdfrx_engine:
     dependency: transitive
     description:
       name: pdfrx_engine
-      sha256: "8043527245e4c35a2a3b7df8494c066b9efa97fe031945951e46b378318b3d5f"
+      sha256: "4399846809a75aed03881d8b8a19e5e70addd4b46b22fd94a0effd8859258f07"
       url: "https://pub.dev"
     source: hosted
-    version: "0.4.5"
+    version: "0.4.7"
   pdfx:
     dependency: "direct main"
     description:
       name: pdfx
-      sha256: "29db9b71d46bf2335e001f91693f2c3fbbf0760e4c2eb596bf4bafab211471c1"
+      sha256: "83bcd2b971fc2f6ee4299659c96d7d66b2ba4807748571a8a4889f1cde14b754"
       url: "https://pub.dev"
     source: hosted
-    version: "2.9.2"
+    version: "2.11.0"
   permission_handler:
     dependency: "direct main"
     description:
@@ -1749,10 +1749,10 @@ packages:
     dependency: transitive
     description:
       name: sqlite3
-      sha256: "64b2c63c8232dd20d14b34105a81ebfd74320442e8451f836179ec89986aa478"
+      sha256: "4c7fe79840389aaeaf05fd093f795b631b5a98e2bd28d54e555c100f4a9c7a1c"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.1"
+    version: "3.5.2"
   sqlite3_flutter_libs:
     dependency: "direct main"
     description:
@@ -2085,10 +2085,10 @@ packages:
     dependency: transitive
     description:
       name: windows_file_picker
-      sha256: "72cf23466e146f2c0f19e1d78be97ff6409dc15b0c090f8eb284f94f4a33de26"
+      sha256: "1659127cb9e9e31a136352bfcb50fa4bb9e242dd7e0b71f99c3943b142e3026a"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1"
+    version: "1.0.2"
   wkt_parser:
     dependency: transitive
     description:
