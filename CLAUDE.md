@@ -33,6 +33,15 @@ threat model, decisions). The execution plan is the order of work.
 
 ## Multi-Agent Worktrees
 
+**HARD RULE — a new feature branch always means a new local worktree.** Whenever
+you start a new feature branch, create it in its own `git worktree` (off `master`)
+and do the work there. NEVER check out a different branch inside the main checkout
+(`/home/user/git/chuk_chat`) or the main CoWork directory — each of those stays on
+its own branch (normally `master`) and is never switched to another task's branch.
+Do not commit an unrelated fix onto whatever branch the main checkout happens to be
+sitting on; branch it into a fresh worktree instead. This keeps every task's history
+isolated and stops one task's in-progress work from riding along with another's.
+
 When several agents work this repo at once, **each agent gets its own git worktree** so they never touch the same working directory. A worktree is a second checkout of the same repo on its own branch, sharing one `.git` — parallel-safe because `.dart_tool/` and `build/` are per-directory.
 
 **Each agent, on start:**
