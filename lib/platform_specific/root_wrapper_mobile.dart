@@ -469,7 +469,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // the whole pill. Slightly more opaque than a frosted fill so the title
     // stays legible without the blur.
     final Color pillBg = theme.colorScheme.surface.withValues(alpha: 0.55);
-    final Color shadowColor = Colors.black.withValues(alpha: 0.30);
     final String? title = _currentChatTitle();
 
     return SafeArea(
@@ -487,7 +486,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   onTap: _toggleSidebar,
                   iconFg: iconFg,
                   chipBg: chipBg,
-                  shadowColor: shadowColor,
                   tooltip: 'Open menu',
                   semanticsId: 'menu_button',
                 ),
@@ -506,13 +504,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                           decoration: BoxDecoration(
                             color: pillBg,
                             borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(
-                                color: shadowColor,
-                                blurRadius: 12,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -540,7 +531,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 onTap: _copyDebugChat,
                 iconFg: iconFg,
                 chipBg: chipBg,
-                shadowColor: shadowColor,
                 tooltip: 'Copy full chat',
                 semanticsId: 'copy_debug_chat_button',
               ),
@@ -561,13 +551,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     );
   }
 
-  /// One round, lifted icon chip for the floating top bar.
+  /// One round, frosted icon chip for the floating top bar.
   Widget _floatIconChip({
     required IconData icon,
     required VoidCallback onTap,
     required Color iconFg,
     required Color chipBg,
-    required Color shadowColor,
     required String tooltip,
     required String semanticsId,
   }) {
@@ -578,15 +567,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         message: tooltip,
         // Blur behind the chip so it frosts the chat underneath instead of
         // hiding it: ClipOval bounds the BackdropFilter to the circle, the
-        // Material on top carries the translucent tint, ripple and shadow.
+        // Material on top carries the translucent tint and ripple. No
+        // elevation — the chip ends hard at its edge, no shadow bleeding out.
         child: ClipOval(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Material(
               color: chipBg,
               shape: const CircleBorder(),
-              elevation: 3,
-              shadowColor: shadowColor,
+              elevation: 0,
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 customBorder: const CircleBorder(),
