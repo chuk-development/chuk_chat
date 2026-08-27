@@ -414,7 +414,7 @@ fi
 # production defaults in lib/platform_config.dart.
 #
 # Override any of them from .env or the shell, e.g.:
-#   FEATURE_VOICE_MODE=false ./run.sh linux
+#   FEATURE_SKILLS=false ./run.sh linux
 #
 # NOTE: FEATURE_PROJECTS used to be passed here and is a no-op — nothing in
 # lib/ reads it. The flag that exists is FEATURE_WORKSPACES.
@@ -424,6 +424,7 @@ FEATURE_VOICE_MODE="${FEATURE_VOICE_MODE:-true}"
 FEATURE_WORKSPACES="${FEATURE_WORKSPACES:-true}"
 FEATURE_ARTIFACTS="${FEATURE_ARTIFACTS:-true}"
 FEATURE_SERVER_TOOLS="${FEATURE_SERVER_TOOLS:-true}"
+FEATURE_SKILLS="${FEATURE_SKILLS:-true}"
 FEATURE_PAYMENTS_DIRECT="${FEATURE_PAYMENTS_DIRECT:-true}"
 
 # On, but NOT a working feature yet: today this only reveals the mode switcher
@@ -458,7 +459,7 @@ esac
 # and a log that disagrees with what was actually passed is worse than none.
 ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
-  FEATURE_SERVER_TOOLS FEATURE_COWORK FEATURE_COWORK_DEMO
+  FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK FEATURE_COWORK_DEMO
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
   FEATURE_LINUX_KEYRING
 )
