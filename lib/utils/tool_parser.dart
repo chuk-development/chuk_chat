@@ -142,7 +142,6 @@ const Set<String> _knownDirectXmlToolNames = <String>{
   'search_restaurants',
   'get_route',
   'search_chats',
-  'spotify_control',
   'google_calendar',
   'random_number',
   'flip_coin',

@@ -1,9 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
-import 'package:chuk_chat/platform_config.dart'
-    show kFeatureSpotify, kFeatureWhoop;
 import 'package:chuk_chat/services/approval_config.dart';
 import 'package:chuk_chat/services/bash_sandbox.dart';
 import 'package:chuk_chat/services/device_services.dart';
@@ -11,13 +7,9 @@ import 'package:chuk_chat/services/email_service.dart';
 import 'package:chuk_chat/services/github_oauth.dart';
 import 'package:chuk_chat/services/google_oauth.dart';
 import 'package:chuk_chat/services/slack_oauth.dart';
-import 'package:chuk_chat/services/spotify_oauth.dart';
-import 'package:chuk_chat/services/whoop_oauth.dart';
-import 'package:chuk_chat/tool_handlers/whoop_tools.dart' as whoop_tools;
 import 'package:chuk_chat/utils/tool_helpers.dart';
 
 /// Singleton service instances for native platforms.
-final SpotifyOAuth _spotifyOAuth = SpotifyOAuth();
 final BashSandbox _bashSandbox = BashSandbox();
 final GitHubOAuth _gitHubOAuth = GitHubOAuth();
 final SlackOAuth _slackOAuth = SlackOAuth();
@@ -25,36 +17,22 @@ final GoogleOAuth _googleOAuth = GoogleOAuth();
 final EmailService _emailService = EmailService();
 final DeviceServices _deviceServices = DeviceServices();
 final ApprovalConfig _approvalConfig = ApprovalConfig();
-final WhoopOAuth _whoopOAuth = WhoopOAuth();
 
 /// Initialize platform services — loads saved tokens/configs.
-///
-/// Spotify and WHOOP services are dormant unless their feature flags are
-/// enabled (the backend OAuth endpoints have been removed). We skip their
-/// token probes here so no background work happens for disabled features.
 Future<void> initPlatformServices() async {
-  final tasks = <Future<void>>[
+  await Future.wait(<Future<void>>[
     _approvalConfig.load(),
     _gitHubOAuth.loadSavedToken(),
     _slackOAuth.isAuthenticated(), // loads tokens internally
     _googleOAuth.getAccessToken().then((_) {}), // loads tokens internally
     _emailService.loadSavedConfig(),
     _bashSandbox.loadSavedFolder(),
-  ];
-  if (kFeatureSpotify) {
-    tasks.add(_spotifyOAuth.checkAuthenticated().then((_) {}));
-  }
-  if (kFeatureWhoop) {
-    tasks.add(_whoopOAuth.checkAuthenticated().then((_) {}));
-  }
-  await Future.wait(tasks);
+  ]);
 }
 
 /// Check if a platform service is connected.
 bool isPlatformServiceConnected(String service) {
   switch (service) {
-    case 'spotify':
-      return kFeatureSpotify && _spotifyOAuth.hasToken;
     case 'bash':
       return _bashSandbox.isConfigured;
     case 'github':
@@ -65,8 +43,6 @@ bool isPlatformServiceConnected(String service) {
       return _googleOAuth.isAuthenticated;
     case 'email':
       return _emailService.isConfigured;
-    case 'whoop':
-      return kFeatureWhoop && _whoopOAuth.hasToken;
     default:
       return false;
   }
@@ -74,24 +50,16 @@ bool isPlatformServiceConnected(String service) {
 
 // ============== Service connection management ==============
 
-/// Categories that support OAuth connect/disconnect. Spotify and WHOOP are
-/// excluded by default — their feature flags add them back at compile time
-/// when the integrations are re-enabled.
+/// Categories that support OAuth connect/disconnect.
 final Set<String> connectableServices = {
   'github',
   'slack',
   'google',
-  if (kFeatureSpotify) 'spotify',
-  if (kFeatureWhoop) 'whoop',
 };
 
 /// Start the OAuth flow for a service. Returns true on success.
 Future<bool> connectPlatformService(String service) async {
   switch (service) {
-    case 'spotify':
-      if (!kFeatureSpotify) return false;
-      await _spotifyOAuth.startAuth();
-      return _spotifyOAuth.completeAuth();
     case 'github':
       await _gitHubOAuth.startAuth();
       return _gitHubOAuth.completeAuth();
@@ -101,10 +69,6 @@ Future<bool> connectPlatformService(String service) async {
     case 'google':
       await _googleOAuth.startAuth();
       return _googleOAuth.completeAuth();
-    case 'whoop':
-      if (!kFeatureWhoop) return false;
-      await _whoopOAuth.startAuth();
-      return _whoopOAuth.completeAuth();
     default:
       return false;
   }
@@ -113,8 +77,6 @@ Future<bool> connectPlatformService(String service) async {
 /// Disconnect a service by clearing its stored tokens.
 Future<void> disconnectPlatformService(String service) async {
   switch (service) {
-    case 'spotify':
-      if (kFeatureSpotify) await _spotifyOAuth.logout();
     case 'github':
       await _gitHubOAuth.logout();
     case 'slack':
@@ -123,565 +85,7 @@ Future<void> disconnectPlatformService(String service) async {
       await _googleOAuth.logout();
     case 'email':
       await _emailService.clearConfig();
-    case 'whoop':
-      if (kFeatureWhoop) await _whoopOAuth.logout();
   }
-}
-
-// ============== Spotify ==============
-
-Future<String> executeSpotify(Map<String, dynamic> args) async {
-  final isAuth = await _spotifyOAuth.checkAuthenticated();
-  if (!isAuth) {
-    return 'Spotify not authenticated. '
-        'Please connect your Spotify account first.';
-  }
-
-  final token = await _spotifyOAuth.getAccessToken();
-  if (token == null) {
-    return 'Failed to get Spotify access token. Please reconnect.';
-  }
-
-  final action = args['action'] as String? ?? '';
-
-  try {
-    switch (action.toLowerCase()) {
-      case 'play':
-        return await _spotifyPlay(token, args);
-      case 'pause':
-        await _spotifyApi(token, '/me/player/pause', method: 'PUT');
-        return 'Playback paused';
-      case 'next':
-        await _spotifyApi(token, '/me/player/next', method: 'POST');
-        return 'Skipped to next track';
-      case 'previous':
-        await _spotifyApi(token, '/me/player/previous', method: 'POST');
-        return 'Skipped to previous track';
-      case 'volume':
-        final volume = (args['volume'] as int? ?? 50).clamp(0, 100);
-        await _spotifyApi(
-          token,
-          '/me/player/volume?volume_percent=$volume',
-          method: 'PUT',
-        );
-        return 'Volume set to $volume%';
-      case 'search':
-        return await _spotifySearch(token, args);
-      case 'now_playing':
-      case 'nowplaying':
-        return await _spotifyNowPlaying(token);
-      case 'devices':
-        return await _spotifyDevices(token);
-      case 'shuffle':
-        final stateArg = args['state'];
-        final bool state;
-        if (stateArg is bool) {
-          state = stateArg;
-        } else if (stateArg is String) {
-          state =
-              stateArg.toLowerCase() == 'on' ||
-              stateArg.toLowerCase() == 'true';
-        } else {
-          state = true;
-        }
-        await _spotifyApi(
-          token,
-          '/me/player/shuffle?state=$state',
-          method: 'PUT',
-        );
-        return 'Shuffle ${state ? "enabled" : "disabled"}';
-      case 'repeat':
-        final rState = args['state'] as String? ?? 'off';
-        await _spotifyApi(
-          token,
-          '/me/player/repeat?state=$rState',
-          method: 'PUT',
-        );
-        return 'Repeat mode: $rState';
-      case 'create_playlist':
-        return await _spotifyCreatePlaylist(token, args);
-      case 'get_playlists':
-      case 'get_my_playlists':
-        return await _spotifyGetPlaylists(token);
-      case 'add_to_queue':
-        final uri = args['uri'] as String? ?? '';
-        if (uri.isEmpty) return 'Error: uri required';
-        await _spotifyApi(token, '/me/player/queue?uri=$uri', method: 'POST');
-        return 'Added track to queue';
-      case 'find_and_play':
-        return await _spotifyFindAndPlay(token, args);
-      case 'get_recently_liked':
-      case 'recently_liked':
-        return await _spotifyRecentlyLiked(token, args);
-      case 'add_to_playlist':
-        return await _spotifyAddToPlaylist(token, args);
-      case 'remove_from_playlist':
-        return await _spotifyRemoveFromPlaylist(token, args);
-      case 'like_track':
-        return await _spotifyLikeTrack(token, args);
-      case 'unlike_track':
-        return await _spotifyUnlikeTrack(token, args);
-      case 'get_playlist_tracks':
-        return await _spotifyGetPlaylistTracks(token, args);
-      default:
-        return 'Unknown Spotify action: $action. '
-            'Available: play, pause, next, previous, volume, search, '
-            'now_playing, devices, shuffle, repeat, create_playlist, '
-            'get_playlists, get_playlist_tracks, add_to_playlist, '
-            'remove_from_playlist, add_to_queue, find_and_play, '
-            'get_recently_liked, like_track, unlike_track';
-    }
-  } catch (e) {
-    return 'Spotify error: $e';
-  }
-}
-
-Future<String> _spotifyApi(
-  String token,
-  String endpoint, {
-  String method = 'GET',
-  Map<String, dynamic>? body,
-}) async {
-  final uri = Uri.parse('https://api.spotify.com/v1$endpoint');
-  final headers = {
-    'Authorization': 'Bearer $token',
-    'Content-Type': 'application/json',
-  };
-
-  late http.Response response;
-  switch (method.toUpperCase()) {
-    case 'GET':
-      response = await http.get(uri, headers: headers);
-    case 'POST':
-      response = await http.post(
-        uri,
-        headers: headers,
-        body: body != null ? jsonEncode(body) : null,
-      );
-    case 'PUT':
-      response = await http.put(
-        uri,
-        headers: headers,
-        body: body != null ? jsonEncode(body) : null,
-      );
-    case 'DELETE':
-      // http.delete() doesn't support a body, use Request for DELETE+body
-      if (body != null) {
-        final request = http.Request('DELETE', uri)
-          ..headers.addAll(headers)
-          ..body = jsonEncode(body);
-        final streamed = await request.send();
-        response = await http.Response.fromStream(streamed);
-      } else {
-        response = await http.delete(uri, headers: headers);
-      }
-    default:
-      return 'Unsupported HTTP method: $method';
-  }
-
-  if (response.statusCode >= 200 && response.statusCode < 300) {
-    return response.body.isEmpty ? 'Success' : response.body;
-  } else {
-    throw StateError(
-      'Spotify API error ${response.statusCode}: ${response.body}',
-    );
-  }
-}
-
-Future<String> _spotifyPlay(String token, Map<String, dynamic> args) async {
-  final uri = args['uri'] as String?;
-
-  Map<String, dynamic>? body;
-  if (uri != null) {
-    if (uri.startsWith('spotify:track:')) {
-      body = {
-        'uris': [uri],
-      };
-    } else if (uri.startsWith('spotify:album:') ||
-        uri.startsWith('spotify:playlist:') ||
-        uri.startsWith('spotify:artist:')) {
-      body = {'context_uri': uri};
-    } else {
-      body = {
-        'uris': [uri],
-      };
-    }
-  }
-
-  await _spotifyApi(token, '/me/player/play', method: 'PUT', body: body);
-  return uri == null ? 'Playback resumed' : 'Playing: $uri';
-}
-
-Future<String> _spotifySearch(String token, Map<String, dynamic> args) async {
-  final query = args['query'] as String? ?? '';
-  final type = args['type'] as String? ?? 'track';
-  final limit = args['limit'] as int? ?? 5;
-
-  if (query.isEmpty) return 'Error: No search query provided';
-
-  final response = await _spotifyApi(
-    token,
-    '/search?q=${Uri.encodeComponent(query)}&type=$type&limit=$limit',
-  );
-  final data = jsonDecode(response);
-
-  final buffer = StringBuffer('Search results for "$query":\n\n');
-  final items = data['${type}s']?['items'] as List? ?? [];
-
-  for (int i = 0; i < items.length; i++) {
-    final item = items[i];
-    buffer.writeln('${i + 1}. ${item['name']}');
-    if (item['artists'] != null) {
-      final artists = (item['artists'] as List)
-          .map((a) => a['name'])
-          .join(', ');
-      buffer.writeln('   Artist: $artists');
-    }
-    buffer.writeln('   URI: ${item['uri']}');
-    buffer.writeln();
-  }
-
-  return buffer.toString();
-}
-
-Future<String> _spotifyNowPlaying(String token) async {
-  final response = await _spotifyApi(token, '/me/player/currently-playing');
-  if (response == 'Success') {
-    return 'Nothing is currently playing';
-  }
-
-  final data = jsonDecode(response);
-  if (data['item'] == null) {
-    return 'Nothing is currently playing';
-  }
-
-  final track = data['item'];
-  final artists = (track['artists'] as List).map((a) => a['name']).join(', ');
-  final isPlaying = data['is_playing'] as bool? ?? false;
-  final progress = data['progress_ms'] as int? ?? 0;
-  final duration = track['duration_ms'] as int? ?? 0;
-
-  return 'Now Playing:\n'
-      '${track['name']}\n'
-      'Artist: $artists\n'
-      'Album: ${track['album']['name']}\n'
-      '${isPlaying ? 'Playing' : 'Paused'} '
-      '${formatDuration(progress)} / ${formatDuration(duration)}\n'
-      'URI: ${track['uri']}';
-}
-
-Future<String> _spotifyDevices(String token) async {
-  final response = await _spotifyApi(token, '/me/player/devices');
-  final data = jsonDecode(response);
-  final devices = data['devices'] as List? ?? [];
-
-  if (devices.isEmpty) {
-    return 'No devices found. Open Spotify on a device.';
-  }
-
-  final buffer = StringBuffer('Available Spotify devices:\n\n');
-  for (int i = 0; i < devices.length; i++) {
-    final device = devices[i];
-    final isActive = device['is_active'] as bool? ?? false;
-    buffer.writeln(
-      '${isActive ? "[Active]" : "[  ]"} '
-      '${device['name']} (${device['type']})',
-    );
-    buffer.writeln('   ID: ${device['id']}');
-    buffer.writeln('   Volume: ${device['volume_percent']}%');
-    buffer.writeln();
-  }
-
-  return buffer.toString();
-}
-
-Future<String> _spotifyUserId(String token) async {
-  final response = await _spotifyApi(token, '/me');
-  final data = jsonDecode(response) as Map<String, dynamic>;
-  return data['id'] as String;
-}
-
-Future<String> _spotifyCreatePlaylist(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final name = args['name'] as String? ?? 'New Playlist';
-  final description = args['description'] as String? ?? '';
-  final isPublic = args['public'] as bool? ?? false;
-
-  final userId = await _spotifyUserId(token);
-
-  final body = {'name': name, 'description': description, 'public': isPublic};
-
-  final response = await _spotifyApi(
-    token,
-    '/users/$userId/playlists',
-    method: 'POST',
-    body: body,
-  );
-  final playlist = jsonDecode(response) as Map<String, dynamic>;
-
-  // If track URIs were provided, add them immediately
-  final uris = args['uris'];
-  final playlistId = playlist['id'] as String;
-  if (uris is List && uris.isNotEmpty) {
-    final trackUris = uris.cast<String>().toList();
-    await _spotifyApi(
-      token,
-      '/playlists/$playlistId/tracks',
-      method: 'POST',
-      body: {'uris': trackUris},
-    );
-    return 'Playlist created: ${playlist['name']} '
-        '(${trackUris.length} tracks added)\n'
-        'URI: ${playlist['uri']}';
-  }
-
-  return 'Playlist created: ${playlist['name']}\n'
-      'URI: ${playlist['uri']}';
-}
-
-Future<String> _spotifyAddToPlaylist(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final playlistId = args['playlist_id'] as String? ?? '';
-  if (playlistId.isEmpty) return 'Error: playlist_id required';
-
-  // Accept uris as a list, or a single uri
-  List<String> uris;
-  final urisArg = args['uris'];
-  final uriArg = args['uri'] as String?;
-  if (urisArg is List) {
-    uris = urisArg.cast<String>().toList();
-  } else if (uriArg != null && uriArg.isNotEmpty) {
-    uris = [uriArg];
-  } else {
-    return 'Error: uri or uris required';
-  }
-
-  await _spotifyApi(
-    token,
-    '/playlists/$playlistId/tracks',
-    method: 'POST',
-    body: {'uris': uris},
-  );
-  return 'Added ${uris.length} track(s) to playlist';
-}
-
-Future<String> _spotifyRemoveFromPlaylist(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final playlistId = args['playlist_id'] as String? ?? '';
-  if (playlistId.isEmpty) return 'Error: playlist_id required';
-
-  List<String> uris;
-  final urisArg = args['uris'];
-  final uriArg = args['uri'] as String?;
-  if (urisArg is List) {
-    uris = urisArg.cast<String>().toList();
-  } else if (uriArg != null && uriArg.isNotEmpty) {
-    uris = [uriArg];
-  } else {
-    return 'Error: uri or uris required';
-  }
-
-  await _spotifyApi(
-    token,
-    '/playlists/$playlistId/tracks',
-    method: 'DELETE',
-    body: {
-      'tracks': uris.map((u) => {'uri': u}).toList(),
-    },
-  );
-  return 'Removed ${uris.length} track(s) from playlist';
-}
-
-Future<String> _spotifyLikeTrack(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  // If no URI provided, like the currently playing track
-  String? trackId = args['track_id'] as String?;
-  final uri = args['uri'] as String?;
-
-  if (trackId == null && uri != null && uri.startsWith('spotify:track:')) {
-    trackId = uri.replaceFirst('spotify:track:', '');
-  }
-
-  if (trackId == null) {
-    // Get currently playing track
-    final nowPlaying = await _spotifyApi(token, '/me/player/currently-playing');
-    if (nowPlaying == 'Success') return 'No track currently playing';
-    final data = jsonDecode(nowPlaying) as Map<String, dynamic>;
-    final item = data['item'] as Map<String, dynamic>?;
-    if (item == null) return 'No track currently playing';
-    trackId = item['id'] as String?;
-    if (trackId == null) return 'Could not identify current track';
-  }
-
-  await _spotifyApi(token, '/me/tracks?ids=$trackId', method: 'PUT');
-  return 'Track added to Liked Songs';
-}
-
-Future<String> _spotifyUnlikeTrack(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  String? trackId = args['track_id'] as String?;
-  final uri = args['uri'] as String?;
-
-  if (trackId == null && uri != null && uri.startsWith('spotify:track:')) {
-    trackId = uri.replaceFirst('spotify:track:', '');
-  }
-
-  if (trackId == null) {
-    final nowPlaying = await _spotifyApi(token, '/me/player/currently-playing');
-    if (nowPlaying == 'Success') return 'No track currently playing';
-    final data = jsonDecode(nowPlaying) as Map<String, dynamic>;
-    final item = data['item'] as Map<String, dynamic>?;
-    if (item == null) return 'No track currently playing';
-    trackId = item['id'] as String?;
-    if (trackId == null) return 'Could not identify current track';
-  }
-
-  await _spotifyApi(token, '/me/tracks?ids=$trackId', method: 'DELETE');
-  return 'Track removed from Liked Songs';
-}
-
-Future<String> _spotifyGetPlaylistTracks(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final playlistId = args['playlist_id'] as String? ?? '';
-  if (playlistId.isEmpty) return 'Error: playlist_id required';
-
-  final limit = (args['limit'] as int? ?? 20).clamp(1, 50);
-  final response = await _spotifyApi(
-    token,
-    '/playlists/$playlistId/tracks?limit=$limit&fields='
-    'items(track(name,artists(name),uri)),total',
-  );
-  final data = jsonDecode(response) as Map<String, dynamic>;
-  final items = data['items'] as List? ?? [];
-  final total = data['total'] as int? ?? 0;
-
-  if (items.isEmpty) return 'Playlist is empty';
-
-  final buffer = StringBuffer('Playlist tracks ($total total):\n\n');
-  for (int i = 0; i < items.length; i++) {
-    final track = items[i]['track'] as Map<String, dynamic>?;
-    if (track == null) continue;
-    final name = track['name'] ?? 'Unknown';
-    final artists =
-        (track['artists'] as List?)?.map((a) => a['name']).join(', ') ??
-        'Unknown';
-    buffer.writeln('${i + 1}. $name');
-    buffer.writeln('   Artist: $artists');
-    buffer.writeln('   URI: ${track['uri']}');
-    buffer.writeln();
-  }
-
-  return buffer.toString();
-}
-
-Future<String> _spotifyGetPlaylists(String token) async {
-  final response = await _spotifyApi(token, '/me/playlists?limit=50');
-  final data = jsonDecode(response);
-  final items = data['items'] as List? ?? [];
-
-  if (items.isEmpty) return 'No playlists found';
-
-  final buffer = StringBuffer('Your playlists:\n\n');
-  for (int i = 0; i < items.length; i++) {
-    final playlist = items[i];
-    buffer.writeln('${i + 1}. ${playlist['name']}');
-    buffer.writeln('   Tracks: ${playlist['tracks']?['total'] ?? 0}');
-    buffer.writeln('   URI: ${playlist['uri']}');
-    buffer.writeln();
-  }
-
-  return buffer.toString();
-}
-
-Future<String> _spotifyFindAndPlay(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final query = args['query'] as String? ?? '';
-  if (query.isEmpty) return 'Error: query parameter required';
-
-  final queryLower = query.toLowerCase();
-
-  // Search user's playlists
-  final playlistsResponse = await _spotifyApi(token, '/me/playlists?limit=50');
-  final playlistsData = jsonDecode(playlistsResponse);
-  final playlists = playlistsData['items'] as List? ?? [];
-
-  for (final playlist in playlists) {
-    final name = (playlist['name'] as String?)?.toLowerCase() ?? '';
-    if (name.contains(queryLower)) {
-      final uri = playlist['uri'] as String;
-      await _spotifyApi(
-        token,
-        '/me/player/play',
-        method: 'PUT',
-        body: {'context_uri': uri},
-      );
-      return 'Playing your playlist: ${playlist['name']}';
-    }
-  }
-
-  // Search public playlists as fallback
-  final publicSearch = await _spotifyApi(
-    token,
-    '/search?q=${Uri.encodeComponent(query)}'
-    '&type=playlist&limit=5',
-  );
-  final publicData = jsonDecode(publicSearch);
-  final publicPlaylists = publicData['playlists']?['items'] as List? ?? [];
-
-  if (publicPlaylists.isNotEmpty) {
-    final playlist = publicPlaylists[0];
-    if (playlist != null && playlist['uri'] != null) {
-      final uri = playlist['uri'] as String;
-      await _spotifyApi(
-        token,
-        '/me/player/play',
-        method: 'PUT',
-        body: {'context_uri': uri},
-      );
-      return 'Playing public playlist: ${playlist['name']}';
-    }
-  }
-
-  return 'Could not find "$query" in your playlists.';
-}
-
-Future<String> _spotifyRecentlyLiked(
-  String token,
-  Map<String, dynamic> args,
-) async {
-  final limit = args['limit'] as int? ?? 20;
-  final response = await _spotifyApi(token, '/me/tracks?limit=$limit');
-  final data = jsonDecode(response);
-  final items = data['items'] as List? ?? [];
-
-  if (items.isEmpty) return 'No liked songs found';
-
-  final buffer = StringBuffer('Your recently liked songs:\n\n');
-  for (int i = 0; i < items.length; i++) {
-    final item = items[i];
-    final track = item['track'];
-
-    buffer.writeln('${i + 1}. ${track['name']}');
-    buffer.writeln('   Artist: ${track['artists']?[0]?['name'] ?? 'Unknown'}');
-    buffer.writeln('   URI: ${track['uri']}');
-    buffer.writeln();
-  }
-
-  return buffer.toString();
 }
 
 // ============== Bash ==============
@@ -1482,10 +886,4 @@ Future<String> executeReminder(Map<String, dynamic> args) async {
 
 Future<String> executeDraftEmail(Map<String, dynamic> args) async {
   return executeDevice({...args, 'action': 'email_draft'});
-}
-
-// ============== WHOOP ==============
-
-Future<String> executeWhoop(Map<String, dynamic> args) async {
-  return whoop_tools.executeWhoop(args, _whoopOAuth);
 }

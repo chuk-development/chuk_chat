@@ -70,6 +70,21 @@ String getApiBaseUrl() {
   return apiConfigDefaultProductionUrl;
 }
 
+// Artifacts hosting service base URL. Override with
+// --dart-define=ARTIFACTS_BASE_URL=…; otherwise the production host is used.
+const String artifactsConfigEnvUrl = String.fromEnvironment('ARTIFACTS_BASE_URL');
+const String artifactsConfigDefaultProductionUrl = 'https://artifacts.chuk.chat';
+
+/// Gets the artifacts hosting base URL.
+///
+/// Resolution order:
+/// 1. Explicit dart-define (ARTIFACTS_BASE_URL)
+/// 2. Production default (`https://artifacts.chuk.chat`)
+String getArtifactsBaseUrl() {
+  if (artifactsConfigEnvUrl.isNotEmpty) return artifactsConfigEnvUrl;
+  return artifactsConfigDefaultProductionUrl;
+}
+
 /// Whether the current build is pointing at the local development server.
 bool get isLocalApiServer => kDebugMode && getConfiguredUrl() == null;
 

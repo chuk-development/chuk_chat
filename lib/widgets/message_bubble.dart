@@ -20,7 +20,6 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
@@ -49,6 +48,8 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/ask_user_card.dart';
+import 'package:chuk_chat/widgets/mcp_connect_card.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/constants.dart';
@@ -124,8 +125,7 @@ final RegExp _attachmentHeaderRe = RegExp(
 
 /// Default chat font family, resolved once. Used when the user has explicitly
 /// picked the system font (the historic Arimo default).
-final String _kAiResponseFontFamilyDefault =
-    GoogleFonts.arimo().fontFamily ?? 'Arimo';
+final String _kAiResponseFontFamilyDefault = kFontFamilyArimo;
 
 /// Cross-instance cache of the two display preferences, so a freshly built
 /// bubble can render with the last known value before its own async load
@@ -166,6 +166,7 @@ class MessageBubble extends StatefulWidget {
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
+    this.onConnectMcpServer,
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
@@ -229,6 +230,12 @@ class MessageBubble extends StatefulWidget {
   /// When non-null, the bubble renders interactive option buttons extracted
   /// from the most recent ask_user tool call in this message.
   final ValueChanged<String>? onAskUserAnswer;
+
+  /// Called with the catalogue id when the user taps Connect on an inline
+  /// MCP connect card (from a completed `request_mcp_server` tool call).
+  /// When non-null, the bubble renders a Connect card for the most recent
+  /// such call in this message.
+  final ValueChanged<String>? onConnectMcpServer;
 
   /// Actions shown in a popup menu on long-press for user messages.
   /// These are hidden by default and only appear on long-press, matching

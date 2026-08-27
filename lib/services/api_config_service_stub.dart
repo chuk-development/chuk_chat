@@ -8,6 +8,9 @@ class ApiConfigService {
   /// Gets the appropriate API base URL based on the current environment and platform.
   static String get apiBaseUrl => base.getApiBaseUrl();
 
+  /// Gets the artifacts hosting base URL.
+  static String get artifactsBaseUrl => base.getArtifactsBaseUrl();
+
   /// Gets the current environment type.
   static String get environment => base.getEnvironment();
 

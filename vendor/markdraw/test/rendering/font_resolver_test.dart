@@ -1,13 +1,10 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:markdraw/markdraw.dart';
 
 void main() {
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
-    // Prevent HTTP calls in tests
-    GoogleFonts.config.allowRuntimeFetching = false;
   });
 
   group('FontResolver', () {

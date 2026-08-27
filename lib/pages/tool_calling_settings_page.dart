@@ -31,7 +31,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'generate_image': Icons.image_outlined,
     'fetch_image': Icons.download_outlined,
     'view_chat_images': Icons.visibility_outlined,
-    'crypto_data': Icons.currency_bitcoin,
     'weather': Icons.cloud_outlined,
     'search_places': Icons.place_outlined,
     'search_restaurants': Icons.restaurant,
@@ -47,7 +46,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': Icons.fingerprint,
     'notes': Icons.note_outlined,
     'generate_qr': Icons.qr_code_2,
-    'whoop': Icons.monitor_heart_outlined,
   };
 
   static Map<String, String> _toolDisplayNames(AppLocalizations l) => {
@@ -56,7 +54,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'generate_image': l.toolImageGen,
     'fetch_image': l.toolFetchImage,
     'view_chat_images': l.toolViewChatImages,
-    'crypto_data': l.toolCryptoData,
     'weather': l.toolWeather,
     'search_places': l.toolPlaceSearch,
     'search_restaurants': l.toolRestaurantSearch,
@@ -72,7 +69,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': l.toolUuidGen,
     'notes': l.toolNotes,
     'generate_qr': l.toolQrGen,
-    'whoop': l.toolWhoopHealth,
   };
 
   late bool _toolCallingEnabled;
@@ -170,8 +166,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 2;
       case ToolCategory.device:
         return 3;
-      case ToolCategory.spotify:
-        return 4;
       case ToolCategory.bash:
         return 5;
       case ToolCategory.github:
@@ -182,8 +176,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 8;
       case ToolCategory.email:
         return 9;
-      case ToolCategory.whoop:
-        return 10;
       case ToolCategory.nextcloud:
         return 11;
       case ToolCategory.sandbox:
@@ -204,8 +196,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catMapsLocation;
       case ToolCategory.device:
         return l.catDevice;
-      case ToolCategory.spotify:
-        return l.catSpotify;
       case ToolCategory.bash:
         return l.catBashTerminal;
       case ToolCategory.github:
@@ -216,8 +206,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catGoogleCalGmail;
       case ToolCategory.email:
         return l.catEmailImapSmtp;
-      case ToolCategory.whoop:
-        return l.catWhoop;
       case ToolCategory.nextcloud:
         return l.catNextcloud;
       case ToolCategory.sandbox:
@@ -237,8 +225,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.map_outlined;
       case ToolCategory.device:
         return Icons.devices_outlined;
-      case ToolCategory.spotify:
-        return Icons.music_note_outlined;
       case ToolCategory.bash:
         return Icons.terminal_outlined;
       case ToolCategory.github:
@@ -249,8 +235,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.event_outlined;
       case ToolCategory.email:
         return Icons.email_outlined;
-      case ToolCategory.whoop:
-        return Icons.monitor_heart_outlined;
       case ToolCategory.nextcloud:
         return Icons.cloud_outlined;
       case ToolCategory.sandbox:
@@ -271,8 +255,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catMapsLocationDesc;
       case ToolCategory.device:
         return l.catDeviceDesc;
-      case ToolCategory.spotify:
-        return l.catSpotifyDesc;
       case ToolCategory.bash:
         return l.catBashTerminalDesc;
       case ToolCategory.github:
@@ -283,8 +265,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catGoogleCalGmailDesc;
       case ToolCategory.email:
         return l.catEmailImapSmtpDesc;
-      case ToolCategory.whoop:
-        return l.catWhoopDesc;
       case ToolCategory.nextcloud:
         return l.catNextcloudDesc;
       case ToolCategory.sandbox:
@@ -298,8 +278,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   /// Returns null for categories that don't have OAuth connections.
   String? _categoryServiceName(ToolCategory category) {
     switch (category) {
-      case ToolCategory.spotify:
-        return 'spotify';
       case ToolCategory.github:
         return 'github';
       case ToolCategory.slack:
@@ -308,8 +286,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'google';
       case ToolCategory.email:
         return 'email';
-      case ToolCategory.whoop:
-        return 'whoop';
       default:
         return null;
     }
@@ -438,11 +414,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return '${cleaned.substring(0, maxChars - 3)}...';
   }
 
-  // GitHub and Spotify integrations ship behind Developer Options — the
-  // server-side OAuth is wired up but we're not advertising them yet.
+  // GitHub integration ships behind Developer Options — the server-side OAuth
+  // is wired up but we're not advertising it yet.
   static const Set<ToolCategory> _devOnlyCategories = {
     ToolCategory.github,
-    ToolCategory.spotify,
   };
 
   bool _isCategoryDevOnly(ToolCategory category) =>
