@@ -224,13 +224,11 @@ const Map<String, String> stringsDe = {
   'catUtilities': 'Hilfsprogramme',
   'catMapsLocation': 'Karten und Standort',
   'catDevice': 'Gerät',
-  'catSpotify': 'Spotify',
   'catBashTerminal': 'Bash / Terminal',
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Kalender / Gmail)',
   'catEmailImapSmtp': 'E-Mail (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
@@ -241,8 +239,6 @@ const Map<String, String> stringsDe = {
       'Orte finden, Adressen geokodieren und Routen berechnen',
   'catDeviceDesc':
       'Auf Gerätefunktionen wie GPS, Kalender und Erinnerungen zugreifen',
-  'catSpotifyDesc':
-      'Wiedergabe steuern und Ihre Spotify-Bibliothek durchsuchen',
   'catBashTerminalDesc': 'Sandboxed Shell-Befehle auf dem Desktop ausführen',
   'catGitHubDesc': 'Auf Repos, Issues, PRs und Commits von GitHub zugreifen',
   'catSlackDesc':
@@ -250,7 +246,6 @@ const Map<String, String> stringsDe = {
   'catGoogleCalGmailDesc':
       'Termine und E-Mails über Google Kalender und Gmail verwalten',
   'catEmailImapSmtpDesc': 'E-Mails über IMAP und SMTP senden und empfangen',
-  'catWhoopDesc': 'Erholung, Belastung, Schlaf und Training von WHOOP anzeigen',
   'catNextcloudDesc':
       'Dateien, Kalender und Kontakte auf Nextcloud durchsuchen',
   'catSandboxDesc':
@@ -286,7 +281,6 @@ const Map<String, String> stringsDe = {
   'toolUuidGen': 'UUID-Generator',
   'toolNotes': 'Notizen',
   'toolQrGen': 'QR-Generator',
-  'toolWhoopHealth': 'WHOOP Gesundheit',
   'resetToolSettingsTitle': 'Tool-Einstellungen zurücksetzen?',
   'resetToolSettingsBody':
       'Alle Tools werden wieder aktiviert und alle benutzerdefinierten Tool-Prompts zurückgesetzt.',
