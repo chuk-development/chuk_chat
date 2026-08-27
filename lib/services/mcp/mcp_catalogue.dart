@@ -150,6 +150,7 @@ const Set<String> kBundledMcpIcons = {
   'canva',
   'clickup',
   'coingecko',
+  'cryptocom',
   'dropbox',
   'etoro',
   'exa',
@@ -158,33 +159,44 @@ const Set<String> kBundledMcpIcons = {
   'fastmail',
   'figma',
   'firecrawl',
+  'floot',
   'gamma',
   'github',
   'gitlab',
+  'godaddy',
   'heygen-hyperframes',
   'higgsfield',
   'huggingface',
   'ibkr',
+  'kiwi',
   'linear',
   'mobbin',
   'monday',
+  'motion',
+  'namecheap',
   'notion',
   'paypal',
+  'pdfnet',
   'plane',
   'posthog',
+  'resend',
   'robinhood',
   'sentry',
+  'slidesgpt',
   'spglobal',
   'square',
   'stripe',
   'supabase',
   'superhuman',
+  'tldraw',
   'todoist',
+  'trivago',
   'vercel',
   'vidiq',
   'webflow',
   'webull',
   'whop',
+  'wisprflow',
   'zapier',
 };
 
@@ -202,6 +214,7 @@ const List<String> kMcpCategories = [
   'Productivity',
   'Finance',
   'Creative',
+  'Lifestyle',
   'Developer',
   'Registry',
 ];
@@ -442,6 +455,28 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     publisher: 'cal.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=cal.com&sz=128',
   ),
+  McpCatalogueEntry(
+    id: 'pdfnet',
+    name: 'PDF.net',
+    url: 'https://mcp.pdf.net/mcp',
+    category: 'Productivity',
+    description:
+        'Edit PDFs in place, generate documents, merge, split, compress and '
+        'convert to Word, Excel or PowerPoint.',
+    publisher: 'pdf.net',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=pdf.net&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'wisprflow',
+    name: 'Wispr Flow',
+    url: 'https://api.wisprflow.ai/connect/mcp',
+    category: 'Productivity',
+    description:
+        'Search your meetings, transcripts and notes, and read the right one '
+        'exactly when you need it.',
+    publisher: 'wisprflow.ai',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=wisprflow.ai&sz=128',
+  ),
 
   // ─── Developer ─────────────────────────────────────────────────────────
   McpCatalogueEntry(
@@ -549,6 +584,48 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     // Duplicates the built-in web search — only wanted in CoWork.
     coworkOnly: true,
   ),
+  McpCatalogueEntry(
+    id: 'godaddy',
+    name: 'GoDaddy',
+    url: 'https://api.godaddy.com/v1/domains/mcp',
+    category: 'Developer',
+    description: 'Search domains, check availability and get suggestions.',
+    publisher: 'godaddy.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=godaddy.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'namecheap',
+    name: 'Namecheap',
+    url: 'https://mcp.namecheap.com/mcp',
+    category: 'Developer',
+    description:
+        'List and register domains, and manage DNS records, nameservers and '
+        'contacts.',
+    publisher: 'namecheap.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=namecheap.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'resend',
+    name: 'Resend',
+    url: 'https://mcp.resend.com/',
+    category: 'Developer',
+    description:
+        'Send email, manage contacts, audiences, domains, API keys and '
+        'webhooks.',
+    publisher: 'resend.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=resend.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'floot',
+    name: 'Floot',
+    url: 'https://mcp.floot.com/mcp',
+    category: 'Developer',
+    description:
+        'Build and host full-stack apps: create a project, write code, '
+        'provision a database and deploy.',
+    publisher: 'floot.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=floot.com&sz=128',
+  ),
 
   // ─── Creative ──────────────────────────────────────────────────────────
   McpCatalogueEntry(
@@ -623,6 +700,38 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     description: 'Generate presentations, decks and documents.',
     publisher: 'gamma.app',
     iconUrl: 'https://www.google.com/s2/favicons?domain=gamma.app&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'tldraw',
+    name: 'tldraw',
+    url: 'https://tldraw-mcp-app.tldraw.workers.dev/mcp',
+    category: 'Creative',
+    description:
+        'Draw flowcharts, wireframes and diagrams, and edit them as shapes.',
+    publisher: 'tldraw.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=tldraw.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'slidesgpt',
+    name: 'SlidesGPT',
+    url: 'https://claude.slidesgpt.com/mcp',
+    category: 'Creative',
+    description:
+        'Generate presentations and export them to PowerPoint, Google Slides '
+        'or PDF.',
+    publisher: 'slidesgpt.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=slidesgpt.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'motion',
+    name: 'Motion Creative Analytics',
+    url: 'https://projects.motionapp.com/mcp',
+    category: 'Creative',
+    description:
+        'Analyze Meta ad creative performance and research competitor ad '
+        'libraries for trends.',
+    publisher: 'motionapp.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=motionapp.com&sz=128',
   ),
 
   // ─── Finance ───────────────────────────────────────────────────────────
@@ -712,6 +821,40 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
         'and historical market data.',
     publisher: 'ibkr.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=ibkr.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'cryptocom',
+    name: 'Crypto.com',
+    url: 'https://mcp.crypto.com/market-data/mcp',
+    category: 'Finance',
+    description:
+        'Live crypto prices, order books, candlestick charts and market data.',
+    publisher: 'crypto.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=crypto.com&sz=128',
+  ),
+
+  // ─── Lifestyle ─────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'trivago',
+    name: 'trivago',
+    url: 'https://mcp.trivago.com/mcp',
+    category: 'Lifestyle',
+    description:
+        'Search hotels and compare prices from multiple providers by city or '
+        'coordinates.',
+    publisher: 'trivago.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=trivago.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'kiwi',
+    name: 'Kiwi.com',
+    url: 'https://mcp.kiwi.com/',
+    category: 'Lifestyle',
+    description:
+        'Search flights: one-way or round-trip, flexible dates, multiple '
+        'passengers and cabin classes.',
+    publisher: 'kiwi.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=kiwi.com&sz=128',
   ),
 ];
 
