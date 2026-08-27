@@ -218,13 +218,11 @@ const Map<String, String> stringsEn = {
   'catUtilities': 'Utilities',
   'catMapsLocation': 'Maps and Location',
   'catDevice': 'Device',
-  'catSpotify': 'Spotify',
   'catBashTerminal': 'Bash / Terminal',
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
   'catEmailImapSmtp': 'Email (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
@@ -232,14 +230,12 @@ const Map<String, String> stringsEn = {
   'catUtilitiesDesc': 'Calculator, clock, notes, QR codes, and other utilities',
   'catMapsLocationDesc': 'Find places, geocode addresses, and calculate routes',
   'catDeviceDesc': 'Access device features like GPS, calendar, and reminders',
-  'catSpotifyDesc': 'Control playback and browse your Spotify library',
   'catBashTerminalDesc': 'Run sandboxed shell commands on the desktop',
   'catGitHubDesc': 'Access repos, issues, PRs, and commits from GitHub',
   'catSlackDesc': 'Send messages, search channels, and fetch Slack data',
   'catGoogleCalGmailDesc':
       'Manage your schedule and email via Google Calendar and Gmail',
   'catEmailImapSmtpDesc': 'Send and receive email via IMAP and SMTP',
-  'catWhoopDesc': 'View recovery, strain, sleep, and workout data from WHOOP',
   'catNextcloudDesc': 'Browse files, calendar, and contacts on Nextcloud',
   'catSandboxDesc':
       'Run Python or shell code in an isolated sandbox and read/write files',
@@ -272,7 +268,6 @@ const Map<String, String> stringsEn = {
   'toolUuidGen': 'UUID Generator',
   'toolNotes': 'Notes',
   'toolQrGen': 'QR Generator',
-  'toolWhoopHealth': 'WHOOP Health',
   'resetToolSettingsTitle': 'Reset Tool Settings?',
   'resetToolSettingsBody':
       'This will re-enable all tools and reset all custom tool prompts.',

@@ -124,13 +124,11 @@ const Map<String, String> stringsPt = {
   'catUtilities': 'Utilitários',
   'catMapsLocation': 'Mapas e Localização',
   'catDevice': 'Dispositivo',
-  'catSpotify': 'Spotify',
   'catBashTerminal': 'Bash / Terminal',
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Agenda / Gmail)',
   'catEmailImapSmtp': 'Email (IMAP/SMTP)',
-  'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
@@ -141,8 +139,6 @@ const Map<String, String> stringsPt = {
       'Encontrar lugares, geocodificar endereços e calcular rotas',
   'catDeviceDesc':
       'Acessar recursos do dispositivo como GPS, calendário e lembretes',
-  'catSpotifyDesc':
-      'Controlar reprodução e navegar pela sua biblioteca do Spotify',
   'catBashTerminalDesc':
       'Executar comandos shell em ambiente isolado no desktop',
   'catGitHubDesc':
@@ -152,8 +148,6 @@ const Map<String, String> stringsPt = {
   'catGoogleCalGmailDesc':
       'Gerenciar sua agenda e email via Google Agenda e Gmail',
   'catEmailImapSmtpDesc': 'Enviar e receber email via IMAP e SMTP',
-  'catWhoopDesc':
-      'Ver dados de recuperação, esforço, sono e treinos do WHOOP',
   'catNextcloudDesc':
       'Navegar por arquivos, calendário e contatos no Nextcloud',
   'catSandboxDesc':
@@ -188,7 +182,6 @@ const Map<String, String> stringsPt = {
   'toolUuidGen': 'Gerador de UUID',
   'toolNotes': 'Notas',
   'toolQrGen': 'Gerador de QR',
-  'toolWhoopHealth': 'Saúde WHOOP',
   'resetToolSettingsTitle': 'Redefinir Configurações de Ferramentas?',
   'resetToolSettingsBody':
       'Isso reativará todas as ferramentas e redefinirá todos os prompts personalizados.',
