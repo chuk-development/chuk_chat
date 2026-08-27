@@ -44,7 +44,7 @@ class CoWorkModeSwitcher extends StatelessWidget {
                   // Mirror into the app-global notifier so the service layer
                   // (prompt builder) sees the mode change, then drive the
                   // shell's own state as before.
-                  appMode.value = value;
+                  appModeNotifier.value = value;
                   onChanged(value);
                 },
           child: AnimatedContainer(

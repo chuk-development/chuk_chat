@@ -14,7 +14,6 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
-import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
@@ -1403,7 +1402,7 @@ class ToolCallHandler {
       // in CoWork mode. The flag rides on each skill's metadata (stored with
       // the body), so it reads synchronously and does not depend on a catalog
       // fetch having completed. In CoWork mode nothing is filtered.
-      final inCoWork = appMode.value == AppMode.cowork;
+      final inCoWork = appModeNotifier.value == AppMode.cowork;
       bool visible(Skill s) => inCoWork || !SkillsCatalogService.isCoworkOnly(s);
 
       skillCatalog = inCoWork
