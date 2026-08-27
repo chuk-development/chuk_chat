@@ -607,7 +607,10 @@ $weatherNote- For render-only pictures in your final answer, emit an <image> blo
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
 REAL PHOTOS vs AI ART — HARD RULE:
-- User wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events) -> call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url.
+- When the user asks to see / show / find / search a REAL picture, photo or image of something (and it is not AI art, and no matching image was already supplied or generated in this conversation) -> call `web_search` with `type: "images"` FIRST. NEVER answer such a request with a URL from memory. (If the user asked for AI art, use generate_image instead; if a matching image already exists in the conversation, reuse it — do not search.)
+- Every URL you put in an `<image>` block MUST be copied verbatim from a `web_search type:"images"` result in THIS conversation. NEVER invent, guess, complete, shorten or recall an image URL from training — a made-up URL renders as a broken image. If you have no fresh search result for the current subject, search again before you emit `<image>`.
+- Prefer the result's `thumbnail_url` (a Brave proxy on imgs.search.brave.com) over `image_url` for the `<image>` url — the proxy loads reliably, while many original `image_url`s are hotlink-protected and render broken. Use `image_url` only when a result has no `thumbnail_url`.
+- When the subject changes (a new thing, or a corrected meaning of the same word) -> run a NEW image search for it. Do NOT reuse a previous subject's URLs.
 - Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, something fictional, or a stylized generated image.
 - NEVER fall back to generate_image just because image search returned nothing useful. Retry web_search with type="images" and a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
 - `fetch_image` is for fetch/store/vision flows (e.g. user asks to attach/store/analyze an image), not for display-only rendering.
@@ -815,7 +818,7 @@ NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <w
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
 7. COST & PRIVACY: Before calling generate_image, ALWAYS briefly tell the user it costs credits. Whether to also warn about privacy depends on the model: model="turbo" (Z-Image Turbo) and model="flux" (FLUX 2 Klein) run under a no-retention policy — inputs and outputs are not stored or used for training — so NO privacy warning is needed, just mention the cost. For model="hunyuan", "ideogram", or "edit", ALSO warn the user that the image is processed on an external server, can be seen by the service operator, and is NOT end-to-end encrypted like chat messages. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. Model selection: use model="turbo" (fast, ~0.01 EUR) by default; use "hunyuan" (high quality, ~0.08 EUR), "flux" (best quality, ~0.02 EUR), or "ideogram" (best text rendering, ~0.03–0.10 EUR) when the user requests higher quality, text in the image, or a specific model; use "edit" (requires image_url, ~0.03 EUR) to modify an existing image.
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
-9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
+9. REAL PHOTOS vs AI ART: When the user asks to see/show/find a REAL picture, photo or image of something (not AI art, and not one already supplied or generated in this conversation), call `web_search` with `type: "images"` FIRST — never answer such a request with a URL from memory. Then emit each `<image>` block using a URL copied VERBATIM from that search result, preferring its `thumbnail_url` (Brave proxy, loads reliably) over `image_url` (often hotlink-protected, renders broken). NEVER invent, guess or recall an image URL from training, and NEVER reuse a previous subject's URL — a made-up URL renders broken. When the subject changes, run a new image search. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
    IMAGE CAPTIONS: When you call fetch_image or generate_image and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
 $trailingRulesText
 $researchDepthSection
@@ -928,11 +931,11 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln();
     buffer.writeln('### Images');
     buffer.writeln(
-      'Use `<image>` for display-only rendering in your final answer. This is an output tag (no tool call required for rendering).',
+      'Use `<image>` for display-only rendering in your final answer. This is an output tag (no tool call required to RENDER) — but the URL itself MUST be copied verbatim from a `web_search type:"images"` result in this conversation. Never invent or recall a URL; a made-up one renders broken.',
     );
     buffer.writeln('<image>');
     buffer.writeln(
-      '{"url":"https://example.com/photo.jpg","caption":"Michelangelo (Porträt, ca. 1548)","source":"Daniele da Volterra"}',
+      '{"url":"<paste a thumbnail_url from your web_search type:\\"images\\" result here>","caption":"Michelangelo (Porträt, ca. 1548)","source":"Daniele da Volterra"}',
     );
     buffer.writeln('</image>');
     buffer.writeln();
@@ -943,7 +946,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     );
     buffer.writeln('- "source" or "credit": attribution text (optional)');
     buffer.writeln(
-      '**Image routing rules:** `web_search type:"images"` finds URLs; `<image>` renders one selected URL; `fetch_image` is only for fetch/store/vision workflows.',
+      '**Image routing rules:** `web_search type:"images"` finds URLs; `<image>` renders ONE URL copied verbatim from that search result (prefer its `thumbnail_url`); `fetch_image` is only for fetch/store/vision workflows. Never put an invented or remembered URL in `<image>`.',
     );
     buffer.writeln(
       '**One link per thing.** When a tool result carries both a page URL '
