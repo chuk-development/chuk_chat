@@ -15,6 +15,7 @@ import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/sandbox_management_page.dart';
+import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
@@ -230,7 +231,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const McpConnectorsPage(),
+                        builder: (_) =>
+                            McpConnectorsPage(isCoworkActive: isCoworkActive),
                       ),
                     );
                   },

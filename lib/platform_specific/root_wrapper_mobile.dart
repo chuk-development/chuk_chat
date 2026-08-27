@@ -53,6 +53,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
   AppMode _mode = AppMode.chat;
+
+  /// Switch mode. Mirrors the choice into [appModeNotifier] so the far-away
+  /// readers (connectors page, model-awareness prompt) see it too.
+  void _setMode(AppMode m) {
+    setState(() => _mode = m);
+    appModeNotifier.value = m;
+  }
+
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
@@ -811,7 +819,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         selectedChatId: ChatStorageService.selectedChatId,
         isCompactMode: true,
         mode: _mode,
-        onModeChanged: (m) => setState(() => _mode = m),
+        onModeChanged: _setMode,
       ),
     );
 

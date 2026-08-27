@@ -14,6 +14,8 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
+import 'package:chuk_chat/models/app_mode.dart';
+import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
@@ -37,7 +39,6 @@ const Set<String> _readOnlyToolNames = <String>{
   'search_chats',
   'get_time',
   'calculate',
-  'crypto_data',
   'find_tools',
   'view_chat_images',
 };
@@ -363,6 +364,10 @@ class ToolCallHandler {
     'find_tools',
     'notes',
     'ask_user',
+    // Returns a Connect-button marker, not a real-world fact. Without this a
+    // turn whose only tool call was request_mcp_server would fire a spurious
+    // [VERIFY] round against nothing.
+    'request_mcp_server',
     'flip_coin',
     'roll_dice',
     'random_number',
@@ -385,6 +390,11 @@ class ToolCallHandler {
     'read_file',
     'write_file',
     'list_directory',
+    // Artifact hosting returns a published URL, not verifiable facts. Without
+    // these entries a turn whose only tool call was create/update_artifact
+    // would fire a spurious [VERIFY] fact-check round against nothing.
+    'create_artifact',
+    'update_artifact',
   };
 
   static const int _maxDiscoveryContexts = 200;
@@ -1308,6 +1318,24 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
+    // request_mcp_server is always available: the model must be able to offer
+    // a Connect button for a server the request needs. The unconnected list
+    // and connected names are recomputed on every rebuild, so the turn after a
+    // reconnect sees the server move from "not connected" to "connected".
+    final requestMcpServerToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'request_mcp_server')
+        .map((t) => t.toJson())
+        .firstOrNull;
+    // CoWork-only servers (which duplicate a built-in or need command
+    // execution) are named to the model only while CoWork is active, matching
+    // what the connectors UI offers.
+    final unconnectedMcpServers = unconnectedCatalogueEntries(
+      includeCoworkOnly: isCoworkActive,
+    );
+    final connectedMcpServerNames = McpService.connections.value
+        .map((c) => c.name)
+        .toList();
+
     // web_search and web_crawl are always available in discovery mode.
     // web_search handles image search too (type="images") so the AI can
     // reach for real photos without another tool registration.
@@ -1408,6 +1436,9 @@ class ToolCallHandler {
           memoryText: memoryText,
           notesToolDef: notesToolDef,
           askUserToolDef: askUserToolDef,
+          requestMcpServerToolDef: requestMcpServerToolDef,
+          unconnectedMcpServers: unconnectedMcpServers,
+          connectedMcpServerNames: connectedMcpServerNames,
           webSearchToolDef: webSearchToolDef,
           searchPlacesToolDef: searchPlacesToolDef,
           webCrawlToolDef: webCrawlToolDef,

@@ -43,6 +43,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
   AppMode _mode = AppMode.chat;
+
+  /// Switch mode. Mirrors the choice into [appModeNotifier] so the far-away
+  /// readers (connectors page, model-awareness prompt) see it too.
+  void _setMode(AppMode m) {
+    setState(() => _mode = m);
+    appModeNotifier.value = m;
+  }
+
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
   ArtifactDocument? _activeArtifact;
@@ -752,7 +760,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
                     mode: _mode,
-                    onModeChanged: (m) => setState(() => _mode = m),
+                    onModeChanged: _setMode,
                   ),
                 ),
               ),
@@ -799,7 +807,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               left: kFixedLeftPadding + kMenuButtonHeight + 4,
               child: CoWorkModeSwitcher(
                 mode: _mode,
-                onChanged: (m) => setState(() => _mode = m),
+                onChanged: _setMode,
               ),
             ),
 

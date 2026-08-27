@@ -111,8 +111,14 @@ injection relies on. One token, two consumers.
 ## Adding a connector to the catalogue
 
 Add an entry to `kMcpCatalogue` with an `id`, a name, the endpoint and a
-category from `kMcpCategories`. The logo needs no work: the site's favicon
-is used unless the server publishes `serverInfo.icons`.
+category from `kMcpCategories`.
+
+When adding or editing an MCP server catalogue entry, set its `iconUrl`
+explicitly to the real verified logo. Do not rely on the auto favicon
+fallback, which mis-resolves service subdomains: `mcp.mail.superhuman.com`
+gave Superhuman a Play-Store icon, and `ai.todoist.net` gave Todoist none. A
+reliable choice is `https://www.google.com/s2/favicons?domain=<brand.com>&sz=128`.
+Check the icon actually loads before you commit.
 
 Anything not in the catalogue is still reachable: search queries the
 official registry at `registry.modelcontextprotocol.io`, and "Add by URL"

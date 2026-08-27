@@ -2,10 +2,9 @@ import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
+        kFeatureArtifactHosting,
         kFeatureCoworkDemo,
         kFeatureServerTools,
-        kFeatureSpotify,
-        kFeatureWhoop,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
@@ -52,19 +51,18 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'notes': ToolCategory.basic,
   'generate_qr': ToolCategory.basic,
   'ask_user': ToolCategory.basic,
+  'request_mcp_server': ToolCategory.basic,
   'skill': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
-  'crypto_data': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
   'search_restaurants': ToolCategory.map,
   'geocode': ToolCategory.map,
   'get_route': ToolCategory.map,
-  'spotify_control': ToolCategory.spotify,
   'bash': ToolCategory.bash,
   'github': ToolCategory.github,
   'slack': ToolCategory.slack,
@@ -72,13 +70,14 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'gmail': ToolCategory.google,
   'email': ToolCategory.email,
   'nextcloud': ToolCategory.nextcloud,
-  'whoop': ToolCategory.whoop,
   'device': ToolCategory.device,
   'calendar': ToolCategory.device,
   'reminder': ToolCategory.device,
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
   'artifact_schema': ToolCategory.basic,
+  'create_artifact': ToolCategory.basic,
+  'update_artifact': ToolCategory.basic,
   'update_project': ToolCategory.basic,
   'typst_compile': ToolCategory.basic,
   'code_run': ToolCategory.sandbox,
@@ -107,9 +106,6 @@ const Map<String, String> discoveryCatalog = {
       '(costs credits, not private) / '
       'Im Internet suchen, Webseiten lesen, Bilder erzeugen/bearbeiten/holen '
       '(kostet Credits, nicht privat)',
-  'Finance / Finanzen':
-      'Cryptocurrency prices, market data, trending coins (CoinGecko) / '
-      'Kryptowährungspreise, Marktdaten, Trending Coins (CoinGecko)',
   'Domains':
       'Check domain name availability across 1400+ TLDs with WHOIS data / '
       'Domain-Verfügbarkeit über 1400+ TLDs prüfen, WHOIS-Daten',
@@ -121,9 +117,6 @@ const Map<String, String> discoveryCatalog = {
       'passwords, UUIDs, notes, QR codes and chat history search / '
       'Rechnen, Uhrzeit, Zufallszahlen, Passwörter, UUIDs, Notizen, QR, '
       'Chat-Verlauf durchsuchen',
-  'Music / Musik':
-      'Spotify: play, pause, search, playlists, volume / '
-      'Spotify steuern: abspielen, pausieren, suchen, Playlists, Lautstärke',
   if (kFeatureServerTools)
     'Productivity / Produktivität':
         'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
@@ -370,6 +363,29 @@ final List<ClientTool> builtinTools = [
     ],
   ),
   ClientTool(
+    name: 'request_mcp_server',
+    description:
+        'Ask the app to show the user a Connect button for an MCP server '
+        'that is available but NOT connected. Use this when a request needs '
+        'a server listed under "## MCP SERVERS" as not connected: name the '
+        'server to the user and call this tool with its id. The app renders '
+        'an inline Connect button; the user taps it to sign in. You do NOT '
+        'connect the server yourself and MUST NOT claim you did — its tools '
+        'become usable only after the user connects it.',
+    parameters: {
+      'id':
+          'string (required: the catalogue id of the server, exactly as '
+          'shown in the "## MCP SERVERS" list, e.g. "notion", "linear")',
+      'reason':
+          'string (optional: a short note on why it is needed, shown to no '
+          'one but useful for your own planning)',
+    },
+    type: ToolType.builtin,
+    // No tags on purpose: like `skill` and `ask_user`, this tool is always
+    // available and must never surface as a find_tools search hit.
+    tags: [],
+  ),
+  ClientTool(
     name: 'skill',
     description:
         'Load a skill. Its full instructions are added to your system '
@@ -385,6 +401,41 @@ final List<ClientTool> builtinTools = [
     type: ToolType.builtin,
     // No tags on purpose: `skill` bypasses discovery and is always shown in
     // full, so it must never be a find_tools search hit.
+    tags: [],
+  ),
+
+  // -- Artifact hosting --
+  ClientTool(
+    name: 'create_artifact',
+    description:
+        'Publish a self-contained HTML page and get a public shareable URL. '
+        'The page is hosted at an unguessable, non-indexed URL, PUBLIC to '
+        'anyone with the link. Only inline HTML/CSS/JS, inline SVG and '
+        '<canvas> render; external images, external scripts, external '
+        '<iframe>s, network requests (fetch/XHR) and base64/raster images are '
+        'blocked by the host and will NOT load — build all visuals with '
+        'inline SVG, CSS and canvas. Returns the public URL.',
+    parameters: {
+      'html': 'string (required: a complete standalone HTML document)',
+      'title': 'string (optional: short human title for the page)',
+    },
+    type: ToolType.builtin,
+    tags: [],
+  ),
+  ClientTool(
+    name: 'update_artifact',
+    description:
+        'Replace the HTML of a previously created artifact and get its URL. '
+        'Needs the public_id returned by create_artifact. Same content '
+        'restrictions as create_artifact (self-contained page only; external '
+        'images/scripts/iframes/network requests do not load).',
+    parameters: {
+      'public_id':
+          'string (required: the public_id returned by create_artifact)',
+      'html': 'string (required: the new complete HTML document)',
+      'title': 'string (optional)',
+    },
+    type: ToolType.builtin,
     tags: [],
   ),
 
@@ -602,49 +653,6 @@ final List<ClientTool> builtinTools = [
     type: ToolType.builtin,
     tags: ['image', 'vision', 'analyze', 'inspect', 'describe', 'bildanalyse'],
   ),
-  ClientTool(
-    name: 'crypto_data',
-    description:
-        'Get cryptocurrency data from CoinGecko (free, no API key). Actions: '
-        'price (current price + 24h change), markets (top coins with full '
-        'stats: 24h range, 1h/24h/7d/30d changes, ATH, supply), '
-        'history (time-series price data for charts — specify days), '
-        'trending (trending coins right now), search (find a coin by '
-        'name/symbol). Use CoinGecko coin IDs like "bitcoin", "ethereum", '
-        '"solana" — search first if unsure.',
-    parameters: {
-      'action':
-          'string (optional, default price: price, markets, history, '
-          'trending, search)',
-      'ids':
-          'string or list (for price/markets/history: CoinGecko coin IDs, '
-          'e.g. "bitcoin" or "bitcoin,ethereum,solana")',
-      'currency': 'string (optional, default "usd": target currency)',
-      'days':
-          'string (for history: number of days, e.g. "1", "7", "30", "365")',
-      'query': 'string (required for search: coin name or symbol to find)',
-      'limit': 'int (optional for markets: number of results, default 20)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'crypto',
-      'krypto',
-      'bitcoin',
-      'ethereum',
-      'coin',
-      'token',
-      'price',
-      'preis',
-      'kurs',
-      'market',
-      'markt',
-      'finance',
-      'finanzen',
-      'coingecko',
-      'trending',
-    ],
-  ),
-
   // -- Maps --
   ClientTool(
     name: 'search_places',
@@ -710,101 +718,6 @@ final List<ClientTool> builtinTools = [
       'karte',
       'weg',
       'anfahrt',
-    ],
-  ),
-
-  // -- Spotify --
-  ClientTool(
-    name: 'spotify_control',
-    description:
-        'Control Spotify playback and browse music. '
-        'PRIORITY ORDER: '
-        '1) "what am I listening to" / "was höre ich" → use now_playing FIRST. '
-        '2) "play X" / specific song/artist/playlist → use find_and_play or play with URI. '
-        '3) "my playlists" / "show playlists" → use get_my_playlists. '
-        '4) "recently liked" / "neue songs" → use get_recently_liked. '
-        '5) "stop" / "pause" / "next" / "skip" → use pause/next/previous. '
-        'PLAYLIST MANAGEMENT: create_playlist (name, optional uris list to pre-fill), '
-        'add_to_playlist (playlist_id + uri/uris), remove_from_playlist, '
-        'get_playlist_tracks (playlist_id). '
-        'LIKES: like_track / unlike_track (optional uri, defaults to current track). '
-        'For all liked songs: {"action": "play", "uri": "liked"}',
-    parameters: {
-      'action':
-          'string (now_playing, play, pause, next, previous, volume, search, '
-          'devices, shuffle, repeat, find_and_play, get_my_playlists, '
-          'get_recently_liked, add_to_queue, create_playlist, get_my_playlists, '
-          'get_playlist_tracks, add_to_playlist, remove_from_playlist, '
-          'like_track, unlike_track)',
-      'query': 'string (for search or find_and_play)',
-      'volume': 'int (0-100 for volume)',
-      'uri': 'string (spotify URI for play, add_to_playlist, like_track)',
-      'uris':
-          'list of strings (track URIs for create_playlist, add_to_playlist, '
-          'remove_from_playlist)',
-      'playlist_id':
-          'string (for add_to_playlist, remove_from_playlist, '
-          'get_playlist_tracks)',
-      'state': 'string or boolean (shuffle on/off; repeat track/context/off)',
-      'limit': 'int (for get_recently_liked / get_playlist_tracks, default 20)',
-      'name': 'string (for create_playlist)',
-      'description': 'string (for create_playlist)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'spotify',
-      'music',
-      'musik',
-      'song',
-      'play',
-      'abspielen',
-      'playlist',
-      'album',
-      'artist',
-      'künstler',
-      'pause',
-      'skip',
-      'next',
-      'volume',
-      'lautstärke',
-      'shuffle',
-      'höre',
-      'listening',
-    ],
-  ),
-
-  // -- WHOOP --
-  ClientTool(
-    name: 'whoop',
-    description:
-        'Fetch health and fitness data from WHOOP wearable. '
-        'Actions: status (today\'s recovery, strain, sleep), '
-        'week (7-day summary), days (last N days), '
-        'sleep (detailed sleep data), recovery (recovery scores), '
-        'strain (strain scores), workouts (recent workouts). '
-        'Use "days" param to control how many days of data to fetch.',
-    parameters: {
-      'action':
-          'string (status, week, days, sleep, recovery, strain, workouts)',
-      'days':
-          'int (optional, default 7 — number of days for days/sleep/'
-          'recovery/strain/workouts)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'whoop',
-      'health',
-      'fitness',
-      'recovery',
-      'strain',
-      'sleep',
-      'workout',
-      'gesundheit',
-      'schlaf',
-      'erholung',
-      'training',
-      'wearable',
-      'tracker',
     ],
   ),
 
@@ -1360,7 +1273,7 @@ final List<ClientTool> builtinTools = [
         'on first call and reused for the rest of this chat; files survive across '
         'calls and a 3-day snapshot keeps them between sessions. '
         'Prefer typst_compile for PDF/document generation, web_crawl for fetching '
-        'URLs, weather/crypto/search tools for their data, and the dedicated '
+        'URLs, weather/search tools for their data, and the dedicated '
         'image tools for image generation/editing — use code_run only when '
         'computation, file manipulation, or library calls (pandas/numpy/'
         'matplotlib/yt-dlp/pypdf) are required. '
@@ -1575,12 +1488,9 @@ void registerBuiltinTools(ToolExecutor executor) {
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
       continue;
     }
-    // Spotify / WHOOP: integration removed. Tool definitions stay in the
-    // source so re-enabling later only requires flipping the feature flag.
-    if (!kFeatureSpotify && tool.name == 'spotify_control') {
-      continue;
-    }
-    if (!kFeatureWhoop && tool.name == 'whoop') {
+    // Artifact hosting: publish HTML to the hosting service. Off with the flag.
+    if (!kFeatureArtifactHosting &&
+        (tool.name == 'create_artifact' || tool.name == 'update_artifact')) {
       continue;
     }
     // Device tool: available on all platforms.
