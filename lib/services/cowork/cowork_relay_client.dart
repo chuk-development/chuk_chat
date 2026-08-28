@@ -448,7 +448,19 @@ abstract interface class CoworkRelayController {
   /// Seals and sends a task prompt. [sessionKey] selects the thread on the
   /// executor side: one agent, many threads (§4). The executor resumes the
   /// append-only session that key routes to.
-  Future<void> sendTask(String prompt, {String sessionKey});
+  ///
+  /// [modelId], [providerSlug] and [reasoningEffort] name the model the task
+  /// runs on, chosen per send in the composer's mode picker. Each is optional:
+  /// an empty or null value is left off the frame, so the host keeps its own
+  /// default. A non-empty [providerSlug] pins the model to one provider; an
+  /// empty one lets the host route.
+  Future<void> sendTask(
+    String prompt, {
+    String sessionKey,
+    String? modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
   /// [members] is `[{agent_id, handle}]` in room order.
@@ -789,11 +801,24 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       _sendFramePayload(payload);
 
   @override
-  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) =>
+  Future<void> sendTask(
+    String prompt, {
+    String sessionKey = 'default',
+    String? modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  }) =>
       _sendFramePayload(<String, dynamic>{
         'type': 'task',
         'prompt': prompt,
         'session_key': sessionKey,
+        // Each model field rides along only when the composer set it, so an
+        // old host and an unconfigured send both keep the host's own default.
+        if (modelId != null && modelId.isNotEmpty) 'model': modelId,
+        if (providerSlug != null && providerSlug.isNotEmpty)
+          'provider': providerSlug,
+        if (reasoningEffort != null && reasoningEffort.isNotEmpty)
+          'reasoning_effort': reasoningEffort,
       });
 
   @override

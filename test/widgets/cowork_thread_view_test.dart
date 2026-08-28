@@ -114,10 +114,23 @@ class FakeRelayController implements CoworkRelayController {
   Future<void> removeRoomMember(String roomId, String agentId) async {}
 
   @override
-  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async {
+  Future<void> sendTask(
+    String prompt, {
+    String sessionKey = 'default',
+    String? modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  }) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);
+    taskModelIds.add(modelId);
+    taskProviderSlugs.add(providerSlug);
+    taskReasoning.add(reasoningEffort);
   }
+
+  final List<String?> taskModelIds = <String?>[];
+  final List<String?> taskProviderSlugs = <String?>[];
+  final List<String?> taskReasoning = <String?>[];
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {
@@ -292,6 +305,29 @@ void main() {
 
     expect(controller.tasks, <String>['do the thing']);
     expect(find.text('do the thing'), findsOneWidget);
+  });
+
+  testWidgets('a send carries the composer mode picker model + provider',
+      (tester) async {
+    final controller = await pumpView(tester);
+    controller.set(
+      const CoworkRelayState(phase: CoworkRelayPhase.paired, sas: '428913'),
+    );
+    await tester.pumpAndSettle();
+
+    // The mode picker pill is on screen (Fast by default).
+    expect(find.text('Fast'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'do the thing');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+
+    // The default (Fast) mode names a model and a provider; Fast reasons off,
+    // so no reasoning level is sent.
+    expect(controller.taskModelIds.single, isNotNull);
+    expect(controller.taskModelIds.single, isNotEmpty);
+    expect(controller.taskProviderSlugs.single, isNotEmpty);
+    expect(controller.taskReasoning.single, isNull);
   });
 
   group('streaming a run', () {
