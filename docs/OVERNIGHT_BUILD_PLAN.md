@@ -91,6 +91,34 @@ to avoid clobbering.
   at end of day writes a dated markdown file (e.g. `journal/YYYY-MM-DD.md`)
   summarizing what happened, automatically. Complements soul.md/agents.md.
 
+## Outcome (done 2026-08-28, branch `cowork`)
+
+All planned + non-gated workstreams landed and merged into `cowork` (off
+`master`), whole-repo green: crypto 65, sandbox 58, manager 183, agent 653,
+executor 56, host 86, Flutter app 257.
+
+- WS-A `e7a34b8` — memory = Mem0 (custom `ChukBackendLLM` WS provider + proxy
+  `/v1/embeddings` + local Qdrant) replacing FTS5; `soul.md`/`agents.md` static
+  persona files. FTS5 `MemoryStore` removed.
+- WS-B `fa84260` — `python` code-action tool + explicit `finish` terminator.
+- WS-D `11f5091` — MCP credential forwarding: `task_payload.mcp_servers` +
+  `MCPServerConfig.auth_token` + per-session authenticated `MCPManager`.
+- WS-C `ff77bea`/`7884f1a`/`89b15fe` — Flutter: per-task composer model-picker,
+  new settings menu, MCP connectors UI + storage, embedding-model picker, theme.
+- WS-E `4caed94` — MCP end-to-end wiring (Flutter `sendTask` → `mcp_servers`;
+  host `account_token_provider`).
+- WS-F `7b3d9f7` — daily-summary journal (`no_agent` zero-token cron → dated md).
+
+Not done (user-gated or another repo): rooms going live (host `RoomBinding` +
+prod relay), prod `relay-crossreplica` deploy, MCP OAuth **backend** routes
+(api_server repo), opt-in enable of daily-summary per agent. Nothing pushed —
+`cowork` is local; owner decides the merge to `master` / deploy.
+
+FLAG: a `live` test showed the real model returning tool calls in a
+`<｜DSML｜tool_call｜>` delimiter instead of `<tool_call>` — a model-routing /
+tool-call-parser concern in the model layer (not touched by this build) that
+could break live tool execution until reconciled. Investigate separately.
+
 ## Orchestration rules
 - Worktree isolation per agent; orchestrator merges sequentially, runs `uv run
   pytest` (Python) / `flutter test` (app) per merge, never lands red.
