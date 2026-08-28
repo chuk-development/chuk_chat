@@ -93,7 +93,13 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> provisionAccount(AccountSession session) async {}
 
   @override
-  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async {}
+  Future<void> sendTask(
+    String prompt, {
+    String sessionKey = 'default',
+    String? modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  }) async {}
 
   @override
   Future<void> createRoom(

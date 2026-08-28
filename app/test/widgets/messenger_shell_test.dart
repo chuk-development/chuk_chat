@@ -68,7 +68,13 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> provisionAccount(AccountSession session) async {}
 
   @override
-  Future<void> sendTask(String prompt, {String sessionKey = 'default'}) async =>
+  Future<void> sendTask(
+    String prompt, {
+    String sessionKey = 'default',
+    String? modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  }) async =>
       sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
