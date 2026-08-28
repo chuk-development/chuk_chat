@@ -5,11 +5,11 @@ model it runs fully offline; swap in ``OpenAICompatModelClient`` and the real
 sandbox ``Environment`` for production.
 
 Memory (§12) and skills (§11) are workspace-relative: ``<workspace>/memory``
-holds ``MEMORY.md`` + ``USER.md``, ``<workspace>/skills`` holds
-``<name>/SKILL.md``. Both are read when a session is seeded, not when this
-function runs — see ``_prompt_factory`` — so a long-lived process still gives
-each new session the current state, while a running session keeps the prompt it
-started with.
+holds the Mem0 vector store plus the static ``soul.md`` + ``agents.md`` persona
+files, ``<workspace>/skills`` holds ``<name>/SKILL.md``. The persona snapshot and
+the skill catalog are read when a session is seeded, not when this function runs
+— see ``_prompt_factory`` — so a long-lived process still gives each new session
+the current state, while a running session keeps the prompt it started with.
 """
 
 from __future__ import annotations
@@ -380,7 +380,11 @@ def build_runtime(
             str(Path(workspace) / MEMORY_DIRNAME) if workspace else None
         )
         if root:
-            memory = MemoryStore(root)
+            # Mem0's fact-extraction writer runs on our own backend via the
+            # `chukbackend` provider; the cheap aux client is preferred, falling
+            # back to the loop's own model. `snapshot()` (soul.md/agents.md) needs
+            # no client, so memory still injects the persona without a backend.
+            memory = MemoryStore(root, llm_client=aux_model or model)
             register_memory_tool(registry, memory)
 
     library = SkillLibrary()
