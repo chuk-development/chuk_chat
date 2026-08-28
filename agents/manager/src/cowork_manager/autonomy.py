@@ -32,14 +32,17 @@ injected, so the whole autonomy path is exercised with fakes and no clock.
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
+from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
-from cowork_manager.scheduler import Job, Scheduler
+from cowork_manager.daily_summary import ModelClient, daily_summary_script
+from cowork_manager.scheduler import Job, JobMode, Scheduler
 
 #: A final answer starting with this marker is not delivered anywhere.
 SILENT_MARKER = "[SILENT]"
@@ -484,3 +487,66 @@ def load_roster_schedules(
             continue
         jobs.append(job)
     return jobs, errors
+
+
+# --------------------------------------------------------------------------
+# Daily summary journal (§13 daily-summary)
+# --------------------------------------------------------------------------
+
+#: Default job id for an agent's daily-summary routine.
+DAILY_SUMMARY_JOB_ID = "daily-summary"
+
+#: Default schedule: daily at 00:00 local (a 5-field cron). The fire closes the
+#: day that just ended — see ``daily_summary._default_target_day``.
+DAILY_SUMMARY_SCHEDULE = "0 0 * * *"
+
+
+def register_daily_summary(
+    scheduler: Scheduler,
+    dispatcher: JobDispatcher,
+    *,
+    workspace: str | Path,
+    now: datetime,
+    schedule: str = DAILY_SUMMARY_SCHEDULE,
+    enabled: bool = False,
+    tz: str | ZoneInfo | None = None,
+    model: ModelClient | None = None,
+    messages_provider: Callable[[date], Sequence[Mapping[str, Any]]] | None = None,
+    agent_id: str | None = None,
+    job_id: str = DAILY_SUMMARY_JOB_ID,
+    clock: Callable[[], datetime] | None = None,
+) -> Job | None:
+    """Register the end-of-day summary as a ``no_agent`` scheduled job.
+
+    Opt-in and cost-free by default: with ``enabled=False`` nothing is
+    registered, so the scheduler never fires it and it provably spends no
+    tokens. When enabled it runs as :attr:`JobMode.NO_AGENT` — a bare callable
+    (:func:`~cowork_manager.daily_summary.daily_summary_script`) that reads the
+    workspace journal and writes ``journal/<day>.md``. Passing ``model`` upgrades
+    the ``## Summary`` section to a single cheap aux-model call; leaving it
+    ``None`` keeps the run at zero tokens with a deterministic recap.
+
+    ``tz`` defaults to the scheduler's own timezone, so the summarised local day
+    and the cron's midnight share one clock. Mirrors
+    :func:`load_roster_schedules`: the scheduler and dispatcher are injected, and
+    the job carries ``agent_id`` so it shows up in that agent's routine view.
+    """
+    if not enabled:
+        return None
+
+    zone = tz if tz is not None else scheduler.tz
+    script = daily_summary_script(
+        workspace,
+        tz=zone,
+        model=model,
+        messages_provider=messages_provider,
+        now=clock,
+    )
+    return scheduler.schedule(
+        job_id,
+        schedule,
+        now=now,
+        mode=JobMode.NO_AGENT,
+        action=dispatcher.script_action(script),
+        agent_id=agent_id,
+    )
