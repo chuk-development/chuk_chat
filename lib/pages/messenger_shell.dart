@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/pages/settings/model_settings_page.dart';
+import 'package:cowork/pages/settings/settings_page.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/services/settings/theme_controller.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
@@ -52,6 +55,7 @@ class MessengerShell extends StatefulWidget {
     this.roomSource,
     this.controlSource,
     this.onSignOut,
+    this.themeController,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -78,6 +82,12 @@ class MessengerShell extends StatefulWidget {
 
   /// Sign-out hook. Defaults to the real [AuthService].
   final VoidCallback? onSignOut;
+
+  /// The app's theme controller, so the settings menu can edit the theme. When
+  /// null the shell builds its own (a session-only controller), so the settings
+  /// icon always works — it just does not survive a full app restart in that
+  /// standalone case.
+  final ThemeController? themeController;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
@@ -110,6 +120,12 @@ class _MessengerShellState extends State<MessengerShell> {
   /// Only a source this state created is this state's to dispose.
   late final bool _ownsControlSource = widget.controlSource == null;
 
+  /// The theme controller the settings menu edits. Falls back to a session-only
+  /// one when the app did not hand one down, so the settings page always opens.
+  late final ThemeController _themeController =
+      widget.themeController ?? ThemeController();
+  late final bool _ownsThemeController = widget.themeController == null;
+
   /// Keeps the one live thread view (and its socket) alive when the layout
   /// moves it between the wide Row and the narrow IndexedStack.
   final GlobalKey _threadViewKey = GlobalKey();
@@ -127,6 +143,7 @@ class _MessengerShellState extends State<MessengerShell> {
   void dispose() {
     _controller.dispose();
     if (_ownsControlSource) _controlSource.dispose();
+    if (_ownsThemeController) _themeController.dispose();
     super.dispose();
   }
 
@@ -414,6 +431,30 @@ class _MessengerShellState extends State<MessengerShell> {
     _select(agentId, thread.key);
   }
 
+  /// Opens the full model catalogue (the settings Model page) from the
+  /// composer's "More models" way out.
+  void _openModelScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            ModelSettingsPage(sessionSource: widget.sessionSource),
+      ),
+    );
+  }
+
+  /// Opens the settings menu as its own route, so the live thread and its
+  /// socket stay mounted underneath.
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => SettingsPage(
+          themeController: _themeController,
+          sessionSource: widget.sessionSource,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // The whole shell listens to the roster: the app-bar title, the control
@@ -450,6 +491,7 @@ class _MessengerShellState extends State<MessengerShell> {
             }
           },
           onController: _onController,
+          onOpenModelScreen: _openModelScreen,
         );
 
         return Scaffold(
@@ -503,6 +545,11 @@ class _MessengerShellState extends State<MessengerShell> {
           tooltip: 'Rooms',
           icon: const Icon(Icons.groups_outlined),
           onPressed: _openRooms,
+        ),
+        IconButton(
+          tooltip: 'Settings',
+          icon: const Icon(Icons.settings_outlined),
+          onPressed: _openSettings,
         ),
         IconButton(
           tooltip: 'Sign out',
