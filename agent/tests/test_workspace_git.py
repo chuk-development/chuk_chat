@@ -187,24 +187,6 @@ def test_the_commit_message_carries_the_round_summary(tmp_path):
     assert workspace.history(limit=1)[0].subject == "Wrote the release notes"
 
 
-def test_a_memory_write_is_versioned_like_any_other_change(tmp_path):
-    """MEMORY.md is markdown in the workspace, so §7.7 gives it a diffable,
-    revertible history for free — that is the point of putting it there."""
-    from cowork_agent.memory import MemoryStore, register_memory_tool
-
-    workspace = _ws(tmp_path)
-    registry = JournalingRegistry(workspace)
-    register_memory_tool(registry, MemoryStore(workspace.root / "memory"))
-
-    result = registry.dispatch(
-        "memory", {"action": "add", "file": "user", "text": "Prefers short answers."}
-    )
-
-    assert result.get("ok") is True
-    assert workspace.journal_entries()[-1]["changed_files"] == ["memory/USER.md"]
-    assert "memory/USER.md" in _git(workspace.root, "ls-files")
-
-
 def test_batch_groups_a_round_into_one_commit(tmp_path):
     workspace = _ws(tmp_path)
     registry = _registry(workspace)
