@@ -46,6 +46,14 @@ from .web_search import DEFAULT_BASE_URL, TokenSession, register_web_search
 # would blow the context on one call.
 READ_CAP = 60_000
 
+# stdout/stderr cap for the python tool — a tool result travels back into the
+# prompt, so an unbounded capture would blow the context on one call.
+PYTHON_OUTPUT_CAP = 30_000
+
+# The tool name the loop recognises as terminal. Kept here so tool and loop
+# agree on one string.
+FINISH_TOOL = "finish"
+
 RUN_COMMAND_SCHEMA = {
     "type": "object",
     "description": (
@@ -111,6 +119,52 @@ LIST_DIR_SCHEMA = {
         },
     },
     "required": [],
+}
+
+# Code-as-action (CodeAct, §7.1). One `python` tool whose argument is a code
+# string run in the sandbox. A single action can carry a whole multi-step plan —
+# loops, branches, intermediate variables, composition of several operations —
+# instead of one JSON tool call per step. Measured ~20% higher task success and
+# ~30% fewer turns vs one-tool-per-turn. `<tool_call>` stays for simple things;
+# the model drops into `python` for anything multi-step.
+RUN_PYTHON_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Run a Python 3 script in the workspace and return its exit code, "
+        "stdout and stderr. Prefer this over many small shell calls when a task "
+        "needs several steps, loops, or intermediate values — write one script. "
+        "The script runs to completion; print what you need to see."
+    ),
+    "properties": {
+        "code": {"type": "string", "description": "The full Python source to run."},
+        "timeout": {
+            "type": "integer",
+            "description": "Seconds before the script is killed.",
+            "default": 120,
+        },
+    },
+    "required": ["code"],
+}
+
+# Explicit terminal action (§7.1). None of the strong agent loops rely on
+# "bare-text turn = done" alone — a mid-task reasoning turn with no tool call
+# would be misread as the final answer. `finish` lets the model signal
+# completion deliberately; the loop treats it as the terminator. The structural
+# bare-text rule stays as a fallback.
+FINISH_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Call this when the task is fully done to deliver the final answer and "
+        "stop. Put the answer to the user in `summary`. Do not call it to report "
+        "mid-task progress — only to finish."
+    ),
+    "properties": {
+        "summary": {
+            "type": "string",
+            "description": "The final answer / result for the user.",
+        },
+    },
+    "required": ["summary"],
 }
 
 
@@ -193,6 +247,51 @@ def make_list_dir_handler(env: Environment):
     return list_dir
 
 
+def _cap(text: str, limit: int) -> tuple[str, bool]:
+    """Truncate ``text`` to ``limit`` bytes; report whether it was cut."""
+    raw = text.encode("utf-8", "replace")
+    if len(raw) <= limit:
+        return text, False
+    return raw[:limit].decode("utf-8", "ignore"), True
+
+
+def make_run_python_handler(env: Environment):
+    def run_python(code: str, timeout: int = 120) -> dict:
+        # The source travels as base64 inside the command, so nothing in the
+        # code (quotes, backticks, ``$``, newlines) can break the shell or be
+        # expanded by it — the same trick the file tools use.
+        payload = base64.b64encode(code.encode("utf-8")).decode("ascii")
+        script = "$(mktemp --suffix=.py)"
+        cmd = (
+            f"__f={script}; "
+            f"printf %s {shlex.quote(payload)} | base64 -d > \"$__f\" && "
+            f"python3 \"$__f\"; __rc=$?; rm -f \"$__f\"; exit $__rc"
+        )
+        result = env.run_bash(cmd, timeout=timeout)
+        stdout, out_trunc = _cap(result.stdout, PYTHON_OUTPUT_CAP)
+        stderr, err_trunc = _cap(result.stderr, PYTHON_OUTPUT_CAP)
+        return {
+            "exit_code": result.exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
+            "timed_out": result.timed_out,
+            "truncated": out_trunc or err_trunc,
+            "duration_s": round(result.duration_s, 4),
+        }
+
+    return run_python
+
+
+def make_finish_handler():
+    def finish(summary: str) -> dict:
+        # The loop intercepts a `finish` tool call and stops with this summary as
+        # the final answer; the handler just echoes it so the tool is a real,
+        # dispatchable tool and gets documented to the model like any other.
+        return {"ok": True, "final": summary}
+
+    return finish
+
+
 def register_run_command(registry: ToolRegistry, env: Environment) -> None:
     registry.register(
         "run_command",
@@ -205,6 +304,14 @@ def register_file_tools(registry: ToolRegistry, env: Environment) -> None:
     registry.register("write_file", WRITE_FILE_SCHEMA, make_write_file_handler(env))
     registry.register("read_file", READ_FILE_SCHEMA, make_read_file_handler(env))
     registry.register("list_dir", LIST_DIR_SCHEMA, make_list_dir_handler(env))
+
+
+def register_run_python(registry: ToolRegistry, env: Environment) -> None:
+    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env))
+
+
+def register_finish(registry: ToolRegistry) -> None:
+    registry.register(FINISH_TOOL, FINISH_SCHEMA, make_finish_handler())
 
 
 def register_builtin_tools(
@@ -242,6 +349,11 @@ def register_builtin_tools(
     """
     register_run_command(registry, env)
     register_file_tools(registry, env)
+    # Net-new built-ins: CodeAct `python` and the explicit `finish` terminator.
+    # Both need only the environment/registry, so the extra channel params above
+    # (session, sinks, mounts) do not apply to them.
+    register_run_python(registry, env)
+    register_finish(registry)
     register_web_search(
         registry, session, base_url=base_url, http_client=search_http_client
     )
