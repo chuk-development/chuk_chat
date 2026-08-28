@@ -17,7 +17,20 @@ In-frame payload protocol
 --------------------------
 Controller -> executor (one, opens the task)::
 
-    {"type": "task", "prompt": "...", "session_key": "..."}
+    {"type": "task", "prompt": "...", "session_key": "...",
+     "mcp_servers": [                                    # optional (§9, §10)
+       {"name": "github", "url": "https://api.example/v1/mcp/github",
+        "transport": "http", "auth": "appSession"},
+       {"name": "tickets", "url": "https://mcp.acme.com/mcp",
+        "transport": "http", "auth": "oauth", "access_token": "..."}]}
+
+``mcp_servers`` is additive and optional. The Flutter host resolves each
+UI-configured connection's live bearer at task launch and forwards the list
+*inside* this sealed frame; the executor builds a per-session ``MCPManager``
+from it, attaching ``Authorization: Bearer <token>`` to the HTTP targets. An
+``appSession`` connector uses the executor's own account token (server-side,
+never in the frame); an ``oauth`` connector forwards its device token here. A
+frame with no ``mcp_servers`` is byte-for-byte the old one.
 
 Controller -> executor (any time after it, aborts a run — §7.1, §16)::
 
@@ -106,8 +119,31 @@ class PayloadTooLarge(ValueError):
 # -- in-frame payload builders ------------------------------------------------
 
 
-def task_payload(prompt: str, session_key: str = "default") -> dict[str, Any]:
-    return {"type": "task", "prompt": prompt, "session_key": session_key}
+def task_payload(
+    prompt: str,
+    session_key: str = "default",
+    *,
+    mcp_servers: list[dict] | None = None,
+) -> dict[str, Any]:
+    """Build the ``task`` frame that opens a run.
+
+    ``mcp_servers`` is optional and additive: when the Flutter host has
+    UI-configured MCP connections for this session, it puts them here so the
+    executor can build an authenticated ``MCPManager`` before the loop starts.
+    Each entry is ``{name, url, transport, auth, access_token?}`` (``headers``
+    and ``env`` are honored too, as in ``mcp.json``); ``auth`` is one of
+    ``appSession`` (use the executor's account bearer, resolved server-side),
+    ``oauth`` (forward this entry's ``access_token``), or ``none``. Absent or
+    empty -> the frame is byte-for-byte the old one, and behavior is unchanged.
+    """
+    payload: dict[str, Any] = {
+        "type": "task",
+        "prompt": prompt,
+        "session_key": session_key,
+    }
+    if mcp_servers:
+        payload["mcp_servers"] = list(mcp_servers)
+    return payload
 
 
 def stop_payload(

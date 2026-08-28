@@ -142,6 +142,13 @@ class MCPServerConfig:
     # sse / http
     url: str | None = None
     headers: dict[str, str] = field(default_factory=dict)
+    #: A resolved bearer token for an HTTP/streamable-HTTP server, attached as
+    #: ``Authorization: Bearer <token>`` on every request. This is the forwarded
+    #: credential channel: the Flutter host resolves each connection's live token
+    #: at task launch and it rides in the sealed ``mcp_servers`` payload. A live
+    #: ``token_provider`` (the OAuth stash) still wins over this static value, and
+    #: the stdio path never sees it. ``None`` -> today's behavior.
+    auth_token: str | None = None
     #: Optional OAuth block for a server that authorizes its own clients:
     #: ``{"token_url": ..., "client_id": ..., "scopes": [...]}``. The redirect
     #: URI is never configured here — it is always the backend's public callback
@@ -196,6 +203,7 @@ def _one_config(name: str, raw: Any) -> MCPServerConfig:
             if isinstance(headers, dict)
             else {}
         ),
+        auth_token=(str(raw["auth_token"]) if raw.get("auth_token") else None),
         oauth=dict(raw["oauth"]) if isinstance(raw.get("oauth"), dict) else {},
         enabled=bool(raw.get("enabled", True)) and not bool(raw.get("disabled", False)),
         connect_timeout=float(raw.get("connect_timeout", CONNECT_TIMEOUT)),
@@ -229,6 +237,64 @@ def parse_mcp_config(text: str) -> tuple[list[MCPServerConfig], list[str]]:
         except ValueError as exc:
             errors.append(f"{name}: {exc}")
             continue
+        problem = config.validate()
+        if problem:
+            errors.append(f"{name}: {problem}")
+            continue
+        configs.append(config)
+    return configs, errors
+
+
+# -- forwarded (host-configured) servers -----------------------------------
+
+#: ``auth`` kinds a forwarded ``mcp_servers`` entry may declare. ``appSession``
+#: authenticates with the executor's own account bearer (a connector the backend
+#: brokers, e.g. GitHub at ``${api}/v1/mcp/github``); ``oauth`` forwards the
+#: device's own resolved token; ``none`` (or absent) is unauthenticated.
+AUTH_APP_SESSION = "appSession"
+AUTH_OAUTH = "oauth"
+AUTH_NONE = "none"
+
+
+def configs_from_entries(
+    entries: list[dict] | None,
+    *,
+    account_token: str | None = None,
+) -> tuple[list[MCPServerConfig], list[str]]:
+    """Turn the forwarded ``mcp_servers`` list into validated server configs.
+
+    Each entry is ``{name, url, transport, auth, access_token?}`` (``headers``
+    and ``env`` are honored too, matching ``mcp.json``). The bearer is resolved
+    per ``auth``: an ``appSession`` connector uses ``account_token`` (the
+    executor's account, resolved server-side); an ``oauth`` connector uses the
+    entry's own forwarded ``access_token``. A malformed entry costs that entry,
+    not the batch — it is recorded in the returned errors and skipped, so one
+    bad server never crashes the task.
+    """
+    configs: list[MCPServerConfig] = []
+    errors: list[str] = []
+    for index, raw in enumerate(entries or []):
+        label = f"mcp_servers[{index}]"
+        if not isinstance(raw, dict):
+            errors.append(f"{label}: entry must be an object")
+            continue
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            errors.append(f"{label}: missing 'name'")
+            continue
+        try:
+            config = _one_config(name, raw)
+        except ValueError as exc:
+            errors.append(f"{name}: {exc}")
+            continue
+        auth = str(raw.get("auth") or "").strip()
+        token: str | None = None
+        if auth == AUTH_APP_SESSION:
+            token = account_token or None
+        elif auth == AUTH_OAUTH:
+            token = str(raw["access_token"]) if raw.get("access_token") else None
+        if token:
+            config.auth_token = token
         problem = config.validate()
         if problem:
             errors.append(f"{name}: {problem}")
@@ -458,6 +524,11 @@ class MCPConnection:
                 token = self._token_provider(self.config.name)
             except Exception:  # noqa: BLE001 — a stash miss is not a failure
                 token = None
+        # The forwarded bearer is the fallback: a live OAuth token from the stash
+        # wins, but with no stash (the per-session forwarded path) the resolved
+        # token from the sealed payload is what authenticates the server.
+        if not token:
+            token = self.config.auth_token or None
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
@@ -650,10 +721,17 @@ class MCPManager:
                 continue
             for info in connection.tools:
                 full = tool_name(name, info.name)
-                if full in self._registered:
-                    continue
                 if registry.has(full):
-                    self.errors.append(f"{name}: duplicate tool name {full}, skipped")
+                    # Present in THIS registry already. If it is one of ours, this
+                    # is a re-registration into the same registry — skip silently.
+                    # If it is not ours, it is a real name clash worth recording,
+                    # once. A per-session manager is registered into a fresh
+                    # registry each task, so ``self._registered`` must not
+                    # short-circuit that — the registry is the source of truth.
+                    if full not in self._registered:
+                        self.errors.append(
+                            f"{name}: duplicate tool name {full}, skipped"
+                        )
                     continue
                 registry.register(
                     full,
