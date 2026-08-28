@@ -57,9 +57,12 @@ from cowork_manager.scheduler import (
     unified_diff,
 )
 from cowork_manager.autonomy import (
+    DAILY_SUMMARY_JOB_ID,
+    DAILY_SUMMARY_SCHEDULE,
     JobDispatcher,
     ScheduleError,
     load_roster_schedules,
+    register_daily_summary,
     Notification,
     NotificationKind,
     RunEvent,
@@ -72,6 +75,15 @@ from cowork_manager.autonomy import (
     ThreadedRunHandle,
     UnattendedRunner,
     should_deliver,
+)
+from cowork_manager.daily_summary import (
+    DailyActivity,
+    ModelClient,
+    daily_summary_script,
+    gather_activity,
+    render_markdown,
+    summary_path,
+    write_daily_summary,
 )
 from cowork_manager.relay import (
     CapabilityDescriptor,
@@ -129,6 +141,16 @@ __all__ = [
     "JobDispatcher",
     "ScheduleError",
     "load_roster_schedules",
+    "register_daily_summary",
+    "DAILY_SUMMARY_JOB_ID",
+    "DAILY_SUMMARY_SCHEDULE",
+    "DailyActivity",
+    "ModelClient",
+    "daily_summary_script",
+    "gather_activity",
+    "render_markdown",
+    "summary_path",
+    "write_daily_summary",
     "Notification",
     "NotificationKind",
     "RunEvent",
