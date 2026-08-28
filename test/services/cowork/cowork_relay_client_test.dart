@@ -11,6 +11,20 @@ import 'package:cowork/services/cowork/cowork_frame.dart';
 import 'package:cowork/services/cowork/cowork_frame_codec.dart';
 import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/mcp/mcp_store.dart';
+
+/// A stand-in [McpStore] whose forward payloads are canned, so a task-frame
+/// test needs no SharedPreferences and no secure storage. Overriding
+/// [forwardPayloads] is enough — the base constructor's secret store is never
+/// touched.
+class FakeMcpStore extends McpStore {
+  FakeMcpStore(this._payloads);
+
+  final List<Map<String, dynamic>> _payloads;
+
+  @override
+  Future<List<Map<String, dynamic>>> forwardPayloads() async => _payloads;
+}
 
 /// A fake duplex socket. `send()` from the client is captured on [outbound];
 /// the test host writes to the client via [deliver].
@@ -168,6 +182,7 @@ void main() {
     String digits = '428913',
     String appDeviceId = 'app-desktop-1',
     String hostDeviceId = 'host-laptop-1',
+    McpStore? mcpStore,
   }) async {
     final socket = FakeRelaySocket();
     final host = FakeExecutorHost(
@@ -185,6 +200,7 @@ void main() {
       signingKeyPair: await CoworkDeviceKeys.generate(),
       connector: (_) async => socket,
       nowMs: clock,
+      mcpStore: mcpStore,
     );
 
     await client.connect(
@@ -276,6 +292,56 @@ void main() {
 
     final task = host.received.singleWhere((m) => m['type'] == 'task');
     expect(task['prompt'], 'list the files');
+
+    await client.dispose();
+  });
+
+  test('sendTask forwards mcp_servers when the store has connections', () async {
+    final servers = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'name': 'github',
+        'url': 'https://mcp.github.example/sse',
+        'auth': 'appSession',
+      },
+      <String, dynamic>{
+        'name': 'notion',
+        'url': 'https://mcp.notion.example/sse',
+        'auth': 'oauth',
+        'access_token': 'tok-123',
+      },
+    ];
+    final (client, host, _) = await paired(mcpStore: FakeMcpStore(servers));
+
+    await client.sendTask('list the files');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task['mcp_servers'], servers);
+
+    await client.dispose();
+  });
+
+  test('sendTask omits mcp_servers when the store is empty', () async {
+    final (client, host, _) =
+        await paired(mcpStore: FakeMcpStore(const <Map<String, dynamic>>[]));
+
+    await client.sendTask('list the files');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task.containsKey('mcp_servers'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('sendTask with no store attached omits mcp_servers', () async {
+    final (client, host, _) = await paired();
+
+    await client.sendTask('list the files');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task.containsKey('mcp_servers'), isFalse);
 
     await client.dispose();
   });

@@ -10,6 +10,7 @@ import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
 import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/models/cowork_room.dart';
@@ -34,6 +35,9 @@ Future<CoworkRelayController> _buildRelayController(
   return CoworkRelayClient(
     deviceId: identity.deviceId,
     signingKeyPair: identity.keyPair,
+    // The user's UI-configured MCP servers ride along on each task frame,
+    // resolved with their live bearers at launch (WS-D).
+    mcpStore: McpStore(),
   );
 }
 

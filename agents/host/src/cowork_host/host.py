@@ -89,6 +89,10 @@ class LocalHost:
         self._supabase_url = supabase_url
         self._anon_key = anon_key
         self._model_factory_override = model_factory_override
+        # The provisioned account session, set once a model factory is resolved
+        # from the token. The task server forwards its live access token to the
+        # executor so ``appSession`` MCP connectors authenticate server-side.
+        self._session: SupabaseSession | None = None
 
         self._workspace = Path(workspace_dir).expanduser()
         self._agents_dir = self._workspace / "agents"
@@ -429,6 +433,9 @@ class LocalHost:
             supabase_url=supabase_url,
             anon_key=anon_key,
         )
+        # Keep the live session so the task server can hand its (refreshable)
+        # access token to the executor for appSession MCP connectors.
+        self._session = session
         self._log("resolving a model from the account (one /v1/models_info call)...")
         return resolve_backend_model_factory(
             session, preferred_model_id=self._model_id
@@ -476,6 +483,12 @@ class LocalHost:
             workspace=self._agent.workspace_dir or None,
             estop_path=self._estop_path,
             on_room_frame=lambda payload: dispatch_room_frame(room_service, payload),
+            # appSession MCP connectors (GitHub etc.) authenticate server-side
+            # with the account token; read it live off the session so a refresh
+            # carries to the next task.
+            account_token_provider=(
+                (lambda: self._session.access_token if self._session else None)
+            ),
         )
 
     @property
