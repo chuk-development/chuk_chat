@@ -39,6 +39,7 @@ import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_reconnect.dart';
 import 'package:cowork/services/executor_provisioning.dart';
+import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/services/websocket_connector.dart' as ws_connector;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -520,18 +521,27 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     int keyVersion = 1,
     int Function()? nowMs,
     Duration pairingTimeout = const Duration(seconds: 30),
+    McpStore? mcpStore,
   })  : _deviceId = deviceId,
         _signingKeyPair = signingKeyPair,
         _connector = connector,
         _approvedDevices = approvedDevices ?? CoworkApprovedDevices.empty(),
         _keyVersion = keyVersion,
         _nowMs = nowMs,
-        _pairingTimeout = pairingTimeout;
+        _pairingTimeout = pairingTimeout,
+        _mcpStore = mcpStore;
 
   final String _deviceId;
   final SimpleKeyPair _signingKeyPair;
   final RelaySocketConnector _connector;
   final CoworkApprovedDevices _approvedDevices;
+
+  /// The user's UI-configured MCP servers. When set, each task frame carries the
+  /// non-empty forward payloads (`[{name, url, auth, access_token?}]`) so the
+  /// executor can stand up an authenticated per-session `MCPManager` (WS-D).
+  /// Null (or an empty store) leaves `mcp_servers` off the frame, which keeps an
+  /// old host happy and costs nothing when the user configured no connectors.
+  final McpStore? _mcpStore;
   final int _keyVersion;
   final int Function()? _nowMs;
   final Duration _pairingTimeout;
@@ -807,19 +817,26 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
-  }) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'task',
-        'prompt': prompt,
-        'session_key': sessionKey,
-        // Each model field rides along only when the composer set it, so an
-        // old host and an unconfigured send both keep the host's own default.
-        if (modelId != null && modelId.isNotEmpty) 'model': modelId,
-        if (providerSlug != null && providerSlug.isNotEmpty)
-          'provider': providerSlug,
-        if (reasoningEffort != null && reasoningEffort.isNotEmpty)
-          'reasoning_effort': reasoningEffort,
-      });
+  }) async {
+    // The user's UI-configured MCP servers, resolved with their live bearers at
+    // launch. Empty (or no store) leaves the key off the frame, so an old host
+    // and a user with no connectors both keep working unchanged.
+    final mcpServers =
+        _mcpStore == null ? const <Map<String, dynamic>>[] : await _mcpStore.forwardPayloads();
+    await _sendFramePayload(<String, dynamic>{
+      'type': 'task',
+      'prompt': prompt,
+      'session_key': sessionKey,
+      // Each model field rides along only when the composer set it, so an
+      // old host and an unconfigured send both keep the host's own default.
+      if (modelId != null && modelId.isNotEmpty) 'model': modelId,
+      if (providerSlug != null && providerSlug.isNotEmpty)
+        'provider': providerSlug,
+      if (reasoningEffort != null && reasoningEffort.isNotEmpty)
+        'reasoning_effort': reasoningEffort,
+      if (mcpServers.isNotEmpty) 'mcp_servers': mcpServers,
+    });
+  }
 
   @override
   Future<void> createRoom(

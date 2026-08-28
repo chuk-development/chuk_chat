@@ -65,6 +65,7 @@ class TaskServer:
         max_iterations: int = 50,
         estop_path: str | None = None,
         on_room_frame=None,
+        account_token_provider: Callable[[], str | None] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -85,6 +86,11 @@ class TaskServer:
                 max_iterations=max_iterations,
                 estop_path=estop_path,
                 on_room_frame=on_room_frame,
+                # The account bearer for ``appSession`` MCP connectors (§10): a
+                # live accessor, so a token refreshed on the SupabaseSession
+                # carries to the next task. ``None`` -> those connectors simply
+                # fail to authenticate, never crash.
+                account_token_provider=account_token_provider,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)
