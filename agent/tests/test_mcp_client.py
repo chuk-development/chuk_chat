@@ -14,12 +14,15 @@ from pathlib import Path
 import pytest
 
 from cowork_agent.mcp_client import (
+    AUTH_APP_SESSION,
+    AUTH_OAUTH,
     HTTP,
     SSE,
     STDIO,
     MCPConnection,
     MCPManager,
     MCPServerConfig,
+    configs_from_entries,
     load_mcp_config,
     parse_mcp_config,
     register_mcp_tools,
@@ -354,6 +357,84 @@ def test_http_transports_round_trip(http_transport):
         )
     finally:
         connection.close()
+
+
+def test_http_target_attaches_forwarded_auth_token(http_transport):
+    """The forwarded ``auth_token`` (no token_provider) rides as a bearer header
+    on the HTTP target — the per-session credential-forwarding path."""
+    transport, url, seen_headers = http_transport
+    connection = MCPConnection(
+        MCPServerConfig(
+            name="http-fake",
+            transport=transport,
+            url=url,
+            auth_token="forwarded-abc",
+            connect_timeout=30.0,
+            call_timeout=30.0,
+        ),
+    )
+    try:
+        assert connection.start() is True, connection.error
+        assert connection.call("shout", {"text": "hi"})["content"] == "HI"
+        assert any(
+            headers.get("authorization") == "Bearer forwarded-abc"
+            for headers in seen_headers
+        )
+    finally:
+        connection.close()
+
+
+# -- forwarded mcp_servers -> configs (§10) -------------------------------
+
+
+def test_configs_from_entries_selects_bearer_by_auth():
+    configs, errors = configs_from_entries(
+        [
+            {"name": "github", "url": "https://api.example/v1/mcp/github",
+             "transport": "http", "auth": AUTH_APP_SESSION},
+            {"name": "tickets", "url": "https://mcp.acme.com/mcp",
+             "transport": "http", "auth": AUTH_OAUTH, "access_token": "device-tok"},
+            {"name": "public", "url": "https://mcp.pub.com/mcp", "auth": "none"},
+        ],
+        account_token="ACCOUNT-BEARER",
+    )
+    assert errors == []
+    by_name = {c.name: c for c in configs}
+    # appSession -> the executor's own account bearer, resolved server-side.
+    assert by_name["github"].auth_token == "ACCOUNT-BEARER"
+    assert by_name["github"].transport == HTTP
+    # oauth -> the device's forwarded token.
+    assert by_name["tickets"].auth_token == "device-tok"
+    # none -> unauthenticated.
+    assert by_name["public"].auth_token is None
+
+
+def test_configs_from_entries_appsession_without_account_token_is_unauthed():
+    configs, _ = configs_from_entries(
+        [{"name": "github", "url": "https://x/mcp", "auth": AUTH_APP_SESSION}],
+        account_token=None,
+    )
+    assert configs[0].auth_token is None
+
+
+def test_configs_from_entries_skips_bad_entries_not_fatal():
+    configs, errors = configs_from_entries(
+        [
+            {"name": "good", "url": "https://ok/mcp", "auth": "none"},
+            {"url": "https://noname/mcp"},          # missing name
+            {"name": "bad_url", "url": "ftp://nope"},
+            "not-an-object",
+            {"name": "no_target"},                   # neither url nor command
+        ],
+        account_token="t",
+    )
+    assert [c.name for c in configs] == ["good"]
+    assert len(errors) == 4
+
+
+def test_configs_from_entries_empty_is_silent():
+    assert configs_from_entries(None) == ([], [])
+    assert configs_from_entries([]) == ([], [])
 
 
 def test_http_server_that_is_not_listening_fails_cleanly():

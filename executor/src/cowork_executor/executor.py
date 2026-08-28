@@ -60,12 +60,14 @@ from dataclasses import dataclass
 
 from cowork_agent import (
     KillSwitch,
+    MCPManager,
     ModelClient,
     ModelResponse,
     SubagentConfig,
     SubagentLimits,
     WorkspaceMount,
     build_runtime,
+    configs_from_entries,
 )
 from cowork_crypto import (
     CoworkFrameOpener,
@@ -127,6 +129,10 @@ class _Run:
     session_key: str
     prompt: str
     kill: KillSwitch
+    # The forwarded UI-configured MCP connections for this task (§9, §10), or
+    # ``None`` when the frame carried none. Captured at accept time so the worker
+    # thread builds the session's MCPManager before the loop starts.
+    mcp_servers: list[dict] | None = None
 
 
 class Executor:
@@ -157,6 +163,7 @@ class Executor:
         subagent_sandbox_options: dict | None = None,
         subagent_limits: SubagentLimits | None = None,
         on_room_frame: Callable[[dict], None] | None = None,
+        account_token_provider: Callable[[], str | None] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -193,6 +200,19 @@ class Executor:
         # hands the decoded payload up to the host, which routes it to the
         # RoomService. None means rooms are not enabled on this host.
         self._on_room_frame = on_room_frame
+        # The account bearer for ``appSession`` MCP connectors (§10). A callable,
+        # not a fixed string, so a token refreshed on the SupabaseSession carries
+        # to the next task. ``None`` -> appSession connectors get no bearer and
+        # simply fail to authenticate (never a crash). ``oauth`` connectors do
+        # not need this: their device token is forwarded in the frame.
+        self._account_token_provider = account_token_provider
+        # MCP managers live per session (§9): one manager owns the transport
+        # threads for a session's forwarded servers, is reused across that
+        # session's tasks, and is closed on executor stop. Guarded because the
+        # worker builds it while ``stop`` closes it.
+        self._mcp_managers: dict[str, MCPManager] = {}
+        self._mcp_signatures: dict[str, str] = {}
+        self._mcp_lock = threading.Lock()
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -243,6 +263,9 @@ class Executor:
             self._terminal(
                 run.request_id, error_payload("executor stopped before the task ran")
             )
+        # Per-session MCP managers own transport threads (and stdio subprocesses);
+        # close them so nothing outlives the executor.
+        self._close_mcp_managers()
         self._environment.cleanup()
 
     def serve_forever(self) -> None:
@@ -347,6 +370,8 @@ class Executor:
         except (KeyError, TypeError):
             self._terminal(request_id, error_payload("bad task payload"))
             return
+        raw_servers = payload.get("mcp_servers")
+        mcp_servers = list(raw_servers) if isinstance(raw_servers, list) else None
         run = _Run(
             request_id=request_id,
             session_key=str(session_key),
@@ -354,6 +379,7 @@ class Executor:
             # Built here, not in the loop, so a stop that arrives while the task
             # is still queued has something to fire.
             kill=KillSwitch(self._estop_path),
+            mcp_servers=mcp_servers,
         )
         with self._runs_lock:
             self._runs[request_id] = run
@@ -432,6 +458,13 @@ class Executor:
         if callable(cancel_model):
             run.kill.on_interrupt(cancel_model)
 
+        # The forwarded MCP servers (§9, §10), built into a per-session manager
+        # with the right bearer attached. Best-effort: any failure here leaves
+        # ``mcp_manager`` None and the task runs without those tools, never
+        # crashing. ``None`` keeps ``build_runtime``'s own workspace ``mcp.json``
+        # path (``enable_mcp``) exactly as it was.
+        mcp_manager = self._session_mcp_manager(session_key, run.mcp_servers)
+
         subagents = self._subagent_config(request_id, session_key)
         loop = build_runtime(
             model,
@@ -441,6 +474,9 @@ class Executor:
             system_prompt=self._system_prompt,
             workspace=self._workspace,
             subagents=subagents,
+            # A prepared manager the executor owns and closes on stop. When None,
+            # build_runtime falls back to reading the workspace mcp.json itself.
+            mcp=mcp_manager,
             # One switch per task, owned by the executor: the run registry fires
             # it when a stop names this task, and ``build_runtime`` hands the same
             # switch to the subagent supervisor, so one Stop reaches the tree.
@@ -489,6 +525,75 @@ class Executor:
                 tokens_spent=result.tokens_spent,
             ),
         )
+
+    # -- MCP credential forwarding (§9, §10) -----------------------------
+    def _session_mcp_manager(
+        self, session_key: str, mcp_servers: list[dict] | None
+    ) -> MCPManager | None:
+        """Get or build this session's MCPManager from the forwarded servers.
+
+        The manager is cached per session and reused across the session's tasks,
+        so the transport threads and any subprocesses live once, not per task.
+        A new task whose ``mcp_servers`` differ from what built the cached manager
+        rebuilds it (the UI changed the connections); an identical list reuses it.
+
+        Best-effort by contract: a bad entry is skipped inside
+        :func:`configs_from_entries`, an unreachable server is skipped inside
+        ``MCPManager.start`` (via ``register_mcp_tools`` in ``build_runtime``),
+        and any unexpected error here is swallowed so the task still runs — just
+        without those tools. Returns ``None`` when nothing was forwarded.
+        """
+        if not mcp_servers:
+            return None
+        try:
+            signature = json.dumps(mcp_servers, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            signature = repr(mcp_servers)
+        with self._mcp_lock:
+            existing = self._mcp_managers.get(session_key)
+            if existing is not None and self._mcp_signatures.get(session_key) == signature:
+                return existing
+            stale = existing if existing is not None else None
+        # Close a superseded manager outside the lock — close() joins threads.
+        if stale is not None:
+            try:
+                stale.close()
+            except Exception:  # noqa: BLE001 — shutdown must not raise
+                pass
+        try:
+            account_token = (
+                self._account_token_provider()
+                if self._account_token_provider is not None
+                else None
+            )
+            configs, errors = configs_from_entries(
+                mcp_servers, account_token=account_token
+            )
+            if not configs:
+                # Nothing usable was forwarded: record why (bad entries) and run
+                # without MCP rather than caching an empty manager per signature.
+                with self._mcp_lock:
+                    self._mcp_managers.pop(session_key, None)
+                    self._mcp_signatures.pop(session_key, None)
+                return None
+            manager = MCPManager(configs, errors=errors)
+        except Exception:  # noqa: BLE001 — building MCP must never crash a task
+            return None
+        with self._mcp_lock:
+            self._mcp_managers[session_key] = manager
+            self._mcp_signatures[session_key] = signature
+        return manager
+
+    def _close_mcp_managers(self) -> None:
+        with self._mcp_lock:
+            managers = list(self._mcp_managers.values())
+            self._mcp_managers.clear()
+            self._mcp_signatures.clear()
+        for manager in managers:
+            try:
+                manager.close()
+            except Exception:  # noqa: BLE001 — shutdown must not raise
+                pass
 
     # -- subagents (§7.6) ------------------------------------------------
     def _subagent_config(self, request_id: str, session_key: str) -> SubagentConfig | None:
