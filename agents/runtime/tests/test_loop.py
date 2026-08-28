@@ -86,6 +86,62 @@ def test_loop_continues_on_tool_call_then_finishes(tmp_path):
     assert roles == ["user", "assistant", "tool", "assistant"]
 
 
+# The explicit terminal action: a `finish` tool call ends the run with its
+# summary as the final answer, even though it is structurally a tool call (which
+# would otherwise continue the loop).
+FINISH_CALL = '<tool_call>{"name":"finish","arguments":{"summary":"the result"}}</tool_call>'
+
+
+def test_finish_tool_terminates_with_summary(tmp_path):
+    from cowork_agent.tools import register_finish
+
+    reg = _reg_with_echo()
+    register_finish(reg)
+    store = _store(tmp_path)
+    # A tool round, then the model calls `finish` instead of returning bare text.
+    model = MockModelClient([ECHO_CALL, FINISH_CALL])
+    loop = AgentLoop(model, reg, store)
+    result = loop.run("kf", "go")
+    assert result.reason is StopReason.FINISHED
+    assert result.final_answer == "the result"
+    assert result.iterations == 2
+    # The finish tool call is still recorded (audit trail) before the stop.
+    roles = [m.role for m in store.get_conversation(result.session_id)]
+    assert roles == ["user", "assistant", "tool", "assistant", "tool"]
+
+
+# -- CodeAct python tool: really runs code in the env --------------------
+
+PYTHON_CALL = (
+    '<tool_call>{"name":"python","arguments":'
+    '{"code":"import sys\\nprint(6 * 7)\\nsys.exit(3)"}}</tool_call>'
+)
+
+
+def test_python_tool_runs_code_in_env(tmp_path):
+    from cowork_agent.environment import LocalEnvironment
+    from cowork_agent.tools import register_run_python
+
+    reg = _reg_with_echo()
+    register_run_python(reg, LocalEnvironment())
+
+    # The model calls `python`, then finishes with bare text.
+    model = MockModelClient([PYTHON_CALL, "done"])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, reg, store)
+    result = loop.run("kpy", "go")
+    assert result.reason is StopReason.FINISHED
+
+    tool_rows = [
+        m for m in store.get_conversation(result.session_id) if m.role == "tool"
+    ]
+    assert len(tool_rows) == 1
+    payload = tool_rows[0].content["content"]
+    assert payload["exit_code"] == 3
+    assert payload["stdout"].strip() == "42"
+    assert payload["timed_out"] is False
+
+
 # -- dual-counter termination --------------------------------------------
 
 

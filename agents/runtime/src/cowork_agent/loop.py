@@ -37,6 +37,7 @@ from .context import ContextLadder, total_tokens_from_usage
 from .model import ModelClient, ModelResponse
 from .registry import ToolRegistry
 from .state import StateStore
+from .tools import FINISH_TOOL
 
 
 #: Stands in for a tool result the run was stopped before reaching. The row has
@@ -361,6 +362,7 @@ class AgentLoop:
 
             # -- structural continue-vs-finish ------------------------
             if response.has_tool_calls:
+                finish_summary: str | None = None
                 for call in response.tool_calls:
                     # One turn can carry several tool calls, and each one can be
                     # a long command. Stop between them too, or a Stop would wait
@@ -371,6 +373,20 @@ class AgentLoop:
                         result: object = INTERRUPTED_TOOL_RESULT
                     else:
                         result = self._registry.dispatch(call.name, call.arguments)
+                        # Explicit terminal action: a `finish` call ends the run
+                        # with its summary as the final answer. Its tool result
+                        # is still recorded below (audit trail); the loop just
+                        # stops after this batch. Structural bare-text stays as
+                        # the fallback terminator.
+                        if call.name == FINISH_TOOL and finish_summary is None:
+                            args = (
+                                call.arguments
+                                if isinstance(call.arguments, dict)
+                                else {}
+                            )
+                            finish_summary = str(args.get("summary", "")) or (
+                                response.text or ""
+                            )
                     store.append_message(
                         session_id,
                         "tool",
@@ -381,8 +397,14 @@ class AgentLoop:
                             "content": result,
                         },
                     )
+                # The interrupt wins over a `finish` in the same batch: a run the
+                # user stopped reports INTERRUPTED, not FINISHED.
                 if self._kill.interrupted():
                     reason = StopReason.INTERRUPTED
+                    break
+                if finish_summary is not None:
+                    final_answer = finish_summary
+                    reason = StopReason.FINISHED
                     break
                 self._drain_context(session_id)
                 continue  # tool calls -> feed results back, loop again
