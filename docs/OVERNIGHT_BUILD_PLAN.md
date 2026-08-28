@@ -86,6 +86,10 @@ to avoid clobbering.
   `docs/MCP_OAUTH_BACKEND_ROUTE.md`).
 - Embedding-picker host/manager capability to feed the UI.
 - Install/pair smoke pass. (Prod relay-crossreplica deploy stays owner-gated.)
+- **Daily summary journal**: a scheduled job (reuse master's scheduler/cron;
+  `no_agent` mode or a cheap aux-model call — need NOT be the agent itself) that
+  at end of day writes a dated markdown file (e.g. `journal/YYYY-MM-DD.md`)
+  summarizing what happened, automatically. Complements soul.md/agents.md.
 
 ## Orchestration rules
 - Worktree isolation per agent; orchestrator merges sequentially, runs `uv run
