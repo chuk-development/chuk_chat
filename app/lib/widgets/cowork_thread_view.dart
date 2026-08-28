@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/chat_mode_service.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/model_cache_service.dart';
+import 'package:cowork/services/model_info_service.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 import 'package:cowork/widgets/agent_run_views.dart';
+import 'package:cowork/widgets/chat_mode_selector.dart';
 
 /// The CoWork chat surface: one scrolling conversation with the agent running
 /// on the user's own host.
@@ -41,6 +45,7 @@ class CoworkThreadView extends StatefulWidget {
     this.onActivity,
     this.onPaired,
     this.onController,
+    this.onOpenModelScreen,
   });
 
   /// Builds the transport controller. Async because a real client generates a
@@ -83,6 +88,11 @@ class CoworkThreadView extends StatefulWidget {
   /// Reports the host device id the moment the transport is paired, so the
   /// roster can list the agent that really runs over there.
   final void Function(String peerDeviceId)? onPaired;
+
+  /// Opens the full model catalogue — the composer's mode picker offers a
+  /// "More models" way out that calls this. Wired by the shell to the
+  /// settings Model page. Null hides that row (the quick picks still work).
+  final VoidCallback? onOpenModelScreen;
 
   @override
   State<CoworkThreadView> createState() => _CoworkThreadViewState();
@@ -132,6 +142,20 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   Timer? _autoReconnectTimer;
   int _reconnectAttempts = 0;
 
+  /// The active composer mode (Fast / Thinking) and its config — which model,
+  /// which provider, which reasoning level. Loaded from [ChatModeService] on
+  /// startup and persisted per mode as the user retunes it. Each task carries
+  /// these so the host runs it on the chosen model.
+  ChatMode _mode = ChatModeService.fallbackMode;
+  ModeConfig _modeConfig =
+      ChatModeService.defaultConfig(ChatModeService.fallbackMode);
+
+  /// The models offered as quick picks in the mode picker's second menu, in
+  /// display order. Loaded from the cached model list (refreshed from the API
+  /// when a token is available). Empty until loaded — the picker then shows
+  /// only "More models".
+  List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
+
   /// Capped exponential backoff for auto-reconnect after an unexpected drop.
   static const Duration _baseBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
@@ -146,6 +170,86 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     super.initState();
     _hostController = TextEditingController(text: widget.defaultHostUrl);
     _bootstrap();
+    _loadModeAndModels();
+  }
+
+  /// Load the stored mode and its config, then the model list for the quick
+  /// picks. Never throws: a failure leaves the baked-in defaults, so the
+  /// composer always has a valid model to send.
+  Future<void> _loadModeAndModels() async {
+    final mode = await ChatModeService.load();
+    final config = await ChatModeService.loadConfig(mode);
+    if (mounted) {
+      setState(() {
+        _mode = mode;
+        _modeConfig = config;
+      });
+    }
+    // A cached list is enough; a token refreshes it but is not required.
+    final token = widget.sessionSource.current()?.accessToken ?? '';
+    final models = await ModelInfoService.loadModels(accessToken: token);
+    if (!mounted) return;
+    setState(() {
+      _pickedModels = <ChatModelChoice>[
+        for (final model in models)
+          if (model['id'] is String && (model['id'] as String).isNotEmpty)
+            ChatModelChoice(
+              id: model['id'] as String,
+              name: (model['name'] is String &&
+                      (model['name'] as String).trim().isNotEmpty)
+                  ? (model['name'] as String).trim()
+                  : prettyModelId(model['id'] as String),
+            ),
+      ];
+    });
+  }
+
+  /// The reasoning levels the active mode's model+provider allow — `none`
+  /// first. A single-entry list hides the reasoning choice in the menu.
+  List<String> get _reasoningLevels => ChatModeService.reasoningLevelsFor(
+        providerSlug: _modeConfig.providerSlug,
+      );
+
+  /// The human label for the active mode's model, shown on the menu opener.
+  String get _modelLabel {
+    for (final choice in _pickedModels) {
+      if (choice.id == _modeConfig.modelId) return choice.name;
+    }
+    return prettyModelId(_modeConfig.modelId);
+  }
+
+  Future<void> _onModeChanged(ChatMode mode) async {
+    await ChatModeService.save(mode);
+    final config = await ChatModeService.loadConfig(mode);
+    if (mounted) {
+      setState(() {
+        _mode = mode;
+        _modeConfig = config;
+      });
+    }
+  }
+
+  Future<void> _onModelSelected(String modelId) async {
+    // Pin the model to its default provider from the catalogue when known, so
+    // the reasoning ladder is clamped to what that provider accepts.
+    String provider = '';
+    for (final model in await ModelCacheService.loadAvailableModels()) {
+      if (model['id'] == modelId) {
+        provider = ModelInfoService.defaultProviderSlug(model);
+        break;
+      }
+    }
+    final config = await ChatModeService.setModelForMode(
+      _mode,
+      modelId: modelId,
+      providerSlug: provider,
+    );
+    if (mounted) setState(() => _modeConfig = config);
+  }
+
+  Future<void> _onReasoningChanged(String level) async {
+    final config = await ChatModeService.setReasoningForMode(_mode, level);
+    if (mounted) setState(() => _modeConfig = config);
   }
 
   @override
@@ -488,7 +592,18 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     _composerController.clear();
     widget.onActivity?.call(thread, DateTime.now());
     _scrollToBottom();
-    controller.sendTask(text, sessionKey: thread).catchError((Object error) {
+    controller
+        .sendTask(
+      text,
+      sessionKey: thread,
+      modelId: _modeConfig.modelId,
+      providerSlug: _modeConfig.providerSlug,
+      // Only a mode that reasons sends a level; Fast (reasoning off) leaves it
+      // off the frame so the host does not force a reasoning pass.
+      reasoningEffort:
+          _modeConfig.reasoningOn ? _modeConfig.reasoningEffort : null,
+    )
+        .catchError((Object error) {
       if (mounted) {
         setState(() => _logFor(thread).add(_ErrorEntry('$error')));
         _setRunPhase(_RunPhase.idle);
@@ -603,8 +718,34 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       top: false,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // The per-task model picker: Fast / Thinking with a model and a
+            // reasoning level behind it. Its choice rides on the very next
+            // send, so a task can name its model without leaving the composer.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ChatModeSelector(
+                  mode: _mode,
+                  onModeChanged: _onModeChanged,
+                  onModelSelected: _onModelSelected,
+                  onOpenModelScreen: widget.onOpenModelScreen,
+                  selectedModelId: _modeConfig.modelId,
+                  modelLabel: _modelLabel,
+                  pickedModels: _pickedModels,
+                  reasoningEffort: _modeConfig.reasoningEffort,
+                  reasoningLevels: _reasoningLevels,
+                  onReasoningEffortChanged: _onReasoningChanged,
+                  menuAbove: true,
+                ),
+              ),
+            ),
+            Row(
+              children: [
             Expanded(
               child: TextField(
                 controller: _composerController,
@@ -639,6 +780,8 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
                     : const Icon(Icons.stop),
                 label: Text(_runPhase == _RunPhase.stopping ? 'Stopping…' : 'Stop'),
               ),
+              ],
+            ),
           ],
         ),
       ),
