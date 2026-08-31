@@ -83,7 +83,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             chuk_chat-macos.zip
@@ -95,7 +95,7 @@ jobs:
 
       # When DMG/PKG are built:
       # - name: Upload DMG and PKG to GitHub Release
-      #   uses: softprops/action-gh-release@v1
+      #   uses: softprops/action-gh-release@v2
       #   with:
       #     files: |
       #       build/macos/chuk_chat.dmg
