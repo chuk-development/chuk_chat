@@ -7,27 +7,31 @@ version: 1.0.109
 environment:
   sdk: ^3.9.2
 
-# SDK ceiling — why several deps are held back
-# ---------------------------------------------
-# CI pins Flutter 3.41.4 (Dart 3.11.1) for every platform except the Android job,
-# which pins 3.38.7 (Dart 3.10.7). The ceiling exists because re_editor 0.8.0
-# (pulled in by vendor/markdraw) breaks on Flutter >= 3.44. Do not float CI on `stable`.
+# Dependency ceilings — what is held back and why
+# ------------------------------------------------
+# CI pins Flutter 3.47.0 (Dart 3.13) on every platform (subosito/flutter-action,
+# plus two git-clone jobs at tag 3.47.0). The old re_editor 0.8.0 ceiling that
+# forced Flutter 3.41.4 is GONE: vendor/markdraw was moved to re_editor ^0.10.0
+# (one removed `sperator` param, now `leadingDivider`), so the whole Dart-3.12
+# batch — pdf, printing, sqflite, sqflite_common_ffi, pdfrx, record 7,
+# flutter_foreground_task 11 — now updates. Do not float CI on `stable`.
 #
-# Consequence: anything needing Dart >= 3.12 / Flutter >= 3.44 is unreachable —
-# pdf 3.13, printing 5.15, sqflite 2.4.3, sqflite_common_ffi 2.4.2, record 7.
-# These unblock together once re_editor is resolved; they are not individually broken.
-#
-# Also: keep constraint FLOORS low. The Android job (Dart 3.10.7) ignores pubspec.lock
-# and re-resolves, downgrading anything needing Dart 3.11 (e.g. add_2_calendar 3.1.1 ->
-# 3.0.1, pdfrx -> the ^2.2.24 floor). Raising a floor to a Dart-3.11-only version makes
-# that job unsolvable, since pub cannot downgrade below a declared floor. Every floor
-# raised here resolves on Dart 3.10.7 / Flutter 3.38.1.
-#
-# Second ceiling, from the other direction: Flutter 3.41 is too OLD for plugins whose
-# Gradle script uses a top-level `kotlin { compilerOptions }` block without applying the
-# Kotlin plugin — Flutter's plugin loader does not apply it, so the script fails to
-# compile. dynamic_color 1.9.0, add_2_calendar 3.1.1 and permission_handler_android 14
-# are all capped for this reason; they unblock together on a newer Flutter.
+# Four deps are still capped, each for a concrete, verified reason on the current
+# Android toolchain (AGP 8.13.2 / Gradle 8.14 / compileSdk 36). They all unblock
+# together when the app moves to AGP 9 / Gradle 9 / compileSdk 37 — a deliberate
+# toolchain migration, not a version bump:
+#   * dynamic_color         < 2.0.0  — 2.x pulls ColorScheme from the new
+#                                       `material_ui` package; Flutter 3.47's
+#                                       ColorScheme is its own class, so the
+#                                       DynamicColorBuilder types no longer match.
+#   * flutter_secure_storage < 11.0.0 — 11.x hardcodes compileSdk 37 (> app 36).
+#   * permission_handler     < 13.0.0 — 13.x pulls permission_handler_android 14,
+#                                       which hardcodes compileSdk 37.
+#   * app_links              < 7.2.0  — 7.2.x ships an AGP-9 `plugins{}`-DSL android
+#                                       build that Flutter 3.47's plugin loader
+#                                       mis-orders (kotlin-android before AGP).
+#                                       Transitive via supabase_flutter.
+# Verified with `./gradlew :app:tasks` (BUILD SUCCESSFUL) after each hold.
 
 dependencies:
   flutter:
@@ -38,11 +42,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^2.6.1  # State management for chat runtime / streaming (perf re-architecture)
   # Material You / system accent colour (Android 12+, some desktops).
-  # Capped below 1.9.0 for the same reason as add_2_calendar: 1.9.0 uses a
-  # top-level `kotlin { compilerOptions }` block in its own Gradle script without
-  # applying the Kotlin plugin, and Flutter's plugin loader does not apply it for
-  # them, so the script fails to compile.
-  dynamic_color: ">=1.7.0 <1.9.0"
+  # Held below 2.0.0: dynamic_color 2.x imports ColorScheme from the new
+  # `material_ui` package, but Flutter 3.47's material library defines its own
+  # ColorScheme, so DynamicColorBuilder's builder types no longer match ours.
+  dynamic_color: ">=1.9.0 <2.0.0"
   web: ^1.1.1
   shared_preferences: ^2.5.3
   http: ^1.5.0
@@ -51,20 +54,23 @@ dependencies:
   file_picker: ^12.0.0  # federated rewrite; drops the win32 ^5 pin that blocked share_plus/package_info_plus/geolocator
   image_picker: ^1.1.2
   uuid: ^4.5.2
-  # Held at 12.x: permission_handler_android 14.0.0 (pulled by 13.0.1) has the
-  # same unusable Gradle script as dynamic_color 1.9.0 — a top-level
-  # `kotlin { compilerOptions }` block with no Kotlin plugin applied.
+  # Held at 12.x: permission_handler 13.x pulls permission_handler_android 14.0.0,
+  # which hardcodes compileSdk 37 (> the app's 36). Unblocks on AGP 9 / compileSdk 37.
   permission_handler: ">=12.0.1 <13.0.0"
   supabase_flutter: ^2.10.3
+  # Pinned below 7.2.0: app_links 7.2.x ships an AGP-9 `plugins{}`-DSL
+  # android build that Flutter 3.47's plugin loader mis-orders (kotlin-android
+  # applied before the Android Gradle plugin). Pulled transitively by
+  # supabase_flutter (which allows >=6.4.1 <8.0.0).
+  app_links: ">=7.0.0 <7.2.0"
   crypto: ^3.0.6
   cryptography: ^2.7.0
-  # Held at 10.x: 11.0.0 compiles against API 37, and API 37 needs AGP 9.1 /
-  # Gradle 9.3 — a toolchain jump this app is not on. 10.3.1 already migrated
-  # the ciphers, so the move to 11 is free whenever the toolchain catches up.
+  # Held at 10.x: 11.0.0 hardcodes compileSdk 37 (> the app's 36). 10.3.1 already
+  # migrated the ciphers, so the move to 11 is free once the toolchain reaches AGP 9.
   flutter_secure_storage: ">=10.0.0 <11.0.0"
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
-  record: ^6.1.2  # 7.x needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.
+  record: ^7.1.1  # audio recording (voice input)
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
   markdown_widget: ^2.3.2+8
@@ -80,29 +86,21 @@ dependencies:
   image: ^4.8.0  # resolves 4.9.2; still works with xml 6 (enough_mail caps xml at ^6)
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
   pdfrx: ^2.2.24  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
-  pdf: ^3.11.0  # PDF generation (export markdown responses). 3.13.0 needs Dart >=3.12 — see SDK ceiling note above.
-  printing: ^5.13.0  # Cross-platform PDF share/print/save. 5.15.0 needs Dart >=3.12 / Flutter >=3.41 — see SDK ceiling note above.
-  flutter_foreground_task: ^10.0.0  # Keep streaming alive when app backgrounded
-  # 10.0.0 is a floor-only major: no Dart API changes, no migration steps.
-  # Needs Flutter >=3.38.0 — satisfied by both CI pins (android 3.38.7, rest 3.41.4).
+  pdf: ^3.11.0  # PDF generation (export markdown responses)
+  printing: ^5.13.0  # Cross-platform PDF share/print/save
+  flutter_foreground_task: ^11.0.1  # Keep streaming alive when app backgrounded
   flutter_local_notifications: ^22.0.0  # Completion notifications with deep linking
   pasteboard: ^0.5.0
   flutter_map: ^8.3.0          # Map widget for displaying locations/routes
   latlong2: ^0.10.1             # Coordinate math (LatLng type) — flutter_map 8.3.1 widened to >=0.9.1 <0.11.0
   fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
   geolocator: ^14.0.3
-  # Native calendar event creation. Capped below 3.1.0: that release's own
-  # android/build.gradle.kts uses a top-level `kotlin { compilerOptions }` block
-  # without applying the Kotlin plugin, so it only compiles under AGP 9 / Kotlin
-  # 2.3.20. Any local Android build resolving 3.1.1 fails at Gradle script
-  # compilation. The Android CI job never hit it because it re-resolves down to
-  # 3.0.1 on Dart 3.10.7.
-  add_2_calendar: ">=3.0.1 <3.1.0"
+  add_2_calendar: ^3.1.1        # Native calendar event creation
   enough_mail: ^2.1.6           # IMAP/SMTP email
   timezone: ^0.11.0             # Timezone data for notifications
   pretty_qr_code: ^3.6.0
-  sqflite: ^2.4.2  # 2.4.3 needs Dart ^3.12 / Flutter >=3.44 — see SDK ceiling note above.
-  sqflite_common_ffi: ^2.4.0+2  # 2.4.2 needs Dart ^3.12 — see SDK ceiling note above.
+  sqflite: ^2.4.3  # local chat cache (native platforms)
+  sqflite_common_ffi: ^2.4.2  # SQLite on desktop (Linux/Windows/macOS)
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
   # System-WebView renderer for HTML artifacts on

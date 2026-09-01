@@ -541,7 +541,6 @@ class _TextPane extends StatelessWidget {
                   ),
                 );
               },
-              sperator: const SizedBox.shrink(),
               padding: const EdgeInsets.all(8),
             ),
           ),
