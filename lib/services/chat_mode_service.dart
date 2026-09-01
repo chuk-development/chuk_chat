@@ -109,7 +109,7 @@ class ChatModeService {
   /// The general-purpose fallback model, and the provider it is pinned to.
   /// Matches Fast's config so the broad "make sure a model is selected"
   /// path and a fresh Fast mode land on the same place.
-  static const String defaultModelId = 'deepseek/deepseek-v4-flash-0731';
+  static const String defaultModelId = 'z-ai/glm-5.3-flash';
   static const String defaultProviderSlug = 'fireworks/serverless';
 
   /// The reasoning level that means "no reasoning pass".

@@ -830,14 +830,18 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                 // Actions
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  // OverflowBar stacks the two buttons vertically when they
+                  // don't fit side by side in a narrow dialog.
+                  child: OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    spacing: 12,
+                    overflowSpacing: 8,
+                    overflowAlignment: OverflowBarAlignment.end,
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: const Text('Cancel'),
                       ),
-                      const SizedBox(width: 12),
                       FilledButton(
                         onPressed: _submit,
                         style: FilledButton.styleFrom(

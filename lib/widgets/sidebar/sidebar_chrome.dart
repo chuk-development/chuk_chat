@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/constants.dart';
 
 class SidebarTokens {
@@ -219,12 +220,16 @@ class SbNavItem extends StatelessWidget {
             children: [
               Icon(icon, size: 19, color: iconColor),
               const SizedBox(width: 14),
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
-                    color: textColor,
-                  )),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
+                      color: textColor,
+                    )),
+              ),
             ],
           ),
         ),
@@ -520,11 +525,8 @@ class _SbChatTileState extends State<SbChatTile> {
                 size: 14, color: t.iconFg.withValues(alpha: 0.4)),
           ),
         Expanded(
-          child: Text(
+          child: HoverMarqueeText(
             widget.title,
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            softWrap: false,
             style: TextStyle(
               fontSize: widget.compact ? 13.5 : 15,
               fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500,

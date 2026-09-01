@@ -202,16 +202,40 @@ class ChatModeSelector extends StatelessWidget {
     final bool showModels = onModelSelected != null && models.isNotEmpty;
 
     final items = <PopupMenuEntry<_DeeperChoice>>[
-      if (showReasoning) ...[
-        _headerRow<_DeeperChoice>(iconFg: iconFg, label: 'Reasoning'),
-        for (final level in reasoningLevels)
-          _menuRow<_DeeperChoice>(
-            value: _DeeperChoice.reasoning(level),
-            iconFg: iconFg,
-            label: ChatModeService.reasoningLabel(level),
-            isSelected: level == reasoningEffort,
+      // Reasoning is a cascading sub-dropdown that flies out to the right.
+      // It must NOT pop the model menu, so it is an opener row, not a
+      // _menuRow (whose tap would close this menu).
+      if (showReasoning)
+        _SubmenuOpener<_DeeperChoice>(
+          rowHeight: 40,
+          onOpen: _openReasoningMenu,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _rowChild(
+              iconFg: iconFg,
+              icon: Icons.psychology_alt_outlined,
+              label: 'Reasoning',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    ChatModeService.reasoningLabel(reasoningEffort),
+                    style: TextStyle(
+                      color: iconFg.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: iconFg.withValues(alpha: 0.8),
+                  ),
+                ],
+              ),
+            ),
           ),
-      ],
+        ),
       if (showReasoning && (showModels || onOpenModelScreen != null))
         const PopupMenuDivider(),
       if (showModels)
@@ -249,18 +273,38 @@ class ChatModeSelector extends StatelessWidget {
       items: items,
     );
 
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     if (picked.openScreen) {
       onOpenModelScreen?.call();
       return;
     }
-    final level = picked.reasoningLevel;
-    if (level != null) {
-      if (level != reasoningEffort) onReasoningEffortChanged?.call(level);
-      return;
-    }
     final id = picked.modelId;
     if (id != null && id != selectedModelId) onModelSelected?.call(id);
+  }
+
+  // ─── Level 3: reasoning, a right-cascading sub-dropdown ───────────────
+
+  /// [rowContext] is the Reasoning row inside the still-open model menu, so
+  /// the submenu flies out beside that row and the model menu stays put.
+  Future<void> _openReasoningMenu(BuildContext rowContext) async {
+    final iconFg = Theme.of(rowContext).resolvedIconColor;
+    final picked = await _showAnchoredMenu<String>(
+      rowContext,
+      // Cascade out to the right of the row, model menu stays open behind it.
+      besideAnchor: true,
+      items: <PopupMenuEntry<String>>[
+        _headerRow<String>(iconFg: iconFg, label: 'Reasoning'),
+        for (final level in reasoningLevels)
+          _menuRow<String>(
+            value: level,
+            iconFg: iconFg,
+            label: ChatModeService.reasoningLabel(level),
+            isSelected: level == reasoningEffort,
+          ),
+      ],
+    );
+    if (picked == null) return;
+    if (picked != reasoningEffort) onReasoningEffortChanged?.call(picked);
   }
 
   // ─── Shared menu look ─────────────────────────────────────────────────
@@ -300,28 +344,46 @@ class ChatModeSelector extends StatelessWidget {
       value: value,
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: iconFg),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            child: Text(
-              label,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w600,
-              ),
+      child: _rowChild(
+        iconFg: iconFg,
+        label: label,
+        icon: icon,
+        isSelected: isSelected,
+        trailing: trailing,
+      ),
+    );
+  }
+
+  /// The inner row of a menu entry, shared by [_menuRow] and the submenu
+  /// opener (which cannot be a [PopupMenuItem] because it must not pop).
+  Widget _rowChild({
+    required Color iconFg,
+    required String label,
+    IconData? icon,
+    bool isSelected = false,
+    Widget? trailing,
+  }) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 18, color: iconFg),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Text(
+            label,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 12),
-          if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
-          ?trailing,
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
+        ?trailing,
+      ],
     );
   }
 
@@ -332,6 +394,8 @@ class ChatModeSelector extends StatelessWidget {
   Future<T?> _showAnchoredMenu<T>(
     BuildContext context, {
     required List<PopupMenuEntry<T>> items,
+    bool? alignRight,
+    bool besideAnchor = false,
   }) {
     final theme = Theme.of(context);
     return showAnchoredMenu<T>(
@@ -339,8 +403,10 @@ class ChatModeSelector extends StatelessWidget {
       items: items,
       color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
-      minWidth: 220,
+      minWidth: besideAnchor ? 160 : 220,
       preferAbove: menuAbove,
+      alignRight: alignRight,
+      besideAnchor: besideAnchor,
     );
   }
 
@@ -397,18 +463,43 @@ class _MenuChoice {
 /// What a row in the second menu stands for: a reasoning level, a model, or
 /// the way out to the full model screen.
 class _DeeperChoice {
-  const _DeeperChoice.reasoning(String this.reasoningLevel)
-    : modelId = null,
-      openScreen = false;
-  const _DeeperChoice.model(String this.modelId)
-    : reasoningLevel = null,
-      openScreen = false;
-  const _DeeperChoice.openScreen()
-    : reasoningLevel = null,
-      modelId = null,
-      openScreen = true;
+  const _DeeperChoice.model(String this.modelId) : openScreen = false;
+  const _DeeperChoice.openScreen() : modelId = null, openScreen = true;
 
-  final String? reasoningLevel;
   final String? modelId;
   final bool openScreen;
+}
+
+/// A menu row that opens a cascading submenu on tap WITHOUT popping the menu
+/// it sits in — a plain [PopupMenuItem] always pops, which would close the
+/// model menu the submenu is meant to hang off.
+class _SubmenuOpener<T> extends PopupMenuEntry<T> {
+  const _SubmenuOpener({
+    required this.rowHeight,
+    required this.child,
+    required this.onOpen,
+  });
+
+  final double rowHeight;
+  final Widget child;
+  final Future<void> Function(BuildContext rowContext) onOpen;
+
+  @override
+  double get height => rowHeight;
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<_SubmenuOpener<T>> createState() => _SubmenuOpenerState<T>();
+}
+
+class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>> {
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => widget.onOpen(context),
+      child: SizedBox(height: widget.rowHeight, child: widget.child),
+    );
+  }
 }

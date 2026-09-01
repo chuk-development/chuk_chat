@@ -107,9 +107,21 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Link blocked'),
-          content: Text(
-            'This link uses an unsupported URL scheme and was blocked '
-            'for your safety:\n\n$href',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This link uses an unsupported URL scheme and was blocked '
+                'for your safety:',
+              ),
+              const SizedBox(height: 12),
+              // A long unbreakable URL scrolls instead of overflowing.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SelectableText(href),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -126,7 +138,18 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Open Link'),
-        content: Text('Do you really want to leave the app and open $href?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Do you really want to leave the app and open:'),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText(href),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

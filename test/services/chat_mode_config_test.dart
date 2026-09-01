@@ -10,9 +10,9 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 
 void main() {
   group('baked defaults', () {
-    test('Fast is flash-0731 on fireworks/serverless, reasoning off', () {
+    test('Fast is glm-5.3-flash on fireworks/serverless, reasoning off', () {
       final fast = ChatModeService.defaultConfig(ChatMode.fast);
-      expect(fast.modelId, 'deepseek/deepseek-v4-flash-0731');
+      expect(fast.modelId, 'z-ai/glm-5.3-flash');
       expect(fast.providerSlug, 'fireworks/serverless');
       expect(fast.reasoningEffort, 'none');
       expect(fast.reasoningOn, isFalse);
@@ -27,7 +27,7 @@ void main() {
     });
 
     test('the general fallback matches Fast', () {
-      expect(ChatModeService.defaultModelId, 'deepseek/deepseek-v4-flash-0731');
+      expect(ChatModeService.defaultModelId, 'z-ai/glm-5.3-flash');
       expect(ChatModeService.defaultProviderSlug, 'fireworks/serverless');
     });
   });

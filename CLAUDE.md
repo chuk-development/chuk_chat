@@ -2,6 +2,23 @@
 
 **chuk_chat** — Cross-platform Flutter chat app with E2E encryption, Supabase backend, AI chat.
 
+## Backend / API server (local repo)
+
+The API server code lives at **`/home/user/git/api_server`** (deployed at
+`api.chuk.chat`). Do NOT claim ignorance about it — read it there.
+
+- **Models endpoint the client calls:** `GET /v1/models_info` — `api_server/main.py:2523`.
+- **Model registry / list logic:** `api_server/model_info/service.py`. Static
+  data: `model_info/models_cache.json` (per-model provider list, incl.
+  `fireworks_model_id` mappings), `model_info/direct_prices.json` (direct
+  provider prices, keyed under `prices/<provider>`), `model_info/data/model_icons.json`.
+- **Direct providers registry:** `api_server/direct_providers.py`
+  (`DIRECT_PROVIDERS`, e.g. `fireworks`). Provider slugs the client pins map here.
+- **Known model ids:** DeepSeek V4 Flash = `deepseek/deepseek-v4-flash-0731`,
+  V4 Pro = `deepseek/deepseek-v4-pro-0813`, GLM 5.3 Flash = `z-ai/glm-5.3-flash`
+  (priced via orcarouter in `direct_prices.json`; fireworks direct catalog
+  carries glm-5p2/5p1, i.e. GLM 5.2/5.1, not 5.3-flash).
+
 ## ▶ Active plan: CoWork
 
 **`docs/COWORK_EXECUTION_PLAN.md`** is the live, ordered build plan for CoWork

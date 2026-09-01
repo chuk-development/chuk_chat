@@ -106,6 +106,11 @@ class ChukChatUIDesktop extends StatefulWidget {
   // Voice transcription settings
   final bool autoSendVoiceTranscription;
 
+  /// Opens the model section of the new settings modal. When set, the
+  /// composer's "More models" uses it instead of pushing the standalone model
+  /// screen, so both paths land in the same redesigned settings surface.
+  final Future<void> Function()? onOpenModelSettings;
+
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
     super.key,
@@ -133,6 +138,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.showToolCalls = true,
     this.allowMarkdownToolCalls = true,
     this.autoSendVoiceTranscription = false,
+    this.onOpenModelSettings,
   });
 
   @override
@@ -2236,15 +2242,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   _buildSearchBar(
                                     isCompactMode: widget.isCompactMode,
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    AppLocalizations.of(context)!.aiDisclaimer,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: iconFg.withValues(alpha: 0.7),
-                                      fontSize: 11,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -2506,41 +2503,48 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   ),
                                 ],
                                 Expanded(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Spacer(),
-                                      // Active assistant indicator
-                                      Builder(
-                                        builder: (context) {
-                                          final a =
-                                              _resolveWorkspaceForCurrentChat();
-                                          if (a == null) {
-                                            return const SizedBox.shrink();
-                                          }
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 6,
-                                            ),
-                                            child: Tooltip(
-                                              message: 'Workspace: ${a.name}',
-                                              child: _buildIconBtn(
-                                                icon: a.displayIcon,
-                                                onTap: () {},
-                                                isActive: true,
+                                  // Expanded gives the FittedBox a bounded
+                                  // width, so the pill stays right-aligned at
+                                  // natural size and only scales DOWN when the
+                                  // toolbar is too narrow — no overflow, and it
+                                  // does not drift to the centre.
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Active assistant indicator
+                                        Builder(
+                                          builder: (context) {
+                                            final a =
+                                                _resolveWorkspaceForCurrentChat();
+                                            if (a == null) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 6,
                                               ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      // Reasoning toggle + model selector,
-                                      // merged into one rounded segmented pill
-                                      // when the model supports reasoning.
-                                      _buildModelControlPill(
-                                        isCompactMode: isCompactMode,
-                                      ),
-                                    ],
+                                              child: Tooltip(
+                                                message: 'Workspace: ${a.name}',
+                                                child: _buildIconBtn(
+                                                  icon: a.displayIcon,
+                                                  onTap: () {},
+                                                  isActive: true,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        // Reasoning toggle + model selector,
+                                        // merged into one rounded segmented pill
+                                        // when the model supports reasoning.
+                                        _buildModelControlPill(
+                                          isCompactMode: isCompactMode,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -2786,11 +2790,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  /// The full model screen: add models, pin providers.
+  /// The full model screen: add models, pin providers. Prefer the redesigned
+  /// settings modal (model section) so "More models" and the settings menu
+  /// land in the same place; fall back to the standalone page if no modal
+  /// opener was wired.
   Future<void> _openModelScreen() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()),
-    );
+    if (widget.onOpenModelSettings != null) {
+      await widget.onOpenModelSettings!.call();
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()),
+      );
+    }
     if (!mounted) return;
     final selected = await UserPreferencesService.loadSelectedModel();
     if (mounted && selected != null && selected.isNotEmpty) {
