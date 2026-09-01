@@ -104,6 +104,29 @@ git branch -d agent/<task>
 - **NEVER** `source .env` or manual `--dart-define=SUPABASE_*`
 - If app shows "Supabase credentials are not configured" → `flutter clean` and rebuild
 
+## Dependency Ceilings
+
+CI runs **Flutter 3.47.0 (Dart 3.13)** on every platform (pinned in
+`.github/workflows/*` and `codemagic.yaml`). The old re_editor 0.8.0 ceiling that
+held CI at 3.41.4 is gone — `vendor/markdraw` now uses `re_editor ^0.10.0`.
+
+When asked to "update everything", run `flutter pub upgrade --major-versions`,
+then fix the fallout and only hold a dep back when you have **verified** it breaks
+(analyze/test error, or `cd android && ./gradlew :app:tasks` fails). Do not trust a
+stale "capped because X" comment — check whether X is still true first. The full
+per-dep reasoning lives in the `pubspec.yaml` header block. Four deps are held for
+real reasons, all gated on an AGP 9 / Gradle 9 / compileSdk 37 toolchain jump:
+`dynamic_color <2` (material_ui ColorScheme split), `flutter_secure_storage <11`
+and `permission_handler <13` (their `_android` majors hardcode compileSdk 37),
+`app_links <7.2` (AGP-9 plugins-DSL the 3.47 loader mis-orders). Everything else
+is at its latest resolvable version.
+
+**Windows caveat:** the whole lock now needs Dart ≥3.12, so every CI job
+(Windows included) must stay on Flutter ≥3.44 — reverting the Windows job to
+3.41.4 would fail to resolve. Flutter's Windows renderer can show a black window
+on GPUs/VMs limited to D3D11 feature level 9_3 (ANGLE fallback, a cross-version
+issue). Test the Windows artifact on such hardware before publishing a release.
+
 ## Quick Start
 
 ```bash
