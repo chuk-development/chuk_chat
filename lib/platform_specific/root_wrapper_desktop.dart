@@ -20,7 +20,7 @@ import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
-import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
@@ -181,12 +181,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        settings: const RouteSettings(name: 'tour:settings'),
-        builder: (_) => SettingsPage(config: widget.config),
-      ),
-    );
+    // Desktop shows settings as a modal popup over the chat UI (left rail +
+    // content pane) instead of a full-screen route. See desktop_settings_modal.
+    unawaited(showDesktopSettingsModal(context, config: widget.config));
   }
 
   void _openWorkspacesPage() {
@@ -530,6 +527,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       },
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
+      // "More models" in the composer opens the redesigned settings modal on
+      // the model section, not the standalone old page.
+      onOpenModelSettings: () => showDesktopSettingsModal(
+        context,
+        config: widget.config,
+        initialSectionId: 'model',
+      ),
       showReasoningTokens: widget.config.showReasoningTokens,
       showModelInfo: widget.config.showModelInfo,
       showTps: widget.config.showTps,

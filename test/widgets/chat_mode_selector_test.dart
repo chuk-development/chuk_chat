@@ -62,7 +62,7 @@ void main() {
 
     test('each mode carries its own model, provider and reasoning', () {
       final fast = ChatModeService.defaultConfig(ChatMode.fast);
-      expect(fast.modelId, 'deepseek/deepseek-v4-flash-0731');
+      expect(fast.modelId, 'z-ai/glm-5.3-flash');
       expect(fast.providerSlug, 'fireworks/serverless');
       expect(fast.reasoningEffort, 'none');
 
@@ -230,11 +230,17 @@ void main() {
       await tester.tap(find.text('Choose model'));
       await tester.pumpAndSettle();
 
-      // The reasoning ladder for a Fireworks provider.
+      // Reasoning is a submenu opener now, not the inline ladder.
+      expect(find.text('Reasoning'), findsOneWidget);
+      expect(find.text('REASONING'), findsNothing);
+
+      await tester.tap(find.text('Reasoning'));
+      await tester.pumpAndSettle();
+
+      // The reasoning ladder for a Fireworks provider, in the cascade.
       expect(find.text('REASONING'), findsOneWidget);
       expect(find.text('Off'), findsOneWidget);
       expect(find.text('Low'), findsOneWidget);
-      expect(find.text('Medium'), findsOneWidget);
       expect(find.text('High'), findsOneWidget);
 
       await tester.tap(find.text('High'));
@@ -256,7 +262,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose model'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Medium'));
+      await tester.tap(find.text('Reasoning'));
+      await tester.pumpAndSettle();
+      // 'Medium' also shows as the opener's trailing label; the cascade row
+      // is the later one.
+      await tester.tap(find.text('Medium').last);
       await tester.pumpAndSettle();
 
       expect(levels, isEmpty);

@@ -8,11 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/pages/fullscreen_text_editor_page.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
@@ -504,26 +505,6 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     _showSnackBar('Imported to memory');
   }
 
-  /// Hand a field the whole screen. A six-line box is fine for a name and
-  /// hopeless for a memory file, and this is the page where people write
-  /// paragraphs.
-  Future<void> _editFullscreen(
-    TextEditingController controller, {
-    required String title,
-    required String hint,
-    bool monospace = false,
-  }) async {
-    final String? result = await showFullscreenTextEditor(
-      context,
-      initialText: controller.text,
-      title: title,
-      hintText: hint,
-      monospace: monospace,
-    );
-    if (result == null || !mounted) return;
-    setState(() => controller.text = result);
-  }
-
   void _showSnackBar(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -551,6 +532,13 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
+
+    // Every field on this page renders in the font the user picked for chat,
+    // so Soul, User, Memory and the raw system prompt read as one surface —
+    // the raw prompt no longer stands out in a monospace of its own.
+    final String? chatFont = resolveChatFontFamily(
+      AppThemeService.instance.chatFontFamily,
+    );
 
     Widget bodyContent;
 
@@ -606,21 +594,13 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── Soul ─────────────────────────────────────────
-                  ExpressiveSectionHeader(
-                    'Soul',
-                    trailing: _FullscreenAction(
-                      onPressed: () => _editFullscreen(
-                        _soulCtrl,
-                        title: 'Soul',
-                        hint: l.soulExample,
-                      ),
-                    ),
-                  ),
+                  const ExpressiveSectionHeader('Soul'),
                   ExpressiveInfoCard(text: l.soulHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _soulCtrl,
                     hintText: l.soulExample,
+                    fontFamily: chatFont,
                     minLines: 6,
                     maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
@@ -629,21 +609,13 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   ),
 
                   // ── User ─────────────────────────────────────────
-                  ExpressiveSectionHeader(
-                    'User',
-                    trailing: _FullscreenAction(
-                      onPressed: () => _editFullscreen(
-                        _userInfoCtrl,
-                        title: 'User',
-                        hint: l.userExample,
-                      ),
-                    ),
-                  ),
+                  const ExpressiveSectionHeader('User'),
                   ExpressiveInfoCard(text: l.userHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _userInfoCtrl,
                     hintText: l.userExample,
+                    fontFamily: chatFont,
                     minLines: 6,
                     maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
@@ -652,21 +624,13 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   ),
 
                   // ── Memory ───────────────────────────────────────
-                  ExpressiveSectionHeader(
-                    'Memory',
-                    trailing: _FullscreenAction(
-                      onPressed: () => _editFullscreen(
-                        _memoryCtrl,
-                        title: 'Memory',
-                        hint: l.memoryExample,
-                      ),
-                    ),
-                  ),
+                  const ExpressiveSectionHeader('Memory'),
                   ExpressiveInfoCard(text: l.memoryHint),
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _memoryCtrl,
                     hintText: l.memoryExample,
+                    fontFamily: chatFont,
                     minLines: 6,
                     maxLines: 18,
                     contextMenuBuilder: _isDesktopPlatform
@@ -676,21 +640,29 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: Text(l.importFromAnotherAi),
-                        onPressed: _importMemory,
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                      // Flexible + ellipsis so the labelled button shrinks
+                      // instead of overflowing the row on a narrow pane.
+                      Flexible(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.download_outlined, size: 18),
+                          label: Text(
+                            l.importFromAnotherAi,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
+                          onPressed: _importMemory,
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 12),
                       Text(
                         '${_memoryCtrl.text.length} ${l.characters}',
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -705,25 +677,15 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           ),
 
           // ── Raw System Prompt ───────────────────────────────────
-          ExpressiveSectionHeader(
-            'Raw system prompt',
-            trailing: _FullscreenAction(
-              onPressed: () => _editFullscreen(
-                _systemPromptCtrl,
-                title: 'System prompt',
-                hint: l.systemPromptExample,
-                monospace: true,
-              ),
-            ),
-          ),
+          const ExpressiveSectionHeader('Raw system prompt'),
           ExpressiveInfoCard(text: l.systemPromptHint),
           const SizedBox(height: 12),
           _MaterialTextField(
             controller: _systemPromptCtrl,
             hintText: l.systemPromptExample,
+            fontFamily: chatFont,
             minLines: 8,
             maxLines: 24,
-            monospace: true,
             contextMenuBuilder: _isDesktopPlatform
                 ? _buildDesktopTextContextMenu
                 : null,
@@ -784,34 +746,15 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
 
-/// Opens the field under a section header in the fullscreen editor. A quiet
-/// icon over the field — the affordance is there when wanted, never a button
-/// bolted across the header.
-class _FullscreenAction extends StatelessWidget {
-  const _FullscreenAction({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: const Icon(Icons.open_in_full_rounded, size: 18),
-      tooltip: 'Fullscreen',
-      color: Theme.of(context).colorScheme.primary,
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-    );
-  }
-}
-
 class _MaterialTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final int minLines;
   final int maxLines;
-  final bool monospace;
+
+  /// The font family the field renders in. The whole page passes the user's
+  /// chat font here so every field reads the same.
+  final String? fontFamily;
   final EditableTextContextMenuBuilder? contextMenuBuilder;
 
   const _MaterialTextField({
@@ -819,7 +762,7 @@ class _MaterialTextField extends StatelessWidget {
     required this.hintText,
     this.minLines = 6,
     this.maxLines = 18,
-    this.monospace = false,
+    this.fontFamily,
     this.contextMenuBuilder,
   });
 
@@ -833,26 +776,32 @@ class _MaterialTextField extends StatelessWidget {
       minLines: minLines,
       maxLines: maxLines,
       contextMenuBuilder: contextMenuBuilder,
+      cursorColor: colorScheme.primary,
       style: theme.textTheme.bodyMedium?.copyWith(
         color: colorScheme.onSurface,
-        height: 1.45,
-        fontFamily: monospace ? 'monospace' : null,
+        height: 1.5,
+        fontFamily: fontFamily,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           color: m3.onSurfaceVariant,
+          height: 1.5,
+          fontFamily: fontFamily,
         ),
         filled: true,
-        fillColor: m3.surfaceContainer,
+        fillColor: m3.surfaceContainerLow,
         contentPadding: const EdgeInsets.all(16),
+        // A hairline outline in the resting state so a field reads as an
+        // editable surface, not a flat grey slab. It thickens to the primary
+        // colour on focus.
         border: OutlineInputBorder(
           borderRadius: kBorderRadiusField,
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: m3.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: kBorderRadiusField,
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: m3.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: kBorderRadiusField,

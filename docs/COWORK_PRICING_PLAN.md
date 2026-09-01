@@ -216,6 +216,9 @@ instead of the 87/13 estimate — it's more accurate and it's already tracked pe
   (Chinese origin → data residency / training risk; potential GDPR/legal cost).
 - Note from real data: the anchor month routed Kimi via `fireworks/serverless` (fine) and
   V4-Pro via `siliconflow/fp8` (NOT business-safe — must be repinned for business tier).
+- Candidate provider to evaluate: **abliteration.ai** (https://docs.abliteration.ai/quickstart).
+  Serves uncensored/abliterated open-weight models. Check price vs DeepInfra/Together, data
+  residency and no-training terms before using for business tier.
 
 ---
 

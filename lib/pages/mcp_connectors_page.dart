@@ -102,6 +102,19 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
               )
               .toList();
 
+          // Catalogue descriptions keyed by id, so a connected connector can
+          // show the same subtitle line the recommended ones do (its stored
+          // description is often empty).
+          final descriptions = <String, String>{
+            for (final e in [...firstPartyConnectors(), ...kMcpCatalogue])
+              e.id: e.description,
+          };
+          String? subtitleFor(McpConnection c) {
+            if (c.description.isNotEmpty) return c.description;
+            final d = descriptions[c.id];
+            return (d != null && d.isNotEmpty) ? d : null;
+          }
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
@@ -126,6 +139,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                         icon: connection.iconUrl,
                         assetPath: bundledIconAsset(connection.id),
                         name: connection.name,
+                        subtitle: subtitleFor(connection),
                         trailing: '${connection.tools.length} tools',
                         onTap: () => _open(connection.id, null),
                       ),

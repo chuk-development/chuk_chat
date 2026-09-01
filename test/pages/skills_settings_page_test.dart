@@ -68,7 +68,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
-      expect(find.text('New skill'), findsOneWidget);
+      // Two entry points now: the FAB, and the empty-state panel's own
+      // "New skill" button shown while the user has authored none.
+      expect(find.text('New skill'), findsWidgets);
     });
   });
 

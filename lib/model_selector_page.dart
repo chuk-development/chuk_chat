@@ -16,7 +16,11 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/chat_mode_selector.dart'
+    show ChatModeSelector, prettyModelId;
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -156,6 +160,11 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Which model each chat mode uses. Editable here so the reader can assign a
+  // model to Fast and a model to Thinking without going through the composer.
+  ModeConfig? _fastConfig;
+  ModeConfig? _thinkingConfig;
+
   static const Duration _apiPollInterval = Duration(seconds: 8);
 
   @override
@@ -173,6 +182,274 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       unawaited(_fetchModels());
     });
     _initializeModelSelections();
+    _loadModeConfigs();
+  }
+
+  Future<void> _loadModeConfigs() async {
+    var fast = await ChatModeService.loadConfig(ChatMode.fast);
+    final thinking = await ChatModeService.loadConfig(ChatMode.thinking);
+
+    // Fast mode is flash-only now. A stored non-flash pick (e.g. a stale
+    // V4 Pro that leaked in) is invalid — heal it to GLM 5.3 Flash, or any
+    // flash model the catalogue carries, pinned to its real provider.
+    if (!_isFlashModelId(fast.modelId) && _models.isNotEmpty) {
+      final healed = await _healFastToFlash();
+      if (healed != null) fast = healed;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _fastConfig = fast;
+      _thinkingConfig = thinking;
+    });
+  }
+
+  bool _isFlashModelId(String id) => id.toLowerCase().contains('flash');
+
+  /// Pick a flash model for Fast — prefer the default GLM 5.3 Flash, else the
+  /// first flash model in the catalogue — and store it against Fast with its
+  /// pinned or cheapest provider.
+  Future<ModeConfig?> _healFastToFlash() async {
+    CustomModelInfo? target;
+    for (final m in _models) {
+      if (m.id == ChatModeService.defaultModelId) {
+        target = m;
+        break;
+      }
+    }
+    target ??= () {
+      for (final m in _models) {
+        if (_isFlashModelId(m.id) || m.name.toLowerCase().contains('flash')) {
+          return m;
+        }
+      }
+      return null;
+    }();
+    if (target == null) return null;
+    final provider = _selectedProviders[target.id]?.slug ??
+        _cheapestProvider(target)?.slug ??
+        '';
+    return ChatModeService.setModelForMode(
+      ChatMode.fast,
+      modelId: target.id,
+      providerSlug: provider,
+    );
+  }
+
+  /// Human name for a model id, from the loaded catalogue, falling back to a
+  /// prettified slug so the row never shows a raw id.
+  String _modelNameFor(String modelId) {
+    for (final model in _models) {
+      if (model.id == modelId) return model.name;
+    }
+    return prettyModelId(modelId);
+  }
+
+  /// Assign [modelId] to [mode]. The provider is the one the reader already
+  /// pinned for that model, or its cheapest, so mode and provider never drift.
+  Future<void> _pickModelForMode(ChatMode mode, String modelId) async {
+    CustomModelInfo? model;
+    for (final m in _models) {
+      if (m.id == modelId) {
+        model = m;
+        break;
+      }
+    }
+    final String providerSlug = _selectedProviders[modelId]?.slug ??
+        (model != null ? _cheapestProvider(model)?.slug ?? '' : '');
+    final updated = await ChatModeService.setModelForMode(
+      mode,
+      modelId: modelId,
+      providerSlug: providerSlug,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (mode == ChatMode.fast) {
+        _fastConfig = updated;
+      } else {
+        _thinkingConfig = updated;
+      }
+    });
+  }
+
+  /// Bottom sheet listing every catalogue model, to assign one to [mode].
+  Future<void> _showModePicker(ChatMode mode) async {
+    final theme = Theme.of(context);
+    final String current = (mode == ChatMode.fast
+            ? _fastConfig?.modelId
+            : _thinkingConfig?.modelId) ??
+        '';
+    // Fast mode is for quick models only — offer just the Flash family (all
+    // DeepSeek Flash variants and GLM 5.3 Flash). Thinking mode takes anything.
+    final List<CustomModelInfo> models = (mode == ChatMode.fast
+        ? _models.where(
+            (m) =>
+                m.id.toLowerCase().contains('flash') ||
+                m.name.toLowerCase().contains('flash'),
+          )
+        : _models)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  child: Text(
+                    mode == ChatMode.fast
+                        ? 'Model for Fast mode'
+                        : 'Model for Thinking mode',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(sheetContext)
+                        .copyWith(scrollbars: false),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: models.length,
+                      itemBuilder: (_, index) {
+                        final model = models[index];
+                        final selected = model.id == current;
+                        return ListTile(
+                          dense: true,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          leading: _buildIconWidget(
+                            model.iconUrl,
+                            Icons.psychology_alt,
+                            size: 22,
+                          ),
+                          title: Text(
+                            model.name,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight:
+                                  selected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                          trailing: selected
+                              ? Icon(Icons.check, color: theme.colorScheme.primary)
+                              : null,
+                          onTap: () =>
+                              Navigator.of(sheetContext).pop(model.id),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    if (picked == current) return;
+    // ignore: use_build_context_synchronously
+    await _pickModelForMode(mode, picked);
+    // Surface which model now runs the mode without shouting.
+    if (mounted) {
+      _showSnackBar(
+        '${mode == ChatMode.fast ? 'Fast' : 'Thinking'} → ${_modelNameFor(picked)}',
+      );
+    }
+  }
+
+  /// Bottom sheet to set the reasoning level for [mode]. Only the levels the
+  /// mode's model+provider actually support are offered.
+  Future<void> _showReasoningPicker(ChatMode mode) async {
+    final config = mode == ChatMode.fast ? _fastConfig : _thinkingConfig;
+    if (config == null) return;
+    final levels = ChatModeService.reasoningLevelsFor(
+      providerSlug: config.providerSlug,
+      supportsReasoning:
+          ModelCapabilitiesService.supportsReasoningSync(config.modelId),
+      supportsReasoningEffort:
+          ModelCapabilitiesService.supportsReasoningEffortSync(config.modelId),
+    );
+    if (levels.length <= 1) {
+      _showSnackBar('${_modelNameFor(config.modelId)} has no reasoning levels');
+      return;
+    }
+    final theme = Theme.of(context);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  child: Text(
+                    mode == ChatMode.fast
+                        ? 'Reasoning for Fast mode'
+                        : 'Reasoning for Thinking mode',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                for (final level in levels)
+                  ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    title: Text(
+                      ChatModeService.reasoningLabel(level),
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: level == config.reasoningEffort
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: level == config.reasoningEffort
+                        ? Icon(Icons.check, color: theme.colorScheme.primary)
+                        : null,
+                    onTap: () => Navigator.of(sheetContext).pop(level),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted || picked == config.reasoningEffort) return;
+    final updated = await ChatModeService.setReasoningForMode(mode, picked);
+    if (!mounted) return;
+    setState(() {
+      if (mode == ChatMode.fast) {
+        _fastConfig = updated;
+      } else {
+        _thinkingConfig = updated;
+      }
+    });
   }
 
   List<CustomModelInfo> get _filteredModels {
@@ -321,6 +598,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           _isLoading = false;
           _error = null;
         });
+        // Models are in now, so a stale non-flash Fast pick can be healed.
+        unawaited(_loadModeConfigs());
         return;
       }
 
@@ -615,10 +894,15 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     ),
                   ),
                 )
-              : ListView.builder(
+              : ScrollConfiguration(
+                  // Hide the desktop scrollbar; it read as noise over the
+                  // rounded model cards.
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
+                  child: ListView.builder(
                   padding: const EdgeInsets.all(16),
                   // +2 header slots: search field + section header.
-                  itemCount: _filteredModels.length + 2,
+                  itemCount: _filteredModels.length + 3,
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return Padding(
@@ -631,12 +915,42 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                       );
                     }
                     if (index == 1) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _ModePickerPanel(
+                          fastModelName: _fastConfig == null
+                              ? null
+                              : _modelNameFor(_fastConfig!.modelId),
+                          thinkingModelName: _thinkingConfig == null
+                              ? null
+                              : _modelNameFor(_thinkingConfig!.modelId),
+                          fastReasoningLabel: _fastConfig == null
+                              ? null
+                              : ChatModeService.reasoningLabel(
+                                  _fastConfig!.reasoningEffort,
+                                ),
+                          thinkingReasoningLabel: _thinkingConfig == null
+                              ? null
+                              : ChatModeService.reasoningLabel(
+                                  _thinkingConfig!.reasoningEffort,
+                                ),
+                          onEditFast: () => _showModePicker(ChatMode.fast),
+                          onEditThinking: () =>
+                              _showModePicker(ChatMode.thinking),
+                          onEditFastReasoning: () =>
+                              _showReasoningPicker(ChatMode.fast),
+                          onEditThinkingReasoning: () =>
+                              _showReasoningPicker(ChatMode.thinking),
+                        ),
+                      );
+                    }
+                    if (index == 2) {
                       final label = _searchQuery.isEmpty
                           ? 'Available · ${_filteredModels.length} models'
                           : '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found';
                       return ExpressiveSectionHeader(label);
                     }
-                    final model = _filteredModels[index - 2];
+                    final model = _filteredModels[index - 3];
                     final ModelProviderInfo? selectedProviderForModel =
                         _selectedProviders[model.id];
                     final ModelPromptConfig? promptConfigForModel =
@@ -650,7 +964,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         selectedProvider: selectedProviderForModel,
                         promptConfig: promptConfigForModel,
                         isAutoSelected: _autoSelected.containsKey(model.id),
-                        isFirstRow: index == 2,
+                        isFirstRow: index == 3,
                         onProviderChanged: (provider) =>
                             _onProviderSelect(model.id, provider),
                         onAutoSelected: () => _onAutoSelect(model),
@@ -660,6 +974,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                       ),
                     );
                   },
+                  ),
                 ),
     );
   }
@@ -718,82 +1033,74 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
     final bool isActive = widget.selectedProvider != null;
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isDesktop = screenWidth >= kTabletBreakpoint;
 
-    final Widget pill = _ProviderPill(
-      // On mobile the pill owns its row, so it may use the card's full
-      // width instead of the narrow leftover next to the model name.
-      maxWidth: isDesktop ? null : math.max(160.0, screenWidth - 64.0),
-      model: widget.model,
-      selectedProvider: widget.selectedProvider,
-      isAutoSelected: widget.isAutoSelected,
-      onProviderChanged: widget.onProviderChanged,
-      onAutoSelected: widget.onAutoSelected,
-      buildIconWidget: widget.buildIconWidget,
-    );
-    final Widget keyedPill = widget.isFirstRow
-        ? KeyedSubtree(
-            key: TourKeyRegistry.instance.keyFor(TourSlots.modelProviderPill),
-            child: pill,
-          )
-        : pill;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Base the layout on the row's OWN width, not the window's. Inside the
+        // narrow settings pane the window is wide while this pane is not, which
+        // is what pushed the provider pill toward the middle.
+        final double availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+        final bool isWide = availableWidth >= kTabletBreakpoint;
 
-    // On a phone the pill and the model name were fighting over one row and
-    // the name lost — it ellipsised to two or three characters. The pill
-    // gets its own full-width row below the name instead.
-    final Widget nameRow = _NameRow(
-      model: widget.model,
-      buildIconWidget: widget.buildIconWidget,
-      promptConfig: widget.promptConfig,
-      onEditPrompt: widget.onEditPrompt,
-      trailing: isDesktop ? keyedPill : const SizedBox.shrink(),
-    );
+        // The provider pill always sits at the right edge of the name row, so
+        // provider selection stays where it has always been — far right — in
+        // both the settings pane and the full model screen. Its width is
+        // capped so the model name keeps at least half the row.
+        final Widget pill = _ProviderPill(
+          maxWidth: math.max(120.0, math.min(280.0, availableWidth * 0.5)),
+          model: widget.model,
+          selectedProvider: widget.selectedProvider,
+          isAutoSelected: widget.isAutoSelected,
+          onProviderChanged: widget.onProviderChanged,
+          onAutoSelected: widget.onAutoSelected,
+          buildIconWidget: widget.buildIconWidget,
+        );
+        final Widget keyedPill = widget.isFirstRow
+            ? KeyedSubtree(
+                key: TourKeyRegistry.instance
+                    .keyFor(TourSlots.modelProviderPill),
+                child: pill,
+              )
+            : pill;
 
-    final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
-    final Widget? statsBlock = _buildStatsBlock();
+        final Widget nameRow = _NameRow(
+          model: widget.model,
+          buildIconWidget: widget.buildIconWidget,
+          promptConfig: widget.promptConfig,
+          onEditPrompt: widget.onEditPrompt,
+          trailing: keyedPill,
+        );
 
-    final List<Widget> mobileChildren = <Widget>[
-      nameRow,
-      const SizedBox(height: 10),
-      Align(alignment: Alignment.centerLeft, child: keyedPill),
-      if (descriptionBlock != null) ...[
-        const SizedBox(height: 10),
-        descriptionBlock,
-      ],
-      if (statsBlock != null) ...[
-        const SizedBox(height: 12),
-        statsBlock,
-      ],
-    ];
+        final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
+        final Widget? statsBlock = _buildStatsBlock();
 
-    // Desktop reuses the same pieces but gives the stats a tighter right
-    // column so the header doesn't feel crammed.
-    final List<Widget> desktopChildren = <Widget>[
-      nameRow,
-      if (descriptionBlock != null) ...[
-        const SizedBox(height: 10),
-        descriptionBlock,
-      ],
-      if (statsBlock != null) ...[
-        const SizedBox(height: 14),
-        statsBlock,
-      ],
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: isActive
-            ? Border.all(color: colorScheme.primary, width: 2)
-            : Border.all(color: Colors.transparent, width: 2),
-      ),
-      padding: EdgeInsets.all(isDesktop ? 20 : 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: isDesktop ? desktopChildren : mobileChildren,
-      ),
+        return Container(
+          decoration: BoxDecoration(
+            color: m3.surfaceContainer,
+            borderRadius: BorderRadius.circular(20),
+            border: isActive
+                ? Border.all(color: colorScheme.primary, width: 2)
+                : Border.all(color: Colors.transparent, width: 2),
+          ),
+          padding: EdgeInsets.all(isWide ? 20 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              nameRow,
+              if (descriptionBlock != null) ...[
+                const SizedBox(height: 10),
+                descriptionBlock,
+              ],
+              if (statsBlock != null) ...[
+                const SizedBox(height: 14),
+                statsBlock,
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -978,7 +1285,9 @@ class _NameRow extends StatelessWidget {
           ),
           const SizedBox(width: 4),
         ],
-        trailing,
+        // Flexible so the provider pill shrinks (and its label ellipsizes)
+        // instead of overflowing the row in a narrow settings pane.
+        Flexible(child: trailing),
       ],
     );
   }
@@ -1344,6 +1653,176 @@ class _SearchField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
+        ),
+      ),
+    );
+  }
+}
+
+/// The panel at the top of the model screen that assigns a model AND a
+/// reasoning level to each chat mode. Each mode has a model pill and a
+/// reasoning pill; tapping either opens its picker.
+class _ModePickerPanel extends StatelessWidget {
+  final String? fastModelName;
+  final String? thinkingModelName;
+  final String? fastReasoningLabel;
+  final String? thinkingReasoningLabel;
+  final VoidCallback onEditFast;
+  final VoidCallback onEditThinking;
+  final VoidCallback onEditFastReasoning;
+  final VoidCallback onEditThinkingReasoning;
+
+  const _ModePickerPanel({
+    required this.fastModelName,
+    required this.thinkingModelName,
+    required this.fastReasoningLabel,
+    required this.thinkingReasoningLabel,
+    required this.onEditFast,
+    required this.onEditThinking,
+    required this.onEditFastReasoning,
+    required this.onEditThinkingReasoning,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Column(
+        children: [
+          _modeBlock(
+            context,
+            Icons.bolt,
+            'Fast mode',
+            fastModelName,
+            onEditFast,
+            fastReasoningLabel,
+            onEditFastReasoning,
+          ),
+          Divider(
+            height: 16,
+            indent: 8,
+            endIndent: 8,
+            color: m3.onSurfaceVariant.withValues(alpha: 0.12),
+          ),
+          _modeBlock(
+            context,
+            Icons.psychology_outlined,
+            'Thinking mode',
+            thinkingModelName,
+            onEditThinking,
+            thinkingReasoningLabel,
+            onEditThinkingReasoning,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeBlock(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String? modelName,
+    VoidCallback onEditModel,
+    String? reasoningLabel,
+    VoidCallback onEditReasoning,
+  ) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: m3.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            _pill(
+              context,
+              modelName == null
+                  ? 'Loading…'
+                  : ChatModeSelector.stripLabPrefix(modelName),
+              onEditModel,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const SizedBox(width: 32),
+            Text(
+              'Reasoning',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+            _pill(
+              context,
+              reasoningLabel ?? '—',
+              onEditReasoning,
+              subtle: true,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _pill(
+    BuildContext context,
+    String label,
+    VoidCallback onTap, {
+    bool subtle = false,
+  }) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: m3.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: m3.onSurfaceVariant,
+                    fontWeight: subtle ? FontWeight.w500 : FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.arrow_drop_down,
+                color: m3.onSurfaceVariant,
+                size: 20,
+              ),
+            ],
+          ),
         ),
       ),
     );

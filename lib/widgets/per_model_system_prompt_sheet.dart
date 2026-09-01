@@ -192,7 +192,11 @@ class _PerModelSystemPromptEditorState
                     child: OutlinedButton.icon(
                       onPressed: _saving ? null : _delete,
                       icon: const Icon(Icons.delete_outline, size: 18),
-                      label: Text(l.perModelPromptRemove),
+                      label: Text(
+                        l.perModelPromptRemove,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(

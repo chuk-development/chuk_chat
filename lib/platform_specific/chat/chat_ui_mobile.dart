@@ -3699,15 +3699,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   theme: theme,
                                   iconFg: iconFg,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  AppLocalizations.of(context)!.aiDisclaimer,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.7),
-                                    fontSize: 11,
-                                  ),
-                                ),
                               ],
                             ),
                           ),

@@ -37,6 +37,15 @@ Future<T?> showAnchoredMenu<T>(
   double minWidth = 200,
   double borderRadius = 18,
   bool preferAbove = false,
+  // null → pick the side from the anchor's screen position (a control on the
+  // right opens leftwards). true → align the menu's right edge to the anchor
+  // (open leftwards). false → align left edges (open rightwards, for a
+  // right-cascading submenu).
+  bool? alignRight,
+  // A cascading submenu: open beside the anchor (to its right, or to its left
+  // when the right would run off screen) with the top edges aligned, the way
+  // a native submenu flies out of its parent row.
+  bool besideAnchor = false,
 }) {
   final RenderBox? box = anchorContext.findRenderObject() as RenderBox?;
   final NavigatorState navigator = Navigator.of(anchorContext);
@@ -72,6 +81,8 @@ Future<T?> showAnchoredMenu<T>(
       minWidth: minWidth,
       borderRadius: borderRadius,
       preferAbove: preferAbove,
+      alignRight: alignRight,
+      besideAnchor: besideAnchor,
       usableTop:
           math.max(media.padding.top, overlayMedia.padding.top) + _kEdgeMargin,
       usableBottom: overlay.size.height - bottomInset - _kEdgeMargin,
@@ -92,6 +103,8 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.minWidth,
     required this.borderRadius,
     required this.preferAbove,
+    required this.alignRight,
+    required this.besideAnchor,
     required this.usableTop,
     required this.usableBottom,
     required this.themes,
@@ -108,6 +121,8 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final double minWidth;
   final double borderRadius;
   final bool preferAbove;
+  final bool? alignRight;
+  final bool besideAnchor;
   final double usableTop;
   final double usableBottom;
   final CapturedThemes themes;
@@ -133,6 +148,8 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           usableTop: usableTop,
           usableBottom: usableBottom,
           preferAbove: preferAbove,
+          alignRight: alignRight,
+          besideAnchor: besideAnchor,
         ),
         child: Material(
           color: color,
@@ -151,9 +168,14 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
                 scopesRoute: true,
                 namesRoute: true,
                 explicitChildNodes: true,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: ListBody(children: items),
+                child: ScrollConfiguration(
+                  // No scrollbar over the menu — it looked messy on desktop.
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListBody(children: items),
+                  ),
                 ),
               ),
             ),
@@ -192,11 +214,20 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
     required this.usableTop,
     required this.usableBottom,
     this.preferAbove = false,
+    this.alignRight,
+    this.besideAnchor = false,
   });
 
   final Rect anchor;
   final double usableTop;
   final double usableBottom;
+
+  /// Which edge the menu aligns to; null means pick from the anchor position.
+  final bool? alignRight;
+
+  /// A cascade: sit beside the anchor (right, or left if right runs off) with
+  /// the top edges aligned, instead of above/below it.
+  final bool besideAnchor;
 
   /// Open above the anchor whenever the menu fits there, even when there is
   /// more room below. The desktop composer sits at the bottom of a tall
@@ -224,17 +255,43 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    final double maxXAll =
+        math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    // Cascade: sit to the right of the anchor, or flip to the left when the
+    // right side would run off screen. Top edges aligned.
+    if (besideAnchor) {
+      final double toRight = anchor.right + _kAnchorGap;
+      final double toLeft = anchor.left - _kAnchorGap - childSize.width;
+      final double x =
+          (toRight + childSize.width <= size.width - _kEdgeMargin || toLeft < _kEdgeMargin)
+              ? toRight
+              : toLeft;
+      return Offset(
+        x.clamp(_kEdgeMargin, maxXAll),
+        anchor.top.clamp(
+          usableTop,
+          math.max(usableTop, usableBottom - childSize.height),
+        ),
+      );
+    }
+
     final bool openDown = !_forceAbove &&
         (childSize.height <= _roomBelow || _roomBelow >= _roomAbove);
     final double y = openDown
         ? anchor.bottom + _kAnchorGap
         : anchor.top - _kAnchorGap - childSize.height;
 
-    // Aligned to the anchor's left edge, pushed back on screen when the
-    // menu is wider than the room to the right of it.
-    final double maxX = size.width - _kEdgeMargin - childSize.width;
+    // Anchor the menu to the near edge of the control: a control on the
+    // right side of the screen opens leftwards (right edges aligned) so the
+    // menu never runs off toward the centre; one on the left opens rightwards
+    // as before. Then clamp so it always stays on screen.
+    final double maxX = math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    final bool ar = alignRight ?? (anchor.right > size.width * 0.6);
+    final double x = ar
+        ? anchor.right - childSize.width
+        : anchor.left;
     return Offset(
-      math.max(_kEdgeMargin, math.min(anchor.left, maxX)),
+      x.clamp(_kEdgeMargin, maxX),
       y.clamp(usableTop, math.max(usableTop, usableBottom - childSize.height)),
     );
   }
@@ -244,5 +301,7 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       anchor != old.anchor ||
       usableTop != old.usableTop ||
       usableBottom != old.usableBottom ||
-      preferAbove != old.preferAbove;
+      preferAbove != old.preferAbove ||
+      alignRight != old.alignRight ||
+      besideAnchor != old.besideAnchor;
 }

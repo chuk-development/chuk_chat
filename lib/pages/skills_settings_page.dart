@@ -136,7 +136,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_userSkills.isEmpty)
-            ExpressiveInfoCard(text: l.skillsYoursEmpty)
+            _SkillsEmptyState(onCreate: () => _openEditor())
           else
             ExpressiveGroup(
               children: [
@@ -357,6 +357,73 @@ message.
             decoration: InputDecoration(
               filled: true,
               fillColor: theme.m3.surfaceContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the user has authored no skills of their own. A quiet centred
+/// panel — an icon, the explainer, and one clear way to start — instead of a
+/// bare info card, so the empty state reads as an invitation, not an error.
+class _SkillsEmptyState extends StatelessWidget {
+  const _SkillsEmptyState({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: m3.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: m3.surfaceContainerHighest,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.auto_awesome_outlined,
+              size: 28,
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l.skillsYoursEmpty,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: m3.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(l.skillNew),
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
           ),
         ],
