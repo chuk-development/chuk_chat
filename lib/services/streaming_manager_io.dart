@@ -343,6 +343,10 @@ class StreamingManager {
     } else if (event is TpsEvent) {
       // Store TPS metric for later use in onComplete
       activeStream.tps = event.tokensPerSecond;
+    } else if (event is ToolCallsEvent) {
+      // Native tool calls, assembled server-side. Collected here and read by
+      // the tool loop after completion via getNativeToolCalls.
+      activeStream.nativeToolCalls.addAll(event.calls);
     } else if (event is MetaEvent) {
       activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
     } else if (event is ErrorEvent) {
@@ -586,6 +590,14 @@ class StreamingManager {
     return Map<String, dynamic>.from(stream.latestMeta!);
   }
 
+  /// Native tool calls the model requested on the just-completed pass, read by
+  /// the tool loop in onComplete. Empty when the turn produced no tool calls.
+  List<NativeToolCall> getNativeToolCalls(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null) return const <NativeToolCall>[];
+    return List<NativeToolCall>.from(stream.nativeToolCalls);
+  }
+
   /// Check if a chat has a completed stream with buffered content
   /// that hasn't been consumed yet.
   bool hasCompletedStream(String chatId) {
@@ -680,6 +692,11 @@ class _ActiveStream {
   // Tokens per second metric (set when TpsEvent is received)
   double? tps;
   Map<String, dynamic>? latestMeta;
+
+  /// Native OpenAI-format tool calls the model requested this pass (assembled
+  /// server-side from `delta.tool_calls`). Read after completion via
+  /// [StreamingManager.getNativeToolCalls]; empty for a plain text turn.
+  final List<NativeToolCall> nativeToolCalls = <NativeToolCall>[];
 
   // Time-to-first-token measurement.
   // startedAt = when the stream subscription is created (≈ message sent).

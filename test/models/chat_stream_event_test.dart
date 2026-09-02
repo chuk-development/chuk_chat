@@ -115,6 +115,9 @@ void main() {
         const UsageEvent({'tokens': 1}),
         const MetaEvent({'key': 'val'}),
         const TpsEvent(50.0),
+        const ToolCallsEvent([
+          NativeToolCall(id: 'call_1', name: 'get_time', arguments: '{}'),
+        ]),
         const ErrorEvent('err'),
         const DoneEvent(),
       ];
@@ -132,6 +135,8 @@ void main() {
             types.add('meta');
           case TpsEvent():
             types.add('tps');
+          case ToolCallsEvent():
+            types.add('tool_calls');
           case ErrorEvent():
             types.add('error');
           case DoneEvent():
@@ -147,6 +152,7 @@ void main() {
           'usage',
           'meta',
           'tps',
+          'tool_calls',
           'error',
           'done',
         ]),

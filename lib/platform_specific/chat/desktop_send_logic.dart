@@ -384,6 +384,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
+        nativeToolCalling: !kIsWeb,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -443,6 +444,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
           chatId: chatIdForStream,
+          // Native tool calling: enabled tools as OpenAI function defs, sent on
+          // every pass; empty (prompt-based) when native mode is off.
+          tools: _toolCallHandler.nativeToolDefinitions(toolSession),
         );
 
         await _streamingManager.startStream(
@@ -485,6 +489,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       content: finalContent,
                       reasoning: finalReasoning,
                       turnSignals: turnSignals,
+                      // Native tool calls assembled server-side this pass;
+                      // empty for a plain text turn / prompt-based fallback.
+                      nativeToolCalls: _streamingManager.getNativeToolCalls(
+                        chatIdForStream,
+                      ),
                       onToolCallsUpdated: (toolCalls) {
                         _updateToolCallsForMessage(
                           placeholderIndex,
@@ -603,6 +612,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     discoveryMode: widget.toolDiscoveryMode,
                     allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
                     skipIdentity: skipIdentity,
+                    nativeToolCalling: !kIsWeb,
                   );
                   final retryPrompt = await _toolCallHandler
                       .buildInitialSystemPrompt(toolSession);
@@ -1493,6 +1503,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
+        nativeToolCalling: !kIsWeb,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -1552,6 +1563,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
           chatId: chatIdForStream,
+          // Native tool calling: enabled tools as OpenAI function defs, sent on
+          // every pass; empty (prompt-based) when native mode is off.
+          tools: _toolCallHandler.nativeToolDefinitions(toolSession),
         );
 
         await _streamingManager.startStream(
@@ -1591,6 +1605,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         content: finalContent,
                         reasoning: finalReasoning,
                         turnSignals: turnSignals,
+                        // Native tool calls assembled server-side this pass;
+                        // empty for a plain text turn / prompt-based fallback.
+                        nativeToolCalls: _streamingManager.getNativeToolCalls(
+                          chatIdForStream,
+                        ),
                         onToolCallsUpdated: (toolCalls) {
                           _updateToolCallsForMessage(
                             placeholderIndex,
@@ -1715,6 +1734,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       discoveryMode: widget.toolDiscoveryMode,
                       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
                       skipIdentity: skipIdentity,
+                      nativeToolCalling: !kIsWeb,
                     );
                     final retryPrompt = await _toolCallHandler
                         .buildInitialSystemPrompt(toolSession);

@@ -65,6 +65,7 @@ class ToolPromptBuilder {
     List<Map<String, dynamic>> extraAlwaysAvailableTools = const [],
     bool includeMapVisualOutput = true,
     bool includeChartVisualOutput = true,
+    bool nativeToolCalling = false,
   }) {
     _catalogSkillNames = skillCatalog.map((s) => s.name).toSet();
     final buffer = StringBuffer();
@@ -103,8 +104,24 @@ class ToolPromptBuilder {
     // Identity system -- always injected (Soul > User > Memory).
     buffer.writeln(_buildIdentitySection(soulText, userInfoText, memoryText));
 
-    // Tool calling protocol
-    if (tools.isNotEmpty) {
+    // Tool calling protocol.
+    //
+    // Native mode: the model receives its tool definitions through the
+    // request's `tools[]` array, so the prompt carries NO tool-definition
+    // listing, NO `<tool_call>` protocol and NO find_tools discovery framing —
+    // only the behaviour that rode alongside them (when to reach for a tool,
+    // the artifact protocol, the visual-output tags). Prompt-based mode (the
+    // fallback) is unchanged.
+    if (nativeToolCalling && tools.isNotEmpty) {
+      buffer.writeln(
+        _buildNativeToolGuidance(
+          tools: tools,
+          artifactToolDef: artifactToolDef,
+          includeMapVisualOutput: includeMapVisualOutput,
+          includeChartVisualOutput: includeChartVisualOutput,
+        ),
+      );
+    } else if (tools.isNotEmpty) {
       buffer.writeln();
       final hasDiscoveredTools =
           discoveredTools != null && discoveredTools.isNotEmpty;
@@ -247,7 +264,11 @@ class ToolPromptBuilder {
     // only when there is at least one server to connect.
     if (unconnectedMcpServers.isNotEmpty) {
       buffer.writeln(
-        _buildMcpServersSection(unconnectedMcpServers, connectedMcpServerNames),
+        _buildMcpServersSection(
+          unconnectedMcpServers,
+          connectedMcpServerNames,
+          native: nativeToolCalling,
+        ),
       );
     }
 
@@ -256,7 +277,7 @@ class ToolPromptBuilder {
     // the bodies of whatever is active (level 2) — last, so they sit closest
     // to the model's answer.
     if (skillCatalog.isNotEmpty) {
-      buffer.writeln(_buildSkillsCatalog(skillCatalog));
+      buffer.writeln(_buildSkillsCatalog(skillCatalog, native: nativeToolCalling));
     }
     for (final skill in activeSkills) {
       buffer.writeln(_buildActiveSkillSection(skill));
@@ -285,24 +306,122 @@ class ToolPromptBuilder {
     return buffer.toString();
   }
 
+  /// Native tool-calling guidance (used when [nativeToolCalling] is set).
+  ///
+  /// The model already has every tool's schema via the request's `tools[]`
+  /// array, so this emits NONE of the prompt-based machinery — no tool listing,
+  /// no `<tool_call>` protocol, no find_tools discovery. It keeps only the
+  /// behaviour that used to ride inside those blocks: when to reach for a tool,
+  /// the artifact protocol, and the visual-output tag docs.
+  String _buildNativeToolGuidance({
+    required List<Map<String, dynamic>> tools,
+    Map<String, dynamic>? artifactToolDef,
+    required bool includeMapVisualOutput,
+    required bool includeChartVisualOutput,
+  }) {
+    final hasArtifact =
+        artifactToolDef != null ||
+        tools.any((t) => (t['name']?.toString() ?? '') == 'artifact_manager');
+    final buffer = StringBuffer()
+      ..writeln()
+      ..writeln('## TOOLS')
+      ..writeln()
+      ..writeln(
+        'You have tools available — their names, descriptions and parameters '
+        'are declared to you through the API. Call them with native function '
+        'calling. Never describe a tool call as plain text and never emit '
+        '<tool_call> tags — the runtime handles the call protocol for you.',
+      )
+      ..writeln()
+      ..writeln('ALWAYS respond in the user\'s language.')
+      ..writeln(
+        'Never mention tool names, tool internals, or technical details to '
+        'the user.',
+      )
+      ..writeln()
+      ..writeln(
+        'CRITICAL — your training data is OLD and INCOMPLETE. For ANY question '
+        'about real-world facts, products, people, events, prices, or opening '
+        'hours, use the appropriate search/lookup tool FIRST. Never write that '
+        'you searched, checked, looked up, or found nothing unless a tool '
+        'result for that lookup is present in THIS turn.',
+      )
+      ..writeln()
+      ..writeln(
+        'For a real place (shop, bank, restaurant, doctor, office), call '
+        'web_search AND search_places together in the same turn. If the user '
+        'says something is new / just released / from today, web_search (and '
+        'web_crawl the primary source) before answering — never contradict a '
+        'recency claim from memory.',
+      )
+      ..writeln()
+      ..writeln(
+        'For a REAL photo of something, call web_search with type="images" '
+        'first, then render a result with an <image> tag whose URL is copied '
+        'verbatim (prefer the result\'s thumbnail_url). Never invent or recall '
+        'an image URL. generate_image instead makes AI art and costs credits — '
+        'briefly tell the user it costs credits before generating, and only '
+        'use it when the user actually asks for generated / AI art. Privacy '
+        'depends on the model: model="turbo" and model="flux" run under a '
+        'no-retention policy (no privacy warning needed, just mention cost); '
+        'for model="hunyuan", "ideogram", or "edit" ALSO warn the user that '
+        'the image is processed on an external server, is visible to the '
+        'service operator, and is NOT end-to-end encrypted like chat messages.',
+      )
+      ..writeln()
+      ..writeln(
+        'Do NOT stall with intention-only text ("I will search…"): either make '
+        'the tool call now, or give the final answer. After tool results come '
+        'back, do not restate them or re-announce your plan — reply once with '
+        'the final answer, and only call another tool if real work remains.',
+      );
+    if (tools.any((t) => (t['name']?.toString() ?? '') == 'search_chats')) {
+      buffer
+        ..writeln()
+        ..writeln(
+          'PRIOR-CONVERSATION REFERENCE: when the user presupposes shared '
+          'history that is NOT in THIS chat — a subject treated as already '
+          'known, a pointer to an earlier discussion, or a reference you '
+          'cannot resolve from the messages above — call search_chats '
+          '(action="find_chats") to recover the real subject from past chats '
+          'BEFORE answering. Never guess the subject from training data or '
+          'memory. If nothing relevant is found, say you could not find the '
+          'prior chat and ask the user to clarify rather than substitute a '
+          'plausible-but-unverified guess.',
+        );
+    }
+    if (hasArtifact) {
+      buffer.writeln(_artifactToolProtocol(native: true));
+    }
+    buffer.writeln(
+      _visualOutputProtocol(
+        includeMaps: includeMapVisualOutput,
+        includeCharts: includeChartVisualOutput,
+      ),
+    );
+    return buffer.toString();
+  }
+
   /// The `## MCP SERVERS` awareness block: which servers are connected and
   /// which exist but are not. Names and ids only — no per-server tool lists —
   /// so the model can tell the user what is possible and offer a Connect
   /// button without paying for a full tool dump on every prompt.
   String _buildMcpServersSection(
     List<McpCatalogueEntry> unconnected,
-    List<String> connectedNames,
-  ) {
+    List<String> connectedNames, {
+    bool native = false,
+  }) {
     final connected = connectedNames.isEmpty
         ? 'none'
         : connectedNames.join(', ');
     final ids = unconnected.map((e) => e.id).join(', ');
+    final connectedLine = native
+        ? 'Connected (their tools are available to call directly): $connected'
+        : 'Connected (their tools are available via find_tools): $connected';
     final buffer = StringBuffer()
       ..writeln()
       ..writeln('## MCP SERVERS')
-      ..writeln(
-        'Connected (their tools are available via find_tools): $connected',
-      )
+      ..writeln(connectedLine)
       ..writeln(
         'Available but NOT connected — you cannot use these until the user '
         'activates them:',
@@ -328,23 +447,29 @@ class ToolPromptBuilder {
   /// contradicts that, and the model will try `find_tools("weather-cards")`
   /// or put a skill name in a tool_call. Same failure the visual output tags
   /// already hit, so use the same fix: say plainly what these are not.
-  String _buildSkillsCatalog(List<Skill> skills) {
+  String _buildSkillsCatalog(List<Skill> skills, {bool native = false}) {
     final buffer = StringBuffer()
       ..writeln()
       ..writeln('## SKILLS')
       ..writeln()
       ..writeln(
         'Skills are procedures, not tools. A skill name is NEVER a tool name '
-        '— never put a skill name in the "name" field of a tool_call, and '
+        '— never put a skill name in the "name" field of a tool call, and '
         'never call find_tools for a skill. To load one, call the `skill` '
-        'tool (always available, no find_tools needed):',
+        'tool (always available) with the skill name:',
       )
-      ..writeln()
-      ..writeln(toolCallStart)
-      ..writeln(
-        '{"name": "skill", "arguments": {"name": "${skills.first.name}"}}',
-      )
-      ..writeln(toolCallEnd)
+      ..writeln();
+    if (native) {
+      buffer.writeln('Call the `skill` tool with {"name": "${skills.first.name}"}.');
+    } else {
+      buffer
+        ..writeln(toolCallStart)
+        ..writeln(
+          '{"name": "skill", "arguments": {"name": "${skills.first.name}"}}',
+        )
+        ..writeln(toolCallEnd);
+    }
+    buffer
       ..writeln()
       ..writeln(
         'Load a skill BEFORE doing the work it describes, not after. Loading '
@@ -871,7 +996,18 @@ ${hasArtifactTool ? _artifactToolProtocol() : ''}
 ${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
   }
 
-  String _artifactToolProtocol() {
+  String _artifactToolProtocol({bool native = false}) {
+    final schemaFlow = native
+        ? '''
+  1. Call artifact_schema(type: "excalidraw").
+  2. Wait for the tool result (the schema).
+  3. Build `content` strictly following that schema.
+  4. Call artifact_manager(action: "create", artifact_id: "...", title: "...", type: "excalidraw", content: "...full JSON as a string...").'''
+        : '''
+  1. `<tool_call>{"name":"artifact_schema","arguments":{"type":"excalidraw"}}</tool_call>`
+  2. Wait for the tool result (the schema).
+  3. Build `content` strictly following that schema.
+  4. `<tool_call>{"name":"artifact_manager","arguments":{"action":"create","artifact_id":"...","title":"...","type":"excalidraw","content":"...full JSON as a string..."}}</tool_call>''';
     return '''
 ## ARTIFACTS
 
@@ -903,10 +1039,7 @@ Artifact rules:
 For `excalidraw`, `technical_drawing`, `mermaid`, `svg`, and `typst`, you MUST call `artifact_schema(type: "<type>")` FIRST — in the SAME response, before the artifact_manager call. The tool returns the exact content shape (JSON keys, element syntax, allowed values). Skipping this step is the #1 cause of silent render failures because the content field does not match what the renderer expects.
 
 Flow:
-  1. `<tool_call>{"name":"artifact_schema","arguments":{"type":"excalidraw"}}</tool_call>`
-  2. Wait for the tool result (the schema).
-  3. Build `content` strictly following that schema.
-  4. `<tool_call>{"name":"artifact_manager","arguments":{"action":"create","artifact_id":"...","title":"...","type":"excalidraw","content":"...full JSON as a string..."}}</tool_call>`
+$schemaFlow
 
 For simple types (`code`, `markdown`, `html`) no schema lookup is needed.
 

@@ -312,6 +312,11 @@ class StreamingManager {
     return Map<String, dynamic>.from(stream.latestMeta!);
   }
 
+  /// Native tool calls from the just-completed pass. The web transport does not
+  /// use native tool calling, so this is always empty (text parsing applies).
+  List<NativeToolCall> getNativeToolCalls(String chatId) =>
+      const <NativeToolCall>[];
+
   /// Check if a chat has a completed stream with buffered content.
   bool hasCompletedStream(String chatId) {
     final stream = _activeStreams[chatId];

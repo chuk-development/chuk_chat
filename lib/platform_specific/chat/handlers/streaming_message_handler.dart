@@ -279,6 +279,10 @@ class StreamingMessageHandler {
         toolCallingEnabled: toolCallingEnabled,
         discoveryMode: toolDiscoveryMode,
         allowMarkdownToolCalls: allowMarkdownToolCalls,
+        // Native OpenAI tool calling over the /v2/ws transport. Web falls back
+        // to the prompt-based scheme (its stream manager does not consume
+        // native tool_calls frames).
+        nativeToolCalling: !kIsWeb,
       );
       initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
         toolSession,
@@ -553,6 +557,9 @@ class StreamingMessageHandler {
         // per-chat and cancels any racing concurrent send (e.g. an
         // overlapping title generation call) before this pass starts.
         chatId: chatId,
+        // Native tool calling: the enabled tools as OpenAI function defs. Sent
+        // on every pass; empty (prompt-based) when native mode is off.
+        tools: _toolCallHandler.nativeToolDefinitions(toolSession),
       );
 
       await _streamingManager.startStream(
@@ -617,6 +624,11 @@ class StreamingMessageHandler {
                     content: finalContent,
                     reasoning: finalReasoning,
                     turnSignals: turnSignals,
+                    // Native tool calls assembled server-side this pass. When
+                    // non-empty the loop drives a native assistant(tool_calls) +
+                    // tool round-trip; empty means a plain text turn (or the
+                    // prompt-based fallback), handled by text parsing.
+                    nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
                     onToolCallsUpdated: (toolCalls) {
                       onToolCallsUpdate?.call(
                         placeholderIndex,
@@ -820,6 +832,7 @@ class StreamingMessageHandler {
                   toolCallingEnabled: toolCallingEnabled,
                   discoveryMode: toolDiscoveryMode,
                   allowMarkdownToolCalls: allowMarkdownToolCalls,
+                  nativeToolCalling: !kIsWeb,
                 );
                 final retryPrompt = await _toolCallHandler
                     .buildInitialSystemPrompt(retrySession);

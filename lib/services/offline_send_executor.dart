@@ -104,6 +104,7 @@ class OfflineSendExecutor {
             case UsageEvent():
             case MetaEvent():
             case TpsEvent():
+            case ToolCallsEvent():
               break;
           }
           if (sawError) break;

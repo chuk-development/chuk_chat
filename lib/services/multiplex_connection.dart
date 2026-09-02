@@ -344,6 +344,18 @@ class MultiplexConnection {
           ctrl.add(ChatStreamEvent.tps(tps.toDouble()));
         }
         break;
+      case 'tool_calls':
+        final raw = data['data'];
+        if (raw is List) {
+          final calls = raw
+              .whereType<Map>()
+              .map((m) => NativeToolCall.fromJson(m.cast<String, dynamic>()))
+              .toList();
+          if (calls.isNotEmpty) {
+            ctrl.add(ChatStreamEvent.toolCalls(calls));
+          }
+        }
+        break;
       case 'error':
         final detail = data['detail']?.toString() ?? 'unknown error';
         // Surface the server `code` for cache misses so the streaming handler

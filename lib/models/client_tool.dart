@@ -29,6 +29,24 @@ class ClientTool {
     'parameters': parameters,
     'type': type.name,
   };
+
+  /// OpenAI-compatible function tool definition for native tool calling.
+  ///
+  /// [parameters] is expected to already be a JSON Schema object
+  /// (`{type: object, properties: {...}, required: [...]}`). Built-in tools
+  /// carry this shape directly; MCP tools pass through their native
+  /// `inputSchema`. When a tool declares no parameters, a valid empty object
+  /// schema is emitted so providers still accept the function definition.
+  Map<String, dynamic> toOpenAiFunction() => {
+    'type': 'function',
+    'function': {
+      'name': name,
+      'description': description,
+      'parameters': parameters.isEmpty
+          ? {'type': 'object', 'properties': <String, dynamic>{}}
+          : parameters,
+    },
+  };
 }
 
 /// Type of tool.

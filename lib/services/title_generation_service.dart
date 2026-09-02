@@ -609,6 +609,7 @@ Rules:
           case UsageEvent():
           case MetaEvent():
           case TpsEvent():
+          case ToolCallsEvent():
             // Ignore these for title generation
             break;
         }
