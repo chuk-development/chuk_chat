@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "cowork",
+  "project_id": "25959840-e3b3-4cc8-96ab-b0bb5aec3bf2"
+}

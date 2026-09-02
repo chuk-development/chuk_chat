@@ -31,3 +31,8 @@ app/pubspec.lock
 
 # Local verification scratch (host workspaces, trust files)
 _scratch/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
+.beads/proxieddb/
