@@ -192,11 +192,15 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     final routeStart = _routeStart;
     final routeEnd = _routeEnd;
 
+    // Esri World Gray Canvas — keyless, clean light/dark grey ({z}/{y}/{x}
+    // order, single host, no {s}). See map_block_renderer.dart.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final children = <Widget>[
       fm.TileLayer(
-        urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-        subdomains: const ['a', 'b', 'c', 'd'],
+        urlTemplate: isDark
+            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        subdomains: const <String>[],
       ),
     ];
 

@@ -130,11 +130,13 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final mapLayers = <Widget>[
+      // Esri World Gray Canvas — keyless, clean light/dark grey. Note the
+      // {z}/{y}/{x} order and single host (no {s}). See map_block_renderer.dart.
       TileLayer(
         urlTemplate: isDark
-            ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
-            : 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-        subdomains: const ['a', 'b', 'c', 'd'],
+            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        subdomains: const <String>[],
       ),
       PolylineLayer(
         polylines: [

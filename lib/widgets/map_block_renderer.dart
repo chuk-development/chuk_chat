@@ -135,11 +135,15 @@ class MapBlockWidget extends StatelessWidget {
 // Shared helpers
 // ──────────────────────────────────────────────────────────
 
+// Esri World Gray Canvas basemaps — keyless, clean light/dark grey styles that
+// match the app's minimal look. Note the {z}/{y}/{x} order (y before x) and the
+// single host (no {s} subdomain). Replaces CARTO, whose anonymous tiles started
+// baking a "get an API key" watermark into the image itself.
 const String _kLightTilesUrl =
-    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 const String _kDarkTilesUrl =
-    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
-const List<String> _kTileSubdomains = ['a', 'b', 'c', 'd'];
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const List<String> _kTileSubdomains = <String>[];
 
 String _tileUrlForBrightness(BuildContext context) {
   return Theme.of(context).brightness == Brightness.dark
