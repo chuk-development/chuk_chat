@@ -99,22 +99,13 @@ const Map<String, String> stringsEs = {
   'requireDiscoveryFirst': 'Requerir descubrimiento primero',
   'requireDiscoverySubtitle':
       'Forzar find_tools antes de que se permitan otras herramientas en un turno',
-  'markdownToolCallFallback': 'Respaldo de llamada de herramientas en Markdown',
-  'markdownFallbackSubtitle':
-      'Aceptar bloques de código ```tool_call cuando los modelos no emiten etiquetas XML',
   'display': 'Visualización',
   'showToolActivity': 'Mostrar actividad de herramientas en el chat',
   'showToolActivitySubtitle':
       'Mostrar chips de herramientas en ejecución/completadas en los mensajes del asistente',
   'toolCallingTip':
-      'Consejo: Deja activado el respaldo Markdown para mejor compatibilidad. Desactívalo solo si quieres llamadas de herramientas estrictamente en XML.',
-  'visualOutputNonTool': 'Salida visual (sin herramientas)',
-  'enableMapBlocks': 'Activar bloques de mapa (<map>)',
-  'enableMapBlocksSubtitle':
-      'Permitir que el prompt del modelo incluya instrucciones de renderizado de mapas',
-  'enableChartBlocks': 'Activar bloques de gráficos (<chart>)',
-  'enableChartBlocksSubtitle':
-      'Permitir que el prompt del modelo incluya instrucciones de renderizado de gráficos',
+      'Consejo: Desactiva las herramientas solo si quieres que el asistente responda con su propio conocimiento, sin buscar ni ejecutar acciones.',
+  'toolAlwaysOn': 'Siempre activo',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Cargando ajustes de herramientas...',
   'noToolsRegistered': 'Aún no hay herramientas registradas.',

@@ -63,8 +63,6 @@ class ToolPromptBuilder {
     List<Skill> skillCatalog = const [],
     List<Skill> activeSkills = const [],
     List<Map<String, dynamic>> extraAlwaysAvailableTools = const [],
-    bool includeMapVisualOutput = true,
-    bool includeChartVisualOutput = true,
     bool nativeToolCalling = false,
   }) {
     _catalogSkillNames = skillCatalog.map((s) => s.name).toSet();
@@ -117,8 +115,6 @@ class ToolPromptBuilder {
         _buildNativeToolGuidance(
           tools: tools,
           artifactToolDef: artifactToolDef,
-          includeMapVisualOutput: includeMapVisualOutput,
-          includeChartVisualOutput: includeChartVisualOutput,
         ),
       );
     } else if (tools.isNotEmpty) {
@@ -185,8 +181,6 @@ class ToolPromptBuilder {
           _buildToolProtocol(
             [...findToolDef, ...alwaysAvailableTools, ...discoveredTools],
             undiscoveredToolNames: undiscoveredNames,
-            includeMapVisualOutput: includeMapVisualOutput,
-            includeChartVisualOutput: includeChartVisualOutput,
           ),
         );
       } else if (discoveryMode) {
@@ -244,17 +238,11 @@ class ToolPromptBuilder {
           _buildDiscoveryPrompt(
             alwaysAvailableTools,
             allToolNames: allToolNames,
-            includeMapVisualOutput: includeMapVisualOutput,
-            includeChartVisualOutput: includeChartVisualOutput,
           ),
         );
       } else {
         buffer.writeln(
-          _buildToolProtocol(
-            tools,
-            includeMapVisualOutput: includeMapVisualOutput,
-            includeChartVisualOutput: includeChartVisualOutput,
-          ),
+          _buildToolProtocol(tools),
         );
       }
     }
@@ -316,8 +304,6 @@ class ToolPromptBuilder {
   String _buildNativeToolGuidance({
     required List<Map<String, dynamic>> tools,
     Map<String, dynamic>? artifactToolDef,
-    required bool includeMapVisualOutput,
-    required bool includeChartVisualOutput,
   }) {
     final hasArtifact =
         artifactToolDef != null ||
@@ -393,12 +379,7 @@ class ToolPromptBuilder {
     if (hasArtifact) {
       buffer.writeln(_artifactToolProtocol(native: true));
     }
-    buffer.writeln(
-      _visualOutputProtocol(
-        includeMaps: includeMapVisualOutput,
-        includeCharts: includeChartVisualOutput,
-      ),
-    );
+    buffer.writeln(_visualOutputProtocol());
     return buffer.toString();
   }
 
@@ -640,8 +621,6 @@ class ToolPromptBuilder {
   String _buildDiscoveryPrompt(
     List<Map<String, dynamic>> alwaysAvailableTools, {
     List<String> allToolNames = const [],
-    required bool includeMapVisualOutput,
-    required bool includeChartVisualOutput,
   }) {
     // Build the tool name catalog.
     final alwaysAvailableNames = alwaysAvailableTools
@@ -785,16 +764,10 @@ REAL PHOTOS vs AI ART — HARD RULE:
 - `fetch_image` is for fetch/store/vision flows (e.g. user asks to attach/store/analyze an image), not for display-only rendering.
 
 $newsSection$searchTuningSection
-VISUAL OUTPUT SWITCHES (current):
-- chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
-- map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
-- email tags: enabled
-- weather tags: enabled
-
 STOP after $toolCallEnd -- wait for real results. Never fabricate outputs.
 ${_buildAlwaysAvailableSection(alwaysAvailableTools)}
 ${alwaysAvailableNames.contains('artifact_manager') ? _artifactToolProtocol() : ''}
-${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
+${_visualOutputProtocol()}''';
   }
 
   /// Renders tool definitions that are always available (bypass discovery).
@@ -845,8 +818,6 @@ ${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: incl
   String _buildToolProtocol(
     List<Map<String, dynamic>> tools, {
     List<String> undiscoveredToolNames = const [],
-    required bool includeMapVisualOutput,
-    required bool includeChartVisualOutput,
   }) {
     final hasArtifactTool = tools.any(
       (tool) => (tool['name']?.toString() ?? '') == 'artifact_manager',
@@ -993,7 +964,7 @@ $trailingRulesText
 $researchDepthSection
 ${hasArtifactTool ? _artifactToolProtocol() : ''}
 
-${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
+${_visualOutputProtocol()}''';
   }
 
   String _artifactToolProtocol({bool native = false}) {
@@ -1227,48 +1198,20 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   }
 
   /// Chart and map rendering protocol — these are output formats, not tools.
-  String _visualOutputProtocol({
-    required bool includeMaps,
-    required bool includeCharts,
-  }) {
-    if (!includeMaps && !includeCharts) {
-      final buffer = StringBuffer();
-      buffer.writeln('## VISUAL OUTPUT');
-      buffer.writeln();
-      buffer.writeln(
-        'Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags.',
-      );
-      _appendAlwaysOnVisualTags(buffer);
-      return buffer.toString();
-    }
-
+  /// Both chart and map tags are always available; the model decides when to
+  /// use them.
+  String _visualOutputProtocol() {
     final buffer = StringBuffer();
     buffer.writeln('## VISUAL OUTPUT');
     buffer.writeln();
 
-    if (includeMaps && includeCharts) {
-      buffer.writeln(
-        'You can embed charts and maps directly in your responses. These are NOT tools — just write the JSON inside the tags.',
-      );
-    } else if (includeCharts) {
-      buffer.writeln(
-        'You can embed charts directly in your responses. These are NOT tools — just write JSON inside <chart> tags.',
-      );
-      buffer.writeln(
-        'Maps are disabled for this session. Do NOT emit <map> tags.',
-      );
-    } else {
-      buffer.writeln(
-        'You can embed interactive maps directly in your responses. These are NOT tools — just write JSON inside <map> tags.',
-      );
-      buffer.writeln(
-        'Charts are disabled for this session. Do NOT emit <chart> tags.',
-      );
-    }
+    buffer.writeln(
+      'You can embed charts and maps directly in your responses. These are NOT tools — just write the JSON inside the tags.',
+    );
 
     // The chart schema is migrated to the `chart-authoring` skill; the
     // catalog entry points the model at it.
-    if (includeCharts && !_migratedToSkill('chart-authoring')) {
+    if (!_migratedToSkill('chart-authoring')) {
       buffer.writeln();
       buffer.writeln('### Charts');
       buffer.writeln('<chart>');
@@ -1303,41 +1246,35 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
       buffer.writeln('- "max_x" / "min_x": fix x-axis range (scatter only)');
     }
 
-    if (includeMaps) {
-      buffer.writeln();
-      buffer.writeln('### Maps');
-      buffer.writeln('Type "markers" (simple pins):');
-      buffer.writeln('<map>');
-      buffer.writeln(
-        '{"type":"markers","title":"Cities","markers":[{"lat":54.32,"lon":10.13,"label":"Kiel"}]}',
-      );
-      buffer.writeln('</map>');
-      buffer.writeln();
-      buffer.writeln('Type "places" (rich cards with details):');
-      buffer.writeln('<map>');
-      buffer.writeln(
-        '{"type":"places","title":"Restaurants","places":[{"name":"Example","lat":54.3,"lon":10.1,"cuisine":"Italian","opening_hours":"Mo-Fr 12-22","address":"Str. 82","rating":4.5,"review_count":120,"price_range":"€€","description":"Cozy trattoria with wood-fired pizzas."}]}',
-      );
-      buffer.writeln('</map>');
-      buffer.writeln();
-      buffer.writeln('Type "route" (navigation with polyline):');
-      buffer.writeln('<map>');
-      buffer.writeln(
-        '{"type":"route","from":{"lat":54.32,"lon":10.13,"label":"Kiel"},"to":{"lat":53.55,"lon":9.99,"label":"Hamburg"},"distance_km":"96.5","duration_min":"58"}',
-      );
-      buffer.writeln('</map>');
-    }
+    buffer.writeln();
+    buffer.writeln('### Maps');
+    buffer.writeln('Type "markers" (simple pins):');
+    buffer.writeln('<map>');
+    buffer.writeln(
+      '{"type":"markers","title":"Cities","markers":[{"lat":54.32,"lon":10.13,"label":"Kiel"}]}',
+    );
+    buffer.writeln('</map>');
+    buffer.writeln();
+    buffer.writeln('Type "places" (rich cards with details):');
+    buffer.writeln('<map>');
+    buffer.writeln(
+      '{"type":"places","title":"Restaurants","places":[{"name":"Example","lat":54.3,"lon":10.1,"cuisine":"Italian","opening_hours":"Mo-Fr 12-22","address":"Str. 82","rating":4.5,"review_count":120,"price_range":"€€","description":"Cozy trattoria with wood-fired pizzas."}]}',
+    );
+    buffer.writeln('</map>');
+    buffer.writeln();
+    buffer.writeln('Type "route" (navigation with polyline):');
+    buffer.writeln('<map>');
+    buffer.writeln(
+      '{"type":"route","from":{"lat":54.32,"lon":10.13,"label":"Kiel"},"to":{"lat":53.55,"lon":9.99,"label":"Hamburg"},"distance_km":"96.5","duration_min":"58"}',
+    );
+    buffer.writeln('</map>');
 
     _appendAlwaysOnVisualTags(buffer);
 
     buffer.writeln();
     buffer.writeln('### Visual output rules:');
     var ruleNumber = 1;
-    final tagLabel = includeMaps && includeCharts
-        ? '<map>/<chart>/<image>/<weather>/<news>/<email>'
-        : includeCharts
-        ? '<chart>/<image>/<weather>/<news>/<email>'
-        : '<map>/<image>/<weather>/<news>/<email>';
+    const tagLabel = '<map>/<chart>/<image>/<weather>/<news>/<email>';
     buffer.writeln(
       '${ruleNumber++}. $tagLabel tags go OUTSIDE tool_call tags — they are part of your text response.',
     );
@@ -1345,8 +1282,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
       '${ruleNumber++}. Never call find_tools for chart/map rendering. They are output tags, not tools.',
     );
     final skillGatedTags = <String>[
-      if (includeCharts && _migratedToSkill('chart-authoring'))
-        '<chart> -> `chart-authoring`',
+      if (_migratedToSkill('chart-authoring')) '<chart> -> `chart-authoring`',
       if (_migratedToSkill('weather-cards')) '<weather> -> `weather-cards`',
       if (_migratedToSkill('news-cards')) '<news> -> `news-cards`',
     ];
@@ -1361,62 +1297,40 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln(
       '${ruleNumber++}. Write your FULL text answer FIRST, then $tagLabel at the very END.',
     );
-    if (includeMaps && includeCharts) {
-      buffer.writeln(
-        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </map>, </chart>, </image>, </weather>, </news>, </email>). Do not write text after it.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. In <map> and <chart> JSON: only include fields from tool results. Do NOT fabricate data.',
-      );
-    } else if (includeCharts) {
-      buffer.writeln(
-        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </chart>, </image>, </weather>, </news>, </email>). Do not write text after it.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. In <chart> JSON: only include fields from tool results. Do NOT fabricate data.',
-      );
-    } else {
-      buffer.writeln(
-        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </map>, </image>, </weather>, </news>, </email>). Do not write text after it.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. In <map> JSON: only include fields from tool results. Do NOT fabricate data.',
-      );
-    }
+    buffer.writeln(
+      '${ruleNumber++}. STOP after your last visual closing tag (e.g. </map>, </chart>, </image>, </weather>, </news>, </email>). Do not write text after it.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. In <map> and <chart> JSON: only include fields from tool results. Do NOT fabricate data.',
+    );
 
-    if (includeMaps) {
-      buffer.writeln(
-        '${ruleNumber++}. ALWAYS include a <map> after location/restaurant/route tool results that contain coordinates.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. For places maps: include all fields the tool returned (name, lat, lon, cuisine, address, phone, website, opening_hours, rating, review_count, price_range, description). Omit fields marked "NOT AVAILABLE".',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. For any markers/places map, coordinates MUST come from map API tool output in this conversation (`search_places`, `search_restaurants`, or `geocode`). Never guess or approximate lat/lon.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. Prefer `{"type":"places"...}` for destination lists; the app can compute routing after the user taps a place.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. List each place ONCE in a <map>. When several tool passes return the same place, merge into one entry with the fullest set of fields — never repeat the same name or coordinates.',
-      );
-      buffer.writeln(
-        '${ruleNumber++}. Write phone numbers in international form with a leading `+` and country code (e.g. `+41 61 317 40 00`). The app turns them into tap-to-dial links; a number without `+` is not linked.',
-      );
-    }
+    buffer.writeln(
+      '${ruleNumber++}. ALWAYS include a <map> after location/restaurant/route tool results that contain coordinates.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. For places maps: include all fields the tool returned (name, lat, lon, cuisine, address, phone, website, opening_hours, rating, review_count, price_range, description). Omit fields marked "NOT AVAILABLE".',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. For any markers/places map, coordinates MUST come from map API tool output in this conversation (`search_places`, `search_restaurants`, or `geocode`). Never guess or approximate lat/lon.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. Prefer `{"type":"places"...}` for destination lists; the app can compute routing after the user taps a place.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. List each place ONCE in a <map>. When several tool passes return the same place, merge into one entry with the fullest set of fields — never repeat the same name or coordinates.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. Write phone numbers in international form with a leading `+` and country code (e.g. `+41 61 317 40 00`). The app turns them into tap-to-dial links; a number without `+` is not linked.',
+    );
 
-    if (includeCharts) {
-      if (!_migratedToSkill('chart-authoring')) {
-        buffer.writeln(
-          '${ruleNumber++}. For stock/financial time series, include full history points in <chart> output; do not downsample data.',
-        );
-      }
-      if (includeMaps) {
-        buffer.writeln(
-          '${ruleNumber++}. Never use scatter for geographic data — use <map>.',
-        );
-      }
+    if (!_migratedToSkill('chart-authoring')) {
+      buffer.writeln(
+        '${ruleNumber++}. For stock/financial time series, include full history points in <chart> output; do not downsample data.',
+      );
     }
+    buffer.writeln(
+      '${ruleNumber++}. Never use scatter for geographic data — use <map>.',
+    );
 
     return buffer.toString();
   }

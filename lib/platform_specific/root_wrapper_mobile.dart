@@ -764,7 +764,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 toolCallingEnabled: widget.config.toolCallingEnabled,
                 toolDiscoveryMode: widget.config.toolDiscoveryMode,
                 showToolCalls: widget.config.showToolCalls,
-                allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
               ),
             ),
             Positioned(

@@ -15,35 +15,26 @@ void main() {
       expect(calls.first['arguments'], {'query': 'web search'});
     });
 
-    test('parses markdown fenced tool_call blocks by default', () {
-      const content =
-          'I will search now.\n\n```tool_call\n{"name":"find_tools","arguments":{"query":"web search"}}\n```';
-
-      final calls = parseToolCalls(content);
-
-      expect(calls.length, 1);
-      expect(calls.first['name'], 'find_tools');
-      expect(calls.first['arguments'], {'query': 'web search'});
-    });
-
-    test('can disable markdown fenced parsing', () {
+    test('ignores markdown fenced tool_call blocks', () {
+      // The markdown fallback lane is gone — tool calls only arrive as native
+      // function calls or the canonical <tool_call> XML. A fenced ```tool_call
+      // block is now just prose and must not execute.
       const content =
           '```tool_call\n{"name":"find_tools","arguments":{"query":"web search"}}\n```';
 
-      final calls = parseToolCalls(content, allowMarkdownToolCalls: false);
+      final calls = parseToolCalls(content);
 
       expect(calls, isEmpty);
     });
 
-    test('preserves call order for mixed XML and markdown', () {
+    test('parses only the XML call when a markdown fence is also present', () {
       const content =
           '```tool_call\n{"name":"find_tools","arguments":{"query":"search"}}\n```\n<tool_call>{"name":"web_search","arguments":{"query":"latest tech"}}</tool_call>';
 
       final calls = parseToolCalls(content);
 
-      expect(calls.length, 2);
-      expect(calls[0]['name'], 'find_tools');
-      expect(calls[1]['name'], 'web_search');
+      expect(calls.length, 1);
+      expect(calls.first['name'], 'web_search');
     });
 
     test('parses legacy direct XML tool tags like fetch_image', () {
@@ -61,10 +52,10 @@ void main() {
   });
 
   group('hasToolCalls', () {
-    test('detects markdown fenced tool_call blocks', () {
+    test('does not treat markdown fenced tool_call blocks as tool calls', () {
       const content =
           '```tool_call\n{"name":"find_tools","arguments":{"query":"weather"}}\n```';
-      expect(hasToolCalls(content), isTrue);
+      expect(hasToolCalls(content), isFalse);
     });
 
     test('detects legacy direct XML tool tags', () {
@@ -91,15 +82,6 @@ void main() {
       final cleaned = stripToolCallBlocksForDisplay(content);
 
       expect(cleaned, 'Searching now...');
-    });
-
-    test('removes incomplete fenced tool-call block from opening fence', () {
-      const content =
-          'Working...\n```tool_call\n{"name":"web_search","arguments":{"query":"flutter"}}';
-
-      final cleaned = stripToolCallBlocksForDisplay(content);
-
-      expect(cleaned, 'Working...');
     });
 
     test('removes complete legacy direct XML tool tag from mixed text', () {
@@ -209,11 +191,6 @@ void main() {
   group('hasToolCallStartMarker', () {
     test('detects XML opening marker without closing tag', () {
       const content = '<tool_call>{"name":"find_tools"';
-      expect(hasToolCallStartMarker(content), isTrue);
-    });
-
-    test('detects fenced tool_call opening marker', () {
-      const content = '```tool_call\n{"name":"find_tools"}';
       expect(hasToolCallStartMarker(content), isTrue);
     });
 

@@ -149,7 +149,6 @@ class StreamingMessageHandler {
     bool includeToolResultsInHistory = true,
     bool toolCallingEnabled = true,
     bool toolDiscoveryMode = true,
-    bool allowMarkdownToolCalls = true,
     String? reasoningEffort,
     String? continuePriorText,
     String? continuePriorContentBlocksJson,
@@ -278,7 +277,6 @@ class StreamingMessageHandler {
         modelId: selectedModelId,
         toolCallingEnabled: toolCallingEnabled,
         discoveryMode: toolDiscoveryMode,
-        allowMarkdownToolCalls: allowMarkdownToolCalls,
         // Native OpenAI tool calling over the /v2/ws transport. Web falls back
         // to the prompt-based scheme (its stream manager does not consume
         // native tool_calls frames).
@@ -831,7 +829,6 @@ class StreamingMessageHandler {
                   modelId: selectedModelId,
                   toolCallingEnabled: toolCallingEnabled,
                   discoveryMode: toolDiscoveryMode,
-                  allowMarkdownToolCalls: allowMarkdownToolCalls,
                   nativeToolCalling: !kIsWeb,
                 );
                 final retryPrompt = await _toolCallHandler

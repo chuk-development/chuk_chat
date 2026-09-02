@@ -52,7 +52,6 @@ class ToolLoopSession {
     required this.enforcer,
     required this.toolCallingEnabled,
     required this.discoveryMode,
-    required this.allowMarkdownToolCalls,
     this.baseSystemPrompt,
     this.discoveryContextKey,
     this.modelId,
@@ -66,7 +65,6 @@ class ToolLoopSession {
   final ToolEnforcer enforcer;
   final bool toolCallingEnabled;
   final bool discoveryMode;
-  final bool allowMarkdownToolCalls;
   final String? baseSystemPrompt;
   final String? discoveryContextKey;
 
@@ -417,7 +415,6 @@ class ToolCallHandler {
     String? modelId,
     bool toolCallingEnabled = true,
     bool discoveryMode = true,
-    bool allowMarkdownToolCalls = true,
     bool skipIdentity = false,
     bool nativeToolCalling = false,
   }) {
@@ -448,7 +445,6 @@ class ToolCallHandler {
       enforcer: enforcer,
       toolCallingEnabled: toolCallingEnabled,
       discoveryMode: discoveryMode,
-      allowMarkdownToolCalls: allowMarkdownToolCalls,
       baseSystemPrompt: baseSystemPrompt,
       discoveryContextKey: discoveryContextKey,
       modelId: modelId,
@@ -619,10 +615,7 @@ class ToolCallHandler {
 
     final parsedCalls = isNativeToolTurn
         ? _nativeCallsToParsed(nativeToolCalls)
-        : parseToolCalls(
-            cleanedContent,
-            allowMarkdownToolCalls: session.allowMarkdownToolCalls,
-          );
+        : parseToolCalls(cleanedContent);
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
       final markerInContent = hasToolCallStartMarker(cleanedContent);
@@ -1560,8 +1553,6 @@ class ToolCallHandler {
           skillToolDef: skillToolDef,
           skillCatalog: skillCatalog,
           activeSkills: activeSkills,
-          includeMapVisualOutput: _toolExecutor.mapVisualOutputEnabled,
-          includeChartVisualOutput: _toolExecutor.chartVisualOutputEnabled,
         )
         .trim();
 

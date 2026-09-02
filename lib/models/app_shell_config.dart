@@ -62,8 +62,6 @@ class AppShellConfig {
   final Function(bool) setToolDiscoveryMode;
   final bool showToolCalls;
   final Function(bool) setShowToolCalls;
-  final bool allowMarkdownToolCalls;
-  final Function(bool) setAllowMarkdownToolCalls;
 
   // ── UI locale ──────────────────────────────────────────────
   final String uiLocale;
@@ -124,8 +122,6 @@ class AppShellConfig {
     required this.setToolDiscoveryMode,
     required this.showToolCalls,
     required this.setShowToolCalls,
-    required this.allowMarkdownToolCalls,
-    required this.setAllowMarkdownToolCalls,
     required this.uiLocale,
     required this.setUiLocale,
     required this.chatFontSize,

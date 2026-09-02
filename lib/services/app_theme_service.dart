@@ -55,7 +55,6 @@ class AppThemeService extends ChangeNotifier {
   bool _toolCallingEnabled = kDefaultToolCallingEnabled;
   bool _toolDiscoveryMode = kDefaultToolDiscoveryMode;
   bool _showToolCalls = kDefaultShowToolCalls;
-  bool _allowMarkdownToolCalls = kDefaultAllowMarkdownToolCalls;
 
   // UI locale
   String _uiLocale = kDefaultUiLocale;
@@ -101,7 +100,6 @@ class AppThemeService extends ChangeNotifier {
   static const String _kToolCallingEnabledKey = 'toolCallingEnabled';
   static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode';
   static const String _kShowToolCallsKey = 'showToolCalls';
-  static const String _kAllowMarkdownToolCallsKey = 'allowMarkdownToolCalls';
   static const String _kUiLocaleKey = 'uiLocale';
   static const String _kChatFontSizeKey = 'chatFontSize';
   static const String _kChatFontFamilyKey = 'chatFontFamily';
@@ -150,7 +148,6 @@ class AppThemeService extends ChangeNotifier {
   bool get toolCallingEnabled => _toolCallingEnabled;
   bool get toolDiscoveryMode => _toolDiscoveryMode;
   bool get showToolCalls => _showToolCalls;
-  bool get allowMarkdownToolCalls => _allowMarkdownToolCalls;
   String get uiLocale => _uiLocale;
   double get chatFontSize => _chatFontSize;
   String get chatFontFamily => _chatFontFamily;
@@ -213,9 +210,6 @@ class AppThemeService extends ChangeNotifier {
     _toolDiscoveryMode =
         prefs.getBool(_kToolDiscoveryModeKey) ?? kDefaultToolDiscoveryMode;
     _showToolCalls = prefs.getBool(_kShowToolCallsKey) ?? kDefaultShowToolCalls;
-    _allowMarkdownToolCalls =
-        prefs.getBool(_kAllowMarkdownToolCallsKey) ??
-        kDefaultAllowMarkdownToolCalls;
     _uiLocale = prefs.getString(_kUiLocaleKey) ?? kDefaultUiLocale;
     _chatFontSize = _clampChatFontSize(
       prefs.getDouble(_kChatFontSizeKey) ?? kDefaultChatFontSize,
@@ -322,7 +316,6 @@ class AppThemeService extends ChangeNotifier {
         _toolCallingEnabled != customizationPrefs.toolCallingEnabled ||
         _toolDiscoveryMode != customizationPrefs.toolDiscoveryMode ||
         _showToolCalls != customizationPrefs.showToolCalls ||
-        _allowMarkdownToolCalls != customizationPrefs.allowMarkdownToolCalls ||
         _uiLocale != customizationPrefs.uiLocale ||
         _chatFontSize != _clampChatFontSize(customizationPrefs.chatFontSize) ||
         _chatFontFamily !=
@@ -350,7 +343,6 @@ class AppThemeService extends ChangeNotifier {
     _toolCallingEnabled = customizationPrefs.toolCallingEnabled;
     _toolDiscoveryMode = customizationPrefs.toolDiscoveryMode;
     _showToolCalls = customizationPrefs.showToolCalls;
-    _allowMarkdownToolCalls = customizationPrefs.allowMarkdownToolCalls;
     _uiLocale = customizationPrefs.uiLocale;
     _chatFontSize = _clampChatFontSize(customizationPrefs.chatFontSize);
     _chatFontFamily = _sanitizeChatFontFamily(
@@ -423,7 +415,6 @@ class AppThemeService extends ChangeNotifier {
       prefs.setBool(_kToolCallingEnabledKey, _toolCallingEnabled),
       prefs.setBool(_kToolDiscoveryModeKey, _toolDiscoveryMode),
       prefs.setBool(_kShowToolCallsKey, _showToolCalls),
-      prefs.setBool(_kAllowMarkdownToolCallsKey, _allowMarkdownToolCalls),
       prefs.setString(_kUiLocaleKey, _uiLocale),
       prefs.setDouble(_kChatFontSizeKey, _chatFontSize),
       prefs.setString(_kChatFontFamilyKey, _chatFontFamily),
@@ -488,7 +479,6 @@ class AppThemeService extends ChangeNotifier {
       toolCallingEnabled: _toolCallingEnabled,
       toolDiscoveryMode: _toolDiscoveryMode,
       showToolCalls: _showToolCalls,
-      allowMarkdownToolCalls: _allowMarkdownToolCalls,
       uiLocale: _uiLocale,
       chatFontSize: _chatFontSize,
       chatFontFamily: _chatFontFamily,
@@ -643,11 +633,6 @@ class AppThemeService extends ChangeNotifier {
     _debouncedSyncCustomization();
   }
 
-  void setAllowMarkdownToolCalls(bool value) {
-    _allowMarkdownToolCalls = value;
-    notifyListeners();
-    _debouncedSyncCustomization();
-  }
 
   void setUiLocale(String locale) {
     _uiLocale = locale;

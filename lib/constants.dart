@@ -33,7 +33,6 @@ const String kDefaultUiLocale = 'en';
 const bool kDefaultToolCallingEnabled = true;
 const bool kDefaultToolDiscoveryMode = true;
 const bool kDefaultShowToolCalls = true;
-const bool kDefaultAllowMarkdownToolCalls = true;
 
 /// Include prior tool calls + their results in the API history so the
 /// model can reuse already-fetched data on follow-up questions instead

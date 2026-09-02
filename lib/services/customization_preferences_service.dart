@@ -21,7 +21,6 @@ class CustomizationPreferences {
     required this.toolCallingEnabled,
     required this.toolDiscoveryMode,
     required this.showToolCalls,
-    required this.allowMarkdownToolCalls,
     required this.uiLocale,
     required this.chatFontSize,
     required this.chatFontFamily,
@@ -48,7 +47,6 @@ class CustomizationPreferences {
   final bool toolCallingEnabled;
   final bool toolDiscoveryMode;
   final bool showToolCalls;
-  final bool allowMarkdownToolCalls;
   // UI locale ('en' or 'de')
   final String uiLocale;
   // Chat body font size (applies to user + AI message text)
@@ -76,7 +74,6 @@ class CustomizationPreferences {
     bool? toolCallingEnabled,
     bool? toolDiscoveryMode,
     bool? showToolCalls,
-    bool? allowMarkdownToolCalls,
     String? uiLocale,
     double? chatFontSize,
     String? chatFontFamily,
@@ -106,8 +103,6 @@ class CustomizationPreferences {
       toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
       toolDiscoveryMode: toolDiscoveryMode ?? this.toolDiscoveryMode,
       showToolCalls: showToolCalls ?? this.showToolCalls,
-      allowMarkdownToolCalls:
-          allowMarkdownToolCalls ?? this.allowMarkdownToolCalls,
       uiLocale: uiLocale ?? this.uiLocale,
       chatFontSize: chatFontSize ?? this.chatFontSize,
       chatFontFamily: chatFontFamily ?? this.chatFontFamily,
@@ -134,7 +129,6 @@ class CustomizationPreferences {
       'tool_calling_enabled': toolCallingEnabled,
       'tool_discovery_mode': toolDiscoveryMode,
       'show_tool_calls': showToolCalls,
-      'allow_markdown_tool_calls': allowMarkdownToolCalls,
       'ui_locale': uiLocale,
       'chat_font_size': chatFontSize,
       'chat_font_family': chatFontFamily,
@@ -161,7 +155,6 @@ class CustomizationPreferences {
       toolCallingEnabled: true,
       toolDiscoveryMode: true,
       showToolCalls: true,
-      allowMarkdownToolCalls: true,
       uiLocale: 'en',
       chatFontSize: kDefaultChatFontSize,
       chatFontFamily: kDefaultChatFontFamily,
@@ -199,8 +192,6 @@ class CustomizationPreferences {
       toolCallingEnabled: (map['tool_calling_enabled'] as bool?) ?? true,
       toolDiscoveryMode: (map['tool_discovery_mode'] as bool?) ?? true,
       showToolCalls: (map['show_tool_calls'] as bool?) ?? true,
-      allowMarkdownToolCalls:
-          (map['allow_markdown_tool_calls'] as bool?) ?? true,
       uiLocale: (map['ui_locale'] as String?) ?? 'en',
       chatFontSize:
           (map['chat_font_size'] as num?)?.toDouble() ?? kDefaultChatFontSize,

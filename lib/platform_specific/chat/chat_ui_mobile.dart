@@ -105,7 +105,6 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool toolCallingEnabled;
   final bool toolDiscoveryMode;
   final bool showToolCalls;
-  final bool allowMarkdownToolCalls;
 
   const ChukChatUIMobile({
     super.key,
@@ -130,7 +129,6 @@ class ChukChatUIMobile extends StatefulWidget {
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
-    this.allowMarkdownToolCalls = true,
   });
 
   @override
@@ -2567,7 +2565,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       includeToolResultsInHistory: widget.includeToolResultsInHistory,
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
-      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
       reasoningEffort: _clampedReasoningEffort(
         _selectedModelId,
         _selectedProviderSlug,
@@ -2891,7 +2888,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       includeToolResultsInHistory: widget.includeToolResultsInHistory,
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
-      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
       reasoningEffort: _clampedReasoningEffort(modelIdToUse, providerToUse),
     );
   }
@@ -3184,7 +3180,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       includeToolResultsInHistory: widget.includeToolResultsInHistory,
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
-      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
       reasoningEffort: _clampedReasoningEffort(modelIdToUse, providerToUse),
       continuePriorText: priorText,
       continuePriorContentBlocksJson: priorContentBlocks,

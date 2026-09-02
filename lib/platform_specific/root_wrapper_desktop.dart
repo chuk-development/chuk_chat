@@ -550,7 +550,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       toolCallingEnabled: widget.config.toolCallingEnabled,
       toolDiscoveryMode: widget.config.toolDiscoveryMode,
       showToolCalls: widget.config.showToolCalls,
-      allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
       autoSendVoiceTranscription: widget.config.autoSendVoiceTranscription,
     );
 
