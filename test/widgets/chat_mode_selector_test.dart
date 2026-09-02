@@ -64,7 +64,7 @@ void main() {
       final fast = ChatModeService.defaultConfig(ChatMode.fast);
       expect(fast.modelId, 'z-ai/glm-5.3-flash');
       expect(fast.providerSlug, 'fireworks/serverless');
-      expect(fast.reasoningEffort, 'none');
+      expect(fast.reasoningEffort, 'low');
 
       final thinking = ChatModeService.defaultConfig(ChatMode.thinking);
       expect(thinking.modelId, 'deepseek/deepseek-v4-pro-0813');

@@ -10,12 +10,12 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 
 void main() {
   group('baked defaults', () {
-    test('Fast is glm-5.3-flash on fireworks/serverless, reasoning off', () {
+    test('Fast is glm-5.3-flash on fireworks/serverless, reasoning low', () {
       final fast = ChatModeService.defaultConfig(ChatMode.fast);
       expect(fast.modelId, 'z-ai/glm-5.3-flash');
       expect(fast.providerSlug, 'fireworks/serverless');
-      expect(fast.reasoningEffort, 'none');
-      expect(fast.reasoningOn, isFalse);
+      expect(fast.reasoningEffort, 'low');
+      expect(fast.reasoningOn, isTrue);
     });
 
     test('Thinking is pro-0813 on fireworks/serverless, reasoning medium', () {
@@ -131,7 +131,7 @@ void main() {
       final loaded = await ChatModeService.loadConfig(ChatMode.fast);
       expect(loaded.modelId, 'x/y');
       expect(loaded.providerSlug, 'fireworks/serverless');
-      expect(loaded.reasoningEffort, 'none');
+      expect(loaded.reasoningEffort, 'low');
     });
 
     test('an invalid stored reasoning level is clamped on load', () async {

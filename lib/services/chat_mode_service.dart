@@ -160,15 +160,16 @@ class ChatModeService {
   /// What each mode starts on, and what a failed load falls back to.
   ///
   /// Both modes run the direct Fireworks provider (`fireworks/serverless`).
-  /// Fast pairs a quick model with reasoning off; Thinking pairs a stronger
-  /// model with a medium reasoning pass. Both are changeable in settings.
+  /// Fast pairs a quick model with a low reasoning pass; Thinking pairs a
+  /// stronger model with a medium reasoning pass. Both are changeable in
+  /// settings.
   static const Map<ChatMode, ModeConfig> _defaults = <ChatMode, ModeConfig>{
     // Fast's default is the general fallback — derived from the constants
     // so the "these must match" invariant is enforced, not just documented.
     ChatMode.fast: ModeConfig(
       modelId: defaultModelId,
       providerSlug: defaultProviderSlug,
-      reasoningEffort: reasoningOff,
+      reasoningEffort: 'low',
     ),
     ChatMode.thinking: ModeConfig(
       modelId: 'deepseek/deepseek-v4-pro-0813',
