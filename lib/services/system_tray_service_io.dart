@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/tray_action_bus.dart';
 
 /// Desktop system tray integration for Linux, Windows, and macOS.
 ///
@@ -18,7 +19,8 @@ class SystemTrayService with TrayListener, WindowListener {
 
   static final SystemTrayService instance = SystemTrayService._();
 
-  static const String _kToggleWindowKey = 'toggle_window';
+  static const String _kOpenWindowKey = 'open_window';
+  static const String _kNewChatKey = 'new_chat';
   static const String _kQuitKey = 'quit';
 
   bool _isInitialized = false;
@@ -73,9 +75,11 @@ class SystemTrayService with TrayListener, WindowListener {
       _retryTimer = null;
 
       await _syncWindowVisibility();
-      if (defaultTargetPlatform != TargetPlatform.linux) {
-        await _updateMenu();
-      }
+      // Install the same context menu on every desktop platform. The labels
+      // are static (they do not depend on window visibility), so a single
+      // install works everywhere — including Linux appindicator, which shows
+      // the menu on click and does not deliver a separate activate event.
+      await _installMenu();
 
       await DiagnosticsLogService.info(
         'tray',
@@ -225,18 +229,11 @@ class SystemTrayService with TrayListener, WindowListener {
     }
   }
 
-  Future<void> _updateMenu() async {
-    if (!_isInitialized) return;
-    if (defaultTargetPlatform == TargetPlatform.linux) return;
-
-    await _syncWindowVisibility();
-
+  Future<void> _installMenu() async {
     final menu = Menu(
       items: [
-        MenuItem(
-          key: _kToggleWindowKey,
-          label: _isWindowVisible ? 'Hide Chuk Chat' : 'Open Chuk Chat',
-        ),
+        MenuItem(key: _kOpenWindowKey, label: 'Open Chuk Chat'),
+        MenuItem(key: _kNewChatKey, label: 'New Chat'),
         MenuItem.separator(),
         MenuItem(key: _kQuitKey, label: 'Quit Chuk Chat'),
       ],
@@ -262,7 +259,6 @@ class SystemTrayService with TrayListener, WindowListener {
     await windowManager.show();
     await windowManager.focus();
     _isWindowVisible = true;
-    await _updateMenu();
   }
 
   Future<void> hideWindow() async {
@@ -270,7 +266,14 @@ class SystemTrayService with TrayListener, WindowListener {
 
     await windowManager.hide();
     _isWindowVisible = false;
-    await _updateMenu();
+  }
+
+  /// Brings the window to the front, then asks the running UI to start a fresh
+  /// chat. The tray has no [BuildContext], so the actual new-chat action is
+  /// performed by the desktop root wrapper listening on [TrayActionBus].
+  Future<void> _startNewChat() async {
+    await showWindow();
+    TrayActionBus.instance.requestNewChat();
   }
 
   Future<void> _quitApplication() async {
@@ -338,8 +341,11 @@ class SystemTrayService with TrayListener, WindowListener {
     if (!_isInitialized) return;
 
     switch (menuItem.key) {
-      case _kToggleWindowKey:
-        unawaited(_toggleWindowVisibility());
+      case _kOpenWindowKey:
+        unawaited(showWindow());
+        break;
+      case _kNewChatKey:
+        unawaited(_startNewChat());
         break;
       case _kQuitKey:
         unawaited(_quitApplication());
