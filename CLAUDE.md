@@ -48,6 +48,16 @@ threat model, decisions). The execution plan is the order of work.
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+## Bug/Task tracking with `bd` (mandatory)
+
+`bd` (beads) is this project's task board — use it, always. For EVERY new bug or
+task you discover, create a `bd` issue (`bd create "<title>" -d "<detail>" -l bug`)
+before or as you start on it. Claim it while working (`bd update <id> --claim`),
+and close it the moment it is done and verified (`bd close <id>`). Treat it as
+your personal kanban: nothing worked on without a bead, nothing left open once
+fixed. Do NOT use TodoWrite or ad-hoc markdown checklists for this. The same rule
+holds in the `api_server` repo, which has its own `bd` database.
+
 ## Multi-Agent Worktrees
 
 **HARD RULE — a new feature branch always means a new local worktree.** Whenever
@@ -441,7 +451,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -485,6 +495,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
    # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
+   bd dolt push
    git push
    git status
    ```

@@ -17,7 +17,6 @@ import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
-import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart'
     show ChatModeSelector, prettyModelId;
@@ -137,6 +136,18 @@ class CustomModelInfo {
 
 // ─── Page widget ────────────────────────────────────────────────────────
 
+/// Which slice of the catalogue the model list shows.
+enum _ModelListFilter {
+  /// Everything, with the active (provider-pinned) models floated to the top.
+  all,
+
+  /// Only the models that have a provider pinned.
+  active,
+
+  /// Only the models with no provider pinned yet.
+  inactive,
+}
+
 class ModelSelectorPage extends StatefulWidget {
   const ModelSelectorPage({super.key});
 
@@ -159,6 +170,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   StreamSubscription<void>? _refreshSubscription;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Which slice of the catalogue the list below shows. Layered on top of the
+  // search filter, never replacing it.
+  _ModelListFilter _listFilter = _ModelListFilter.all;
 
   // Which model each chat mode uses. Editable here so the reader can assign a
   // model to Fast and a model to Thinking without going through the composer.
@@ -272,176 +287,58 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     });
   }
 
-  /// Bottom sheet listing every catalogue model, to assign one to [mode].
-  Future<void> _showModePicker(ChatMode mode) async {
-    final theme = Theme.of(context);
-    final String current = (mode == ChatMode.fast
-            ? _fastConfig?.modelId
-            : _thinkingConfig?.modelId) ??
-        '';
-    // Fast mode is for quick models only — offer just the Flash family (all
-    // DeepSeek Flash variants and GLM 5.3 Flash). Thinking mode takes anything.
-    final List<CustomModelInfo> models = (mode == ChatMode.fast
-        ? _models.where(
-            (m) =>
-                m.id.toLowerCase().contains('flash') ||
-                m.name.toLowerCase().contains('flash'),
-          )
-        : _models)
-        .toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                  child: Text(
-                    mode == ChatMode.fast
-                        ? 'Model for Fast mode'
-                        : 'Model for Thinking mode',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(sheetContext)
-                        .copyWith(scrollbars: false),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: models.length,
-                      itemBuilder: (_, index) {
-                        final model = models[index];
-                        final selected = model.id == current;
-                        return ListTile(
-                          dense: true,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          leading: _buildIconWidget(
-                            model.iconUrl,
-                            Icons.psychology_alt,
-                            size: 22,
-                          ),
-                          title: Text(
-                            model.name,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontWeight:
-                                  selected ? FontWeight.w700 : FontWeight.w500,
-                            ),
-                          ),
-                          trailing: selected
-                              ? Icon(Icons.check, color: theme.colorScheme.primary)
-                              : null,
-                          onTap: () =>
-                              Navigator.of(sheetContext).pop(model.id),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-    if (picked == current) return;
-    // ignore: use_build_context_synchronously
-    await _pickModelForMode(mode, picked);
-    // Surface which model now runs the mode without shouting.
-    if (mounted) {
-      _showSnackBar(
-        '${mode == ChatMode.fast ? 'Fast' : 'Thinking'} → ${_modelNameFor(picked)}',
-      );
+  /// The catalogue entry for [modelId], or null when it is unknown / unset.
+  CustomModelInfo? _modelById(String? modelId) {
+    if (modelId == null || modelId.isEmpty) return null;
+    for (final m in _models) {
+      if (m.id == modelId) return m;
     }
+    return null;
   }
 
-  /// Bottom sheet to set the reasoning level for [mode]. Only the levels the
-  /// mode's model+provider actually support are offered.
-  Future<void> _showReasoningPicker(ChatMode mode) async {
+  /// Pin [mode] to a new provider, keeping its model. The service re-clamps the
+  /// mode's reasoning level to the new provider's allowed set.
+  Future<void> _setProviderForMode(ChatMode mode, String providerSlug) async {
+    final updated = await ChatModeService.setProviderForMode(mode, providerSlug);
+    if (!mounted) return;
+    setState(() {
+      if (mode == ChatMode.fast) {
+        _fastConfig = updated;
+      } else {
+        _thinkingConfig = updated;
+      }
+    });
+  }
+
+  /// Models the reader can assign to a mode: those they have enabled (pinned a
+  /// provider for). These are the recommended set. Falls back to the whole
+  /// catalogue when nothing is enabled yet.
+  List<CustomModelInfo> get _enabledModels {
+    final enabled =
+        _models.where((m) => _selectedProviders[m.id] != null).toList();
+    final list =
+        enabled.isNotEmpty ? enabled : List<CustomModelInfo>.from(_models);
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  }
+
+  /// Reasoning levels the mode's current model supports — straight from the
+  /// server's `supported_efforts` contract (derived list as a cold-start
+  /// fallback), so the picker can never offer a level the model lacks.
+  List<String> _reasoningLevelsForMode(ChatMode mode) {
     final config = mode == ChatMode.fast ? _fastConfig : _thinkingConfig;
-    if (config == null) return;
-    final levels = ChatModeService.reasoningLevelsFor(
+    if (config == null) return const <String>[ChatModeService.reasoningOff];
+    return ChatModeService.reasoningLevelsForModel(
+      modelId: config.modelId,
       providerSlug: config.providerSlug,
-      supportsReasoning:
-          ModelCapabilitiesService.supportsReasoningSync(config.modelId),
-      supportsReasoningEffort:
-          ModelCapabilitiesService.supportsReasoningEffortSync(config.modelId),
     );
-    if (levels.length <= 1) {
-      _showSnackBar('${_modelNameFor(config.modelId)} has no reasoning levels');
-      return;
-    }
-    final theme = Theme.of(context);
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                  child: Text(
-                    mode == ChatMode.fast
-                        ? 'Reasoning for Fast mode'
-                        : 'Reasoning for Thinking mode',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                for (final level in levels)
-                  ListTile(
-                    dense: true,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    title: Text(
-                      ChatModeService.reasoningLabel(level),
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: level == config.reasoningEffort
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
-                    ),
-                    trailing: level == config.reasoningEffort
-                        ? Icon(Icons.check, color: theme.colorScheme.primary)
-                        : null,
-                    onTap: () => Navigator.of(sheetContext).pop(level),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (picked == null || !mounted || picked == config.reasoningEffort) return;
-    final updated = await ChatModeService.setReasoningForMode(mode, picked);
+  }
+
+  Future<void> _setReasoningForMode(ChatMode mode, String level) async {
+    final current =
+        (mode == ChatMode.fast ? _fastConfig : _thinkingConfig)?.reasoningEffort;
+    if (level == current) return;
+    final updated = await ChatModeService.setReasoningForMode(mode, level);
     if (!mounted) return;
     setState(() {
       if (mode == ChatMode.fast) {
@@ -462,6 +359,31 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           model.description?.toLowerCase().contains(_searchQuery) ?? false;
       return nameMatch || descMatch;
     }).toList();
+  }
+
+  /// The list actually rendered: the search-filtered set, then the Active /
+  /// Inactive slice, with the base API order preserved. In the "All" slice the
+  /// active (provider-pinned) models float to the top via a STABLE partition,
+  /// so each group keeps its original relative order — no alphabetical sort.
+  List<CustomModelInfo> get _displayModels {
+    final searched = _filteredModels;
+    final actives = <CustomModelInfo>[];
+    final inactives = <CustomModelInfo>[];
+    for (final model in searched) {
+      if (_selectedProviders[model.id] != null) {
+        actives.add(model);
+      } else {
+        inactives.add(model);
+      }
+    }
+    switch (_listFilter) {
+      case _ModelListFilter.all:
+        return <CustomModelInfo>[...actives, ...inactives];
+      case _ModelListFilter.active:
+        return actives;
+      case _ModelListFilter.inactive:
+        return inactives;
+    }
   }
 
   Future<void> _initializeModelSelections() async {
@@ -901,8 +823,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                       .copyWith(scrollbars: false),
                   child: ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  // +2 header slots: search field + section header.
-                  itemCount: _filteredModels.length + 3,
+                  // +3 header slots: search field, mode picker, section header.
+                  itemCount: _displayModels.length + 3,
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return Padding(
@@ -918,39 +840,76 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: _ModePickerPanel(
-                          fastModelName: _fastConfig == null
-                              ? null
-                              : _modelNameFor(_fastConfig!.modelId),
-                          thinkingModelName: _thinkingConfig == null
-                              ? null
-                              : _modelNameFor(_thinkingConfig!.modelId),
-                          fastReasoningLabel: _fastConfig == null
-                              ? null
-                              : ChatModeService.reasoningLabel(
-                                  _fastConfig!.reasoningEffort,
-                                ),
-                          thinkingReasoningLabel: _thinkingConfig == null
-                              ? null
-                              : ChatModeService.reasoningLabel(
-                                  _thinkingConfig!.reasoningEffort,
-                                ),
-                          onEditFast: () => _showModePicker(ChatMode.fast),
-                          onEditThinking: () =>
-                              _showModePicker(ChatMode.thinking),
-                          onEditFastReasoning: () =>
-                              _showReasoningPicker(ChatMode.fast),
-                          onEditThinkingReasoning: () =>
-                              _showReasoningPicker(ChatMode.thinking),
+                          buildIconWidget: _buildIconWidget,
+                          models: _enabledModels,
+                          fast: _ModeRowData(
+                            icon: Icons.bolt,
+                            title: 'Fast mode',
+                            modelId: _fastConfig?.modelId ?? '',
+                            modelName: _fastConfig == null
+                                ? null
+                                : _modelNameFor(_fastConfig!.modelId),
+                            reasoningEffort: _fastConfig?.reasoningEffort ??
+                                ChatModeService.reasoningOff,
+                            reasoningLevels:
+                                _reasoningLevelsForMode(ChatMode.fast),
+                            providerSlug: _fastConfig?.providerSlug ?? '',
+                            providers:
+                                _modelById(_fastConfig?.modelId)?.providers ??
+                                    const <ModelProviderInfo>[],
+                            onPickModel: (id) =>
+                                _pickModelForMode(ChatMode.fast, id),
+                            onPickReasoning: (lvl) =>
+                                _setReasoningForMode(ChatMode.fast, lvl),
+                            onPickProvider: (slug) =>
+                                _setProviderForMode(ChatMode.fast, slug),
+                          ),
+                          thinking: _ModeRowData(
+                            icon: Icons.psychology_outlined,
+                            title: 'Thinking mode',
+                            modelId: _thinkingConfig?.modelId ?? '',
+                            modelName: _thinkingConfig == null
+                                ? null
+                                : _modelNameFor(_thinkingConfig!.modelId),
+                            reasoningEffort: _thinkingConfig?.reasoningEffort ??
+                                ChatModeService.reasoningOff,
+                            reasoningLevels:
+                                _reasoningLevelsForMode(ChatMode.thinking),
+                            providerSlug: _thinkingConfig?.providerSlug ?? '',
+                            providers: _modelById(_thinkingConfig?.modelId)
+                                    ?.providers ??
+                                const <ModelProviderInfo>[],
+                            onPickModel: (id) =>
+                                _pickModelForMode(ChatMode.thinking, id),
+                            onPickReasoning: (lvl) =>
+                                _setReasoningForMode(ChatMode.thinking, lvl),
+                            onPickProvider: (slug) =>
+                                _setProviderForMode(ChatMode.thinking, slug),
+                          ),
                         ),
                       );
                     }
                     if (index == 2) {
+                      final int count = _displayModels.length;
                       final label = _searchQuery.isEmpty
-                          ? 'Available · ${_filteredModels.length} models'
-                          : '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found';
-                      return ExpressiveSectionHeader(label);
+                          ? 'Available · $count models'
+                          : '$count model${count == 1 ? '' : 's'} found';
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ExpressiveSectionHeader(label),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ListFilterBar(
+                              value: _listFilter,
+                              onChanged: (f) =>
+                                  setState(() => _listFilter = f),
+                            ),
+                          ),
+                        ],
+                      );
                     }
-                    final model = _filteredModels[index - 3];
+                    final model = _displayModels[index - 3];
                     final ModelProviderInfo? selectedProviderForModel =
                         _selectedProviders[model.id];
                     final ModelPromptConfig? promptConfigForModel =
@@ -1267,6 +1226,16 @@ class _NameRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        // Flexible so the provider pill shrinks (and its label ellipsizes)
+        // instead of overflowing the row in a narrow settings pane.
+        // Push the provider pill hard against the right edge. Without the
+        // Align it sits at the LEFT of its flex box (name Expanded + pill
+        // Flexible split the row), leaving a gap to the right.
+        Flexible(
+          child: Align(alignment: Alignment.centerRight, child: trailing),
+        ),
+        // The set-system-prompt button is the very last element — to the
+        // right of the provider pill, at the far right of the row.
         if (onEditPrompt != null) ...[
           const SizedBox(width: 4),
           IconButton(
@@ -1283,11 +1252,7 @@ class _NameRow extends StatelessWidget {
             ),
             onPressed: onEditPrompt,
           ),
-          const SizedBox(width: 4),
         ],
-        // Flexible so the provider pill shrinks (and its label ellipsizes)
-        // instead of overflowing the row in a narrow settings pane.
-        Flexible(child: trailing),
       ],
     );
   }
@@ -1659,169 +1624,426 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// The panel at the top of the model screen that assigns a model AND a
-/// reasoning level to each chat mode. Each mode has a model pill and a
-/// reasoning pill; tapping either opens its picker.
+/// One mode's data for the picker panel.
+class _ModeRowData {
+  final IconData icon;
+  final String title;
+  final String modelId;
+  final String? modelName;
+  final String reasoningEffort;
+  final List<String> reasoningLevels;
+
+  /// The provider slug the mode's model is currently pinned to.
+  final String providerSlug;
+
+  /// The providers the mode's currently-selected model offers.
+  final List<ModelProviderInfo> providers;
+
+  final ValueChanged<String> onPickModel;
+  final ValueChanged<String> onPickReasoning;
+  final ValueChanged<String> onPickProvider;
+
+  const _ModeRowData({
+    required this.icon,
+    required this.title,
+    required this.modelId,
+    required this.modelName,
+    required this.reasoningEffort,
+    required this.reasoningLevels,
+    required this.providerSlug,
+    required this.providers,
+    required this.onPickModel,
+    required this.onPickReasoning,
+    required this.onPickProvider,
+  });
+}
+
+/// The panel at the top of the model screen that assigns a model, a provider
+/// AND a reasoning level to each chat mode. Fast and Thinking each get their
+/// own card, laid out side by side when there is room, using the same anchored
+/// dropdown menu as the provider picker on the cards below.
 class _ModePickerPanel extends StatelessWidget {
-  final String? fastModelName;
-  final String? thinkingModelName;
-  final String? fastReasoningLabel;
-  final String? thinkingReasoningLabel;
-  final VoidCallback onEditFast;
-  final VoidCallback onEditThinking;
-  final VoidCallback onEditFastReasoning;
-  final VoidCallback onEditThinkingReasoning;
+  final List<CustomModelInfo> models;
+  final _ModeRowData fast;
+  final _ModeRowData thinking;
+  final Widget Function(String?, IconData, {double size}) buildIconWidget;
+
+  /// Below this available width the two cards stack instead of sitting side
+  /// by side — the narrow settings pane never squeezes them into a strip.
+  static const double _sideBySideMinWidth = 460;
 
   const _ModePickerPanel({
-    required this.fastModelName,
-    required this.thinkingModelName,
-    required this.fastReasoningLabel,
-    required this.thinkingReasoningLabel,
-    required this.onEditFast,
-    required this.onEditThinking,
-    required this.onEditFastReasoning,
-    required this.onEditThinkingReasoning,
+    required this.models,
+    required this.fast,
+    required this.thinking,
+    required this.buildIconWidget,
   });
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+        final bool sideBySide = availableWidth >= _sideBySideMinWidth;
+        final Widget fastCard = _modeCard(context, fast);
+        final Widget thinkingCard = _modeCard(context, thinking);
+        if (sideBySide) {
+          // IntrinsicHeight bounds the Row's (otherwise unbounded, inside a
+          // ListView) cross-axis extent, so `stretch` matches both card
+          // heights instead of forcing an infinite height on their children.
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: fastCard),
+                const SizedBox(width: 12),
+                Expanded(child: thinkingCard),
+              ],
+            ),
+          );
+        }
+        return Column(
+          children: [
+            fastCard,
+            const SizedBox(height: 12),
+            thinkingCard,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _modeCard(BuildContext context, _ModeRowData data) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
+    final bool canReason = data.reasoningLevels.length > 1;
+    final bool hasProviderChoice = data.providers.length > 1;
+    final bool hasSingleProvider = data.providers.length == 1;
+
     return Container(
       decoration: BoxDecoration(
         color: m3.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _modeBlock(
-            context,
-            Icons.bolt,
-            'Fast mode',
-            fastModelName,
-            onEditFast,
-            fastReasoningLabel,
-            onEditFastReasoning,
+          Row(
+            children: [
+              Icon(data.icon, size: 20, color: m3.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  data.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
           ),
-          Divider(
-            height: 16,
-            indent: 8,
-            endIndent: 8,
-            color: m3.onSurfaceVariant.withValues(alpha: 0.12),
+          const SizedBox(height: 2),
+          _labelledRow(context, 'Model', _modelMenu(context, data)),
+          if (hasProviderChoice)
+            _labelledRow(context, 'Provider', _providerMenu(context, data))
+          else if (hasSingleProvider)
+            _labelledRow(
+              context,
+              'Provider',
+              _staticValue(context, data.providers.first.name),
+            ),
+          if (canReason)
+            _labelledRow(context, 'Reasoning', _reasoningMenu(context, data)),
+        ],
+      ),
+    );
+  }
+
+  /// A settings-style row inside a mode card: a quiet label on the left, its
+  /// control on the right. The two columns line up across the rows so the two
+  /// cards read as clean matched columns.
+  Widget _labelledRow(BuildContext context, String label, Widget control) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant,
+              ),
+            ),
           ),
-          _modeBlock(
-            context,
-            Icons.psychology_outlined,
-            'Thinking mode',
-            thinkingModelName,
-            onEditThinking,
-            thinkingReasoningLabel,
-            onEditThinkingReasoning,
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: control,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _modeBlock(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String? modelName,
-    VoidCallback onEditModel,
-    String? reasoningLabel,
-    VoidCallback onEditReasoning,
-  ) {
+  /// A read-only value on the right of a labelled row, for a model that offers
+  /// exactly one provider (nothing to choose).
+  Widget _staticValue(BuildContext context, String text) {
     final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: m3.onSurfaceVariant),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: theme.colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _providerMenu(BuildContext context, _ModeRowData data) {
+    String label = data.providerSlug;
+    for (final provider in data.providers) {
+      if (provider.slug == data.providerSlug) {
+        label = provider.name;
+        break;
+      }
+    }
+    if (label.isEmpty) label = 'Auto';
+    return _menuPill<String>(
+      context,
+      label: label,
+      onSelected: data.onPickProvider,
+      itemBuilder: (ctx) => [
+        for (final provider in data.providers)
+          _menuRow(
+            ctx,
+            value: provider.slug,
+            label: provider.name,
+            selected: provider.slug == data.providerSlug,
+            leading: buildIconWidget(
+              provider.iconUrl,
+              Icons.business,
+              size: 18,
             ),
-            _pill(
-              context,
-              modelName == null
-                  ? 'Loading…'
-                  : ChatModeSelector.stripLabPrefix(modelName),
-              onEditModel,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const SizedBox(width: 32),
-            Text(
-              'Reasoning',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-              ),
-            ),
-            const Spacer(),
-            _pill(
-              context,
-              reasoningLabel ?? '—',
-              onEditReasoning,
-              subtle: true,
-            ),
-          ],
-        ),
+          ),
       ],
     );
   }
 
-  Widget _pill(
-    BuildContext context,
-    String label,
-    VoidCallback onTap, {
+  Widget _modelMenu(BuildContext context, _ModeRowData data) {
+    final label = data.modelName == null
+        ? 'Loading…'
+        : ChatModeSelector.stripLabPrefix(data.modelName!);
+    return _menuPill<String>(
+      context,
+      label: label,
+      onSelected: data.onPickModel,
+      itemBuilder: (ctx) => [
+        for (final model in models)
+          _menuRow(
+            ctx,
+            value: model.id,
+            label: ChatModeSelector.stripLabPrefix(model.name),
+            selected: model.id == data.modelId,
+            leading: buildIconWidget(
+              model.iconUrl,
+              Icons.psychology_alt,
+              size: 18,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _reasoningMenu(BuildContext context, _ModeRowData data) {
+    return _menuPill<String>(
+      context,
+      label: ChatModeService.reasoningLabel(data.reasoningEffort),
+      subtle: true,
+      onSelected: data.onPickReasoning,
+      itemBuilder: (ctx) => [
+        for (final level in data.reasoningLevels)
+          _menuRow(
+            ctx,
+            value: level,
+            label: ChatModeService.reasoningLabel(level),
+            selected: level == data.reasoningEffort,
+          ),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _menuRow(
+    BuildContext context, {
+    required String value,
+    required String label,
+    required bool selected,
+    Widget? leading,
+  }) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return PopupMenuItem<String>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          if (leading != null) ...[leading, const SizedBox(width: 10)],
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color:
+                    selected ? theme.colorScheme.primary : m3.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+          if (selected)
+            Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuPill<T>(
+    BuildContext context, {
+    required String label,
+    required PopupMenuItemBuilder<T> itemBuilder,
+    required ValueChanged<T> onSelected,
     bool subtle = false,
   }) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 220),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: m3.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: m3.onSurfaceVariant,
-                    fontWeight: subtle ? FontWeight.w500 : FontWeight.w600,
+    return Theme(
+      data: theme.copyWith(
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: PopupMenuButton<T>(
+        color: m3.surfaceContainerHigh,
+        constraints: const BoxConstraints(minWidth: 220, maxWidth: 340),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        onSelected: onSelected,
+        itemBuilder: itemBuilder,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: m3.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: m3.onSurfaceVariant,
+                      fontWeight: subtle ? FontWeight.w500 : FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                Icons.arrow_drop_down,
-                color: m3.onSurfaceVariant,
-                size: 20,
-              ),
-            ],
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.arrow_drop_down,
+                  color: m3.onSurfaceVariant,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A three-way pill toggle above the model list: All / Active / Inactive.
+/// Styled to match the page's pills — a filled track with the selected
+/// segment lit in the primary colour.
+class _ListFilterBar extends StatelessWidget {
+  final _ModelListFilter value;
+  final ValueChanged<_ModelListFilter> onChanged;
+
+  const _ListFilterBar({required this.value, required this.onChanged});
+
+  static String _labelFor(_ModelListFilter f) {
+    switch (f) {
+      case _ModelListFilter.all:
+        return 'All';
+      case _ModelListFilter.active:
+        return 'Active';
+      case _ModelListFilter.inactive:
+        return 'Inactive';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          for (final f in _ModelListFilter.values)
+            Expanded(child: _segment(context, f)),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(BuildContext context, _ModelListFilter f) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final bool selected = f == value;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(f),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          _labelFor(f),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: selected
+                ? theme.colorScheme.onPrimary
+                : m3.onSurfaceVariant,
           ),
         ),
       ),

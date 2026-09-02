@@ -185,7 +185,9 @@ void main() {
       expect(picked, isEmpty);
     });
 
-    testWidgets('the deeper opener names the current model', (tester) async {
+    testWidgets('under Fast the third point stays neutral, not the model', (
+      tester,
+    ) async {
       await _pump(
         tester,
         mode: ChatMode.fast,
@@ -196,8 +198,28 @@ void main() {
 
       await tester.tap(find.text('Fast'));
       await tester.pumpAndSettle();
-      // The row shows the model name, lab prefix stripped.
-      expect(find.text('V4 Flash'), findsOneWidget);
+      // Fast runs the model set in the model screen — the composer never
+      // surfaces it. The third point is the neutral Custom entry.
+      expect(find.text('Choose model'), findsOneWidget);
+      expect(find.text('V4 Flash'), findsNothing);
+    });
+
+    testWidgets('the third point names the model once Custom is active', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        mode: ChatMode.custom,
+        selectedModelId: 'deepseek/deepseek-v4-flash',
+        modelLabel: 'DeepSeek: V4 Flash',
+        onModelSelected: (_) {},
+      );
+
+      await tester.tap(find.byIcon(Icons.tune).first);
+      await tester.pumpAndSettle();
+      // In Custom the third point is the chosen model, lab prefix stripped.
+      expect(find.text('V4 Flash'), findsWidgets);
+      expect(find.text('Choose model'), findsNothing);
     });
 
     testWidgets('with no deeper handlers there is no opener row', (
@@ -294,7 +316,7 @@ void main() {
 
       await tester.tap(find.text('Fast'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('V4 Flash')); // deeper opener
+      await tester.tap(find.text('Choose model')); // third point → deeper menu
       await tester.pumpAndSettle();
 
       expect(find.text('Kimi K3'), findsOneWidget);
@@ -320,7 +342,7 @@ void main() {
 
       await tester.tap(find.text('Fast'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Model B')); // deeper opener
+      await tester.tap(find.text('Choose model')); // third point → deeper menu
       await tester.pumpAndSettle();
       expect(find.text('More models'), findsOneWidget);
       await tester.tap(find.text('More models'));
@@ -343,7 +365,7 @@ void main() {
 
         await tester.tap(find.text('Fast'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Model B'));
+        await tester.tap(find.text('Choose model'));
         await tester.pumpAndSettle();
 
         expect(opened, 1);

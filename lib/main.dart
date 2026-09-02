@@ -27,7 +27,6 @@ import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
-import 'package:chuk_chat/services/cowork/cowork_executor_bridge.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
@@ -146,21 +145,6 @@ Future<void> main() async {
   // ProviderScope hosts the Riverpod container for the chat runtime / streaming
   // state introduced by the chat-UI performance re-architecture.
   runApp(const ProviderScope(child: ChukChatApp()));
-
-  // CoWork local demo: bring the loopback phone-page server up at launch so
-  // its URL is live before the user opens the CoWork surface. Compiled out of
-  // every normal build (kFeatureCoworkDemo is const false without the define).
-  if (kFeatureCoworkDemo) {
-    unawaited(() async {
-      try {
-        await CoworkExecutorBridge.instance.start();
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[main] CoWork demo server failed to start: $e');
-        }
-      }
-    }());
-  }
 }
 
 class ChukChatApp extends StatefulWidget {

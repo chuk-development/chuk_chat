@@ -195,6 +195,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   /// Models the reader picked on the model screen, shown one level deeper.
   List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
+
+  /// Human name of the model Custom last ran, remembered across mode switches
+  /// so the third point in the mode menu names it even under Fast or Thinking.
+  /// Null until Custom has been used at least once.
+  String? _customModelName;
   String? _systemPrompt;
   String? _selectedWorkspaceId;
   late final VoidCallback _modelSelectionListener;
@@ -2675,21 +2680,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         selectedModelId: _selectedModelId,
         modelLabel: _selectedModelName ??
             (_selectedModelId.isEmpty ? null : _selectedModelId),
+        customModelLabel: _customModelName,
         pickedModels: _pickedModels,
-        reasoningEffort: _reasoningEffort,
-        reasoningLevels: ChatModeService.reasoningLevelsFor(
+        reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+          _reasoningEffort,
+          modelId: _selectedModelId,
+          providerSlug: _selectedProviderSlug ?? '',
+        ),
+        // The picker options come straight from the server's per-model
+        // `supported_efforts` (derived list only as a cold-start fallback),
+        // so a level the model does not support can never be offered.
+        reasoningLevels: ChatModeService.reasoningLevelsForModel(
+          modelId: _selectedModelId,
           // Before the provider resolves, use the mode's own default provider
-          // so a Fireworks-pinned mode never briefly offers Minimal or Max.
+          // so the derived fallback never briefly offers a wrong ladder.
           providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
               ? _selectedProviderSlug!
               : ChatModeService.defaultConfig(_chatMode).providerSlug,
-          supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
-            _selectedModelId,
-          ),
-          supportsReasoningEffort:
-              ModelCapabilitiesService.supportsReasoningEffortSync(
-                _selectedModelId,
-              ),
         ),
           onReasoningEffortChanged: _setReasoningEffort,
           onModeChanged: _setChatMode,
@@ -2714,6 +2721,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _selectedModelName = name;
     });
+  }
+
+  /// Resolve the name of the model Custom last ran, so the third point in the
+  /// mode menu can name it even while Fast or Thinking is active. Stays null
+  /// until Custom has a stored config (has been used at least once), so a fresh
+  /// install shows the neutral "Choose model" instead of the seed default.
+  Future<void> _refreshCustomModelName() async {
+    final bool used = await ChatModeService.hasStoredConfig(ChatMode.custom);
+    if (!used) {
+      if (mounted && _customModelName != null) {
+        setState(() => _customModelName = null);
+      }
+      return;
+    }
+    final config = await ChatModeService.loadConfig(ChatMode.custom);
+    final name = await ModelCacheService.displayNameFor(config.modelId) ??
+        prettyModelId(config.modelId);
+    if (!mounted || name == _customModelName) return;
+    setState(() => _customModelName = name);
   }
 
   /// The models this reader has picked, for the composer's second menu.
@@ -2795,6 +2821,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// land in the same place; fall back to the standalone page if no modal
   /// opener was wired.
   Future<void> _openModelScreen() async {
+    // Only a genuinely new pick should flip the composer into Custom. Merely
+    // browsing the screen — pinning a provider, retuning Fast/Thinking — must
+    // leave the active mode untouched, so compare against the model in use.
+    final String before = _selectedModelId;
     if (widget.onOpenModelSettings != null) {
       await widget.onOpenModelSettings!.call();
     } else {
@@ -2804,7 +2834,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
     if (!mounted) return;
     final selected = await UserPreferencesService.loadSelectedModel();
-    if (mounted && selected != null && selected.isNotEmpty) {
+    if (mounted &&
+        selected != null &&
+        selected.isNotEmpty &&
+        selected != before) {
       await _applyModelSelection(selected);
     }
     await _refreshPickedModels();
@@ -2829,20 +2862,37 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  /// Apply a model picked in the second menu: remember it, keep the shared
-  /// notifier in step, reload the pinned provider so model and provider
-  /// cannot drift apart on the next send, and record model+provider against
-  /// the active mode so switching back to it returns here.
+  /// The reasoning effort to actually send, clamped to what [modelId]'s real
+  /// server-provided ladder allows. The stored `_reasoningEffort` is already
+  /// clamped whenever the model or level changes, but the catalog cache can
+  /// hydrate after a send is queued (cold start) or the send may target a
+  /// different model than the composer's (resend/continue), so clamp again at
+  /// the send site — a level the model does not support must never leave here.
+  String _clampedReasoningEffort(String modelId, String? providerSlug) =>
+      ChatModeService.sanitizeReasoningForModel(
+        _reasoningEffort,
+        modelId: modelId,
+        providerSlug: providerSlug ?? '',
+      );
+
+  /// Apply a model the reader picked directly. Picking a specific model IS the
+  /// Custom mode — an arbitrary model at its own reasoning level. Fast and
+  /// Thinking keep the models set on the model screen and are never
+  /// overwritten from here, so the pick records against Custom and switches to
+  /// it. Reload the pinned provider so model and provider cannot drift apart on
+  /// the next send.
   Future<void> _applyModelSelection(String modelId) async {
     setState(() {
       _selectedModelId = modelId;
+      _chatMode = ChatMode.custom;
     });
+    await ChatModeService.save(ChatMode.custom);
     ModelSelectionDropdown.selectedModelNotifier.value = modelId;
     await UserPreferencesService.saveSelectedModel(modelId);
     if (!mounted) return;
     await loadProviderSlugForModel(modelId, forceFromPrefs: true);
     final config = await ChatModeService.setModelForMode(
-      _chatMode,
+      ChatMode.custom,
       modelId: modelId,
       providerSlug: _selectedProviderSlug ?? '',
     );
@@ -2852,6 +2902,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       });
     }
     await _refreshSelectedModelName(modelId);
+    await _refreshCustomModelName();
     await _refreshPickedModels();
   }
 
@@ -2891,6 +2942,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
     if (!mounted) return;
     await _refreshSelectedModelName(config.modelId);
+    await _refreshCustomModelName();
     await _refreshPickedModels();
   }
 

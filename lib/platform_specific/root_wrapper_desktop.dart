@@ -4,11 +4,8 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
-import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
-import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -42,14 +39,6 @@ class RootWrapperDesktop extends StatefulWidget {
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
-  AppMode _mode = AppMode.chat;
-
-  /// Switch mode. Mirrors the choice into [appModeNotifier] so the far-away
-  /// readers (connectors page, model-awareness prompt) see it too.
-  void _setMode(AppMode m) {
-    setState(() => _mode = m);
-    appModeNotifier.value = m;
-  }
 
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
@@ -502,13 +491,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     );
 
     final bool isWorkspacesFullPage = _activePanel == 'workspaces';
-    // CoWork runtime mode — same app, swaps the chat area for the CoWork
-    // surface. See docs/COWORK_BUILD_PLAN.md.
-    final bool isCoWork = kFeatureCoWork && _mode == AppMode.cowork;
     final bool showContent =
-        (!isCompactMode || !_isSidebarExpanded) &&
-        !isWorkspacesFullPage &&
-        !isCoWork;
+        (!isCompactMode || !_isSidebarExpanded) && !isWorkspacesFullPage;
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
@@ -623,13 +607,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   _openWorkspace(workspaceId);
                 },
               ),
-            ),
-
-          // Full-page CoWork surface (replaces chat area in CoWork mode)
-          if (isCoWork)
-            Positioned.fill(
-              left: _isSidebarExpanded ? effectiveSidebarWidth : 48,
-              child: const CoWorkSurface(),
             ),
 
           // Right Panel (Projects/Media/Artifact)
@@ -763,8 +740,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
-                    mode: _mode,
-                    onModeChanged: _setMode,
                   ),
                 ),
               ),
@@ -800,20 +775,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
           ),
-
-          // CoWork mode switcher — collapsed-sidebar fallback only. When the
-          // sidebar is open the switcher lives inside it, under the New chat
-          // row; here it sits next to the hamburger so the mini-rail keeps
-          // access to it. Same app, runtime mode.
-          if (kFeatureCoWork && !_isSidebarExpanded)
-            Positioned(
-              top: kTopInitialSpacing + 3,
-              left: kFixedLeftPadding + kMenuButtonHeight + 4,
-              child: CoWorkModeSwitcher(
-                mode: _mode,
-                onChanged: _setMode,
-              ),
-            ),
 
           // Mini rail — visible only when sidebar is collapsed. Each icon's
           // visual centre lines up *exactly* with the matching SbRailRow in

@@ -3,21 +3,11 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureArtifactHosting,
-        kFeatureCoworkDemo,
         kFeatureServerTools,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
 import 'package:chuk_chat/utils/io_helper.dart' show Platform;
-
-/// CoWork laptop-native tools. Registered only when [kFeatureCoworkDemo] is on,
-/// so a normal build never advertises real filesystem/process access.
-const Set<String> _coworkDemoToolNames = {
-  'run_command',
-  'read_file',
-  'write_file',
-  'list_directory',
-};
 
 const Set<String> _serverBackedToolNames = {
   'github',
@@ -86,13 +76,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'sandbox_write': ToolCategory.sandbox,
   'sandbox_reset': ToolCategory.sandbox,
   'send_file_to_user': ToolCategory.sandbox,
-  // CoWork laptop-native tools (gated behind kFeatureCoworkDemo). Categorised
-  // as `basic` so they need no new ToolCategory enum value / settings-UI case;
-  // `basic` reports always-connected, which matches always-available-on-native.
-  'run_command': ToolCategory.basic,
-  'read_file': ToolCategory.basic,
-  'write_file': ToolCategory.basic,
-  'list_directory': ToolCategory.basic,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -1395,71 +1378,6 @@ final List<ClientTool> builtinTools = [
       'artifact',
     ],
   ),
-
-  // -- CoWork laptop-native tools (gated behind kFeatureCoworkDemo) --
-  // These act on the user's OWN machine: real shell, real filesystem. Every
-  // path and the command cwd is jailed under a configurable root; reads of
-  // secret paths are denied; run_command is killed after a timeout.
-  ClientTool(
-    name: 'run_command',
-    description:
-        'Run a shell command on the local machine and return its stdout, '
-        'stderr and exit code. The command runs under a jailed working '
-        'directory (the CoWork root or a subdirectory of it). Use for build, '
-        'test, git and file-inspection commands. The process is killed if it '
-        'runs longer than the timeout. Output is capped.',
-    parameters: {
-      'command': 'string (required: the shell command line to run)',
-      'cwd':
-          'string (optional: working directory, relative to or under the '
-          'CoWork root; defaults to the root)',
-    },
-    type: ToolType.builtin,
-    tags: ['cowork', 'shell', 'command', 'run', 'exec', 'terminal', 'bash'],
-  ),
-  ClientTool(
-    name: 'read_file',
-    description:
-        'Read a UTF-8 text file from the local machine and return its '
-        'contents. The path must resolve under the CoWork root. Contents are '
-        'capped at 200 KB; if the file is larger you are told how much was '
-        'omitted. Reads of obvious secret files (.env, *.pem, id_rsa, .ssh, '
-        '.aws/credentials, keyrings) are refused.',
-    parameters: {
-      'path':
-          'string (required: file path, relative to or under the CoWork root)',
-    },
-    type: ToolType.builtin,
-    tags: ['cowork', 'file', 'read', 'open', 'cat'],
-  ),
-  ClientTool(
-    name: 'write_file',
-    description:
-        'Write (create or overwrite) a UTF-8 text file on the local machine. '
-        'The path must resolve under the CoWork root; parent directories are '
-        'created as needed. Overwrites any existing file at the path.',
-    parameters: {
-      'path':
-          'string (required: file path, relative to or under the CoWork root)',
-      'content': 'string (required: the full text to write)',
-    },
-    type: ToolType.builtin,
-    tags: ['cowork', 'file', 'write', 'save', 'create'],
-  ),
-  ClientTool(
-    name: 'list_directory',
-    description:
-        'List the entries of a directory on the local machine. The path must '
-        'resolve under the CoWork root; it defaults to the root. Each entry is '
-        'shown with its type (dir/file/link) and, for files, its size.',
-    parameters: {
-      'path':
-          'string (optional: directory path, relative to or under the CoWork '
-          'root; defaults to the root)',
-    },
-    type: ToolType.builtin,
-    tags: ['cowork', 'directory', 'list', 'ls', 'files', 'folder'],
-  ),
 ];
 
 /// Whether the current platform is a mobile device (Android/iOS).
@@ -1479,10 +1397,6 @@ void registerBuiltinTools(ToolExecutor executor) {
 
   for (final tool in builtinTools) {
     if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
-      continue;
-    }
-    // CoWork laptop-native tools stay off unless the demo flag is set.
-    if (!kFeatureCoworkDemo && _coworkDemoToolNames.contains(tool.name)) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {

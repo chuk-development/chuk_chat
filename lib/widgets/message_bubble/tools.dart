@@ -31,6 +31,14 @@ extension _MessageBubbleTools on _MessageBubbleState {
     final bool isStreaming = widget.isReasoningStreaming;
     final String reasoning = _hasReasoning ? (widget.reasoning ?? '') : '';
 
+    // No reasoning happened and nothing is streaming: never claim "Thought".
+    // A model that just answered (e.g. "Hi") produced no reasoning tokens, so
+    // the collapsible "Thought for X" bar would open onto nothing. Show only
+    // the quiet model footer when there is one, and otherwise render nothing.
+    if (!isStreaming && reasoning.trim().isEmpty) {
+      return _hasModelInfo ? _buildModelFooter() : const SizedBox.shrink();
+    }
+
     return AgentActivityTimeline(
       toolCalls: const <ToolCall>[],
       steps: <AgentActivityStep>[
