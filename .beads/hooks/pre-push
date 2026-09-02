@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Globaler CodeRabbit-Review vor jedem Push, in JEDEM Repo auf diesem Rechner.
+# Aktiviert per: git config --global core.hooksPath ~/.config/git/hooks
+#
+# Grundsatz: nie blockieren, nie nerven. Der Hook endet immer mit 0, damit ein
+# Fehlalarm oder ein cr-Ausfall nie einen Push oder Deploy stoppt. Die Befunde
+# liest man und entscheidet selbst.
+#
+# Ausschalten fuer einen Push:            NO_CR=1 git push
+# Ganz aus (dieser Rechner):              git config --global --unset core.hooksPath
+
+set -u
+
+# 1) Ohne CLI oder ohne Login still durchlassen (Arbeits-/Fremd-Rechner).
+command -v cr >/dev/null 2>&1 || exit 0
+cr auth status >/dev/null 2>&1 || exit 0
+
+# 2) Manueller Ausstieg pro Push.
+if [ "${NO_CR:-}" = "1" ]; then
+  echo "CodeRabbit: uebersprungen (NO_CR=1)"
+  exit 0
+fi
+
+# 3) Basis exakt aus dem pre-push-Protokoll bestimmen. git schreibt je Ref eine
+#    Zeile "<local_ref> <local_sha> <remote_ref> <remote_sha>" auf stdin. Der
+#    remote_sha ist der aktuelle Remote-Stand = genau die Basis fuer diesen Push,
+#    unabhaengig vom Branch-Namen (main, master, feature, egal).
+zero="0000000000000000000000000000000000000000"
+base_commit=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  [ "$local_sha" = "$zero" ] && continue          # Loeschung eines Refs: ignorieren
+  if [ "$remote_sha" != "$zero" ]; then
+    base_commit="$remote_sha"                      # bestehender Branch: gegen Remote-Stand
+    break
+  fi
+done
+
+# 4) Neuer Branch (kein Remote-Stand): auf den Default-Branch des Remotes
+#    zurueckfallen, damit auch der erste Push eines Feature-Branches reviewt wird.
+base_ref=""
+if [ -z "$base_commit" ]; then
+  if def=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null); then
+    base_ref="${def#refs/remotes/}"
+  elif git rev-parse --verify --quiet origin/main >/dev/null; then
+    base_ref="origin/main"
+  elif git rev-parse --verify --quiet origin/master >/dev/null; then
+    base_ref="origin/master"
+  fi
+  [ -z "$base_ref" ] && exit 0                     # keine Basis ermittelbar: still raus
+fi
+
+# 5) Review. timeout kappt bei 4 min, damit ein haengender Review den Push nie
+#    ewig blockiert. Fehler werden geschluckt (|| true), Ausgang bleibt 0.
+if [ -n "$base_commit" ]; then
+  echo "CodeRabbit: reviewe zu pushende Commits (gegen Remote-Stand) ..."
+  timeout 240 cr review --committed --base-commit "$base_commit" 2>&1 || true
+else
+  echo "CodeRabbit: reviewe neuen Branch gegen ${base_ref} ..."
+  timeout 240 cr review --committed --base "$base_ref" 2>&1 || true
+fi
+echo "CodeRabbit: Review fertig (nicht blockierend)."
+exit 0
+
+# --- BEGIN BEADS INTEGRATION v1.2.2 ---
+# This section is managed by beads. Do not remove these markers.
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+  _bd_used_perl=0
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$_bd_timeout" bd hooks run pre-push "$@"
+    _bd_exit=$?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$_bd_timeout" bd hooks run pre-push "$@"
+    _bd_exit=$?
+  elif command -v perl >/dev/null 2>&1; then
+    _bd_used_perl=1
+    perl -e 'alarm shift; exec @ARGV' "$_bd_timeout" bd hooks run pre-push "$@"
+    _bd_exit=$?
+  else
+    echo >&2 "beads: hook 'pre-push' running without timeout; install coreutils or perl to enable BEADS_HOOK_TIMEOUT"
+    bd hooks run pre-push "$@"
+    _bd_exit=$?
+  fi
+  if [ $_bd_exit -eq 124 ] || { [ $_bd_used_perl -eq 1 ] && [ $_bd_exit -eq 142 ]; }; then
+    echo >&2 "beads: hook 'pre-push' timed out after ${_bd_timeout}s — continuing without beads"
+    _bd_exit=0
+  fi
+  if [ $_bd_exit -eq 3 ]; then
+    echo >&2 "beads: database not initialized — skipping hook 'pre-push'"
+    _bd_exit=0
+  fi
+  if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
+fi
+# --- END BEADS INTEGRATION v1.2.2 ---
