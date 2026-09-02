@@ -4,22 +4,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:flutter/foundation.dart';
-
-import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/services/pdf_export_service.dart';
 import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
-/// True on a phone: either the build says so, or the device does.
-bool get _isPhone =>
-    kPlatformMobile ||
-    (kAutoDetectPlatform &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.iOS));
-
 class MessageActionsHandler {
   // Callbacks
   Function(String)? onShowSnackBar;
@@ -33,10 +22,10 @@ class MessageActionsHandler {
 
   /// Strips tool-call protocol from text that is about to leave the app.
   ///
-  /// The chat view renders through [stripToolCallBlocksForDisplay], but copy,
-  /// PDF export and print all read the raw `text` field. Anything the UI hides
-  /// — `<tool_call>` blocks, `<artifact>` blocks, provider special tokens —
-  /// was therefore pasted into other apps and printed into documents.
+  /// The chat view renders through [stripToolCallBlocksForDisplay], but copy
+  /// reads the raw `text` field. Anything the UI hides — `<tool_call>` blocks,
+  /// `<artifact>` blocks, provider special tokens — was therefore pasted into
+  /// other apps.
   static String _forExport(String text) =>
       stripToolCallBlocksForDisplay(text);
 
@@ -105,6 +94,7 @@ class MessageActionsHandler {
     required Function(int) onResendMessage,
     Future<void> Function(int)? onRetryToolPass,
     bool canRetryToolPass = false,
+    void Function(int)? onBranch,
   }) {
     // User message actions are built separately via buildUserMessageActions.
     if (isUser) return const [];
@@ -121,30 +111,6 @@ class MessageActionsHandler {
           label: 'Copy',
           onPressed: () => copyToClipboard(messageText),
           isEnabled: !isAssistantPending,
-        ),
-      );
-    }
-
-    // PDF export and printing — desktop only. A phone has no printer and
-    // no place to put a PDF that beats sharing the text, so both buttons
-    // were noise in a row that has to stay short.
-    if (!_isPhone &&
-        !isAssistantPending &&
-        messageText.trim().isNotEmpty) {
-      actions.add(
-        MessageBubbleAction(
-          icon: Icons.picture_as_pdf_outlined,
-          tooltip: 'Save as PDF',
-          label: 'PDF',
-          onPressed: () => exportAsPdf(messageText),
-        ),
-      );
-      actions.add(
-        MessageBubbleAction(
-          icon: Icons.print_outlined,
-          tooltip: 'Print',
-          label: 'Print',
-          onPressed: () => printMessage(messageText),
         ),
       );
     }
@@ -170,39 +136,20 @@ class MessageActionsHandler {
       );
     }
 
+    // Branch — fork the conversation into a new chat, up to and including this
+    // message. The current chat is left untouched.
+    if (!isAssistantPending && onBranch != null) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.alt_route,
+          tooltip: 'Branch into a new chat',
+          label: 'Branch',
+          onPressed: () => onBranch(index),
+        ),
+      );
+    }
+
     return actions;
-  }
-
-  /// Export the given assistant text as a PDF and trigger the share/save flow.
-  Future<void> exportAsPdf(String rawMessageText, {String? title}) async {
-    final messageText = _forExport(rawMessageText);
-    if (messageText.trim().isEmpty) {
-      onShowSnackBar?.call('Nothing to export');
-      return;
-    }
-    final bool ok = await PdfExportService.exportMarkdownAndShare(
-      messageText,
-      title: title,
-    );
-    if (!ok) {
-      onShowSnackBar?.call('PDF export failed');
-    }
-  }
-
-  /// Open the native print dialog for the given assistant text.
-  Future<void> printMessage(String rawMessageText, {String? title}) async {
-    final messageText = _forExport(rawMessageText);
-    if (messageText.trim().isEmpty) {
-      onShowSnackBar?.call('Nothing to print');
-      return;
-    }
-    final bool ok = await PdfExportService.printMarkdown(
-      messageText,
-      title: title,
-    );
-    if (!ok) {
-      onShowSnackBar?.call('Print failed');
-    }
   }
 
   /// Build actions for user messages (shown in long-press popup).
