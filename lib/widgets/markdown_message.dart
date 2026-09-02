@@ -15,6 +15,73 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
+
+/// One slice of a message: either plain markdown or a GFM table block.
+class _MdSegment {
+  const _MdSegment(this.text, {required this.isTable, this.table});
+  final String text;
+  final bool isTable;
+  final ParsedTable? table;
+}
+
+/// Splits raw markdown into alternating plain-markdown and table segments so
+/// tables can render with the native [ChukTable] while everything else flows
+/// through `markdown_widget`. Tables inside fenced code blocks are left alone.
+List<_MdSegment> _splitMarkdownTables(String text) {
+  final List<String> lines = text.split('\n');
+  final List<_MdSegment> segments = <_MdSegment>[];
+  final StringBuffer textBuf = StringBuffer();
+  bool inFence = false;
+
+  void flushText() {
+    if (textBuf.isNotEmpty) {
+      segments.add(_MdSegment(textBuf.toString(), isTable: false));
+      textBuf.clear();
+    }
+  }
+
+  int i = 0;
+  while (i < lines.length) {
+    final String line = lines[i];
+    final String trimmed = line.trimLeft();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      textBuf.writeln(line);
+      i++;
+      continue;
+    }
+
+    final bool couldBeHeader = !inFence &&
+        line.contains('|') &&
+        i + 1 < lines.length &&
+        isTableDelimiterRow(lines[i + 1]) &&
+        splitTableRow(line).length == splitTableRow(lines[i + 1]).length;
+
+    if (couldBeHeader) {
+      int j = i + 2;
+      while (j < lines.length &&
+          lines[j].trim().isNotEmpty &&
+          lines[j].contains('|') &&
+          !lines[j].trimLeft().startsWith('```') &&
+          !lines[j].trimLeft().startsWith('~~~')) {
+        j++;
+      }
+      final ParsedTable? parsed = parseTable(lines.sublist(i, j));
+      if (parsed != null) {
+        flushText();
+        segments.add(_MdSegment('', isTable: true, table: parsed));
+        i = j;
+        continue;
+      }
+    }
+
+    textBuf.writeln(line);
+    i++;
+  }
+  flushText();
+  return segments;
+}
 
 class MarkdownMessage extends StatefulWidget {
   const MarkdownMessage({
@@ -419,31 +486,42 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       },
     );
 
-    List<Widget> builtWidgets;
-    try {
-      builtWidgets = generator.buildWidgets(
-        linkifyPhoneNumbers(widget.text),
-        config: config,
-      );
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Markdown parsing error: $error');
+    final TextStyle fallbackStyle =
+        (theme.textTheme.bodyMedium?.copyWith(
+          color: widget.textColor,
+          height: 1.45,
+          fontSize: 14,
+        )) ??
+        TextStyle(color: widget.textColor, height: 1.45, fontSize: 14);
+
+    final List<Widget> builtWidgets = <Widget>[];
+    for (final _MdSegment segment in _splitMarkdownTables(widget.text)) {
+      if (segment.isTable && segment.table != null) {
+        builtWidgets.add(
+          ChukTable(
+            table: segment.table!,
+            textColor: widget.textColor,
+            accentColor: accentColor,
+            fontFamily: proseFontFamily,
+          ),
+        );
+        continue;
       }
-      if (kDebugMode) {
-        debugPrint('Stack trace: $stackTrace');
+      if (segment.text.trim().isEmpty) continue;
+      try {
+        builtWidgets.addAll(
+          generator.buildWidgets(
+            linkifyPhoneNumbers(segment.text),
+            config: config,
+          ),
+        );
+      } catch (error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('Markdown parsing error: $error');
+          debugPrint('Stack trace: $stackTrace');
+        }
+        builtWidgets.add(Text(segment.text, style: fallbackStyle));
       }
-      builtWidgets = <Widget>[
-        Text(
-          widget.text,
-          style:
-              (theme.textTheme.bodyMedium?.copyWith(
-                color: widget.textColor,
-                height: 1.45,
-                fontSize: 14,
-              )) ??
-              TextStyle(color: widget.textColor, height: 1.45, fontSize: 14),
-        ),
-      ];
     }
 
     _cachedContent = builtWidgets.isEmpty

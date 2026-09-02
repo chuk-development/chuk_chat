@@ -4093,8 +4093,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               onSend: _sendOrSubmitEdit,
               child: KeyedSubtree(
                 key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
-                child: Scrollbar(
-                  controller: _composerScrollController,
+                // Hidden composer scrollbar (reads as clutter); the field grows
+                // to ~8 lines before it scrolls.
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
                   child: Semantics(
                     identifier: 'message_input',
                     child: TextField(
@@ -4110,7 +4114,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         height: 1.35,
                       ),
                       minLines: 1,
-                      maxLines: 6,
+                      maxLines: 8,
                       decoration: InputDecoration(
                         hintText: _messageActionsHandler.isEditing
                             ? AppLocalizations.of(context)!.editYourMessage

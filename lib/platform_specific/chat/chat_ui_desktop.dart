@@ -1938,9 +1938,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           bottom: 0,
                           left: 0,
                           right: 0,
-                          child: Padding(
-                            padding: EdgeInsets.zero,
-                            child: Align(
+                          // The scrollbar sits at the full-width (window) edge,
+                          // while the message column stays centered inside it.
+                          // ScrollConfiguration(scrollbars: false) kills the
+                          // ListView's own bar so only this edge one shows.
+                          child: Scrollbar(
+                            controller: scrollController,
+                            thumbVisibility: false,
+                            thickness: 6,
+                            radius: const Radius.circular(8),
+                            child: ScrollConfiguration(
+                              behavior: ScrollConfiguration.of(
+                                context,
+                              ).copyWith(scrollbars: false),
+                              child: Align(
                               alignment: Alignment.center,
                               child: Container(
                                 constraints: BoxConstraints(
@@ -2186,6 +2197,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 ),
                               ),
                             ),
+                            ),
                           ),
                         ),
                       // Scroll-to-bottom button (centered above input)
@@ -2391,10 +2403,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               Padding(
                 padding: EdgeInsets.only(right: btnW + 8),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 160),
+                  // Raised so the composer grows to a comfortable ~10 lines
+                  // before it starts scrolling, and the internal scrollbar is
+                  // hidden (scrollbars: false) since it reads as clutter.
+                  constraints: const BoxConstraints(maxHeight: 240),
                   child: _wrapWithSmartPasteActions(
-                    Scrollbar(
-                      controller: _composerScrollController,
+                    ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(
+                        context,
+                      ).copyWith(scrollbars: false),
                       child: KeyedSubtree(
                         key: TourKeyRegistry.instance.keyFor(
                           TourSlots.chatInput,
