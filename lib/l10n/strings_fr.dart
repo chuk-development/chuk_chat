@@ -113,23 +113,13 @@ const Map<String, String> stringsFr = {
   'requireDiscoveryFirst': 'Exiger la découverte d\'abord',
   'requireDiscoverySubtitle':
       'Forcer find_tools avant que d\'autres outils ne soient autorisés dans un tour',
-  'markdownToolCallFallback':
-      'Solution de repli Markdown pour les appels d\'outils',
-  'markdownFallbackSubtitle':
-      'Accepter les blocs de code ```tool_call lorsque les modèles n\'émettent pas de balises XML',
   'display': 'Affichage',
   'showToolActivity': 'Afficher l\'activité des outils dans le chat',
   'showToolActivitySubtitle':
       'Afficher les pastilles d\'outils en cours/terminés dans les messages de l\'assistant',
   'toolCallingTip':
-      'Astuce : Laissez la solution de repli Markdown activée pour une meilleure compatibilité. Désactivez-la uniquement si vous souhaitez des appels d\'outils strictement XML.',
-  'visualOutputNonTool': 'Sortie visuelle (hors outils)',
-  'enableMapBlocks': 'Activer les blocs carte (<map>)',
-  'enableMapBlocksSubtitle':
-      'Autoriser le prompt du modèle à inclure des instructions de rendu de carte',
-  'enableChartBlocks': 'Activer les blocs graphique (<chart>)',
-  'enableChartBlocksSubtitle':
-      'Autoriser le prompt du modèle à inclure des instructions de rendu de graphique',
+      'Astuce : Désactivez les outils uniquement si vous voulez que l\'assistant réponde avec ses propres connaissances, sans rechercher ni exécuter d\'actions.',
+  'toolAlwaysOn': 'Toujours actif',
   'connectors': 'Connecteurs',
   'loadingToolSettings':
       'Chargement des paramètres des outils...',

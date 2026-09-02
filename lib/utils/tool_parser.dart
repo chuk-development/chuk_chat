@@ -24,14 +24,6 @@ final RegExp _kimiToolCallStartPattern = RegExp(
   r'<\|tool_calls?(?:_section)?_begin',
   caseSensitive: false,
 );
-final RegExp _markdownToolCallBlockPattern = RegExp(
-  r'```(?:tool_call|toolcall|tool-call)\s*([\s\S]*?)```',
-  caseSensitive: false,
-);
-final RegExp _markdownToolCallStartPattern = RegExp(
-  r'```(?:tool_call|toolcall|tool-call)\b',
-  caseSensitive: false,
-);
 // The app prepends a `<previous_tool_results>…</previous_tool_results>` block
 // to the assistant `content` it feeds back to the model (see
 // tool_history_formatter.dart). The model sees its own prior turns starting
@@ -391,7 +383,6 @@ Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs) {
 /// including incomplete blocks during token streaming.
 bool hasToolCallStartMarker(String content) {
   return _xmlToolCallStartPattern.hasMatch(content) ||
-      _markdownToolCallStartPattern.hasMatch(content) ||
       _kimiToolCallStartPattern.hasMatch(content) ||
       _earliestDirectXmlToolStart(content) != -1 ||
       hasForeignToolProtocolMarker(content);
@@ -497,7 +488,7 @@ String _stripForeignToolProtocol(
   return cleaned;
 }
 
-/// Removes tool-call XML/markdown blocks from user-visible text.
+/// Removes tool-call XML blocks from user-visible text.
 ///
 /// When [stripIncomplete] is true, incomplete blocks are removed from the
 /// first opening marker onward to prevent raw protocol text from flashing in UI
@@ -508,7 +499,6 @@ String stripToolCallBlocksForDisplay(
 }) {
   var cleaned = content
       .replaceAll(_xmlToolCallBlockPattern, '')
-      .replaceAll(_markdownToolCallBlockPattern, '')
       .replaceAll(_previousToolResultsBlockPattern, '');
   cleaned = cleaned.replaceAllMapped(_xmlDirectToolTagBlockPattern, (match) {
     final tagName = (match.group(1) ?? '').trim().toLowerCase();
@@ -548,14 +538,6 @@ String stripToolCallBlocksForDisplay(
     final directToolStartIdx = _earliestDirectXmlToolStart(cleaned);
     if (directToolStartIdx != -1) {
       cleaned = cleaned.substring(0, directToolStartIdx);
-    }
-
-    // Same for the markdown form: a fenced block starting with
-    // ```tool_call / ```toolcall / ```tool-call (or any in-flight prefix
-    // thereof, e.g. just ```too).
-    final markdownPartialIdx = _earliestMarkdownToolCallStart(cleaned);
-    if (markdownPartialIdx != -1) {
-      cleaned = cleaned.substring(0, markdownPartialIdx);
     }
 
     // A `<previous_tool_results>` opener with no matching close is an echoed
@@ -608,32 +590,9 @@ int _earliestCaseInsensitiveIndex(String haystack, String needle) {
   return haystack.toLowerCase().indexOf(needle.toLowerCase());
 }
 
-int _earliestMarkdownToolCallStart(String content) {
-  final lower = content.toLowerCase();
-  var search = 0;
-  while (true) {
-    final fence = lower.indexOf('```', search);
-    if (fence == -1) return -1;
-    final after = lower.substring(fence + 3);
-    if (after.startsWith('tool_call') ||
-        after.startsWith('toolcall') ||
-        after.startsWith('tool-call') ||
-        // In-flight prefix of any of the above (e.g. ```too).
-        ('tool_call'.startsWith(after) && after.isNotEmpty) ||
-        ('toolcall'.startsWith(after) && after.isNotEmpty) ||
-        ('tool-call'.startsWith(after) && after.isNotEmpty)) {
-      return fence;
-    }
-    search = fence + 3;
-  }
-}
-
 /// Parse ALL tool calls from LLM response content (supports multiple).
 /// Includes JSON repair for common LLM mistakes (missing braces, etc.).
-List<Map<String, dynamic>> parseToolCalls(
-  String content, {
-  bool allowMarkdownToolCalls = true,
-}) {
+List<Map<String, dynamic>> parseToolCalls(String content) {
   final indexedCalls = <({int index, Map<String, dynamic> call})>[];
 
   Map<String, dynamic>? normalizeCall(Map<String, dynamic> data) {
@@ -675,29 +634,6 @@ List<Map<String, dynamic>> parseToolCalls(
     }
 
     searchStart = endIdx + toolCallEnd.length;
-  }
-
-  if (allowMarkdownToolCalls) {
-    for (final match in _markdownToolCallBlockPattern.allMatches(content)) {
-      final inner = (match.group(1) ?? '').trim();
-      if (inner.isEmpty) continue;
-
-      // Avoid duplicating XML-tag based calls that are already parsed above.
-      if (inner.contains(toolCallStart) && inner.contains(toolCallEnd)) {
-        continue;
-      }
-
-      final data =
-          tryParseToolJson(inner) ??
-          _extractEmbeddedToolJson(inner) ??
-          _parseLegacyToolCallSyntax(inner);
-      if (data == null) continue;
-
-      final normalized = normalizeCall(data);
-      if (normalized != null) {
-        indexedCalls.add((index: match.start, call: normalized));
-      }
-    }
   }
 
   for (final match in _xmlDirectToolTagBlockPattern.allMatches(content)) {
@@ -780,10 +716,6 @@ bool hasToolCalls(String content) {
         ),
       );
   if (hasDirectXmlTool) {
-    return true;
-  }
-
-  if (_markdownToolCallBlockPattern.hasMatch(content)) {
     return true;
   }
 

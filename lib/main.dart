@@ -441,8 +441,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       setToolDiscoveryMode: _themeService.setToolDiscoveryMode,
       showToolCalls: _themeService.showToolCalls,
       setShowToolCalls: _themeService.setShowToolCalls,
-      allowMarkdownToolCalls: _themeService.allowMarkdownToolCalls,
-      setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
       uiLocale: _themeService.uiLocale,
       setUiLocale: _themeService.setUiLocale,
       chatFontSize: _themeService.chatFontSize,

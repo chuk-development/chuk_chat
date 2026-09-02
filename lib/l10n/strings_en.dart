@@ -194,22 +194,13 @@ const Map<String, String> stringsEn = {
   'requireDiscoveryFirst': 'Require discovery first',
   'requireDiscoverySubtitle':
       'Force find_tools before other tools are allowed in a turn',
-  'markdownToolCallFallback': 'Markdown tool-call fallback',
-  'markdownFallbackSubtitle':
-      'Accept ```tool_call code blocks when models do not emit XML tags',
   'display': 'Display',
   'showToolActivity': 'Show tool activity in chat',
   'showToolActivitySubtitle':
       'Display running/completed tool chips in assistant messages',
   'toolCallingTip':
-      'Tip: Leave markdown fallback enabled for best compatibility. Disable it only if you want strict XML-only tool calls.',
-  'visualOutputNonTool': 'Visual Output (Non-Tool)',
-  'enableMapBlocks': 'Enable map blocks (<map>)',
-  'enableMapBlocksSubtitle':
-      'Allow the model prompt to include map rendering instructions',
-  'enableChartBlocks': 'Enable chart blocks (<chart>)',
-  'enableChartBlocksSubtitle':
-      'Allow the model prompt to include chart rendering instructions',
+      'Tip: Turn tools off only if you want the assistant to answer from its own knowledge without searching or running actions.',
+  'toolAlwaysOn': 'Always on',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Let the assistant use tools from other services',
   'loadingToolSettings': 'Loading tool settings...',

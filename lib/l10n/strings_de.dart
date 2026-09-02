@@ -200,22 +200,13 @@ const Map<String, String> stringsDe = {
   'requireDiscoveryFirst': 'Erkennung zuerst erforderlich',
   'requireDiscoverySubtitle':
       'find_tools vor anderen Tools in einem Zug erzwingen',
-  'markdownToolCallFallback': 'Markdown-Tool-Call-Fallback',
-  'markdownFallbackSubtitle':
-      '```tool_call-Codeblöcke akzeptieren, wenn Modelle keine XML-Tags ausgeben',
   'display': 'Anzeige',
   'showToolActivity': 'Tool-Aktivität im Chat anzeigen',
   'showToolActivitySubtitle':
       'Laufende/abgeschlossene Tool-Chips in Assistenten-Nachrichten anzeigen',
   'toolCallingTip':
-      'Tipp: Markdown-Fallback für beste Kompatibilität aktiviert lassen. Nur deaktivieren, wenn Sie ausschließlich XML-Tool-Calls möchten.',
-  'visualOutputNonTool': 'Visuelle Ausgabe (Kein Tool)',
-  'enableMapBlocks': 'Kartenblöcke aktivieren (<map>)',
-  'enableMapBlocksSubtitle':
-      'Dem Modell-Prompt Karten-Rendering-Anweisungen erlauben',
-  'enableChartBlocks': 'Diagrammblöcke aktivieren (<chart>)',
-  'enableChartBlocksSubtitle':
-      'Dem Modell-Prompt Diagramm-Rendering-Anweisungen erlauben',
+      'Tipp: Tools nur deaktivieren, wenn der Assistent aus eigenem Wissen antworten soll, ohne zu suchen oder Aktionen auszuführen.',
+  'toolAlwaysOn': 'Immer an',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
   'loadingToolSettings': 'Tool-Einstellungen werden geladen...',

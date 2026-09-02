@@ -74,9 +74,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   late bool _toolCallingEnabled;
   late bool _toolDiscoveryMode;
   late bool _showToolCalls;
-  late bool _allowMarkdownToolCalls;
-  bool _mapVisualOutputEnabled = true;
-  bool _chartVisualOutputEnabled = true;
   late final ToolExecutor _toolExecutor;
   bool _isLoadingToolPreferences = true;
 
@@ -86,7 +83,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     _toolCallingEnabled = widget.config.toolCallingEnabled;
     _toolDiscoveryMode = widget.config.toolDiscoveryMode;
     _showToolCalls = widget.config.showToolCalls;
-    _allowMarkdownToolCalls = widget.config.allowMarkdownToolCalls;
     _toolExecutor = ToolCallHandler().toolExecutor;
     DeveloperOptionsService.enabledNotifier.addListener(_onDevOptionsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -125,8 +121,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return;
       }
       setState(() {
-        _mapVisualOutputEnabled = _toolExecutor.mapVisualOutputEnabled;
-        _chartVisualOutputEnabled = _toolExecutor.chartVisualOutputEnabled;
         _isLoadingToolPreferences = false;
       });
       unawaited(
@@ -136,8 +130,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           stopwatch.elapsedMilliseconds,
           data: {
             'tool_count': _toolExecutor.allRegisteredTools.length,
-            'map_visual': _mapVisualOutputEnabled,
-            'chart_visual': _chartVisualOutputEnabled,
           },
         ),
       );
@@ -484,7 +476,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       final description = _categoryDescription(category);
       final toolsInCategory = grouped[category]!;
 
-      widgets.add(ExpressiveSectionHeader(_categoryLabel(category)));
+      // Categories sit UNDER the single "Tools" section header, so they render
+      // as light labels — not full section headers — to keep one clear level of
+      // hierarchy instead of two competing headers.
+      widgets.add(_CategoryLabel(_categoryLabel(category)));
 
       // A category the assistant signs in to carries its state as a pill and
       // flips it on tap; the rest just get a quiet line of context under the
@@ -528,6 +523,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               _toolExecutor.getToolDescription(tool.name),
             ),
             value: _toolExecutor.isToolEnabled(tool.name),
+            // Web search / crawl stay on for everyone — the row shows the state
+            // but offers no switch to turn them off.
+            alwaysOn: ToolExecutor.isAlwaysOnTool(tool.name),
             onChanged: (value) async {
               await _toolExecutor.setToolEnabled(tool.name, value);
               if (!mounted) return;
@@ -636,20 +634,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                       }
                     : null,
               ),
-              ExpressiveSwitchRow(
-                icon: Icons.code,
-                title: l.markdownToolCallFallback,
-                subtitle: l.markdownFallbackSubtitle,
-                value: _allowMarkdownToolCalls,
-                onChanged: _toolCallingEnabled
-                    ? (value) {
-                        setState(() {
-                          _allowMarkdownToolCalls = value;
-                        });
-                        widget.config.setAllowMarkdownToolCalls(value);
-                      }
-                    : null,
-              ),
             ],
           ),
           const ExpressiveSectionHeader('Display'),
@@ -671,45 +655,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           ),
           const SizedBox(height: 8),
           ExpressiveInfoCard(text: l.toolCallingTip),
-          const ExpressiveSectionHeader('Visual output'),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.map_outlined,
-                title: l.enableMapBlocks,
-                subtitle: l.enableMapBlocksSubtitle,
-                value: _mapVisualOutputEnabled,
-                onChanged: _toolCallingEnabled
-                    ? (value) async {
-                        await _toolExecutor.setMapVisualOutputEnabled(value);
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() {
-                          _mapVisualOutputEnabled = value;
-                        });
-                      }
-                    : null,
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.insights_outlined,
-                title: l.enableChartBlocks,
-                subtitle: l.enableChartBlocksSubtitle,
-                value: _chartVisualOutputEnabled,
-                onChanged: _toolCallingEnabled
-                    ? (value) async {
-                        await _toolExecutor.setChartVisualOutputEnabled(value);
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() {
-                          _chartVisualOutputEnabled = value;
-                        });
-                      }
-                    : null,
-              ),
-            ],
-          ),
           const ExpressiveSectionHeader('Tools'),
           if (_isLoadingToolPreferences)
             ExpressiveInfoCard(
@@ -738,6 +683,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 // ───────── private shared widgets ─────────
 
 /// One tool: the switch turns it off, the tile itself opens its detail.
+/// An always-on tool shows a locked "Always on" pill instead of a switch.
 class _ToolRow extends StatelessWidget {
   const _ToolRow({
     required this.icon,
@@ -747,6 +693,7 @@ class _ToolRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.onTap,
+    this.alwaysOn = false,
   });
 
   final IconData icon;
@@ -756,11 +703,13 @@ class _ToolRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final VoidCallback onTap;
+  final bool alwaysOn;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
+    final l = AppLocalizations.of(context)!;
     return ExpressiveRow(
       icon: icon,
       tone: iconEnabled ? null : m3.surfaceContainerHighest,
@@ -770,10 +719,38 @@ class _ToolRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Switch.adaptive(value: value, onChanged: onChanged),
+          if (alwaysOn)
+            ExpressiveBadge(l.toolAlwaysOn, tone: m3.successContainer)
+          else
+            Switch.adaptive(value: value, onChanged: onChanged),
           const SizedBox(width: 4),
           Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
         ],
+      ),
+    );
+  }
+}
+
+/// A light category label under the single "Tools" section header. Smaller and
+/// quieter than [ExpressiveSectionHeader] so categories read as sub-groups, not
+/// as a second row of competing top-level headers.
+class _CategoryLabel extends StatelessWidget {
+  const _CategoryLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 16, 6, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: theme.m3.onSurfaceVariant,
+        ),
       ),
     );
   }

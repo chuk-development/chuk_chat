@@ -67,8 +67,6 @@ void main() {
         tools: tools,
         webSearchToolDef: tools[1],
         webCrawlToolDef: tools[2],
-        includeMapVisualOutput: true,
-        includeChartVisualOutput: true,
       );
 
       expect(section, contains('<image>'));
@@ -124,8 +122,6 @@ void main() {
           final section = builder.buildToolProtocolSection(
             tools: <Map<String, dynamic>>[artifactTool],
             artifactToolDef: artifactTool,
-            includeMapVisualOutput: false,
-            includeChartVisualOutput: false,
           );
 
           // The rule must be present so excalidraw / mermaid / svg rewrites

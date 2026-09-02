@@ -382,7 +382,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         modelId: _selectedModelId,
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
-        allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
@@ -610,7 +609,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     modelId: _selectedModelId,
                     toolCallingEnabled: widget.toolCallingEnabled,
                     discoveryMode: widget.toolDiscoveryMode,
-                    allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
                     skipIdentity: skipIdentity,
                     nativeToolCalling: !kIsWeb,
                   );
@@ -1501,7 +1499,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         modelId: _selectedModelId,
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
-        allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
@@ -1732,7 +1729,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       modelId: _selectedModelId,
                       toolCallingEnabled: widget.toolCallingEnabled,
                       discoveryMode: widget.toolDiscoveryMode,
-                      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
                       skipIdentity: skipIdentity,
                       nativeToolCalling: !kIsWeb,
                     );

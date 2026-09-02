@@ -47,6 +47,9 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
 
   bool get _isEnabled => widget.toolExecutor.isToolEnabled(widget.tool.name);
 
+  /// Web search / crawl cannot be turned off — the switch is locked on.
+  bool get _isAlwaysOn => ToolExecutor.isAlwaysOnTool(widget.tool.name);
+
   bool get _hasCustomPrompt =>
       widget.toolExecutor.hasCustomDescription(widget.tool.name);
 
@@ -93,14 +96,16 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
                 title: widget.displayName,
                 subtitle: _isEnabled ? l.enabled : l.disabled,
                 value: _isEnabled,
-                onChanged: (value) async {
-                  await widget.toolExecutor.setToolEnabled(
-                    widget.tool.name,
-                    value,
-                  );
-                  if (!mounted) return;
-                  setState(() {});
-                },
+                onChanged: _isAlwaysOn
+                    ? null
+                    : (value) async {
+                        await widget.toolExecutor.setToolEnabled(
+                          widget.tool.name,
+                          value,
+                        );
+                        if (!mounted) return;
+                        setState(() {});
+                      },
               ),
             ],
           ),

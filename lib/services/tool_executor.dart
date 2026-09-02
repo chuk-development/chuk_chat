@@ -60,8 +60,6 @@ class ToolExecutor {
   final Map<String, ClientTool> _tools = {};
   final Map<String, bool> _enabledTools = {};
   final Map<String, String> _customToolDescriptions = {};
-  bool _mapVisualOutputEnabled = true;
-  bool _chartVisualOutputEnabled = true;
   Future<void>? _loadPrefsFuture;
 
   /// The chat id for the current send/turn. Set by the send logic before
@@ -72,9 +70,6 @@ class ToolExecutor {
   /// of a newly-created chat.
   String? currentChatId;
 
-  static const String _kMapVisualOutputEnabledKey = 'visual_output_map_enabled';
-  static const String _kChartVisualOutputEnabledKey =
-      'visual_output_chart_enabled';
   static const String _kToolPrefsTable = 'user_tool_preferences';
 
   static const Set<String> _builtinExecutableToolNames = {
@@ -178,9 +173,6 @@ class ToolExecutor {
   /// Get all registered tools.
   List<ClientTool> get allRegisteredTools => _tools.values.toList();
 
-  bool get mapVisualOutputEnabled => _mapVisualOutputEnabled;
-  bool get chartVisualOutputEnabled => _chartVisualOutputEnabled;
-
   Future<void> loadPreferences() {
     _loadPrefsFuture ??= _loadPreferencesInternal();
     return _loadPrefsFuture!;
@@ -202,11 +194,6 @@ class ToolExecutor {
         _customToolDescriptions.remove(name);
       }
     }
-
-    _mapVisualOutputEnabled =
-        prefs.getBool(_kMapVisualOutputEnabledKey) ?? true;
-    _chartVisualOutputEnabled =
-        prefs.getBool(_kChartVisualOutputEnabledKey) ?? true;
 
     // Defer Supabase sync to avoid blocking UI at startup.
     // Local prefs are already loaded above — tools work immediately.
@@ -355,20 +342,16 @@ class ToolExecutor {
     }
   }
 
-  Future<void> setMapVisualOutputEnabled(bool enabled) async {
-    _mapVisualOutputEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kMapVisualOutputEnabledKey, enabled);
-  }
-
-  Future<void> setChartVisualOutputEnabled(bool enabled) async {
-    _chartVisualOutputEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kChartVisualOutputEnabledKey, enabled);
-  }
+  /// Tools the user cannot turn off — they are always sent to the model. Web
+  /// search and crawl stay on so the assistant can always reach current
+  /// information; there is no useful reason to disable them.
+  static bool isAlwaysOnTool(String name) =>
+      toolCategories[name] == ToolCategory.search;
 
   Future<void> setToolEnabled(String name, bool enabled) async {
-    if (!_tools.containsKey(name) || name == 'find_tools') {
+    if (!_tools.containsKey(name) ||
+        name == 'find_tools' ||
+        isAlwaysOnTool(name)) {
       return;
     }
 
@@ -379,7 +362,7 @@ class ToolExecutor {
   }
 
   bool isToolEnabled(String name) {
-    if (name == 'find_tools') {
+    if (name == 'find_tools' || isAlwaysOnTool(name)) {
       return true;
     }
 
@@ -440,10 +423,6 @@ class ToolExecutor {
       await prefs.remove('tool_desc_$name');
     }
 
-    _mapVisualOutputEnabled = true;
-    _chartVisualOutputEnabled = true;
-    await prefs.setBool(_kMapVisualOutputEnabledKey, true);
-    await prefs.setBool(_kChartVisualOutputEnabledKey, true);
     await _syncAllToolEnabledToSupabase();
   }
 

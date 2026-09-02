@@ -102,7 +102,6 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool toolCallingEnabled;
   final bool toolDiscoveryMode;
   final bool showToolCalls;
-  final bool allowMarkdownToolCalls;
   // Voice transcription settings
   final bool autoSendVoiceTranscription;
 
@@ -136,7 +135,6 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
-    this.allowMarkdownToolCalls = true,
     this.autoSendVoiceTranscription = false,
     this.onOpenModelSettings,
   });

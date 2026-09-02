@@ -101,22 +101,13 @@ const Map<String, String> stringsPt = {
   'requireDiscoveryFirst': 'Exigir descoberta primeiro',
   'requireDiscoverySubtitle':
       'Forçar find_tools antes que outras ferramentas sejam permitidas em um turno',
-  'markdownToolCallFallback': 'Fallback de chamada de ferramenta em Markdown',
-  'markdownFallbackSubtitle':
-      'Aceitar blocos de código ```tool_call quando modelos não emitem tags XML',
   'display': 'Exibição',
   'showToolActivity': 'Mostrar atividade de ferramentas no chat',
   'showToolActivitySubtitle':
       'Exibir chips de ferramentas em execução/concluídas nas mensagens do assistente',
   'toolCallingTip':
-      'Dica: Deixe o fallback em Markdown ativado para melhor compatibilidade. Desative apenas se quiser chamadas de ferramenta estritamente em XML.',
-  'visualOutputNonTool': 'Saída Visual (Sem Ferramenta)',
-  'enableMapBlocks': 'Habilitar blocos de mapa (<map>)',
-  'enableMapBlocksSubtitle':
-      'Permitir que o prompt do modelo inclua instruções de renderização de mapa',
-  'enableChartBlocks': 'Habilitar blocos de gráfico (<chart>)',
-  'enableChartBlocksSubtitle':
-      'Permitir que o prompt do modelo inclua instruções de renderização de gráfico',
+      'Dica: Desative as ferramentas apenas se quiser que o assistente responda com o próprio conhecimento, sem pesquisar ou executar ações.',
+  'toolAlwaysOn': 'Sempre ativo',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Carregando configurações de ferramentas...',
   'noToolsRegistered': 'Nenhuma ferramenta registrada ainda.',
