@@ -345,8 +345,13 @@ class ToolExecutor {
   /// Tools the user cannot turn off — they are always sent to the model. Web
   /// search and crawl stay on so the assistant can always reach current
   /// information; there is no useful reason to disable them.
-  static bool isAlwaysOnTool(String name) =>
-      toolCategories[name] == ToolCategory.search;
+  ///
+  /// Named explicitly, NOT keyed off [ToolCategory.search] — that category also
+  /// holds optional and paid tools (generate_image, fetch_image,
+  /// view_chat_images, weather) which the user must stay free to disable.
+  static const Set<String> _alwaysOnTools = {'web_search', 'web_crawl'};
+
+  static bool isAlwaysOnTool(String name) => _alwaysOnTools.contains(name);
 
   Future<void> setToolEnabled(String name, bool enabled) async {
     if (!_tools.containsKey(name) ||

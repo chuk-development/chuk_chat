@@ -27,14 +27,17 @@ void main() {
       expect(calls, isEmpty);
     });
 
-    test('parses only the XML call when a markdown fence is also present', () {
+    test('keeps XML call order and ignores a markdown fence between them', () {
       const content =
-          '```tool_call\n{"name":"find_tools","arguments":{"query":"search"}}\n```\n<tool_call>{"name":"web_search","arguments":{"query":"latest tech"}}</tool_call>';
+          '<tool_call>{"name":"find_tools","arguments":{"query":"a"}}</tool_call>\n'
+          '```tool_call\n{"name":"web_crawl","arguments":{"url":"x"}}\n```\n'
+          '<tool_call>{"name":"web_search","arguments":{"query":"b"}}</tool_call>';
 
       final calls = parseToolCalls(content);
 
-      expect(calls.length, 1);
-      expect(calls.first['name'], 'web_search');
+      expect(calls.length, 2);
+      expect(calls[0]['name'], 'find_tools');
+      expect(calls[1]['name'], 'web_search');
     });
 
     test('parses legacy direct XML tool tags like fetch_image', () {
