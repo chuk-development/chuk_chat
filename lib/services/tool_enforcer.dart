@@ -247,8 +247,17 @@ class ToolEnforcer {
         }
       }
 
-      // 3. Assign Kimi-style global ID
-      final callId = 'functions.$name:$_globalCallIndex';
+      // 3. Assign a globally-unique ID. Prefer the provider's native tool-call
+      //    id when one is carried on the parsed call (native tool calling), so
+      //    the echoed assistant.tool_calls[].id and the role:"tool"
+      //    tool_call_id match what the provider issued — some providers
+      //    validate that association on the follow-up request. Fall back to the
+      //    Kimi-style synthetic id for prompt-based calls. The index still
+      //    advances either way so synthetic ids stay unique.
+      final providedId = call['id'];
+      final callId = (providedId is String && providedId.trim().isNotEmpty)
+          ? providedId
+          : 'functions.$name:$_globalCallIndex';
       _globalCallIndex++;
 
       valid.add(

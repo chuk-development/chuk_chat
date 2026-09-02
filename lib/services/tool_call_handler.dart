@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/models/chat_stream_event.dart' show NativeToolCall;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -55,6 +57,7 @@ class ToolLoopSession {
     this.discoveryContextKey,
     this.modelId,
     this.skipIdentity = false,
+    this.nativeToolCalling = false,
   });
 
   String latestUserMessage;
@@ -74,6 +77,12 @@ class ToolLoopSession {
   /// When true, the identity section (Soul/User/Memory) is not injected
   /// into the system prompt. Used for assistants with memory disabled.
   final bool skipIdentity;
+
+  /// When true, tools are exposed to the model natively (the request carries a
+  /// `tools[]` array and the provider streams structured `tool_calls`), so the
+  /// system prompt omits the prompt-based `<tool_call>` protocol and per-tool
+  /// prose. When false, the legacy prompt-based scheme applies (fallback).
+  final bool nativeToolCalling;
 
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
@@ -410,6 +419,7 @@ class ToolCallHandler {
     bool discoveryMode = true,
     bool allowMarkdownToolCalls = true,
     bool skipIdentity = false,
+    bool nativeToolCalling = false,
   }) {
     // Pin the chat id on the executor for the duration of this send. The
     // `discoveryContextKey` carries the active chat id from the send
@@ -443,6 +453,7 @@ class ToolCallHandler {
       discoveryContextKey: discoveryContextKey,
       modelId: modelId,
       skipIdentity: skipIdentity,
+      nativeToolCalling: nativeToolCalling,
     );
 
     // Not gated on discoveryMode: skills must survive across user turns even
@@ -474,8 +485,30 @@ class ToolCallHandler {
       discoveredTools: session.discoveredTools,
       activeSkillNames: session.activeSkillNames,
       skipIdentity: session.skipIdentity,
+      nativeToolCalling: session.nativeToolCalling,
       modelId: session.modelId,
     );
+  }
+
+  /// The enabled tools as native OpenAI function definitions, for the request's
+  /// `tools[]` array. Built-in tools carry synthesized JSON Schema; MCP tools
+  /// carry their native `inputSchema`. Sent on every pass of the loop (the
+  /// router re-validates the schema each call). Returns empty when tool calling
+  /// is off or the session is not in native mode — the prompt-based path then
+  /// applies. Mirrors the prompt build: `notes` is withheld when memory is
+  /// disabled so it can never be invoked to overwrite/delete memory.
+  List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session) {
+    if (!session.toolCallingEnabled || !session.nativeToolCalling) {
+      return const <Map<String, dynamic>>[];
+    }
+    return _toolExecutor.allTools
+        // find_tools is a discovery meta-tool: pointless in native mode, where
+        // every tool is already declared in tools[]. notes is withheld when
+        // memory is disabled so it can't overwrite/delete memory.
+        .where((t) => t.name != 'find_tools')
+        .where((t) => !session.skipIdentity || t.name != 'notes')
+        .map((t) => t.toOpenAiFunction())
+        .toList();
   }
 
   Future<ToolLoopResult> processAssistantResponse({
@@ -484,6 +517,7 @@ class ToolCallHandler {
     required String reasoning,
     ToolTurnSignals? turnSignals,
     void Function(List<ToolCall>)? onToolCallsUpdated,
+    List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[],
   }) async {
     final enforcer = session.enforcer;
     // Some providers (e.g. Fireworks + Kimi) emit the entire assistant
@@ -555,16 +589,40 @@ class ToolCallHandler {
       reasoning: effectiveReasoning,
     );
 
-    _appendRoundToHistory(
-      session,
-      assistantContent: cleanedContent,
-      assistantReasoning: roundThinking,
-    );
+    // Native tool calling: when the provider streamed structured tool_calls
+    // (assembled server-side), use them directly and drive a native
+    // assistant(tool_calls) + tool round-trip below. The plain history append
+    // is skipped for such a turn — the native round-trip records the assistant
+    // message WITH its tool_calls so the upstream sees a valid function-calling
+    // history. A turn with no native calls (a final text answer, or a
+    // prompt-based model) falls through to the existing text path unchanged.
+    final isNativeToolTurn = nativeToolCalls.isNotEmpty;
 
-    final parsedCalls = parseToolCalls(
-      cleanedContent,
-      allowMarkdownToolCalls: session.allowMarkdownToolCalls,
-    );
+    if (isNativeToolTurn) {
+      // Record the user turn now — native turns skip the plain history append,
+      // and the assistant(tool_calls) + tool results are appended at
+      // round-trip time. Doing the user turn here (not in the round-trip) means
+      // it survives a turn that ends via an early rejection/return path before
+      // the round-trip is reached. On a continuation pass latestUserMessage is
+      // empty, so nothing is added twice.
+      final priorUser = session.latestUserMessage.trim();
+      if (priorUser.isNotEmpty) {
+        session.history.add({'role': 'user', 'content': priorUser});
+      }
+    } else {
+      _appendRoundToHistory(
+        session,
+        assistantContent: cleanedContent,
+        assistantReasoning: roundThinking,
+      );
+    }
+
+    final parsedCalls = isNativeToolTurn
+        ? _nativeCallsToParsed(nativeToolCalls)
+        : parseToolCalls(
+            cleanedContent,
+            allowMarkdownToolCalls: session.allowMarkdownToolCalls,
+          );
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
       final markerInContent = hasToolCallStartMarker(cleanedContent);
@@ -600,6 +658,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -633,6 +692,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -668,6 +728,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -722,6 +783,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -760,6 +822,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -836,6 +899,7 @@ class ToolCallHandler {
               discoveredTools: session.discoveredTools,
               activeSkillNames: session.activeSkillNames,
               skipIdentity: session.skipIdentity,
+              nativeToolCalling: session.nativeToolCalling,
               modelId: session.modelId,
             ),
           ),
@@ -947,6 +1011,7 @@ class ToolCallHandler {
             discoveredTools: session.discoveredTools,
             activeSkillNames: session.activeSkillNames,
             skipIdentity: session.skipIdentity,
+            nativeToolCalling: session.nativeToolCalling,
             modelId: session.modelId,
           ),
         ),
@@ -1042,8 +1107,44 @@ class ToolCallHandler {
       );
     }
 
-    final resultMessage = enforcer.buildResultMessage(modelResults);
-    session.latestUserMessage = resultMessage;
+    final String nextMessage;
+    if (isNativeToolTurn) {
+      // Native round-trip. The user turn was already recorded at the top of
+      // this method. Record the assistant turn WITH its tool_calls and one tool
+      // message per result, then continue with an empty user message — the tool
+      // results ARE the model's next input, not a synthetic user turn.
+      // tool_call_id matches the assistant tool_calls id (the enforcer keeps
+      // the provider's native id), which is what the stateless upstream needs.
+      final assistantToolCalls = <Map<String, dynamic>>[
+        for (final call in enforceResult.validCalls)
+          {
+            'id': call.callId,
+            'type': 'function',
+            'function': {
+              'name': call.name,
+              'arguments': jsonEncode(call.arguments),
+            },
+          },
+      ];
+      final interim = _stripToolCallBlocks(cleanedContent).trim();
+      session.history.add({
+        'role': 'assistant',
+        'content': interim.isEmpty ? null : interim,
+        'tool_calls': assistantToolCalls,
+      });
+      for (final result in modelResults) {
+        session.history.add({
+          'role': 'tool',
+          'tool_call_id': result.callId,
+          'content': result.result,
+        });
+      }
+      nextMessage = '';
+      session.latestUserMessage = '';
+    } else {
+      nextMessage = enforcer.buildResultMessage(modelResults);
+      session.latestUserMessage = nextMessage;
+    }
 
     final orderedUiCalls = enforceResult.validCalls
         .map((c) => uiCallsById[c.callId])
@@ -1056,7 +1157,7 @@ class ToolCallHandler {
 
     return ToolLoopResult.continueWith(
       nextStep: ToolLoopStep(
-        message: resultMessage,
+        message: nextMessage,
         history: _cloneHistory(session.history),
         systemPrompt: await _buildSystemPrompt(
           baseSystemPrompt: session.baseSystemPrompt,
@@ -1065,6 +1166,7 @@ class ToolCallHandler {
           discoveredTools: session.discoveredTools,
           activeSkillNames: session.activeSkillNames,
           skipIdentity: session.skipIdentity,
+          nativeToolCalling: session.nativeToolCalling,
           modelId: session.modelId,
         ),
       ),
@@ -1147,6 +1249,40 @@ class ToolCallHandler {
       }
     }
     return groups;
+  }
+
+  /// Convert native (structured) tool calls into the parsed-call shape the
+  /// enforcer and executor consume. `arguments` arrives as a JSON string;
+  /// parse it defensively — providers occasionally emit malformed or truncated
+  /// JSON, in which case the call runs with empty args rather than crashing the
+  /// whole turn.
+  List<Map<String, dynamic>> _nativeCallsToParsed(
+    List<NativeToolCall> calls,
+  ) {
+    return calls.map((call) {
+      Map<String, dynamic> args = <String, dynamic>{};
+      final raw = call.arguments.trim();
+      if (raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, dynamic>) {
+            args = decoded;
+          } else if (decoded is Map) {
+            args = decoded.map((k, v) => MapEntry(k.toString(), v));
+          }
+        } catch (_) {
+          // Malformed argument JSON — keep empty args.
+        }
+      }
+      return <String, dynamic>{
+        'name': call.name,
+        'arguments': args,
+        // Carry the provider's native tool-call id so the enforcer uses it as
+        // the callId — the assistant.tool_calls[].id and role:"tool"
+        // tool_call_id then echo exactly what the provider issued.
+        if (call.id.isNotEmpty) 'id': call.id,
+      };
+    }).toList();
   }
 
   void _appendRoundToHistory(
@@ -1274,6 +1410,7 @@ class ToolCallHandler {
     required List<Map<String, dynamic>> discoveredTools,
     List<String> activeSkillNames = const [],
     bool skipIdentity = false,
+    bool nativeToolCalling = false,
     String? modelId,
   }) async {
     // Check if identity system is enabled before loading Soul/User/Memory.
@@ -1403,6 +1540,7 @@ class ToolCallHandler {
         .buildToolProtocolSection(
           tools: tools,
           isToolResult: isToolResult,
+          nativeToolCalling: nativeToolCalling,
           discoveredTools: discoveredTools,
           soulText: soulText,
           userInfoText: userInfoText,

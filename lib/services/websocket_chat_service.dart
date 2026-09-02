@@ -40,6 +40,7 @@ class WebSocketChatService {
     List<String>? images,
     String? reasoningEffort,
     String? chatId,
+    List<Map<String, dynamic>>? tools,
   }) async* {
     // One connection carries everything. When [chatId] is supplied the
     // multiplex routes through [MultiplexSession.chatForChat] (single
@@ -73,6 +74,7 @@ class WebSocketChatService {
       images: images,
       reasoningEffort: reasoningEffort,
       chatId: chatId,
+      tools: tools,
     );
   }
 
@@ -91,6 +93,7 @@ class WebSocketChatService {
     List<String>? images,
     String? reasoningEffort,
     String? chatId,
+    List<Map<String, dynamic>>? tools,
   }) async* {
     if (kDebugMode) {
       debugPrint('📤 [Multiplex] chat -> $modelId via $providerSlug');
@@ -105,6 +108,12 @@ class WebSocketChatService {
       'max_tokens': maxTokens,
       'temperature': temperature,
     };
+
+    // Native tool calling: OpenAI-format function defs the model may call this
+    // turn. The backend forwards them upstream and streams back tool_calls.
+    if (tools != null && tools.isNotEmpty) {
+      payload['tools'] = tools;
+    }
 
     // Cache a large message server-side under a client-issued id so later
     // passes of this turn can reference it instead of re-uploading the text.
@@ -175,7 +184,9 @@ class WebSocketChatService {
         chatId: chatId,
         payload: payload,
       )) {
-        if (event is ContentEvent || event is ReasoningEvent) {
+        if (event is ContentEvent ||
+            event is ReasoningEvent ||
+            event is ToolCallsEvent) {
           yieldedContent = true;
           yield event;
         } else if (event is ErrorEvent) {
@@ -225,7 +236,16 @@ class WebSocketChatService {
       if (content is String && role != null && registry.shouldCache(content)) {
         final ref = registry.refFor(content);
         if (ref != null) {
-          return <String, dynamic>{'role': role, 'cache_ref': ref};
+          final folded = <String, dynamic>{'role': role, 'cache_ref': ref};
+          // Preserve the native tool-calling fields when folding a large body
+          // into a cache ref — dropping tool_call_id (on a role:"tool" message)
+          // or tool_calls (on an assistant turn) would leave a tool call
+          // unanswered and 400 the upstream request.
+          final toolCallId = entry['tool_call_id'];
+          if (toolCallId != null) folded['tool_call_id'] = toolCallId;
+          final toolCalls = entry['tool_calls'];
+          if (toolCalls != null) folded['tool_calls'] = toolCalls;
+          return folded;
         }
       }
       return entry;

@@ -125,11 +125,19 @@ final List<ClientTool> builtinTools = [
         'short category keywords and use returned TOOL entries to choose '
         'the next tool call.',
     parameters: {
-      'query':
-          'string (required: 1-3 SHORT category keywords -- e.g. '
-          '"restaurant", "web search", "email", "rechnen". '
-          'Do NOT paste the user message - use short tool-category keywords '
-          'only)',
+      'type': 'object',
+      'properties': {
+        'query': {
+          'type': 'string',
+          'description':
+              'string (required: 1-3 SHORT category keywords -- e.g. '
+              '"restaurant", "web search", "email", "rechnen". '
+              'Do NOT paste the user message - use short tool-category keywords '
+              'only)',
+        },
+      },
+      'required': ['query'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['meta', 'tools', 'search', 'find', 'discover'],
@@ -142,14 +150,25 @@ final List<ClientTool> builtinTools = [
         'Evaluate a math expression and return the numeric result. Supports '
         'operator precedence, parentheses, + - * / ^, and functions such as '
         'sqrt/sin/cos/tan/log/ln/abs/exp.',
-    parameters: {'expression': 'string'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'expression': {'type': 'string', 'description': 'string'},
+      },
+      'required': ['expression'],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['math', 'rechnen', 'calculate', 'berechnen', 'prozent', 'percent'],
   ),
   ClientTool(
     name: 'get_time',
     description: 'Return the current local date and time.',
-    parameters: {},
+    parameters: {
+      'type': 'object',
+      'properties': <String, dynamic>{},
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['time', 'date', 'uhr', 'zeit', 'datum', 'clock'],
   ),
@@ -158,14 +177,26 @@ final List<ClientTool> builtinTools = [
     description:
         'Generate a random integer in range [min, max]. Defaults: min=1, '
         'max=100.',
-    parameters: {'min': 'int', 'max': 'int'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'min': {'type': 'integer', 'description': 'int'},
+        'max': {'type': 'integer', 'description': 'int'},
+      },
+      'required': <String>[],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['random', 'zufall', 'zufallszahl'],
   ),
   ClientTool(
     name: 'flip_coin',
     description: 'Simulate a coin flip and return Heads or Tails.',
-    parameters: {},
+    parameters: {
+      'type': 'object',
+      'properties': <String, dynamic>{},
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['coin', 'flip', 'zufall', 'random'],
   ),
@@ -173,7 +204,15 @@ final List<ClientTool> builtinTools = [
     name: 'roll_dice',
     description:
         'Roll one or more dice and return individual rolls plus total.',
-    parameters: {'sides': 'int', 'count': 'int'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'sides': {'type': 'integer', 'description': 'int'},
+        'count': {'type': 'integer', 'description': 'int'},
+      },
+      'required': <String>[],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['dice', 'roll', 'zufall', 'random', 'game'],
   ),
@@ -182,7 +221,14 @@ final List<ClientTool> builtinTools = [
     description:
         'Return days remaining until a target ISO date (or days since if in '
         'the past).',
-    parameters: {'date': 'string YYYY-MM-DD'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'date': {'type': 'string', 'description': 'string YYYY-MM-DD'},
+      },
+      'required': ['date'],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['countdown', 'date', 'days', 'tage', 'datum'],
   ),
@@ -190,14 +236,25 @@ final List<ClientTool> builtinTools = [
     name: 'password_generator',
     description:
         'Generate a random password from letters, digits, and symbols.',
-    parameters: {'length': 'int'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'length': {'type': 'integer', 'description': 'int'},
+      },
+      'required': <String>[],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['password', 'passwort', 'security', 'generate'],
   ),
   ClientTool(
     name: 'uuid_generator',
     description: 'Generate a UUID v4.',
-    parameters: {},
+    parameters: {
+      'type': 'object',
+      'properties': <String, dynamic>{},
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['uuid', 'id', 'unique', 'generate'],
   ),
@@ -226,13 +283,37 @@ final List<ClientTool> builtinTools = [
         '"edits":[{"old_str":"old text","new_str":"new text"}]}}</tool_call>. '
         'WRONG: <tool_call>{"name":"update_memory","arguments":{…}}</tool_call>.',
     parameters: {
-      'action':
-          'string (REQUIRED — one of: "update_memory" | "update_user" | '
-          '"update_soul" | "patch_memory" | "patch_user" | "patch_soul")',
-      'content': 'string (full replacement text — use with update_* actions)',
-      'edits':
-          'list of {old_str, new_str} objects — use with patch_* actions. '
-          'Each old_str must appear exactly once in the current content.',
+      'type': 'object',
+      'properties': {
+        'action': {
+          'type': 'string',
+          'enum': [
+            'update_memory',
+            'update_user',
+            'update_soul',
+            'patch_memory',
+            'patch_user',
+            'patch_soul',
+          ],
+          'description':
+              'string (REQUIRED — one of: "update_memory" | "update_user" | '
+              '"update_soul" | "patch_memory" | "patch_user" | "patch_soul")',
+        },
+        'content': {
+          'type': 'string',
+          'description':
+              'string (full replacement text — use with update_* actions)',
+        },
+        'edits': {
+          'type': 'array',
+          'items': {'type': 'object'},
+          'description':
+              'list of {old_str, new_str} objects — use with patch_* actions. '
+              'Each old_str must appear exactly once in the current content.',
+        },
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -264,25 +345,50 @@ final List<ClientTool> builtinTools = [
         'Uses local plaintext cache for fast lookup and falls back to full '
         'chat loading when needed.',
     parameters: {
-      'action':
-          'string (optional: find_chats | search_in_chat | recent_messages. '
-          'Defaults to search_in_chat when chat_id is provided with a query, '
-          'else find_chats.)',
-      'query':
-          'string (required for find_chats and search_in_chat; ignored for '
-          'recent_messages)',
-      'chat_id':
-          'string (required for search_in_chat; optional for recent_messages '
-          '— defaults to the currently open chat)',
-      'limit':
-          'int (optional: max chats for find_chats default 10 / max 50; '
-          'max messages for recent_messages default 10 / max 50)',
-      'message_limit':
-          'int (optional for search_in_chat: max matching messages to show, '
-          'default 8, max 50)',
-      'role':
-          'string (optional for recent_messages: "user" | "assistant" | "ai" '
-          '(alias for assistant) | "all". Default "all".)',
+      'type': 'object',
+      'properties': {
+        'action': {
+          'type': 'string',
+          'enum': ['find_chats', 'search_in_chat', 'recent_messages'],
+          'description':
+              'string (optional: find_chats | search_in_chat | recent_messages. '
+              'Defaults to search_in_chat when chat_id is provided with a query, '
+              'else find_chats.)',
+        },
+        'query': {
+          'type': 'string',
+          'description':
+              'string (required for find_chats and search_in_chat; ignored for '
+              'recent_messages)',
+        },
+        'chat_id': {
+          'type': 'string',
+          'description':
+              'string (required for search_in_chat; optional for recent_messages '
+              '— defaults to the currently open chat)',
+        },
+        'limit': {
+          'type': 'integer',
+          'description':
+              'int (optional: max chats for find_chats default 10 / max 50; '
+              'max messages for recent_messages default 10 / max 50)',
+        },
+        'message_limit': {
+          'type': 'integer',
+          'description':
+              'int (optional for search_in_chat: max matching messages to show, '
+              'default 8, max 50)',
+        },
+        'role': {
+          'type': 'string',
+          'enum': ['user', 'assistant', 'ai', 'all'],
+          'description':
+              'string (optional for recent_messages: "user" | "assistant" | "ai" '
+              '(alias for assistant) | "all". Default "all".)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -312,8 +418,20 @@ final List<ClientTool> builtinTools = [
         'Generate a QR-code PNG locally on the device (private, no network '
         'call) and return IMAGE_DATA for inline display.',
     parameters: {
-      'data': 'string (required: text or URL to encode)',
-      'size': 'int (optional: image size in pixels, 100-1000, default 400)',
+      'type': 'object',
+      'properties': {
+        'data': {
+          'type': 'string',
+          'description': 'string (required: text or URL to encode)',
+        },
+        'size': {
+          'type': 'integer',
+          'description':
+              'int (optional: image size in pixels, 100-1000, default 400)',
+        },
+      },
+      'required': ['data'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['qr', 'qrcode', 'barcode', 'scan', 'link', 'url', 'code'],
@@ -328,10 +446,22 @@ final List<ClientTool> builtinTools = [
         'between alternatives before proceeding. The result is shown as '
         'a numbered list; the user replies with their choice.',
     parameters: {
-      'question': 'string (required: the question to ask)',
-      'options':
-          'list of strings (required: 2-6 short option labels, e.g. '
-          '["Option A", "Option B", "Option C"])',
+      'type': 'object',
+      'properties': {
+        'question': {
+          'type': 'string',
+          'description': 'string (required: the question to ask)',
+        },
+        'options': {
+          'type': 'array',
+          'items': {'type': 'string'},
+          'description':
+              'list of strings (required: 2-6 short option labels, e.g. '
+              '["Option A", "Option B", "Option C"])',
+        },
+      },
+      'required': ['question', 'options'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -356,12 +486,23 @@ final List<ClientTool> builtinTools = [
         'connect the server yourself and MUST NOT claim you did — its tools '
         'become usable only after the user connects it.',
     parameters: {
-      'id':
-          'string (required: the catalogue id of the server, exactly as '
-          'shown in the "## MCP SERVERS" list, e.g. "notion", "linear")',
-      'reason':
-          'string (optional: a short note on why it is needed, shown to no '
-          'one but useful for your own planning)',
+      'type': 'object',
+      'properties': {
+        'id': {
+          'type': 'string',
+          'description':
+              'string (required: the catalogue id of the server, exactly as '
+              'shown in the "## MCP SERVERS" list, e.g. "notion", "linear")',
+        },
+        'reason': {
+          'type': 'string',
+          'description':
+              'string (optional: a short note on why it is needed, shown to no '
+              'one but useful for your own planning)',
+        },
+      },
+      'required': ['id'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     // No tags on purpose: like `skill` and `ask_user`, this tool is always
@@ -377,9 +518,17 @@ final List<ClientTool> builtinTools = [
         '— loading is cheap, guessing the format is not. Valid names come '
         'from the SKILLS catalog; never invent one.',
     parameters: {
-      'name':
-          'string (required: exact skill name from the SKILLS catalog, '
-          'e.g. "weather-cards")',
+      'type': 'object',
+      'properties': {
+        'name': {
+          'type': 'string',
+          'description':
+              'string (required: exact skill name from the SKILLS catalog, '
+              'e.g. "weather-cards")',
+        },
+      },
+      'required': ['name'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     // No tags on purpose: `skill` bypasses discovery and is always shown in
@@ -399,8 +548,19 @@ final List<ClientTool> builtinTools = [
         'blocked by the host and will NOT load — build all visuals with '
         'inline SVG, CSS and canvas. Returns the public URL.',
     parameters: {
-      'html': 'string (required: a complete standalone HTML document)',
-      'title': 'string (optional: short human title for the page)',
+      'type': 'object',
+      'properties': {
+        'html': {
+          'type': 'string',
+          'description': 'string (required: a complete standalone HTML document)',
+        },
+        'title': {
+          'type': 'string',
+          'description': 'string (optional: short human title for the page)',
+        },
+      },
+      'required': ['html'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [],
@@ -413,10 +573,21 @@ final List<ClientTool> builtinTools = [
         'restrictions as create_artifact (self-contained page only; external '
         'images/scripts/iframes/network requests do not load).',
     parameters: {
-      'public_id':
-          'string (required: the public_id returned by create_artifact)',
-      'html': 'string (required: the new complete HTML document)',
-      'title': 'string (optional)',
+      'type': 'object',
+      'properties': {
+        'public_id': {
+          'type': 'string',
+          'description':
+              'string (required: the public_id returned by create_artifact)',
+        },
+        'html': {
+          'type': 'string',
+          'description': 'string (required: the new complete HTML document)',
+        },
+        'title': {'type': 'string', 'description': 'string (optional)'},
+      },
+      'required': ['public_id', 'html'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [],
@@ -443,38 +614,92 @@ final List<ClientTool> builtinTools = [
         'timeframe or uses words like "latest", "today", "breaking", '
         '"just released", "aktuell", "neu".',
     parameters: {
-      'query': 'string (required: the search query)',
-      'type':
-          'string (optional: "web" (default), "images" for real photo URLs, '
-          '"news" for recent articles)',
-      'count': 'int (optional: number of search results, default 5, max 8)',
-      'include_content':
-          'bool (optional, web mode only: auto-fetch page content from top hits, default true)',
-      'crawl_count':
-          'int (optional, web mode only: number of top URLs to auto-fetch, default 2, max 3)',
-      'crawl_max_chars':
-          'int (optional, web mode only: max chars per auto-fetched page, default 3000, max 8000)',
-      'extra_snippets':
-          'bool (optional, web mode: up to 5 extra excerpts per result, '
-          'default true — often removes the need for a separate web_crawl)',
-      'freshness':
-          'string (optional, web/news: "pd" (24h), "pw" (week), "pm" (month), '
-          '"py" (year), or a "YYYY-MM-DDtoYYYY-MM-DD" range). Use when the '
-          'query has a time component like "latest", "heute", "neu".',
-      'country':
-          'string (optional, web/news: ISO 3166-1 alpha-2 code like "DE" or "US")',
-      'search_lang':
-          'string (optional, web/news: language code like "de" or "en")',
-      'ui_lang':
-          'string (optional, web: response metadata language, e.g. "de-DE")',
-      'safesearch':
-          'string (optional: "off", "moderate" (web default) or "strict" '
-          '(images default))',
-      'units': 'string (optional, web: "metric" or "imperial")',
-      'spellcheck':
-          'bool (optional, web: run spell correction on the query, default true)',
-      'goggles_id':
-          'string (optional, web: custom Brave Goggles re-ranking profile)',
+      'type': 'object',
+      'properties': {
+        'query': {
+          'type': 'string',
+          'description': 'string (required: the search query)',
+        },
+        'type': {
+          'type': 'string',
+          'enum': ['web', 'images', 'news'],
+          'description':
+              'string (optional: "web" (default), "images" for real photo URLs, '
+              '"news" for recent articles)',
+        },
+        'count': {
+          'type': 'integer',
+          'description':
+              'int (optional: number of search results, default 5, max 8)',
+        },
+        'include_content': {
+          'type': 'boolean',
+          'description':
+              'bool (optional, web mode only: auto-fetch page content from top hits, default true)',
+        },
+        'crawl_count': {
+          'type': 'integer',
+          'description':
+              'int (optional, web mode only: number of top URLs to auto-fetch, default 2, max 3)',
+        },
+        'crawl_max_chars': {
+          'type': 'integer',
+          'description':
+              'int (optional, web mode only: max chars per auto-fetched page, default 3000, max 8000)',
+        },
+        'extra_snippets': {
+          'type': 'boolean',
+          'description':
+              'bool (optional, web mode: up to 5 extra excerpts per result, '
+              'default true — often removes the need for a separate web_crawl)',
+        },
+        'freshness': {
+          'type': 'string',
+          'description':
+              'string (optional, web/news: "pd" (24h), "pw" (week), "pm" (month), '
+              '"py" (year), or a "YYYY-MM-DDtoYYYY-MM-DD" range). Use when the '
+              'query has a time component like "latest", "heute", "neu".',
+        },
+        'country': {
+          'type': 'string',
+          'description':
+              'string (optional, web/news: ISO 3166-1 alpha-2 code like "DE" or "US")',
+        },
+        'search_lang': {
+          'type': 'string',
+          'description':
+              'string (optional, web/news: language code like "de" or "en")',
+        },
+        'ui_lang': {
+          'type': 'string',
+          'description':
+              'string (optional, web: response metadata language, e.g. "de-DE")',
+        },
+        'safesearch': {
+          'type': 'string',
+          'enum': ['off', 'moderate', 'strict'],
+          'description':
+              'string (optional: "off", "moderate" (web default) or "strict" '
+              '(images default))',
+        },
+        'units': {
+          'type': 'string',
+          'enum': ['metric', 'imperial'],
+          'description': 'string (optional, web: "metric" or "imperial")',
+        },
+        'spellcheck': {
+          'type': 'boolean',
+          'description':
+              'bool (optional, web: run spell correction on the query, default true)',
+        },
+        'goggles_id': {
+          'type': 'string',
+          'description':
+              'string (optional, web: custom Brave Goggles re-ranking profile)',
+        },
+      },
+      'required': ['query'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -522,7 +747,17 @@ final List<ClientTool> builtinTools = [
     description:
         'Fetch and extract readable content from a single URL. Use this when '
         'you need full page text, often after web_search.',
-    parameters: {'url': 'string (required: the URL to crawl)'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'url': {
+          'type': 'string',
+          'description': 'string (required: the URL to crawl)',
+        },
+      },
+      'required': ['url'],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: [
       'web',
@@ -562,34 +797,95 @@ final List<ClientTool> builtinTools = [
         'be seen by the operator, and is NOT end-to-end encrypted like chat '
         'messages.',
     parameters: {
-      'model': 'string (required: turbo | hunyuan | flux | ideogram | edit)',
-      'prompt':
-          'string (required: descriptive image prompt, or edit instruction '
-          'when model=edit)',
-      'image_url':
-          'string (required ONLY when model=edit: URL of the image to edit)',
-      'image_size':
-          'string (optional preset for turbo/hunyuan/flux/edit: square_hd, '
-          'square, portrait_4_3, portrait_16_9, landscape_4_3, '
-          'landscape_16_9; edit also accepts auto)',
-      'aspect_ratio':
-          'string (optional for hunyuan/flux, overrides image_size: 1:1, '
-          '16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
-      'megapixels':
-          'string (optional for flux: "0.25", "0.5", "1", "2", "4" — '
-          'default "1")',
-      'tier':
-          'string (optional for ideogram: quality | balanced | turbo — '
-          'default quality)',
-      'resolution':
-          'string (optional for ideogram: a native-2K preset like '
-          '"2048x2048"; omit for auto)',
-      'json_prompt':
-          'string (optional for ideogram: structured JSON prompt for '
-          'explicit layout/text/palette control)',
-      'caption':
-          'string (optional short subtitle shown under the image, e.g. '
-          'subject name, scene — keep it under ~40 chars)',
+      'type': 'object',
+      'properties': {
+        'model': {
+          'type': 'string',
+          'enum': ['turbo', 'hunyuan', 'flux', 'ideogram', 'edit'],
+          'description':
+              'string (required: turbo | hunyuan | flux | ideogram | edit)',
+        },
+        'prompt': {
+          'type': 'string',
+          'description':
+              'string (required: descriptive image prompt, or edit instruction '
+              'when model=edit)',
+        },
+        'image_url': {
+          'type': 'string',
+          'description':
+              'string (required ONLY when model=edit: URL of the image to edit)',
+        },
+        'image_size': {
+          'type': 'string',
+          'enum': [
+            'square_hd',
+            'square',
+            'portrait_4_3',
+            'portrait_16_9',
+            'landscape_4_3',
+            'landscape_16_9',
+            'auto',
+          ],
+          'description':
+              'string (optional preset for turbo/hunyuan/flux/edit: square_hd, '
+              'square, portrait_4_3, portrait_16_9, landscape_4_3, '
+              'landscape_16_9; edit also accepts auto)',
+        },
+        'aspect_ratio': {
+          'type': 'string',
+          'enum': [
+            '1:1',
+            '16:9',
+            '9:16',
+            '3:2',
+            '2:3',
+            '4:3',
+            '3:4',
+            '5:4',
+            '4:5',
+            '21:9',
+            '9:21',
+          ],
+          'description':
+              'string (optional for hunyuan/flux, overrides image_size: 1:1, '
+              '16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
+        },
+        'megapixels': {
+          'type': 'string',
+          'enum': ['0.25', '0.5', '1', '2', '4'],
+          'description':
+              'string (optional for flux: "0.25", "0.5", "1", "2", "4" — '
+              'default "1")',
+        },
+        'tier': {
+          'type': 'string',
+          'enum': ['quality', 'balanced', 'turbo'],
+          'description':
+              'string (optional for ideogram: quality | balanced | turbo — '
+              'default quality)',
+        },
+        'resolution': {
+          'type': 'string',
+          'description':
+              'string (optional for ideogram: a native-2K preset like '
+              '"2048x2048"; omit for auto)',
+        },
+        'json_prompt': {
+          'type': 'string',
+          'description':
+              'string (optional for ideogram: structured JSON prompt for '
+              'explicit layout/text/palette control)',
+        },
+        'caption': {
+          'type': 'string',
+          'description':
+              'string (optional short subtitle shown under the image, e.g. '
+              'subject name, scene — keep it under ~40 chars)',
+        },
+      },
+      'required': ['model', 'prompt'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -614,10 +910,21 @@ final List<ClientTool> builtinTools = [
         'to display an external image inline. Returns IMAGE_DATA metadata. '
         'Max size 4 MB.',
     parameters: {
-      'url': 'string (required: direct image URL)',
-      'caption':
-          'string (optional short subtitle shown under the image, e.g. '
-          'person name, place, product — keep it under ~40 chars)',
+      'type': 'object',
+      'properties': {
+        'url': {
+          'type': 'string',
+          'description': 'string (required: direct image URL)',
+        },
+        'caption': {
+          'type': 'string',
+          'description':
+              'string (optional short subtitle shown under the image, e.g. '
+              'person name, place, product — keep it under ~40 chars)',
+        },
+      },
+      'required': ['url'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['image', 'fetch', 'download', 'picture', 'url', 'bild', 'foto'],
@@ -629,9 +936,17 @@ final List<ClientTool> builtinTools = [
         'when the user explicitly asks to look at, describe, or analyze an '
         'image. Do NOT call automatically after generating or fetching images.',
     parameters: {
-      'indices':
-          'string (optional: comma-separated image indices to analyze, '
-          'e.g. "0,2")',
+      'type': 'object',
+      'properties': {
+        'indices': {
+          'type': 'string',
+          'description':
+              'string (optional: comma-separated image indices to analyze, '
+              'e.g. "0,2")',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['image', 'vision', 'analyze', 'inspect', 'describe', 'bildanalyse'],
@@ -644,9 +959,23 @@ final List<ClientTool> builtinTools = [
         'phone, website, price range and a short description. Filter by '
         'query and optional city.',
     parameters: {
-      'query': 'string (required, e.g. pharmacy, museum, cafe)',
-      'city': 'string (optional city/region filter)',
-      'limit': 'int (optional number of results, 1-20)',
+      'type': 'object',
+      'properties': {
+        'query': {
+          'type': 'string',
+          'description': 'string (required, e.g. pharmacy, museum, cafe)',
+        },
+        'city': {
+          'type': 'string',
+          'description': 'string (optional city/region filter)',
+        },
+        'limit': {
+          'type': 'integer',
+          'description': 'int (optional number of results, 1-20)',
+        },
+      },
+      'required': ['query'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['map', 'place', 'poi', 'location', 'ort', 'karte', 'nearby'],
@@ -658,10 +987,27 @@ final List<ClientTool> builtinTools = [
         'phone, website, price range and a short description. Filter by '
         'cuisine and optional city.',
     parameters: {
-      'query': 'string (optional restaurant keyword)',
-      'cuisine': 'string (optional cuisine, e.g. italian, sushi)',
-      'city': 'string (optional city/region filter)',
-      'limit': 'int (optional number of results, 1-20)',
+      'type': 'object',
+      'properties': {
+        'query': {
+          'type': 'string',
+          'description': 'string (optional restaurant keyword)',
+        },
+        'cuisine': {
+          'type': 'string',
+          'description': 'string (optional cuisine, e.g. italian, sushi)',
+        },
+        'city': {
+          'type': 'string',
+          'description': 'string (optional city/region filter)',
+        },
+        'limit': {
+          'type': 'integer',
+          'description': 'int (optional number of results, 1-20)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['restaurant', 'food', 'essen', 'cuisine', 'dinner', 'lunch', 'map'],
@@ -672,10 +1018,27 @@ final List<ClientTool> builtinTools = [
         'Forward/reverse geocoding. Convert address/query to coordinates or '
         'lat/lon to address.',
     parameters: {
-      'address': 'string (forward geocoding)',
-      'query': 'string (alias for address)',
-      'lat': 'number (reverse geocoding latitude)',
-      'lon': 'number (reverse geocoding longitude)',
+      'type': 'object',
+      'properties': {
+        'address': {
+          'type': 'string',
+          'description': 'string (forward geocoding)',
+        },
+        'query': {
+          'type': 'string',
+          'description': 'string (alias for address)',
+        },
+        'lat': {
+          'type': 'number',
+          'description': 'number (reverse geocoding latitude)',
+        },
+        'lon': {
+          'type': 'number',
+          'description': 'number (reverse geocoding longitude)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['geocode', 'address', 'coordinates', 'lat', 'lon', 'ort', 'adresse'],
@@ -686,11 +1049,20 @@ final List<ClientTool> builtinTools = [
         'Compute a route between two coordinates via OSRM. Returns distance, '
         'estimated duration, and turn-by-turn step summary.',
     parameters: {
-      'from_lat': 'number (required)',
-      'from_lon': 'number (required)',
-      'to_lat': 'number (required)',
-      'to_lon': 'number (required)',
-      'profile': 'string (optional: driving, walking, cycling)',
+      'type': 'object',
+      'properties': {
+        'from_lat': {'type': 'number', 'description': 'number (required)'},
+        'from_lon': {'type': 'number', 'description': 'number (required)'},
+        'to_lat': {'type': 'number', 'description': 'number (required)'},
+        'to_lon': {'type': 'number', 'description': 'number (required)'},
+        'profile': {
+          'type': 'string',
+          'enum': ['driving', 'walking', 'cycling'],
+          'description': 'string (optional: driving, walking, cycling)',
+        },
+      },
+      'required': ['from_lat', 'from_lon', 'to_lat', 'to_lon'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -710,7 +1082,14 @@ final List<ClientTool> builtinTools = [
     description:
         'Execute bash commands in sandbox folder. Safe: ls, cat, mkdir, cp, '
         'mv, rm, touch, ffmpeg. Others need approval.',
-    parameters: {'command': 'string'},
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'command': {'type': 'string', 'description': 'string'},
+      },
+      'required': ['command'],
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: [
       'bash',
@@ -732,13 +1111,25 @@ final List<ClientTool> builtinTools = [
         'GitHub repos & issues. Actions: get_user, list_repos, get_repo, '
         'list_issues, create_issue, list_pull_requests, add_comment',
     parameters: {
-      'action': 'string (required)',
-      'owner': 'string (repo owner)',
-      'repo': 'string (repo name)',
-      'issue_number': 'int (for comments)',
-      'title': 'string (for create_issue)',
-      'body': 'string (for issue/comment)',
-      'state': 'string (open/closed)',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'owner': {'type': 'string', 'description': 'string (repo owner)'},
+        'repo': {'type': 'string', 'description': 'string (repo name)'},
+        'issue_number': {
+          'type': 'integer',
+          'description': 'int (for comments)',
+        },
+        'title': {'type': 'string', 'description': 'string (for create_issue)'},
+        'body': {'type': 'string', 'description': 'string (for issue/comment)'},
+        'state': {
+          'type': 'string',
+          'enum': ['open', 'closed'],
+          'description': 'string (open/closed)',
+        },
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -761,13 +1152,18 @@ final List<ClientTool> builtinTools = [
         'Slack messaging. Actions: list_channels, get_channel_history, '
         'send_message, search_messages, get_users, find_channel',
     parameters: {
-      'action': 'string (required)',
-      'channel_id': 'string',
-      'channel_name': 'string (to find)',
-      'message': 'string (for send)',
-      'query': 'string (for search)',
-      'limit': 'int',
-      'thread_ts': 'string (for threads)',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'channel_id': {'type': 'string', 'description': 'string'},
+        'channel_name': {'type': 'string', 'description': 'string (to find)'},
+        'message': {'type': 'string', 'description': 'string (for send)'},
+        'query': {'type': 'string', 'description': 'string (for search)'},
+        'limit': {'type': 'integer', 'description': 'int'},
+        'thread_ts': {'type': 'string', 'description': 'string (for threads)'},
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -788,16 +1184,31 @@ final List<ClientTool> builtinTools = [
         'Google Calendar. Actions: list_calendars, list_events, '
         'create_event, update_event, delete_event',
     parameters: {
-      'action': 'string (required)',
-      'calendar_id': 'string (default: primary)',
-      'event_id': 'string (for update/delete)',
-      'summary': 'string (event title)',
-      'description': 'string',
-      'location': 'string',
-      'start': 'string (ISO datetime)',
-      'end': 'string (ISO datetime)',
-      'attendees': 'list of emails',
-      'max_results': 'int',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'calendar_id': {
+          'type': 'string',
+          'description': 'string (default: primary)',
+        },
+        'event_id': {
+          'type': 'string',
+          'description': 'string (for update/delete)',
+        },
+        'summary': {'type': 'string', 'description': 'string (event title)'},
+        'description': {'type': 'string', 'description': 'string'},
+        'location': {'type': 'string', 'description': 'string'},
+        'start': {'type': 'string', 'description': 'string (ISO datetime)'},
+        'end': {'type': 'string', 'description': 'string (ISO datetime)'},
+        'attendees': {
+          'type': 'array',
+          'items': {'type': 'string'},
+          'description': 'list of emails',
+        },
+        'max_results': {'type': 'integer', 'description': 'int'},
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -819,14 +1230,19 @@ final List<ClientTool> builtinTools = [
         'Gmail email. Actions: list_messages, read_message, send_email, '
         'get_labels',
     parameters: {
-      'action': 'string (required)',
-      'message_id': 'string (for read)',
-      'to': 'string (recipient)',
-      'subject': 'string',
-      'body': 'string',
-      'cc': 'string',
-      'query': 'string (Gmail search)',
-      'max_results': 'int',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'message_id': {'type': 'string', 'description': 'string (for read)'},
+        'to': {'type': 'string', 'description': 'string (recipient)'},
+        'subject': {'type': 'string', 'description': 'string'},
+        'body': {'type': 'string', 'description': 'string'},
+        'cc': {'type': 'string', 'description': 'string'},
+        'query': {'type': 'string', 'description': 'string (Gmail search)'},
+        'max_results': {'type': 'integer', 'description': 'int'},
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -849,21 +1265,35 @@ final List<ClientTool> builtinTools = [
         'list_emails, search_emails, read_email, send_email, unread_count. '
         'Sending requires user approval.',
     parameters: {
-      'action': 'string (required)',
-      'mailbox': 'string (default: INBOX)',
-      'sequence_id': 'int (for read/delete/move/mark)',
-      'to': 'string (recipient for send)',
-      'subject': 'string (for send)',
-      'body': 'string (for send)',
-      'cc': 'string (for send)',
-      'bcc': 'string (for send)',
-      'from': 'string (search filter)',
-      'text': 'string (search query)',
-      'since': 'string (date YYYY-MM-DD)',
-      'before': 'string (date YYYY-MM-DD)',
-      'unread_only': 'boolean (search filter)',
-      'limit': 'int (default: 20)',
-      'offset': 'int (default: 0)',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'mailbox': {
+          'type': 'string',
+          'description': 'string (default: INBOX)',
+        },
+        'sequence_id': {
+          'type': 'integer',
+          'description': 'int (for read/delete/move/mark)',
+        },
+        'to': {'type': 'string', 'description': 'string (recipient for send)'},
+        'subject': {'type': 'string', 'description': 'string (for send)'},
+        'body': {'type': 'string', 'description': 'string (for send)'},
+        'cc': {'type': 'string', 'description': 'string (for send)'},
+        'bcc': {'type': 'string', 'description': 'string (for send)'},
+        'from': {'type': 'string', 'description': 'string (search filter)'},
+        'text': {'type': 'string', 'description': 'string (search query)'},
+        'since': {'type': 'string', 'description': 'string (date YYYY-MM-DD)'},
+        'before': {'type': 'string', 'description': 'string (date YYYY-MM-DD)'},
+        'unread_only': {
+          'type': 'boolean',
+          'description': 'boolean (search filter)',
+        },
+        'limit': {'type': 'integer', 'description': 'int (default: 20)'},
+        'offset': {'type': 'integer', 'description': 'int (default: 0)'},
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -890,12 +1320,20 @@ final List<ClientTool> builtinTools = [
         'upload_file, delete_file, create_directory, get_calendars, '
         'get_events, get_contacts',
     parameters: {
-      'action': 'string (required)',
-      'path': 'string (file path)',
-      'content': 'string (for upload)',
-      'calendar_id': 'string (for events)',
-      'start_date': 'string (ISO date)',
-      'end_date': 'string (ISO date)',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'path': {'type': 'string', 'description': 'string (file path)'},
+        'content': {'type': 'string', 'description': 'string (for upload)'},
+        'calendar_id': {
+          'type': 'string',
+          'description': 'string (for events)',
+        },
+        'start_date': {'type': 'string', 'description': 'string (ISO date)'},
+        'end_date': {'type': 'string', 'description': 'string (ISO date)'},
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -929,28 +1367,81 @@ final List<ClientTool> builtinTools = [
         'IMPORTANT: Calendar events, SMS, and email drafts require user '
         'confirmation — nothing is sent automatically.',
     parameters: {
-      'action': 'string (required)',
-      'title': 'string (for calendar event or alarm)',
-      'start': 'string (ISO datetime for calendar event start)',
-      'end': 'string (ISO datetime for calendar event end)',
-      'description': 'string (calendar event description)',
-      'location': 'string (calendar event location)',
-      'all_day': 'boolean (calendar event all-day flag)',
-      'time': 'string (ISO datetime for alarm)',
-      'label': 'string (timer label)',
-      'seconds': 'int (timer duration in seconds)',
-      'minutes': 'int (timer duration in minutes)',
-      'alarm_id': 'int (for cancel_alarm)',
-      'phone': 'string (phone number for sms_draft)',
-      'message': 'string (SMS message body)',
-      'to': 'string (email address for email_draft)',
-      'subject': 'string (email subject)',
-      'cc': 'string (email CC)',
-      'bcc': 'string (email BCC)',
-      'from_lat': 'double (for distance calculation)',
-      'from_lon': 'double (for distance calculation)',
-      'to_lat': 'double (for distance calculation)',
-      'to_lon': 'double (for distance calculation)',
+      'type': 'object',
+      'properties': {
+        'action': {'type': 'string', 'description': 'string (required)'},
+        'title': {
+          'type': 'string',
+          'description': 'string (for calendar event or alarm)',
+        },
+        'start': {
+          'type': 'string',
+          'description': 'string (ISO datetime for calendar event start)',
+        },
+        'end': {
+          'type': 'string',
+          'description': 'string (ISO datetime for calendar event end)',
+        },
+        'description': {
+          'type': 'string',
+          'description': 'string (calendar event description)',
+        },
+        'location': {
+          'type': 'string',
+          'description': 'string (calendar event location)',
+        },
+        'all_day': {
+          'type': 'boolean',
+          'description': 'boolean (calendar event all-day flag)',
+        },
+        'time': {
+          'type': 'string',
+          'description': 'string (ISO datetime for alarm)',
+        },
+        'label': {'type': 'string', 'description': 'string (timer label)'},
+        'seconds': {
+          'type': 'integer',
+          'description': 'int (timer duration in seconds)',
+        },
+        'minutes': {
+          'type': 'integer',
+          'description': 'int (timer duration in minutes)',
+        },
+        'alarm_id': {'type': 'integer', 'description': 'int (for cancel_alarm)'},
+        'phone': {
+          'type': 'string',
+          'description': 'string (phone number for sms_draft)',
+        },
+        'message': {
+          'type': 'string',
+          'description': 'string (SMS message body)',
+        },
+        'to': {
+          'type': 'string',
+          'description': 'string (email address for email_draft)',
+        },
+        'subject': {'type': 'string', 'description': 'string (email subject)'},
+        'cc': {'type': 'string', 'description': 'string (email CC)'},
+        'bcc': {'type': 'string', 'description': 'string (email BCC)'},
+        'from_lat': {
+          'type': 'number',
+          'description': 'double (for distance calculation)',
+        },
+        'from_lon': {
+          'type': 'number',
+          'description': 'double (for distance calculation)',
+        },
+        'to_lat': {
+          'type': 'number',
+          'description': 'double (for distance calculation)',
+        },
+        'to_lon': {
+          'type': 'number',
+          'description': 'double (for distance calculation)',
+        },
+      },
+      'required': ['action'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -984,12 +1475,36 @@ final List<ClientTool> builtinTools = [
         'Windows (.ics file), and macOS (native). '
         'Use this for appointments, meetings, reminders, deadlines, birthdays.',
     parameters: {
-      'title': 'string (required — event title)',
-      'start': 'string (required — ISO datetime, e.g. "2026-03-20T14:00:00")',
-      'end': 'string (required — ISO datetime for event end)',
-      'description': 'string (optional — event details)',
-      'location': 'string (optional — event location)',
-      'all_day': 'boolean (optional — true for all-day events)',
+      'type': 'object',
+      'properties': {
+        'title': {
+          'type': 'string',
+          'description': 'string (required — event title)',
+        },
+        'start': {
+          'type': 'string',
+          'description':
+              'string (required — ISO datetime, e.g. "2026-03-20T14:00:00")',
+        },
+        'end': {
+          'type': 'string',
+          'description': 'string (required — ISO datetime for event end)',
+        },
+        'description': {
+          'type': 'string',
+          'description': 'string (optional — event details)',
+        },
+        'location': {
+          'type': 'string',
+          'description': 'string (optional — event location)',
+        },
+        'all_day': {
+          'type': 'boolean',
+          'description': 'boolean (optional — true for all-day events)',
+        },
+      },
+      'required': ['title', 'start', 'end'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1017,13 +1532,32 @@ final List<ClientTool> builtinTools = [
         'Use set_timer for countdown timers (e.g. 5 minutes). '
         'Notifications fire even when the app is in the background.',
     parameters: {
-      'action':
-          'string (optional, default "set_alarm": set_alarm, set_timer, cancel, list)',
-      'title': 'string (alarm/timer name)',
-      'time': 'string (ISO datetime for alarm, e.g. "2026-03-20T08:00:00")',
-      'minutes': 'int (timer duration in minutes)',
-      'seconds': 'int (timer duration in seconds)',
-      'alarm_id': 'int (for cancel action)',
+      'type': 'object',
+      'properties': {
+        'action': {
+          'type': 'string',
+          'enum': ['set_alarm', 'set_timer', 'cancel', 'list'],
+          'description':
+              'string (optional, default "set_alarm": set_alarm, set_timer, cancel, list)',
+        },
+        'title': {'type': 'string', 'description': 'string (alarm/timer name)'},
+        'time': {
+          'type': 'string',
+          'description':
+              'string (ISO datetime for alarm, e.g. "2026-03-20T08:00:00")',
+        },
+        'minutes': {
+          'type': 'integer',
+          'description': 'int (timer duration in minutes)',
+        },
+        'seconds': {
+          'type': 'integer',
+          'description': 'int (timer duration in seconds)',
+        },
+        'alarm_id': {'type': 'integer', 'description': 'int (for cancel action)'},
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1046,14 +1580,38 @@ final List<ClientTool> builtinTools = [
         'hourly. Provide "location" (city/place name) or lat/lon. Days/hours '
         'are hints baked into the natural-language query Brave receives.',
     parameters: {
-      'location': 'string (city/place name, e.g. "Berlin", "New York")',
-      'latitude': 'number (optional: direct WGS84 latitude)',
-      'longitude': 'number (optional: direct WGS84 longitude)',
-      'action':
-          'string (optional, default "current": current, forecast, '
-          'hourly)',
-      'days': 'int (optional, default 7: forecast days 1-16)',
-      'hours': 'int (optional, default 24: hours 1-48)',
+      'type': 'object',
+      'properties': {
+        'location': {
+          'type': 'string',
+          'description': 'string (city/place name, e.g. "Berlin", "New York")',
+        },
+        'latitude': {
+          'type': 'number',
+          'description': 'number (optional: direct WGS84 latitude)',
+        },
+        'longitude': {
+          'type': 'number',
+          'description': 'number (optional: direct WGS84 longitude)',
+        },
+        'action': {
+          'type': 'string',
+          'enum': ['current', 'forecast', 'hourly'],
+          'description':
+              'string (optional, default "current": current, forecast, '
+              'hourly)',
+        },
+        'days': {
+          'type': 'integer',
+          'description': 'int (optional, default 7: forecast days 1-16)',
+        },
+        'hours': {
+          'type': 'integer',
+          'description': 'int (optional, default 24: hours 1-48)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1089,22 +1647,62 @@ final List<ClientTool> builtinTools = [
         'descriptive id so both coexist with independent version histories. '
         'The user can switch between them in the artifact panel.',
     parameters: {
-      'action': 'string (required: create | update | rewrite)',
-      'artifact_id':
-          'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens only. Bad: "doc", "test", "output". Good: "quantum-mechanics-intro", "invoice-acme-2026-04")',
-      'title':
-          'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
-      'type':
-          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing|excalidraw). '
-          'For excalidraw|technical_drawing|typst|mermaid|svg call artifact_schema(type) FIRST to get the precise content shape.',
-      'language':
-          'string (optional for code artifacts, e.g. dart, python, ts, rust)',
-      'content':
-          'string (required for create/rewrite; full artifact content, max ~500KB)',
-      'message_id':
-          'string (optional: message identifier if you want to associate artifact with a message)',
-      'edits':
-          'array (required for update): list of {old_str,new_str} replacements; each old_str must be unique in current content',
+      'type': 'object',
+      'properties': {
+        'action': {
+          'type': 'string',
+          'enum': ['create', 'update', 'rewrite'],
+          'description': 'string (required: create | update | rewrite)',
+        },
+        'artifact_id': {
+          'type': 'string',
+          'description':
+              'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens only. Bad: "doc", "test", "output". Good: "quantum-mechanics-intro", "invoice-acme-2026-04")',
+        },
+        'title': {
+          'type': 'string',
+          'description':
+              'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
+        },
+        'type': {
+          'type': 'string',
+          'enum': [
+            'code',
+            'markdown',
+            'html',
+            'mermaid',
+            'svg',
+            'technical_drawing',
+            'excalidraw',
+          ],
+          'description':
+              'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing|excalidraw). '
+              'For excalidraw|technical_drawing|typst|mermaid|svg call artifact_schema(type) FIRST to get the precise content shape.',
+        },
+        'language': {
+          'type': 'string',
+          'description':
+              'string (optional for code artifacts, e.g. dart, python, ts, rust)',
+        },
+        'content': {
+          'type': 'string',
+          'description':
+              'string (required for create/rewrite; full artifact content, max ~500KB)',
+        },
+        'message_id': {
+          'type': 'string',
+          'description':
+              'string (optional: message identifier if you want to associate artifact with a message)',
+        },
+        'edits': {
+          'type': 'array',
+          'items': {'type': 'object'},
+          'description':
+              'array (required for update): list of {old_str,new_str} replacements; each old_str must be unique in current content',
+        },
+      },
+      'required': ['action', 'artifact_id'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1138,8 +1736,23 @@ final List<ClientTool> builtinTools = [
         'rejects malformed JSON silently otherwise. For simple types '
         '(code, markdown, html) no schema call is needed.',
     parameters: {
-      'type':
-          'string (required: excalidraw | technical_drawing | typst | mermaid | svg)',
+      'type': 'object',
+      'properties': {
+        'type': {
+          'type': 'string',
+          'enum': [
+            'excalidraw',
+            'technical_drawing',
+            'typst',
+            'mermaid',
+            'svg',
+          ],
+          'description':
+              'string (required: excalidraw | technical_drawing | typst | mermaid | svg)',
+        },
+      },
+      'required': ['type'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1190,13 +1803,31 @@ final List<ClientTool> builtinTools = [
         '(`#set par(leading: 0.55em)`), or trim filler. Reuse the same '
         '`artifact_id` so the version updates in place.',
     parameters: {
-      'source': 'string (required: full Typst document source, max ~256KB)',
-      'artifact_id':
-          'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens. Bad: "pdf", "test", "document". Good: "invoice-2026-04", "lecture-notes-linalg")',
-      'title':
-          'string (optional: human-readable title describing the CONTENT, not the format)',
-      'message_id':
-          'string (optional: associate artifact with a specific message)',
+      'type': 'object',
+      'properties': {
+        'source': {
+          'type': 'string',
+          'description':
+              'string (required: full Typst document source, max ~256KB)',
+        },
+        'artifact_id': {
+          'type': 'string',
+          'description':
+              'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens. Bad: "pdf", "test", "document". Good: "invoice-2026-04", "lecture-notes-linalg")',
+        },
+        'title': {
+          'type': 'string',
+          'description':
+              'string (optional: human-readable title describing the CONTENT, not the format)',
+        },
+        'message_id': {
+          'type': 'string',
+          'description':
+              'string (optional: associate artifact with a specific message)',
+        },
+      },
+      'required': ['source', 'artifact_id'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1225,10 +1856,24 @@ final List<ClientTool> builtinTools = [
         'name and description. At least one of instructions, name, or '
         'description must be provided.',
     parameters: {
-      'instructions':
-          'string (optional: new custom system prompt / instructions for the workspace)',
-      'name': 'string (optional: new workspace name)',
-      'description': 'string (optional: new workspace description)',
+      'type': 'object',
+      'properties': {
+        'instructions': {
+          'type': 'string',
+          'description':
+              'string (optional: new custom system prompt / instructions for the workspace)',
+        },
+        'name': {
+          'type': 'string',
+          'description': 'string (optional: new workspace name)',
+        },
+        'description': {
+          'type': 'string',
+          'description': 'string (optional: new workspace description)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1270,11 +1915,26 @@ final List<ClientTool> builtinTools = [
         'Exec timeout 5 min, 512MB RAM, 50%% of one CPU core. Returns stdout, '
         'stderr, exit code and duration.',
     parameters: {
-      'code': 'string (required: source code to execute)',
-      'language': 'string (optional: "python" (default) or "bash")',
-      'timeout':
-          'int (optional: per-execution seconds, 1..300; omit for the '
-          'server default — usually adequate).',
+      'type': 'object',
+      'properties': {
+        'code': {
+          'type': 'string',
+          'description': 'string (required: source code to execute)',
+        },
+        'language': {
+          'type': 'string',
+          'enum': ['python', 'bash'],
+          'description': 'string (optional: "python" (default) or "bash")',
+        },
+        'timeout': {
+          'type': 'integer',
+          'description':
+              'int (optional: per-execution seconds, 1..300; omit for the '
+              'server default — usually adequate).',
+        },
+      },
+      'required': ['code'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
@@ -1291,7 +1951,16 @@ final List<ClientTool> builtinTools = [
         'List files in the sandbox at /home/sandbox (or a subdirectory). '
         'Use after code_run to see what files were created.',
     parameters: {
-      'path': 'string (optional: must be under /home/sandbox, defaults there)',
+      'type': 'object',
+      'properties': {
+        'path': {
+          'type': 'string',
+          'description':
+              'string (optional: must be under /home/sandbox, defaults there)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['sandbox', 'list', 'ls', 'files'],
@@ -1304,7 +1973,15 @@ final List<ClientTool> builtinTools = [
         'line with a hint to have code_run base64-encode the bytes so you can '
         'still inspect them. Use to look at output files created by code_run.',
     parameters: {
-      'path': 'string (required: absolute path under /home/sandbox)',
+      'type': 'object',
+      'properties': {
+        'path': {
+          'type': 'string',
+          'description': 'string (required: absolute path under /home/sandbox)',
+        },
+      },
+      'required': ['path'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['sandbox', 'read', 'cat', 'open', 'file'],
@@ -1320,11 +1997,26 @@ final List<ClientTool> builtinTools = [
         'encoded payload as content — otherwise the bytes will be mangled by '
         'UTF-8 encoding.',
     parameters: {
-      'path': 'string (required: absolute path under /home/sandbox)',
-      'content':
-          'string (required: file contents — raw text in mode="text", '
-          'base64-encoded bytes in mode="base64")',
-      'mode': 'string (optional: "text" (default) or "base64")',
+      'type': 'object',
+      'properties': {
+        'path': {
+          'type': 'string',
+          'description': 'string (required: absolute path under /home/sandbox)',
+        },
+        'content': {
+          'type': 'string',
+          'description':
+              'string (required: file contents — raw text in mode="text", '
+              'base64-encoded bytes in mode="base64")',
+        },
+        'mode': {
+          'type': 'string',
+          'enum': ['text', 'base64'],
+          'description': 'string (optional: "text" (default) or "base64")',
+        },
+      },
+      'required': ['path', 'content'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: ['sandbox', 'write', 'save', 'file'],
@@ -1338,7 +2030,11 @@ final List<ClientTool> builtinTools = [
         'environment corruption (broken package, stuck process, weird state). '
         'Do NOT call before a fresh code_run "to start clean" — that destroys '
         'the persistent files in /home/sandbox unnecessarily.',
-    parameters: const {},
+    parameters: {
+      'type': 'object',
+      'properties': <String, dynamic>{},
+      'additionalProperties': false,
+    },
     type: ToolType.builtin,
     tags: ['sandbox', 'reset', 'destroy', 'clean'],
   ),
@@ -1358,12 +2054,23 @@ final List<ClientTool> builtinTools = [
         'user the temp link, since the chat UI cannot render those. '
         'Path must be under /home/sandbox.',
     parameters: {
-      'path':
-          'string (required: absolute path of the file inside the sandbox, '
-          'e.g. /home/sandbox/report.pdf)',
-      'display_name':
-          'string (optional: override filename shown to the user; '
-          'defaults to the last segment of `path`)',
+      'type': 'object',
+      'properties': {
+        'path': {
+          'type': 'string',
+          'description':
+              'string (required: absolute path of the file inside the sandbox, '
+              'e.g. /home/sandbox/report.pdf)',
+        },
+        'display_name': {
+          'type': 'string',
+          'description':
+              'string (optional: override filename shown to the user; '
+              'defaults to the last segment of `path`)',
+        },
+      },
+      'required': ['path'],
+      'additionalProperties': false,
     },
     type: ToolType.builtin,
     tags: [
