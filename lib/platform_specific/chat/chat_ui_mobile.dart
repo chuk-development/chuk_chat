@@ -162,6 +162,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final Map<int, (String, List<ToolCall>?)> _decodedToolCallsCache = {};
   final Map<int, (String, List<ContentBlock>?)> _decodedContentBlocksCache = {};
   String? _activeChatId;
+
+  /// Answer-version pager: while a regenerate is in flight, the previously
+  /// generated answer(s) are archived here so the finalized answer is appended
+  /// as a new variant. Keyed by [_pendingVariantMessageId] (the new assistant
+  /// turn's messageId) so the fold only attaches to the right message. The seed
+  /// is overwritten by the next regenerate and cleared on a chat switch /
+  /// newChat() by [_clearPendingVariantSeed]; the messageId key makes a
+  /// lingering seed harmless in between.
+  List<Map<String, dynamic>>? _pendingVariantSeed;
+  String? _pendingVariantMessageId;
+
+  /// Drop any armed regenerate seed — called when the visible message list is
+  /// replaced (loading another chat, starting a new one) so a seed from a
+  /// half-finished regenerate cannot leak into an unrelated conversation.
+  void _clearPendingVariantSeed() {
+    _pendingVariantSeed = null;
+    _pendingVariantMessageId = null;
+  }
   final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
@@ -830,6 +848,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // --- CHAT MANAGEMENT ---
 
   void _loadChatById(String? chatId) {
+    // A pending regenerate seed belongs to the chat we are leaving.
+    _clearPendingVariantSeed();
     if (kDebugMode) {
       debugPrint('');
     }
@@ -1189,7 +1209,53 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _showSnackBar('Branched into a new chat');
   }
 
+  // ---------------------------------------------------------------------------
+  // Answer-version pager (OpenAI-style ‹ k/n › on regenerated answers).
+  // ---------------------------------------------------------------------------
+
+  /// Capture the answer(s) about to be discarded by a regenerate at
+  /// [userIndex] (the preceding user message), to seed the fresh answer's
+  /// variant archive. Reuses the old answer's own archive when it already has
+  /// one (repeated regenerates keep stacking), else a single snapshot. Returns
+  /// null when there is no assistant answer to preserve.
+  List<Map<String, dynamic>>? _captureRegenSeed(int userIndex) {
+    final int aiIndex = userIndex + 1;
+    if (aiIndex >= _messages.length) return null;
+    final Map<String, String> old = _messages[aiIndex];
+    if (old['sender'] != 'ai') return null;
+    final existing = ChatUiHelpers.decodeVariants(old['variants']);
+    if (existing.isNotEmpty) return existing;
+    return <Map<String, dynamic>>[ChatUiHelpers.variantSnapshotOf(old)];
+  }
+
+  /// Fold the pending regenerate seed onto [message] when it is the message
+  /// the seed was armed for. Idempotent — rebuilds `variants` from
+  /// `seed + current snapshot` each call. No-op when nothing is armed, the ids
+  /// mismatch, or the answer is still the "Thinking..." placeholder.
+  void _foldRegenVariantOnto(Map<String, String> message) {
+    final seed = _pendingVariantSeed;
+    if (seed == null) return;
+    final String? mid = message['messageId'];
+    if (mid == null || mid != _pendingVariantMessageId) return;
+    if ((message['text'] ?? '') == 'Thinking...') return;
+    ChatUiHelpers.writeVariants(
+      message: message,
+      seed: seed,
+      current: ChatUiHelpers.variantSnapshotOf(message),
+    );
+  }
+
+  /// Switch the answer shown by the message at [index] to variant [newIndex]
+  /// and persist. Wired to the pager arrows.
+  void _switchVariantAt(int index, int newIndex) {
+    if (index < 0 || index >= _messages.length) return;
+    if (!ChatUiHelpers.switchVariant(_messages[index], newIndex)) return;
+    setState(() {});
+    _persistChat();
+  }
+
   void newChat() {
+    _clearPendingVariantSeed();
     if (kDebugMode) {
       debugPrint(
         '🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId',
@@ -1995,6 +2061,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (message['status'] == 'interrupted') {
           message.remove('status');
         }
+        // Answer-version pager: on a regenerate, append this fresh answer as a
+        // new variant. Content blocks / tool calls / images are written into
+        // the message before finalize on mobile, so the snapshot is complete.
+        _foldRegenVariantOnto(message);
         _messages[index] = message;
       });
 
@@ -2736,6 +2806,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     bool removeFollowingAssistant = true,
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
+    bool isRegenerate = false,
   }) async {
     if (index < 0 || index >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
@@ -2754,6 +2825,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     });
+
+    // Answer-version pager: on a regenerate, archive the answer being
+    // discarded so the fresh answer can be appended as a new variant. Must run
+    // BEFORE the tail is removed below.
+    final List<Map<String, dynamic>>? regenVariantSeed =
+        isRegenerate ? _captureRegenSeed(index) : null;
 
     // Before removing AI messages, collect:
     //   * artifact ids they created (legacy fallback for chats whose
@@ -2850,6 +2927,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // desktop resend path.
     final String assistantMessageId = _uuid.v4();
     ArtifactStorageService.currentMessageId = assistantMessageId;
+    // Arm the variant fold for this turn (keyed by the new messageId), or
+    // clear it when this is not a regenerate.
+    _pendingVariantSeed = regenVariantSeed;
+    _pendingVariantMessageId =
+        regenVariantSeed != null ? assistantMessageId : null;
     setState(() {
       _messages.add({
         'sender': 'ai',
@@ -3091,11 +3173,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _showSnackBar(AppLocalizations.of(context)!.nothingToResend);
       return;
     }
+    // This is a regenerate, so the discarded answer is archived as a variant
+    // instead of being lost.
     await _submitEditedMessage(
       sourceIndex,
       text,
       removeFollowingAssistant: false,
       clearMessagesBelow: true,
+      isRegenerate: true,
     );
   }
 
@@ -3491,6 +3576,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   }
                                   final lastError = raw['lastError'];
 
+                                  // Answer-version pager: how many variants
+                                  // this regenerated answer has and which is
+                                  // shown.
+                                  int variantCount = 0;
+                                  int variantIndex = 0;
+                                  if (isAiMessage) {
+                                    final variants = ChatUiHelpers.decodeVariants(
+                                      raw['variants'],
+                                    );
+                                    variantCount = variants.length;
+                                    if (variantCount > 0) {
+                                      variantIndex =
+                                          (int.tryParse(
+                                                    raw['activeVariant'] ?? '',
+                                                  ) ??
+                                                  0)
+                                              .clamp(0, variantCount - 1);
+                                    }
+                                  }
+
                                   // Build the bubble from a (text, reasoning)
                                   // pair so the streaming bubble can be fed live
                                   // values from the runtime notifier without a
@@ -3574,6 +3679,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                           contentBlocks: parsedContentBlocks,
                                         ),
                                     useSharedSelectionArea: true,
+                                    variantIndex: variantIndex,
+                                    variantCount: variantCount,
+                                    onPrevVariant: variantCount > 1
+                                        ? () => _switchVariantAt(
+                                            i,
+                                            variantIndex - 1,
+                                          )
+                                        : null,
+                                    onNextVariant: variantCount > 1
+                                        ? () => _switchVariantAt(
+                                            i,
+                                            variantIndex + 1,
+                                          )
+                                        : null,
                                     status: status,
                                     lastError: lastError,
                                     onRetryPending: isUser &&

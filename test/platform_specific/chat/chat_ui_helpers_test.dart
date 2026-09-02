@@ -245,4 +245,193 @@ void main() {
       expect(ChatMessage(role: 'user', text: 't').statusString, isNull);
     });
   });
+
+  group('answer-version pager helpers', () {
+    Map<String, String> aiMessage() => <String, String>{
+      'sender': 'ai',
+      'text': 'first answer',
+      'reasoning': 'thinking one',
+      'contentBlocks': '[{"type":"text","text":"first answer"}]',
+      'modelId': 'gpt-4',
+      'provider': 'openai',
+      'messageId': 'mid-1',
+      'startedAt': '2024-01-01T00:00:00.000Z',
+      'generationMs': '1200',
+    };
+
+    test('variantSnapshotOf captures content + archive keys, skips empties',
+        () {
+      final msg = aiMessage()
+        ..['images'] = '' // empty → skipped
+        ..['tps'] = '42' // per-answer metric → captured
+        ..['debugRequests'] = '[]'; // not a variant key → skipped
+      final snap = ChatUiHelpers.variantSnapshotOf(msg);
+
+      expect(snap['text'], 'first answer');
+      expect(snap['reasoning'], 'thinking one');
+      expect(snap['contentBlocks'], '[{"type":"text","text":"first answer"}]');
+      expect(snap['modelId'], 'gpt-4');
+      expect(snap['provider'], 'openai');
+      expect(snap['generationMs'], '1200');
+      expect(snap['tps'], '42');
+      // Archive-only keys captured for round-trip completeness.
+      expect(snap['messageId'], 'mid-1');
+      expect(snap['startedAt'], '2024-01-01T00:00:00.000Z');
+      // Empty + non-variant keys excluded.
+      expect(snap.containsKey('images'), isFalse);
+      expect(snap.containsKey('debugRequests'), isFalse);
+    });
+
+    test('writeVariants appends current as the active (last) variant', () {
+      final oldSnap = ChatUiHelpers.variantSnapshotOf(aiMessage());
+
+      final message = aiMessage()
+        ..['text'] = 'second answer'
+        ..['reasoning'] = 'thinking two'
+        ..['contentBlocks'] = '[{"type":"text","text":"second answer"}]';
+      final newSnap = ChatUiHelpers.variantSnapshotOf(message);
+
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: <Map<String, dynamic>>[oldSnap],
+        current: newSnap,
+      );
+
+      final decoded = ChatUiHelpers.decodeVariants(message['variants']);
+      expect(decoded.length, 2);
+      expect(decoded[0]['text'], 'first answer');
+      expect(decoded[1]['text'], 'second answer');
+      expect(message['activeVariant'], '1');
+    });
+
+    test('writeVariants stays at seed+1 when called twice (desktop re-fold)',
+        () {
+      // The desktop path folds twice per turn: once in _finalizeAiMessage,
+      // again after content blocks land. The archive must not grow, and the
+      // second call must capture the now-present content blocks.
+      final oldSnap = ChatUiHelpers.variantSnapshotOf(aiMessage());
+      final message = aiMessage()..['text'] = 'second answer';
+
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: <Map<String, dynamic>>[oldSnap],
+        current: ChatUiHelpers.variantSnapshotOf(message),
+      );
+      // Content blocks land after the first fold on the desktop success path.
+      message['contentBlocks'] = '[{"type":"text","text":"second answer"}]';
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: <Map<String, dynamic>>[oldSnap],
+        current: ChatUiHelpers.variantSnapshotOf(message),
+      );
+
+      final decoded = ChatUiHelpers.decodeVariants(message['variants']);
+      expect(decoded.length, 2);
+      expect(
+        decoded[1]['contentBlocks'],
+        '[{"type":"text","text":"second answer"}]',
+      );
+      expect(message['activeVariant'], '1');
+    });
+
+    test('variant snapshot captures tps and switch restores it', () {
+      final message = aiMessage()..['tps'] = '55.5';
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: <Map<String, dynamic>>[
+          <String, dynamic>{'text': 'older', 'tps': '10.0'},
+        ],
+        current: ChatUiHelpers.variantSnapshotOf(message),
+      );
+      expect(ChatUiHelpers.switchVariant(message, 0), isTrue);
+      expect(message['tps'], '10.0');
+      expect(ChatUiHelpers.switchVariant(message, 1), isTrue);
+      expect(message['tps'], '55.5');
+    });
+
+    test('switchVariant swaps top-level content and drops absent keys', () {
+      // Variant 0 has no contentBlocks; variant 1 (current) has them.
+      final variantZero = <String, dynamic>{
+        'text': 'first answer',
+        'modelId': 'gpt-4',
+      };
+      final message = <String, String>{
+        'sender': 'ai',
+        'text': 'second answer',
+        'contentBlocks': '[{"type":"text","text":"second answer"}]',
+        'modelId': 'gpt-4o',
+        'messageId': 'mid-2',
+      };
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: <Map<String, dynamic>>[variantZero],
+        current: ChatUiHelpers.variantSnapshotOf(message),
+      );
+      expect(message['activeVariant'], '1');
+
+      // Switch to the older variant.
+      final ok = ChatUiHelpers.switchVariant(message, 0);
+      expect(ok, isTrue);
+      expect(message['text'], 'first answer');
+      expect(message['modelId'], 'gpt-4');
+      expect(message['activeVariant'], '0');
+      // contentBlocks absent in variant 0 → removed from top level so no stale
+      // tool cards linger.
+      expect(message.containsKey('contentBlocks'), isFalse);
+      // The message keeps its own stable id (not restored from the variant).
+      expect(message['messageId'], 'mid-2');
+
+      // Switch back to the newest variant restores its content.
+      expect(ChatUiHelpers.switchVariant(message, 1), isTrue);
+      expect(message['text'], 'second answer');
+      expect(
+        message['contentBlocks'],
+        '[{"type":"text","text":"second answer"}]',
+      );
+      expect(message['activeVariant'], '1');
+    });
+
+    test('switchVariant rejects out-of-range indices', () {
+      final message = aiMessage();
+      ChatUiHelpers.writeVariants(
+        message: message,
+        seed: const <Map<String, dynamic>>[],
+        current: ChatUiHelpers.variantSnapshotOf(message),
+      );
+      expect(ChatUiHelpers.switchVariant(message, -1), isFalse);
+      expect(ChatUiHelpers.switchVariant(message, 5), isFalse);
+    });
+
+    test('decodeVariants tolerates absent / malformed JSON', () {
+      expect(ChatUiHelpers.decodeVariants(null), isEmpty);
+      expect(ChatUiHelpers.decodeVariants(''), isEmpty);
+      expect(ChatUiHelpers.decodeVariants('not json'), isEmpty);
+      expect(ChatUiHelpers.decodeVariants('{"not":"a list"}'), isEmpty);
+    });
+
+    test('messageToRawMap round-trips variants + activeVariant', () {
+      const variantsJson =
+          '[{"text":"one"},{"text":"two"}]';
+      final map = ChatUiHelpers.messageToRawMap(
+        ChatMessage(
+          role: 'assistant',
+          text: 'two',
+          variants: variantsJson,
+          activeVariant: 1,
+        ),
+      );
+      expect(map['variants'], variantsJson);
+      expect(map['activeVariant'], '1');
+
+      // And the parser turns that stringified index back into a ChatMessage.
+      final restored = ChatMessage.fromJson(<String, dynamic>{
+        'role': 'assistant',
+        'text': map['text'],
+        'variants': map['variants'],
+        'activeVariant': map['activeVariant'],
+      });
+      expect(restored.variants, variantsJson);
+      expect(restored.activeVariant, 1);
+    });
+  });
 }

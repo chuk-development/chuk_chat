@@ -26,6 +26,16 @@ ChatMessageStatus? _statusFromString(String? raw) {
   return null;
 }
 
+/// Parse an int that may arrive as an int, a num, or a String — the UI map
+/// stores `activeVariant` as a stringified int, while a decoded JSON payload
+/// carries it as a number.
+int? parseFlexibleInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
+}
+
 String? _statusToString(ChatMessageStatus? status) {
   if (status == null) return null;
   switch (status) {
@@ -62,6 +72,8 @@ class ChatMessage {
     this.messageId,
     this.startedAt,
     this.generationMs,
+    this.variants,
+    this.activeVariant,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -85,6 +97,8 @@ class ChatMessage {
       messageId: json['messageId'] as String?,
       startedAt: json['startedAt']?.toString(),
       generationMs: json['generationMs']?.toString(),
+      variants: json['variants'] as String?,
+      activeVariant: parseFlexibleInt(json['activeVariant']),
     );
   }
 
@@ -139,6 +153,20 @@ class ChatMessage {
   /// the header then falls back to the tool-call stamps.
   final String? generationMs;
 
+  /// JSON-encoded `List` of answer-variant snapshots for a regenerated
+  /// assistant message. Each entry captures the swappable content of one
+  /// answer (`text`, `reasoning`, `contentBlocks`, `toolCalls`, `modelId`,
+  /// `provider`, `generationMs`, `startedAt`, `messageId`, `images`,
+  /// `imageMetas`, `imageCostEur`, `imageGeneratedAt`). The currently shown
+  /// answer lives in the message's own top-level fields; this list is the
+  /// archive the OpenAI-style pager switches between. `null`/absent for
+  /// messages that were never regenerated (legacy + first answers).
+  final String? variants;
+
+  /// Index into [variants] of the answer currently shown at top level.
+  /// `null` when there are no variants.
+  final int? activeVariant;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -179,6 +207,8 @@ class ChatMessage {
     String? messageId,
     String? startedAt,
     String? generationMs,
+    String? variants,
+    int? activeVariant,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -200,6 +230,8 @@ class ChatMessage {
       messageId: messageId ?? this.messageId,
       startedAt: startedAt ?? this.startedAt,
       generationMs: generationMs ?? this.generationMs,
+      variants: variants ?? this.variants,
+      activeVariant: activeVariant ?? this.activeVariant,
     );
   }
 
@@ -230,5 +262,7 @@ class ChatMessage {
     if (startedAt != null && startedAt!.isNotEmpty) 'startedAt': startedAt,
     if (generationMs != null && generationMs!.isNotEmpty)
       'generationMs': generationMs,
+    if (variants != null && variants!.isNotEmpty) 'variants': variants,
+    if (activeVariant != null) 'activeVariant': activeVariant,
   };
 }

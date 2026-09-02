@@ -16,15 +16,107 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
     final sources = _allSources(_collectAllToolCalls());
     final bool hasSources = sources.isNotEmpty;
-    if (!hasActions && !hasSources) return const SizedBox.shrink();
+    final bool hasPager = widget.variantCount > 1;
+    if (!hasActions && !hasSources && !hasPager) {
+      return const SizedBox.shrink();
+    }
 
+    // The left cluster (actions + pager) can grow with many actions and
+    // several variants; on a narrow bubble that plus a five-icon sources pill
+    // would overflow the Row. Let the left cluster take the remaining width and
+    // scroll horizontally instead of overflowing, keeping the sources pill
+    // pinned at the right.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (hasActions) _buildActionButtons(iconFgColor, false),
-        const Spacer(),
-        if (hasSources) _buildSourcesBar(sources),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasActions) _buildActionButtons(iconFgColor, false),
+                if (hasPager) ...[
+                  const SizedBox(width: 6),
+                  _buildVariantPager(iconFgColor),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (hasSources) ...[
+          const SizedBox(width: 6),
+          _buildSourcesBar(sources),
+        ],
       ],
+    );
+  }
+
+  /// The OpenAI-style ‹ k/n › pager: a compact previous / index / next
+  /// control that steps through a regenerated answer's variants. Styled to
+  /// match the action-bar pill next to it.
+  Widget _buildVariantPager(Color iconFgColor) {
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final int count = widget.variantCount;
+    final int index = widget.variantIndex.clamp(0, count - 1);
+    final bool canPrev = index > 0 && widget.onPrevVariant != null;
+    final bool canNext = index < count - 1 && widget.onNextVariant != null;
+
+    Widget arrow(IconData icon, bool enabled, VoidCallback? onTap) {
+      return IconButton(
+        icon: Icon(
+          icon,
+          color: enabled ? iconFgColor : iconFgColor.withValues(alpha: 0.38),
+          size: 18,
+        ),
+        padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
+        visualDensity: VisualDensity.compact,
+        constraints: BoxConstraints(
+          minWidth: kPlatformMobile ? 28 : 30,
+          minHeight: kPlatformMobile ? 28 : 30,
+        ),
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: enabled ? onTap : null,
+      );
+    }
+
+    return Container(
+      height: kPlatformMobile ? _kMobileBottomBarHeight : null,
+      decoration: BoxDecoration(
+        color: bgColor.lighten(0.05),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: iconFgColor.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: kPlatformMobile ? 2 : 4,
+        vertical: kPlatformMobile ? 0 : 4,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: 'Previous answer',
+            child: arrow(Icons.chevron_left, canPrev, widget.onPrevVariant),
+          ),
+          Text(
+            '${index + 1}/$count',
+            style: TextStyle(
+              color: iconFgColor,
+              fontWeight: FontWeight.w500,
+              fontSize: kPlatformMobile ? 14 : 12,
+            ),
+          ),
+          Tooltip(
+            message: 'Next answer',
+            child: arrow(Icons.chevron_right, canNext, widget.onNextVariant),
+          ),
+        ],
+      ),
     );
   }
 
