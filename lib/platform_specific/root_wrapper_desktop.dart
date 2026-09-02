@@ -20,6 +20,7 @@ import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
+import 'package:chuk_chat/services/tray_action_bus.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -53,6 +54,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   @override
   void initState() {
     super.initState();
+    if (kFeatureSystemTray) {
+      TrayActionBus.instance.newChatRequested.addListener(_onTrayNewChat);
+    }
     if (kFeatureArtifacts) {
       _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
       _panelOpen = ArtifactStorageService.panelOpenNotifier.value;
@@ -107,6 +111,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   @override
   void dispose() {
+    if (kFeatureSystemTray) {
+      TrayActionBus.instance.newChatRequested.removeListener(_onTrayNewChat);
+    }
     if (kFeatureArtifacts) {
       ArtifactStorageService.activeArtifactNotifier.removeListener(
         _onArtifactChanged,
@@ -435,6 +442,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       );
     }
     return items;
+  }
+
+  // Fired from the desktop system tray "New Chat" menu item. Reuses the exact
+  // sidebar path so a tray-started chat behaves identically to a sidebar one.
+  void _onTrayNewChat() {
+    if (!mounted) return;
+    _handleNewChatFromSidebar();
   }
 
   void _handleNewChatFromSidebar() {
