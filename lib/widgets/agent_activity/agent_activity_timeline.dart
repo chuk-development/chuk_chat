@@ -119,10 +119,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       _ticker = null;
       return;
     }
-    // ~3 ticks a second while the turn runs, so the live counter climbs
-    // smoothly (the header shows tenths of a second) rather than jumping once
-    // per whole second. Cancelled the moment the turn settles.
-    _ticker = Timer.periodic(const Duration(milliseconds: 333), (_) {
+    // One tick a second while the turn runs: the live counter shows whole
+    // seconds, so re-rendering faster than that only wastes frames. Cancelled
+    // the moment the turn settles.
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
   }

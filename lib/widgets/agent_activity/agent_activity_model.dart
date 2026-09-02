@@ -379,14 +379,12 @@ Duration? agentActivityDuration(
 }
 
 /// Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
-/// Live elapsed label for a RUNNING turn: one decimal below a minute, so the
-/// counter visibly climbs several times a second instead of jumping once per
-/// whole second. Above a minute it reads the same as the settled label — a
-/// tenth of a second there is noise. The settled value keeps whole seconds.
+/// Live elapsed label for a RUNNING turn. Whole seconds only, ticking up once
+/// a second — no decimals. Above a minute it reads the same as the settled
+/// label. The settled value also keeps whole seconds.
 String formatAgentDurationLive(Duration duration) {
   if (duration.inSeconds < 60) {
-    final seconds = duration.inMilliseconds / 1000.0;
-    return '${seconds.toStringAsFixed(1)}s';
+    return '${duration.inSeconds}s';
   }
   return formatAgentDuration(duration);
 }
