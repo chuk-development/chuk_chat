@@ -8,7 +8,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/pages/mcp_connectors_page.dart' show McpConnectorIcon;
+import 'package:chuk_chat/pages/mcp_connectors_page.dart'
+    show McpConnectorIcon, showMcpCredentialDialog;
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
@@ -45,19 +46,41 @@ class _McpConnectCardState extends State<McpConnectCard> {
   bool get _blockedOnWeb => kIsWeb && widget.entry.auth == McpAuth.oauth;
 
   Future<void> _connect() async {
+    final entry = widget.entry;
+
+    // An API-key server takes the reader's own credentials, not a browser
+    // sign-in — collect them first, exactly as the Connectors page does.
+    Map<String, String>? credentials;
+    if (entry.credentials.isNotEmpty) {
+      credentials = await showMcpCredentialDialog(
+        context,
+        entry.credentials,
+        entry.name,
+      );
+      if (credentials == null || !mounted) return; // cancelled
+    }
+
     setState(() {
       _busy = true;
       _error = null;
     });
-    final entry = widget.entry;
-    final result = await McpService.connect(
-      id: entry.id,
-      name: entry.name,
-      url: entry.url,
-      description: entry.description,
-      iconUrl: entry.iconUrl,
-      auth: entry.auth,
-    );
+    final result = credentials != null
+        ? await McpService.connectWithCredentials(
+            id: entry.id,
+            name: entry.name,
+            url: entry.url,
+            description: entry.description,
+            iconUrl: entry.iconUrl,
+            credentials: credentials,
+          )
+        : await McpService.connect(
+            id: entry.id,
+            name: entry.name,
+            url: entry.url,
+            description: entry.description,
+            iconUrl: entry.iconUrl,
+            auth: entry.auth,
+          );
     if (!mounted) return;
 
     if (result.status == McpConnectStatus.connected) {

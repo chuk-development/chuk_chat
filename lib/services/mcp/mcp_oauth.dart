@@ -311,6 +311,26 @@ class McpOAuth {
     if (json is! Map || json['client_id'] == null) {
       throw const McpAuthException('The server registered no client id.');
     }
+
+    // Some servers accept the registration but hand back a fixed set of
+    // redirect URIs — an allowlist of a few first-party apps (Namecheap
+    // returns Cursor, Claude, VS Code, ChatGPT and the like) — and drop the
+    // one we asked for. The loopback address we listen on is never in that
+    // list, so the sign-in that follows would redirect to the server's own
+    // error page and the app would sit on the callback until it timed out.
+    // Catch it here, before any browser opens, and say why.
+    final registered = (json['redirect_uris'] as List?)
+        ?.map((e) => e.toString())
+        .toList();
+    if (registered != null &&
+        registered.isNotEmpty &&
+        !registered.contains(redirectUri.toString())) {
+      throw const McpAuthException(
+        'This server only signs in a fixed set of apps and will not let this '
+        'one receive the sign-in, so it cannot be connected here.',
+      );
+    }
+
     return McpClientCredentials.fromJson(Map<String, dynamic>.from(json));
   }
 

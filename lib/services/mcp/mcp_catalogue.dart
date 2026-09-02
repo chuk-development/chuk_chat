@@ -18,6 +18,35 @@ import 'package:http/http.dart' as http;
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 
+/// One credential a server takes on its URL instead of through a browser
+/// sign-in: an API key, a project id. The reader types the value; it is added
+/// to the endpoint as a query parameter named [key].
+class McpCredentialField {
+  const McpCredentialField({
+    required this.key,
+    required this.label,
+    this.hint,
+    this.secret = true,
+    this.required = true,
+  });
+
+  /// The query-parameter name the server expects, e.g. `browserbaseApiKey`.
+  final String key;
+
+  /// What the reader sees, e.g. "API key".
+  final String label;
+
+  /// Placeholder text, e.g. "bb_live_…".
+  final String? hint;
+
+  /// True for a value that must be obscured on screen and kept in secure
+  /// storage — a key or token. A project id is not secret.
+  final bool secret;
+
+  /// Whether the connect form insists on a value.
+  final bool required;
+}
+
 /// A connector as offered to the reader.
 class McpCatalogueEntry {
   const McpCatalogueEntry({
@@ -32,7 +61,7 @@ class McpCatalogueEntry {
     this.termsUrl,
     this.privacyUrl,
     this.auth = McpAuth.oauth,
-    this.coworkOnly = false,
+    this.credentials = const <McpCredentialField>[],
   });
 
   /// Stable id, used as the tool-name prefix and the storage key.
@@ -86,14 +115,13 @@ class McpCatalogueEntry {
   }
 
   /// Where the token comes from. Everything in the catalogue signs in
-  /// through the browser except the connectors our own server fronts.
+  /// through the browser except the connectors our own server fronts and the
+  /// ones that take a reader-supplied API key.
   final McpAuth auth;
 
-  /// True for servers that only make sense in CoWork mode — they duplicate a
-  /// built-in (web search / crawl) or need command execution the normal chat
-  /// cannot use. Kept in the catalogue so Add-by-URL and CoWork still reach
-  /// them, but hidden from the normal chat UI and the model-awareness list.
-  final bool coworkOnly;
+  /// The credentials the reader must supply for an [McpAuth.apiKey] server.
+  /// Empty for OAuth and app-session connectors.
+  final List<McpCredentialField> credentials;
 
   /// The logo. Servers rarely publish one in `serverInfo.icons`, so the
   /// site's own favicon is the fallback that works for every host.
@@ -153,12 +181,10 @@ const Set<String> kBundledMcpIcons = {
   'cryptocom',
   'dropbox',
   'etoro',
-  'exa',
   'excalidraw',
   'fal',
   'fastmail',
   'figma',
-  'firecrawl',
   'floot',
   'gamma',
   'github',
@@ -173,7 +199,6 @@ const Set<String> kBundledMcpIcons = {
   'mobbin',
   'monday',
   'motion',
-  'namecheap',
   'notion',
   'paypal',
   'pdfnet',
@@ -534,25 +559,6 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     description: 'Search models, datasets, spaces and papers.',
   ),
   McpCatalogueEntry(
-    id: 'firecrawl',
-    termsUrl: 'https://www.firecrawl.dev/terms-of-service',
-    privacyUrl: 'https://www.firecrawl.dev/privacy-policy',
-    name: 'Firecrawl',
-    // The `-oauth` endpoint, not the plain `/v2/mcp` one. The plain endpoint
-    // answers 200 keyless (Search/Scrape/Parse with limits) and never sends a
-    // 401, so the browser sign-in would never start; `-oauth` returns 401 with
-    // the resource-metadata challenge, and its authorization server
-    // (`www.firecrawl.dev`) supports RFC 7591 registration + PKCE, so the
-    // ordinary connect flow signs the reader in and unlocks the account tools.
-    url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-    category: 'Developer',
-    description:
-        'Scrape pages to clean markdown, search the web, map a site\'s URLs '
-        'and run multi-page research.',
-    // Duplicates the built-in web search / crawl — only wanted in CoWork.
-    coworkOnly: true,
-  ),
-  McpCatalogueEntry(
     id: 'posthog',
     termsUrl: 'https://posthog.com/terms',
     privacyUrl: 'https://posthog.com/privacy',
@@ -565,24 +571,28 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
   McpCatalogueEntry(
     id: 'browserbase',
     name: 'Browserbase',
+    // No browser sign-in: the endpoint is open, but every tool call needs the
+    // reader's own Browserbase key and project, taken as query parameters on
+    // this URL. connectWithCredentials adds them; the plain URL is all that is
+    // stored, the values stay in secure storage.
     url: 'https://mcp.browserbase.com/mcp',
     category: 'Developer',
     description: 'Headless browser automation and web scraping.',
     publisher: 'browserbase.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128',
-    // Needs command-style execution — only wanted in CoWork.
-    coworkOnly: true,
-  ),
-  McpCatalogueEntry(
-    id: 'exa',
-    name: 'Exa',
-    url: 'https://mcp.exa.ai/mcp',
-    category: 'Developer',
-    description: 'AI-powered web search and content retrieval.',
-    publisher: 'exa.ai',
-    iconUrl: 'https://www.google.com/s2/favicons?domain=exa.ai&sz=128',
-    // Duplicates the built-in web search — only wanted in CoWork.
-    coworkOnly: true,
+    auth: McpAuth.apiKey,
+    credentials: [
+      McpCredentialField(
+        key: 'browserbaseApiKey',
+        label: 'API key',
+        hint: 'bb_live_…',
+      ),
+      McpCredentialField(
+        key: 'browserbaseProjectId',
+        label: 'Project ID',
+        secret: false,
+      ),
+    ],
   ),
   McpCatalogueEntry(
     id: 'godaddy',
@@ -593,17 +603,11 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     publisher: 'godaddy.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=godaddy.com&sz=128',
   ),
-  McpCatalogueEntry(
-    id: 'namecheap',
-    name: 'Namecheap',
-    url: 'https://mcp.namecheap.com/mcp',
-    category: 'Developer',
-    description:
-        'List and register domains, and manage DNS records, nameservers and '
-        'contacts.',
-    publisher: 'namecheap.com',
-    iconUrl: 'https://www.google.com/s2/favicons?domain=namecheap.com&sz=128',
-  ),
+  // Namecheap is deliberately not offered. Its dynamic client registration
+  // accepts the request but hands back a fixed redirect-URI allowlist (Cursor,
+  // Claude, VS Code, ChatGPT and a few more) and drops the loopback address we
+  // listen on, so the sign-in always lands on the server's own error page. See
+  // McpOAuth.register, which fails such a server fast instead of hanging.
   McpCatalogueEntry(
     id: 'resend',
     name: 'Resend',

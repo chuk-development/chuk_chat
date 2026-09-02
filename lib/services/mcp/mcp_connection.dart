@@ -18,6 +18,13 @@ enum McpAuth {
   /// session token is the credential. Used by the connectors that our API
   /// server fronts, where the upstream credential never reaches the device.
   appSession,
+
+  /// The reader supplies their own credentials — an API key, a project id —
+  /// and the server takes them as query parameters on the endpoint URL rather
+  /// than through a browser sign-in. Browserbase works this way. The values
+  /// are secret, so they live in secure storage, never in the connection row;
+  /// the stored [McpConnection.url] stays the plain base URL.
+  apiKey,
 }
 
 class McpConnection {
@@ -80,9 +87,10 @@ class McpConnection {
     description: (json['description'] ?? '').toString(),
     iconUrl: json['icon_url']?.toString(),
     addedByHand: json['added_by_hand'] == true,
-    auth: json['auth'] == McpAuth.appSession.name
-        ? McpAuth.appSession
-        : McpAuth.oauth,
+    auth: McpAuth.values.firstWhere(
+      (a) => a.name == json['auth'],
+      orElse: () => McpAuth.oauth,
+    ),
     tools: [
       for (final tool in (json['tools'] as List? ?? const []))
         if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),

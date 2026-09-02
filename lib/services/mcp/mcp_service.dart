@@ -26,6 +26,27 @@ import 'package:chuk_chat/services/supabase_service.dart';
 /// What a connect attempt ended in, for the UI to show.
 enum McpConnectStatus { connected, cancelled, failed }
 
+/// A handle the screen keeps so it can stop a connect while the browser
+/// sign-in is still open. Without it the reader would sit on the spinner
+/// until the five-minute callback timeout — the back button was the only way
+/// out. Cancelling completes the wait early; the connect returns [cancelled].
+class McpConnectCanceler {
+  final Completer<void> _canceled = Completer<void>();
+
+  void cancel() {
+    if (!_canceled.isCompleted) _canceled.complete();
+  }
+
+  bool get isCanceled => _canceled.isCompleted;
+  Future<void> get whenCanceled => _canceled.future;
+}
+
+/// Thrown inside [McpService] when the reader cancels the sign-in. Private:
+/// it never leaves the service — it is turned into [McpConnectStatus.cancelled].
+class _ConnectCanceled implements Exception {
+  const _ConnectCanceled();
+}
+
 class McpConnectResult {
   const McpConnectResult(this.status, {this.message, this.connection});
 
@@ -36,7 +57,15 @@ class McpConnectResult {
 
 /// The secrets of one connection. Never written to shared preferences.
 class _McpSecrets {
-  const _McpSecrets({required this.credentials, required this.tokens, this.issuer, this.authorizationEndpoint, this.tokenEndpoint, this.scope});
+  const _McpSecrets({
+    this.credentials = const McpClientCredentials(clientId: ''),
+    this.tokens = const McpTokens(accessToken: ''),
+    this.issuer,
+    this.authorizationEndpoint,
+    this.tokenEndpoint,
+    this.scope,
+    this.apiCredentials = const <String, String>{},
+  });
 
   final McpClientCredentials credentials;
   final McpTokens tokens;
@@ -45,6 +74,10 @@ class _McpSecrets {
   final String? tokenEndpoint;
   final String? scope;
 
+  /// Reader-supplied API credentials for an [McpAuth.apiKey] server, keyed by
+  /// the query-parameter name the server expects. Empty for OAuth servers.
+  final Map<String, String> apiCredentials;
+
   Map<String, dynamic> toJson() => {
     'credentials': credentials.toJson(),
     'tokens': tokens.toJson(),
@@ -52,6 +85,7 @@ class _McpSecrets {
     'authorization_endpoint': authorizationEndpoint,
     'token_endpoint': tokenEndpoint,
     'scope': scope,
+    if (apiCredentials.isNotEmpty) 'api_credentials': apiCredentials,
   };
 
   static _McpSecrets fromJson(Map<String, dynamic> json) => _McpSecrets(
@@ -65,6 +99,10 @@ class _McpSecrets {
     authorizationEndpoint: json['authorization_endpoint']?.toString(),
     tokenEndpoint: json['token_endpoint']?.toString(),
     scope: json['scope']?.toString(),
+    apiCredentials: <String, String>{
+      for (final e in (json['api_credentials'] as Map? ?? const {}).entries)
+        e.key.toString(): e.value.toString(),
+    },
   );
 
   McpAuthServer? get authServer {
@@ -159,6 +197,7 @@ class McpService {
     String? iconUrl,
     bool addedByHand = false,
     McpAuth auth = McpAuth.oauth,
+    McpConnectCanceler? canceler,
   }) async {
     final endpoint = Uri.tryParse(url);
     if (endpoint == null || !_isAcceptableEndpoint(endpoint)) {
@@ -196,6 +235,7 @@ class McpService {
             id: id,
             endpoint: endpoint,
             wwwAuthenticate: unauthorized.wwwAuthenticate,
+            canceler: canceler,
           );
           if (authorized == null) {
             return const McpConnectResult(McpConnectStatus.cancelled);
@@ -257,12 +297,103 @@ class McpService {
     }
   }
 
+  /// Connect a server that takes the reader's own credentials on its URL
+  /// (an API key, a project id) instead of a browser sign-in. The values are
+  /// added to the endpoint as query parameters to reach the server, but only
+  /// the plain base [url] is stored in the connection row — the values go to
+  /// secure storage, keyed by the connection id, and ride the same encrypted
+  /// sync as OAuth tokens.
+  static Future<McpConnectResult> connectWithCredentials({
+    required String id,
+    required String name,
+    required String url,
+    required Map<String, String> credentials,
+    String description = '',
+    String? iconUrl,
+    bool addedByHand = false,
+  }) async {
+    final base = Uri.tryParse(url);
+    if (base == null || !_isAcceptableEndpoint(base)) {
+      return const McpConnectResult(
+        McpConnectStatus.failed,
+        message: 'That is not an https address.',
+      );
+    }
+
+    final endpoint = _endpointWithCredentials(base, credentials);
+    try {
+      final client = McpClient(endpoint: endpoint);
+      final info = await client.initialize();
+      final tools = await client.listTools();
+
+      final connection = McpConnection(
+        id: id,
+        name: name.trim().isEmpty ? info.displayName : name,
+        url: url,
+        description: description.isEmpty
+            ? (info.instructions ?? '').split('\n').first
+            : description,
+        iconUrl: iconUrl ?? info.iconUrl,
+        tools: tools,
+        addedByHand: addedByHand,
+        auth: McpAuth.apiKey,
+      );
+
+      await _writeSecrets(id, _McpSecrets(apiCredentials: credentials));
+      connections.value = [
+        ...connections.value.where((c) => c.id != id),
+        connection,
+      ];
+      await _persist();
+      unawaited(
+        McpSyncService.clearPendingDelete(id)
+            .then((_) => McpSyncService.push(connection))
+            .catchError((Object e) {
+          if (kDebugMode) debugPrint('⚠️ [MCP] Could not share $id: $e');
+        }),
+      );
+      return McpConnectResult(
+        McpConnectStatus.connected,
+        connection: connection,
+      );
+    } on McpUnauthorized {
+      return const McpConnectResult(
+        McpConnectStatus.failed,
+        message: 'The server refused those credentials. Check the key.',
+      );
+    } on McpException catch (e) {
+      return McpConnectResult(McpConnectStatus.failed, message: e.message);
+    } catch (e) {
+      return McpConnectResult(
+        McpConnectStatus.failed,
+        message: 'Could not reach the server: $e',
+      );
+    }
+  }
+
+  /// The endpoint the server is actually called on: the base URL with the
+  /// reader's credentials added as query parameters, keeping any the URL
+  /// already carried.
+  static Uri _endpointWithCredentials(Uri base, Map<String, String> creds) =>
+      base.replace(
+        queryParameters: <String, String>{...base.queryParameters, ...creds},
+      );
+
+  /// The credentialed endpoint, exposed for tests: the reader's key must land
+  /// on the request URL, and never in the stored connection row.
+  @visibleForTesting
+  static Uri endpointWithCredentialsForTest(
+    Uri base,
+    Map<String, String> creds,
+  ) => _endpointWithCredentials(base, creds);
+
   /// Run the OAuth flow and store what came out of it. Returns the access
   /// token, or null when the reader closed the browser.
   static Future<String?> _authorize({
     required String id,
     required Uri endpoint,
     String? wwwAuthenticate,
+    McpConnectCanceler? canceler,
   }) async {
     final oauth = McpOAuth();
     final server = await oauth.discover(
@@ -291,12 +422,29 @@ class McpService {
         throw const McpAuthException('The browser did not open.');
       }
 
-      final callback = await listener.callback.timeout(
-        const Duration(minutes: 5),
-        onTimeout: () => throw const McpAuthException(
-          'The sign-in took too long. Try again.',
-        ),
-      );
+      // Wait for the redirect, but let the reader cancel out of it. The
+      // cancel and the five-minute timeout both end the wait; only the real
+      // callback carries a code on.
+      final Uri callback;
+      try {
+        callback = await Future.any(<Future<Uri>>[
+          listener.callback.timeout(
+            const Duration(minutes: 5),
+            onTimeout: () => throw const McpAuthException(
+              'The sign-in took too long. Try again.',
+            ),
+          ),
+          if (canceler != null)
+            canceler.whenCanceled.then<Uri>(
+              (_) => throw const _ConnectCanceled(),
+            ),
+        ]);
+      } on _ConnectCanceled {
+        // Reader tapped Cancel: shut the browser and report a clean cancel,
+        // not a failure.
+        await _closeBrowser();
+        return null;
+      }
 
       // The sign-in tab has done its job — close it so the reader lands
       // back in the app instead of on a "you can close this" page.
@@ -499,6 +647,14 @@ class McpService {
       return McpClient(endpoint: endpoint, accessToken: token);
     }
 
+    if (connection.auth == McpAuth.apiKey) {
+      final secrets = await _readSecrets(connection.id);
+      if (secrets == null || secrets.apiCredentials.isEmpty) return null;
+      return McpClient(
+        endpoint: _endpointWithCredentials(endpoint, secrets.apiCredentials),
+      );
+    }
+
     final secrets = await _readSecrets(connection.id);
     if (secrets == null) {
       // A server that never asked for a token needs none now either.
@@ -527,7 +683,11 @@ class McpService {
   }
 
   /// Add a server the reader typed in by hand.
-  static Future<McpConnectResult> connectByUrl(String url, {String? name}) {
+  static Future<McpConnectResult> connectByUrl(
+    String url, {
+    String? name,
+    McpConnectCanceler? canceler,
+  }) {
     final trimmed = url.trim();
     final id = slugFor(trimmed);
     return connect(
@@ -535,6 +695,7 @@ class McpService {
       name: name?.trim().isNotEmpty == true ? name!.trim() : '',
       url: trimmed,
       addedByHand: true,
+      canceler: canceler,
     );
   }
 

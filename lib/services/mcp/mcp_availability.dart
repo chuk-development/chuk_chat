@@ -13,16 +13,10 @@ import 'package:chuk_chat/services/mcp/mcp_service.dart';
 ///
 /// Registry / hand-added servers are not here: they have no constant entry,
 /// so the model cannot name one it has not already seen.
-///
-/// CoWork-only servers are hidden by default — normal chat must never suggest
-/// them. The CoWork path passes [includeCoworkOnly] true to see them.
-List<McpCatalogueEntry> unconnectedCatalogueEntries({
-  bool includeCoworkOnly = false,
-}) {
+List<McpCatalogueEntry> unconnectedCatalogueEntries() {
   final connectedIds = McpService.connections.value.map((c) => c.id).toSet();
   return [...firstPartyConnectors(), ...kMcpCatalogue]
       .where((e) => !connectedIds.contains(e.id))
-      .where((e) => includeCoworkOnly || !e.coworkOnly)
       .toList();
 }
 
