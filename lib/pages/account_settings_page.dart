@@ -341,13 +341,50 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     if (step2 != true || !mounted) return;
 
     // ── Step 3: Password confirmation ──
+    // The dialog returns the verified password (not just a bool): the server
+    // re-verifies it on the delete request, so this client-side check is only
+    // a fast-fail and the password must travel to Step 4.
     final passwordController = TextEditingController();
-    final passwordConfirmed = await showDialog<bool>(
+    final confirmedPassword = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         String? errorText;
         bool isVerifying = false;
+
+        Future<void> verify(StateSetter setDialogState) async {
+          final password = passwordController.text.trim();
+          if (password.isEmpty) {
+            setDialogState(() => errorText = l.passwordRequired);
+            return;
+          }
+          setDialogState(() {
+            isVerifying = true;
+            errorText = null;
+          });
+          try {
+            final email = Supabase.instance.client.auth.currentUser?.email;
+            if (email == null) {
+              throw Exception('No email found');
+            }
+            await Supabase.instance.client.auth.signInWithPassword(
+              email: email,
+              password: password,
+            );
+            if (ctx.mounted) Navigator.of(ctx).pop(password);
+          } on AuthException catch (e) {
+            setDialogState(() {
+              isVerifying = false;
+              errorText = e.message;
+            });
+          } catch (e) {
+            setDialogState(() {
+              isVerifying = false;
+              errorText = l.verificationFailed(e.toString());
+            });
+          }
+        }
+
         return StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             title: Text(l.confirmYourPassword),
@@ -366,48 +403,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                     errorText: errorText,
                     prefixIcon: const Icon(Icons.lock_outline),
                   ),
-                  onSubmitted: isVerifying
-                      ? null
-                      : (_) async {
-                          final password = passwordController.text.trim();
-                          if (password.isEmpty) {
-                            setDialogState(
-                              () => errorText = l.passwordRequired,
-                            );
-                            return;
-                          }
-                          setDialogState(() {
-                            isVerifying = true;
-                            errorText = null;
-                          });
-                          try {
-                            final email = Supabase
-                                .instance
-                                .client
-                                .auth
-                                .currentUser
-                                ?.email;
-                            if (email == null) {
-                              throw Exception('No email found');
-                            }
-                            await Supabase.instance.client.auth
-                                .signInWithPassword(
-                                  email: email,
-                                  password: password,
-                                );
-                            if (ctx.mounted) Navigator.of(ctx).pop(true);
-                          } on AuthException catch (e) {
-                            setDialogState(() {
-                              isVerifying = false;
-                              errorText = e.message;
-                            });
-                          } catch (e) {
-                            setDialogState(() {
-                              isVerifying = false;
-                              errorText = l.verificationFailed(e.toString());
-                            });
-                          }
-                        },
+                  onSubmitted:
+                      isVerifying ? null : (_) => verify(setDialogState),
                 ),
               ],
             ),
@@ -415,49 +412,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               TextButton(
                 onPressed: isVerifying
                     ? null
-                    : () => Navigator.of(ctx).pop(false),
+                    : () => Navigator.of(ctx).pop(),
                 child: Text(l.cancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(foregroundColor: cs.error),
-                onPressed: isVerifying
-                    ? null
-                    : () async {
-                        final password = passwordController.text.trim();
-                        if (password.isEmpty) {
-                          setDialogState(
-                            () => errorText = l.passwordRequired,
-                          );
-                          return;
-                        }
-                        setDialogState(() {
-                          isVerifying = true;
-                          errorText = null;
-                        });
-                        try {
-                          final email =
-                              Supabase.instance.client.auth.currentUser?.email;
-                          if (email == null) {
-                            throw Exception('No email found');
-                          }
-                          await Supabase.instance.client.auth
-                              .signInWithPassword(
-                                email: email,
-                                password: password,
-                              );
-                          if (ctx.mounted) Navigator.of(ctx).pop(true);
-                        } on AuthException catch (e) {
-                          setDialogState(() {
-                            isVerifying = false;
-                            errorText = e.message;
-                          });
-                        } catch (e) {
-                          setDialogState(() {
-                            isVerifying = false;
-                            errorText = l.verificationFailed(e.toString());
-                          });
-                        }
-                      },
+                onPressed: isVerifying ? null : () => verify(setDialogState),
                 child: isVerifying
                     ? const SizedBox(
                         width: 16,
@@ -473,7 +433,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     );
 
     passwordController.dispose();
-    if (passwordConfirmed != true || !mounted) return;
+    if (confirmedPassword == null || confirmedPassword.isEmpty || !mounted) {
+      return;
+    }
 
     // ── Step 4: Execute deletion ──
     final messenger = ScaffoldMessenger.of(context);
@@ -485,7 +447,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
       final response = await http.delete(
         Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/delete-account'),
-        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        headers: {
+          'Authorization': 'Bearer ${session.accessToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'password': confirmedPassword}),
       );
 
       if (response.statusCode != 200) {
