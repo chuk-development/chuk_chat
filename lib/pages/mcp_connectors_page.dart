@@ -18,13 +18,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class McpConnectorsPage extends StatefulWidget {
-  const McpConnectorsPage({super.key, this.isCoworkActive = false});
-
-  /// Whether CoWork mode is active. CoWork-only servers (which duplicate a
-  /// built-in or need command execution) are hidden in normal chat and only
-  /// shown here when this is true. CoWork is an M0 placeholder today, so the
-  /// effective behaviour is "hidden"; the path is kept so they appear later.
-  final bool isCoworkActive;
+  const McpConnectorsPage({super.key});
 
   @override
   State<McpConnectorsPage> createState() => _McpConnectorsPageState();
@@ -94,8 +88,6 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
               .where(
                 (entry) =>
                     !connectedIds.contains(entry.id) &&
-                    // CoWork-only servers stay hidden until CoWork is active.
-                    (widget.isCoworkActive || !entry.coworkOnly) &&
                     (_query.isEmpty ||
                         entry.name.toLowerCase().contains(_query) ||
                         entry.description.toLowerCase().contains(_query)),
@@ -323,9 +315,11 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     controller.dispose();
     if (url == null || url.trim().isEmpty || !mounted) return;
 
+    final canceler = McpConnectCanceler();
     final result = await _withProgress(
       context,
-      () => McpService.connectByUrl(url),
+      () => McpService.connectByUrl(url, canceler: canceler),
+      canceler: canceler,
     );
     if (!mounted) return;
     _report(result);
@@ -357,6 +351,7 @@ class McpConnectorDetailPage extends StatefulWidget {
 
 class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   bool _busy = false;
+  McpConnectCanceler? _canceler;
 
   @override
   Widget build(BuildContext context) {
@@ -408,7 +403,21 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
               SizedBox(
                 height: 52,
                 child: _busy
-                    ? const Center(child: CircularProgressIndicator())
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                          const SizedBox(width: 16),
+                          TextButton(
+                            onPressed: _cancelConnect,
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      )
                     : FilledButton(
                         style: FilledButton.styleFrom(
                           shape: const StadiumBorder(),
@@ -569,8 +578,41 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     }
   }
 
+  void _cancelConnect() => _canceler?.cancel();
+
   Future<void> _connect(String url, String name) async {
-    setState(() => _busy = true);
+    final entry = widget.entry;
+    final fields = entry?.credentials ?? const <McpCredentialField>[];
+
+    // An API-key server needs the reader's credentials, not a browser sign-in:
+    // collect them, then reach the server with them on the URL.
+    if (fields.isNotEmpty) {
+      final values = await showMcpCredentialDialog(context, fields, name);
+      if (values == null || !mounted) return;
+      setState(() => _busy = true);
+      final result = await McpService.connectWithCredentials(
+        id: widget.id,
+        name: name,
+        url: url,
+        description: entry?.description ?? '',
+        iconUrl: entry?.iconUrl,
+        credentials: values,
+      );
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (result.status != McpConnectStatus.connected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? 'Could not connect.')),
+        );
+      }
+      return;
+    }
+
+    final canceler = McpConnectCanceler();
+    setState(() {
+      _busy = true;
+      _canceler = canceler;
+    });
     final result = await McpService.connect(
       id: widget.id,
       name: name,
@@ -578,9 +620,13 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       description: widget.entry?.description ?? '',
       iconUrl: widget.entry?.iconUrl,
       auth: widget.entry?.auth ?? McpAuth.oauth,
+      canceler: canceler,
     );
     if (!mounted) return;
-    setState(() => _busy = false);
+    setState(() {
+      _busy = false;
+      _canceler = null;
+    });
     if (result.status != McpConnectStatus.connected) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -600,6 +646,84 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     if (!mounted) return;
     setState(() => _busy = false);
   }
+}
+
+/// Collect a reader's own credentials for an [McpAuth.apiKey] server. Returns
+/// the values keyed by their query-parameter name, or null if cancelled.
+/// Shared by the detail page and the inline connect card, so both reach an
+/// API-key server the same way.
+Future<Map<String, String>?> showMcpCredentialDialog(
+  BuildContext context,
+  List<McpCredentialField> fields,
+  String name,
+) {
+  final controllers = {
+    for (final f in fields) f.key: TextEditingController(),
+  };
+  return showDialog<Map<String, String>>(
+    context: context,
+    builder: (dialogContext) {
+        String? error;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Connect $name'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final field in fields)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: controllers[field.key],
+                      autofocus: field == fields.first,
+                      obscureText: field.secret,
+                      enableSuggestions: !field.secret,
+                      autocorrect: false,
+                      decoration: InputDecoration(
+                        labelText:
+                            field.label + (field.required ? '' : ' (optional)'),
+                        hintText: field.hint,
+                      ),
+                    ),
+                  ),
+                if (error != null)
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final values = <String, String>{};
+                  for (final field in fields) {
+                    final value = controllers[field.key]!.text.trim();
+                    if (field.required && value.isEmpty) {
+                      setDialogState(() => error = '${field.label} is required.');
+                      return;
+                    }
+                    if (value.isNotEmpty) values[field.key] = value;
+                  }
+                  Navigator.pop(dialogContext, values);
+                },
+                child: const Text('Connect'),
+              ),
+            ],
+          ),
+        );
+      },
+    ).whenComplete(() {
+      for (final c in controllers.values) {
+        c.dispose();
+      }
+    });
 }
 
 /// A connector logo. The bundled brand logo first (shipped in the binary for
@@ -749,11 +873,19 @@ class _McpConnectorIconState extends State<McpConnectorIcon> {
 
 Future<T> _withProgress<T>(
   BuildContext context,
-  Future<T> Function() work,
-) async {
+  Future<T> Function() work, {
+  McpConnectCanceler? canceler,
+}) async {
   final messenger = ScaffoldMessenger.of(context);
   messenger.showSnackBar(
-    const SnackBar(content: Text('Opening the browser to sign in…')),
+    SnackBar(
+      content: const Text('Opening the browser to sign in…'),
+      // Stay up for the whole sign-in so its Cancel stays reachable.
+      duration: const Duration(minutes: 5),
+      action: canceler == null
+          ? null
+          : SnackBarAction(label: 'Cancel', onPressed: canceler.cancel),
+    ),
   );
   try {
     return await work();

@@ -111,6 +111,40 @@ void main() {
               'cannot be connected from the catalogue',
         );
       }, skip: !_live ? 'set --dart-define=MCP_LIVE=true' : null);
+
+      // The trap Namecheap fell into: the server registers a client but hands
+      // back a fixed redirect-URI allowlist (a few first-party apps) and drops
+      // the loopback address we listen on. The browser then redirects to the
+      // server's own error page, and the app waits on a callback that never
+      // comes. register() turns that into a thrown McpAuthException, so this
+      // case fails here — automatically — for any offered server that gates
+      // its redirects, before it ever ships in the catalogue.
+      test('honours our loopback redirect in dynamic registration', () async {
+        final probe = await _probe(entry.url, client);
+        if (probe.open) return; // Nothing to sign in to.
+
+        final oauth = McpOAuth(httpClient: client);
+        final server = await oauth.discover(
+          Uri.parse(entry.url),
+          wwwAuthenticate: probe.challenge,
+        );
+        if (server.registrationEndpoint == null) return; // other test covers it
+
+        // A stand-in for the real listener's address: a loopback URI the
+        // server has never seen, exactly like the one at connect time.
+        final redirect = Uri.parse('http://127.0.0.1:52765/mcp/callback');
+        await expectLater(
+          oauth.register(
+            server,
+            redirect,
+            scope: server.scopesSupported.join(' '),
+          ),
+          completes,
+          reason:
+              '${entry.name} does not honour our loopback redirect, so the '
+              'sign-in cannot complete from this app',
+        );
+      }, skip: !_live ? 'set --dart-define=MCP_LIVE=true' : null);
     });
   }
 }

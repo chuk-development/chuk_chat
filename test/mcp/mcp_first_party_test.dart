@@ -36,9 +36,30 @@ void main() {
       }
     });
 
-    test('the catalogue itself stays OAuth-only', () {
+    test('the catalogue never carries the app session', () {
+      // Catalogue servers are third-party: they sign in through the browser
+      // (oauth) or take the reader's own key (apiKey). The app session is
+      // reserved for the connectors our own server fronts.
       for (final entry in kMcpCatalogue) {
-        expect(entry.auth, McpAuth.oauth, reason: entry.name);
+        expect(entry.auth, isNot(McpAuth.appSession), reason: entry.name);
+      }
+    });
+
+    test('an api-key entry declares the credentials it needs', () {
+      for (final entry in kMcpCatalogue) {
+        if (entry.auth == McpAuth.apiKey) {
+          expect(
+            entry.credentials,
+            isNotEmpty,
+            reason: '${entry.name} takes a key but names no credential fields',
+          );
+        } else {
+          expect(
+            entry.credentials,
+            isEmpty,
+            reason: '${entry.name} lists credentials but is not an api-key server',
+          );
+        }
       }
     });
 

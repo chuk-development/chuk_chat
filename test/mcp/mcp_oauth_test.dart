@@ -124,6 +124,84 @@ void main() {
     );
   });
 
+  // The Namecheap failure mode: registration succeeds but the server replaces
+  // our redirect with a fixed allowlist of a few first-party apps. The loopback
+  // we listen on is never in it, so the sign-in would land on the server's own
+  // error page. register() must catch this and throw, not hand back a client id
+  // that leads to a dead browser tab.
+  test('a fixed redirect allowlist that omits our loopback is refused', () async {
+    final client = MockClient((request) async {
+      final path = request.url.path;
+      if (path.contains('oauth-protected-resource')) {
+        return _json({
+          'authorization_servers': [_issuer],
+          'scopes_supported': ['files:read'],
+        });
+      }
+      if (path.contains('oauth-authorization-server') ||
+          path.contains('openid-configuration')) {
+        return _json({
+          'issuer': _issuer,
+          'authorization_endpoint': '$_issuer/authorize',
+          'token_endpoint': '$_issuer/token',
+          'registration_endpoint': '$_issuer/register',
+        });
+      }
+      if (path.endsWith('/register')) {
+        return _json({
+          'client_id': 'generated-id',
+          'redirect_uris': [
+            'https://claude.ai/api/mcp/auth_callback',
+            'cursor://anysphere.cursor-mcp/oauth/callback',
+          ],
+        });
+      }
+      return http.Response('not found', 404);
+    });
+    final oauth = McpOAuth(httpClient: client);
+    final server = await oauth.discover(endpoint);
+    await expectLater(
+      oauth.register(server, Uri.parse('http://127.0.0.1:1234/mcp/callback')),
+      throwsA(isA<McpAuthException>()),
+    );
+  });
+
+  // A compliant server echoes our redirect back in the list — that must pass.
+  test('a registration that keeps our redirect is accepted', () async {
+    final client = MockClient((request) async {
+      final path = request.url.path;
+      if (path.contains('oauth-protected-resource')) {
+        return _json({
+          'authorization_servers': [_issuer],
+          'scopes_supported': ['files:read'],
+        });
+      }
+      if (path.contains('oauth-authorization-server') ||
+          path.contains('openid-configuration')) {
+        return _json({
+          'issuer': _issuer,
+          'authorization_endpoint': '$_issuer/authorize',
+          'token_endpoint': '$_issuer/token',
+          'registration_endpoint': '$_issuer/register',
+        });
+      }
+      if (path.endsWith('/register')) {
+        return _json({
+          'client_id': 'generated-id',
+          'redirect_uris': ['http://127.0.0.1:1234/mcp/callback'],
+        });
+      }
+      return http.Response('not found', 404);
+    });
+    final oauth = McpOAuth(httpClient: client);
+    final server = await oauth.discover(endpoint);
+    final credentials = await oauth.register(
+      server,
+      Uri.parse('http://127.0.0.1:1234/mcp/callback'),
+    );
+    expect(credentials.clientId, 'generated-id');
+  });
+
   group('the authorization request', () {
     Future<McpAuthorizationRequest> build() async {
       final oauth = McpOAuth(httpClient: _server());
