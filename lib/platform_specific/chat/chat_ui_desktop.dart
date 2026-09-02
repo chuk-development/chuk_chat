@@ -1586,7 +1586,42 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       isStreaming: data.isReasoningStreaming,
       onEdit: _editMessageAt,
       onResendMessage: _resendMessageAt,
+      onBranch: _branchFromIndex,
     );
+  }
+
+  /// Fork the conversation into a brand-new chat, up to and including the
+  /// message at [index]. The current chat is left untouched in storage; the
+  /// new chat becomes the active one.
+  Future<void> _branchFromIndex(int index) async {
+    if (!_isValidMessageIndex(index)) return;
+    final List<Map<String, String>> branchMessages = _messages
+        .sublist(0, index + 1)
+        .map((m) => Map<String, String>.from(m))
+        .toList();
+    if (branchMessages.isEmpty) return;
+
+    final StoredChat? created = await _persistenceHandler.persistChat(
+      messages: branchMessages,
+      chatId: null,
+      waitForCompletion: true,
+      silent: true,
+    );
+    if (created == null) {
+      _showSnackBar('Could not branch chat');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(branchMessages);
+      _activeChatId = created.id;
+      _messageActionsHandler.cancelEdit();
+    });
+    widget.onChatIdChanged(created.id);
+    scrollChatToBottom(force: true);
+    _showSnackBar('Branched into a new chat');
   }
 
   List<MessageBubbleAction> _buildUserMessageActionsForIndex(
@@ -2002,10 +2037,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       itemCount: _messages.length,
                                       addAutomaticKeepAlives:
                                           true, // Keep message widgets alive
-                                      addRepaintBoundaries: true,
+                                      // Each item already wraps its own
+                                      // RepaintBoundary below, so the builder's
+                                      // automatic one would just be a redundant
+                                      // layer on every row.
+                                      addRepaintBoundaries: false,
                                       cacheExtent: _isLinuxDesktop
                                           ? 360.0
-                                          : 1200.0, // Lower Linux cache to reduce jank spikes
+                                          : 600.0, // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
                                       itemBuilder: (_, int i) {
                                         final MessageRenderData data =
                                             _buildMessageRenderData(i);

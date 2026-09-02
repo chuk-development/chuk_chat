@@ -1157,6 +1157,40 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Current active chat id. Debug only.
   String? get debugActiveChatId => _activeChatId;
 
+  /// Fork the conversation into a brand-new chat, up to and including the
+  /// message at [index]. The current chat is left untouched in storage; the
+  /// new chat becomes the active one.
+  Future<void> _branchFromIndex(int index) async {
+    if (index < 0 || index >= _messages.length) return;
+    final List<Map<String, String>> branchMessages = _messages
+        .sublist(0, index + 1)
+        .map((m) => Map<String, String>.from(m))
+        .toList();
+    if (branchMessages.isEmpty) return;
+
+    final StoredChat? created = await _persistenceHandler.persistChat(
+      messages: branchMessages,
+      chatId: null,
+      waitForCompletion: true,
+      silent: true,
+    );
+    if (created == null) {
+      _showSnackBar('Could not branch chat');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(branchMessages);
+      _activeChatId = created.id;
+      _messageActionsHandler.cancelEdit();
+    });
+    widget.onChatIdChanged(created.id);
+    scrollChatToBottom(force: true);
+    _showSnackBar('Branched into a new chat');
+  }
+
   void newChat() {
     if (kDebugMode) {
       debugPrint(
@@ -3512,6 +3546,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                           isStreaming: isStreamingMessage,
                                           onEdit: _editMessageAt,
                                           onResendMessage: _resendMessageAt,
+                                          onBranch: _branchFromIndex,
                                         ),
                                     userMessageActions: isUser
                                         ? _messageActionsHandler

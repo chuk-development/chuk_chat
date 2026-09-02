@@ -838,7 +838,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     }
                     if (index == 1) {
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
+                        // No bottom gap here: the "Available" section header
+                        // below carries its own top spacing, so 16 on top of
+                        // that left an oversized gap above the model list.
+                        padding: EdgeInsets.zero,
                         child: _ModePickerPanel(
                           buildIconWidget: _buildIconWidget,
                           models: _enabledModels,

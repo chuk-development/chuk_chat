@@ -10,7 +10,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   gtk
   irondash_engine_context
   pasteboard
-  printing
   record_linux
   screen_retriever_linux
   super_native_extensions
