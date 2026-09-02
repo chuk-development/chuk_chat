@@ -229,6 +229,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
 
+  /// Answer-version pager: while a regenerate is in flight, the previously
+  /// generated answer(s) are archived here so the freshly finalized answer can
+  /// be appended as a new variant instead of discarding the old one. Keyed by
+  /// [_pendingVariantMessageId] (the new assistant turn's messageId) so the
+  /// fold only ever attaches to the right message. The seed stays armed after
+  /// the fold — the desktop path folds twice per turn (once in
+  /// `_finalizeAiMessage`, once after content blocks land) — and is overwritten
+  /// by the next regenerate; the messageId key makes a lingering seed harmless.
+  /// It is cleared on a chat switch / newChat() by [_clearPendingVariantSeed].
+  List<Map<String, dynamic>>? _pendingVariantSeed;
+  String? _pendingVariantMessageId;
+
+  /// Drop any armed regenerate seed — called when the visible message list is
+  /// replaced (loading another chat, starting a new one) so a seed from a
+  /// half-finished regenerate cannot leak into an unrelated conversation.
+  void _clearPendingVariantSeed() {
+    _pendingVariantSeed = null;
+    _pendingVariantMessageId = null;
+  }
+
   /// When a new chat is started from a workspace, this holds the assistant ID
   /// until the chat is created and linked in the database.
   String? _pendingWorkspaceId;
@@ -556,6 +576,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void _loadChatById(String? chatId) {
     _pendingWorkspaceId = null;
+    // A pending regenerate seed belongs to the chat we are leaving.
+    _clearPendingVariantSeed();
     if (kDebugMode) {
       debugPrint('');
     }
@@ -1020,6 +1042,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void newChat() {
     _pendingWorkspaceId = null;
+    _clearPendingVariantSeed();
     WorkspaceStorageService.selectedWorkspaceId = null;
 
     // Capture current chat data for background persistence
@@ -1463,12 +1486,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _showSnackBar('Nothing to resend.');
       return;
     }
-    // Use the same logic as editing and submitting
+    // Use the same logic as editing and submitting. This is a regenerate, so
+    // the discarded answer is archived as a variant instead of being lost.
     await _submitEditedMessage(
       sourceIndex,
       text,
       removeFollowingAssistant: false,
       clearMessagesBelow: true,
+      isRegenerate: true,
     );
   }
 
@@ -1620,6 +1645,54 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     widget.onChatIdChanged(created.id);
     scrollChatToBottom(force: true);
     _showSnackBar('Branched into a new chat');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Answer-version pager (OpenAI-style ‹ k/n › on regenerated answers).
+  // ---------------------------------------------------------------------------
+
+  /// Capture the answer(s) about to be discarded by a regenerate at
+  /// [userIndex] (the preceding user message). Returns the archive to seed the
+  /// new answer's variant list with: the assistant answer directly below the
+  /// user message, using its own variant archive when it already has one (so
+  /// repeated regenerates keep stacking) or a single fresh snapshot otherwise.
+  /// Returns null when there is no assistant answer to preserve.
+  List<Map<String, dynamic>>? _captureRegenSeed(int userIndex) {
+    final int aiIndex = userIndex + 1;
+    if (aiIndex >= _messages.length) return null;
+    final Map<String, String> old = _messages[aiIndex];
+    if (old['sender'] != 'ai') return null;
+    final existing = ChatUiHelpers.decodeVariants(old['variants']);
+    if (existing.isNotEmpty) return existing;
+    return <Map<String, dynamic>>[ChatUiHelpers.variantSnapshotOf(old)];
+  }
+
+  /// Fold the pending regenerate seed onto [message] when it is the message
+  /// the seed was armed for. Idempotent: it always rebuilds `variants` from
+  /// `seed + current snapshot`, so calling it again after more content lands
+  /// (e.g. content blocks on the desktop success path) just refreshes the
+  /// active variant. No-op when nothing is armed, the ids do not match, or the
+  /// answer is still the "Thinking..." placeholder.
+  void _foldRegenVariantOnto(Map<String, String> message) {
+    final seed = _pendingVariantSeed;
+    if (seed == null) return;
+    final String? mid = message['messageId'];
+    if (mid == null || mid != _pendingVariantMessageId) return;
+    if ((message['text'] ?? '') == 'Thinking...') return;
+    ChatUiHelpers.writeVariants(
+      message: message,
+      seed: seed,
+      current: ChatUiHelpers.variantSnapshotOf(message),
+    );
+  }
+
+  /// Switch the answer shown by the message at [index] to variant [newIndex]
+  /// and persist. Wired to the pager arrows.
+  void _switchVariantAt(int index, int newIndex) {
+    if (!_isValidMessageIndex(index)) return;
+    if (!ChatUiHelpers.switchVariant(_messages[index], newIndex)) return;
+    setState(() {});
+    unawaited(_persistChat());
   }
 
   List<MessageBubbleAction> _buildUserMessageActionsForIndex(
@@ -2135,6 +2208,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 data,
                                               ),
                                           useSharedSelectionArea: true,
+                                          variantIndex: data.variantIndex,
+                                          variantCount: data.variantCount,
+                                          onPrevVariant: data.variantCount > 1
+                                              ? () => _switchVariantAt(
+                                                    i,
+                                                    data.variantIndex - 1,
+                                                  )
+                                              : null,
+                                          onNextVariant: data.variantCount > 1
+                                              ? () => _switchVariantAt(
+                                                    i,
+                                                    data.variantIndex + 1,
+                                                  )
+                                              : null,
                                           status: data.status,
                                           lastError: data.lastError,
                                           onRetryPending: data.isUser &&

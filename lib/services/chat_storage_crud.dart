@@ -897,6 +897,12 @@ class ChatStorageCrud {
         status: status,
         queueId: m['queueId'] as String?,
         messageId: m['messageId'] as String?,
+        // Answer-version pager: the variant archive and the active index must
+        // survive persist + reload. The UI map stores `variants` as a JSON
+        // string and `activeVariant` as a stringified int, so parse the latter
+        // back to an int here.
+        variants: m['variants'] as String?,
+        activeVariant: parseFlexibleInt(m['activeVariant']),
       );
     }).toList();
   }

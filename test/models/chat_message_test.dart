@@ -216,4 +216,89 @@ void main() {
       expect(restored.text, equals('Hello'));
     });
   });
+
+  group('answer variants', () {
+    const variantsJson =
+        '[{"text":"first answer","modelId":"gpt-4"},'
+        '{"text":"second answer","modelId":"gpt-4o"}]';
+
+    test('constructor stores variants + activeVariant', () {
+      final msg = ChatMessage(
+        role: 'assistant',
+        text: 'second answer',
+        variants: variantsJson,
+        activeVariant: 1,
+      );
+      expect(msg.variants, equals(variantsJson));
+      expect(msg.activeVariant, equals(1));
+    });
+
+    test('legacy messages have null variants', () {
+      final msg = ChatMessage(role: 'assistant', text: 'hi');
+      expect(msg.variants, isNull);
+      expect(msg.activeVariant, isNull);
+    });
+
+    test('toJson emits variants + activeVariant when present', () {
+      final json = ChatMessage(
+        role: 'assistant',
+        text: 'second answer',
+        variants: variantsJson,
+        activeVariant: 1,
+      ).toJson();
+      expect(json['variants'], equals(variantsJson));
+      expect(json['activeVariant'], equals(1));
+    });
+
+    test('toJson omits variants when null/empty, but keeps activeVariant 0', () {
+      final json = ChatMessage(role: 'assistant', text: 'hi').toJson();
+      expect(json.containsKey('variants'), isFalse);
+      expect(json.containsKey('activeVariant'), isFalse);
+
+      final zero = ChatMessage(
+        role: 'assistant',
+        text: 'hi',
+        variants: variantsJson,
+        activeVariant: 0,
+      ).toJson();
+      // activeVariant 0 is meaningful (first variant) and must survive.
+      expect(zero['activeVariant'], equals(0));
+    });
+
+    test('roundtrip preserves variants + activeVariant (persist + reload)', () {
+      final original = ChatMessage(
+        role: 'assistant',
+        text: 'second answer',
+        variants: variantsJson,
+        activeVariant: 1,
+      );
+      final restored = ChatMessage.fromJson(original.toJson());
+      expect(restored.variants, equals(variantsJson));
+      expect(restored.activeVariant, equals(1));
+    });
+
+    test('fromJson reads activeVariant from a stringified int', () {
+      // The UI map stores activeVariant as a String; a payload built from such
+      // a map must still parse it back to an int.
+      final restored = ChatMessage.fromJson(<String, dynamic>{
+        'role': 'assistant',
+        'text': 'second answer',
+        'variants': variantsJson,
+        'activeVariant': '1',
+      });
+      expect(restored.activeVariant, equals(1));
+    });
+
+    test('copyWith carries variants + activeVariant', () {
+      final base = ChatMessage(
+        role: 'assistant',
+        text: 'second answer',
+        variants: variantsJson,
+        activeVariant: 1,
+      );
+      final copy = base.copyWith(text: 'edited');
+      expect(copy.variants, equals(variantsJson));
+      expect(copy.activeVariant, equals(1));
+    });
+  });
 }

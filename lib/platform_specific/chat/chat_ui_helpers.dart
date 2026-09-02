@@ -48,6 +48,8 @@ class MessageRenderData {
     this.status,
     this.queueId,
     this.lastError,
+    this.variantIndex = 0,
+    this.variantCount = 0,
   });
 
   final String sender;
@@ -87,6 +89,14 @@ class MessageRenderData {
 
   /// Last error message recorded while trying to send (for failed status).
   final String? lastError;
+
+  /// Zero-based index of the answer variant currently shown, for the OpenAI-
+  /// style ‹ k/n › pager. `0` when the message was never regenerated.
+  final int variantIndex;
+
+  /// Number of answer variants on this message. `0` or `1` means no pager
+  /// (nothing to switch between); `> 1` renders the pager.
+  final int variantCount;
 
   bool get isUser => sender == 'user';
 }
@@ -351,7 +361,112 @@ class ChatUiHelpers {
     if (message.queueId != null && message.queueId!.isNotEmpty) {
       map['queueId'] = message.queueId!;
     }
+    // Answer-version pager: carry the variant archive + active index back into
+    // the UI map so a reloaded regenerated answer keeps its ‹ k/n › pager and
+    // can still switch between versions. `variants` stays a JSON string;
+    // `activeVariant` is stringified (the map is String-valued).
+    if (message.variants != null && message.variants!.isNotEmpty) {
+      map['variants'] = message.variants!;
+    }
+    if (message.activeVariant != null) {
+      map['activeVariant'] = message.activeVariant!.toString();
+    }
     return map;
+  }
+
+  /// Content keys that make up one answer variant — the swappable body of an
+  /// assistant answer. Snapshotting copies these (plus [kVariantArchiveOnlyKeys]);
+  /// switching a variant copies only these back onto the message's top level.
+  static const List<String> kVariantContentKeys = <String>[
+    'text',
+    'reasoning',
+    'contentBlocks',
+    'toolCalls',
+    'modelId',
+    'provider',
+    'generationMs',
+    'tps',
+    'images',
+    'imageMetas',
+    'imageCostEur',
+    'imageGeneratedAt',
+  ];
+
+  /// Extra keys captured into a variant snapshot for round-trip completeness
+  /// but never restored onto the top level when switching — the message keeps
+  /// its own stable [ChatMessage.messageId] (UI key + artifact rollback anchor)
+  /// and [ChatMessage.startedAt].
+  static const List<String> kVariantArchiveOnlyKeys = <String>[
+    'messageId',
+    'startedAt',
+  ];
+
+  /// Build a variant snapshot of one assistant message's swappable content.
+  /// Only present, non-empty keys are captured, mirroring the JSON guards on
+  /// [ChatMessage.toJson].
+  static Map<String, dynamic> variantSnapshotOf(Map<String, String> message) {
+    final snapshot = <String, dynamic>{};
+    for (final key in kVariantContentKeys) {
+      final value = message[key];
+      if (value != null && value.isNotEmpty) snapshot[key] = value;
+    }
+    for (final key in kVariantArchiveOnlyKeys) {
+      final value = message[key];
+      if (value != null && value.isNotEmpty) snapshot[key] = value;
+    }
+    return snapshot;
+  }
+
+  /// Decode the variant archive stored on a message map. Returns an empty list
+  /// when absent or malformed.
+  static List<Map<String, dynamic>> decodeVariants(String? variantsJson) {
+    if (variantsJson == null || variantsJson.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final decoded = jsonDecode(variantsJson);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    } catch (_) {}
+    return <Map<String, dynamic>>[];
+  }
+
+  /// Write a variant archive + active index onto [message]. [seed] holds the
+  /// previously archived variants (the discarded answers) and [current] is the
+  /// snapshot of the freshly generated answer, appended as the last (active)
+  /// variant. Idempotent per call: it always rebuilds from `seed + current`.
+  static void writeVariants({
+    required Map<String, String> message,
+    required List<Map<String, dynamic>> seed,
+    required Map<String, dynamic> current,
+  }) {
+    final all = <Map<String, dynamic>>[...seed, current];
+    message['variants'] = jsonEncode(all);
+    message['activeVariant'] = '${all.length - 1}';
+  }
+
+  /// Switch [message] to variant [newIndex]: copy that variant's content keys
+  /// onto the top level (removing any key the target variant lacks so stale
+  /// images/tool cards do not linger) and update `activeVariant`. Returns true
+  /// when the switch was applied.
+  static bool switchVariant(Map<String, String> message, int newIndex) {
+    final variants = decodeVariants(message['variants']);
+    if (newIndex < 0 || newIndex >= variants.length) return false;
+    final target = variants[newIndex];
+    for (final key in kVariantContentKeys) {
+      final value = target[key];
+      if (value != null && value.toString().isNotEmpty) {
+        message[key] = value.toString();
+      } else {
+        message.remove(key);
+      }
+    }
+    message['activeVariant'] = '$newIndex';
+    return true;
   }
 
   /// Finalize stale tool-call statuses in a raw message map.
@@ -898,6 +1013,18 @@ class ChatUiHelpers {
     final queueId = raw['queueId'];
     final lastError = raw['lastError'];
 
+    // Answer-version pager: how many variants exist and which is shown.
+    int variantCount = 0;
+    int variantIndex = 0;
+    if (isAiMessage) {
+      final variants = decodeVariants(raw['variants']);
+      variantCount = variants.length;
+      if (variantCount > 0) {
+        final parsed = int.tryParse(raw['activeVariant'] ?? '') ?? 0;
+        variantIndex = parsed.clamp(0, variantCount - 1);
+      }
+    }
+
     return MessageRenderData(
       sender: sender,
       displayText: displayText,
@@ -922,6 +1049,8 @@ class ChatUiHelpers {
       status: status,
       queueId: queueId,
       lastError: lastError,
+      variantIndex: variantIndex,
+      variantCount: variantCount,
     );
   }
 }

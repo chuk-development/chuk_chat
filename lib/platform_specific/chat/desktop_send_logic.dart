@@ -39,6 +39,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     bool removeFollowingAssistant = true,
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
+    bool isRegenerate = false,
   }) async {
     if (!_isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
@@ -80,6 +81,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _messages[index]['text'] = trimmedText;
         _messageActionsHandler.cancelEdit();
       });
+
+      // Answer-version pager: on a regenerate, archive the answer we are about
+      // to discard so the fresh answer can be appended as a new variant. Must
+      // run BEFORE the tail is removed below. Not a regenerate (a real prompt
+      // edit is a new question) → clear any stale seed so nothing folds.
+      final List<Map<String, dynamic>>? regenVariantSeed =
+          isRegenerate ? _captureRegenSeed(index) : null;
 
       // For resend flows on older messages, reset the chat branch from this
       // point by clearing everything below the resent message. Before removing
@@ -258,6 +266,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // tied to this turn for future regenerate rollbacks.
       final String assistantMessageId = _uuid.v4();
       ArtifactStorageService.currentMessageId = assistantMessageId;
+      // Arm the variant fold for this turn (keyed by the new messageId), or
+      // clear it when this is not a regenerate.
+      _pendingVariantSeed = regenVariantSeed;
+      _pendingVariantMessageId =
+          regenVariantSeed != null ? assistantMessageId : null;
       setState(() {
         _isSending = true;
         _messages.add({
@@ -724,6 +737,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     _messages[placeholderIndex]['contentBlocks'] =
                         contentBlocksJson;
                   }
+                  // Re-fold the answer variant now that content blocks are in
+                  // place (they are written after _finalizeAiMessage on the
+                  // desktop success path) so the archived active variant is
+                  // complete. Guard the index: the tail can be truncated by an
+                  // edit / resend / newChat() while _processToolImages and
+                  // ArtifactTagProcessor.processTags are awaited above.
+                  if (placeholderIndex >= 0 &&
+                      placeholderIndex < _messages.length) {
+                    _foldRegenVariantOnto(_messages[placeholderIndex]);
+                  }
                   _persistChatWithId(chatIdForStream);
                 } else {
                   final backgroundMsgs = _streamingManager
@@ -739,6 +762,23 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     }
                     if (tps != null) {
                       backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
+                    }
+                    // Archive the discarded answer here too (user switched to
+                    // another chat mid-regenerate) so a regenerate that
+                    // finishes in the background keeps its pager. The discarded
+                    // answer survives only in _pendingVariantSeed at this point,
+                    // so skipping the fold would lose it for good. Fold via a
+                    // String view of the dynamic background map.
+                    final bgMessage = <String, String>{
+                      for (final e in backgroundMsgs[placeholderIndex].entries)
+                        if (e.value != null) e.key: e.value.toString(),
+                    };
+                    _foldRegenVariantOnto(bgMessage);
+                    final String? bgVariants = bgMessage['variants'];
+                    if (bgVariants != null) {
+                      backgroundMsgs[placeholderIndex]['variants'] = bgVariants;
+                      backgroundMsgs[placeholderIndex]['activeVariant'] =
+                          bgMessage['activeVariant'];
                     }
                     _persistChatWithIdAndMessages(
                       chatIdForStream,
@@ -2347,6 +2387,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
         if (tps != null) message['tps'] = tps.toString();
+        _foldRegenVariantOnto(message);
         _messages[index] = message;
         _isSending = false;
       });
@@ -2357,6 +2398,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
       if (tps != null) message['tps'] = tps.toString();
+      _foldRegenVariantOnto(message);
       _messages[index] = message;
       _isSending = false;
     }

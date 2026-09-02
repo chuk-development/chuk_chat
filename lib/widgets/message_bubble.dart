@@ -173,6 +173,10 @@ class MessageBubble extends StatefulWidget {
     this.lastError,
     this.onRetryPending,
     this.onContinueGeneration,
+    this.variantIndex = 0,
+    this.variantCount = 0,
+    this.onPrevVariant,
+    this.onNextVariant,
   });
 
   final String message;
@@ -257,6 +261,19 @@ class MessageBubble extends StatefulWidget {
   /// an assistant message that was cut off mid-stream (status =
   /// [ChatMessageStatus.interrupted]). When null no button is rendered.
   final VoidCallback? onContinueGeneration;
+
+  /// Zero-based index of the answer variant currently shown, for the
+  /// OpenAI-style ‹ k/n › pager on a regenerated assistant answer.
+  final int variantIndex;
+
+  /// Total number of answer variants. The pager renders only when this is
+  /// greater than 1.
+  final int variantCount;
+
+  /// Switch to the previous / next answer variant. Null (or when at the
+  /// respective end) disables that arrow.
+  final VoidCallback? onPrevVariant;
+  final VoidCallback? onNextVariant;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
