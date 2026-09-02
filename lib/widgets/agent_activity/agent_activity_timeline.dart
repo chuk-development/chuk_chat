@@ -119,7 +119,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       _ticker = null;
       return;
     }
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+    // ~3 ticks a second while the turn runs, so the live counter climbs
+    // smoothly (the header shows tenths of a second) rather than jumping once
+    // per whole second. Cancelled the moment the turn settles.
+    _ticker = Timer.periodic(const Duration(milliseconds: 333), (_) {
       if (mounted) setState(() {});
     });
   }
@@ -206,7 +209,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     }
     final label = duration == null
         ? verb
-        : '$verb for ${formatAgentDuration(duration)}';
+        : '$verb for ${widget.isRunning ? formatAgentDurationLive(duration) : formatAgentDuration(duration)}';
 
     return Semantics(
       button: true,

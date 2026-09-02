@@ -24,7 +24,6 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -204,8 +203,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'connectors',
             icon: Icons.extension_outlined,
             label: l.connectors,
-            builder: (_) =>
-                McpConnectorsPage(isCoworkActive: isCoworkActive),
+            builder: (_) => const McpConnectorsPage(),
           ),
         _SettingsDest(
           id: 'skills',

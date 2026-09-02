@@ -37,7 +37,6 @@ class CatalogSkill {
     this.allowedTools = const [],
     this.resources = const [],
     this.enabled = true,
-    this.coworkOnly = false,
   });
 
   final String name;
@@ -59,11 +58,6 @@ class CatalogSkill {
   /// to the model — the reconciler skips it and drops any local copy. Defaults
   /// to true so a manifest without the field behaves exactly as before.
   final bool enabled;
-
-  /// Manifest toggle. A `true` entry is offered only while the app is in CoWork
-  /// mode and hidden from the normal chat UI. Carried through to the stored
-  /// skill so the registry can gate it at prompt-build time.
-  final bool coworkOnly;
 
   static CatalogSkill? fromJson(Map<String, dynamic> json) {
     final name = json['name'];
@@ -88,8 +82,6 @@ class CatalogSkill {
       resources:
           (json['resources'] as List?)?.whereType<String>().toList() ?? const [],
       enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
-      coworkOnly:
-          json['cowork_only'] is bool ? json['cowork_only'] as bool : false,
     );
   }
 }
@@ -235,16 +227,6 @@ class SkillsCatalogService {
   /// Pending update suggestions from the last reconcile, for the settings UI.
   static List<SkillUpdateSuggestion> _suggestions = const [];
   static List<SkillUpdateSuggestion> get suggestions => _suggestions;
-
-  /// Metadata key a catalog skill carries to mark itself CoWork-only. It rides
-  /// inside the SKILL.md `metadata` block (parsed into [Skill.metadata]), so
-  /// the flag is stored with the skill body and readable synchronously at
-  /// prompt-build time — no dependence on the manifest having been fetched yet.
-  static const String kCoworkOnlyMetaKey = 'cowork_only';
-
-  /// True when a stored skill is marked CoWork-only via its metadata.
-  static bool isCoworkOnly(Skill skill) =>
-      skill.metadata[kCoworkOnlyMetaKey]?.trim().toLowerCase() == 'true';
 
   static String hashOf(String source) =>
       'sha256:${sha256.convert(utf8.encode(source)).toString()}';

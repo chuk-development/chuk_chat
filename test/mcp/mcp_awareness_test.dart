@@ -33,20 +33,6 @@ void main() {
       expect(ids, isNot(contains('notion')));
       expect(ids, contains('linear'));
     });
-
-    test('hides coworkOnly servers by default, shows them on request', () {
-      final normal = unconnectedCatalogueEntries().map((e) => e.id).toSet();
-      expect(normal, isNot(contains('exa')));
-      expect(normal, isNot(contains('firecrawl')));
-      expect(normal, isNot(contains('browserbase')));
-
-      final withCowork = unconnectedCatalogueEntries(includeCoworkOnly: true)
-          .map((e) => e.id)
-          .toSet();
-      expect(withCowork, contains('exa'));
-      expect(withCowork, contains('firecrawl'));
-      expect(withCowork, contains('browserbase'));
-    });
   });
 
   group('catalogueEntryById', () {
@@ -61,18 +47,6 @@ void main() {
   });
 
   group('catalogue polish', () {
-    test('the three new servers are present', () {
-      final ids = kMcpCatalogue.map((e) => e.id).toSet();
-      expect(ids, containsAll(<String>['calcom', 'browserbase', 'exa']));
-    });
-
-    test('coworkOnly is set only on the CoWork-mode servers', () {
-      for (final e in kMcpCatalogue) {
-        final expected = {'exa', 'firecrawl', 'browserbase'}.contains(e.id);
-        expect(e.coworkOnly, expected, reason: e.id);
-      }
-    });
-
     test('brandDomain strips ai and mail service subdomains', () {
       expect(McpCatalogueEntry.brandDomain('ai.todoist.net'), 'todoist.net');
       expect(

@@ -4,7 +4,6 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
 
 CatalogSkill _cat(String name, String hash) => CatalogSkill(
@@ -194,21 +193,18 @@ void main() {
       expect(skill.license, 'Apache-2.0');
       // Toggles default when absent.
       expect(skill.enabled, isTrue);
-      expect(skill.coworkOnly, isFalse);
     });
 
-    test('parses the enabled and cowork_only toggles', () {
+    test('parses the enabled toggle', () {
       final skill = CatalogSkill.fromJson({
         'name': 'browser-to-curl',
         'description': 'd',
         'path': 'skills/browser-to-curl',
         'hash': 'sha256:abc',
         'enabled': false,
-        'cowork_only': true,
       });
       expect(skill, isNotNull);
       expect(skill!.enabled, isFalse);
-      expect(skill.coworkOnly, isTrue);
     });
 
     test('returns null when a required field is missing', () {
@@ -216,26 +212,6 @@ void main() {
         CatalogSkill.fromJson({'name': 'x', 'description': 'y'}),
         isNull,
       );
-    });
-  });
-
-  group('isCoworkOnly', () {
-    Skill mk(Map<String, String> metadata) => Skill(
-      name: 'x',
-      description: 'd',
-      body: 'b',
-      source: SkillSource.user,
-      metadata: metadata,
-    );
-
-    test('true only when metadata cowork_only reads true', () {
-      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'true'})),
-          isTrue);
-      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'TRUE'})),
-          isTrue);
-      expect(SkillsCatalogService.isCoworkOnly(mk({'cowork_only': 'false'})),
-          isFalse);
-      expect(SkillsCatalogService.isCoworkOnly(mk(const {})), isFalse);
     });
   });
 

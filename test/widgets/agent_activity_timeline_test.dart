@@ -342,7 +342,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 10)),
       );
 
-      expect(find.text('Working for 10s'), findsOneWidget);
+      expect(find.text('Working for 10.0s'), findsOneWidget);
       expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
       expect(find.byIcon(Icons.search), findsOneWidget);
       expect(find.byIcon(Icons.language), findsOneWidget);
@@ -563,7 +563,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 3)),
       );
 
-      expect(find.text('Connecting for 3s'), findsOneWidget);
+      expect(find.text('Connecting for 3.0s'), findsOneWidget);
     });
 
     testWidgets('a server reading the prompt is not called thinking', (
@@ -578,7 +578,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 12)),
       );
 
-      expect(find.text('Prompt processing for 12s'), findsOneWidget);
+      expect(find.text('Prompt processing for 12.0s'), findsOneWidget);
     });
 
     testWidgets('a running tool outranks the stream phase', (tester) async {
@@ -595,7 +595,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 5)),
       );
 
-      expect(find.text('Working for 5s'), findsOneWidget);
+      expect(find.text('Working for 5.0s'), findsOneWidget);
     });
 
     testWidgets('the clock runs from the request, not the first call', (
@@ -612,7 +612,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 32)),
       );
 
-      expect(find.text('Writing for 32s'), findsOneWidget);
+      expect(find.text('Writing for 32.0s'), findsOneWidget);
     });
 
     testWidgets('a finished turn shows the length it was saved with', (

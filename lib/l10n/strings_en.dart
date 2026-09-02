@@ -646,13 +646,6 @@ const Map<String, String> stringsEn = {
   'workspaces': 'Workspaces',
   'media': 'Media',
 
-  // ── CoWork mode ─────────────────────────────────────────────
-  'chatMode': 'Chat',
-  'coworkMode': 'CoWork',
-  'coworkComingSoon': 'CoWork',
-  'coworkComingSoonBody':
-      'Drive an agent on your laptop from anywhere. Pairing and remote control are on the way.',
-
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Media Manager',
   'imageUsedInChats': 'Image Used in Chats',

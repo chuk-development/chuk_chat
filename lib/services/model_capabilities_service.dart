@@ -21,6 +21,23 @@ class ModelCapabilitiesService {
   // In-memory cache for graded-effort support (modelId -> supportsReasoningEffort)
   static final Map<String, bool> _reasoningEffortCache = {};
 
+  // In-memory cache for mandatory reasoning (modelId -> reasoningMandatory).
+  // A model flagged here forbids disabling reasoning; the server rejects a
+  // "reasoning off" request with a hard 400, so the UI must not offer it.
+  static final Map<String, bool> _reasoningMandatoryCache = {};
+
+  // In-memory cache of the server's `supported_efforts` list per model — THE
+  // picker list the client must render verbatim (see the reasoning-effort
+  // contract). "none"/off is first when disabling is allowed, absent when
+  // reasoning is mandatory. The list is already fully resolved by the server;
+  // the client never invents or reorders it.
+  static final Map<String, List<String>> _supportedEffortsCache = {};
+
+  // In-memory cache of the server's `reasoning_default_effort` per model — the
+  // level the model reasons at by default, used as a clamp target for an
+  // unknown/stale stored selection.
+  static final Map<String, String> _reasoningDefaultEffortCache = {};
+
   static bool _isInitialized = false;
 
   /// Serializes every load so a self-heal, a startup init and a prefetch
@@ -62,6 +79,9 @@ class ModelCapabilitiesService {
       final vision = <String, bool>{};
       final reasoning = <String, bool>{};
       final effort = <String, bool>{};
+      final mandatory = <String, bool>{};
+      final supportedEfforts = <String, List<String>>{};
+      final defaultEffort = <String, String>{};
       for (final model in cachedModels) {
         final modelId = model['id'];
         if (modelId is! String) continue;
@@ -73,6 +93,19 @@ class ModelCapabilitiesService {
         if (supportsReasoningEffort is bool) {
           effort[modelId] = supportsReasoningEffort;
         }
+        final reasoningMandatory = model['reasoning_mandatory'];
+        if (reasoningMandatory is bool) {
+          mandatory[modelId] = reasoningMandatory;
+        }
+        final efforts = model['supported_efforts'];
+        if (efforts is List) {
+          final tokens = efforts.whereType<String>().toList();
+          if (tokens.isNotEmpty) supportedEfforts[modelId] = tokens;
+        }
+        final defEffort = model['reasoning_default_effort'];
+        if (defEffort is String && defEffort.isNotEmpty) {
+          defaultEffort[modelId] = defEffort;
+        }
       }
       _visionSupportCache
         ..clear()
@@ -83,6 +116,15 @@ class ModelCapabilitiesService {
       _reasoningEffortCache
         ..clear()
         ..addAll(effort);
+      _reasoningMandatoryCache
+        ..clear()
+        ..addAll(mandatory);
+      _supportedEffortsCache
+        ..clear()
+        ..addAll(supportedEfforts);
+      _reasoningDefaultEffortCache
+        ..clear()
+        ..addAll(defaultEffort);
       _isInitialized = true;
       revision.value++;
       if (kDebugMode) {
@@ -139,6 +181,35 @@ class ModelCapabilitiesService {
   static bool supportsReasoningEffortSync(String modelId) {
     if (modelId.isEmpty) return true;
     return _reasoningEffortCache[modelId] ?? true;
+  }
+
+  /// Whether [modelId] FORCES reasoning on (cannot be turned off). When true,
+  /// the UI must hide the "off" option and never send a reasoning-disabled
+  /// request — the server rejects it with a hard 400. Conservative default:
+  /// an unknown model is treated as NOT mandatory (keeps the off option); the
+  /// server-side safety net still recovers if such a model rejects a disable.
+  static bool isReasoningMandatorySync(String modelId) {
+    if (modelId.isEmpty) return false;
+    return _reasoningMandatoryCache[modelId] ?? false;
+  }
+
+  /// The server's `supported_efforts` list for [modelId] — the picker options,
+  /// rendered verbatim (see the reasoning-effort contract). Returns an empty
+  /// list when the catalog cache has no entry yet (cold start) or the model is
+  /// unknown, so the caller falls back to the derived list. The returned list
+  /// is a copy, so a caller can never mutate the cache.
+  static List<String> supportedEffortsSync(String modelId) {
+    if (modelId.isEmpty) return const <String>[];
+    final cached = _supportedEffortsCache[modelId];
+    return cached == null ? const <String>[] : List<String>.of(cached);
+  }
+
+  /// The server's `reasoning_default_effort` for [modelId], or null when the
+  /// model advertises none / is unknown. Used as a clamp target for a stale
+  /// stored selection that is no longer in the model's list.
+  static String? reasoningDefaultEffortSync(String modelId) {
+    if (modelId.isEmpty) return null;
+    return _reasoningDefaultEffortCache[modelId];
   }
 
   /// Refresh the in-memory cache from disk.

@@ -420,25 +420,12 @@ fi
 # lib/ reads it. The flag that exists is FEATURE_WORKSPACES.
 
 # On by default.
-FEATURE_VOICE_MODE="${FEATURE_VOICE_MODE:-true}"
+FEATURE_VOICE_MODE="${FEATURE_VOICE_MODE:-false}"
 FEATURE_WORKSPACES="${FEATURE_WORKSPACES:-true}"
 FEATURE_ARTIFACTS="${FEATURE_ARTIFACTS:-true}"
 FEATURE_SERVER_TOOLS="${FEATURE_SERVER_TOOLS:-true}"
 FEATURE_SKILLS="${FEATURE_SKILLS:-true}"
 FEATURE_PAYMENTS_DIRECT="${FEATURE_PAYMENTS_DIRECT:-true}"
-
-# On, but NOT a working feature yet: today this only reveals the mode switcher
-# and an M0 "coming soon" placeholder (lib/platform_specific/cowork/ is 64
-# lines). It is on so the surface is visible while it gets built out — see
-# docs/COWORK_EXECUTION_PLAN.md. Turn it off if the dead screen is in the way.
-FEATURE_COWORK="${FEATURE_COWORK:-true}"
-
-# Off by default. Turns the CoWork surface into the LOCAL demo: a 127.0.0.1
-# loopback server + a phone-style web page that injects tasks into THIS
-# machine's real agent loop, which can run laptop-native tools (run_command,
-# read_file, …) here. Enable with FEATURE_COWORK_DEMO=true ./run.sh linux.
-# See docs/COWORK_DEMO.md.
-FEATURE_COWORK_DEMO="${FEATURE_COWORK_DEMO:-false}"
 
 # Off by default on purpose — turning this on makes the app worse, not
 # more complete. Set it explicitly if you actually want it:
@@ -459,7 +446,7 @@ esac
 # and a log that disagrees with what was actually passed is worse than none.
 ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
-  FEATURE_SERVER_TOOLS FEATURE_SKILLS FEATURE_COWORK FEATURE_COWORK_DEMO
+  FEATURE_SERVER_TOOLS FEATURE_SKILLS
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
   FEATURE_LINUX_KEYRING
 )

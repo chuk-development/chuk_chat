@@ -23,6 +23,12 @@ enum ChatMode {
 
   /// Thinks hard before answering — a stronger model, reasoning on.
   thinking,
+
+  /// A free slot: any model the reader picks, at any reasoning level. Unlike
+  /// Fast and Thinking — whose models are set on the model screen and never
+  /// overwritten by a composer pick — Custom's model is whatever the reader
+  /// last chose in the composer. Picking a model there switches to this mode.
+  custom,
 }
 
 /// One mode's independent settings: which model, on which provider, at which
@@ -128,9 +134,11 @@ class ChatModeService {
     'high',
   ];
 
-  /// Every reasoning level the chat API accepts, weakest to strongest. The
-  /// order doubles as the rank used when clamping a level to what a provider
-  /// allows.
+  /// Every graded reasoning token the chat API accepts, weakest to strongest.
+  /// The order doubles as the canonical rank used when clamping a level to what
+  /// a model allows. Real per-model ladders are irregular subsets of this — the
+  /// server decides which tokens a model exposes (see `supported_efforts`); this
+  /// list only fixes their ORDER, never invents a model's ladder.
   static const List<String> reasoningLevelsAll = <String>[
     'none',
     'minimal',
@@ -138,6 +146,7 @@ class ChatModeService {
     'medium',
     'high',
     'xhigh',
+    'max',
   ];
 
   /// What Fireworks providers accept — no `minimal`, no `xhigh`.
@@ -166,6 +175,14 @@ class ChatModeService {
       providerSlug: defaultProviderSlug,
       reasoningEffort: 'medium',
     ),
+    // Custom starts on the general fallback with reasoning off. It is only a
+    // seed: the reader replaces the model the moment they pick one, so the
+    // exact starting model matters less than that it is always valid.
+    ChatMode.custom: ModeConfig(
+      modelId: defaultModelId,
+      providerSlug: defaultProviderSlug,
+      reasoningEffort: reasoningOff,
+    ),
   };
 
   /// What a fresh install starts with. Fast, because most questions are
@@ -191,16 +208,47 @@ class ChatModeService {
   /// exposes no graded effort offers a plain on/off toggle. A model with
   /// graded effort offers the low/medium/high ladder — the same set on both
   /// OpenRouter and Fireworks now, so the provider no longer splits the list.
+  /// [reasoningMandatory] models forbid disabling reasoning: the server rejects
+  /// a "reasoning off" request with a hard 400, so `none` is dropped from the
+  /// list entirely. A mandatory graded model offers low/medium/high; a mandatory
+  /// toggle model collapses to a single "on" (always on, nothing to turn off).
   static List<String> reasoningLevelsFor({
     required String providerSlug,
     bool supportsReasoning = true,
     bool supportsReasoningEffort = true,
+    bool reasoningMandatory = false,
   }) {
     if (!supportsReasoning) return const <String>[reasoningOff];
     if (!supportsReasoningEffort) {
-      return const <String>[reasoningOff, reasoningOn];
+      return reasoningMandatory
+          ? const <String>[reasoningOn]
+          : const <String>[reasoningOff, reasoningOn];
     }
-    return reasoningLevelsGraded;
+    return reasoningMandatory
+        ? const <String>['low', 'medium', 'high']
+        : reasoningLevelsGraded;
+  }
+
+  /// THE picker list for [modelId] — the single source of truth. The server
+  /// resolves exactly which levels are selectable per model and ships them as
+  /// `supported_efforts`; the client renders that list verbatim. Only when the
+  /// catalog cache has no entry yet (cold start, or a model the cache does not
+  /// know) does this fall back to the derived [reasoningLevelsFor] list, so a
+  /// picker never comes up empty. Never hardcodes a per-model ladder.
+  static List<String> reasoningLevelsForModel({
+    required String modelId,
+    required String providerSlug,
+  }) {
+    final server = ModelCapabilitiesService.supportedEffortsSync(modelId);
+    if (server.isNotEmpty) return server;
+    return reasoningLevelsFor(
+      providerSlug: providerSlug,
+      supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(modelId),
+      supportsReasoningEffort:
+          ModelCapabilitiesService.supportsReasoningEffortSync(modelId),
+      reasoningMandatory:
+          ModelCapabilitiesService.isReasoningMandatorySync(modelId),
+    );
   }
 
   /// Clamp [level] to what the model allows. An exact match wins; otherwise
@@ -215,12 +263,56 @@ class ChatModeService {
     required String providerSlug,
     bool supportsReasoning = true,
     bool supportsReasoningEffort = true,
+    bool reasoningMandatory = false,
   }) {
     final allowed = reasoningLevelsFor(
       providerSlug: providerSlug,
       supportsReasoning: supportsReasoning,
       supportsReasoningEffort: supportsReasoningEffort,
+      reasoningMandatory: reasoningMandatory,
     );
+    return _clampToAllowed(level, allowed);
+  }
+
+  /// Clamp [level] to what [modelId] actually allows, using the server's
+  /// `supported_efforts` list as the source of truth (with the derived list as
+  /// a cold-start fallback). This is the clamp to run BEFORE display and BEFORE
+  /// send, so a stale saved preference can never render or transmit a level the
+  /// model does not support. Falls back to the model's advertised default when
+  /// nothing weaker qualifies.
+  static String sanitizeReasoningForModel(
+    String level, {
+    required String modelId,
+    required String providerSlug,
+  }) {
+    final allowed = reasoningLevelsForModel(
+      modelId: modelId,
+      providerSlug: providerSlug,
+    );
+    return _clampToAllowed(
+      level,
+      allowed,
+      defaultEffort: ModelCapabilitiesService.reasoningDefaultEffortSync(
+        modelId,
+      ),
+    );
+  }
+
+  /// Clamp [level] to [allowed]. An exact match wins; otherwise the strongest
+  /// allowed level no stronger than [level] is used, and only if none qualifies
+  /// does it drop to the weakest allowed (the list's first entry).
+  ///
+  /// The `'on'` token means "reasoning on at some strength". On a binary model
+  /// (its list contains `on`) it maps to [reasoningOn]; on a graded model it
+  /// maps to a graded level (ranked as `medium`, since `'on'` has no place on
+  /// the graded ladder). [defaultEffort], when given and allowed, is preferred
+  /// over a blind guess for a token with no rank.
+  static String _clampToAllowed(
+    String level,
+    List<String> allowed, {
+    String? defaultEffort,
+  }) {
+    if (allowed.isEmpty) return level;
     if (allowed.contains(level)) return level;
     if (level == reasoningOff) return allowed.first;
 
@@ -233,7 +325,11 @@ class ChatModeService {
     final wantToken = level == reasoningOn ? 'medium' : level;
     final wantRank = reasoningLevelsAll.indexOf(wantToken);
     if (wantRank < 0) {
-      // Unknown token — fall back to a safe graded level rather than off.
+      // Unknown token — prefer the model's advertised default, else a safe
+      // graded level rather than off.
+      if (defaultEffort != null && allowed.contains(defaultEffort)) {
+        return defaultEffort;
+      }
       return allowed.contains('medium') ? 'medium' : allowed.first;
     }
 
@@ -265,6 +361,8 @@ class ChatModeService {
       case 'high':
         return 'High';
       case 'xhigh':
+        return 'X-High';
+      case 'max':
         return 'Max';
       default:
         return level;
@@ -302,16 +400,10 @@ class ChatModeService {
         fallback: fallback,
       );
       return config.copyWith(
-        reasoningEffort: sanitizeReasoning(
+        reasoningEffort: sanitizeReasoningForModel(
           config.reasoningEffort,
+          modelId: config.modelId,
           providerSlug: config.providerSlug,
-          supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
-            config.modelId,
-          ),
-          supportsReasoningEffort:
-              ModelCapabilitiesService.supportsReasoningEffortSync(
-                config.modelId,
-              ),
         ),
       );
     } catch (e) {
@@ -335,6 +427,20 @@ class ChatModeService {
     }
   }
 
+  /// Whether [mode] has a real stored config record (the reader has set it at
+  /// least once), as opposed to only ever running the baked default. Used to
+  /// tell "Custom has a remembered model" from "Custom was never picked", so
+  /// the composer can label the third point with the model or stay neutral.
+  static Future<bool> hasStoredConfig(ChatMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_configKey(mode));
+      return raw != null && raw.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Point [mode] at a new model+provider, re-clamping its reasoning level to
   /// the new provider's allowed set. Returns the stored result.
   static Future<ModeConfig> setModelForMode(
@@ -352,14 +458,10 @@ class ChatModeService {
     final updated = current.copyWith(
       modelId: modelId,
       providerSlug: effectiveProvider,
-      reasoningEffort: sanitizeReasoning(
+      reasoningEffort: sanitizeReasoningForModel(
         current.reasoningEffort,
+        modelId: modelId,
         providerSlug: effectiveProvider,
-        supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
-          modelId,
-        ),
-        supportsReasoningEffort:
-            ModelCapabilitiesService.supportsReasoningEffortSync(modelId),
       ),
     );
     await saveConfig(mode, updated);
@@ -374,16 +476,33 @@ class ChatModeService {
   ) async {
     final current = await loadConfig(mode);
     final updated = current.copyWith(
-      reasoningEffort: sanitizeReasoning(
+      reasoningEffort: sanitizeReasoningForModel(
         level,
+        modelId: current.modelId,
         providerSlug: current.providerSlug,
-        supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
-          current.modelId,
-        ),
-        supportsReasoningEffort:
-            ModelCapabilitiesService.supportsReasoningEffortSync(
-              current.modelId,
-            ),
+      ),
+    );
+    await saveConfig(mode, updated);
+    return updated;
+  }
+
+  /// Pin [mode] to a new provider, keeping its model, and re-clamp the mode's
+  /// reasoning level to what the new provider allows. Returns the stored
+  /// result. An empty slug is ignored — the mode keeps its current provider.
+  static Future<ModeConfig> setProviderForMode(
+    ChatMode mode,
+    String providerSlug,
+  ) async {
+    final current = await loadConfig(mode);
+    if (providerSlug.isEmpty || providerSlug == current.providerSlug) {
+      return current;
+    }
+    final updated = current.copyWith(
+      providerSlug: providerSlug,
+      reasoningEffort: sanitizeReasoningForModel(
+        current.reasoningEffort,
+        modelId: current.modelId,
+        providerSlug: providerSlug,
       ),
     );
     await saveConfig(mode, updated);

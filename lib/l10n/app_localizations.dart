@@ -660,12 +660,6 @@ class AppLocalizations {
   String get workspaces => _get('workspaces');
   String get media => _get('media');
 
-  // ── CoWork mode ─────────────────────────────────────────────
-  String get chatMode => _get('chatMode');
-  String get coworkMode => _get('coworkMode');
-  String get coworkComingSoon => _get('coworkComingSoon');
-  String get coworkComingSoonBody => _get('coworkComingSoonBody');
-
   // ── Media manager ──────────────────────────────────────────
   String get mediaManager => _get('mediaManager');
   String get imageUsedInChats => _get('imageUsedInChats');

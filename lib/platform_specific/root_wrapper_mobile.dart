@@ -4,10 +4,8 @@ import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/platform_specific/cowork/cowork_surface.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
@@ -52,14 +50,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
-  AppMode _mode = AppMode.chat;
-
-  /// Switch mode. Mirrors the choice into [appModeNotifier] so the far-away
-  /// readers (connectors page, model-awareness prompt) see it too.
-  void _setMode(AppMode m) {
-    setState(() => _mode = m);
-    appModeNotifier.value = m;
-  }
 
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
@@ -731,58 +721,51 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         child: Stack(
           children: [
             Positioned.fill(
-              child: (kFeatureCoWork && _mode == AppMode.cowork)
-                  ? Padding(
-                      padding: EdgeInsets.only(top: topBarInset),
-                      child: const CoWorkSurface(),
-                    )
-                  : ChukChatUIMobile(
-                      key: _chatUIMobileKey,
-                      topInset: topBarInset,
-                      onToggleSidebar: _toggleSidebar,
-                      selectedChatId: ChatStorageService.selectedChatId,
-                      onChatIdChanged: (newId) {
-                        // Update the global state when chat UI creates/changes a chat
-                        // Use setState to ensure parent rebuilds with new ID
-                        setState(() {
-                          ChatStorageService.selectedChatId = newId;
-                        });
-                        if (kFeatureArtifacts) {
-                          unawaited(
-                            ArtifactStorageService.setActiveChat(
-                              newId,
-                              forceRefresh: false,
-                            ),
-                          );
-                        }
-                      },
-                      isSidebarExpanded: _isSidebarExpanded,
-                      showReasoningTokens: widget.config.showReasoningTokens,
-                      showModelInfo: widget.config.showModelInfo,
-                      showTps: widget.config.showTps,
-                      autoSendVoiceTranscription:
-                          widget.config.autoSendVoiceTranscription,
-                      // Image generation settings
-                      imageGenEnabled: widget.config.imageGenEnabled,
-                      imageGenDefaultSize: widget.config.imageGenDefaultSize,
-                      imageGenCustomWidth: widget.config.imageGenCustomWidth,
-                      imageGenCustomHeight: widget.config.imageGenCustomHeight,
-                      imageGenUseCustomSize:
-                          widget.config.imageGenUseCustomSize,
-                      includeRecentImagesInHistory:
-                          widget.config.includeRecentImagesInHistory,
-                      includeAllImagesInHistory:
-                          widget.config.includeAllImagesInHistory,
-                      includeReasoningInHistory:
-                          widget.config.includeReasoningInHistory,
-                      includeToolResultsInHistory:
-                          widget.config.includeToolResultsInHistory,
-                      toolCallingEnabled: widget.config.toolCallingEnabled,
-                      toolDiscoveryMode: widget.config.toolDiscoveryMode,
-                      showToolCalls: widget.config.showToolCalls,
-                      allowMarkdownToolCalls:
-                          widget.config.allowMarkdownToolCalls,
-                    ),
+              child: ChukChatUIMobile(
+                key: _chatUIMobileKey,
+                topInset: topBarInset,
+                onToggleSidebar: _toggleSidebar,
+                selectedChatId: ChatStorageService.selectedChatId,
+                onChatIdChanged: (newId) {
+                  // Update the global state when chat UI creates/changes a chat
+                  // Use setState to ensure parent rebuilds with new ID
+                  setState(() {
+                    ChatStorageService.selectedChatId = newId;
+                  });
+                  if (kFeatureArtifacts) {
+                    unawaited(
+                      ArtifactStorageService.setActiveChat(
+                        newId,
+                        forceRefresh: false,
+                      ),
+                    );
+                  }
+                },
+                isSidebarExpanded: _isSidebarExpanded,
+                showReasoningTokens: widget.config.showReasoningTokens,
+                showModelInfo: widget.config.showModelInfo,
+                showTps: widget.config.showTps,
+                autoSendVoiceTranscription:
+                    widget.config.autoSendVoiceTranscription,
+                // Image generation settings
+                imageGenEnabled: widget.config.imageGenEnabled,
+                imageGenDefaultSize: widget.config.imageGenDefaultSize,
+                imageGenCustomWidth: widget.config.imageGenCustomWidth,
+                imageGenCustomHeight: widget.config.imageGenCustomHeight,
+                imageGenUseCustomSize: widget.config.imageGenUseCustomSize,
+                includeRecentImagesInHistory:
+                    widget.config.includeRecentImagesInHistory,
+                includeAllImagesInHistory:
+                    widget.config.includeAllImagesInHistory,
+                includeReasoningInHistory:
+                    widget.config.includeReasoningInHistory,
+                includeToolResultsInHistory:
+                    widget.config.includeToolResultsInHistory,
+                toolCallingEnabled: widget.config.toolCallingEnabled,
+                toolDiscoveryMode: widget.config.toolDiscoveryMode,
+                showToolCalls: widget.config.showToolCalls,
+                allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
+              ),
             ),
             Positioned(
               top: 0,
@@ -818,8 +801,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         onChatDeleted: _handleChatDeleted,
         selectedChatId: ChatStorageService.selectedChatId,
         isCompactMode: true,
-        mode: _mode,
-        onModeChanged: _setMode,
       ),
     );
 

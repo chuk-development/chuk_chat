@@ -105,6 +105,15 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
           style: style,
         );
 
+        // Every title reserves the SAME height, with a little slack below the
+        // bare line box so descenders (g, y, p) always have room and the line
+        // sits vertically centred. Pinning a Text to exactly the line height —
+        // as the old overflow path did — clipped descenders on long titles
+        // while short ones (plain self-sized Text) escaped, which is why the
+        // list looked uneven. One height for both keeps every row identical.
+        final double fontSize = style?.fontSize ?? 14.0;
+        final double boxHeight = (textHeight + fontSize * 0.18).ceilToDouble();
+
         // Fits: plain ellipsized text, no gestures, no animation.
         if (!overflows) {
           // Defensively wind down any leftover animation (e.g. the title was
@@ -112,32 +121,43 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
           if (_active) {
             WidgetsBinding.instance.addPostFrameCallback((_) => _stop());
           }
-          return resting;
+          return SizedBox(
+            height: boxHeight,
+            child: Align(alignment: Alignment.centerLeft, child: resting),
+          );
         }
 
         final Widget marquee = SizedBox(
           width: maxWidth,
-          height: textHeight,
+          height: boxHeight,
           child: AnimatedBuilder(
             animation: _controller,
             builder: (context, _) {
               if (!_active && _controller.value == 0) {
-                return resting;
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: resting,
+                );
               }
               final double dx = -overflow * _controller.value;
               return ClipRect(
                 child: Stack(
                   clipBehavior: Clip.none,
+                  alignment: Alignment.centerLeft,
                   children: [
                     Positioned(
                       left: dx,
                       top: 0,
-                      child: Text(
-                        widget.text,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.visible,
-                        style: style,
+                      bottom: 0,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          widget.text,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          style: style,
+                        ),
                       ),
                     ),
                   ],

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:chuk_chat/models/app_mode.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -381,14 +380,6 @@ class ToolCallHandler {
     // turn whose only tool call was `skill()` would trigger a full [VERIFY]
     // round-trip that fact-checks an ack against nothing.
     'skill',
-    // CoWork laptop-native tools return local machine state (command output,
-    // file contents, directory listings), not verifiable real-world facts.
-    // Without these entries every turn that touches the local machine would
-    // fire a spurious [VERIFY] fact-check round against nothing.
-    'run_command',
-    'read_file',
-    'write_file',
-    'list_directory',
     // Artifact hosting returns a published URL, not verifiable facts. Without
     // these entries a turn whose only tool call was create/update_artifact
     // would fire a spurious [VERIFY] fact-check round against nothing.
@@ -1325,12 +1316,7 @@ class ToolCallHandler {
         .where((t) => t.name == 'request_mcp_server')
         .map((t) => t.toJson())
         .firstOrNull;
-    // CoWork-only servers (which duplicate a built-in or need command
-    // execution) are named to the model only while CoWork is active, matching
-    // what the connectors UI offers.
-    final unconnectedMcpServers = unconnectedCatalogueEntries(
-      includeCoworkOnly: isCoworkActive,
-    );
+    final unconnectedMcpServers = unconnectedCatalogueEntries();
     final connectedMcpServerNames = McpService.connections.value
         .map((c) => c.name)
         .toList();
@@ -1398,22 +1384,10 @@ class ToolCallHandler {
           .where((t) => t.name == 'skill')
           .map((t) => t.toJson())
           .firstOrNull;
-      // Gate `cowork_only` skills: hide them from the model unless the app is
-      // in CoWork mode. The flag rides on each skill's metadata (stored with
-      // the body), so it reads synchronously and does not depend on a catalog
-      // fetch having completed. In CoWork mode nothing is filtered.
-      final inCoWork = appModeNotifier.value == AppMode.cowork;
-      bool visible(Skill s) => inCoWork || !SkillsCatalogService.isCoworkOnly(s);
-
-      skillCatalog = inCoWork
-          ? SkillRegistry.all
-          : SkillRegistry.all.where(visible).toList(growable: false);
+      skillCatalog = SkillRegistry.all;
       activeSkills = activeSkillNames
           .map(SkillRegistry.byName)
           .whereType<Skill>()
-          // A skill activated in CoWork must not leak its body into a later
-          // Chat-mode prompt, so apply the same predicate here too.
-          .where(visible)
           .toList();
     }
 

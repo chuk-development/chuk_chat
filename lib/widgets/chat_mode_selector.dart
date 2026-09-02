@@ -24,6 +24,7 @@ class ChatModeSelector extends StatelessWidget {
     this.onOpenModelScreen,
     this.selectedModelId,
     this.modelLabel,
+    this.customModelLabel,
     this.pickedModels = const <ChatModelChoice>[],
     this.showLabel = true,
     this.reasoningEffort = ChatModeService.reasoningOff,
@@ -53,6 +54,12 @@ class ChatModeSelector extends StatelessWidget {
   /// Human name of that model, shown on the second-menu opener.
   final String? modelLabel;
 
+  /// Human name of the model Custom last ran, remembered across mode switches.
+  /// The third point (the Custom entry) shows this even while Fast or Thinking
+  /// is active, so the reader sees which model a tap on it will bring back.
+  /// Null when Custom has never been used — the point then reads "Choose model".
+  final String? customModelLabel;
+
   /// The active mode's reasoning level, ticked in the reasoning rows.
   final String reasoningEffort;
 
@@ -78,15 +85,53 @@ class ChatModeSelector extends StatelessWidget {
   /// row underneath.
   static const int kMaxModelsInMenu = 40;
 
-  static IconData iconFor(ChatMode mode) =>
-      mode == ChatMode.fast ? Icons.bolt : Icons.psychology_outlined;
+  static IconData iconFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return Icons.bolt;
+      case ChatMode.thinking:
+        return Icons.psychology_outlined;
+      case ChatMode.custom:
+        return Icons.tune;
+    }
+  }
 
-  static String labelFor(ChatMode mode) =>
-      mode == ChatMode.fast ? 'Fast' : 'Thinking';
+  static String labelFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return 'Fast';
+      case ChatMode.thinking:
+        return 'Thinking';
+      case ChatMode.custom:
+        return 'Custom model';
+    }
+  }
 
-  static String descriptionFor(ChatMode mode) => mode == ChatMode.fast
-      ? 'Answers right away'
-      : 'Thinks first, then answers';
+  static String descriptionFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return 'Answers right away';
+      case ChatMode.thinking:
+        return 'Thinks first, then answers';
+      case ChatMode.custom:
+        return 'Any model you pick';
+    }
+  }
+
+  /// The label for the third point (Custom). When Custom is active it names
+  /// the running model; otherwise it names the model Custom last ran; only when
+  /// Custom has never been used does it fall back to "Choose model".
+  String get _customPointLabel {
+    if (mode == ChatMode.custom &&
+        modelLabel != null &&
+        modelLabel!.isNotEmpty) {
+      return stripLabPrefix(modelLabel!);
+    }
+    if (customModelLabel != null && customModelLabel!.isNotEmpty) {
+      return stripLabPrefix(customModelLabel!);
+    }
+    return 'Choose model';
+  }
 
   /// Whether the second menu has anything to show.
   bool get _hasDeeperMenu =>
@@ -99,9 +144,14 @@ class ChatModeSelector extends StatelessWidget {
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
-    // The pill always names the mode: each mode carries its own model, so
-    // there is no third state that renames it.
-    final String pillLabel = labelFor(mode);
+    // Fast and Thinking name the mode. Custom names the model it runs — that
+    // is the whole point of the mode, so the pill shows the chosen model
+    // rather than the bare word "Custom".
+    final String pillLabel = mode == ChatMode.custom
+        ? (modelLabel == null || modelLabel!.isEmpty
+            ? labelFor(mode)
+            : stripLabPrefix(modelLabel!))
+        : labelFor(mode);
     final IconData pillIcon = iconFor(mode);
 
     return Semantics(
@@ -155,7 +205,11 @@ class ChatModeSelector extends StatelessWidget {
     final choice = await _showAnchoredMenu<_MenuChoice>(
       context,
       items: <PopupMenuEntry<_MenuChoice>>[
-        for (final option in ChatMode.values)
+        // Exactly three points. Fast and Thinking run the models set on the
+        // model screen, so their rows never surface a model name. The third
+        // point is Custom: an arbitrary model at its own reasoning level,
+        // reached through the model-and-reasoning menu.
+        for (final option in const <ChatMode>[ChatMode.fast, ChatMode.thinking])
           _menuRow<_MenuChoice>(
             value: _MenuChoice.mode(option),
             iconFg: iconFg,
@@ -167,10 +221,13 @@ class ChatModeSelector extends StatelessWidget {
           _menuRow<_MenuChoice>(
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
-            icon: Icons.tune,
-            label: modelLabel == null
-                ? 'Choose model'
-                : stripLabPrefix(modelLabel!),
+            icon: iconFor(ChatMode.custom),
+            // The third point names the Custom model: the active one when
+            // Custom is running, otherwise the one it last ran (remembered
+            // across mode switches). It stays "Choose model" only until Custom
+            // has ever been used. Fast/Thinking models are never surfaced here.
+            label: _customPointLabel,
+            isSelected: mode == ChatMode.custom,
             trailing: Icon(
               Icons.chevron_right,
               size: 18,

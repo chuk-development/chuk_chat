@@ -19,8 +19,6 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
-import 'package:chuk_chat/widgets/cowork_mode_switcher.dart';
-import 'package:chuk_chat/models/app_mode.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
@@ -32,11 +30,6 @@ class SidebarMobile extends StatefulWidget {
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
-  /// Current app mode and its setter — only used to render the CoWork
-  /// switcher under the brand row when [kFeatureCoWork] is on.
-  final AppMode mode;
-  final ValueChanged<AppMode> onModeChanged;
-
   const SidebarMobile({
     super.key,
     required this.onChatSelected,
@@ -47,8 +40,6 @@ class SidebarMobile extends StatefulWidget {
     this.onChatDeleted,
     required this.selectedChatId,
     required this.isCompactMode,
-    required this.mode,
-    required this.onModeChanged,
   });
 
   @override
@@ -638,20 +629,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
               semanticsId: 'sidebar_new_chat_button',
             ),
           ),
-
-          // CoWork switcher — directly under the brand row and its New chat
-          // pill, above the nav items. Same app, runtime mode.
-          if (kFeatureCoWork)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 12, 10),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: CoWorkModeSwitcher(
-                  mode: widget.mode,
-                  onChanged: widget.onModeChanged,
-                ),
-              ),
-            ),
 
           // Match desktop ordering: Workspaces → Media → Search at the bottom.
           // The Search row morphs in-place into the input field when tapped

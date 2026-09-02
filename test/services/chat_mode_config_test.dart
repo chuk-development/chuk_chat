@@ -30,6 +30,46 @@ void main() {
       expect(ChatModeService.defaultModelId, 'z-ai/glm-5.3-flash');
       expect(ChatModeService.defaultProviderSlug, 'fireworks/serverless');
     });
+
+    test('Custom seeds on the general fallback, reasoning off', () {
+      final custom = ChatModeService.defaultConfig(ChatMode.custom);
+      expect(custom.modelId, 'z-ai/glm-5.3-flash');
+      expect(custom.providerSlug, 'fireworks/serverless');
+      expect(custom.reasoningEffort, 'none');
+      expect(custom.reasoningOn, isFalse);
+    });
+  });
+
+  group('setProviderForMode', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('re-pins the provider and re-clamps reasoning', () async {
+      // Thinking on a non-Fireworks provider at xhigh.
+      await ChatModeService.saveConfig(
+        ChatMode.thinking,
+        const ModeConfig(
+          modelId: 'deepseek/deepseek-v4-pro-0813',
+          providerSlug: 'openai',
+          reasoningEffort: 'xhigh',
+        ),
+      );
+      final updated = await ChatModeService.setProviderForMode(
+        ChatMode.thinking,
+        'fireworks/serverless',
+      );
+      expect(updated.providerSlug, 'fireworks/serverless');
+      // Model is untouched.
+      expect(updated.modelId, 'deepseek/deepseek-v4-pro-0813');
+      // xhigh is not valid on Fireworks → high.
+      expect(updated.reasoningEffort, 'high');
+      expect(await ChatModeService.loadConfig(ChatMode.thinking), updated);
+    });
+
+    test('an empty slug is a no-op', () async {
+      final before = await ChatModeService.loadConfig(ChatMode.fast);
+      final updated = await ChatModeService.setProviderForMode(ChatMode.fast, '');
+      expect(updated, before);
+    });
   });
 
   group('config persistence', () {
@@ -333,7 +373,8 @@ void main() {
       expect(ChatModeService.reasoningLabel('low'), 'Low');
       expect(ChatModeService.reasoningLabel('medium'), 'Medium');
       expect(ChatModeService.reasoningLabel('high'), 'High');
-      expect(ChatModeService.reasoningLabel('xhigh'), 'Max');
+      expect(ChatModeService.reasoningLabel('xhigh'), 'X-High');
+      expect(ChatModeService.reasoningLabel('max'), 'Max');
     });
   });
 }
