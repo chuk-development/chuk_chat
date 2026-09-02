@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/token_activity_stats.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -33,6 +34,8 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
   static const String _kScopeBillingPeriod = 'billing-period';
 
   UsageOverview? _overview;
+  TokenActivityStats? _activityStats;
+  HeatmapMode _heatmapMode = HeatmapMode.daily;
   bool _isLoading = true;
   String? _errorMessage;
   DateTime? _lastUpdatedAt;
@@ -55,8 +58,14 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       if (!mounted) return;
 
       _syncSelectedScope(overview);
+      // The heatmap and both streaks come from this one fetch so they can
+      // never disagree with each other. This panel is deliberately all-time
+      // and does not follow the period chip — a "longest streak within June"
+      // would be a meaningless number.
+      final stats = TokenActivityStatsService.build(overview.entries);
       setState(() {
         _overview = overview;
+        _activityStats = stats;
         _isLoading = false;
         _lastUpdatedAt = DateTime.now();
       });
@@ -187,6 +196,12 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
 
                     ExpressiveSectionHeader(l.totals),
                     _buildSummaryCard(context, usageSlice),
+
+                    if (_activityStats != null &&
+                        !_activityStats!.isEmpty) ...[
+                      const ExpressiveSectionHeader('Token activity'),
+                      _buildTokenActivitySection(context, _activityStats!),
+                    ],
 
                     if (selectedScope.type == _UsageScopeType.billingPeriod &&
                         _hasCreditProgress(overview)) ...[
@@ -341,6 +356,146 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildTokenActivitySection(
+    BuildContext context,
+    TokenActivityStats stats,
+  ) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+
+    final List<DailyTokenPoint> series = TokenActivityStatsService.denseSeries(
+      stats,
+    );
+    final List<int> values = TokenActivityStatsService.heatmapValues(
+      series,
+      _heatmapMode,
+    );
+
+    return ExpressiveCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Streaks cover all of your history. The heatmap shows about the '
+            'last year of daily use and does not follow the period picker.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _StreakTile(
+                  label: 'Current streak',
+                  value: stats.currentStreak,
+                  icon: Icons.local_fire_department_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StreakTile(
+                  label: 'Longest streak',
+                  value: stats.longestStreak,
+                  icon: Icons.emoji_events_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _buildHeatmapModeSelector(context),
+          const SizedBox(height: 14),
+          // The grid can be wider than the screen; it scrolls inside its own
+          // horizontal viewport so the page body never scrolls sideways.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: _TokenActivityHeatmap(
+              series: series,
+              values: values,
+              mode: _heatmapMode,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildHeatmapLegend(context),
+          const SizedBox(height: 6),
+          Text(
+            _heatmapCaption(),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeatmapModeSelector(BuildContext context) {
+    const List<(HeatmapMode, String)> modes = <(HeatmapMode, String)>[
+      (HeatmapMode.daily, 'Daily'),
+      (HeatmapMode.weekly, 'Weekly'),
+      (HeatmapMode.cumulative, 'Cumulative'),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final (HeatmapMode mode, String label) in modes)
+          ChoiceChip(
+            label: Text(label),
+            selected: _heatmapMode == mode,
+            showCheckmark: false,
+            onSelected: (_) {
+              if (_heatmapMode == mode) return;
+              setState(() => _heatmapMode = mode);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeatmapLegend(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final TextStyle? labelStyle = theme.textTheme.bodySmall?.copyWith(
+      color: m3.onSurfaceVariant,
+    );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text('Less', style: labelStyle),
+        const SizedBox(width: 6),
+        for (int level = 0; level <= 4; level++) ...[
+          Container(
+            width: 11,
+            height: 11,
+            decoration: BoxDecoration(
+              color: _heatmapCellColor(context, level),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          if (level < 4) const SizedBox(width: 3),
+        ],
+        const SizedBox(width: 6),
+        Text('More', style: labelStyle),
+      ],
+    );
+  }
+
+  String _heatmapCaption() {
+    switch (_heatmapMode) {
+      case HeatmapMode.daily:
+        return 'Each cell is one day, shaded by tokens used that day.';
+      case HeatmapMode.weekly:
+        return 'Each cell is shaded by its ISO-week token total.';
+      case HeatmapMode.cumulative:
+        return 'Each cell is shaded by the running token total across the '
+            'days shown.';
+    }
   }
 
   Widget _buildBillingCard(
@@ -936,5 +1091,245 @@ class _StatGrid extends StatelessWidget {
     }
 
     return Column(children: children);
+  }
+}
+
+/// One of the two streak read-outs: a big number over a quiet label.
+class _StreakTile extends StatelessWidget {
+  const _StreakTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final int value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerHigh,
+        borderRadius: kBorderRadiusField,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 15, color: m3.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: m3.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$value',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                value == 1 ? 'day' : 'days',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A GitHub-contribution-style grid: one column per ISO week (oldest at the
+/// left), seven rows Mon–Sun. [values] is parallel to [series] and carries
+/// the per-cell number for the active [mode]; the cell colour is a quartile
+/// of that number relative to the grid's own maximum.
+class _TokenActivityHeatmap extends StatelessWidget {
+  const _TokenActivityHeatmap({
+    required this.series,
+    required this.values,
+    required this.mode,
+  });
+
+  final List<DailyTokenPoint> series;
+  final List<int> values;
+  final HeatmapMode mode;
+
+  static const double _cell = 12;
+  static const double _gap = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+
+    if (series.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    int maxValue = 0;
+    for (final int v in values) {
+      if (v > maxValue) maxValue = v;
+    }
+
+    // Chunk the flat day series into week columns of 7 (Mon..Sun). The series
+    // starts on a Monday, so index % 7 is the weekday row.
+    final int weekCount = (series.length + 6) ~/ 7;
+
+    final List<Widget> columns = <Widget>[];
+    for (int week = 0; week < weekCount; week++) {
+      final List<Widget> cells = <Widget>[];
+      for (int row = 0; row < 7; row++) {
+        final int index = week * 7 + row;
+        if (index >= series.length) {
+          // Days past today in the trailing partial week: keep the slot so
+          // columns stay the same height, but draw nothing.
+          cells.add(
+            const SizedBox(width: _cell, height: _cell),
+          );
+        } else {
+          cells.add(_cell3(context, series[index], values[index], maxValue));
+        }
+        if (row < 6) cells.add(const SizedBox(height: _gap));
+      }
+      columns.add(Column(children: cells));
+      if (week < weekCount - 1) columns.add(const SizedBox(width: _gap));
+    }
+
+    final List<Widget> weekdayLabels = _buildWeekdayLabels(theme, m3);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: weekdayLabels,
+        ),
+        const SizedBox(width: 6),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: columns),
+      ],
+    );
+  }
+
+  Widget _cell3(
+    BuildContext context,
+    DailyTokenPoint point,
+    int value,
+    int maxValue,
+  ) {
+    final int level = _heatmapLevel(value, maxValue);
+    return Tooltip(
+      // Report the number that drives the shade, which in weekly/cumulative
+      // mode is not the day's own token count.
+      message: _tooltipFor(point, value),
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        width: _cell,
+        height: _cell,
+        decoration: BoxDecoration(
+          color: _heatmapCellColor(context, level),
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildWeekdayLabels(ThemeData theme, MaterialYouTokens m3) {
+    const List<String> labels = <String>['', 'Mon', '', 'Wed', '', 'Fri', ''];
+    final TextStyle? style = theme.textTheme.labelSmall?.copyWith(
+      color: m3.onSurfaceVariant,
+      height: 1,
+    );
+    final List<Widget> out = <Widget>[];
+    for (int row = 0; row < 7; row++) {
+      out.add(
+        SizedBox(
+          height: _cell,
+          child: labels[row].isEmpty
+              ? null
+              : Text(labels[row], style: style),
+        ),
+      );
+      if (row < 6) out.add(const SizedBox(height: _gap));
+    }
+    return out;
+  }
+
+  String _tooltipFor(DailyTokenPoint point, int value) {
+    final String tokens = '${_formatTokens(value)}'
+        '${value == 1 ? ' token' : ' tokens'}';
+    switch (mode) {
+      case HeatmapMode.daily:
+        return '${_formatDay(point.day)} · $tokens';
+      case HeatmapMode.weekly:
+        final DateTime monday = TokenActivityStatsService.mondayOf(point.day);
+        return 'Week of ${_formatDay(monday)} · $tokens';
+      case HeatmapMode.cumulative:
+        return 'Through ${_formatDay(point.day)} · $tokens so far';
+    }
+  }
+
+  String _formatDay(DateTime day) =>
+      '${day.day.toString().padLeft(2, '0')}.'
+      '${day.month.toString().padLeft(2, '0')}.${day.year}';
+
+  String _formatTokens(int value) {
+    final String raw = value.toString();
+    return raw.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  }
+}
+
+/// Quartile of [value] against [maxValue]: 0 (none) then 1–4 (light→dark).
+int _heatmapLevel(int value, int maxValue) {
+  if (value <= 0 || maxValue <= 0) {
+    return 0;
+  }
+  final double frac = value / maxValue;
+  if (frac <= 0.25) return 1;
+  if (frac <= 0.5) return 2;
+  if (frac <= 0.75) return 3;
+  return 4;
+}
+
+/// Cell colour for a heat level, from theme tokens so both themes read well:
+/// level 0 is the empty container, 1–4 are the primary at rising opacity.
+Color _heatmapCellColor(BuildContext context, int level) {
+  final theme = Theme.of(context);
+  final Color primary = theme.colorScheme.primary;
+  switch (level) {
+    case 0:
+      return theme.m3.surfaceContainerHighest;
+    case 1:
+      return primary.withValues(alpha: 0.30);
+    case 2:
+      return primary.withValues(alpha: 0.52);
+    case 3:
+      return primary.withValues(alpha: 0.76);
+    default:
+      return primary;
   }
 }
