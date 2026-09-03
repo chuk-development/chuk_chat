@@ -66,6 +66,7 @@ class TaskServer:
         estop_path: str | None = None,
         on_room_frame=None,
         account_token_provider: Callable[[], str | None] | None = None,
+        browser_mcp: bool = False,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -91,6 +92,9 @@ class TaskServer:
                 # carries to the next task. ``None`` -> those connectors simply
                 # fail to authenticate, never crash.
                 account_token_provider=account_token_provider,
+                # Give the agent the Playwright MCP + watchable browser when the
+                # sandbox is the browser image (§9.1).
+                browser_mcp=browser_mcp,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

@@ -52,17 +52,23 @@ start the executor with ``estop_path`` and ``touch`` that file. See
 
 from __future__ import annotations
 
+import base64
 import json
 import queue
+import subprocess
 import threading
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import uuid4
 
 from cowork_agent import (
+    HereNowConfig,
     KillSwitch,
     MCPManager,
     ModelClient,
     ModelResponse,
+    PublishRequest,
     SubagentConfig,
     SubagentLimits,
     WorkspaceMount,
@@ -81,7 +87,11 @@ from .environment import SandboxEnvironment
 from .protocol import (
     INBOUND_METHODS,
     METHOD_EVENT,
+    approval_request_payload,
     b64_to_frame,
+    browser_data_payload,
+    browser_view_payload,
+    debug_context_payload,
     decode_payload,
     delta_payload,
     done_payload,
@@ -100,18 +110,34 @@ ModelFactory = Callable[[], ModelClient]
 
 
 class StreamingModelClient:
-    """Wraps a ``ModelClient`` and reports each turn's assistant text as a delta.
-    Tool-only turns carry no text and emit nothing."""
+    """Wraps a ``ModelClient`` and reports the assistant text as deltas.
+
+    If the inner client can stream (it exposes a settable ``on_delta``, like the
+    backend client), we hand it the callback so each chunk reaches the UI **as it
+    arrives** — real token-by-token streaming. Otherwise (e.g. the mock client)
+    we fall back to emitting the whole turn's text once, so the UI still updates.
+    Tool-only turns carry no text and emit nothing either way."""
 
     def __init__(
         self, inner: ModelClient, *, on_delta: Callable[[str], None] | None = None
     ) -> None:
         self._inner = inner
         self._on_delta = on_delta
+        # Prefer live per-chunk streaming when the inner client supports it.
+        self._inner_streams = False
+        if on_delta is not None and hasattr(inner, "on_delta"):
+            inner.on_delta = on_delta  # type: ignore[attr-defined]
+            self._inner_streams = True
 
     def complete(self, messages: list[dict]) -> ModelResponse:
         response = self._inner.complete(messages)
-        if self._on_delta is not None and response.text:
+        # Fallback only: the inner already streamed each chunk, so emitting the
+        # full text again here would duplicate it in the thread.
+        if (
+            self._on_delta is not None
+            and not self._inner_streams
+            and response.text
+        ):
             self._on_delta(response.text)
         return response
 
@@ -133,6 +159,124 @@ class _Run:
     # ``None`` when the frame carried none. Captured at accept time so the worker
     # thread builds the session's MCPManager before the loop starts.
     mcp_servers: list[dict] | None = None
+    # The forwarded here.now connector setting ({"enabled", "approval"}) or
+    # ``None``. Disabled/absent -> no publish tool is registered for this task.
+    herenow: dict | None = None
+    # The debug "copy raw context" flag (§ debug tap). True -> the executor wires
+    # a debug observer that streams one ``debug_context`` event per model round;
+    # absent/false -> no observer and zero overhead.
+    debug: bool = False
+
+
+#: How long a here.now publish waits for the user before it gives up and denies.
+#: Long enough to walk to the phone and read the prompt; bounded so a run cannot
+#: hang forever on an approval nobody will ever answer.
+APPROVAL_TIMEOUT = 600.0
+
+
+@dataclass
+class _PendingApproval:
+    """One in-flight publish approval: the worker waits on ``event``, the serve
+    thread writes ``approved`` and sets it. Default is deny, so a lost decision
+    or a torn-down wait resolves to "do not publish"."""
+
+    event: threading.Event = field(default_factory=threading.Event)
+    approved: bool = False
+
+
+class _VncBridge:
+    """A live byte pipe between the app and x11vnc inside the agent's container.
+
+    One `docker exec -i <container> socat STDIO TCP:127.0.0.1:<port>` process
+    reaches x11vnc's localhost RFB port (§9.1). A reader thread pumps its stdout
+    out to the app as `browser_data` frames; `feed` writes the app's RFB-client
+    bytes to its stdin. Nothing here parses RFB — the pipe is opaque both ways;
+    the Flutter side speaks the protocol.
+
+    Self-closing: when socat exits (the user closed the view, or x11vnc / the
+    container went away) the reader drains, calls `on_closed`, and stops. The
+    executor kills it on stop, on ESTOP, and on an explicit `browser_stop`.
+    """
+
+    def __init__(
+        self,
+        argv: list[str],
+        *,
+        emit: Callable[[bytes], None],
+        on_closed: Callable[[], None],
+        chunk_size: int = 64 * 1024,
+    ) -> None:
+        self._emit = emit
+        self._on_closed = on_closed
+        self._chunk = chunk_size
+        self._closed = threading.Event()
+        self._write_lock = threading.Lock()
+        self._proc = subprocess.Popen(  # noqa: S603 — argv is built by us, not user input
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        self._reader = threading.Thread(target=self._pump, name="vnc-pump", daemon=True)
+        self._reader.start()
+
+    def _pump(self) -> None:
+        out = self._proc.stdout
+        # `read1` returns as soon as ANY bytes are available (up to chunk), so a
+        # framebuffer update is forwarded at once — a plain `read(n)` on a pipe
+        # blocks until n bytes or EOF, which would stall the whole stream.
+        read = getattr(out, "read1", None) if out is not None else None
+        try:
+            while not self._closed.is_set():
+                chunk = read(self._chunk) if read is not None else b""
+                if not chunk:
+                    break  # socat closed: x11vnc/container gone or view ended
+                try:
+                    self._emit(chunk)
+                except Exception:  # noqa: BLE001 — a send failure must not wedge the pump
+                    break
+        finally:
+            if not self._closed.is_set():
+                # The pipe died on its own (not an explicit close): tell the owner
+                # so it can drop the registry entry and notify the app.
+                self._closed.set()
+                try:
+                    self._on_closed()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def feed(self, data: bytes) -> None:
+        """Write the app's RFB-client bytes into the pipe. Silent if it is gone."""
+        if self._closed.is_set():
+            return
+        stdin = self._proc.stdin
+        if stdin is None:
+            return
+        try:
+            with self._write_lock:
+                stdin.write(data)
+                stdin.flush()
+        except (BrokenPipeError, ValueError, OSError):
+            # The far end closed mid-write; the reader will report the close.
+            pass
+
+    def close(self) -> None:
+        """Tear the pipe down. Idempotent."""
+        self._closed.set()
+        proc = self._proc
+        try:
+            if proc.stdin is not None:
+                proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+        try:
+            proc.terminate()
+            proc.wait(timeout=2)
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
 
 
 class Executor:
@@ -164,6 +308,7 @@ class Executor:
         subagent_limits: SubagentLimits | None = None,
         on_room_frame: Callable[[dict], None] | None = None,
         account_token_provider: Callable[[], str | None] | None = None,
+        browser_mcp: bool = False,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -206,6 +351,12 @@ class Executor:
         # simply fail to authenticate (never a crash). ``oauth`` connectors do
         # not need this: their device token is forwarded in the frame.
         self._account_token_provider = account_token_provider
+        # Give every task the Playwright MCP (§9.1) when the sandbox is the
+        # browser image: the agent drives a headed Chromium the user can watch
+        # over VNC. Off on the browser-free base image, where the launcher script
+        # does not exist. The server runs INSIDE the container (the runtime is
+        # host-side), reached over `docker exec` stdio — see `_browser_mcp_entry`.
+        self._browser_mcp = browser_mcp
         # MCP managers live per session (§9): one manager owns the transport
         # threads for a session's forwarded servers, is reused across that
         # session's tasks, and is closed on executor stop. Guarded because the
@@ -224,6 +375,21 @@ class Executor:
         self._runs: dict[str, _Run] = {}
         self._runs_lock = threading.Lock()
         self._queue: "queue.Queue[_Run]" = queue.Queue()
+
+        # In-flight here.now publish approvals, by approval id. The worker thread
+        # (inside the publish tool) registers one and blocks on its event; the
+        # serve thread resolves it when the app's ``approval_decision`` lands.
+        # Guarded because the two threads touch it.
+        self._approvals: dict[str, _PendingApproval] = {}
+        self._approvals_lock = threading.Lock()
+
+        # The live browser view (§9.1), at most one per executor (one agent, one
+        # sandbox Chromium). Set on `browser_start`, fed by `browser_data`, torn
+        # down on `browser_stop`, on the pipe dying, and on executor stop. Guarded
+        # because it is touched from the serve thread and the pump's close hook.
+        self._vnc: _VncBridge | None = None
+        self._vnc_stream_id: str = ""
+        self._vnc_lock = threading.Lock()
 
     @property
     def name(self) -> str:
@@ -249,6 +415,9 @@ class Executor:
         expire while a run kept writing to a channel nobody reads.
         """
         self._stop.set()
+        # A live browser view holds a `docker exec` pipe; drop it before the
+        # container is released so no socat outlives the executor.
+        self._vnc_teardown(reason="stopped", notify=False)
         for run in self._live_runs():
             run.kill.interrupt()
         serve, worker = self._thread, self._worker
@@ -346,6 +515,21 @@ class Executor:
         if kind == "stop":
             self._handle_stop(request_id, payload)
             return
+        if kind == "browser_start":
+            self._vnc_start(request_id, payload)
+            return
+        if kind == "browser_stop":
+            self._vnc_teardown(reason="stopped")
+            return
+        if kind == "browser_data":
+            self._vnc_feed(payload)
+            return
+        if kind == "approval_decision":
+            # The user's answer to a pending here.now publish. A control frame
+            # like a stop: it resolves a wait, it does not open or close a task,
+            # so there is no request-scoped terminal to send.
+            self._resolve_approval(payload)
+            return
         if kind == "task" or kind is None:
             # ``None`` keeps the original contract: the first frames of this
             # protocol carried a prompt and no type.
@@ -372,6 +556,8 @@ class Executor:
             return
         raw_servers = payload.get("mcp_servers")
         mcp_servers = list(raw_servers) if isinstance(raw_servers, list) else None
+        raw_herenow = payload.get("herenow")
+        herenow = dict(raw_herenow) if isinstance(raw_herenow, dict) else None
         run = _Run(
             request_id=request_id,
             session_key=str(session_key),
@@ -380,10 +566,165 @@ class Executor:
             # is still queued has something to fire.
             kill=KillSwitch(self._estop_path),
             mcp_servers=mcp_servers,
+            herenow=herenow,
+            debug=bool(payload.get("debug")),
         )
         with self._runs_lock:
             self._runs[request_id] = run
         self._queue.put(run)
+
+    # -- live browser view (§9.1) ----------------------------------------
+    def _vnc_exec_prefix(self) -> tuple[list[str], str] | None:
+        """`docker exec` prefix + container id for this agent's box, or None.
+
+        None means the sandbox is not the docker backend (nothing to watch) or
+        the container could not be realized. Forces the container live first,
+        because `container_id` is None until the first command runs.
+        """
+        env = self._environment
+        cli = getattr(env, "_cli", None)
+        binary = getattr(cli, "binary", None)
+        if binary is None or not hasattr(env, "container_id"):
+            return None
+        try:
+            env.run_bash("true", internal=True)  # realize the container
+        except Exception:  # noqa: BLE001 — no container, no view; caller reports
+            return None
+        cid = getattr(env, "container_id", None)
+        if not cid:
+            return None
+        prefix = [binary, "exec", "-i"]
+        user = getattr(env, "_user", None)
+        if user:
+            prefix += ["-u", str(user)]
+        return prefix, str(cid)
+
+    def _browser_mcp_entry(self) -> dict | None:
+        """The Playwright MCP server entry for this agent's container, or None.
+
+        Runs the server INSIDE the container over `docker exec` stdio, so the
+        Chromium it launches renders to the container's Xvfb (the display x11vnc
+        serves) — the agent's browser and the watched browser are one process.
+        None when the browser MCP is off or the sandbox is not docker. Reuses the
+        same exec prefix (and container realization) as the VNC bridge.
+        """
+        if not self._browser_mcp:
+            return None
+        prep = self._vnc_exec_prefix()
+        if prep is None:
+            return None
+        prefix, cid = prep  # [binary, "exec", "-i", ("-u", user)?]
+        return {
+            "name": "playwright",
+            "command": prefix[0],
+            "args": [*prefix[1:], cid, "cowork-browser-mcp"],
+        }
+
+    def _vnc_start(self, request_id: str, payload: dict) -> None:
+        # Only ever one live view; replace any prior one silently.
+        self._vnc_teardown(reason="stopped", notify=False)
+
+        prep = self._vnc_exec_prefix()
+        if prep is None:
+            self._event(
+                request_id,
+                browser_view_payload("error", message="live view needs the docker sandbox"),
+            )
+            return
+        prefix, cid = prep
+
+        # Bring x11vnc up on the browser display (idempotent). Exit 3 = the agent
+        # has not opened the browser yet, so there is no display to serve.
+        # Use the FULL prefix: it is [binary, "exec", "-i", ("-u", user)?] and the
+        # `-u <user>` pair must stay intact. Slicing it (`prefix[:-1]`) to drop the
+        # harmless `-i` also dropped the username when a user was set, producing
+        # `docker exec -i -u <cid> cowork-vnc-up` — a malformed command that failed
+        # with "could not start the VNC server". `-i` on a captured run is a no-op.
+        try:
+            up = subprocess.run(  # noqa: S603 — argv built by us
+                prefix + [cid, "cowork-vnc-up"],
+                capture_output=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._event(
+                request_id,
+                browser_view_payload("error", message=f"vnc start failed: {type(exc).__name__}"),
+            )
+            return
+        if up.returncode == 3:
+            self._event(
+                request_id,
+                browser_view_payload("error", message="no browser open yet — ask the agent to open a page first"),
+            )
+            return
+        if up.returncode != 0:
+            self._event(
+                request_id, browser_view_payload("error", message="could not start the VNC server")
+            )
+            return
+
+        port = "5900"
+        argv = prefix + [cid, "socat", "STDIO", f"TCP:127.0.0.1:{port}"]
+
+        def emit(chunk: bytes) -> None:
+            self._event(request_id, browser_data_payload(chunk))
+
+        def on_closed() -> None:
+            # The pipe died on its own (view closed, x11vnc/container gone).
+            self._vnc_teardown(reason="stopped")
+
+        try:
+            bridge = _VncBridge(argv, emit=emit, on_closed=on_closed)
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._event(
+                request_id,
+                browser_view_payload("error", message=f"vnc bridge failed: {type(exc).__name__}"),
+            )
+            return
+        with self._vnc_lock:
+            self._vnc = bridge
+            self._vnc_stream_id = request_id
+        # If the display has no browser window, the stream is an all-black frame.
+        # Say so, so the user knows to ask the agent to open a page rather than
+        # staring at a silent black screen. The bridge stays live: the moment the
+        # agent opens a browser the window appears in the same stream.
+        message = ""
+        try:
+            for line in up.stdout.decode("utf-8", "replace").splitlines():
+                if line.startswith("WINDOWS="):
+                    if line[len("WINDOWS=") :].strip() == "0":
+                        message = "no page open yet — ask the agent to open a browser"
+                    break
+        except (AttributeError, ValueError):
+            pass
+        self._event(request_id, browser_view_payload("started", message=message))
+
+    def _vnc_feed(self, payload: dict) -> None:
+        with self._vnc_lock:
+            bridge = self._vnc
+        if bridge is None:
+            return
+        raw = payload.get("data")
+        if not isinstance(raw, str):
+            return
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except (ValueError, TypeError):
+            return
+        bridge.feed(data)
+
+    def _vnc_teardown(self, *, reason: str = "stopped", notify: bool = True) -> None:
+        with self._vnc_lock:
+            bridge = self._vnc
+            stream_id = self._vnc_stream_id
+            self._vnc = None
+            self._vnc_stream_id = ""
+        if bridge is None:
+            return
+        bridge.close()
+        if notify and stream_id:
+            self._event(stream_id, browser_view_payload(reason))
 
     # -- stop (§7.1) -----------------------------------------------------
     def _handle_stop(self, request_id: str, payload: dict) -> None:
@@ -420,6 +761,63 @@ class Executor:
             return [r for r in self._live_runs() if r.session_key == session_key]
         return []
 
+    # -- here.now publish approval (§10-style consent) -------------------
+    def _make_approval_gate(self, request_id: str, kill: KillSwitch):
+        """Build the here.now approval gate for one task.
+
+        The gate runs on the worker thread inside the publish tool. It emits one
+        ``approval_request`` and blocks until the app answers with a matching
+        ``approval_decision`` (resolved on the serve thread), a stop fires, or
+        the timeout passes. Anything but an explicit approve returns False — the
+        publish does not happen.
+        """
+
+        def gate(req: PublishRequest) -> bool:
+            approval_id = uuid4().hex
+            pending = _PendingApproval()
+            with self._approvals_lock:
+                self._approvals[approval_id] = pending
+            try:
+                self._event(
+                    request_id,
+                    approval_request_payload(
+                        approval_id=approval_id,
+                        path=req.path,
+                        name=req.name,
+                        file_count=req.file_count,
+                        total_bytes=req.total_bytes,
+                        base_url=req.base_url,
+                        public=req.public,
+                    ),
+                )
+                deadline = time.monotonic() + APPROVAL_TIMEOUT
+                # Poll so a Stop reaches the wait: the loop only checks the kill
+                # switch between tool calls, and this call is inside one.
+                while True:
+                    if kill.interrupted() or kill.estop_engaged():
+                        return False
+                    if pending.event.wait(self._poll):
+                        return pending.approved
+                    if time.monotonic() >= deadline:
+                        return False
+            finally:
+                with self._approvals_lock:
+                    self._approvals.pop(approval_id, None)
+
+        return gate
+
+    def _resolve_approval(self, payload: dict) -> None:
+        """Serve-thread half: record the user's decision and wake the worker."""
+        approval_id = payload.get("approval_id")
+        if not isinstance(approval_id, str) or not approval_id:
+            return
+        with self._approvals_lock:
+            pending = self._approvals.get(approval_id)
+        if pending is None:
+            return  # a decision for a publish that already ended: no-op
+        pending.approved = bool(payload.get("approved"))
+        pending.event.set()
+
     def _live_runs(self) -> list[_Run]:
         with self._runs_lock:
             return list(self._runs.values())
@@ -449,6 +847,16 @@ class Executor:
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
         )
 
+        # The "hero"/aux model (§7.3): the SAME model on the SAME session, reasoning
+        # off, small output cap. It runs tier-2/3 context compaction AND the mem0
+        # fact-extraction, so both housekeeping jobs default to the cheap same-model
+        # instead of the frontier client. A backend client can clone itself; the
+        # mock (tests) cannot, so this is best-effort — no clone, no aux, tier-1
+        # only. It owns its own socket, closed in the ``finally`` below so it never
+        # leaks past the task.
+        cheap_clone = getattr(inner_model, "cheap_clone", None)
+        hero_model = cheap_clone() if callable(cheap_clone) else None
+
         # "Cancels in-flight" (§7.1): a Stop kills the command the sandbox is
         # blocked on and the model turn in flight, instead of ending the run only
         # after they return on their own. Registered on this task's switch, so the
@@ -457,13 +865,53 @@ class Executor:
         cancel_model = getattr(inner_model, "cancel", None)
         if callable(cancel_model):
             run.kill.on_interrupt(cancel_model)
+        # A Stop mid-compaction/extraction must abort the hero's socket too, or it
+        # would wait out the aux call instead of stopping at once.
+        if hero_model is not None:
+            cancel_hero = getattr(hero_model, "cancel", None)
+            if callable(cancel_hero):
+                run.kill.on_interrupt(cancel_hero)
 
         # The forwarded MCP servers (§9, §10), built into a per-session manager
         # with the right bearer attached. Best-effort: any failure here leaves
         # ``mcp_manager`` None and the task runs without those tools, never
         # crashing. ``None`` keeps ``build_runtime``'s own workspace ``mcp.json``
         # path (``enable_mcp``) exactly as it was.
-        mcp_manager = self._session_mcp_manager(session_key, run.mcp_servers)
+        # Merge the always-on Playwright MCP (§9.1, browser image only) with the
+        # UI-forwarded connectors. Appended, so a user's own server of another
+        # name is untouched; on the base image `_browser_mcp_entry` is None.
+        servers = list(run.mcp_servers or [])
+        browser_entry = self._browser_mcp_entry()
+        if browser_entry is not None:
+            servers.append(browser_entry)
+        mcp_manager = self._session_mcp_manager(session_key, servers or None)
+
+        # here.now publish connector (§10-style consent): off unless the app
+        # forwarded an enabled setting. ``ask`` mode binds the approval gate so a
+        # public publish blocks on the user; ``auto`` publishes straight through.
+        herenow_config = HereNowConfig.from_entry(run.herenow) if run.herenow else None
+        herenow_gate = (
+            self._make_approval_gate(request_id, run.kill)
+            if herenow_config is not None and herenow_config.enabled and herenow_config.asks
+            else None
+        )
+
+        # The debug "copy raw context" tap: only wired when the task asked for it,
+        # so a normal run builds and streams nothing. Each round's exact outbound
+        # payload and the ladder's stats go out as one sealed ``debug_context``
+        # event on the same channel as the deltas.
+        debug_observer = None
+        if run.debug:
+            def debug_observer(dbg: dict) -> None:
+                self._event(
+                    request_id,
+                    debug_context_payload(
+                        session_key=str(dbg.get("session_key", "")),
+                        round=int(dbg.get("round", 0)),
+                        messages=list(dbg.get("messages", [])),
+                        stats=dict(dbg.get("stats", {})),
+                    ),
+                )
 
         subagents = self._subagent_config(request_id, session_key)
         loop = build_runtime(
@@ -474,6 +922,14 @@ class Executor:
             system_prompt=self._system_prompt,
             workspace=self._workspace,
             subagents=subagents,
+            herenow_config=herenow_config,
+            herenow_gate=herenow_gate,
+            # The hero/aux client (§7.3): same model, reasoning off, cheap. Enables
+            # tier-2/3 compaction and mem0 extraction by default in production.
+            # ``None`` (mock model) keeps tier-1-only behaviour.
+            aux_model=hero_model,
+            # Off unless the task set ``debug``; ``None`` means zero overhead.
+            debug_observer=debug_observer,
             # A prepared manager the executor owns and closes on stop. When None,
             # build_runtime falls back to reading the workspace mcp.json itself.
             mcp=mcp_manager,
@@ -515,6 +971,15 @@ class Executor:
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
                 subagents.supervisor.shutdown()
+            # The hero/aux client owns its own socket; close it with the task so
+            # no aux connection outlives the run.
+            if hero_model is not None:
+                close_hero = getattr(hero_model, "close", None)
+                if callable(close_hero):
+                    try:
+                        close_hero()
+                    except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                        pass
 
         self._terminal(
             request_id,

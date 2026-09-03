@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:cowork/services/cowork/cowork_frame.dart';
 import 'package:cowork/services/cowork/cowork_frame_codec.dart';
 import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 
 /// A stand-in [McpStore] whose forward payloads are canned, so a task-frame
@@ -24,6 +26,17 @@ class FakeMcpStore extends McpStore {
 
   @override
   Future<List<Map<String, dynamic>>> forwardPayloads() async => _payloads;
+}
+
+/// A stand-in [HereNowStore] whose forward payload is canned, so a task-frame
+/// test needs no SharedPreferences. Null [_payload] models a disabled connector.
+class FakeHereNowStore extends HereNowStore {
+  FakeHereNowStore(this._payload);
+
+  final Map<String, dynamic>? _payload;
+
+  @override
+  Future<Map<String, dynamic>?> forwardPayload() async => _payload;
 }
 
 /// A fake duplex socket. `send()` from the client is captured on [outbound];
@@ -183,6 +196,7 @@ void main() {
     String appDeviceId = 'app-desktop-1',
     String hostDeviceId = 'host-laptop-1',
     McpStore? mcpStore,
+    HereNowStore? hereNowStore,
   }) async {
     final socket = FakeRelaySocket();
     final host = FakeExecutorHost(
@@ -201,6 +215,7 @@ void main() {
       connector: (_) async => socket,
       nowMs: clock,
       mcpStore: mcpStore,
+      hereNowStore: hereNowStore,
     );
 
     await client.connect(
@@ -342,6 +357,79 @@ void main() {
 
     final task = host.received.singleWhere((m) => m['type'] == 'task');
     expect(task.containsKey('mcp_servers'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('sendTask forwards herenow when the connector is enabled', () async {
+    final (client, host, _) = await paired(
+      hereNowStore: FakeHereNowStore(
+        <String, dynamic>{'enabled': true, 'approval': 'ask'},
+      ),
+    );
+
+    await client.sendTask('publish the report');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task['herenow'], <String, dynamic>{'enabled': true, 'approval': 'ask'});
+
+    await client.dispose();
+  });
+
+  test('sendTask omits herenow when the connector is disabled', () async {
+    final (client, host, _) = await paired(hereNowStore: FakeHereNowStore(null));
+
+    await client.sendTask('publish the report');
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task.containsKey('herenow'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('an approval_request frame surfaces as a CoworkRelayApprovalRequest',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'approval_request',
+      'approval_id': 'ap-1',
+      'action': 'herenow_publish',
+      'path': 'site',
+      'name': 'My Page',
+      'file_count': 2,
+      'total_bytes': 1024,
+      'base_url': 'https://here.now',
+      'public': true,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final ask = events.whereType<CoworkRelayApprovalRequest>().single;
+    expect(ask.approvalId, 'ap-1');
+    expect(ask.name, 'My Page');
+    expect(ask.fileCount, 2);
+    expect(ask.totalBytes, 1024);
+    expect(ask.public, isTrue);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('sendApprovalDecision seals {type:approval_decision}; the host opens it',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.sendApprovalDecision(approvalId: 'ap-1', approved: true);
+    await Future<void>.delayed(Duration.zero);
+
+    final decision =
+        host.received.singleWhere((m) => m['type'] == 'approval_decision');
+    expect(decision['approval_id'], 'ap-1');
+    expect(decision['approved'], true);
 
     await client.dispose();
   });
@@ -631,6 +719,51 @@ void main() {
 
     final stop = host.received.singleWhere((m) => m['type'] == 'stop');
     expect(stop['session_key'], 'default');
+
+    await client.dispose();
+  });
+
+  test('browser_data and browser_view frames surface as browser events (§9.1)',
+      () async {
+    final (client, host, _) = await paired();
+
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    final rfb = base64.encode(<int>[0, 1, 82, 70, 66, 255]); // arbitrary bytes
+    await host.emit(<String, dynamic>{'type': 'browser_view', 'status': 'started'});
+    await host.emit(<String, dynamic>{'type': 'browser_data', 'size': 6, 'data': rfb});
+    await host.emit(<String, dynamic>{
+      'type': 'browser_view',
+      'status': 'error',
+      'message': 'no browser open yet',
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final views = events.whereType<CoworkRelayBrowserView>().toList();
+    expect(views.map((e) => e.status), <String>['started', 'error']);
+    expect(views.last.message, 'no browser open yet');
+
+    final data = events.whereType<CoworkRelayBrowserData>().single;
+    expect(data.bytes, <int>[0, 1, 82, 70, 66, 255]);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('start/stop/sendBrowserData seal the browser control frames (§9.1)',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.startBrowserView();
+    await client.sendBrowserData(Uint8List.fromList(<int>[9, 8, 7]));
+    await client.stopBrowserView();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(host.received.any((m) => m['type'] == 'browser_start'), isTrue);
+    expect(host.received.any((m) => m['type'] == 'browser_stop'), isTrue);
+    final data = host.received.singleWhere((m) => m['type'] == 'browser_data');
+    expect(base64.decode(data['data'] as String), <int>[9, 8, 7]);
 
     await client.dispose();
   });

@@ -99,6 +99,7 @@ class _IdleRelayController implements CoworkRelayController {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    bool debug = false,
   }) async {}
 
   @override
@@ -128,6 +129,21 @@ class _IdleRelayController implements CoworkRelayController {
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {}
+
+  @override
+  Future<void> startBrowserView() async {}
+
+  @override
+  Future<void> stopBrowserView() async {}
+
+  @override
+  Future<void> sendBrowserData(Uint8List bytes) async {}
+
+  @override
+  Future<void> sendApprovalDecision({
+    required String approvalId,
+    required bool approved,
+  }) async {}
 
   @override
   Future<void> dispose() async {

@@ -79,6 +79,9 @@ _EMBED_API_KEY = os.environ.get("COWORK_MEM_EMBED_API_KEY") or os.environ.get(
 _FASTEMBED_MODEL = os.environ.get(
     "COWORK_MEM_FASTEMBED_MODEL", "nomic-ai/nomic-embed-text-v1.5"
 )
+# Output dimension of the fastembed model above (nomic-embed-text-v1.5 -> 768).
+# Used for the Qdrant collection when the local embedder is active.
+_FASTEMBED_DIMS = int(os.environ.get("COWORK_MEM_FASTEMBED_DIMS", "768"))
 _EMBED_PROVIDER = os.environ.get("COWORK_MEM_EMBED_PROVIDER", "proxy")
 _COLLECTION = os.environ.get("COWORK_MEM_COLLECTION", "cowork_memory")
 _QDRANT_DIRNAME = os.environ.get("COWORK_MEM_QDRANT_DIRNAME", "qdrant")
@@ -289,10 +292,20 @@ class MemoryStore:
     # -- Mem0 semantic memory --------------------------------------------
 
     def _build_config(self) -> dict:
-        """The Mem0 config: our ``chukbackend`` writer, the proxy embedder, an
-        embedded local-path Qdrant under the workspace."""
-        if _EMBED_PROVIDER == "fastembed":
+        """The Mem0 config: our ``chukbackend`` writer, an embedder, and an
+        embedded local-path Qdrant under the workspace.
+
+        The embedder is the proxy (``qwen3-embedding-8b`` over the account token)
+        when a key is configured. Otherwise it falls back to **local fastembed**
+        — no key, no network — so memory works out of the box on any host; the
+        proxy path is used only when ``COWORK_MEM_EMBED_API_KEY`` (or the account
+        token) is present. The vector-store dimension follows whichever embedder
+        is active, or Qdrant rejects the vectors.
+        """
+        use_fastembed = _EMBED_PROVIDER == "fastembed" or not _EMBED_API_KEY
+        if use_fastembed:
             embedder = {"provider": "fastembed", "config": {"model": _FASTEMBED_MODEL}}
+            active_dims = _FASTEMBED_DIMS
         else:
             embedder = {
                 "provider": "openai",
@@ -303,10 +316,16 @@ class MemoryStore:
                     "embedding_dims": _EMBED_DIMS,
                 },
             }
+            active_dims = _EMBED_DIMS
         qdrant_path = str(self._root / _QDRANT_DIRNAME)
+        # ``ALIAS_PROVIDER`` (not the literal "chukbackend") because Mem0 2.0.x
+        # validates this name against a hardcoded allowlist before the factory
+        # runs — see the note in :mod:`cowork_agent.mem0_provider`.
+        from .mem0_provider import ALIAS_PROVIDER
+
         return {
             "llm": {
-                "provider": "chukbackend",
+                "provider": ALIAS_PROVIDER,
                 "config": {"model": _LLM_MODEL},
             },
             "embedder": embedder,
@@ -315,7 +334,7 @@ class MemoryStore:
                 "config": {
                     "collection_name": _COLLECTION,
                     "path": qdrant_path,
-                    "embedding_model_dims": _EMBED_DIMS,
+                    "embedding_model_dims": active_dims,
                 },
             },
         }

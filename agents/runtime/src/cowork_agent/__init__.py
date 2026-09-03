@@ -66,6 +66,14 @@ from .documents import (
     register_read_document,
 )
 from .environment import Environment, LocalEnvironment, ProcessResult
+from .herenow import (
+    ApprovalGate,
+    HereNowConfig,
+    HereNowError,
+    PublishRequest,
+    make_publish_handler,
+    register_herenow_tools,
+)
 from .files_out import (
     MAX_FILE_BYTES,
     FileSink,
@@ -318,6 +326,12 @@ __all__ = [
     "FETCH_CAP",
     "FetchedFile",
     "FileSink",
+    "ApprovalGate",
+    "HereNowConfig",
+    "HereNowError",
+    "PublishRequest",
+    "make_publish_handler",
+    "register_herenow_tools",
     "IterationBudget",
     "JournalingRegistry",
     "KillSwitch",

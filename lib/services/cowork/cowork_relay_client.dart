@@ -39,6 +39,7 @@ import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_reconnect.dart';
 import 'package:cowork/services/executor_provisioning.dart';
+import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/services/websocket_connector.dart' as ws_connector;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -416,6 +417,105 @@ class CoworkRelayRunError extends CoworkRelayInbound {
   final String message;
 }
 
+/// The raw context the executor sent to the model for one round, echoed back
+/// only when the task was sent with `debug: true` (the developer "capture model
+/// context" toggle). It is a developer aid: the thread keeps the latest one per
+/// session so it can be copied to the clipboard, and it never renders in the
+/// conversation. [payload] is the whole decoded event, so nothing is lost — the
+/// named fields are the ones the copy button reads first.
+class CoworkRelayDebugContext extends CoworkRelayInbound {
+  const CoworkRelayDebugContext({
+    required this.sessionKey,
+    required this.payload,
+    this.round,
+  });
+
+  /// The session the context belongs to — the same key the task was sent with.
+  final String sessionKey;
+
+  /// Which round of the run this context is for, when the host reported one.
+  final int? round;
+
+  /// The whole decoded `debug_context` payload (messages, stats, everything),
+  /// kept verbatim so the copy button has the full picture.
+  final Map<String, dynamic> payload;
+}
+
+/// One raw RFB byte chunk of the live browser view (§9.1). Opaque on purpose —
+/// the RFB protocol is spoken by `flutter_rfb`, never parsed here.
+class CoworkRelayBrowserData extends CoworkRelayInbound {
+  const CoworkRelayBrowserData(this.bytes);
+  final Uint8List bytes;
+}
+
+/// Status of the live browser view: `started`, `stopped`, or `error` (§9.1).
+class CoworkRelayBrowserView extends CoworkRelayInbound {
+  const CoworkRelayBrowserView({required this.status, this.message = ''});
+  final String status;
+  final String message;
+}
+
+/// The executor is asking the user to approve one here.now publish before it
+/// runs (the connector's `ask` mode). The run **blocks** on the executor until
+/// the app answers with a matching decision, so the UI must surface this as a
+/// standing prompt, not a transient one. The reply goes back through
+/// [CoworkRelayController.sendApprovalDecision], correlated by [approvalId].
+class CoworkRelayApprovalRequest extends CoworkRelayInbound {
+  const CoworkRelayApprovalRequest({
+    required this.approvalId,
+    required this.action,
+    required this.path,
+    required this.name,
+    required this.fileCount,
+    required this.totalBytes,
+    required this.baseUrl,
+    required this.public,
+  });
+
+  /// Builds an approval request from a decoded `approval_request` payload, or
+  /// null when the id is missing (nothing to correlate a decision to). Dropped,
+  /// never thrown, so a malformed frame cannot break the socket read loop.
+  static CoworkRelayApprovalRequest? fromPayload(Map<String, dynamic> payload) {
+    final id = payload['approval_id'];
+    if (id is! String || id.isEmpty) return null;
+    final rawName = payload['name'];
+    final rawPath = payload['path'];
+    return CoworkRelayApprovalRequest(
+      approvalId: id,
+      action: '${payload['action'] ?? 'publish'}',
+      path: rawPath is String ? rawPath : '',
+      name: rawName is String && rawName.trim().isNotEmpty
+          ? rawName.trim()
+          : (rawPath is String ? rawPath : ''),
+      fileCount: CoworkRelayTool._asInt(payload['file_count']) ?? 0,
+      totalBytes: CoworkRelayTool._asInt(payload['total_bytes']) ?? 0,
+      baseUrl: '${payload['base_url'] ?? 'here.now'}',
+      public: payload['public'] != false,
+    );
+  }
+
+  /// Correlates the decision back to this request.
+  final String approvalId;
+
+  /// What is being approved (today always `herenow_publish`).
+  final String action;
+
+  /// The workspace path going out, and a friendly name for it.
+  final String path;
+  final String name;
+
+  /// How much is going out: file count and total byte size.
+  final int fileCount;
+  final int totalBytes;
+
+  /// The here.now host the site will live under.
+  final String baseUrl;
+
+  /// True when the site will be publicly viewable by anyone with the link
+  /// (always true on the anonymous free tier).
+  final bool public;
+}
+
 /// Read-only surface the UI depends on, so widget tests can drive a fake
 /// without a socket or a real pairing ceremony.
 abstract interface class CoworkRelayController {
@@ -455,12 +555,18 @@ abstract interface class CoworkRelayController {
   /// an empty or null value is left off the frame, so the host keeps its own
   /// default. A non-empty [providerSlug] pins the model to one provider; an
   /// empty one lets the host route.
+  ///
+  /// [debug] rides only when the developer's "capture model context" toggle is
+  /// on. It asks the executor to echo back the raw context it sent to the model
+  /// as a `debug_context` event; left false the frame carries no `debug` key, so
+  /// an old host and a normal send both behave exactly as before.
   Future<void> sendTask(
     String prompt, {
     String sessionKey,
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    bool debug,
   });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
@@ -505,6 +611,27 @@ abstract interface class CoworkRelayController {
   /// over when a `done` or `error` event arrives.
   Future<void> requestStop({String sessionKey});
 
+  /// Ask the executor to start streaming the sandbox browser's screen over the
+  /// sealed channel (§9.1), so the user can watch and take control (e.g. to log
+  /// in). Status comes back as [CoworkRelayBrowserView]; pixels as
+  /// [CoworkRelayBrowserData].
+  Future<void> startBrowserView();
+
+  /// Ask the executor to stop the live browser view and tear the stream down.
+  Future<void> stopBrowserView();
+
+  /// Forward raw RFB client bytes (the viewer's handshake and every pointer/key
+  /// event) to the sandbox browser (§9.1).
+  Future<void> sendBrowserData(Uint8List bytes);
+
+  /// Answer a [CoworkRelayApprovalRequest]: approve or deny one here.now
+  /// publish, correlated by [approvalId]. The run is blocked until this arrives;
+  /// a denial (or no answer within the executor's timeout) does not publish.
+  Future<void> sendApprovalDecision({
+    required String approvalId,
+    required bool approved,
+  });
+
   /// Tears the client down.
   Future<void> dispose();
 }
@@ -522,6 +649,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     int Function()? nowMs,
     Duration pairingTimeout = const Duration(seconds: 30),
     McpStore? mcpStore,
+    HereNowStore? hereNowStore,
   })  : _deviceId = deviceId,
         _signingKeyPair = signingKeyPair,
         _connector = connector,
@@ -529,7 +657,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         _keyVersion = keyVersion,
         _nowMs = nowMs,
         _pairingTimeout = pairingTimeout,
-        _mcpStore = mcpStore;
+        _mcpStore = mcpStore,
+        _hereNowStore = hereNowStore;
 
   final String _deviceId;
   final SimpleKeyPair _signingKeyPair;
@@ -542,6 +671,13 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   /// Null (or an empty store) leaves `mcp_servers` off the frame, which keeps an
   /// old host happy and costs nothing when the user configured no connectors.
   final McpStore? _mcpStore;
+
+  /// The user's here.now publishing setting. When the connector is enabled, each
+  /// task frame carries `{enabled, approval}` under `herenow`, so the executor
+  /// registers the publish tool and applies the approval policy. Null (or a
+  /// disabled store) leaves the key off the frame, so an old host and a user who
+  /// never enabled it both keep working, and no publish tool is registered.
+  final HereNowStore? _hereNowStore;
   final int _keyVersion;
   final int Function()? _nowMs;
   final Duration _pairingTimeout;
@@ -817,12 +953,17 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    bool debug = false,
   }) async {
     // The user's UI-configured MCP servers, resolved with their live bearers at
     // launch. Empty (or no store) leaves the key off the frame, so an old host
     // and a user with no connectors both keep working unchanged.
     final mcpServers =
         _mcpStore == null ? const <Map<String, dynamic>>[] : await _mcpStore.forwardPayloads();
+    // The here.now connector setting, when the user enabled it. Null leaves the
+    // `herenow` key off the frame, so the executor registers no publish tool.
+    final herenow =
+        _hereNowStore == null ? null : await _hereNowStore.forwardPayload();
     await _sendFramePayload(<String, dynamic>{
       'type': 'task',
       'prompt': prompt,
@@ -835,6 +976,11 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       if (reasoningEffort != null && reasoningEffort.isNotEmpty)
         'reasoning_effort': reasoningEffort,
       if (mcpServers.isNotEmpty) 'mcp_servers': mcpServers,
+      // Null (disabled connector) drops the key via the null-aware element.
+      'herenow': ?herenow,
+      // Only a debug send carries the flag, so an old host and a normal send
+      // both keep the frame exactly as it was.
+      if (debug) 'debug': true,
     });
   }
 
@@ -906,6 +1052,34 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         // working on. A bare `{"type":"stop"}` — what this used to send — named
         // no run at all, so nothing could act on it.
         'session_key': sessionKey,
+      });
+
+  @override
+  Future<void> startBrowserView() =>
+      _sendFramePayload(<String, dynamic>{'type': 'browser_start'});
+
+  @override
+  Future<void> stopBrowserView() =>
+      _sendFramePayload(<String, dynamic>{'type': 'browser_stop'});
+
+  @override
+  Future<void> sendBrowserData(Uint8List bytes) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'browser_data',
+        'data': base64.encode(bytes),
+      });
+
+  @override
+  Future<void> sendApprovalDecision({
+    required String approvalId,
+    required bool approved,
+  }) =>
+      // A sealed control frame, sent the same way as a stop: the executor
+      // correlates it by `approval_id` and resolves the blocked publish.
+      _sendFramePayload(<String, dynamic>{
+        'type': 'approval_decision',
+        'approval_id': approvalId,
+        'approved': approved,
       });
 
   @override
@@ -1065,6 +1239,25 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         _inbound.add(CoworkRelayTool.fromPayload(payload));
       case 'file':
         _inbound.add(_fileFromPayload(payload));
+      case 'browser_data':
+        final data = payload['data'];
+        if (data is String && data.isNotEmpty) {
+          try {
+            _inbound.add(CoworkRelayBrowserData(base64.decode(data)));
+          } on FormatException {
+            // A corrupt chunk is dropped, not fatal — the stream continues.
+          }
+        }
+      case 'browser_view':
+        _inbound.add(
+          CoworkRelayBrowserView(
+            status: '${payload['status'] ?? 'error'}',
+            message: '${payload['message'] ?? ''}',
+          ),
+        );
+      case 'approval_request':
+        final request = CoworkRelayApprovalRequest.fromPayload(payload);
+        if (request != null) _inbound.add(request);
       case 'done':
         final iterations = payload['iterations'];
         final finalAnswer = payload['final_answer'];
@@ -1085,6 +1278,15 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       case 'error':
         _inbound.add(
           CoworkRelayRunError('${payload['message'] ?? 'Unknown error'}'),
+        );
+      case 'debug_context':
+        final sessionKey = payload['session_key'];
+        _inbound.add(
+          CoworkRelayDebugContext(
+            sessionKey: sessionKey is String ? sessionKey : '',
+            round: CoworkRelayTool._asInt(payload['round']),
+            payload: payload,
+          ),
         );
       case 'subagent':
         final sub = _subagentFromPayload(payload);

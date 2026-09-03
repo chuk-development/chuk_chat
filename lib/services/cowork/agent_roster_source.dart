@@ -1,4 +1,6 @@
-/// The roster: who your coworkers are, and which threads each one has (§4).
+/// The roster: who your coworkers are, and the one permanent thread each one
+/// has. Every agent carries exactly one session; there is no way to open a
+/// second (the product decision — one permanent session per bot).
 ///
 /// The host has no roster API over the relay yet, so this source holds what the
 /// app itself knows: the one agent that really runs on the paired host, plus any
@@ -47,8 +49,8 @@ abstract class AgentRosterSource extends ChangeNotifier {
   /// returns it. Called once the transport reports a paired host.
   CoworkAgent ensureHostAgent(String peerDeviceId);
 
-  /// Adds a coworker the user just onboarded. The returned agent always has one
-  /// thread, so selecting it opens a conversation immediately.
+  /// Adds a coworker the user just onboarded. The returned agent always has its
+  /// one permanent thread, so selecting it opens the conversation immediately.
   CoworkAgent addAgent({
     required String name,
     String? role,
@@ -56,9 +58,6 @@ abstract class AgentRosterSource extends ChangeNotifier {
     ScheduleSpec? schedule,
     List<String> attachmentNames,
   });
-
-  /// Opens another thread on [agentId] (§4: many threads per agent).
-  CoworkThreadInfo addThread(String agentId, {String? title});
 
   /// Marks a run as in flight (or finished) for [agentId].
   void markRunning(String agentId, bool running);
@@ -86,7 +85,6 @@ class LocalAgentRosterSource extends AgentRosterSource {
   final List<CoworkAgent> _agents;
   final Random _random;
   final Set<String> _hidden = <String>{};
-  int _threadCounter = 0;
 
   @override
   List<CoworkAgent> get agents => List<CoworkAgent>.unmodifiable(_agents);
@@ -127,9 +125,10 @@ class LocalAgentRosterSource extends AgentRosterSource {
       name: peerDeviceId,
       onHost: true,
       threads: <CoworkThreadInfo>[
-        // `default` is the session key the executor uses when a task carries
-        // none, so the first thread must be exactly that one.
-        const CoworkThreadInfo(key: 'default', title: 'General'),
+        // One permanent session per bot: its key is the agent id, so the
+        // session_key the task rides with is stable across restarts and there
+        // is only ever this one.
+        CoworkThreadInfo(key: id, title: 'General'),
       ],
     );
     _agents.insert(0, agent);
@@ -154,29 +153,14 @@ class LocalAgentRosterSource extends AgentRosterSource {
       schedule: schedule,
       attachmentNames: List<String>.unmodifiable(attachmentNames),
       threads: <CoworkThreadInfo>[
-        CoworkThreadInfo(key: _nextThreadKey(name), title: 'General'),
+        // One permanent session per bot: its key is the agent id, stable for
+        // the life of the coworker.
+        CoworkThreadInfo(key: id, title: 'General'),
       ],
     );
     _agents.add(agent);
     notifyListeners();
     return agent;
-  }
-
-  @override
-  CoworkThreadInfo addThread(String agentId, {String? title}) {
-    final index = _indexOf(agentId);
-    final agent = _agents[index];
-    final thread = CoworkThreadInfo(
-      key: _nextThreadKey(agent.name),
-      title: (title != null && title.trim().isNotEmpty)
-          ? title.trim()
-          : 'Thread ${agent.threads.length + 1}',
-    );
-    _agents[index] = agent.copyWith(
-      threads: <CoworkThreadInfo>[...agent.threads, thread],
-    );
-    notifyListeners();
-    return thread;
   }
 
   @override
@@ -226,12 +210,6 @@ class LocalAgentRosterSource extends AgentRosterSource {
     }
     if (orNull) return -1;
     throw ArgumentError.value(agentId, 'agentId', 'No such agent');
-  }
-
-  String _nextThreadKey(String name) {
-    _threadCounter++;
-    final slug = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-    return '$slug-$_threadCounter';
   }
 }
 

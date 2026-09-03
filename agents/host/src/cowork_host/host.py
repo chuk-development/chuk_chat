@@ -15,6 +15,7 @@ For production the model factory is built from the provisioned Supabase token
 
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from typing import Callable
@@ -50,6 +51,7 @@ from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
+from .seed_skills import seed_workspace_skills
 from .serve import TaskServer
 
 DEFAULT_WORKSPACE = "~/.cowork"
@@ -86,6 +88,13 @@ class LocalHost:
         self._host_addr = host_addr
         self._model_id = model_id
         self._sandbox_kind = sandbox_kind
+        # The Playwright MCP + watchable browser (§9.1) ship in the browser image
+        # only; on the base image the launcher script is absent, so leave it off.
+        # The image is what COWORK_SANDBOX_IMAGE selects (resolve_image); "browser"
+        # in the tag is the browser variant.
+        self._browser_mcp = sandbox_kind == "docker" and (
+            "browser" in os.environ.get("COWORK_SANDBOX_IMAGE", "").lower()
+        )
         self._supabase_url = supabase_url
         self._anon_key = anon_key
         self._model_factory_override = model_factory_override
@@ -314,6 +323,12 @@ class LocalHost:
         # Each agent owns a real workspace directory under the host.
         workspace = self._agents_dir / agent.name
         workspace.mkdir(parents=True, exist_ok=True)
+        # Drop the shipped seed skills in so a fresh coworker can act on a
+        # YouTube link (and future seeds) out of the box. Non-destructive: an
+        # agent's own skills are never overwritten.
+        seeded = seed_workspace_skills(workspace)
+        if seeded:
+            self._log(f"[cowork-host] seeded skills for {agent.name}: {', '.join(seeded)}")
         if agent.workspace_dir != str(workspace):
             updated = self._roster.update(agent.id, workspace_dir=str(workspace))
             if updated is not None:
@@ -489,6 +504,7 @@ class LocalHost:
             account_token_provider=(
                 (lambda: self._session.access_token if self._session else None)
             ),
+            browser_mcp=self._browser_mcp,
         )
 
     @property

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cowork/pages/settings/account_settings_page.dart';
 import 'package:cowork/pages/settings/developer_settings_page.dart';
 import 'package:cowork/pages/settings/embedding_settings_page.dart';
+import 'package:cowork/pages/settings/herenow_settings_page.dart';
 import 'package:cowork/pages/settings/mcp_connectors_page.dart';
 import 'package:cowork/pages/settings/model_settings_page.dart';
 import 'package:cowork/pages/settings/theme_settings_page.dart';
@@ -93,6 +94,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: 'Model Context Protocol servers',
                 trailing: const _Chevron(),
                 onTap: () => _push(const McpConnectorsPage()),
+              ),
+              ExpressiveRow(
+                icon: Icons.public,
+                title: 'here.now Publishing',
+                subtitle: 'Publish files to a live public URL',
+                trailing: const _Chevron(),
+                onTap: () => _push(const HereNowSettingsPage()),
               ),
               ExpressiveRow(
                 icon: Icons.scatter_plot_outlined,

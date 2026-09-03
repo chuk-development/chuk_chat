@@ -26,6 +26,7 @@ from .browser import BrowserRunner, register_browser_task
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .files_out import FileSink
+from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .mcp_client import MCPManager, register_mcp_tools
 from .media import WorkspaceMount
@@ -240,10 +241,13 @@ def build_runtime(
     subagents: SubagentConfig | None = None,
     enable_mcp: bool = True,
     mcp: MCPManager | None = None,
+    herenow_config: HereNowConfig | None = None,
+    herenow_gate: ApprovalGate | None = None,
     enable_tool_search: bool = True,
     tool_search_threshold: float = DEFAULT_THRESHOLD,
     oauth_link_notifier: LinkNotifier | None = None,
     oauth_http_client: httpx.Client | None = None,
+    debug_observer: Callable[[dict], None] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract, the ``<tool_call>`` wire format and the live tool list
@@ -290,10 +294,20 @@ def build_runtime(
     as ``loop.mcp``; **close it when the run ends** or the transport threads and
     their subprocesses outlive the task.
 
+    ``herenow_config`` turns on the here.now publish connector (off by default).
+    The tool is registered only when the config is enabled; ``herenow_gate`` is
+    the approval round-trip the executor binds, so a public publish waits on the
+    user in ``ask`` mode and refuses when no one can approve.
+
     ``enable_tool_search`` (§7.2) hides the MCP tools behind ``tool_search`` /
     ``tool_describe`` / ``tool_call`` once their schemas pass
     ``tool_search_threshold`` of the effective input budget. Core tools are never
     hidden. The measured decision is on the loop as ``loop.tool_search``.
+
+    ``debug_observer`` is the backend half of a debug "copy raw context" feature:
+    a callback fired once per model round with the EXACT message list sent to the
+    model that round and the context ladder's stats. Off by default — pass no
+    observer and nothing is built or called, so a normal run pays nothing for it.
     """
     env = environment or LocalEnvironment()
     ladder_config = context_config or LadderConfig()
@@ -318,6 +332,13 @@ def build_runtime(
         media_mount=media_mount,
     )
     register_workspace_tools(registry, git_workspace)
+
+    # here.now publishing (a first-class connector, off unless the user enabled
+    # it in settings). Registered only when ``herenow_config.enabled``; the gate
+    # is the executor's approval round-trip, so a public publish waits on the
+    # user in ``ask`` mode. Not deferrable — a publish is a real, user-visible
+    # action, kept in the prompt like the other core tools.
+    register_herenow_tools(registry, env, herenow_config, herenow_gate)
 
     if enable_terminal:
         # Task-scoped by construction (§7.8): the task id is part of every tmux
@@ -469,6 +490,9 @@ def build_runtime(
         system_prompt=prompt,
         context_providers=[library.pending_context],
         context_ladder=ladder,
+        # The debug "copy raw context" tap (off by default): fired each round with
+        # the exact outbound payload and the ladder's stats. Unset -> not wired.
+        debug_observer=debug_observer,
     )
     # Two handles the caller needs and the loop itself does not: the MCP manager,
     # whose transport threads and subprocesses must be closed when the run ends,

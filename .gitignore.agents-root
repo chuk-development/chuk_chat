@@ -36,3 +36,8 @@ _scratch/
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+
+# Claude Code session id files (never commit)
+session.txt
+**/session.txt
+.playwright-mcp/

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/services/api_config_service.dart';
+import 'package:cowork/services/settings/debug_settings.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
 /// Developer options: the endpoints the app talks to, and a couple of local
@@ -19,6 +20,7 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
   static const String _verboseKey = 'dev_verbose_logging';
 
   bool _verbose = false;
+  bool _captureContext = false;
   bool _loading = true;
 
   @override
@@ -35,9 +37,11 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
     } catch (_) {
       // Default off when the store is unavailable.
     }
+    final capture = await DebugSettings.captureContext();
     if (!mounted) return;
     setState(() {
       _verbose = verbose;
+      _captureContext = capture;
       _loading = false;
     });
   }
@@ -50,6 +54,11 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
     } catch (_) {
       // The live toggle still holds for the session.
     }
+  }
+
+  Future<void> _setCaptureContext(bool value) async {
+    setState(() => _captureContext = value);
+    await DebugSettings.setCaptureContext(value);
   }
 
   @override
@@ -95,6 +104,14 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
                       subtitle: 'Extra client-side logs (this device only)',
                       value: _verbose,
                       onChanged: _setVerbose,
+                    ),
+                    ExpressiveSwitchRow(
+                      icon: Icons.data_object,
+                      title: 'Capture model context (debug)',
+                      subtitle: 'Send each task with debug on and keep the raw '
+                          'model context, so it can be copied from the thread',
+                      value: _captureContext,
+                      onChanged: _setCaptureContext,
                     ),
                   ],
                 ),

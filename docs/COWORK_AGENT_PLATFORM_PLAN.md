@@ -35,6 +35,36 @@ The essence: **you assemble a team of specialised, always-running AI coworkers,
 give them tasks and revocable access, and they do the work autonomously on your
 own machine.**
 
+### 1.1 Product thesis — a computer you tell what to do
+
+This is meant to be the next way of using a computer: you say "do this", and it
+does it. The **product is the chat window.** The agent does everything **in its
+own container / on the remote — never directly on the user's system.** The user
+installs nothing, ships nothing, sets up no toolchain. They just talk to the
+agent, hand it files and links, and get results back.
+
+The agent cannot drive GUI programs — and it does not need to. For 99% of tasks
+there is a **CLI, an MCP server, or an API**; the agent reaches for that instead
+of clicking a desktop app. That constraint is the whole point, not a limitation.
+
+Direct access to the user's own machine or specific folders is explicitly **not**
+this product. That is what Claude Code and similar tools are for. A separate
+"give it access to your system" mode may come later, but it is not the goal here.
+Here the boundary is clean: a chat window in, work done in a sandbox, files out.
+
+Shape of the tasks (examples, not a fixed list):
+- "Summarise this YouTube video" → the `youtube-transcript` skill: pull the
+  transcript, read it, answer.
+- "Cut this video into a viral YouTube Short" → pull the transcript, find the
+  strong moments, cut with ffmpeg, send the clip back.
+- "Convert this from format A to format B" → ffmpeg / anydoc / a CLI.
+- "Scrape everything from this website into an Excel sheet" → browser or API →
+  `openpyxl` → send the `.xlsx` back.
+- "Transcribe this voice memo" → the Whisper tool (§9) → text back.
+
+Same loop every time: a plain request in, the agent picks the right tool, the
+work happens in the sandbox, the file or answer comes back to the thread.
+
 ---
 
 ## 2. Glossary
@@ -52,8 +82,10 @@ own machine.**
 - **Executor** — the Python agent runtime inside a sandbox.
 - **Relay** — `cowork_relay` on `api.chuk.chat`; a blind proxy of encrypted
   frames between controller and executor.
-- **Session / thread** — one conversation with an agent (an agent can have
-  many).
+- **Session** — the one permanent conversation with an agent. There are **no
+  threads and no "new chat"**: a bot has exactly one session that runs forever,
+  kept coherent by compaction + memory, not by the user filing work into threads.
+  See `docs/context-compaction-design.md` §0.
 
 ---
 
@@ -102,9 +134,12 @@ memory). It carries:
 - **Credentials** — revocable OAuth/API doors, never raw secrets in the box
   (§10).
 
-**Multiple chats per agent** (same sandbox, separate threads) and
-**multi-agent collaboration** — several agents in one thread, talking to each
-other like teammates while you assign targeted tasks (§7.6).
+**One permanent session per agent — no threads** (§16.1;
+`docs/context-compaction-design.md` §0). A coworker you have to "start a new
+chat" with is not a coworker. The single session grows past any context window;
+compaction + memory (§12) keep it coherent, not the user. **Multi-agent
+collaboration** stays — several agents in one shared room, talking to each other
+like teammates while you assign targeted tasks (§7.6).
 
 Open decision: reuse the Workspace entity directly, or a thin "Agent" entity
 that *wraps* a Workspace. (§20)
@@ -426,15 +461,198 @@ competitors do and it is the wrong default.
 toolset ships preinstalled so the agent has tools ready without a cold install.
 
 **Inside the sandbox (default):**
-- **Browser:** **browser-use** (MIT, self-hosted) + Chromium. Free; we pay only
-  LLM tokens (which route through the backend). Not the Playwright MCP server —
-  a higher-level agent-browser library. **Correction, verified against 0.13.7
-  (2026-08-13):** Playwright is no longer part of it. browser-use drives Chromium
-  straight over the DevTools Protocol (`cdp-use`, `browser-harness`); the
-  Playwright CLI survives only as the *downloader* its own `browser-use install`
-  shells out to. Requires Python ≥3.11. Chromium plus its system libraries is a
-  few hundred MB, so it ships as a **separate image variant**
-  (`sandbox/docker/Dockerfile.browser`), not in the base image.
+- **Browser — headless Chromium in the container, driven by the agent's own
+  loop.** Decisions:
+  - **Ships IN the base image, not a separate variant.** The product is "any
+    user throws any task at the agent" — the browser must always be there, no
+    image choice to get wrong. Chromium plus its libraries is a few hundred MB;
+    we pay that on every agent by design. (`Dockerfile.browser` stays as the
+    historical split, but the default build folds it in.) It runs **headless**:
+    no window opens on anyone's screen, the user installs nothing and ships
+    nothing. The agent still "sees" it — it can take screenshots and read the
+    page — but that all happens inside the container.
+  - **Driver = Playwright, not browser-use.** The agent is *already* the
+    autonomous loop (§7, Claude-Code style). browser-use's whole value is a
+    *second* agentic loop that drives the browser toward a goal on its own —
+    nesting that inside our loop means a second LLM burning tokens and less
+    control. We do not want two brains. Instead the agent drives the browser
+    **directly**, the same way this very session drives the Playwright MCP
+    (navigate / accessibility-tree snapshot / click / type / screenshot /
+    evaluate). Playwright is deterministic and the transport the user already
+    trusts.
+  - **Exposed as a native browser tool set** (a thin Playwright-backed wrapper,
+    or the Playwright MCP server running in-container), modeled on the Playwright
+    MCP surface — one persistent headless Chromium per agent, called from the
+    agent's loop. Chromium is downloaded at **build time** (as `Dockerfile.browser`
+    already does via `uvx playwright install chromium --with-deps`), so no agent
+    run pays for the download.
+  - Still API-first (§8): the browser is the *fallback* for the sites without a
+    usable API/CLI/MCP, not the default reach.
+
+  **browser-use vs Playwright — the comparison (researched 2026-09-02):**
+  - **Architecture.** browser-use is *itself an agent*: its own observe→plan→act
+    →verify loop. Every step it feeds the page state (accessibility tree / DOM,
+    optionally a screenshot) to **an LLM**, the LLM picks the action, it runs it
+    over CDP, repeat. The LLM is the driver — a second brain. Playwright has **no
+    LLM inside**: a deterministic API, and as the Playwright MCP it exposes tools
+    (navigate / snapshot / click / type / screenshot / evaluate) that **our**
+    agent drives from its own loop.
+  - **Tokens.** browser-use ≈ **5,000–15,000 tokens per ~10-step workflow**
+    (~$0.05–0.15) because it sends a full observation to an LLM every step — and
+    that is a **separate model bill on top of our agent**. Playwright MCP
+    snapshot ≈ **1,500–5,000 tokens**, and those are **only our agent's own
+    tokens**, spent when it chooses to snapshot; no second model. Accessibility
+    tree over screenshots is 20–50× cheaper (≈50k vision → ≈5k text) and both
+    approaches get that saving.
+  - **What browser-use is for.** Autonomous multi-page workflows on unknown /
+    changing layouts, self-recovery from UI changes, "just accomplish this goal",
+    structured extraction, custom actions. Its strength is *autonomy* — which our
+    agent already is. Adopting it means paying for a capability we have.
+  - **Version.** Latest is **0.13.8 (2026-08-16)** — still the 0.13 line, no "2.x"
+    library (the `bu-2-0` / `bu-latest` names are browser-use's *cloud model
+    tier*, not the pip version). It still pins `mcp==1.26`, which conflicts with
+    our `mcp>=2.0` client — adopting it still forces an isolated environment.
+  - **Playwright MCP specifically (Microsoft `@playwright/mcp`, Apache-2.0,
+    researched 2026-09-02).** Snapshot mode (default) hands the model the
+    accessibility tree — a single snapshot ≈ **200–400 tokens** (2–5 KB) vs
+    100 KB+ for a screenshot; vision mode exists only for edge cases the AX tree
+    misses. So per-step it is cheap. **But the sting is long sessions:** the MCP
+    server keeps re-emitting snapshots into the context, which bloats and goes
+    **stale** — a benchmarked task ran ~**114k tokens through the MCP** vs ~**27k
+    through the Playwright CLI** (agent writes scripts, snapshots to disk, greps
+    them), and stale AX trees cause hallucinated locators / flaky runs in long
+    sessions. So the MCP is the *convenient* surface but not the *cheapest or
+    most reliable* one.
+  - **Decision: Playwright MCP server (not browser-use, not the CLI).** The
+    token difference between MCP and CLI is **irrelevant at our prices** — the
+    models we run are absurdly cheap (≈**$0.15 / M input, $0.50 / M output, and a
+    cache hit ≈$0.03 / M**; verify the exact cache price for the current model).
+    A whole browser session is cents. So the "CLI is 4× fewer tokens" point does
+    not move the decision. We pick the MCP server for the **clean ready-made tool
+    surface** the agent drives directly — the same surface that has been reliable
+    in practice — over hand-writing Playwright scripts. browser-use stays out: it
+    is a second autonomous brain we do not need, and it drags the `mcp==1.26`
+    conflict. (The CLI/library remains a valid path if a specific job wants
+    snapshot-to-disk + grep, but it is not the default.)
+
+  **Only-GUI-needed = the browser.** ~99% of what users want, and of what our
+  automation does, is in the browser. So the browser is essentially the *only*
+  GUI program we need — we do not chase other desktop apps. That means we can
+  likely use a **ready-made Xvfb/VNC browser image** as the base for the visual
+  side rather than assembling the X stack by hand. Open: which image (§20).
+
+  **Interactive login hand-off (the important one, recorded):**
+  Some services have no API/MCP and force a login *on the website itself*. That
+  is a small minority of tasks — most tasks need no login, and most that do have
+  an MCP — but it must work. The mechanism (as decided):
+  - The agent hits a login wall and **ends its browser tool loop**. It tells the
+    user, in the thread, "please open the login view and sign in".
+  - The chat UI shows a **remote-controllable noVNC view** of the container's
+    Chromium (running headful under **Xvfb**). The user drives that browser
+    directly and types their own credentials. A notice says the view can change.
+  - The user finishes, **closes the view, and tells the agent "I'm logged in,
+    done"**. Only then does the agent restart its loop and continue, now with an
+    authenticated session (cookie) living in the container's browser.
+  - **Why this is safe by construction:** because the agent's tool loop is
+    *ended* during the login — not merely paused — there is no observation
+    running that could capture the password. The risk is absent, not mitigated.
+    The agent never sees the login screen or the credentials.
+  - **Two modes, deliberately.** Default = **agent-blind** (above): the password
+    stays with the user. But sometimes it is useful for the agent **to get the
+    credentials on purpose** — so it can reverse-engineer the login flow and
+    build a **reusable auto-login script** (see the browser→script skill below),
+    so the next run needs no human. That is a per-task choice, not the default.
+  - **Transport = the same E2E channel, no open ports.** The VNC stream is
+    redirected through the host/Python server to the Flutter client over the
+    existing end-to-end-encrypted line — same topology as everything else, no
+    inbound port on the sandbox.
+  - **HARD CONSTRAINT: no browser / no webview in the Flutter app.** The app is
+    deliberately small and there is **no good universal webview across Android /
+    Linux / Windows / macOS** — we have hit this before and never shipped a
+    bundled browser. So **any noVNC-in-webview path is rejected outright**, on
+    every platform. The renderer must be pure Flutter.
+  - **Rendering in Flutter — decided approach (researched 2026-09-02).** Two
+    browser-free paths; we take **path 2 (host pixels)** as the default:
+    1. ~~Webview + noVNC~~ — **REJECTED** (violates the no-webview constraint
+       above). Kept only to record why.
+    2. **Host grabs the pixels, Flutter just paints (DEFAULT).** Sandbox: Xvfb +
+       Chromium. The host **grabs the framebuffer directly** (`ffmpeg -f x11grab`,
+       or x11vnc as the source), encodes changed regions as **WebP/JPEG tiles**,
+       and streams them over the sealed E2E channel. Flutter receives images and
+       **paints them with `Image.memory` on a `CustomPaint`** — no protocol, no
+       decoder. Flutter captures pointer/keyboard as normal gestures/key events
+       and sends **simple JSON events** (x, y, click, keycode) back; the host
+       injects them with **`xdotool`**. Benefits: the Flutter side is tiny and
+       rock-solid (a few hundred lines, **no new dependency**, no RFB decoder to
+       debug across 5 platforms); we **own the codec and FPS, so we control the
+       delay directly**; x11vnc can be dropped entirely (just x11grab + xdotool).
+       Cost: we build the mini remote-desktop ourselves — dirty-rect diffing (or
+       plain low-FPS full frames for a login) and input mapping (coord scaling,
+       keycodes). More host code, but simple host code.
+    3. **Native Dart RFB client** (`flutter_rfb` / `dart_vnc`) — the pure-Dart
+       alternative. Speaks RFB itself and renders the framebuffer in a Flutter
+       widget; runs on every Flutter target with no native lib and no webview.
+       Transport: rebind their raw-`Socket` I/O onto our sealed channel (the
+       decoder does not care where bytes come from). Benefits: RFB is **naturally
+       incremental** (dirty-rects only → less bandwidth for free), input is solved
+       by the protocol, and the host stays stock x11vnc (**less host code**). Cost:
+       these are weekend-grade packages with **thin encoding coverage** — we must
+       pin x11vnc to encodings the Dart client handles (Raw/CopyRect safe, ZRLE/
+       Tight maybe to add), and any RFB bug is ours to debug in Dart.
+  - **Delay:** for **both** paths the floor is the **relay round-trip** — one hop
+    client↔host over the E2E line. Typing feels responsive as long as the input
+    RTT is small (event → xdotool/RFB-input → next frame), which is identical for
+    both. Frame delay is dirty-rect vs full-frame — both can do incremental
+    updates (path 3 natively, path 2 we build it). A login is low-motion, so
+    small dirty-rects → low delay. **Delay is effectively equal; the real
+    difference is code and robustness, not speed.**
+  - **CHOICE: path 3 — least custom code, because both ends are off-the-shelf.**
+    The deciding criterion is "do not rebuild the whole stack ourselves." Path 2
+    fails it — both ends are bespoke (custom pixel protocol, dirty-rect diffing,
+    xdotool input mapping). Path 3 passes: the **server is stock x11vnc** (an apt
+    package, zero code) and the **client is a stock pure-Dart RFB library**
+    (`flutter_rfb`) that does rendering + keyboard/mouse itself and imports like
+    any pub package on all Flutter targets. We write only **two thin byte
+    bridges** that reuse the **existing sealed E2E channel** — so E2E is free (the
+    RFB bytes ride inside our sealed frames; no new crypto layer).
+  - **No fork of the library, via a loopback socket.** The RFB lib wants to
+    connect to `host:port` over TCP. Instead of rewriting it, the Flutter app
+    opens a **local loopback `ServerSocket` on `127.0.0.1`** (`dart:io`, works on
+    Android/Linux/Windows/macOS); the lib connects there; our bridge pipes those
+    bytes into the sealed frames. The library stays unmodified. The Python side
+    is the mirror: read the x11vnc TCP socket → wrap in a sealed frame → relay →
+    and back (~50 lines; the sealed-frame machinery already exists).
+  - **Data flow:** Chromium@Xvfb → **x11vnc** (TCP, localhost only) → Python
+    bridge → **sealed E2E frames** → relay → Flutter loopback bridge → `127.0.0.1`
+    → **flutter_rfb** renders + sends input back the same way. No open port
+    anywhere, E2E throughout, both ends standard software.
+  - **One thing to verify before committing (a ~1-hour check, not an architecture
+    risk):** that `flutter_rfb` (a) handles **keyboard input** and (b) speaks an
+    encoding x11vnc serves. The RFB client dictates encodings (SetEncodings); Raw
+    + CopyRect is universal and plenty for a low-motion login, and x11vnc serves
+    them. If `flutter_rfb` lacks input, `dart_vnc` is the backup candidate (same
+    pattern). This is the only login-screen piece; it is for the small minority of
+    tasks that need an on-site login.
+  - **"Just open a normal browser" — the simple fallback, with a real tradeoff.**
+    We could instead give the user a URL they open in their **own system
+    browser** (standard noVNC deployment at the backend + websockify). Easiest by
+    far, works on any device — **but there is then no E2E line**; it is a public
+    web page whose pixels and keystrokes transit our backend under plain TLS, not
+    the client-held E2E key. The agent still never sees the password, **but our
+    backend theoretically could.** So for a **password login** this is the weaker
+    posture; fine for harmless remote control. **Decision: path 1 (in-app, E2E)
+    is the default for logins; the external-browser page is an explicit fallback
+    for unsupported devices, shown with a note that it is not E2E.**
+
+  Related: we already built a **browser→script skill** — it captures browser
+  actions and turns them into a replayable script over a **WebSocket stream**.
+  That is the automation-capture path an agent-with-credentials login would feed
+  into.
+
+  **Bot fingerprint (low priority).** A Playwright/headless Chromium is sometimes
+  detectable vs a normal Chrome and gets flagged by some sites. May want to spoof
+  the fingerprint (real UA, headful-like flags, stealth). Separate concern, do
+  not couple it to the login work.
 - **File → markdown:** **anydoc** (firecrawl, MIT, fully offline, no API key).
   One dependency (`pip install firecrawl-anydoc`) replacing pandoc + python-docx
   + LibreOffice + pypdf for ingestion of doc/docx, ppt/pptx, xls/xlsx, odt, rtf,
@@ -442,20 +660,38 @@ toolset ships preinstalled so the agent has tools ready without a cold install.
   no standalone images → route those to a **vision/video model via the backend**
   (no Tesseract). Pattern: try `anydoc.to_markdown(...)`, on `UnsupportedError` →
   vision path.
-- **Vision / video model (open-weight only):** default **`qwen/qwen3.6-35b-a3b`**
-  (MoE, ~3B active — cheap + fast, does image *and* video, fully open); harder
-  cases **`qwen/qwen3.5-397b-a17b`**; alternatives **MiniMax M3**, **Kimi K3**.
-  These are the only models in our catalog that accept **video** input (verified
-  against `/v1/models_info` ∩ OpenRouter modalities). Serves both the image/OCR
-  route here and the **video-onboarding** of §4. (No Gemini/proprietary — we run
-  open-weight only. IDs churn; keep the choice at "cheap Qwen MoE default.")
-- **Media:** `ffmpeg`/`ffprobe` (ffmpeg via host passthrough, below), **yt-dlp**.
+- **Vision / OCR — through the main model, never a local model.** The main
+  agent model is **GLM 5.3**, which already has vision. So image understanding
+  and OCR route straight to it: an image the user sent, a scanned PDF, a
+  screenshot — hand it to the vision-capable main model. **Running a local OCR
+  model is completely inefficient; no Tesseract, no local vision weights.** (IDs
+  churn; keep the choice at "the main model does vision, nothing local does.")
+  Video input rides the same path where the model accepts it; specifics are TBD
+  and tracked in §20.
+- **Media:** **`ffmpeg`/`ffprobe`**, and **`jellyfin-ffmpeg`** — Jellyfin's
+  full static ffmpeg build with all codecs and the hardware encoders (NVENC/
+  VAAPI/QSV) baked in, which the thin Debian ffmpeg lacks. That is the build the
+  agent uses for anything heavy. Plus **yt-dlp**. The GPU-accelerated path runs
+  on the host (§20 passthrough); the in-container jellyfin-ffmpeg is the always-
+  available fallback.
+- **Speech-to-text (Whisper) — a tool that calls OUR API, not a local model.**
+  We already have Whisper transcription running as a service. The agent gets a
+  tool that calls that same speech-input API (WebSocket or plain request, the
+  transport we already use) and gets text back. No whisper weights in the
+  sandbox — the transcription happens where it already happens, server-side.
 - **Docs out:** `python-docx`/`openpyxl`/`python-pptx` where the agent must
   *write* office files (anydoc only reads).
-- **send-file-to-user:** push any produced file (CSV/PDF/image/generated
-  doc/**browser screenshot**) into the chat thread. Reuse chuk_chat's existing
-  `send_file_to_user` → `sandboxArtifact` block (renders as a download/preview
-  card).
+- **Files flow both ways — the core loop.** A user sends a file; it lands as a
+  **real file in the agent's workspace filesystem**, not just a reference. The
+  agent opens, edits, converts, regenerates it — whatever the task needs — right
+  there. Uploaded user files sit in the workspace ready to hand. Then the agent
+  **uploads files back to the user** through a tool, and the user sees them in
+  the thread. So: user upload → workspace file → agent works on it → agent sends
+  the result back. anydoc (above) is the *convert* step inside that loop.
+- **send-file-to-user:** the return leg. Push any produced file (CSV/PDF/image/
+  generated doc/**browser screenshot**) into the chat thread. Reuse chuk_chat's
+  existing `send_file_to_user` → `sandboxArtifact` block (renders as a download/
+  preview card).
 - **search-chats:** cross-session recall (§12) — every chat is a read-only,
   live-linked markdown transcript searchable via SQLite FTS5.
 
@@ -493,6 +729,23 @@ toolset ships preinstalled so the agent has tools ready without a cold install.
   `state` compare**, and hand only the `code` to the sandboxed agent via an
   Event-gated wait. The sandbox needs no inbound port and no tunnel. Our app +
   blind-relay topology fits this better than Hermes's does.
+- **Primary path (decided): authenticate in the Flutter client, then pass the
+  token into the sandbox.** The simplest model, and the one we build for. Every
+  MCP server / service is connected and authenticated **on the client side, in
+  the Flutter app, exactly like every other connection**. When the sandbox
+  actually needs the credential, the client hands it to the sandbox **over the
+  existing end-to-end-encrypted channel** (the same sealed-frame transport as
+  everything else — no new ports, no tunnel). Whether the token is ultimately
+  used from Python in the sandbox or from Dart in the client makes **no
+  difference** — it is the same token doing the same call. The user authenticates
+  **once**; if they connected an MCP server on their phone and later the agent
+  needs it in a freshly provisioned Python sandbox, the token is simply forwarded
+  in. This sidesteps the localhost-callback-in-sandbox problem entirely, because
+  the interactive OAuth happens in the client (which already has a browser), and
+  only the **result** crosses into the sandbox. The backend-terminated callback
+  above stays as the **fallback** for servers whose flow must complete
+  server-side. (Nuance to handle: token **refresh** — the client stays the auth
+  authority and re-issues; a static token passed in must be refreshable.)
 - Open: verify the connect-and-delegate flow with a sandbox executor; per-agent
   scoping of connections. (§20)
 
@@ -534,7 +787,20 @@ toolset ships preinstalled so the agent has tools ready without a cold install.
 
 ## 12. Memory / notebook
 
-Two stores (Hermes `tools/memory_tool.py` + `hermes_state_search.py`):
+Because a bot has **one infinite session** (§4, no threads), memory *is* the
+product. Full design in `docs/context-compaction-design.md`; the layers:
+
+- **(0) mem0 — semantic recall.** Fact extraction → vector store → multi-signal
+  retrieval (semantic + keyword + entity, fused), ADD-only, temporal rerank. The
+  "remembers everything, even weeks old" front door. Strong on temporal/multi-hop
+  (~92–94 on LoCoMo/LongMemEval), weak on open-domain (~72.7) — so it is a layer
+  **on top of**, never a replacement for, the exact store below.
+- **(0b) Hero-model note-writer.** A cheap background model updates the bot's
+  running notes every round (`context-compaction-design.md` §2) — the curated,
+  always-shipped summary that never forgets a decision or a value.
+
+Under those, the two exact stores (Hermes `tools/memory_tool.py` +
+`hermes_state_search.py`):
 
 - **(A) Curated declarative markdown** — `MEMORY.md` (agent's own notes) +
   `USER.md` (about the user). Injected as a **frozen snapshot at session start**;
@@ -613,6 +879,60 @@ Borrowed from Hermes `cron/` (MIT):
   vectors.
 - **Honest boundary:** model I/O routes through the backend (§7.4), so E2E means
   "relay/control channel is blind," not "backend sees nothing."
+
+### 14.1 P2P data plane — the server coordinates, it does not carry (decided 2026-09-02)
+
+**Decision: rewrite the transport so ALL client↔host traffic goes peer-to-peer,
+and our API server is only a signaling coordinator — it never carries the data.**
+The relay-through-our-server model above becomes a *fallback*, not the path.
+
+Why: the heavy payloads — file uploads, files sent back, the live VNC browser
+stream (§9.1), and the text/tool streaming — must not eat our server's bandwidth
+(one gigabit) or add a hop. When the host is a small box on the user's LAN and
+the client is a laptop next to it, the bytes should never leave the LAN.
+
+**Hard constraint: NO port forwarding, ever. No publicly-open, listening port on
+the host — nothing scannable, nothing hackable.** The user's router/firewall
+stays fully closed. This is non-negotiable and rules out UPnP/NAT-PMP too (those
+open a mapping). We use **outbound-only** connectivity: an outbound UDP packet
+creates a temporary NAT hole that ONLY the one negotiated peer can traverse —
+not a public door. This is exactly how Zoom/Discord/WhatsApp calls work behind
+NAT with zero port-forwarding.
+
+**Mechanism — WebRTC DataChannels + ICE (simple, not WireGuard/Tailscale):**
+- **Signaling** over our existing coordinator (the API server / relay): the two
+  peers exchange ICE candidates + the pairing keys. Kilobytes per connection
+  setup; then the data plane is direct.
+- **ICE/STUN** discovers each side's public endpoint and does **UDP hole
+  punching** → a direct P2P DataChannel. Outbound only; no listening port.
+- **IPv6** kept as an accelerator (often no NAT at all); firewall still stays
+  closed, still hole-punched, still no open port.
+- **TURN fallback** for the hard-NAT minority (symmetric NAT both ends). Also an
+  **outbound** connection, so still no open port, and **blind** (our E2E seal
+  stays on top). Prefer a **user-run TURN** (coturn on their own host/VPS) so
+  even the fallback never touches our server. Rejected: UPnP (opens a port),
+  WireGuard/libp2p/iroh (no good Flutter binding, or overkill for 1 client↔1
+  host).
+- **Stack:** Flutter **`flutter_webrtc`** ↔ Python **`aiortc`**, **DataChannels
+  only** (SCTP/DTLS/ICE) — no media tracks. Our sealed `cowork_frame`s ride as
+  DataChannel messages.
+
+**What stays vs what changes:**
+- **Only the PIPE changes.** The `cowork_frame*` E2E crypto, the §15 pairing, and
+  all app/executor/host logic are pipe-agnostic. The VNC/browser work (§9.1)
+  rides sealed frames and is unaffected. We swap the WebSocket-through-relay
+  (`RelaySocket` on Dart, the relay endpoint on Python) for a WebRTC transport
+  behind the same `Transport`/frame seam.
+- **DTLS is transport encryption; our seal is the real E2E** — we never have to
+  trust DTLS or a TURN operator. Everything stays end-to-end encrypted with the
+  channel key, exactly as today.
+- The **model I/O honest boundary is unchanged**: that is host↔backend (the
+  agent's uplink to the model), a different hop from client↔host, and not part of
+  this P2P data plane. The user's file/stream bytes never touch us.
+
+**Effort:** a transport-layer rewrite on both ends (Dart + Python) plus a small
+signaling service, but bounded — the crypto, pairing, and business logic are
+untouched. Tracked as its own workstream.
 
 ---
 
@@ -712,14 +1032,30 @@ trust and brings the code form back.
   chat UI, workspaces, tools, and the discarded loopback demo; trim
   `AuthService.signOut` so sandbox/cache/chat deps fall out; reimplement the
   auth gate + login minimally.
-- **UI:** a messenger — roster of agents, one thread per conversation,
-  Hermes-style streaming run with collapsible tool lines and **Stop**, file/
-  screenshot cards.
+- **UI = a ChukChat clone.** The chat UI looks exactly like ChukChat. The one
+  structural change: **the sidebar lists bots, not chat links** — where ChukChat
+  shows conversations, cowork shows the bot roster (§16.1). **No thread list**
+  under a bot, because there are no threads (§4). Same MCP servers, same skills,
+  bundled and shipped. Minimal for now but built at real scale — these pieces are
+  **copied first** from ChukChat, then trimmed.
+- **UI:** a messenger — roster of agents, **one permanent session per agent (no
+  threads)**, Hermes-style streaming run with collapsible tool lines and
+  **Stop**, file/screenshot cards.
 - **In-UI control surface:** activate/deactivate skills, connect/disconnect
   integrations, pick/see the model, live **token usage**, **session runtime**,
   and the **cron schedule / next runs** — all in the GUI, not a CLI.
   Slash-commands optional, never the boundary. (Called "the moat" until
   2026-08-20; now table stakes — see §17.)
+- **Debug "copy chat" button.** Copies the **exact raw context sent to the model
+  this round** (system prompt + verbatim head + compacted tail + injected notes +
+  pulled-blob ids) to the clipboard. Because compaction rewrites the context every
+  round, this is the only way to see what the model actually saw vs the pretty
+  transcript — the debugging surface for the whole memory system
+  (`docs/context-compaction-design.md` §8). Cheap; ship early.
+- **Self-description is real, not a boast.** "What can you do / what tools do you
+  have?" answers with the bot's **loadable skills (name + description)** and its
+  **connected MCP servers**, read straight from the always-on prompt inventory —
+  not "I can write Python" (`context-compaction-design.md` §9).
 
 ### 16.1 Borrowed from Hermes Bot Mode (verified 2026-08-20)
 
@@ -877,6 +1213,20 @@ their auth.
 - Own thin loop vs a graph framework for multi-agent (leaning: own thin loop).
 - Manager as FastAPI vs a bare async process.
 - Interactive terminal backing (§7.8): tmux vs PTY + a `pyte` screen emulator.
+- **Interactive login hand-off over VNC/noVNC (§9 browser).** Mechanism decided:
+  the agent **ends its browser loop**, asks the user to open a noVNC view of the
+  container Chromium (headful under Xvfb), the user logs in privately, closes it,
+  and tells the agent "done" → the agent resumes with the authenticated session.
+  Safe by construction (loop ended = no observation to leak the password).
+  Renderer chosen (§9): **x11vnc + the pure-Dart `flutter_rfb` library**, bridged
+  to the existing sealed E2E channel via an in-app loopback socket (no webview —
+  the app stays browser-free — and no fork of the lib). Verify `flutter_rfb`
+  keyboard input + a served encoding first (~1h; `dart_vnc` is the backup).
+  Open: how the remote-control view is surfaced into the chat thread and torn
+  down; the "your turn / done" signalling; the optional agent-gets-credentials
+  mode that feeds the browser→script skill; which ready-made Xvfb/VNC image to
+  base the sandbox side on. Also: bot-fingerprint spoofing (low priority, kept
+  separate).
 
 ---
 

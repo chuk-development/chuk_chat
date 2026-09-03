@@ -215,6 +215,7 @@ class AgentLoop:
         system_prompt: str | Callable[[], str] | None = None,
         context_providers: Sequence[Callable[[], list[dict]]] | None = None,
         context_ladder: ContextLadder | None = None,
+        debug_observer: Callable[[dict], None] | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
@@ -229,6 +230,11 @@ class AgentLoop:
         self._system_prompt = system_prompt
         self._context_providers = list(context_providers or [])
         self._ladder = context_ladder
+        # Optional debug tap (a UI "copy raw context" feature). Fired once per
+        # model round with the EXACT outbound message list and the ladder's stats,
+        # so the app can show what really went on the wire. ``None`` -> not built,
+        # not called: zero overhead on a normal run.
+        self._debug_observer = debug_observer
 
     @property
     def budget(self) -> IterationBudget:
@@ -321,10 +327,11 @@ class AgentLoop:
             iterations += 1
             self._budget.consume()
 
+            # Built once here so the debug tap can report the EXACT list sent, and
+            # so the ladder's ``last_stats`` (set inside ``prepare``) matches it.
+            outbound = self._outbound_messages(session_id)
             try:
-                response: ModelResponse = self._model.complete(
-                    self._outbound_messages(session_id)
-                )
+                response: ModelResponse = self._model.complete(outbound)
             except Exception:
                 # A model call that dies *while we are interrupting* died because
                 # of the interrupt: a cancelled socket, a closed stream. Report
@@ -334,6 +341,12 @@ class AgentLoop:
                     reason = StopReason.INTERRUPTED
                     break
                 raise
+
+            # Debug tap (§ "copy raw context"): the outbound payload and the
+            # ladder's stats for this round. Guarded so a broken sink cannot abort
+            # a real run.
+            if self._debug_observer is not None:
+                self._emit_debug(session_key, iterations, outbound)
 
             # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
             # prompt tokens are read — reasoning tokens must not move pressure.
@@ -421,6 +434,37 @@ class AgentLoop:
             session_id=session_id,
             tokens_spent=self._tokens_spent,
         )
+
+    def _emit_debug(
+        self, session_key: str, round_no: int, outbound: list[dict]
+    ) -> None:
+        """Hand the debug observer one round's raw context, in the fixed contract
+        shape. Stats come from the ladder's ``last_stats``; with no ladder they
+        are zeros at tier 0. A raising observer is swallowed — a debug sink must
+        never take the run down."""
+        ladder = self._ladder
+        if ladder is not None:
+            ls = ladder.last_stats
+            stats = {
+                "tier": ls.tier,
+                "pressure": ls.pressure,
+                "tokens_before": ls.tokens_before,
+                "tokens_after": ls.tokens_after,
+            }
+        else:
+            stats = {"tier": 0, "pressure": 0.0, "tokens_before": 0, "tokens_after": 0}
+        try:
+            self._debug_observer(  # type: ignore[misc]
+                {
+                    "type": "debug_context",
+                    "session_key": session_key,
+                    "round": round_no,
+                    "messages": outbound,
+                    "stats": stats,
+                }
+            )
+        except Exception:  # noqa: BLE001 — a debug sink error must not abort a run
+            pass
 
     def _drain_context(self, session_id: int) -> None:
         """Append whatever a tool asked to add to the conversation — today, a

@@ -10,8 +10,10 @@ import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
+import 'package:cowork/widgets/browser_view_page.dart';
 import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
@@ -38,6 +40,9 @@ Future<CoworkRelayController> _buildRelayController(
     // The user's UI-configured MCP servers ride along on each task frame,
     // resolved with their live bearers at launch (WS-D).
     mcpStore: McpStore(),
+    // The here.now publishing connector setting rides along the same way, so a
+    // public publish is gated on the user's yes (or their auto-approve opt-in).
+    hereNowStore: HereNowStore(),
   );
 }
 
@@ -230,6 +235,21 @@ class _MessengerShellState extends State<MessengerShell> {
             onManageMembers: _manageRoomMembers,
           ),
         ),
+      ),
+    );
+  }
+
+  void _openBrowserView() {
+    final controller = _controller.value;
+    if (controller == null || !controller.state.value.isPaired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connect to the agent first.')),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => BrowserViewPage(controller: controller),
       ),
     );
   }
@@ -428,13 +448,6 @@ class _MessengerShellState extends State<MessengerShell> {
     }
   }
 
-  void _newThread() {
-    final agentId = _selectedAgentId;
-    if (agentId == null) return;
-    final thread = _roster.addThread(agentId);
-    _select(agentId, thread.key);
-  }
-
   /// Opens the full model catalogue (the settings Model page) from the
   /// composer's "More models" way out.
   void _openModelScreen() {
@@ -535,12 +548,6 @@ class _MessengerShellState extends State<MessengerShell> {
       actions: [
         if (agent != null)
           IconButton(
-            tooltip: 'New thread',
-            icon: const Icon(Icons.add_comment_outlined),
-            onPressed: _newThread,
-          ),
-        if (agent != null)
-          IconButton(
             tooltip: 'Agent controls',
             icon: const Icon(Icons.tune),
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -550,6 +557,12 @@ class _MessengerShellState extends State<MessengerShell> {
           icon: const Icon(Icons.groups_outlined),
           onPressed: _openRooms,
         ),
+        if (agent != null)
+          IconButton(
+            tooltip: "Agent's browser",
+            icon: const Icon(Icons.desktop_windows_outlined),
+            onPressed: _openBrowserView,
+          ),
         IconButton(
           tooltip: 'Settings',
           icon: const Icon(Icons.settings_outlined),

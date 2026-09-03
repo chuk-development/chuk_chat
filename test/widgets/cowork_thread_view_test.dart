@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
@@ -120,17 +122,20 @@ class FakeRelayController implements CoworkRelayController {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    bool debug = false,
   }) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);
     taskModelIds.add(modelId);
     taskProviderSlugs.add(providerSlug);
     taskReasoning.add(reasoningEffort);
+    taskDebugFlags.add(debug);
   }
 
   final List<String?> taskModelIds = <String?>[];
   final List<String?> taskProviderSlugs = <String?>[];
   final List<String?> taskReasoning = <String?>[];
+  final List<bool> taskDebugFlags = <bool>[];
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {
@@ -138,6 +143,27 @@ class FakeRelayController implements CoworkRelayController {
     stopSessionKeys.add(sessionKey);
     final error = stopError;
     if (error != null) throw error;
+  }
+
+  @override
+  Future<void> startBrowserView() async {}
+
+  @override
+  Future<void> stopBrowserView() async {}
+
+  @override
+  Future<void> sendBrowserData(Uint8List bytes) async {}
+
+  /// Records every here.now publish decision the view sent, so a test can assert
+  /// which approval id was answered and how.
+  final List<(String, bool)> approvalDecisions = <(String, bool)>[];
+
+  @override
+  Future<void> sendApprovalDecision({
+    required String approvalId,
+    required bool approved,
+  }) async {
+    approvalDecisions.add((approvalId, approved));
   }
 
   @override
@@ -275,6 +301,66 @@ void main() {
     expect(find.text('done'), findsOneWidget);
   });
 
+  testWidgets('a here.now approval renders a card and Publish sends approve',
+      (tester) async {
+    final controller = await pumpView(tester);
+    controller.set(
+      const CoworkRelayState(phase: CoworkRelayPhase.paired, sas: '428913'),
+    );
+    await tester.pump();
+
+    controller.emit(const CoworkRelayApprovalRequest(
+      approvalId: 'ap-1',
+      action: 'herenow_publish',
+      path: 'site',
+      name: 'My Page',
+      fileCount: 2,
+      totalBytes: 2048,
+      baseUrl: 'https://here.now',
+      public: true,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Publish to the web?'), findsOneWidget);
+    expect(find.text('My Page'), findsOneWidget);
+    expect(find.text('2 files · 2.0 KB'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Publish'));
+    await tester.pumpAndSettle();
+
+    expect(controller.approvalDecisions, <(String, bool)>[('ap-1', true)]);
+    // The card resolves and the buttons are gone — the answer is sent once.
+    expect(find.text('Published'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Publish'), findsNothing);
+  });
+
+  testWidgets('denying a here.now approval sends deny and marks it denied',
+      (tester) async {
+    final controller = await pumpView(tester);
+    controller.set(
+      const CoworkRelayState(phase: CoworkRelayPhase.paired, sas: '428913'),
+    );
+    await tester.pump();
+
+    controller.emit(const CoworkRelayApprovalRequest(
+      approvalId: 'ap-2',
+      action: 'herenow_publish',
+      path: 'site',
+      name: 'Draft',
+      fileCount: 1,
+      totalBytes: 10,
+      baseUrl: 'https://here.now',
+      public: true,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, 'Deny'));
+    await tester.pumpAndSettle();
+
+    expect(controller.approvalDecisions, <(String, bool)>[('ap-2', false)]);
+    expect(find.text('Denied'), findsOneWidget);
+  });
+
   testWidgets('tapping Connect runs connect, provisions, and shows the chat',
       (tester) async {
     final controller = await pumpView(tester);
@@ -305,6 +391,80 @@ void main() {
 
     expect(controller.tasks, <String>['do the thing']);
     expect(find.text('do the thing'), findsOneWidget);
+  });
+
+  testWidgets('the debug toggle shows the copy button and sends debug on',
+      (tester) async {
+    // The developer "capture model context" toggle is on for this device.
+    SharedPreferences.setMockInitialValues(
+      <String, Object>{'dev_capture_context': true},
+    );
+    // Do not leak the toggle into later tests: reset the store afterwards.
+    addTearDown(
+      () => SharedPreferences.setMockInitialValues(<String, Object>{}),
+    );
+
+    // Capture what the copy button writes to the clipboard, deterministically.
+    final clipboardWrites = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardWrites.add(
+            (call.arguments as Map)['text'] as String,
+          );
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final controller = FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CoworkThreadView(
+            controllerBuilder: () async => controller,
+            sessionSource: const _FakeSessionSource(),
+            threadKey: 'agent-1',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+    await tester.pumpAndSettle();
+
+    // The copy button rides only because the toggle is on.
+    expect(find.byTooltip('Copy raw context'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'do the thing');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+    // The send carried debug on.
+    expect(controller.taskDebugFlags.single, isTrue);
+
+    // A debug_context for this session arrives; the copy button copies it.
+    controller.emit(const CoworkRelayDebugContext(
+      sessionKey: 'agent-1',
+      payload: <String, dynamic>{
+        'type': 'debug_context',
+        'session_key': 'agent-1',
+        'round': 1,
+      },
+      round: 1,
+    ));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Copy raw context'));
+    // The copy awaits Clipboard.setData before showing the SnackBar, so pump
+    // the async gap and the entrance animation before asserting.
+    await tester.pumpAndSettle();
+    // The stored debug context was copied as pretty JSON, and the user was told.
+    expect(clipboardWrites, hasLength(1));
+    expect(clipboardWrites.single, contains('"type": "debug_context"'));
+    expect(find.text('context copied'), findsOneWidget);
   });
 
   testWidgets('a send carries the composer mode picker model + provider',

@@ -36,6 +36,8 @@ Controller -> executor (any time after it, aborts a run — §7.1, §16)::
 
     {"type": "stop", "request_id": "task-3"}        # exact: one relay request
     {"type": "stop", "session_key": "default"}      # thread-level: that thread's run
+    {"type": "approval_decision",                   # answer a here.now publish ask
+     "approval_id": "ap-1", "approved": true}
 
 A stop is a frame like every other one: sealed, signed, replay-checked. That is
 deliberate — the kill switch is reachable only by an **approved device**, so a
@@ -86,9 +88,19 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
     {"type": "room_done",                                 # the room exchange ended
      "room_id": "...", "reason": "no_more_mentions",
      "messages_sent": 3, "rounds": 2}
+    {"type": "approval_request",                          # ask before a public publish
+     "approval_id": "ap-1", "action": "herenow_publish",
+     "path": "site", "name": "My Page", "file_count": 2,
+     "total_bytes": 1024, "base_url": "https://here.now", "public": true}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
+
+The ``approval_request`` event is the one place the executor **waits** on the
+app: the run blocks on its worker thread until an ``approval_decision`` with the
+matching ``approval_id`` comes back (a stop or a timeout ends the wait as a
+denial). It is what makes here.now publishing user-gated (§10-style consent) —
+the only executor->app frame that expects a reply.
 
 The ``file`` event (§9, ``send_file_to_user``) is how a produced file reaches the
 chat thread. It rides the same sealed frame as every other event, so a file the
@@ -124,6 +136,8 @@ def task_payload(
     session_key: str = "default",
     *,
     mcp_servers: list[dict] | None = None,
+    herenow: dict | None = None,
+    debug: bool = False,
 ) -> dict[str, Any]:
     """Build the ``task`` frame that opens a run.
 
@@ -135,6 +149,16 @@ def task_payload(
     ``appSession`` (use the executor's account bearer, resolved server-side),
     ``oauth`` (forward this entry's ``access_token``), or ``none``. Absent or
     empty -> the frame is byte-for-byte the old one, and behavior is unchanged.
+
+    ``herenow`` is the here.now publish connector's setting, forwarded the same
+    additive way: ``{"enabled": bool, "approval": "ask"|"auto"}``. Absent or
+    disabled, the executor registers no publish tool at all. When enabled with
+    ``approval == "ask"`` (the default), a public publish blocks on an
+    ``approval_request`` the app must answer with ``approval_decision``.
+
+    ``debug`` (optional, off by default) turns on the "copy raw context" tap: the
+    executor wires a debug observer that streams one ``debug_context`` event per
+    model round. Absent or false -> no observer, and the frame is unchanged.
     """
     payload: dict[str, Any] = {
         "type": "task",
@@ -143,7 +167,58 @@ def task_payload(
     }
     if mcp_servers:
         payload["mcp_servers"] = list(mcp_servers)
+    if herenow:
+        payload["herenow"] = dict(herenow)
+    if debug:
+        payload["debug"] = True
     return payload
+
+
+def approval_request_payload(
+    *,
+    approval_id: str,
+    path: str,
+    name: str,
+    file_count: int,
+    total_bytes: int,
+    base_url: str,
+    public: bool = True,
+) -> dict[str, Any]:
+    """Executor -> app: ask the user to approve one public here.now publish.
+
+    Sent when the here.now connector is in ``ask`` mode and the model calls
+    ``herenow_publish``. The run **blocks** on the worker thread until the app
+    answers with an :func:`approval_decision_payload`; a stop or a timeout
+    counts as a denial. The fields are what a human needs to decide — what is
+    going out (``path``/``name``), how much (``file_count``/``total_bytes``),
+    and where (``base_url``) — and ``public`` records that an anonymous site is
+    an open, link-shareable URL.
+    """
+    return {
+        "type": "approval_request",
+        "approval_id": approval_id,
+        "action": "herenow_publish",
+        "path": path,
+        "name": name,
+        "file_count": file_count,
+        "total_bytes": total_bytes,
+        "base_url": base_url,
+        "public": public,
+    }
+
+
+def approval_decision_payload(*, approval_id: str, approved: bool) -> dict[str, Any]:
+    """App -> executor: the user's answer to one ``approval_request``.
+
+    Correlated by ``approval_id`` (an ``approval_request`` the app never saw, or
+    a decision that arrives after the run already ended, matches nothing and is
+    a no-op). ``approved`` True publishes; False (or no answer) does not.
+    """
+    return {
+        "type": "approval_decision",
+        "approval_id": approval_id,
+        "approved": bool(approved),
+    }
 
 
 def stop_payload(
@@ -346,6 +421,79 @@ def done_payload(
 
 def error_payload(message: str) -> dict[str, Any]:
     return {"type": "error", "message": message}
+
+
+def debug_context_payload(
+    *,
+    session_key: str,
+    round: int,
+    messages: list[dict],
+    stats: dict[str, Any],
+) -> dict[str, Any]:
+    """The debug "copy raw context" event (opt-in per task via ``debug``).
+
+    Carries the EXACT message list the loop sent to the model for this round and
+    the context ladder's stats (``tier`` / ``pressure`` / ``tokens_before`` /
+    ``tokens_after``), so the app can show and copy what really went on the wire.
+    Streamed once per model round; never sent unless the task asked for it.
+    """
+    return {
+        "type": "debug_context",
+        "session_key": session_key,
+        "round": round,
+        "messages": messages,
+        "stats": stats,
+    }
+
+
+# -- live browser view (§9.1) -------------------------------------------------
+#
+# The user watches and controls the agent's sandbox Chromium over a raw RFB
+# (VNC) byte stream tunneled inside the sealed channel — no new ports, no RFB
+# parsing on either the host or the executor. The executor runs x11vnc in the
+# container and a `docker exec socat` pipe to its localhost RFB port; the bytes
+# in both directions are these payloads. The Flutter side speaks RFB (via
+# flutter_rfb over a loopback socket), so nothing here interprets the stream —
+# `browser_data` is an opaque chunk each way.
+#
+# `browser_start` / `browser_stop` are app -> executor control frames (parsed,
+# not built here). `browser_data` flows BOTH ways: executor -> app carries the
+# RFB server's bytes, app -> executor carries the RFB client's bytes (its
+# handshake and every pointer/key event). `browser_view` is executor -> app
+# status (started / stopped / error), so the app can show or dismiss the view.
+
+#: A single RFB chunk is small (a framebuffer tile or a burst of client input),
+#: so the whole-file 8 MiB ceiling would be absurd here. Bound each chunk so a
+#: runaway read cannot seal a giant frame; the pump simply sends more payloads.
+MAX_BROWSER_CHUNK = 512 * 1024
+
+
+def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> dict[str, Any]:
+    """One raw RFB byte chunk, base64'd (JSON cannot hold bytes). Bidirectional."""
+    if not isinstance(data, (bytes, bytearray)):
+        raise TypeError("browser data must be bytes")
+    size = len(data)
+    if size == 0:
+        raise ValueError("browser chunk is empty")
+    if size > max_bytes:
+        raise PayloadTooLarge(
+            f"browser chunk is {size} bytes, over the {max_bytes} byte limit"
+        )
+    return {
+        "type": "browser_data",
+        "size": size,
+        "data": base64.b64encode(bytes(data)).decode("ascii"),
+    }
+
+
+def browser_view_payload(status: str, *, message: str = "") -> dict[str, Any]:
+    """Executor -> app status for the live browser view.
+
+    ``status`` is ``"started"`` (the stream is live, the app may show the view),
+    ``"stopped"`` (torn down — user asked, or the pipe/container went away), or
+    ``"error"`` (could not bring the view up; ``message`` says why).
+    """
+    return {"type": "browser_view", "status": status, "message": message}
 
 
 def encode_payload(payload: dict[str, Any]) -> bytes:
