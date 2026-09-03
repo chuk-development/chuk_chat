@@ -51,20 +51,53 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
     super.dispose();
   }
 
-  void _start(double overflow) {
+  /// How long the pointer must dwell before the marquee starts, so a quick
+  /// pass over the row doesn't twitch every title into motion.
+  static const Duration _startDelay = Duration(milliseconds: 500);
+
+  /// Bumped on every stop so an in-flight scroll loop bails at its next await.
+  int _cycleToken = 0;
+
+  Future<void> _start(double overflow) async {
     if (!mounted || _active || overflow <= 0) return;
     _active = true;
+    final int token = ++_cycleToken;
+
+    // Dwell first — no motion on a quick hover.
+    await Future<void>.delayed(_startDelay);
+    if (!_stillRunning(token)) return;
+
     final int ms =
         (overflow / widget.velocity * 1000).clamp(600, 6000).round();
-    _controller
-      ..duration = Duration(milliseconds: ms)
-      ..value = 0
-      ..repeat(reverse: true);
+    _controller.duration = Duration(milliseconds: ms);
+
+    // One direction only: show the start, scroll left to reveal the end, hold,
+    // then snap back to the start and repeat. Never scroll the text backwards
+    // at reading pace — nobody reads right-to-left, so the return is an instant
+    // reset, not a reverse animation.
+    while (_stillRunning(token)) {
+      _controller.value = 0;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (!_stillRunning(token)) return;
+      try {
+        await _controller.animateTo(1, curve: Curves.linear);
+      } catch (_) {
+        return;
+      }
+      if (!_stillRunning(token)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 1000));
+      // Loop back to the top: `_controller.value = 0` snaps to the start.
+    }
   }
+
+  /// True while the loop started under [token] is still the active one.
+  bool _stillRunning(int token) =>
+      mounted && _active && token == _cycleToken;
 
   void _stop() {
     if (!_active) return;
     _active = false;
+    _cycleToken++; // invalidate any in-flight scroll loop
     _controller.stop();
     if (!mounted) return;
     _controller.animateBack(
