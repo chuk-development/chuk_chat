@@ -129,10 +129,20 @@ class ChatStorageState {
   static bool get isLoading =>
       loadingCompleter != null && !loadingCompleter!.isCompleted;
 
-  // Get chats as a sorted list (most recent first)
+  // Get chats as a sorted list (most recent activity first).
+  //
+  // Sort by last activity (updatedAt), not createdAt: a chat that just
+  // finished a turn — including one that completed in the background while
+  // the user was in another chat — must float to the top, matching the
+  // time buckets in the sidebar which also key off updatedAt. Opening a chat
+  // does not touch updatedAt, so only a real update re-orders it.
   static List<StoredChat> get savedChats {
     final list = chatsById.values.toList();
-    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    list.sort((a, b) {
+      final aTime = a.updatedAt ?? a.createdAt;
+      final bTime = b.updatedAt ?? b.createdAt;
+      return bTime.compareTo(aTime);
+    });
     return List.unmodifiable(list);
   }
 
