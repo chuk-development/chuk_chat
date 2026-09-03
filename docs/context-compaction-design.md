@@ -229,6 +229,32 @@ The cowork chat UI **looks exactly like ChukChat**. The one structural change:
   pieces (chat UI, skills, MCP servers, model routing) are **copied first** from
   ChukChat, then trimmed, rather than reinvented.
 
+## 10a. Status — built and validated (2026-09-04)
+
+Built this session and proven on the real backend (`deepseek-v4-flash`):
+
+- **Hero compaction on by default.** The executor builds a cheap same-model aux
+  via `BackendModelClient.cheap_clone()` (`reasoning_effort="none"`, small
+  `max_tokens`) and passes it as `aux_model`, so the context ladder's tier-2/3
+  summary and mem0 extraction run every round on the cheap clone. Live long-run
+  proof (`agent/tests/live_long_context.py`): over a shrunk budget, tier-2 fired
+  round 5 (4378→3748 tokens) and tier-3 round 6 (4506→3876), and the early fact
+  was recalled across compaction — final answer "BLUEFALCON, 2026-11-15".
+- **Reasoning OFF is the right hero setting — measured.** With `reasoning="none"`
+  the summarizer captured the fact into the template; with `reasoning="low"` it
+  over-applied the redaction rule and `[REDACTED]`-ed the (non-secret) codename.
+  So the cheap, reasoning-off clone is not just cheaper, it summarizes better.
+- **mem0 works end to end.** It failed silently before: mem0 2.0.x validates
+  `llm.provider` against a hardcoded allowlist *before* the factory, so the custom
+  `chukbackend` name was rejected. Fixed by registering the provider under an
+  allowlisted, unused alias (`lmstudio`). The embedder falls back to local
+  fastembed when no proxy embed key is set, so memory works out of the box. Live
+  add/search recalled "codename BLUEFALCON ... launch date of November 15, 2026".
+- **Known gap (filed):** `deepseek-v4-flash` sometimes emits tool calls in its
+  native `<｜DSML｜tool_call>` format, which the `<tool_call>` parser misses — so
+  a `memory.search` the model tried went unexecuted. Recall still worked from the
+  in-context hero summary. Tracked as a bug to extend the parser.
+
 ## 11. How this maps onto cowork today
 
 - Backend is text-only ChukChat `/v2/ws`; the only current trimming is the
