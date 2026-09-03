@@ -49,6 +49,11 @@ class DesktopFileHandler {
   /// Set by the parent widget before calling file processing methods.
   bool modelSupportsImageInput = false;
 
+  /// Guards against opening a second native picker while one is already open.
+  /// The picker can take a moment to appear on Linux, so rapid taps on the
+  /// add button would otherwise stack multiple picker windows.
+  bool _isPicking = false;
+
   void initialize(ChatApiService apiService) {
     _chatApiService = apiService;
   }
@@ -204,10 +209,20 @@ class DesktopFileHandler {
 
   /// Opens file picker and processes selected files.
   Future<void> uploadFiles() async {
-    final List<PlatformFile> pickedFiles = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: FileConstants.allowedExtensions,
-    );
+    // A picker is already open — ignore repeat taps so we never stack windows.
+    if (_isPicking) return;
+    _isPicking = true;
+    final List<PlatformFile> pickedFiles;
+    try {
+      pickedFiles = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: FileConstants.allowedExtensions,
+      );
+    } finally {
+      // Clear as soon as the native dialog closes, so processing/uploading the
+      // selection does not block the user from opening the picker again.
+      _isPicking = false;
+    }
 
     if (pickedFiles.isNotEmpty) {
       if (kIsWeb) {

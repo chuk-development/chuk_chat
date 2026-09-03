@@ -25,6 +25,11 @@ class FileAttachmentHandler {
   Function(String)? onError;
   VoidCallback? onUpdate;
 
+  /// Guards against opening a second native picker (files, camera or gallery)
+  /// while one is already open. The picker can take a moment to appear, so
+  /// rapid taps on the add button would otherwise stack multiple pickers.
+  bool _isPicking = false;
+
   List<AttachedFile> get attachedFiles => _attachedFiles;
   bool get hasAttachments => _attachedFiles.isNotEmpty;
   bool get hasUploading => _attachedFiles.any((f) => f.isUploading);
@@ -45,31 +50,42 @@ class FileAttachmentHandler {
       return;
     }
 
+    // A picker is already open — ignore repeat taps so we never stack windows.
+    if (_isPicking) return;
+    _isPicking = true;
+    final XFile? pickedFile;
     try {
-      final XFile? pickedFile = await _imagePicker.pickImage(
+      pickedFile = await _imagePicker.pickImage(
         source: source,
         imageQuality: 90,
-      );
-      if (pickedFile == null) return;
-
-      final File file = File(pickedFile.path);
-      final int fileSize = await pickedFile.length();
-      final String fileName = pickedFile.name.isNotEmpty
-          ? pickedFile.name
-          : pickedFile.path.split('/').last;
-
-      await _handleFileAttachment(
-        file: file,
-        fileName: fileName,
-        fileSizeBytes: fileSize,
-        supportsImages: supportsImages,
       );
     } catch (error) {
       final String sourceName = source == ImageSource.camera
           ? 'camera'
           : 'photo picker';
       onError?.call('Unable to open $sourceName: $error');
+      return;
+    } finally {
+      // Own the flag only for the picker call: clearing it here, before the
+      // async processing below, keeps a later tap from releasing it while a
+      // newer picker is still open.
+      _isPicking = false;
     }
+
+    if (pickedFile == null) return;
+
+    final File file = File(pickedFile.path);
+    final int fileSize = await pickedFile.length();
+    final String fileName = pickedFile.name.isNotEmpty
+        ? pickedFile.name
+        : pickedFile.path.split('/').last;
+
+    await _handleFileAttachment(
+      file: file,
+      fileName: fileName,
+      fileSizeBytes: fileSize,
+      supportsImages: supportsImages,
+    );
   }
 
   /// Pick multiple images from gallery
@@ -81,42 +97,64 @@ class FileAttachmentHandler {
       return;
     }
 
+    // A picker is already open — ignore repeat taps so we never stack windows.
+    if (_isPicking) return;
+    _isPicking = true;
+    final List<XFile> pickedImages;
     try {
-      final List<XFile> pickedImages = await _imagePicker.pickMultiImage(
+      pickedImages = await _imagePicker.pickMultiImage(
         imageQuality: 90,
       );
-      if (pickedImages.isEmpty) return;
-
-      for (final XFile image in pickedImages) {
-        final File file = File(image.path);
-        final int fileSize = await image.length();
-        final String fileName = image.name.isNotEmpty
-            ? image.name
-            : image.path.split('/').last;
-        await _handleFileAttachment(
-          file: file,
-          fileName: fileName,
-          fileSizeBytes: fileSize,
-          supportsImages: supportsImages,
-        );
-      }
     } catch (error) {
       onError?.call('Unable to access photo library: $error');
+      return;
+    } finally {
+      // Own the flag only for the picker call: clearing it here, before the
+      // async processing below, keeps a later tap from releasing it while a
+      // newer picker is still open.
+      _isPicking = false;
+    }
+
+    if (pickedImages.isEmpty) return;
+
+    for (final XFile image in pickedImages) {
+      final File file = File(image.path);
+      final int fileSize = await image.length();
+      final String fileName = image.name.isNotEmpty
+          ? image.name
+          : image.path.split('/').last;
+      await _handleFileAttachment(
+        file: file,
+        fileName: fileName,
+        fileSizeBytes: fileSize,
+        supportsImages: supportsImages,
+      );
     }
   }
 
   /// Upload files using file picker
   Future<void> uploadFiles({required bool supportsImages}) async {
+    // A picker is already open — ignore repeat taps so we never stack windows.
+    if (_isPicking) return;
+
     if (_attachedFiles.where((f) => f.isUploading).length >=
         FileConstants.maxConcurrentUploads) {
       onError?.call('Please wait for current uploads to complete');
       return;
     }
 
-    final List<PlatformFile> pickedFiles = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: FileConstants.allowedExtensions,
-    );
+    _isPicking = true;
+    final List<PlatformFile> pickedFiles;
+    try {
+      pickedFiles = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: FileConstants.allowedExtensions,
+      );
+    } finally {
+      // Clear as soon as the native dialog closes, so processing/uploading the
+      // selection does not block the user from opening the picker again.
+      _isPicking = false;
+    }
 
     if (pickedFiles.isEmpty) {
       if (kDebugMode) {
