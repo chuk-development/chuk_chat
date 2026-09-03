@@ -420,12 +420,18 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     final tools = _toolExecutor.allRegisteredTools
         .where((tool) => tool.name != 'find_tools')
         .where((tool) {
+          // Only our own native tools belong here. Anything a connected MCP
+          // server offers (Canva, GitHub-MCP, …) is a connector tool: it lives
+          // on the Connectors screen, is auto-enabled when its server is added,
+          // and must never leak into this list. MCP tool names are dynamic and
+          // absent from `toolCategoryMap`, so they used to fall back to
+          // `basic` and show up under Utilities — filter by tool TYPE, which is
+          // authoritative, not by category.
+          if (tool.type != ToolType.builtin) {
+            return false;
+          }
           final category =
               ToolExecutor.toolCategories[tool.name] ?? ToolCategory.basic;
-          // Tools from MCP servers are not listed here. A connector is a
-          // server you sign in to, and it is managed on the Connectors
-          // screen — mixing its tools into this list only made the page
-          // longer without giving anything to switch.
           if (category == ToolCategory.mcp) {
             return false;
           }
