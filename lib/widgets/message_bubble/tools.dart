@@ -540,6 +540,27 @@ extension _MessageBubbleTools on _MessageBubbleState {
     // If the result is only a diff (nothing else to show), return just the widgets.
     if (displayResult.isEmpty) return diffWidgets;
 
+    // web_search / web_crawl: render formatted source cards (favicon + title +
+    // host + snippet) instead of the raw numbered text with its <strong> tags.
+    if (toolCall.name == 'web_search' || toolCall.name == 'web_crawl') {
+      final sources = parseWebSearchSources(displayResult);
+      if (sources.isNotEmpty) {
+        final scheme = Theme.of(context).colorScheme;
+        return [
+          _buildToolSectionFrame(
+            label: sources.length == 1 ? 'source' : '${sources.length} sources',
+            labelColor: scheme.onSurface.withValues(alpha: 0.7),
+            child: WebSearchSourcesCard(
+              sources: sources,
+              textColor: scheme.onSurface,
+              accentColor: scheme.primary,
+            ),
+          ),
+          ...diffWidgets,
+        ];
+      }
+    }
+
     final stdoutMarker = RegExp(r'^--- stdout ---\s*$', multiLine: true);
     final stderrMarker = RegExp(r'^--- stderr ---\s*$', multiLine: true);
     final stdoutMatch = stdoutMarker.firstMatch(displayResult);
