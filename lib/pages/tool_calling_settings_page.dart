@@ -416,9 +416,44 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       _devOnlyCategories.contains(category) &&
       !DeveloperOptionsService.enabledNotifier.value;
 
+  // Agent-internal plumbing the user never reasons about as a toggle. The model
+  // uses these transparently, so listing them only made the page longer and
+  // more confusing — they are never shown.
+  static const Set<String> _hiddenTools = {
+    'find_tools',
+    'ask_user',
+    'request_mcp_server',
+    'skill',
+    'create_artifact',
+    'update_artifact',
+    'update_project',
+    'typst_compile',
+    'search_chats',
+  };
+
+  // The six sandbox tools are one capability to a user — they collapse into a
+  // single "Code sandbox" switch that flips them together.
+  static const Set<String> _sandboxTools = {
+    'code_run',
+    'sandbox_list',
+    'sandbox_read',
+    'sandbox_write',
+    'sandbox_reset',
+    'send_file_to_user',
+  };
+
+  // Artifacts is one always-on capability (manager + schema), shown as a single
+  // non-toggleable row rather than two internal tools.
+  static const Set<String> _artifactTools = {
+    'artifact_manager',
+    'artifact_schema',
+  };
+
+  bool _anyRegistered(Set<String> names) => _toolExecutor.allRegisteredTools
+      .any((t) => t.type == ToolType.builtin && names.contains(t.name));
+
   List<ClientTool> _visibleTools() {
     final tools = _toolExecutor.allRegisteredTools
-        .where((tool) => tool.name != 'find_tools')
         .where((tool) {
           // Only our own native tools belong here. Anything a connected MCP
           // server offers (Canva, GitHub-MCP, …) is a connector tool: it lives
@@ -428,6 +463,13 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           // `basic` and show up under Utilities — filter by tool TYPE, which is
           // authoritative, not by category.
           if (tool.type != ToolType.builtin) {
+            return false;
+          }
+          // Infra tools are hidden; sandbox + artifact tools are represented by
+          // their own collapsed rows, not listed individually.
+          if (_hiddenTools.contains(tool.name) ||
+              _sandboxTools.contains(tool.name) ||
+              _artifactTools.contains(tool.name)) {
             return false;
           }
           final category =
@@ -479,30 +521,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     for (final category in orderedCategories) {
       final connectable = _isCategoryConnectable(category);
       final connected = _isCategoryConnected(category);
-      final description = _categoryDescription(category);
       final toolsInCategory = grouped[category]!;
 
       // Categories sit UNDER the single "Tools" section header, so they render
       // as light labels — not full section headers — to keep one clear level of
       // hierarchy instead of two competing headers.
       widgets.add(_CategoryLabel(_categoryLabel(category)));
-
-      // A category the assistant signs in to carries its state as a pill and
-      // flips it on tap; the rest just get a quiet line of context under the
-      // header so the description is never lost.
-      if (!connectable) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),
-            child: Text(
-              description,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-              ),
-            ),
-          ),
-        );
-      }
 
       final rows = <Widget>[
         if (connectable)
@@ -512,7 +536,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                 : _categoryIcon(category),
             tone: connected ? m3.successContainer : null,
             title: connected ? l.disconnect : l.connect,
-            subtitle: description,
+            subtitle: _categoryDescription(category),
             trailing: connected
                 ? ExpressiveBadge('Connected', tone: m3.successContainer)
                 : const ExpressiveBadge('Not connected'),
@@ -544,7 +568,60 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       widgets.add(ExpressiveGroup(children: rows));
     }
 
+    _appendCollapsedInfraRows(widgets, l);
     return widgets;
+  }
+
+  /// Artifacts and the sandbox are each one capability to the user, not a pile
+  /// of internal tools. Render Artifacts as a single always-on row and the six
+  /// sandbox tools as one switch that flips them together.
+  void _appendCollapsedInfraRows(List<Widget> widgets, AppLocalizations l) {
+    final rows = <Widget>[];
+
+    if (_anyRegistered(_artifactTools)) {
+      rows.add(
+        _ToolRow(
+          icon: Icons.dashboard_customize_outlined,
+          iconEnabled: true,
+          title: l.toolArtifacts,
+          subtitle: l.toolArtifactsSubtitle,
+          value: true,
+          alwaysOn: true,
+          onChanged: (_) {},
+        ),
+      );
+    }
+
+    final registeredSandbox = _toolExecutor.allRegisteredTools
+        .where((t) => t.type == ToolType.builtin && _sandboxTools.contains(t.name))
+        .map((t) => t.name)
+        .toList(growable: false);
+    if (registeredSandbox.isNotEmpty) {
+      // One switch, six underlying tools — legacy installs may have them in
+      // mixed on/off states, so the row reads as ON only when every registered
+      // sandbox tool is on, and flipping it normalizes them all together.
+      final sandboxOn = registeredSandbox.every(_toolExecutor.isToolEnabled);
+      rows.add(
+        _ToolRow(
+          icon: Icons.terminal_outlined,
+          iconEnabled: sandboxOn,
+          title: l.toolCodeSandbox,
+          subtitle: l.toolCodeSandboxSubtitle,
+          value: sandboxOn,
+          onChanged: (value) async {
+            for (final name in registeredSandbox) {
+              await _toolExecutor.setToolEnabled(name, value);
+            }
+            if (!mounted) return;
+            setState(() {});
+          },
+        ),
+      );
+    }
+
+    if (rows.isEmpty) return;
+    widgets.add(_CategoryLabel(l.toolGroupCodeArtifacts));
+    widgets.add(ExpressiveGroup(children: rows));
   }
 
   Future<void> _openToolDetail(ClientTool tool) async {
@@ -662,13 +739,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 8),
           ExpressiveInfoCard(text: l.toolCallingTip),
           const ExpressiveSectionHeader('Tools'),
-          if (_isLoadingToolPreferences)
-            ExpressiveInfoCard(
-              text: l.loadingToolSettings,
-              icon: Icons.hourglass_empty,
-            )
-          else
-            ..._buildToolSections(),
+          // Rendered immediately — the tool set is known at startup, so the
+          // list keeps a stable height while preferences load in the
+          // background (switch positions just settle in place). Gating this on
+          // a loading flag made the whole list pop in and resize the scroll
+          // area, which is exactly the jump we want to avoid.
+          ..._buildToolSections(),
           const SizedBox(height: 20),
           Align(
             alignment: Alignment.centerLeft,
@@ -698,7 +774,7 @@ class _ToolRow extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
-    required this.onTap,
+    this.onTap,
     this.alwaysOn = false,
   });
 
@@ -708,7 +784,7 @@ class _ToolRow extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool alwaysOn;
 
   @override
@@ -729,8 +805,11 @@ class _ToolRow extends StatelessWidget {
             ExpressiveBadge(l.toolAlwaysOn, tone: m3.successContainer)
           else
             Switch.adaptive(value: value, onChanged: onChanged),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+          // Only a navigable row (one with a detail page) shows the chevron.
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+          ],
         ],
       ),
     );

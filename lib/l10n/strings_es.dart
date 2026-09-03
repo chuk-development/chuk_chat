@@ -106,6 +106,11 @@ const Map<String, String> stringsEs = {
   'toolCallingTip':
       'Consejo: Desactiva las herramientas solo si quieres que el asistente responda con su propio conocimiento, sin buscar ni ejecutar acciones.',
   'toolAlwaysOn': 'Siempre activo',
+  'toolArtifacts': 'Artefactos',
+  'toolArtifactsSubtitle': 'Código, documentos y dibujos editables',
+  'toolCodeSandbox': 'Sandbox de código',
+  'toolCodeSandboxSubtitle': 'Ejecuta código y gestiona archivos en un sandbox',
+  'toolGroupCodeArtifacts': 'Código y artefactos',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Cargando ajustes de herramientas...',
   'noToolsRegistered': 'Aún no hay herramientas registradas.',

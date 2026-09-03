@@ -120,6 +120,11 @@ const Map<String, String> stringsFr = {
   'toolCallingTip':
       'Astuce : Désactivez les outils uniquement si vous voulez que l\'assistant réponde avec ses propres connaissances, sans rechercher ni exécuter d\'actions.',
   'toolAlwaysOn': 'Toujours actif',
+  'toolArtifacts': 'Artéfacts',
+  'toolArtifactsSubtitle': 'Code, documents et dessins modifiables',
+  'toolCodeSandbox': 'Bac à sable de code',
+  'toolCodeSandboxSubtitle': 'Exécute du code et gère des fichiers dans un bac à sable',
+  'toolGroupCodeArtifacts': 'Code et artéfacts',
   'connectors': 'Connecteurs',
   'loadingToolSettings':
       'Chargement des paramètres des outils...',

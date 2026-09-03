@@ -217,6 +217,11 @@ const Map<String, String> stringsEn = {
   'toolCallingTip':
       'Tip: Turn tools off only if you want the assistant to answer from its own knowledge without searching or running actions.',
   'toolAlwaysOn': 'Always on',
+  'toolArtifacts': 'Artifacts',
+  'toolArtifactsSubtitle': 'Editable code, docs and drawings',
+  'toolCodeSandbox': 'Code sandbox',
+  'toolCodeSandboxSubtitle': 'Run code and manage files in a sandbox',
+  'toolGroupCodeArtifacts': 'Code & artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Let the assistant use tools from other services',
   'loadingToolSettings': 'Loading tool settings...',
