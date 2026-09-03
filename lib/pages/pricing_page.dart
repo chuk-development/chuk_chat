@@ -9,6 +9,7 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -313,7 +314,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           // ── Credits ────────────────────────────────────────────

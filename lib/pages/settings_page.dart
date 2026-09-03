@@ -5,6 +5,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/model_selector_page.dart';
@@ -126,7 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: theme.resolvedIconColor),
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           ExpressiveSectionHeader('Account'),

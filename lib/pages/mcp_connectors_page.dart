@@ -6,6 +6,7 @@
 // other MCP address into.
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -107,7 +108,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             return (d != null && d.isNotEmpty) ? d : null;
           }
 
-          return ListView(
+          return SettingsListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
@@ -368,7 +369,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
 
         return Scaffold(
           appBar: AppBar(title: Text(name)),
-          body: ListView(
+          body: SettingsListView(
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
             children: [
               Center(

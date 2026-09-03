@@ -8,6 +8,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -200,7 +201,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
       appBar: AppBar(title: const Text('GitHub')),
       body: RefreshIndicator(
         onRefresh: _refreshStatus,
-        child: ListView(
+        child: SettingsListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [

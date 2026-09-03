@@ -5,6 +5,7 @@
 // aesthetic of settings_page / system_prompt_page.
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
@@ -124,7 +125,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        body: ListView(
+        body: SettingsListView(
           padding: const EdgeInsets.all(16),
           children: [
             Container(

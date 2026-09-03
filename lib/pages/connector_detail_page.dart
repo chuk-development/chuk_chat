@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/client_tool.dart';
@@ -84,7 +85,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
         ),
         titleSpacing: 0,
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           // --- Header: the tool, and its switch ---

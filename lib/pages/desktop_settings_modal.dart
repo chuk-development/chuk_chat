@@ -17,6 +17,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -86,6 +87,7 @@ class _SettingsDest {
     required this.id,
     required this.icon,
     required this.label,
+    this.keywords = '',
     this.builder,
     this.onAction,
     this.tone,
@@ -94,6 +96,11 @@ class _SettingsDest {
   final String id;
   final IconData icon;
   final String label;
+
+  /// Extra search terms covering the rows INSIDE this page, so the settings
+  /// search finds a submenu control (e.g. "color" finds the Theme page) and
+  /// not just the top-level label. Matched together with [label].
+  final String keywords;
 
   /// Page to show in the right pane. Null for action-only destinations.
   final WidgetBuilder? builder;
@@ -170,12 +177,16 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'account',
           icon: Icons.person_outline,
           label: l.accountSettings,
+          keywords: 'account profile email password sign out log out logout '
+              'delete account konto profil abmelden passwort',
           builder: (_) => const AccountSettingsPage(),
         ),
         _SettingsDest(
           id: 'pricing',
           icon: Icons.credit_card,
           label: l.pricingPlans,
+          keywords: 'pricing plan plans credits subscription billing payment '
+              'upgrade buy stripe invoice preis guthaben abo zahlung rechnung',
           builder: (_) => const PricingPage(),
         ),
       ]),
@@ -184,18 +195,24 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'model',
           icon: Icons.smart_toy_outlined,
           label: l.modelSelection,
+          keywords: 'model models ai llm gpt deepseek glm provider selection '
+              'default modell auswahl',
           builder: (_) => const ModelSelectorPage(),
         ),
         _SettingsDest(
           id: 'identity',
           icon: Icons.fingerprint,
           label: l.aiIdentityMemory,
+          keywords: 'identity memory system prompt name persona custom '
+              'instructions identität gedächtnis erinnerung anweisungen',
           builder: (_) => const SystemPromptPage(),
         ),
         _SettingsDest(
           id: 'tools',
           icon: Icons.build_circle_outlined,
           label: l.toolCalling,
+          keywords: 'tools tool calling function functions artifacts code '
+              'sandbox web search discovery activity werkzeuge funktionen',
           builder: (_) => ToolCallingSettingsPage(config: widget.config),
         ),
         if (kFeatureMcp && !kIsWeb)
@@ -203,18 +220,22 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'connectors',
             icon: Icons.extension_outlined,
             label: l.connectors,
+            keywords: 'connectors mcp integrations github slack gmail calendar '
+                'notion email nextcloud oauth verbindungen integration',
             builder: (_) => const McpConnectorsPage(),
           ),
         _SettingsDest(
           id: 'skills',
           icon: Icons.auto_awesome_outlined,
           label: l.skills,
+          keywords: 'skills agent skills procedures abilities fähigkeiten',
           builder: (_) => const SkillsSettingsPage(),
         ),
         _SettingsDest(
           id: 'sandboxes',
           icon: Icons.developer_board,
           label: 'Sandboxes',
+          keywords: 'sandbox sandboxes code execution container docker runtime',
           builder: (_) => const SandboxManagementPage(),
         ),
       ]),
@@ -223,12 +244,20 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'theme',
           icon: Icons.palette_outlined,
           label: l.themeSettings,
+          keywords: 'theme color colour colors farbe farben accent background '
+              'dark mode light mode contrast palette dynamic color preset '
+              'interface font chat font typeface appearance look design hell '
+              'dunkel kontrast schrift schriftart aussehen',
           builder: (_) => ThemePage(config: widget.config),
         ),
         _SettingsDest(
           id: 'customization',
           icon: Icons.tune,
           label: l.customization,
+          keywords: 'customization language sprache font size ui scale zoom '
+              'reasoning tokens model info tps images in context downloads '
+              'auto titles title generation typography anpassung schriftgröße '
+              'skalierung',
           builder: (_) => CustomizationPage(config: widget.config),
         ),
       ]),
@@ -238,18 +267,21 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'export',
             icon: Icons.file_download_outlined,
             label: l.exportChats,
+            keywords: 'export chats backup download exportieren sicherung',
             onAction: _exportChats,
           ),
         _SettingsDest(
           id: 'onboarding',
           icon: Icons.school_outlined,
           label: l.onboardingReplayTile,
+          keywords: 'onboarding tutorial intro replay walkthrough einführung',
           onAction: _replayOnboarding,
         ),
         _SettingsDest(
           id: 'about',
           icon: Icons.info_outline,
           label: l.about,
+          keywords: 'about version license credits info legal über lizenz',
           builder: (_) => const AboutPage(),
         ),
         if (_developerOptions)
@@ -257,6 +289,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'developer',
             icon: Icons.code,
             label: l.developerOptions,
+            keywords: 'developer debug diagnostics logs advanced experimental '
+                'entwickler fehlersuche',
             builder: (_) => const DeveloperOptionsPage(),
             tone: Theme.of(context).colorScheme.tertiary,
           ),
@@ -468,7 +502,12 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     final List<Widget> navChildren = [];
     for (final group in groups) {
       final matches = group.items
-          .where((i) => query.isEmpty || i.label.toLowerCase().contains(query))
+          .where(
+            (i) =>
+                query.isEmpty ||
+                i.label.toLowerCase().contains(query) ||
+                i.keywords.toLowerCase().contains(query),
+          )
           .toList();
       if (matches.isEmpty) continue;
       navChildren.add(
@@ -552,7 +591,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             ),
           ),
           Expanded(
-            child: ListView(
+            child: SettingsListView(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               children: navChildren,
             ),
