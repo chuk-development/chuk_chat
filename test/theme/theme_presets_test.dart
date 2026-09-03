@@ -1,5 +1,6 @@
-// Tests that applying a ThemePreset routes to the right AppShellConfig
-// setters, and that matches() recognises the applied look.
+// Tests that a ThemePreset carries a light and a dark variant, that applying
+// one routes to the right AppShellConfig setters for the chosen brightness,
+// and that matches() recognises the applied look.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -86,44 +87,83 @@ AppShellConfig _config(
   );
 }
 
+const _preset = ThemePreset(
+  name: 'Test',
+  light: ThemeVariant(
+    accent: Color(0xFF112233),
+    iconFg: Color(0xFF445566),
+    bg: Color(0xFF778899),
+    contrast: 0.7,
+    uiFont: kChatFontFamilyMerriweather,
+  ),
+  dark: ThemeVariant(
+    accent: Color(0xFFAABBCC),
+    iconFg: Color(0xFFDDEEFF),
+    bg: Color(0xFF101010),
+    contrast: 0.3,
+  ),
+);
+
 void main() {
-  test('kThemePresets is non-empty and includes the Aya default', () {
+  test('kThemePresets is non-empty and Aya default matches the dark defaults',
+      () {
     expect(kThemePresets, isNotEmpty);
     final aya = kThemePresets.first;
     expect(aya.name, 'Aya');
-    expect(aya.brightness, kDefaultThemeMode);
-    expect(aya.accent, kDefaultAccentColor);
-    expect(aya.iconFg, kDefaultIconFgColor);
-    expect(aya.bg, kDefaultBgColor);
-    expect(aya.contrast, kDefaultContrast);
-    expect(aya.uiFont, kDefaultUiFontFamily);
+    expect(aya.dark.accent, kDefaultAccentColor);
+    expect(aya.dark.iconFg, kDefaultIconFgColor);
+    expect(aya.dark.bg, kDefaultBgColor);
+    // A light variant exists and differs from the dark one.
+    expect(aya.light.bg, isNot(kDefaultBgColor));
   });
 
-  test('every preset uses a supported UI font id', () {
+  test('every variant uses a supported UI font and an in-range contrast', () {
     for (final p in kThemePresets) {
-      expect(
-        kSupportedUiFontFamilies.contains(p.uiFont),
-        isTrue,
-        reason: '${p.name} has an unsupported uiFont ${p.uiFont}',
-      );
-      expect(p.contrast, inInclusiveRange(kMinContrast, kMaxContrast));
+      for (final v in [p.light, p.dark]) {
+        expect(
+          kSupportedUiFontFamilies.contains(v.uiFont),
+          isTrue,
+          reason: '${p.name} has an unsupported uiFont ${v.uiFont}',
+        );
+        expect(v.contrast, inInclusiveRange(kMinContrast, kMaxContrast));
+      }
     }
   });
 
-  test('applyTo routes every field to the matching setter', () {
-    final r = _Recorder();
-    final config = _config(r);
-    const preset = ThemePreset(
-      name: 'Test',
-      brightness: Brightness.light,
-      accent: Color(0xFF112233),
-      iconFg: Color(0xFF445566),
-      bg: Color(0xFF778899),
-      contrast: 0.7,
-      uiFont: kChatFontFamilyMerriweather,
-    );
+  test('variantFor returns the look for the requested brightness', () {
+    expect(_preset.variantFor(Brightness.light), same(_preset.light));
+    expect(_preset.variantFor(Brightness.dark), same(_preset.dark));
+  });
 
-    preset.applyTo(config);
+  test('matches() is true for its own variant and false across brightness', () {
+    expect(
+      _preset.matches(
+        brightness: Brightness.light,
+        accent: _preset.light.accent,
+        iconFg: _preset.light.iconFg,
+        bg: _preset.light.bg,
+        contrast: _preset.light.contrast,
+        uiFont: _preset.light.uiFont,
+      ),
+      isTrue,
+    );
+    // The light look does not match while the app is in dark mode.
+    expect(
+      _preset.matches(
+        brightness: Brightness.dark,
+        accent: _preset.light.accent,
+        iconFg: _preset.light.iconFg,
+        bg: _preset.light.bg,
+        contrast: _preset.light.contrast,
+        uiFont: _preset.light.uiFont,
+      ),
+      isFalse,
+    );
+  });
+
+  test('applyTo routes the chosen brightness variant to every setter', () {
+    final r = _Recorder();
+    _preset.applyTo(_config(r), Brightness.light);
 
     expect(r.themeMode, Brightness.light);
     expect(r.accent, const Color(0xFF112233));
@@ -131,31 +171,23 @@ void main() {
     expect(r.bg, const Color(0xFF778899));
     expect(r.contrast, 0.7);
     expect(r.uiFont, kChatFontFamilyMerriweather);
+
+    final r2 = _Recorder();
+    _preset.applyTo(_config(r2), Brightness.dark);
+    expect(r2.themeMode, Brightness.dark);
+    expect(r2.accent, const Color(0xFFAABBCC));
+    expect(r2.bg, const Color(0xFF101010));
+    expect(r2.contrast, 0.3);
   });
 
   test('applyTo always disables dynamic colour, regardless of the snapshot',
       () {
-    // The snapshot flag may be stale, so a preset must unconditionally clear
-    // dynamic colour or Material You would keep overriding its palette.
     final rOn = _Recorder();
-    ThemePreset(
-      name: 'X',
-      brightness: Brightness.dark,
-      accent: kDefaultAccentColor,
-      iconFg: kDefaultIconFgColor,
-      bg: kDefaultBgColor,
-    ).applyTo(_config(rOn, dynamicColorEnabled: true));
+    _preset.applyTo(_config(rOn, dynamicColorEnabled: true), Brightness.dark);
     expect(rOn.dynamicCalls, [false]);
 
     final rOff = _Recorder();
-    ThemePreset(
-      name: 'X',
-      brightness: Brightness.dark,
-      accent: kDefaultAccentColor,
-      iconFg: kDefaultIconFgColor,
-      bg: kDefaultBgColor,
-    ).applyTo(_config(rOff, dynamicColorEnabled: false));
+    _preset.applyTo(_config(rOff, dynamicColorEnabled: false), Brightness.dark);
     expect(rOff.dynamicCalls, [false]);
   });
-
 }

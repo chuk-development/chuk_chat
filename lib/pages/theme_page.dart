@@ -2,11 +2,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/theme/theme_presets.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -106,17 +108,20 @@ class _ThemePageState extends State<ThemePage> {
   @override
   void initState() {
     super.initState();
-    _selectedThemeMode = widget.config.currentThemeMode;
-    _selectedAccentColor = widget.config.currentAccentColor;
-    _selectedIconFgColor = widget.config.currentIconFgColor;
-    _selectedBgColor = widget.config.currentBgColor;
-    _selectedDynamicColor = widget.config.dynamicColorEnabled;
-    _selectedContrast = widget.config.contrast.clamp(
-      kMinContrast,
-      kMaxContrast,
-    );
-    _selectedUiFont = sanitizeUiFontFamily(widget.config.uiFontFamily);
-    _selectedChatFont = sanitizeChatFontFamily(widget.config.chatFontFamily);
+    // Read the LIVE service, not [widget.config]. The config is an immutable
+    // snapshot captured when an ancestor settings route was pushed, so it goes
+    // stale after the theme changes — re-entering this page from that route
+    // would otherwise show the old preset and old picker colours. The setters
+    // still go through [widget.config]; they point at the same singleton.
+    final service = AppThemeService.instance;
+    _selectedThemeMode = service.themeMode;
+    _selectedAccentColor = service.accentColor;
+    _selectedIconFgColor = service.iconFgColor;
+    _selectedBgColor = service.bgColor;
+    _selectedDynamicColor = service.dynamicColorEnabled;
+    _selectedContrast = service.contrast.clamp(kMinContrast, kMaxContrast);
+    _selectedUiFont = sanitizeUiFontFamily(service.uiFontFamily);
+    _selectedChatFont = sanitizeChatFontFamily(service.chatFontFamily);
 
     _accentHexController.text = _selectedAccentColor.toHexString();
     _iconFgHexController.text = _selectedIconFgColor.toHexString();
@@ -139,8 +144,17 @@ class _ThemePageState extends State<ThemePage> {
   }
 
   void _updateThemeMode(bool useDarkMode) {
+    final brightness = useDarkMode ? Brightness.dark : Brightness.light;
+    // If a pack is currently applied, flipping the toggle switches to that same
+    // pack's sibling look (its light or dark variant) instead of dropping back
+    // to the plain default background.
+    final active = _matchedPreset;
+    if (active != null) {
+      _selectPresetVariant(active, brightness);
+      return;
+    }
     setState(() {
-      _selectedThemeMode = useDarkMode ? Brightness.dark : Brightness.light;
+      _selectedThemeMode = brightness;
       _selectedBgColor = useDarkMode
           ? kDefaultBgColor
           : kDefaultBgColor.lighten(0.8);
@@ -156,33 +170,42 @@ class _ThemePageState extends State<ThemePage> {
     widget.config.setDynamicColorEnabled(enabled);
   }
 
-  void _applyPreset(ThemePreset preset) {
+  /// Applies a pack's variant for [brightness] to both local state and the
+  /// live theme. Selecting a pack keeps the current brightness; the dark-mode
+  /// toggle switches which variant is used.
+  void _selectPresetVariant(ThemePreset preset, Brightness brightness) {
+    final v = preset.variantFor(brightness);
     setState(() {
       _selectedDynamicColor = false;
-      _selectedThemeMode = preset.brightness;
-      _selectedAccentColor = preset.accent;
-      _selectedIconFgColor = preset.iconFg;
-      _selectedBgColor = preset.bg;
-      _selectedContrast = preset.contrast;
-      _selectedUiFont = preset.uiFont;
-      _accentHexController.text = preset.accent.toHexString();
-      _iconFgHexController.text = preset.iconFg.toHexString();
-      _bgHexController.text = preset.bg.toHexString();
+      _selectedThemeMode = brightness;
+      _selectedAccentColor = v.accent;
+      _selectedIconFgColor = v.iconFg;
+      _selectedBgColor = v.bg;
+      _selectedContrast = v.contrast;
+      _selectedUiFont = v.uiFont;
+      _accentHexController.text = v.accent.toHexString();
+      _iconFgHexController.text = v.iconFg.toHexString();
+      _bgHexController.text = v.bg.toHexString();
     });
-    preset.applyTo(widget.config);
+    preset.applyTo(widget.config, brightness);
   }
 
-  /// The preset whose look currently matches every selected value, or null
-  /// when the user has customised away from every pack.
+  void _applyPreset(ThemePreset preset) =>
+      _selectPresetVariant(preset, _selectedThemeMode);
+
+  /// The pack whose variant for the current brightness matches every selected
+  /// value, or null when the user has customised away from every pack.
   ThemePreset? get _matchedPreset {
     if (_selectedDynamicColor) return null;
     for (final preset in kThemePresets) {
-      if (preset.brightness == _selectedThemeMode &&
-          preset.accent == _selectedAccentColor &&
-          preset.iconFg == _selectedIconFgColor &&
-          preset.bg == _selectedBgColor &&
-          preset.contrast == _selectedContrast &&
-          preset.uiFont == _selectedUiFont) {
+      if (preset.matches(
+        brightness: _selectedThemeMode,
+        accent: _selectedAccentColor,
+        iconFg: _selectedIconFgColor,
+        bg: _selectedBgColor,
+        contrast: _selectedContrast,
+        uiFont: _selectedUiFont,
+      )) {
         return preset;
       }
     }
@@ -242,7 +265,7 @@ class _ThemePageState extends State<ThemePage> {
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           // Presets, up top so a whole look can be applied before tuning the
@@ -254,6 +277,7 @@ class _ThemePageState extends State<ThemePage> {
               _PresetPicker(
                 presets: kThemePresets,
                 selected: _matchedPreset,
+                brightness: _selectedThemeMode,
                 onSelected: _applyPreset,
                 title: l.themePresetPack,
                 subtitle: l.themePresetPackSubtitle,
@@ -895,6 +919,7 @@ class _Swatch extends StatelessWidget {
 class _PresetPicker extends StatelessWidget {
   final List<ThemePreset> presets;
   final ThemePreset? selected;
+  final Brightness brightness;
   final ValueChanged<ThemePreset> onSelected;
   final String title;
   final String subtitle;
@@ -903,6 +928,7 @@ class _PresetPicker extends StatelessWidget {
   const _PresetPicker({
     required this.presets,
     required this.selected,
+    required this.brightness,
     required this.onSelected,
     required this.title,
     required this.subtitle,
@@ -951,7 +977,7 @@ class _PresetPicker extends StatelessWidget {
                         value: p,
                         child: Row(
                           children: [
-                            _PresetDots(preset: p),
+                            _PresetDots(preset: p, brightness: brightness),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -981,11 +1007,13 @@ class _PresetPicker extends StatelessWidget {
 // The three-colour dot cluster that previews a preset in the dropdown.
 class _PresetDots extends StatelessWidget {
   final ThemePreset preset;
-  const _PresetDots({required this.preset});
+  final Brightness brightness;
+  const _PresetDots({required this.preset, required this.brightness});
 
   @override
   Widget build(BuildContext context) {
     final outline = Theme.of(context).m3.outlineVariant;
+    final v = preset.variantFor(brightness);
     Widget dot(Color c) => Container(
       width: 14,
       height: 14,
@@ -998,11 +1026,11 @@ class _PresetDots extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        dot(preset.bg),
+        dot(v.bg),
         const SizedBox(width: 4),
-        dot(preset.accent),
+        dot(v.accent),
         const SizedBox(width: 4),
-        dot(preset.iconFg),
+        dot(v.iconFg),
       ],
     );
   }

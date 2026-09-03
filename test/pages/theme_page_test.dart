@@ -131,9 +131,11 @@ void main() {
     await tester.pumpWidget(_host(_config(state)));
     await tester.pumpAndSettle();
 
-    // Open the preset dropdown and pick a light pack (GitHub). The menu is
-    // scrollable now, so scroll the item into view before tapping it.
+    // Open the preset dropdown and pick GitHub. The page starts in the default
+    // dark mode, so it applies GitHub's dark variant. The menu is scrollable,
+    // so scroll the item into view before tapping it.
     final github = kThemePresets.firstWhere((p) => p.name == 'GitHub');
+    final v = github.dark; // default brightness is dark
     await tester.tap(find.byType(DropdownButton<ThemePreset>));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -145,11 +147,11 @@ void main() {
     await tester.tap(find.text('GitHub').last);
     await tester.pumpAndSettle();
 
-    expect(state.themeMode, github.brightness);
-    expect(state.accent, github.accent);
-    expect(state.iconFg, github.iconFg);
-    expect(state.bg, github.bg);
-    expect(state.contrast, github.contrast);
-    expect(state.uiFont, github.uiFont);
+    expect(state.themeMode, Brightness.dark);
+    expect(state.accent, v.accent);
+    expect(state.iconFg, v.iconFg);
+    expect(state.bg, v.bg);
+    expect(state.contrast, v.contrast);
+    expect(state.uiFont, v.uiFont);
   });
 }
