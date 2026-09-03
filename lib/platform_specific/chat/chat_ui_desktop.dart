@@ -237,16 +237,64 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// the fold — the desktop path folds twice per turn (once in
   /// `_finalizeAiMessage`, once after content blocks land) — and is overwritten
   /// by the next regenerate; the messageId key makes a lingering seed harmless.
-  /// It is cleared on a chat switch / newChat() by [_clearPendingVariantSeed].
+  ///
+  /// These two fields hold the seed for the CURRENTLY VISIBLE chat. When the
+  /// user switches away from a chat whose regenerate is still running, the
+  /// armed seed is handed to [_backgroundVariantSeedByChat] instead of being
+  /// dropped, so the background completion can still fold. See
+  /// [_stashPendingVariantSeedForBackground].
   List<Map<String, dynamic>>? _pendingVariantSeed;
   String? _pendingVariantMessageId;
 
-  /// Drop any armed regenerate seed — called when the visible message list is
-  /// replaced (loading another chat, starting a new one) so a seed from a
-  /// half-finished regenerate cannot leak into an unrelated conversation.
+  /// Armed regenerate seeds for chats that are no longer visible but whose turn
+  /// is still finishing in the background, keyed by chatId. A background
+  /// regenerate that completes after a chat switch reads its seed from here
+  /// (the visible-chat fields were cleared on the switch), folds the previous
+  /// answer into the pager, then evicts its entry — the background fold is a
+  /// one-shot at the final answer. Returning to such a chat restores the seed
+  /// to the visible-chat fields (see [_restorePendingVariantSeedForChat]).
+  final Map<String, List<Map<String, dynamic>>> _backgroundVariantSeedByChat =
+      {};
+  final Map<String, String> _backgroundVariantMessageIdByChat = {};
+
+  /// Drop the armed seed for the visible chat. Used when a new chat replaces
+  /// the message list and there is no running turn to preserve.
   void _clearPendingVariantSeed() {
     _pendingVariantSeed = null;
     _pendingVariantMessageId = null;
+  }
+
+  /// Called when leaving the visible chat. If that chat's regenerate is still
+  /// running (it will continue in the background), hand its armed seed to
+  /// [_backgroundVariantSeedByChat] so the background completion can still fold
+  /// the previous answer into the pager. A plain switch away with no live turn
+  /// just drops the seed. Always clears the visible-chat fields afterwards.
+  void _stashPendingVariantSeedForBackground() {
+    final outgoing = _activeChatId;
+    final seed = _pendingVariantSeed;
+    final mid = _pendingVariantMessageId;
+    if (outgoing != null &&
+        seed != null &&
+        mid != null &&
+        (_streamingManager.isStreaming(outgoing) ||
+            _isSendingForChat(outgoing))) {
+      _backgroundVariantSeedByChat[outgoing] = seed;
+      _backgroundVariantMessageIdByChat[outgoing] = mid;
+    }
+    _clearPendingVariantSeed();
+  }
+
+  /// Called when a chat becomes visible again. If it had a background regenerate
+  /// still in flight, move its stashed seed back to the visible-chat fields so
+  /// the now-foreground final answer folds through the normal path.
+  void _restorePendingVariantSeedForChat(String? chatId) {
+    if (chatId == null) return;
+    final seed = _backgroundVariantSeedByChat.remove(chatId);
+    final mid = _backgroundVariantMessageIdByChat.remove(chatId);
+    if (seed != null && mid != null) {
+      _pendingVariantSeed = seed;
+      _pendingVariantMessageId = mid;
+    }
   }
 
   /// When a new chat is started from a workspace, this holds the assistant ID
@@ -576,8 +624,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void _loadChatById(String? chatId) {
     _pendingWorkspaceId = null;
-    // A pending regenerate seed belongs to the chat we are leaving.
-    _clearPendingVariantSeed();
+    // The regenerate seed belongs to the chat we are leaving. If that chat's
+    // turn is still running it keeps going in the background, so hand the seed
+    // over instead of dropping it — otherwise the background completion cannot
+    // fold and the previous answer is lost from the pager.
+    _stashPendingVariantSeedForBackground();
     if (kDebugMode) {
       debugPrint('');
     }
@@ -629,6 +680,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // This ensures didUpdateWidget always sees the correct value when comparing
     // chatIdToSave with _activeChatId for persist logic
     _activeChatId = chatId;
+    // If we are returning to a chat whose regenerate was still running in the
+    // background, re-arm its seed so the now-foreground final answer folds
+    // through the normal path.
+    _restorePendingVariantSeedForChat(chatId);
     if (chatId != null) {
       unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
         if (kDebugMode) {
@@ -1043,7 +1098,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void newChat() {
     _pendingWorkspaceId = null;
-    _clearPendingVariantSeed();
+    // Preserve the seed for a still-running turn on the chat we are leaving so
+    // its background completion can still fold (mirrors _loadChatById).
+    _stashPendingVariantSeedForBackground();
     WorkspaceStorageService.selectedWorkspaceId = null;
 
     // Capture current chat data for background persistence
@@ -1676,17 +1733,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// (e.g. content blocks on the desktop success path) just refreshes the
   /// active variant. No-op when nothing is armed, the ids do not match, or the
   /// answer is still the "Thinking..." placeholder.
-  void _foldRegenVariantOnto(Map<String, String> message) {
-    final seed = _pendingVariantSeed;
-    if (seed == null) return;
+  /// Folds the archived previous answer(s) onto [message] as pager variants.
+  /// Returns true when a fold actually happened, so a caller holding a stashed
+  /// background seed knows it is safe to evict it (a fold skipped by the guards
+  /// means the seed must be kept, or the only archived answer is lost).
+  bool _foldRegenVariantOnto(
+    Map<String, String> message, {
+    List<Map<String, dynamic>>? seedOverride,
+    String? messageIdOverride,
+  }) {
+    final seed = seedOverride ?? _pendingVariantSeed;
+    if (seed == null) return false;
+    final String? expectMid = messageIdOverride ?? _pendingVariantMessageId;
     final String? mid = message['messageId'];
-    if (mid == null || mid != _pendingVariantMessageId) return;
-    if ((message['text'] ?? '') == 'Thinking...') return;
+    if (mid == null || mid != expectMid) return false;
+    if ((message['text'] ?? '') == 'Thinking...') return false;
     ChatUiHelpers.writeVariants(
       message: message,
       seed: seed,
       current: ChatUiHelpers.variantSnapshotOf(message),
     );
+    return true;
   }
 
   /// Switch the answer shown by the message at [index] to variant [newIndex]

@@ -1060,11 +1060,35 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     });
 
     if (foldVariant) {
+      final seedOverride = _backgroundVariantSeedByChat[chatId];
+      final midOverride = _backgroundVariantMessageIdByChat[chatId];
+      // In the storage-rebuild fallback the synthesized assistant row has no
+      // messageId, so the fold's id guard would skip and the previous answer
+      // would be lost. Stamp the row with this turn's stashed id (it IS this
+      // turn's assistant message) so the fold matches.
+      final existingMid = target[idx]['messageId'];
+      if (midOverride != null &&
+          (existingMid == null ||
+              (existingMid is String && existingMid.isEmpty))) {
+        target[idx]['messageId'] = midOverride;
+      }
       final bgMessage = <String, String>{
         for (final e in target[idx].entries)
           if (e.value != null) e.key: e.value.toString(),
       };
-      _foldRegenVariantOnto(bgMessage);
+      // The visible-chat seed fields were cleared when we switched away, so
+      // fold from the seed stashed for this background chat. Evict the stashed
+      // entry only when the fold actually happened — dropping it on a skipped
+      // fold would discard the only archived prior answer.
+      final folded = _foldRegenVariantOnto(
+        bgMessage,
+        seedOverride: seedOverride,
+        messageIdOverride: midOverride,
+      );
+      if (folded) {
+        _backgroundVariantSeedByChat.remove(chatId);
+        _backgroundVariantMessageIdByChat.remove(chatId);
+      }
       final String? bgVariants = bgMessage['variants'];
       if (bgVariants != null) {
         target[idx]['variants'] = bgVariants;
