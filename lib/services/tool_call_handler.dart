@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
+import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
 
@@ -98,6 +99,13 @@ class ToolLoopSession {
   /// surfaced to the streaming handler via `ToolLoopResult.producedBlocks`,
   /// which slices the new items off this list each round.
   final List<ContentBlock> producedBlocks = [];
+
+  /// Consecutive sandbox-infrastructure failures in this turn (HTTP 0/502/
+  /// 503/504 or "upstream unavailable"). Reset to 0 whenever a sandbox call
+  /// succeeds; a fresh session (one per user turn) starts it at 0. Once it
+  /// reaches [ToolCallHandler._kMaxConsecutiveSandboxInfraFailures] the tool
+  /// loop short-circuits further sandbox tool calls for the rest of the turn.
+  int consecutiveSandboxInfraFailures = 0;
 
   int emptyFinalRecoveryAttempts = 0;
   int malformedToolProtocolRecoveryAttempts = 0;
@@ -357,6 +365,12 @@ class ToolCallHandler {
   static const int _maxDeferredActionRecoveryAttempts = 2;
   static const int _maxNonFinalTurnRecoveryAttempts = 1;
 
+  /// Consecutive sandbox-infrastructure failures (HTTP 0/502/503/504) allowed
+  /// in one turn before the circuit breaker short-circuits any further sandbox
+  /// tool call. The sandbox being down does not recover mid-turn, so retrying
+  /// only burns the tool-call budget and ends in the safety-limit message.
+  static const int _kMaxConsecutiveSandboxInfraFailures = 2;
+
   /// One-shot self-verification pass before a tool-grounded answer is shown.
   static const int _maxFactCheckRecoveryAttempts = 1;
 
@@ -505,6 +519,73 @@ class ToolCallHandler {
         .where((t) => !session.skipIdentity || t.name != 'notes')
         .map((t) => t.toOpenAiFunction())
         .toList();
+  }
+
+  /// Message shown when the tool-call safety limit trips. If the turn already
+  /// produced deliverables — a compiled PDF, an artifact, a generated image,
+  /// or a delivered file — say the work is done and name what was delivered,
+  /// instead of the defeatist "try again with a simpler prompt". Only fall
+  /// back to the retry message when nothing was produced. Decides structurally
+  /// from completed, non-error tool calls — never from text patterns.
+  String _buildSafetyLimitMessage(ToolLoopSession session) {
+    bool completed(bool Function(ToolCall) test) => session.toolCalls.any(
+      (tc) => tc.status == ToolCallStatus.completed && test(tc),
+    );
+
+    // Deduped, order-preserving list of what this turn delivered.
+    final delivered = <String>{};
+    // A typst_compile is "completed" even when the source failed to compile —
+    // its result then carries the compiler error and no "version:", and no
+    // artifact card is shown (see message_bubble/tools.dart). Only count it as
+    // a delivered PDF when a version was actually persisted, or we would tell
+    // the user a PDF is ready when none exists.
+    if (completed(
+      (tc) =>
+          tc.name == 'typst_compile' &&
+          tc.result != null &&
+          RegExp(r'version:\s*\d+').hasMatch(tc.result!),
+    )) {
+      delivered.add('the PDF');
+    }
+    if (completed(
+      (tc) =>
+          tc.name == 'artifact_manager' &&
+          const {'create', 'rewrite', 'update'}.contains(
+            (tc.arguments['action'] ?? '').toString(),
+          ),
+    )) {
+      delivered.add('the artifact');
+    }
+    if (completed(
+      (tc) => tc.name == 'create_artifact' || tc.name == 'update_artifact',
+    )) {
+      delivered.add('the artifact');
+    }
+    if (completed((tc) => tc.name == 'generate_image')) {
+      delivered.add('the image');
+    }
+    if (completed((tc) => tc.name == 'send_file_to_user')) {
+      delivered.add('the file');
+    }
+
+    if (delivered.isEmpty) {
+      return 'Sorry, I hit the tool-call safety limit for this request. '
+          'Please try again with a simpler prompt.';
+    }
+
+    final list = delivered.toList();
+    final String what;
+    if (list.length == 1) {
+      what = list.first;
+    } else if (list.length == 2) {
+      what = '${list[0]} and ${list[1]}';
+    } else {
+      what = '${list.sublist(0, list.length - 1).join(', ')}, '
+          'and ${list.last}';
+    }
+    return 'Your work is ready above — $what is done. I reached the '
+        'tool-call limit for this turn while trying to do more, but the '
+        'result is already complete.';
   }
 
   Future<ToolLoopResult> processAssistantResponse({
@@ -959,9 +1040,7 @@ class ToolCallHandler {
 
     if (enforceResult.iterationLimitReached) {
       return ToolLoopResult.finalAnswer(
-        content:
-            'Sorry, I hit the tool-call safety limit for this request. '
-            'Please try again with a simpler prompt.',
+        content: _buildSafetyLimitMessage(session),
         reasoning: effectiveReasoning,
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
@@ -1060,22 +1139,46 @@ class ToolCallHandler {
 
       String rawResult;
       bool isError;
-      try {
-        final executionResult =
-            await (inFlight[call.callId] ??
-                _toolExecutor.execute(
-                  call.name,
-                  call.arguments,
-                  accessToken: session.accessToken,
-                ));
-        rawResult = executionResult.output;
-        isError = executionResult.isError;
-        if (executionResult.producedBlocks.isNotEmpty) {
-          session.producedBlocks.addAll(executionResult.producedBlocks);
-        }
-      } catch (error) {
-        rawResult = 'Error executing ${call.name}: $error';
+      // Circuit breaker: once the sandbox infrastructure has failed enough
+      // times this turn (HTTP 0/502/503/504 — the upstream is down, not a bad
+      // request), stop dispatching sandbox/file tools. Return a terminal,
+      // non-retryable result so the model finishes with what it already has
+      // instead of looping until it trips the tool-call safety limit.
+      final isSandboxTool = sandbox_tools.isSandboxBackedTool(call.name);
+      if (isSandboxTool &&
+          session.consecutiveSandboxInfraFailures >=
+              _kMaxConsecutiveSandboxInfraFailures) {
+        rawResult = sandbox_tools.kSandboxUnavailableThisTurnMessage;
         isError = true;
+      } else {
+        try {
+          final executionResult =
+              await (inFlight[call.callId] ??
+                  _toolExecutor.execute(
+                    call.name,
+                    call.arguments,
+                    accessToken: session.accessToken,
+                  ));
+          rawResult = executionResult.output;
+          isError = executionResult.isError;
+          if (executionResult.producedBlocks.isNotEmpty) {
+            session.producedBlocks.addAll(executionResult.producedBlocks);
+          }
+        } catch (error) {
+          rawResult = 'Error executing ${call.name}: $error';
+          isError = true;
+        }
+
+        // Track consecutive sandbox-infrastructure failures for the breaker:
+        // an infra error advances the count, any other outcome (success or a
+        // user-level error like a bad path) resets it.
+        if (isSandboxTool) {
+          if (sandbox_tools.isSandboxInfraError(rawResult)) {
+            session.consecutiveSandboxInfraFailures++;
+          } else {
+            session.consecutiveSandboxInfraFailures = 0;
+          }
+        }
       }
 
       if (call.name == 'find_tools' && !isError) {

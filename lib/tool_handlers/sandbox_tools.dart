@@ -70,6 +70,58 @@ String _formatError(SandboxServiceException e) {
   return 'Error: HTTP ${e.statusCode} — ${e.message}';
 }
 
+// ---------------------------------------------------------------------------
+// Sandbox-infrastructure circuit breaker (shared with the tool loop)
+// ---------------------------------------------------------------------------
+
+/// Tools whose calls are served by (or reach for) the remote sandbox service.
+/// The tool loop trips a per-turn circuit breaker when several of these fail
+/// in a row with an infrastructure error. `bash` is included because the model
+/// reaches for it as a sandbox fallback and it shares the same "no sandbox"
+/// failure mode.
+const Set<String> kSandboxBackedToolNames = {
+  'code_run',
+  'bash',
+  'sandbox_list',
+  'sandbox_read',
+  'sandbox_write',
+  'sandbox_reset',
+  'send_file_to_user',
+};
+
+/// True when [name] is a sandbox-backed tool (see [kSandboxBackedToolNames]).
+bool isSandboxBackedTool(String name) => kSandboxBackedToolNames.contains(name);
+
+/// Terminal, non-retryable result the tool loop returns for a sandbox tool
+/// once the sandbox has failed repeatedly this turn. Keeps the literal
+/// "Error:" prefix so is-error detection still flags it.
+const String kSandboxUnavailableThisTurnMessage =
+    'Error: The code sandbox is unavailable this turn (infrastructure error, '
+    'not a problem with your request). Stop calling sandbox and file tools '
+    '(code_run, bash, sandbox_*, send_file_to_user) for the rest of this turn '
+    'and finish your answer using what you already have.';
+
+/// True when a tool result string signals a sandbox INFRASTRUCTURE failure —
+/// the upstream is unreachable or overloaded — as opposed to a user-level
+/// error like a bad path (HTTP 400/404/413). Matches the [_formatError] shape
+/// (`Error: HTTP <status> — <message>`) for HTTP 0/502/503/504, plus the
+/// upstream-unavailable phrasing the gateway emits.
+bool isSandboxInfraError(String result) {
+  final lower = result.toLowerCase();
+  if (lower.contains('upstream unavailable') ||
+      lower.contains('sandbox upstream')) {
+    return true;
+  }
+  final match = RegExp(r'error:\s*http\s+(\d+)').firstMatch(lower);
+  if (match != null) {
+    final status = int.tryParse(match.group(1)!);
+    if (status == 0 || status == 502 || status == 503 || status == 504) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Future<String> executeCodeRun({
   required String? accessToken,
   required String? chatId,
