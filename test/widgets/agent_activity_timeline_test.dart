@@ -581,9 +581,11 @@ void main() {
       expect(find.text('Prompt processing for 12s'), findsOneWidget);
     });
 
-    testWidgets('a running tool outranks the stream phase', (tester) async {
+    testWidgets('a running tool outranks the stream phase and is named', (
+      tester,
+    ) async {
       // The model last sent reasoning, but it is waiting on a tool — that is
-      // what the reader is waiting for too.
+      // what the reader is waiting for, so the header names the tool.
       await _pumpTimeline(
         tester,
         calls: [
@@ -595,7 +597,37 @@ void main() {
         now: _t0.add(const Duration(seconds: 5)),
       );
 
-      expect(find.text('Working for 5s'), findsOneWidget);
+      expect(find.text('Searching the web for 5s'), findsOneWidget);
+    });
+
+    testWidgets('the running header names a non-search tool', (tester) async {
+      await _pumpTimeline(
+        tester,
+        calls: [
+          _call('typst_compile', status: ToolCallStatus.running, endSecond: null),
+        ],
+        isRunning: true,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 12)),
+      );
+
+      expect(find.text('Compiling document for 12s'), findsOneWidget);
+    });
+
+    testWidgets('an unknown running tool falls back to its name', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        calls: [
+          _call('mystery_tool', status: ToolCallStatus.running, endSecond: null),
+        ],
+        isRunning: true,
+        startedAt: _t0,
+        now: _t0.add(const Duration(seconds: 3)),
+      );
+
+      expect(find.text('Running mystery tool for 3s'), findsOneWidget);
     });
 
     testWidgets('the clock runs from the request, not the first call', (
