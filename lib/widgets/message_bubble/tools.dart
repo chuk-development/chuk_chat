@@ -108,15 +108,40 @@ extension _MessageBubbleTools on _MessageBubbleState {
   /// last card on top of whatever spacer the caller appended.
   List<Widget> _buildArtifactCards(List<ToolCall> toolCalls) {
     if (!kFeatureArtifacts) return const [];
-    final cards = <Widget>[];
+
+    // One card per artifact_id, not one per tool call. A single document is
+    // often compiled several times in one turn (a failed compile, a retry, a
+    // layout-tightening pass), and every successful call used to spawn its own
+    // identical card — the user saw the same PDF stacked three or four times.
+    // Dedupe by artifact_id: keep the LAST successful call for each id, so the
+    // card shows the final version with no stale "(was vN)" hint, while a
+    // genuinely different document (a new id) still gets its own card.
+    //
+    // Insertion order is first-seen; reassigning an existing key keeps that
+    // position and swaps in the latest card. Error chips are collected
+    // separately and only shown for ids that never produced a real artifact.
+    final artifactCards = <String, Widget>{};
+    final errorCards = <String, Widget>{};
+    final anonErrorCards = <Widget>[];
+
     for (final tc in toolCalls) {
+      if (tc.name != 'artifact_manager' && tc.name != 'typst_compile') {
+        continue;
+      }
+
       // Render error ToolCalls as a visible error chip so silent failures
       // (malformed tag, RLS denial, network error) surface to the user
       // instead of producing a mysteriously empty chat bubble.
-      if (tc.status == ToolCallStatus.error &&
-          (tc.name == 'artifact_manager' || tc.name == 'typst_compile')) {
+      if (tc.status == ToolCallStatus.error) {
         final result = tc.result ?? 'Unknown error';
-        cards.add(_ArtifactErrorCard(toolName: tc.name, message: result));
+        final rawId = tc.arguments['artifact_id'];
+        final id = rawId is String ? rawId.trim() : '';
+        final card = _ArtifactErrorCard(toolName: tc.name, message: result);
+        if (id.isEmpty) {
+          anonErrorCards.add(card);
+        } else {
+          errorCards[id] = card;
+        }
         continue;
       }
       if (tc.status != ToolCallStatus.completed) continue;
@@ -133,7 +158,8 @@ extension _MessageBubbleTools on _MessageBubbleState {
         if (artifactId.isEmpty) continue;
         title = args['title'] as String? ?? artifactId;
         type = args['type'] as String? ?? '';
-      } else if (tc.name == 'typst_compile') {
+      } else {
+        // typst_compile
         final args = tc.arguments;
         artifactId = args['artifact_id'] as String? ?? '';
         if (artifactId.isEmpty) continue;
@@ -142,8 +168,6 @@ extension _MessageBubbleTools on _MessageBubbleState {
             ? rawTitle.trim()
             : artifactId;
         type = 'typst';
-      } else {
-        continue;
       }
 
       // Parse "version: N" from the tool result so each chip can open the
@@ -157,16 +181,29 @@ extension _MessageBubbleTools on _MessageBubbleState {
         }
       }
 
-      cards.add(
-        _ArtifactInlineCard(
-          artifactId: artifactId,
-          title: title,
-          type: type,
-          authoredVersion: version,
-        ),
+      // A typst_compile that failed to compile is status=completed but saved
+      // nothing (its result carries the compiler error, no "version:"). Do not
+      // render a phantom card for it — only a call that actually stored an
+      // artifact should show one.
+      if (tc.name == 'typst_compile' && version == null) continue;
+
+      artifactCards[artifactId] = _ArtifactInlineCard(
+        artifactId: artifactId,
+        title: title,
+        type: type,
+        authoredVersion: version,
       );
     }
-    return cards;
+
+    return [
+      ...artifactCards.values,
+      // Only surface an error chip for an id that never produced a real
+      // artifact this turn — a later successful compile makes the earlier
+      // failure noise.
+      for (final entry in errorCards.entries)
+        if (!artifactCards.containsKey(entry.key)) entry.value,
+      ...anonErrorCards,
+    ];
   }
 
   /// Wrap a list of artifact cards into one cohesive "artifact stack":
