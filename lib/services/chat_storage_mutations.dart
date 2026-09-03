@@ -13,7 +13,6 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const int kChatPayloadVersion = 2;
 
@@ -257,9 +256,13 @@ class ChatStorageMutations {
 
 /// Save decrypted titles to local cache for instant loading.
 /// Shared by mutations and sidebar modules.
+///
+/// The title list (~175 KB for a mature account) used to live in
+/// SharedPreferences; that bloated the prefs file the legacy plugin re-parses
+/// on every getInstance() (startup path) and rewrites whole on every write.
+/// It now lives in the SQLite kv_cache under [chatTitlesCacheKey].
 Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
-  final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance();
-  final cacheKey = 'chat_titles_v1_$userId';
+  final cacheKey = chatTitlesCacheKey(userId);
 
   final data = chats
       .map(
@@ -274,7 +277,7 @@ Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
       )
       .toList();
 
-  await prefs.setString(cacheKey, jsonEncode(data));
+  await LocalChatCacheService.kvSet(cacheKey, jsonEncode(data));
   final withTimestamp = chats.where((c) => c.updatedAt != null).length;
   if (kDebugMode) {
     debugPrint(

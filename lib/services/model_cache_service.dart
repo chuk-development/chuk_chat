@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+
 class ModelCacheService {
   const ModelCacheService._();
 
@@ -13,21 +15,59 @@ class ModelCacheService {
   /// Cache validity duration - models don't change often
   static const Duration _cacheValidDuration = Duration(hours: 24);
 
+  // The model catalogue (~200 KB) used to live in SharedPreferences. That
+  // bloated the prefs file, which the legacy plugin re-parses on every
+  // getInstance() (startup critical path) and rewrites whole on every
+  // setString(). It now lives in the SQLite kv_cache; this moves any existing
+  // prefs copy over once, then deletes the prefs keys so the file shrinks.
+  //
+  // Memoised as a shared Future so concurrent isCacheValid() / loadAvailable
+  // Models() callers all await the SAME migration and none reads kv_cache
+  // before the copy finished (a cold-start "no models" race otherwise).
+  static Future<void>? _migration;
+  static Future<void> _migrateFromPrefs() => _migration ??= _runMigration();
+
+  static Future<void> _runMigration() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!prefs.containsKey(_kModelsKey)) return;
+      // Only adopt the prefs copy when kv has none, so a fresh kv write is
+      // never clobbered by a stale prefs value.
+      if (await LocalChatCacheService.kvGet(_kModelsKey) == null) {
+        final oldRaw = prefs.getString(_kModelsKey);
+        if (oldRaw != null) {
+          await LocalChatCacheService.kvSet(_kModelsKey, oldRaw);
+        }
+        final ts = prefs.getInt(_kModelsTimestampKey);
+        if (ts != null) {
+          await LocalChatCacheService.kvSet(
+            _kModelsTimestampKey,
+            ts.toString(),
+          );
+        }
+      }
+      await prefs.remove(_kModelsKey);
+      await prefs.remove(_kModelsTimestampKey);
+    } catch (_) {
+      // Best-effort; a failure just leaves the prefs copy in place.
+    }
+  }
+
   static Future<void> saveAvailableModels(
     List<Map<String, dynamic>> models,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kModelsKey, jsonEncode(models));
-    await prefs.setInt(
+    await LocalChatCacheService.kvSet(_kModelsKey, jsonEncode(models));
+    await LocalChatCacheService.kvSet(
       _kModelsTimestampKey,
-      DateTime.now().millisecondsSinceEpoch,
+      DateTime.now().millisecondsSinceEpoch.toString(),
     );
   }
 
   /// Check if cached models are still valid (less than 24h old)
   static Future<bool> isCacheValid() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timestamp = prefs.getInt(_kModelsTimestampKey);
+    await _migrateFromPrefs();
+    final raw = await LocalChatCacheService.kvGet(_kModelsTimestampKey);
+    final timestamp = raw == null ? null : int.tryParse(raw);
     if (timestamp == null) return false;
 
     final cachedAt = DateTime.fromMillisecondsSinceEpoch(timestamp);
@@ -36,8 +76,8 @@ class ModelCacheService {
   }
 
   static Future<List<Map<String, dynamic>>> loadAvailableModels() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kModelsKey);
+    await _migrateFromPrefs();
+    final raw = await LocalChatCacheService.kvGet(_kModelsKey);
     if (raw == null) return const <Map<String, dynamic>>[];
     try {
       final decoded = jsonDecode(raw);
