@@ -558,7 +558,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Render segments.
     var hasRenderedMainContent = false;
 
-    void renderRound(_RenderSegment seg) {
+    void renderRound(_RenderSegment seg, {bool live = false}) {
       if (!seg.hasContent) return;
       // Reasoning-only round: standalone collapsible reasoning card.
       // _buildBlockReasoning has no margin, so the trailing gap below
@@ -593,6 +593,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         _buildActivityTimeline(
           seg.toolCalls,
           contentBlockTimeline: timeline,
+          live: live,
         ),
       );
       // Match the gap above the bar (`_kBlockGap`) — only insert the
@@ -639,7 +640,21 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       }
     }
 
-    for (final seg in segments) {
+    // The last tool-bearing round is the one still open while the message
+    // streams — including the Deep Research gaps where the model reasons
+    // between tool rounds and every tool reads `completed`. Only that round
+    // keeps the live counter running; without this the ticker is cancelled
+    // in each gap and "Worked for …" freezes until the next tool starts.
+    int lastRoundIndex = -1;
+    for (int i = 0; i < segments.length; i++) {
+      final s = segments[i];
+      if (!s.isText && !s.isSandboxArtifact && s.toolCalls.isNotEmpty) {
+        lastRoundIndex = i;
+      }
+    }
+
+    for (int i = 0; i < segments.length; i++) {
+      final seg = segments[i];
       if (seg.isText) {
         children.addAll(
           _buildTextParagraphs(
@@ -657,7 +672,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         children.add(const SizedBox(height: _kArtifactGap));
         hasRenderedMainContent = true;
       } else {
-        renderRound(seg);
+        renderRound(
+          seg,
+          live: widget.isStreamingMessage && i == lastRoundIndex,
+        );
       }
     }
 
