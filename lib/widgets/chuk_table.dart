@@ -10,6 +10,7 @@
 // that cell renders as an accent-tinted chip. This is the "highlight what
 // matters" convention — no new tag or syntax, just bold.
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -138,6 +139,16 @@ class ChukTable extends StatefulWidget {
 class _ChukTableState extends State<ChukTable> {
   bool _copied = false;
 
+  /// Shared by the horizontal Scrollbar and its SingleChildScrollView so the
+  /// scrollbar thumb is draggable and the two stay in sync.
+  final ScrollController _hCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _hCtrl.dispose();
+    super.dispose();
+  }
+
   String _asMarkdown() {
     final ParsedTable t = widget.table;
     String pipe(List<String> cells) => '| ${cells.join(' | ')} |';
@@ -239,11 +250,29 @@ class _ChukTableState extends State<ChukTable> {
 
               if (fits) return card;
               // Too wide: the card sizes to the table's intrinsic width
-              // (wider than maxW) inside the horizontal scroller.
-              return Scrollbar(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: card,
+              // (wider than maxW) inside the horizontal scroller. Enable mouse
+              // drag as a scroll device and a draggable, always-visible
+              // scrollbar — otherwise on desktop there is no way to pan a wide
+              // table left/right (the wheel scrolls the page vertically).
+              return ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: <PointerDeviceKind>{
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
+                    PointerDeviceKind.trackpad,
+                    PointerDeviceKind.stylus,
+                  },
+                  scrollbars: false,
+                ),
+                child: Scrollbar(
+                  controller: _hCtrl,
+                  thumbVisibility: true,
+                  interactive: true,
+                  child: SingleChildScrollView(
+                    controller: _hCtrl,
+                    scrollDirection: Axis.horizontal,
+                    child: card,
+                  ),
                 ),
               );
             },
