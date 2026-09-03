@@ -234,6 +234,11 @@ class AppLocalizations {
   String get showToolActivitySubtitle => _get('showToolActivitySubtitle');
   String get toolCallingTip => _get('toolCallingTip');
   String get toolAlwaysOn => _get('toolAlwaysOn');
+  String get toolArtifacts => _get('toolArtifacts');
+  String get toolArtifactsSubtitle => _get('toolArtifactsSubtitle');
+  String get toolCodeSandbox => _get('toolCodeSandbox');
+  String get toolCodeSandboxSubtitle => _get('toolCodeSandboxSubtitle');
+  String get toolGroupCodeArtifacts => _get('toolGroupCodeArtifacts');
   String get connectors => _get('connectors');
   String get loadingToolSettings => _get('loadingToolSettings');
   String get noToolsRegistered => _get('noToolsRegistered');

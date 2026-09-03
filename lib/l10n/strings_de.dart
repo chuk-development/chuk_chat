@@ -207,6 +207,11 @@ const Map<String, String> stringsDe = {
   'toolCallingTip':
       'Tipp: Tools nur deaktivieren, wenn der Assistent aus eigenem Wissen antworten soll, ohne zu suchen oder Aktionen auszuführen.',
   'toolAlwaysOn': 'Immer an',
+  'toolArtifacts': 'Artifacts',
+  'toolArtifactsSubtitle': 'Bearbeitbarer Code, Dokumente und Zeichnungen',
+  'toolCodeSandbox': 'Code-Sandbox',
+  'toolCodeSandboxSubtitle': 'Code ausführen und Dateien in einer Sandbox verwalten',
+  'toolGroupCodeArtifacts': 'Code & Artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
   'loadingToolSettings': 'Tool-Einstellungen werden geladen...',
