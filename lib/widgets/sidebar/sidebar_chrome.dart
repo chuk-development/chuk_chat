@@ -587,9 +587,16 @@ class _SbChatTileState extends State<SbChatTile> {
         color: widget.selected
             ? t.accent.withValues(alpha: 0.18)
             : (_hovered ? t.iconFg.withValues(alpha: 0.05) : null),
-        border: widget.selected
-            ? Border.all(color: t.accent.withValues(alpha: 0.55), width: 1.5)
-            : null,
+        // Always reserve the 1.5px border so selecting a row only changes its
+        // colour, never its size — a selected border of `null` on the
+        // unselected state grew the tile by 3px per axis and shifted the whole
+        // list. Transparent keeps the layout identical across states.
+        border: Border.all(
+          color: widget.selected
+              ? t.accent.withValues(alpha: 0.55)
+              : Colors.transparent,
+          width: 1.5,
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Stack(
