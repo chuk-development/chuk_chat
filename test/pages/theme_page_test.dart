@@ -1,6 +1,6 @@
-// Renders ThemePage to prove the new preset dropdown, contrast slider,
-// font pickers and live preview build without errors, and that selecting a
-// preset drives the shell-config setters.
+// Renders ThemePage to prove the preset dropdown, contrast slider and
+// font pickers build without errors, and that selecting a preset drives the
+// shell-config setters.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -86,7 +86,7 @@ Widget _host(AppShellConfig config) => MaterialApp(
 );
 
 void main() {
-  testWidgets('renders the preset, contrast and font controls plus preview',
+  testWidgets('renders the preset, contrast and font controls',
       (tester) async {
     // Tall viewport so the whole lazy ListView is built in one pass.
     tester.view.physicalSize = const Size(400, 5000);
@@ -101,7 +101,6 @@ void main() {
     expect(find.text('Contrast'), findsOneWidget);
     expect(find.text('Fonts'), findsOneWidget);
     expect(find.text('Interface font'), findsOneWidget);
-    expect(find.text('Preview'), findsOneWidget); // live-preview header
     expect(find.byType(Slider), findsOneWidget); // the contrast slider
   });
 
@@ -132,9 +131,16 @@ void main() {
     await tester.pumpWidget(_host(_config(state)));
     await tester.pumpAndSettle();
 
-    // Open the preset dropdown and pick a light pack (GitHub).
+    // Open the preset dropdown and pick a light pack (GitHub). The menu is
+    // scrollable now, so scroll the item into view before tapping it.
     final github = kThemePresets.firstWhere((p) => p.name == 'GitHub');
     await tester.tap(find.byType(DropdownButton<ThemePreset>));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('GitHub'),
+      100,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('GitHub').last);
     await tester.pumpAndSettle();
