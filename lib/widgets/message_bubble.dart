@@ -40,6 +40,7 @@ import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/utils/tool_detail_format.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
