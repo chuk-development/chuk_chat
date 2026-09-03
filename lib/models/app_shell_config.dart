@@ -21,6 +21,14 @@ class AppShellConfig {
   final bool dynamicColorEnabled;
   final Future<void> Function(bool) setDynamicColorEnabled;
 
+  // ── Contrast (surface/outline separation strength) ─────────
+  final double contrast;
+  final Future<void> Function(double) setContrast;
+
+  // ── UI (app-chrome) font family ────────────────────────────
+  final String uiFontFamily;
+  final Future<void> Function(String) setUiFontFamily;
+
   // ── Display toggles ────────────────────────────────────────
   final bool showReasoningTokens;
   final Function(bool) setShowReasoningTokens;
@@ -90,6 +98,10 @@ class AppShellConfig {
     required this.setBgColor,
     required this.dynamicColorEnabled,
     required this.setDynamicColorEnabled,
+    required this.contrast,
+    required this.setContrast,
+    required this.uiFontFamily,
+    required this.setUiFontFamily,
     required this.showReasoningTokens,
     required this.setShowReasoningTokens,
     required this.showModelInfo,
