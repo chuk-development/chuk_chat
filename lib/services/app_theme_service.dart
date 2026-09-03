@@ -30,6 +30,14 @@ class AppThemeService extends ChangeNotifier {
   Color _bgColor = kDefaultBgColor;
   bool _dynamicColorEnabled = kDefaultDynamicColorEnabled;
 
+  // Surface/outline separation strength. Device-local (like [_uiScale] and
+  // [_dynamicColorEnabled]) — persisted to SharedPreferences, not Supabase.
+  double _contrast = kDefaultContrast;
+
+  // App-chrome font family identifier (whole UI outside the chat body).
+  // Device-local, prefs only.
+  String _uiFontFamily = kDefaultUiFontFamily;
+
   // Message display preferences
   bool _showReasoningTokens = kDefaultShowReasoningTokens;
   bool _showModelInfo = kDefaultShowModelInfo;
@@ -79,6 +87,8 @@ class AppThemeService extends ChangeNotifier {
   static const String _kIconFgColorKey = 'iconFgColor';
   static const String _kBgColorKey = 'bgColor';
   static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled';
+  static const String _kContrastKey = 'contrast';
+  static const String _kUiFontFamilyKey = 'uiFontFamily';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
   static const String _kShowTpsKey = 'showTps';
@@ -121,6 +131,8 @@ class AppThemeService extends ChangeNotifier {
   Color? _cachedThemeAccent;
   Color? _cachedThemeBg;
   Color? _cachedThemeIconFg;
+  double? _cachedThemeContrast;
+  String? _cachedThemeUiFont;
   bool _hasAppliedSupabaseTheme = false;
   Future<void>? _supabaseLoadInFlight;
   DateTime? _lastSupabaseLoadAt;
@@ -132,6 +144,8 @@ class AppThemeService extends ChangeNotifier {
   Color get iconFgColor => _iconFgColor;
   Color get bgColor => _bgColor;
   bool get dynamicColorEnabled => _dynamicColorEnabled;
+  double get contrast => _contrast;
+  String get uiFontFamily => _uiFontFamily;
   bool get showReasoningTokens => _showReasoningTokens;
   bool get showModelInfo => _showModelInfo;
   bool get showTps => _showTps;
@@ -184,6 +198,10 @@ class AppThemeService extends ChangeNotifier {
     );
     _dynamicColorEnabled =
         prefs.getBool(_kDynamicColorEnabledKey) ?? kDefaultDynamicColorEnabled;
+    _contrast = _clampContrast(
+      prefs.getDouble(_kContrastKey) ?? kDefaultContrast,
+    );
+    _uiFontFamily = _sanitizeUiFontFamily(prefs.getString(_kUiFontFamilyKey));
     _showReasoningTokens =
         prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
     _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
@@ -242,9 +260,18 @@ class AppThemeService extends ChangeNotifier {
 
   double _clampUiScale(double v) => v.clamp(kMinUiScale, kMaxUiScale);
 
+  double _clampContrast(double v) => v.clamp(kMinContrast, kMaxContrast);
+
   String _sanitizeChatFontFamily(String? id) {
     if (id == null || !kSupportedChatFontFamilies.contains(id)) {
       return kDefaultChatFontFamily;
+    }
+    return id;
+  }
+
+  String _sanitizeUiFontFamily(String? id) {
+    if (id == null || !kSupportedUiFontFamilies.contains(id)) {
+      return kDefaultUiFontFamily;
     }
     return id;
   }
@@ -667,6 +694,33 @@ class AppThemeService extends ChangeNotifier {
     await prefs.setDouble(_kUiScaleKey, _uiScale);
   }
 
+  /// Contrast is a device-local display preference and is NOT synced to
+  /// Supabase (it scales derived surface/outline colours, not a stored
+  /// palette). Persists to SharedPreferences on each change and clears the
+  /// theme cache so the ladder is rebuilt.
+  Future<void> setContrast(double contrast) async {
+    final clamped = _clampContrast(contrast);
+    if (_contrast == clamped) return;
+    _contrast = clamped;
+    _cachedThemeData = null;
+    notifyListeners();
+    final prefs = await _getPrefs();
+    await prefs.setDouble(_kContrastKey, _contrast);
+  }
+
+  /// The app-chrome font is a device-local display preference and is NOT
+  /// synced to Supabase (the bundled families differ per platform build).
+  /// Persists to SharedPreferences on each change and clears the theme cache.
+  Future<void> setUiFontFamily(String id) async {
+    final sanitized = _sanitizeUiFontFamily(id);
+    if (_uiFontFamily == sanitized) return;
+    _uiFontFamily = sanitized;
+    _cachedThemeData = null;
+    notifyListeners();
+    final prefs = await _getPrefs();
+    await prefs.setString(_kUiFontFamilyKey, _uiFontFamily);
+  }
+
   /// Onboarding completion is per-user: cached locally under a user-scoped
   /// key and synced to Supabase so other devices skip the tour too.
   Future<void> setOnboardingCompleted(bool completed) async {
@@ -715,17 +769,23 @@ class AppThemeService extends ChangeNotifier {
     if (_cachedThemeData != null &&
         _cachedThemeAccent == accent &&
         _cachedThemeBg == bg &&
-        _cachedThemeIconFg == iconFg) {
+        _cachedThemeIconFg == iconFg &&
+        _cachedThemeContrast == _contrast &&
+        _cachedThemeUiFont == _uiFontFamily) {
       return _cachedThemeData!;
     }
     _cachedThemeAccent = accent;
     _cachedThemeBg = bg;
     _cachedThemeIconFg = iconFg;
+    _cachedThemeContrast = _contrast;
+    _cachedThemeUiFont = _uiFontFamily;
     _cachedThemeData = buildAppTheme(
       accent: accent,
       iconFg: iconFg,
       bg: bg,
       brightness: _themeMode,
+      contrast: _contrast,
+      uiFont: _uiFontFamily,
     );
     return _cachedThemeData!;
   }

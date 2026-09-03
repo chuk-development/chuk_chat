@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
 
 /* ---------- DEFAULT COLOURS (Material You dark palette) ---------- */
 const Color kDefaultBgColor = Color(0xFF111318);
@@ -66,6 +67,35 @@ const List<String> kSupportedChatFontFamilies = <String>[
   kChatFontFamilyJetBrainsMono,
 ];
 
+/* ---------- UI FONT FAMILY ----------
+   The font used for the whole app chrome (menus, settings, buttons — every
+   surface outside the chat body). Reuses the same bundled families as the
+   chat font, but defaults to the system font so an untouched install keeps
+   Flutter's platform default. Resolved via [resolveUiFontFamily]. */
+const String kDefaultUiFontFamily = kChatFontFamilySystem;
+
+const List<String> kSupportedUiFontFamilies = kSupportedChatFontFamilies;
+
+/* ---------- CONTRAST ----------
+   Scales how strongly the surface-container ladder and the outline colours
+   separate from the scaffold background. [kDefaultContrast] is the midpoint:
+   at that value [buildAppTheme] reproduces the original hand-tuned palette
+   exactly, so an install that never touches the slider looks identical. Below
+   the midpoint the surfaces flatten toward the background; above it they pull
+   apart for a crisper, higher-separation look. Device-local (SharedPreferences
+   only), like UI scale and dynamic colour. */
+const double kMinContrast = 0.0;
+const double kMaxContrast = 1.0;
+const double kDefaultContrast = 0.5;
+
+/// Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
+/// applied to the surface/outline separation deltas. The default midpoint
+/// maps to exactly `1.0` (identity), so the untouched theme is unchanged.
+double contrastFactor(double contrast) {
+  final double c = contrast.clamp(kMinContrast, kMaxContrast);
+  return 0.5 + c; // 0.5 (flat) .. 1.0 (default) .. 1.5 (crisp)
+}
+
 /* ---------- SHAPE SCALE ----------
    One radius per role, used by the theme below and by hand-rolled
    surfaces. Anything a pointer can hover, focus or press must round its
@@ -105,16 +135,33 @@ ThemeData buildAppTheme({
   required Color iconFg,
   required Color bg,
   required Brightness brightness,
+  double contrast = kDefaultContrast,
+  String? uiFont,
 }) {
   final bool isDark = brightness == Brightness.dark;
+
+  // Contrast scales the surface-ladder deltas and the outline alphas. At the
+  // default midpoint the factor is exactly 1.0, so every value below matches
+  // the original hand-tuned palette; higher values pull surfaces and outlines
+  // further from the background for a crisper look, lower values flatten them.
+  final double factor = contrastFactor(contrast);
+  double scaled(double base) => (base * factor).clamp(0.0, 1.0);
 
   // Container-style surfaces are derived by lightening the scaffold bg
   // in dark mode and darkening it in light mode, producing the M3
   // surface-container ladder.
-  final Color surfaceLow = isDark ? bg.lighten(0.03) : bg.darken(0.03);
-  final Color surface = isDark ? bg.lighten(0.06) : bg.darken(0.05);
-  final Color surfaceHigh = isDark ? bg.lighten(0.10) : bg.darken(0.08);
-  final Color surfaceHighest = isDark ? bg.lighten(0.14) : bg.darken(0.12);
+  final Color surfaceLow = isDark
+      ? bg.lighten(scaled(0.03))
+      : bg.darken(scaled(0.03));
+  final Color surface = isDark
+      ? bg.lighten(scaled(0.06))
+      : bg.darken(scaled(0.05));
+  final Color surfaceHigh = isDark
+      ? bg.lighten(scaled(0.10))
+      : bg.darken(scaled(0.08));
+  final Color surfaceHighest = isDark
+      ? bg.lighten(scaled(0.14))
+      : bg.darken(scaled(0.12));
 
   // Primary / tertiary containers — tint accent toward the surface to get
   // a muted container color that still reads as accented.
@@ -131,12 +178,14 @@ ThemeData buildAppTheme({
   final Color onTertiaryContainer = isDark
       ? Color.lerp(tertiary, const Color(0xFFFFFFFF), 0.55)!
       : Color.lerp(tertiary, const Color(0xFF000000), 0.55)!;
-  final Color secondaryContainer = isDark ? bg.lighten(0.18) : bg.darken(0.15);
+  final Color secondaryContainer = isDark
+      ? bg.lighten(scaled(0.18))
+      : bg.darken(scaled(0.15));
   final Color onSecondaryContainer = iconFg;
 
-  final Color outline = iconFg.withValues(alpha: 0.55);
-  final Color outlineVariant = iconFg.withValues(alpha: 0.25);
-  final Color onSurfaceVariant = iconFg.withValues(alpha: 0.82);
+  final Color outline = iconFg.withValues(alpha: scaled(0.55));
+  final Color outlineVariant = iconFg.withValues(alpha: scaled(0.25));
+  final Color onSurfaceVariant = iconFg.withValues(alpha: scaled(0.82));
 
   final Color errorColor = isDark
       ? const Color(0xFFFFB4AB)
@@ -169,7 +218,9 @@ ThemeData buildAppTheme({
     surface: bg,
     onSurface: iconFg,
     onSurfaceVariant: onSurfaceVariant,
-    surfaceContainerLowest: isDark ? bg.darken(0.02) : bg.lighten(0.02),
+    surfaceContainerLowest: isDark
+        ? bg.darken(scaled(0.02))
+        : bg.lighten(scaled(0.02)),
     surfaceContainerLow: surfaceLow,
     surfaceContainer: surface,
     surfaceContainerHigh: surfaceHigh,
@@ -215,9 +266,16 @@ ThemeData buildAppTheme({
         : const Color(0xFF291800),
   );
 
+  // Null / 'system' leaves [ThemeData.fontFamily] unset, so the platform
+  // default font is used — this is the untouched-install behaviour. A bundled
+  // family id applies that font to the whole app chrome via the base
+  // textTheme; the chat body keeps its own resolved font on top of this.
+  final String? uiFontFamily = resolveUiFontFamily(uiFont);
+
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    fontFamily: uiFontFamily,
     scaffoldBackgroundColor: bg,
     cardColor: surface,
     dividerColor: outlineVariant,

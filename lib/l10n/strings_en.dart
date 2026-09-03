@@ -91,6 +91,22 @@ const Map<String, String> stringsEn = {
   'fontFamilyArimo': 'Arimo (sans-serif)',
   'fontFamilyMerriweather': 'Merriweather (serif)',
   'fontFamilyJetBrainsMono': 'JetBrains Mono',
+  'themePresets': 'Presets',
+  'themePresetPack': 'Theme pack',
+  'themePresetPackSubtitle': 'Apply a full look at once, then fine-tune below.',
+  'themePresetCustom': 'Custom',
+  'themeContrast': 'Contrast',
+  'themeContrastStrength': 'Separation strength',
+  'themeContrastSubtitle':
+      'How strongly cards and outlines stand out from the background. '
+          'Higher is crisper.',
+  'themeFonts': 'Fonts',
+  'interfaceFont': 'Interface font',
+  'interfaceFontSubtitle': 'Menus, settings and buttons.',
+  'themeLivePreview': 'Preview',
+  'themePreviewIncoming': 'How does the new theme look?',
+  'themePreviewOutgoing': 'Surfaces and outlines read clearly.',
+  'themePreviewSend': 'Send',
   // ── Downloads page ─────────────────────────────────────────
   'downloads': 'Downloads',
   'downloadsSubtitle': 'Where saved files go and whether to prompt each time',

@@ -42,3 +42,30 @@ String sanitizeChatFontFamily(String? id) {
   }
   return id;
 }
+
+/// Map a stored UI-font identifier to a font family string for
+/// [ThemeData.fontFamily]. Returns `null` for the system default (and for any
+/// unknown id) so the platform font stack is used — that is the untouched
+/// behaviour of the app chrome.
+String? resolveUiFontFamily(String? id) {
+  switch (id) {
+    case kChatFontFamilyArimo:
+      return kFontFamilyArimo;
+    case kChatFontFamilyMerriweather:
+      return kFontFamilyMerriweather;
+    case kChatFontFamilyJetBrainsMono:
+      return kFontFamilyJetBrainsMono;
+    case kChatFontFamilySystem:
+    default:
+      return null;
+  }
+}
+
+/// Normalize an unknown UI-font id back to a supported value. Defaults to the
+/// system font (unlike the chat font, which defaults to Arimo).
+String sanitizeUiFontFamily(String? id) {
+  if (id == null || !kSupportedUiFontFamilies.contains(id)) {
+    return kDefaultUiFontFamily;
+  }
+  return id;
+}

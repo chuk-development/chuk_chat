@@ -124,6 +124,21 @@ class AppLocalizations {
   String get fontFamilyArimo => _get('fontFamilyArimo');
   String get fontFamilyMerriweather => _get('fontFamilyMerriweather');
   String get fontFamilyJetBrainsMono => _get('fontFamilyJetBrainsMono');
+  // Theme editor: presets, contrast, fonts and live preview.
+  String get themePresets => _get('themePresets');
+  String get themePresetPack => _get('themePresetPack');
+  String get themePresetPackSubtitle => _get('themePresetPackSubtitle');
+  String get themePresetCustom => _get('themePresetCustom');
+  String get themeContrast => _get('themeContrast');
+  String get themeContrastStrength => _get('themeContrastStrength');
+  String get themeContrastSubtitle => _get('themeContrastSubtitle');
+  String get themeFonts => _get('themeFonts');
+  String get interfaceFont => _get('interfaceFont');
+  String get interfaceFontSubtitle => _get('interfaceFontSubtitle');
+  String get themeLivePreview => _get('themeLivePreview');
+  String get themePreviewIncoming => _get('themePreviewIncoming');
+  String get themePreviewOutgoing => _get('themePreviewOutgoing');
+  String get themePreviewSend => _get('themePreviewSend');
   String get downloads => _get('downloads');
   String get downloadsSubtitle => _get('downloadsSubtitle');
   String get downloadsAlwaysAsk => _get('downloadsAlwaysAsk');
