@@ -200,31 +200,53 @@ class _ChukTableState extends State<ChukTable> {
       );
     }
 
-    // Column widths proportional to each column's longest cell, so the table
-    // stretches to fill the full width of the message column instead of
-    // floating at its intrinsic width. Cells wrap within their share.
-    final Widget table = Table(
-      columnWidths: _flexColumnWidths(t),
-      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-      border: TableBorder(
-        horizontalInside: BorderSide(color: border, width: 1),
-      ),
-      children: rows,
-    );
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: border, width: 1),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: table,
+          // Fill the full message width when the table fits, but fall back to
+          // horizontal scrolling when it is genuinely wider than the column —
+          // so a wide table scrolls left/right inside its card instead of
+          // cramming every cell.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final double maxW = constraints.maxWidth;
+              final bool fits =
+                  !maxW.isFinite || _estimatedNaturalWidth(t) <= maxW;
+
+              final Widget table = Table(
+                columnWidths: fits ? _flexColumnWidths(t) : null,
+                defaultColumnWidth: fits
+                    ? const FlexColumnWidth()
+                    : const IntrinsicColumnWidth(),
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                border: TableBorder(
+                  horizontalInside: BorderSide(color: border, width: 1),
+                ),
+                children: rows,
+              );
+
+              final Widget card = Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: border, width: 1),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: table,
+              );
+
+              if (fits) return card;
+              // Too wide: the card sizes to the table's intrinsic width
+              // (wider than maxW) inside the horizontal scroller.
+              return Scrollbar(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: card,
+                ),
+              );
+            },
           ),
           // Copy control sits below the table, right-aligned, instead of
           // floating over the top-right corner where it covered header text.
@@ -268,6 +290,27 @@ class _ChukTableState extends State<ChukTable> {
   /// `**bold**` / `` `code` `` don't inflate a column's weight.
   int _visibleLen(String raw) =>
       raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
+
+  /// Rough natural pixel width of the table if every cell sat on one line.
+  /// Used only to decide between filling the width (flex columns) and
+  /// horizontal scrolling (intrinsic columns) — a slight misestimate near the
+  /// boundary is harmless since either layout reads fine there.
+  double _estimatedNaturalWidth(ParsedTable t) {
+    const double cellPadding = 26; // 12 + 12 from _cell, plus a little slack.
+    final double charWidth = widget.fontSize * 0.58; // avg glyph advance.
+    double total = 0;
+    for (int c = 0; c < t.columnCount; c++) {
+      int maxLen = _visibleLen(c < t.header.length ? t.header[c] : '');
+      for (final List<String> row in t.rows) {
+        if (c < row.length) {
+          final int l = _visibleLen(row[c]);
+          if (l > maxLen) maxLen = l;
+        }
+      }
+      total += maxLen * charWidth + cellPadding;
+    }
+    return total;
+  }
 
   Widget _cell(
     String raw, {
