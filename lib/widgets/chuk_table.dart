@@ -200,8 +200,11 @@ class _ChukTableState extends State<ChukTable> {
       );
     }
 
+    // Column widths proportional to each column's longest cell, so the table
+    // stretches to fill the full width of the message column instead of
+    // floating at its intrinsic width. Cells wrap within their share.
     final Widget table = Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
+      columnWidths: _flexColumnWidths(t),
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       border: TableBorder(
         horizontalInside: BorderSide(color: border, width: 1),
@@ -211,40 +214,60 @@ class _ChukTableState extends State<ChukTable> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: border, width: 1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Scrollbar(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: MediaQuery.sizeOf(context).width > 520
-                      ? 360
-                      : 0,
-                ),
-                child: table,
-              ),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: border, width: 1),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: table,
           ),
-          Positioned(
-            top: 2,
-            right: 2,
-            child: _CopyButton(
-              copied: _copied,
-              color: widget.textColor,
-              accent: widget.accentColor,
-              onTap: _copy,
+          // Copy control sits below the table, right-aligned, instead of
+          // floating over the top-right corner where it covered header text.
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _CopyButton(
+                copied: _copied,
+                color: widget.textColor,
+                accent: widget.accentColor,
+                onTap: _copy,
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  /// Column widths proportional to the longest visible cell in each column,
+  /// clamped so one very long cell can't starve the rest and a tiny column
+  /// still gets a sane share. Using flex widths makes the table fill the full
+  /// available width rather than sitting at its intrinsic content width.
+  Map<int, TableColumnWidth> _flexColumnWidths(ParsedTable t) {
+    final Map<int, TableColumnWidth> widths = <int, TableColumnWidth>{};
+    for (int c = 0; c < t.columnCount; c++) {
+      int maxLen = _visibleLen(c < t.header.length ? t.header[c] : '');
+      for (final List<String> row in t.rows) {
+        if (c < row.length) {
+          final int l = _visibleLen(row[c]);
+          if (l > maxLen) maxLen = l;
+        }
+      }
+      widths[c] = FlexColumnWidth(maxLen.clamp(3, 40).toDouble());
+    }
+    return widths;
+  }
+
+  /// Rough on-screen length of a cell: drop the inline markdown markers so
+  /// `**bold**` / `` `code` `` don't inflate a column's weight.
+  int _visibleLen(String raw) =>
+      raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
 
   Widget _cell(
     String raw, {
