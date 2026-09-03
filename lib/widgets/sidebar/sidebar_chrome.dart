@@ -574,8 +574,12 @@ class _SbChatTileState extends State<SbChatTile> {
         ? const EdgeInsets.fromLTRB(8, 4, 4, 4)
         : const EdgeInsets.fromLTRB(14, 5, 8, 5);
 
+    // Opaque backdrop the trailing pin / options buttons paint over the title
+    // text. It must match the tile's own fill exactly, otherwise the patch
+    // behind the buttons shows as a different colour — visible only on the
+    // selected row, whose fill (accent @0.18) differed from the old 0.12.
     final Color rowBg = widget.selected
-        ? Color.alphaBlend(t.accent.withValues(alpha: 0.12), t.bg)
+        ? Color.alphaBlend(t.accent.withValues(alpha: 0.18), t.bg)
         : (_hovered
             ? Color.alphaBlend(t.iconFg.withValues(alpha: 0.05), t.bg)
             : t.bg);
