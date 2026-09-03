@@ -268,9 +268,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       ArtifactStorageService.currentMessageId = assistantMessageId;
       // Arm the variant fold for this turn (keyed by the new messageId), or
       // clear it when this is not a regenerate.
-      _pendingVariantSeed = regenVariantSeed;
-      _pendingVariantMessageId =
-          regenVariantSeed != null ? assistantMessageId : null;
+      armVariantSeed(regenVariantSeed, assistantMessageId);
       setState(() {
         _isSending = true;
         _messages.add({
@@ -739,7 +737,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   // ArtifactTagProcessor.processTags are awaited above.
                   if (placeholderIndex >= 0 &&
                       placeholderIndex < _messages.length) {
-                    _foldRegenVariantOnto(_messages[placeholderIndex]);
+                    foldRegenVariantOnto(_messages[placeholderIndex]);
                   }
                   _persistChatWithId(chatIdForStream);
                 } else {
@@ -1060,39 +1058,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     });
 
     if (foldVariant) {
-      final seedOverride = _backgroundVariantSeedByChat[chatId];
-      final midOverride = _backgroundVariantMessageIdByChat[chatId];
-      // In the storage-rebuild fallback the synthesized assistant row has no
-      // messageId, so the fold's id guard would skip and the previous answer
-      // would be lost. Stamp the row with this turn's stashed id (it IS this
-      // turn's assistant message) so the fold matches.
-      final existingMid = target[idx]['messageId'];
-      if (midOverride != null &&
-          (existingMid == null ||
-              (existingMid is String && existingMid.isEmpty))) {
-        target[idx]['messageId'] = midOverride;
-      }
+      // The visible-chat seed was cleared when the user switched away; fold
+      // from the seed stashed for this background chat (it stamps a missing
+      // messageId and evicts itself only on a real fold). Copy the resulting
+      // pager variants back into the dynamic-typed row.
       final bgMessage = <String, String>{
         for (final e in target[idx].entries)
           if (e.value != null) e.key: e.value.toString(),
       };
-      // The visible-chat seed fields were cleared when we switched away, so
-      // fold from the seed stashed for this background chat. Evict the stashed
-      // entry only when the fold actually happened — dropping it on a skipped
-      // fold would discard the only archived prior answer.
-      final folded = _foldRegenVariantOnto(
-        bgMessage,
-        seedOverride: seedOverride,
-        messageIdOverride: midOverride,
-      );
-      if (folded) {
-        _backgroundVariantSeedByChat.remove(chatId);
-        _backgroundVariantMessageIdByChat.remove(chatId);
-      }
-      final String? bgVariants = bgMessage['variants'];
-      if (bgVariants != null) {
-        target[idx]['variants'] = bgVariants;
-        target[idx]['activeVariant'] = bgMessage['activeVariant'];
+      if (foldBackgroundVariantOnto(chatId, bgMessage)) {
+        target[idx]['messageId'] = bgMessage['messageId'];
+        final String? bgVariants = bgMessage['variants'];
+        if (bgVariants != null) {
+          target[idx]['variants'] = bgVariants;
+          target[idx]['activeVariant'] = bgMessage['activeVariant'];
+        }
       }
     }
 
@@ -2428,7 +2408,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
         if (tps != null) message['tps'] = tps.toString();
-        _foldRegenVariantOnto(message);
+        foldRegenVariantOnto(message);
         _messages[index] = message;
         _isSending = false;
       });
@@ -2439,7 +2419,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
       if (tps != null) message['tps'] = tps.toString();
-      _foldRegenVariantOnto(message);
+      foldRegenVariantOnto(message);
       _messages[index] = message;
       _isSending = false;
     }

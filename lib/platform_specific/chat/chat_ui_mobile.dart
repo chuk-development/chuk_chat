@@ -54,6 +54,7 @@ import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handl
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
@@ -140,7 +141,10 @@ class ChukChatUIMobile extends StatefulWidget {
 /// inline parser further down). `null` returns `null` so historic
 /// messages stay status-less on disk.
 class ChukChatUIMobileState extends State<ChukChatUIMobile>
-    with ChatScrollMixin, ModelProviderResolutionMixin {
+    with
+        ChatScrollMixin,
+        ModelProviderResolutionMixin,
+        RegenVariantSeedMixin<ChukChatUIMobile> {
   // Controllers and basic state
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
@@ -163,23 +167,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final Map<int, (String, List<ContentBlock>?)> _decodedContentBlocksCache = {};
   String? _activeChatId;
 
-  /// Answer-version pager: while a regenerate is in flight, the previously
-  /// generated answer(s) are archived here so the finalized answer is appended
-  /// as a new variant. Keyed by [_pendingVariantMessageId] (the new assistant
-  /// turn's messageId) so the fold only attaches to the right message. The seed
-  /// is overwritten by the next regenerate and cleared on a chat switch /
-  /// newChat() by [_clearPendingVariantSeed]; the messageId key makes a
-  /// lingering seed harmless in between.
-  List<Map<String, dynamic>>? _pendingVariantSeed;
-  String? _pendingVariantMessageId;
+  // Answer-version pager plumbing (seed stash/restore/fold) lives in
+  // RegenVariantSeedMixin, shared with the desktop State. This State supplies
+  // the two hooks it needs via [variantActiveChatId] and [variantChatIsLive].
 
-  /// Drop any armed regenerate seed — called when the visible message list is
-  /// replaced (loading another chat, starting a new one) so a seed from a
-  /// half-finished regenerate cannot leak into an unrelated conversation.
-  void _clearPendingVariantSeed() {
-    _pendingVariantSeed = null;
-    _pendingVariantMessageId = null;
-  }
   final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
@@ -848,8 +839,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // --- CHAT MANAGEMENT ---
 
   void _loadChatById(String? chatId) {
-    // A pending regenerate seed belongs to the chat we are leaving.
-    _clearPendingVariantSeed();
+    // The regenerate seed belongs to the chat we are leaving. If its turn is
+    // still running it keeps going in the background, so hand the seed over
+    // instead of dropping it — otherwise the background completion cannot fold
+    // and the previous answer is lost from the pager.
+    stashVariantSeedForBackground();
     if (kDebugMode) {
       debugPrint('');
     }
@@ -896,6 +890,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           );
         }
         _activeChatId = cached.id;
+        // Returning to a chat whose regenerate was still running in the
+        // background: re-arm its seed so the now-foreground answer folds.
+        restoreVariantSeedForChat(cached.id);
         unawaited(MultiplexSession.openForChat(cached.id).catchError((e) {
           if (kDebugMode) {
             debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
@@ -1103,6 +1100,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           );
         }
         _activeChatId = storedChat.id;
+        // Returning to a chat whose regenerate was still running in the
+        // background: re-arm its seed so the now-foreground answer folds.
+        restoreVariantSeedForChat(storedChat.id);
         unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
           if (kDebugMode) {
             debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
@@ -1228,22 +1228,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return <Map<String, dynamic>>[ChatUiHelpers.variantSnapshotOf(old)];
   }
 
-  /// Fold the pending regenerate seed onto [message] when it is the message
-  /// the seed was armed for. Idempotent — rebuilds `variants` from
-  /// `seed + current snapshot` each call. No-op when nothing is armed, the ids
-  /// mismatch, or the answer is still the "Thinking..." placeholder.
-  void _foldRegenVariantOnto(Map<String, String> message) {
-    final seed = _pendingVariantSeed;
-    if (seed == null) return;
-    final String? mid = message['messageId'];
-    if (mid == null || mid != _pendingVariantMessageId) return;
-    if ((message['text'] ?? '') == 'Thinking...') return;
-    ChatUiHelpers.writeVariants(
-      message: message,
-      seed: seed,
-      current: ChatUiHelpers.variantSnapshotOf(message),
-    );
-  }
+  // RegenVariantSeedMixin hook: the seed logic is shared with desktop; this
+  // State only has to name the chat that owns the visible message list.
+  @override
+  String? get variantActiveChatId => _activeChatId;
 
   /// Switch the answer shown by the message at [index] to variant [newIndex]
   /// and persist. Wired to the pager arrows.
@@ -1255,7 +1243,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   void newChat() {
-    _clearPendingVariantSeed();
+    // Preserve the seed for a still-running turn on the chat we are leaving so
+    // its background completion can still fold (mirrors _loadChatById).
+    stashVariantSeedForBackground();
     if (kDebugMode) {
       debugPrint(
         '🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId',
@@ -2064,7 +2054,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // Answer-version pager: on a regenerate, append this fresh answer as a
         // new variant. Content blocks / tool calls / images are written into
         // the message before finalize on mobile, so the snapshot is complete.
-        _foldRegenVariantOnto(message);
+        foldRegenVariantOnto(message);
         _messages[index] = message;
       });
 
@@ -2121,6 +2111,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (fullMessages[index]['status'] == 'interrupted') {
           fullMessages[index].remove('status');
         }
+        // Answer-version pager: fold the previous answer into this background
+        // turn's row from the seed stashed when the user switched away, so a
+        // regenerate that finishes off-screen keeps its pager (writes the
+        // variants directly into fullMessages[index]).
+        foldBackgroundVariantOnto(chatId, fullMessages[index]);
         unawaited(
           _persistenceHandler
               .persistChat(
@@ -2269,6 +2264,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // This handles cases where _activeChatId was cleared but user is still on existing chat
     if (_activeChatId == null && widget.selectedChatId != null) {
       _activeChatId = widget.selectedChatId;
+      // May be a return to a chat with a background regenerate still running.
+      restoreVariantSeedForChat(widget.selectedChatId);
       if (kDebugMode) {
         debugPrint(
           '⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId',
@@ -2929,9 +2926,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     ArtifactStorageService.currentMessageId = assistantMessageId;
     // Arm the variant fold for this turn (keyed by the new messageId), or
     // clear it when this is not a regenerate.
-    _pendingVariantSeed = regenVariantSeed;
-    _pendingVariantMessageId =
-        regenVariantSeed != null ? assistantMessageId : null;
+    armVariantSeed(regenVariantSeed, assistantMessageId);
     setState(() {
       _messages.add({
         'sender': 'ai',
