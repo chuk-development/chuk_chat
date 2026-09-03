@@ -96,6 +96,66 @@ ENV ANONYMIZED_TELEMETRY=false \
     BROWSER_USE_CLOUD_SYNC=false \
     BROWSER_USE_VERSION_CHECK=false
 
+# Node.js — the runtime for the official Playwright MCP server (`@playwright/mcp`,
+# a Node package the agent drives over stdio, §9.1). It doubles as the general
+# JavaScript runtime in the box, the way Python is already here. NodeSource LTS
+# (22.x) rather than the older apt nodejs, so npm and node agree. (Node, not Bun:
+# @playwright/mcp, playwright-core and the MCP SDK are built and tested against
+# Node; Bun buys only faster cold start, irrelevant for a long-lived server.)
+ARG NODE_MAJOR=22
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends nodejs; \
+    rm -rf /var/lib/apt/lists/*; \
+    node --version; \
+    npm --version
+
+# The Playwright MCP server, pinned and installed globally so no agent run pays a
+# cold `npx` download. Driven over stdio, headed by default → it renders to the
+# Xvfb display the user watches over VNC, using the single Chromium installed
+# above (via `--executable-path` in the seeded mcp.json). See §9.1.
+ARG PLAYWRIGHT_MCP_VERSION=0.0.80
+RUN set -eux; \
+    npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"; \
+    npm cache clean --force; \
+    mcp-server-playwright --version || npx @playwright/mcp --version
+
+# Xvfb + x11vnc: the headful Chromium runs on a virtual framebuffer (no real
+# screen, no window on anyone's device), and x11vnc serves that display so the
+# user can watch and take control over the sealed E2E channel (§9 login hand-off,
+# §9.1 renderer path 3). Both are plain apt packages. The startup wiring (which
+# display, on-demand vs entrypoint) lives with the runtime, not baked here.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        xvfb \
+        x11vnc \
+        x11-utils \
+        xauth \
+        xdotool \
+        socat; \
+    rm -rf /var/lib/apt/lists/*
+
+# The display the browser view uses. Not exported globally (a stray DISPLAY makes
+# unrelated GUI calls fail when no server is up); the launcher passes it to the
+# Playwright MCP process, and the VNC bringup uses the same value.
+ENV COWORK_BROWSER_DISPLAY=:99 \
+    PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
+
+# In-container helpers (§9.1): the launcher brings up Xvfb then execs the headed
+# Playwright MCP server; the vnc-up script starts x11vnc on demand for the live
+# view. Both are invoked by the host over `docker exec`.
+COPY browser-mcp.sh /usr/local/bin/cowork-browser-mcp
+COPY vnc-up.sh /usr/local/bin/cowork-vnc-up
+RUN chmod 0755 /usr/local/bin/cowork-browser-mcp /usr/local/bin/cowork-vnc-up
+
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/cowork-entrypoint"]
 CMD ["sleep", "infinity"]

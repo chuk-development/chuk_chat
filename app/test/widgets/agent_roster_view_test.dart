@@ -88,29 +88,6 @@ void main() {
     expect(picks, <(String, String)>[(agent.id, agent.threads.first.key)]);
   });
 
-  testWidgets('a second thread is listed and switches the selection',
-      (tester) async {
-    final source = LocalAgentRosterSource(random: Random(3));
-    final agent = source.addAgent(name: 'amber-otter', brief: 'x');
-    final second = source.addThread(agent.id, title: 'Invoices');
-
-    final picks = await pumpRoster(
-      tester,
-      source,
-      selectedAgentId: agent.id,
-      selectedThreadKey: agent.threads.first.key,
-    );
-
-    // The selected agent shows its threads.
-    expect(find.text('General'), findsOneWidget);
-    expect(find.text('Invoices'), findsOneWidget);
-
-    await tester.tap(find.text('Invoices'));
-    await tester.pumpAndSettle();
-
-    expect(picks.last, (agent.id, second.key));
-  });
-
   group('lastActivityLabel', () {
     test('never invents a time', () {
       expect(lastActivityLabel(null, now: now), 'no activity yet');
@@ -134,7 +111,7 @@ void main() {
   });
 
   group('LocalAgentRosterSource', () {
-    test('the host agent is added once and keeps the default session key', () {
+    test('the host agent is added once with one thread keyed by its id', () {
       final source = LocalAgentRosterSource();
       final first = source.ensureHostAgent('cowork-host');
       final again = source.ensureHostAgent('cowork-host');
@@ -142,9 +119,8 @@ void main() {
       expect(source.agents, hasLength(1));
       expect(first.id, again.id);
       expect(first.onHost, isTrue);
-      // `default` is what the executor falls back to, so the first thread must
-      // be exactly that key.
-      expect(first.threads.single.key, 'default');
+      // One permanent session per bot: the session key is the stable agent id.
+      expect(first.threads.single.key, first.id);
     });
 
     test('an app-created agent is not claimed to be on the host', () {
@@ -157,19 +133,18 @@ void main() {
       expect(agent.activity, AgentActivity.waiting);
     });
 
-    test('threads get distinct keys and notify listeners', () {
+    test('an added agent has one permanent thread keyed by its id, notifies once',
+        () {
       final source = LocalAgentRosterSource(random: Random(5));
       var notifications = 0;
       source.addListener(() => notifications++);
 
       final agent = source.addAgent(name: 'amber-otter');
-      final a = source.addThread(agent.id);
-      final b = source.addThread(agent.id, title: 'Invoices');
 
-      expect(a.key, isNot(b.key));
-      expect(b.title, 'Invoices');
-      expect(source.byId(agent.id)!.threads, hasLength(3));
-      expect(notifications, 3);
+      // Exactly one permanent thread, and its key is the stable agent id.
+      expect(source.byId(agent.id)!.threads, hasLength(1));
+      expect(agent.threads.single.key, agent.id);
+      expect(notifications, 1);
     });
 
     test('markRunning drives the activity, markActivity the timestamps', () {

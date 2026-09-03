@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/chat_mode_service.dart';
@@ -9,6 +11,7 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/model_cache_service.dart';
 import 'package:cowork/services/model_info_service.dart';
+import 'package:cowork/services/settings/debug_settings.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 import 'package:cowork/widgets/agent_run_views.dart';
 import 'package:cowork/widgets/chat_mode_selector.dart';
@@ -113,6 +116,16 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   /// One log per thread, so switching threads keeps both conversations.
   final Map<String, List<_ThreadEntry>> _logs = <String, List<_ThreadEntry>>{};
 
+  /// The latest `debug_context` payload per session key, kept only when the
+  /// developer "capture model context" toggle is on. The copy button reads the
+  /// one for the current thread; nothing here ever renders in the conversation.
+  final Map<String, Map<String, dynamic>> _debugContexts =
+      <String, Map<String, dynamic>>{};
+
+  /// Mirrors the developer toggle, loaded once at startup. When false the debug
+  /// copy button is hidden and no task rides with `debug: true`.
+  bool _captureContext = false;
+
   /// One line per child agent, keyed "threadKey\u0000subagentId", so a child's
   /// state transitions update its own line instead of appending a new one each
   /// time (§7.6). Kept beside the log because the log is append-only.
@@ -171,6 +184,14 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     _hostController = TextEditingController(text: widget.defaultHostUrl);
     _bootstrap();
     _loadModeAndModels();
+    _loadDebugToggle();
+  }
+
+  /// Load the developer "capture model context" toggle. Never throws: a failure
+  /// leaves it off, so a normal send is unchanged.
+  Future<void> _loadDebugToggle() async {
+    final capture = await DebugSettings.captureContext();
+    if (mounted) setState(() => _captureContext = capture);
   }
 
   /// Load the stored mode and its config, then the model list for the quick
@@ -442,6 +463,21 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           // one-agent conversation. Ignored here so the sealed switch stays
           // exhaustive without pulling room rendering into the agent thread.
           break;
+        case CoworkRelayBrowserData():
+        case CoworkRelayBrowserView():
+          // Live browser view events (§9.1) belong to BrowserViewPage, which has
+          // its own subscription. Ignored here to keep the sealed switch
+          // exhaustive.
+          break;
+        case CoworkRelayApprovalRequest():
+          // A here.now publish is waiting on the user. The run is blocked on the
+          // executor until we answer, so this is a standing card in the thread,
+          // not a fleeting prompt.
+          _currentAssistant = null;
+          _currentReasoning = null;
+          final entry = _ApprovalEntry(event);
+          entry.onDecide = (approved) => _decideApproval(entry, approved);
+          log.add(entry);
         case CoworkRelayDone():
           log.add(_DoneEntry(event));
           _currentAssistant = null;
@@ -450,6 +486,11 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           log.add(_ErrorEntry(message));
           _currentAssistant = null;
           _currentReasoning = null;
+        case CoworkRelayDebugContext():
+          // A developer aid, not part of the conversation: keep only the latest
+          // one per session so the copy button has it, and render nothing.
+          final key = event.sessionKey.isNotEmpty ? event.sessionKey : target;
+          _debugContexts[key] = event.payload;
       }
     });
     if (event is CoworkRelayDone || event is CoworkRelayRunError) {
@@ -488,6 +529,18 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     final entry = _ReasoningEntry();
     log.add(entry);
     return entry;
+  }
+
+  /// Answer a here.now publish approval and record it on the card. Idempotent:
+  /// once a decision is sent the buttons are gone, so a second tap does nothing
+  /// and the executor never gets two answers for one publish.
+  void _decideApproval(_ApprovalEntry entry, bool approved) {
+    if (entry.decision != null) return;
+    _controller?.sendApprovalDecision(
+      approvalId: entry.request.approvalId,
+      approved: approved,
+    );
+    setState(() => entry.decision = approved);
   }
 
   void _setRunPhase(_RunPhase phase) {
@@ -602,6 +655,9 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       // off the frame so the host does not force a reasoning pass.
       reasoningEffort:
           _modeConfig.reasoningOn ? _modeConfig.reasoningEffort : null,
+      // Ask the executor to echo the raw model context only when the developer
+      // toggle is on; off leaves the frame unchanged.
+      debug: _captureContext,
     )
         .catchError((Object error) {
       if (mounted) {
@@ -631,6 +687,39 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       _setRunPhase(_RunPhase.running);
       _scrollToBottom();
     });
+  }
+
+  /// Copies the latest raw model context for this thread to the clipboard as
+  /// pretty JSON. Never dead: if no `debug_context` has arrived yet (a fresh
+  /// thread, or the toggle was only just turned on), it copies the visible
+  /// transcript instead and says so, so the button always does something.
+  Future<void> _copyDebugContext() async {
+    final latest = _debugContexts[widget.threadKey];
+    final String text;
+    final String note;
+    if (latest != null) {
+      text = const JsonEncoder.withIndent('  ').convert(latest);
+      note = 'context copied';
+    } else {
+      text = _visibleTranscript();
+      note = 'no context yet — copied the transcript';
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(note)));
+  }
+
+  /// A plain-text dump of what is on screen for this thread, used as the copy
+  /// fallback before any debug context has arrived.
+  String _visibleTranscript() {
+    final buffer = StringBuffer();
+    for (final entry in _entries) {
+      final line = entry.asPlainText();
+      if (line.isNotEmpty) buffer.writeln(line);
+    }
+    return buffer.toString().trimRight();
   }
 
   @override
@@ -727,21 +816,36 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
             // send, so a task can name its model without leaving the composer.
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ChatModeSelector(
-                  mode: _mode,
-                  onModeChanged: _onModeChanged,
-                  onModelSelected: _onModelSelected,
-                  onOpenModelScreen: widget.onOpenModelScreen,
-                  selectedModelId: _modeConfig.modelId,
-                  modelLabel: _modelLabel,
-                  pickedModels: _pickedModels,
-                  reasoningEffort: _modeConfig.reasoningEffort,
-                  reasoningLevels: _reasoningLevels,
-                  onReasoningEffortChanged: _onReasoningChanged,
-                  menuAbove: true,
-                ),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ChatModeSelector(
+                        mode: _mode,
+                        onModeChanged: _onModeChanged,
+                        onModelSelected: _onModelSelected,
+                        onOpenModelScreen: widget.onOpenModelScreen,
+                        selectedModelId: _modeConfig.modelId,
+                        modelLabel: _modelLabel,
+                        pickedModels: _pickedModels,
+                        reasoningEffort: _modeConfig.reasoningEffort,
+                        reasoningLevels: _reasoningLevels,
+                        onReasoningEffortChanged: _onReasoningChanged,
+                        menuAbove: true,
+                      ),
+                    ),
+                  ),
+                  // The debug context copy button rides here only while the
+                  // developer toggle is on, so a normal composer is unchanged.
+                  if (_captureContext)
+                    IconButton(
+                      tooltip: 'Copy raw context',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.data_object, size: 20),
+                      onPressed: _copyDebugContext,
+                    ),
+                ],
               ),
             ),
             Row(
@@ -926,11 +1030,18 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
 sealed class _ThreadEntry {
   const _ThreadEntry();
   Widget build(BuildContext context, CoworkThreadView view);
+
+  /// A one-line plain-text form, used only by the debug copy fallback. Empty by
+  /// default; the text-bearing entries override it.
+  String asPlainText() => '';
 }
 
 class _UserEntry extends _ThreadEntry {
   _UserEntry(this.text);
   final String text;
+
+  @override
+  String asPlainText() => 'You: $text';
 
   @override
   Widget build(BuildContext context, CoworkThreadView view) {
@@ -955,6 +1066,9 @@ class _AssistantEntry extends _ThreadEntry {
   String text = '';
 
   @override
+  String asPlainText() => text.isEmpty ? '' : 'Agent: $text';
+
+  @override
   Widget build(BuildContext context, CoworkThreadView view) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -974,6 +1088,9 @@ class _ReasoningEntry extends _ThreadEntry {
   String text = '';
 
   @override
+  String asPlainText() => text.isEmpty ? '' : 'Reasoning: $text';
+
+  @override
   Widget build(BuildContext context, CoworkThreadView view) =>
       AgentReasoningBlock(text: text);
 }
@@ -983,6 +1100,12 @@ class _ToolEntry extends _ThreadEntry {
   final CoworkRelayTool call;
 
   @override
+  String asPlainText() {
+    final args = call.arguments;
+    return 'Tool: ${call.name}${args != null && args.isNotEmpty ? ' $args' : ''}';
+  }
+
+  @override
   Widget build(BuildContext context, CoworkThreadView view) =>
       AgentToolLine(call: call);
 }
@@ -990,6 +1113,9 @@ class _ToolEntry extends _ThreadEntry {
 class _FileEntry extends _ThreadEntry {
   _FileEntry(this.file);
   final CoworkRelayFile file;
+
+  @override
+  String asPlainText() => 'File: ${file.name}';
 
   @override
   Widget build(BuildContext context, CoworkThreadView view) =>
@@ -1125,6 +1251,9 @@ class _ErrorEntry extends _ThreadEntry {
   final String message;
 
   @override
+  String asPlainText() => 'Error: $message';
+
+  @override
   Widget build(BuildContext context, CoworkThreadView view) {
     final theme = Theme.of(context);
     return Padding(
@@ -1134,5 +1263,128 @@ class _ErrorEntry extends _ThreadEntry {
         style: TextStyle(color: theme.colorScheme.error),
       ),
     );
+  }
+}
+
+/// A standing prompt: the agent wants to publish something public to here.now,
+/// and the run is blocked until the user approves or denies it. [decision] is
+/// null while pending, then true (approved) or false (denied); once set the
+/// buttons are replaced by the outcome, so the answer is sent exactly once.
+class _ApprovalEntry extends _ThreadEntry {
+  _ApprovalEntry(this.request);
+
+  final CoworkRelayApprovalRequest request;
+
+  /// Null while waiting; the sent answer once decided.
+  bool? decision;
+
+  /// Wired by the state to [_decideApproval]. Null-guarded so an entry built in
+  /// a test without a handler simply renders inert buttons.
+  void Function(bool approved)? onDecide;
+
+  @override
+  Widget build(BuildContext context, CoworkThreadView view) {
+    final theme = Theme.of(context);
+    final decided = decision != null;
+    final size = _humanBytes(request.totalBytes);
+    final files = request.fileCount == 1 ? '1 file' : '${request.fileCount} files';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Publish to the web?',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                request.name.isEmpty ? request.path : request.name,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$files · $size',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                request.public
+                    ? 'This site will be PUBLIC — anyone with the link can view '
+                        'it. Anonymous sites expire 24 hours after publishing.'
+                    : 'This publish will go live on ${request.baseUrl}.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 12),
+              if (!decided)
+                Row(
+                  children: [
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => onDecide?.call(false),
+                      child: const Text('Deny'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () => onDecide?.call(true),
+                      icon: const Icon(Icons.public, size: 18),
+                      label: const Text('Publish'),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Icon(
+                      decision! ? Icons.check_circle_outline : Icons.block,
+                      size: 16,
+                      color: decision!
+                          ? theme.colorScheme.primary
+                          : theme.hintColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      decision! ? 'Published' : 'Denied',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: decision!
+                            ? theme.colorScheme.primary
+                            : theme.hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+  static String _humanBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    const units = <String>['KB', 'MB', 'GB'];
+    double value = bytes / 1024;
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return '${value.toStringAsFixed(1)} ${units[unit]}';
   }
 }

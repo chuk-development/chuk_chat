@@ -390,6 +390,12 @@ class BackendModelClient:
         # Set by ``cancel`` so a socket we closed ourselves is not mistaken for a
         # dropped idle connection and retried.
         self._cancelled = False
+        # Optional per-chunk callback: fired with each ``content`` delta as it
+        # arrives off the wire, so the UI streams token-by-token instead of the
+        # whole answer landing at ``done``. Settable by the executor's
+        # StreamingModelClient. ``None`` -> no live streaming (the caller may fall
+        # back to one delta at the end).
+        self.on_delta: Callable[[str], None] | None = None
 
     # -- ModelClient -----------------------------------------------------
 
@@ -413,6 +419,40 @@ class BackendModelClient:
             # Idle socket dropped by an LB: reconnect and retry once.
             self._close()
             return self._chat_once(payload)
+
+    def cheap_clone(self, *, max_tokens: int = 512) -> "BackendModelClient":
+        """A "hero"/aux twin of this client: the SAME model, on the SAME account
+        session, but with reasoning turned OFF and a smaller output cap (§7.3).
+
+        This is what makes the default aux client cheap without a second model or
+        a second login. The compaction summary and the mem0 fact-extraction are
+        housekeeping, not the frontier thinking the run is paid for, so they run
+        on the same model with ``reasoning_effort="none"`` — the weakest level the
+        chat API accepts (the app's own "reasoning off"), which skips the reasoning
+        pass entirely — and a 512-token output ceiling, since a summary is short.
+
+        The **session object is shared** (``self._session``), so the token and its
+        auto-refresh are the one already in use — no second GoTrue login. The clone
+        still owns its own socket (opened lazily, like any client), because the two
+        clients each run their own blocking ``recv`` loop and a shared socket would
+        cross their frames; the backend endpoint, connector and timeouts are copied
+        so the twin talks to exactly the same place.
+        """
+        clone = BackendModelClient(
+            self._session,
+            model_id=self._model_id,
+            provider_slug=self._provider_slug,
+            max_tokens=max_tokens,
+            temperature=self._temperature,
+            reasoning_effort="none",
+            connect=self._connect,
+            auth_timeout=self._auth_timeout,
+            recv_timeout=self._recv_timeout,
+        )
+        # The base_url is not stored, only the derived ws url; copy it so a clone
+        # of a non-default backend still points at that backend.
+        clone._ws_url = self._ws_url
+        return clone
 
     def cancel(self) -> None:
         """Abandon the turn in flight (§7.1): close the socket so the blocking
@@ -524,6 +564,12 @@ class BackendModelClient:
                 data = frame.get("data")
                 if isinstance(data, str):
                     content_parts.append(data)
+                    # Live stream this chunk to the UI as it arrives.
+                    if self.on_delta is not None and data:
+                        try:
+                            self.on_delta(data)
+                        except Exception:  # noqa: BLE001 — a UI sink error must not abort the turn
+                            pass
             elif kind == "reasoning":
                 data = frame.get("data")
                 if isinstance(data, str):

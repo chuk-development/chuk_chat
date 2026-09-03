@@ -35,6 +35,19 @@ logger = logging.getLogger(__name__)
 # The provider name Mem0 config refers to (``{"llm": {"provider": "chukbackend"}}``).
 PROVIDER_NAME = "chukbackend"
 
+# Mem0 2.0.x validates ``llm.provider`` against a HARDCODED allowlist in a
+# pydantic field-validator (``mem0.llms.configs.LlmConfig.validate_config``) that
+# runs at ``Memory.from_config`` time — *before* ``LlmFactory`` is ever consulted.
+# A genuinely custom provider name like ``chukbackend`` is therefore rejected
+# outright ("Unsupported LLM provider"), and the validator is compiled into the
+# model at class-creation, so it cannot be monkeypatched after import. The robust
+# workaround is to repurpose an allowlisted-but-unused slot: ``lmstudio`` is a
+# local-inference provider we never use, it carries no ``provider ==`` special
+# case anywhere in Mem0's extraction path, and its factory class is overridden
+# below to our own :class:`ChukBackendLLM`. So the config declares provider
+# ``lmstudio`` (passes the allowlist) and the factory builds *our* class.
+ALIAS_PROVIDER = "lmstudio"
+
 # Fallback client for the factory path. Mem0's ``LlmFactory`` instantiates the
 # provider as ``llm_class(config)`` with no room for our client, so
 # ``memory.py`` sets this just before building ``Memory`` and each provider
@@ -58,10 +71,11 @@ def register_provider() -> None:
     """
     from mem0.utils.factory import LlmFactory
 
-    LlmFactory.provider_to_class[PROVIDER_NAME] = (
-        "cowork_agent.mem0_provider.ChukBackendLLM",
-        BaseLlmConfig,
-    )
+    target = ("cowork_agent.mem0_provider.ChukBackendLLM", BaseLlmConfig)
+    # Register under the real name (for clarity / ``get_supported_providers``)
+    # AND the allowlisted alias the config actually declares (see ALIAS_PROVIDER).
+    LlmFactory.provider_to_class[PROVIDER_NAME] = target
+    LlmFactory.provider_to_class[ALIAS_PROVIDER] = target
 
 
 def _coerce_content(content: Any) -> str:

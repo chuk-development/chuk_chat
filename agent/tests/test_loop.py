@@ -468,3 +468,58 @@ def test_an_interrupt_mid_batch_skips_the_rest_but_answers_every_call(tmp_path):
     assert len(rows) == 3  # every call answered, two of them "not run"
     assert rows[0]["content"] == {"ok": "1"}
     assert all("stopped" in str(r["content"]) for r in rows[1:])
+
+
+# -- debug context tap ----------------------------------------------------
+
+
+def test_debug_observer_gets_each_round_in_the_contract_shape(tmp_path):
+    """The debug "copy raw context" tap fires once per model round with the exact
+    outbound payload and the ladder's stats, in the fixed dict shape."""
+    from cowork_agent.context import ContextLadder
+
+    # Round 1 makes a tool call (continues); round 2 is bare text (finishes).
+    model = MockModelClient([ECHO_CALL, "done"])
+    ladder = ContextLadder()
+    captured: list[dict] = []
+
+    loop = AgentLoop(
+        model,
+        _reg_with_echo(),
+        _store(tmp_path),
+        system_prompt="you are a tester",
+        context_ladder=ladder,
+        debug_observer=captured.append,
+    )
+    result = loop.run("dbg-1", "go")
+    assert result.reason is StopReason.FINISHED
+
+    # One call per model round.
+    assert len(captured) == len(model.calls) == 2
+    for i, event in enumerate(captured):
+        assert event["type"] == "debug_context"
+        assert event["session_key"] == "dbg-1"
+        # Round is 1-based and increments.
+        assert event["round"] == i + 1
+        # The messages are exactly what went to the model that round.
+        assert event["messages"] == model.calls[i]
+        # Stats carry the four ladder fields.
+        stats = event["stats"]
+        assert set(stats) == {"tier", "pressure", "tokens_before", "tokens_after"}
+        assert isinstance(stats["tier"], int)
+        assert isinstance(stats["pressure"], float)
+
+    # The first round's payload is the seeded system prompt + the user message.
+    first = captured[0]["messages"]
+    assert first[0]["role"] == "system"
+    assert first[-1]["content"] == "go"
+
+
+def test_no_debug_observer_means_no_tap(tmp_path):
+    """Unset observer -> the loop never tries to call one (zero overhead)."""
+    model = MockModelClient(["done"])
+    loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path))
+    result = loop.run("dbg-2", "go")
+    # Nothing to assert but a clean finish: the point is it does not raise trying
+    # to call a ``None`` observer.
+    assert result.reason is StopReason.FINISHED

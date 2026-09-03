@@ -55,6 +55,20 @@ def test_system_prompt_carries_protocol_tools_workspace_and_persona():
     assert prompt.index("Be terse.") > prompt.index("<tool_call>")
 
 
+def test_system_prompt_tells_the_model_to_report_skills_and_mcp_not_languages():
+    """Asked what it can do, the model must name its SKILLS and connected MCP
+    servers/tools, not list programming languages."""
+    prompt = build_system_prompt(_registry())
+    lowered = prompt.lower()
+    assert "what you can do" in lowered
+    # It must point at the real inventory: skills and MCP servers/tools.
+    assert "skill" in lowered
+    assert "mcp" in lowered
+    # And it must warn off the wrong answer (listing languages / "write Python").
+    assert "python" in lowered
+    assert "languages" in lowered
+
+
 def test_prompt_example_parses_with_the_runtime_tool_parser():
     """The example in the prompt must be a call the runtime can actually parse —
     a wrong example teaches the model a format the loop then drops."""

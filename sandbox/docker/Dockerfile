@@ -70,6 +70,7 @@ RUN set -eux; \
         locales \
         tzdata \
         ripgrep \
+        ffmpeg \
         libexpat1 \
         zlib1g \
         libsqlite3-0 \
@@ -124,6 +125,15 @@ RUN set -eux; \
     visudo -c; \
     install -d -o "${COWORK_UID}" -g "${COWORK_GID}" -m 0755 /workspace; \
     printf 'cd /workspace 2>/dev/null || true\n' >> /home/"${COWORK_USER}"/.bashrc
+
+# yt-dlp, installed system-wide with uv so it lands on PATH (UV_TOOL_BIN_DIR)
+# and any agent can pull a video's captions immediately. The youtube-transcript
+# skill also self-installs it, so this is only the fast path, not a hard
+# dependency. ffmpeg (above) backs yt-dlp's subtitle conversion and any audio
+# fallback.
+RUN set -eux; \
+    uv tool install yt-dlp; \
+    yt-dlp --version
 
 COPY entrypoint.sh /usr/local/bin/cowork-entrypoint
 RUN chmod 0755 /usr/local/bin/cowork-entrypoint

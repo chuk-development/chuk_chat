@@ -74,6 +74,7 @@ class _FakeRelayController implements CoworkRelayController {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    bool debug = false,
   }) async =>
       sessionKeys.add(sessionKey);
 
@@ -119,6 +120,21 @@ class _FakeRelayController implements CoworkRelayController {
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) async {}
+
+  @override
+  Future<void> startBrowserView() async {}
+
+  @override
+  Future<void> stopBrowserView() async {}
+
+  @override
+  Future<void> sendBrowserData(Uint8List bytes) async {}
+
+  @override
+  Future<void> sendApprovalDecision({
+    required String approvalId,
+    required bool approved,
+  }) async {}
 
   @override
   Future<void> dispose() async {
@@ -200,7 +216,9 @@ void main() {
     // Named after the host's own device id, and marked as living there.
     expect(find.text('cowork-host'), findsWidgets);
     expect(roster.agents.single.onHost, isTrue);
-    expect(roster.agents.single.threads.single.key, 'default');
+    // One permanent thread, keyed by the stable agent id.
+    expect(roster.agents.single.threads, hasLength(1));
+    expect(roster.agents.single.threads.single.key, roster.agents.single.id);
   });
 
   testWidgets('onboarding adds a coworker and opens its thread', (tester) async {
@@ -232,31 +250,35 @@ void main() {
     expect(controller.sessionKeys, isEmpty);
   });
 
-  testWidgets('a second thread is opened from the app bar and gets its own key',
+  testWidgets('an agent has one permanent thread and no way to open a second',
       (tester) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'in the first thread');
+    // The "new thread" affordance is gone: one permanent session per bot.
+    expect(find.byIcon(Icons.add_comment_outlined), findsNothing);
+    expect(roster.agents.single.threads, hasLength(1));
+    final stableKey = roster.agents.single.id;
+    expect(roster.agents.single.threads.single.key, stableKey);
+
+    // Two sends both ride the one stable session key, into the same thread.
+    await tester.enterText(find.byType(TextField).first, 'in the first turn');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
     controller.emit(const CoworkRelayDone());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add_comment_outlined));
-    await tester.pumpAndSettle();
-
-    expect(roster.agents.single.threads, hasLength(2));
-    // The fresh thread is empty, and its task rides a different session key.
-    expect(find.text('in the first thread'), findsNothing);
-    await tester.enterText(find.byType(TextField).first, 'in the second thread');
+    await tester.enterText(find.byType(TextField).first, 'in the second turn');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
 
-    expect(controller.sessionKeys, hasLength(2));
-    expect(controller.sessionKeys.first, 'default');
-    expect(controller.sessionKeys.last, isNot('default'));
+    expect(controller.sessionKeys, <String>[stableKey, stableKey]);
+    // Both turns live in the same one thread — nothing was cleared.
+    expect(find.text('in the first turn'), findsOneWidget);
+    expect(find.text('in the second turn'), findsOneWidget);
+    // Still exactly one thread after the exchange.
+    expect(roster.agents.single.threads, hasLength(1));
   });
 
   testWidgets('a run marks the agent as working and back to waiting',

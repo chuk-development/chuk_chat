@@ -374,6 +374,48 @@ def test_fetch_models_info_uses_bearer_token():
         http.close()
 
 
+# -- cheap_clone: the hero/aux twin (§7.3) -----------------------------------
+
+
+def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
+    session = _session()
+    client = BackendModelClient(
+        session,
+        model_id="deepseek/deepseek-v4-flash",
+        provider_slug="fireworks",
+        base_url="https://api.chuk.chat",
+        max_tokens=2048,
+        temperature=0.4,
+        reasoning_effort="high",
+    )
+    clone = client.cheap_clone()
+
+    # Reasoning off, at the weakest level the chat API accepts.
+    assert clone._reasoning_effort == "none"
+    # Small output cap by default.
+    assert clone._max_tokens == 512
+    # Same model + provider + backend endpoint.
+    assert clone._model_id == client._model_id
+    assert clone._provider_slug == client._provider_slug
+    assert clone._ws_url == client._ws_url
+    assert clone._temperature == client._temperature
+    # The SAME session object — no second login, one shared token + refresh.
+    assert clone._session is client._session
+    # A distinct client (own socket), not the original.
+    assert clone is not client
+
+
+def test_cheap_clone_honours_a_custom_max_tokens():
+    client = BackendModelClient(
+        _session(),
+        model_id="deepseek/deepseek-v4-flash",
+        provider_slug="fireworks",
+    )
+    clone = client.cheap_clone(max_tokens=256)
+    assert clone._max_tokens == 256
+    assert clone._reasoning_effort == "none"
+
+
 # -- optional live smoke test (never required, never hardcodes creds) --------
 
 
