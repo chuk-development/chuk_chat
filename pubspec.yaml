@@ -16,22 +16,19 @@ environment:
 # batch — pdf, printing, sqflite, sqflite_common_ffi, pdfrx, record 7,
 # flutter_foreground_task 11 — now updates. Do not float CI on `stable`.
 #
-# Four deps are still capped, each for a concrete, verified reason on the current
-# Android toolchain (AGP 8.13.2 / Gradle 8.14 / compileSdk 36). They all unblock
-# together when the app moves to AGP 9 / Gradle 9 / compileSdk 37 — a deliberate
-# toolchain migration, not a version bump:
-#   * dynamic_color         < 2.0.0  — 2.x pulls ColorScheme from the new
-#                                       `material_ui` package; Flutter 3.47's
-#                                       ColorScheme is its own class, so the
-#                                       DynamicColorBuilder types no longer match.
-#   * flutter_secure_storage < 11.0.0 — 11.x hardcodes compileSdk 37 (> app 36).
-#   * permission_handler     < 13.0.0 — 13.x pulls permission_handler_android 14,
-#                                       which hardcodes compileSdk 37.
-#   * app_links              < 7.2.0  — 7.2.x ships an AGP-9 `plugins{}`-DSL android
-#                                       build that Flutter 3.47's plugin loader
-#                                       mis-orders (kotlin-android before AGP).
-#                                       Transitive via supabase_flutter.
-# Verified with `./gradlew :app:tasks` (BUILD SUCCESSFUL) after each hold.
+# The four Android-toolchain caps (dynamic_color, flutter_secure_storage,
+# permission_handler, app_links) are LIFTED. android/app/build.gradle.kts now
+# sets compileSdk = 37 (was flutter's default 36), which satisfies
+# flutter_secure_storage 11 and permission_handler_android 14. AGP 8.13.2 /
+# Gradle 8.14 build against 37 fine — no AGP 9 migration was needed. dynamic_color
+# 2.x still hands its palette back as a `material_ui` ColorScheme; main.dart
+# imports material_ui directly and converts it to a Flutter ColorScheme.
+#
+# Deep transitive deps left at older versions are capped by their parents, not by
+# us: material_color_utilities (pinned by the Flutter SDK), xml ^6 (enough_mail),
+# qr ^3 (pretty_qr_code), isolate_manager 4.x (pdfrx), analyzer/test_api (dev
+# toolchain). Forcing these via dependency_overrides breaks the parent, so they
+# stay until the parent widens. Verified with a release APK build (BUILD SUCCESSFUL).
 
 dependencies:
   flutter:
@@ -40,12 +37,12 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  flutter_riverpod: ^2.6.1  # State management for chat runtime / streaming (perf re-architecture)
+  flutter_riverpod: ^3.4.2  # State management for chat runtime / streaming (perf re-architecture)
   # Material You / system accent colour (Android 12+, some desktops).
-  # Held below 2.0.0: dynamic_color 2.x imports ColorScheme from the new
-  # `material_ui` package, but Flutter 3.47's material library defines its own
-  # ColorScheme, so DynamicColorBuilder's builder types no longer match ours.
-  dynamic_color: ">=1.9.0 <2.0.0"
+  dynamic_color: ^2.1.0
+  # dynamic_color 2.x surfaces its palette as a material_ui ColorScheme; we
+  # import it directly in main.dart to convert to a Flutter ColorScheme.
+  material_ui: ^1.1.1
   web: ^1.1.1
   shared_preferences: ^2.5.3
   http: ^1.5.0
@@ -54,20 +51,12 @@ dependencies:
   file_picker: ^12.0.0  # federated rewrite; drops the win32 ^5 pin that blocked share_plus/package_info_plus/geolocator
   image_picker: ^1.1.2
   uuid: ^4.5.2
-  # Held at 12.x: permission_handler 13.x pulls permission_handler_android 14.0.0,
-  # which hardcodes compileSdk 37 (> the app's 36). Unblocks on AGP 9 / compileSdk 37.
-  permission_handler: ">=12.0.1 <13.0.0"
+  permission_handler: ^13.0.1
   supabase_flutter: ^2.10.3
-  # Pinned below 7.2.0: app_links 7.2.x ships an AGP-9 `plugins{}`-DSL
-  # android build that Flutter 3.47's plugin loader mis-orders (kotlin-android
-  # applied before the Android Gradle plugin). Pulled transitively by
-  # supabase_flutter (which allows >=6.4.1 <8.0.0).
-  app_links: ">=7.0.0 <7.2.0"
+  app_links: ^7.2.1
   crypto: ^3.0.6
   cryptography: ^2.7.0
-  # Held at 10.x: 11.0.0 hardcodes compileSdk 37 (> the app's 36). 10.3.1 already
-  # migrated the ciphers, so the move to 11 is free once the toolchain reaches AGP 9.
-  flutter_secure_storage: ">=10.0.0 <11.0.0"
+  flutter_secure_storage: ^11.0.0
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   record: ^7.1.1  # audio recording (voice input)
