@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -680,7 +681,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         title: Text(l.toolCalling),
         centerTitle: false,
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           const ExpressiveSectionHeader('Engine'),

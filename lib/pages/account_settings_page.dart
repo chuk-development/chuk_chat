@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -515,7 +516,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ),
       );
     } else {
-      bodyContent = ListView(
+      bodyContent = SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           if (_errorMessage != null)

@@ -1,6 +1,7 @@
 // lib/pages/download_settings_page.dart
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/download_preferences_service.dart';
@@ -78,7 +79,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           const ExpressiveSectionHeader('Behavior'),

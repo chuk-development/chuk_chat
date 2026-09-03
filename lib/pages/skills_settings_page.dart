@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/skill.dart';
@@ -117,7 +118,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
         icon: const Icon(Icons.add),
         label: Text(l.skillNew),
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           ExpressiveInfoCard(text: l.skillsExplainer),
@@ -336,7 +337,7 @@ message.
           ),
         ],
       ),
-      body: ListView(
+      body: SettingsListView(
         padding: const EdgeInsets.all(16),
         children: [
           ExpressiveInfoCard(text: l.skillEditorHint),

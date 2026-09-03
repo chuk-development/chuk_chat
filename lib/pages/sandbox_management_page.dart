@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/services/github_connection_service.dart';
@@ -197,7 +198,8 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
           await _refresh();
           await _loadGitHubStatus();
         },
-        child: ListView(
+        child: SettingsListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             const ExpressiveInfoCard(

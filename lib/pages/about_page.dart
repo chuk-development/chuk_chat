@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -133,7 +134,7 @@ class _AboutPageState extends State<AboutPage> {
               ? AboutPage._formattedVersion(info.version, info.buildNumber)
               : null;
 
-          return ListView(
+          return SettingsListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
               // Hero header — the icon, the name, the version.

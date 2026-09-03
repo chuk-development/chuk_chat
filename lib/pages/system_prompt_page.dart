@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -545,7 +546,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     if (_isLoading) {
       bodyContent = const Center(child: CircularProgressIndicator());
     } else {
-      bodyContent = ListView(
+      bodyContent = SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           Text(

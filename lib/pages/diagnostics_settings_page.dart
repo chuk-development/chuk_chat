@@ -1,5 +1,6 @@
 // lib/pages/diagnostics_settings_page.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -190,7 +191,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : SettingsListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 ExpressiveInfoCard(
