@@ -145,6 +145,52 @@ String _humanizeToolName(String name) {
   return spaced.isEmpty ? 'tool' : spaced;
 }
 
+/// Present-tense name for what a running turn is doing RIGHT NOW, so the
+/// timeline header can say "Searching the web" instead of a generic "Working".
+/// Reads the tool the model is currently waiting on — the most recent call
+/// that is still running or pending — and returns null when nothing is in
+/// flight (the header then falls back to the stream phase / "Working").
+String? runningActivityLabel(List<ToolCall> calls) {
+  ToolCall? current;
+  for (final call in calls) {
+    if (call.status == ToolCallStatus.running ||
+        call.status == ToolCallStatus.pending) {
+      current = call; // last in-flight call wins → the most recent one
+    }
+  }
+  if (current == null) return null;
+  switch (_kindOf(current)) {
+    case AgentActivityKind.search:
+      // The search kind also covers chat / file search, not only the web —
+      // only web_search is "the web"; anything else gets a neutral verb.
+      return current.name == 'web_search' ? 'Searching the web' : 'Searching';
+    case AgentActivityKind.page:
+      return 'Reading a page';
+    case AgentActivityKind.thinking:
+    case AgentActivityKind.other:
+      return _runningVerbFor(current.name);
+  }
+}
+
+/// Present-tense phrase for a non-search, non-page tool the turn is waiting on.
+/// Known tools get a natural verb; everything else falls back to the tool name.
+String _runningVerbFor(String name) {
+  switch (name) {
+    case 'typst_compile':
+      return 'Compiling document';
+    case 'generate_image':
+      return 'Generating image';
+    case 'code_run':
+      return 'Running code';
+    case 'bash':
+      return 'Running a command';
+    case 'send_file_to_user':
+      return 'Sending a file';
+    default:
+      return 'Running ${_humanizeToolName(name)}';
+  }
+}
+
 AgentActivityEntry _entryFor(ToolCall call) {
   final kind = _kindOf(call);
   final subject = _subjectOf(call);

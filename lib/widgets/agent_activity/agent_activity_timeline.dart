@@ -201,7 +201,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final String verb;
     if (widget.isRunning) {
       verb = toolRunning
-          ? StreamPhase.working.label
+          // Name the tool the model is waiting on ("Searching the web",
+          // "Compiling document") so a long run says what it is doing, not a
+          // bare "Working". Falls back to "Working" if the tool is unknown.
+          ? (runningActivityLabel(widget.toolCalls) ?? StreamPhase.working.label)
           : (widget.phase?.label ??
                 (widget.toolCalls.isEmpty ? 'Thinking' : 'Working'));
     } else {
