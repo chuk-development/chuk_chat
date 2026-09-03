@@ -607,7 +607,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // to StreamingManager before switching away. This allows the stream to
     // continue in background and persist correctly when complete.
     if (_activeChatId != null &&
-        _streamingManager.isStreaming(_activeChatId!)) {
+        (_streamingManager.isStreaming(_activeChatId!) ||
+            _isSendingForChat(_activeChatId!))) {
       final messagesCopy = _messages
           .map((m) => Map<String, dynamic>.from(m))
           .toList();
@@ -1053,7 +1054,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
     // to StreamingManager so the stream can persist correctly when complete.
-    if (chatIdToSave != null && _streamingManager.isStreaming(chatIdToSave)) {
+    if (chatIdToSave != null &&
+        (_streamingManager.isStreaming(chatIdToSave) ||
+            _isSendingForChat(chatIdToSave))) {
       if (messagesToSave != null) {
         _streamingManager.setBackgroundMessages(
           chatIdToSave,

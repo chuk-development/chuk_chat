@@ -565,21 +565,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     }
                     _persistChatWithId(chatIdForStream);
                   } else {
-                    final backgroundMsgs = _streamingManager
-                        .getBackgroundMessages(chatIdForStream);
-                    if (backgroundMsgs != null &&
-                        placeholderIndex < backgroundMsgs.length) {
-                      backgroundMsgs[placeholderIndex]['text'] = accumulatedText
-                          .toString();
-                      backgroundMsgs[placeholderIndex]['reasoning'] =
-                          finalReasoning;
-                      backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                          contentBlocksJson;
-                      _persistChatWithIdAndMessages(
-                        chatIdForStream,
-                        backgroundMsgs,
-                      );
-                    }
+                    _persistBackgroundAssistant(
+                      chatIdForStream,
+                      placeholderIndex,
+                      {
+                        'text': accumulatedText.toString(),
+                        'reasoning': finalReasoning,
+                        'contentBlocks': contentBlocksJson,
+                      },
+                    );
                   }
 
                   final next = loopResult.nextStep!;
@@ -749,42 +743,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   }
                   _persistChatWithId(chatIdForStream);
                 } else {
-                  final backgroundMsgs = _streamingManager
-                      .getBackgroundMessages(chatIdForStream);
-                  if (backgroundMsgs != null &&
-                      placeholderIndex < backgroundMsgs.length) {
-                    backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-                    backgroundMsgs[placeholderIndex]['reasoning'] =
-                        resolvedReasoning;
-                    if (contentBlocksJson != null) {
-                      backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                          contentBlocksJson;
-                    }
-                    if (tps != null) {
-                      backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-                    }
-                    // Archive the discarded answer here too (user switched to
-                    // another chat mid-regenerate) so a regenerate that
-                    // finishes in the background keeps its pager. The discarded
-                    // answer survives only in _pendingVariantSeed at this point,
-                    // so skipping the fold would lose it for good. Fold via a
-                    // String view of the dynamic background map.
-                    final bgMessage = <String, String>{
-                      for (final e in backgroundMsgs[placeholderIndex].entries)
-                        if (e.value != null) e.key: e.value.toString(),
-                    };
-                    _foldRegenVariantOnto(bgMessage);
-                    final String? bgVariants = bgMessage['variants'];
-                    if (bgVariants != null) {
-                      backgroundMsgs[placeholderIndex]['variants'] = bgVariants;
-                      backgroundMsgs[placeholderIndex]['activeVariant'] =
-                          bgMessage['activeVariant'];
-                    }
-                    _persistChatWithIdAndMessages(
-                      chatIdForStream,
-                      backgroundMsgs,
-                    );
-                  }
+                  // Archive the discarded answer too (user switched to another
+                  // chat mid-regenerate) via foldVariant, so a regenerate that
+                  // finishes in the background keeps its pager.
+                  _persistBackgroundAssistant(
+                    chatIdForStream,
+                    placeholderIndex,
+                    {
+                      'text': effectiveContent,
+                      'reasoning': resolvedReasoning,
+                      'contentBlocks': ?contentBlocksJson,
+                      if (tps != null) 'tps': tps.toString(),
+                    },
+                    foldVariant: true,
+                  );
                 }
               })().catchError((Object error, StackTrace stackTrace) {
                 if (kDebugMode) {
@@ -802,17 +774,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   _finalizeAiMessage(placeholderIndex, 'Error: $error');
                   _persistChatWithId(chatIdForStream);
                 } else {
-                  final backgroundMsgs = _streamingManager
-                      .getBackgroundMessages(chatIdForStream);
-                  if (backgroundMsgs != null &&
-                      placeholderIndex < backgroundMsgs.length) {
-                    backgroundMsgs[placeholderIndex]['text'] = 'Error: $error';
-                    backgroundMsgs[placeholderIndex]['reasoning'] = '';
-                    _persistChatWithIdAndMessages(
-                      chatIdForStream,
-                      backgroundMsgs,
-                    );
-                  }
+                  _persistBackgroundAssistant(
+                    chatIdForStream,
+                    placeholderIndex,
+                    {'text': 'Error: $error', 'reasoning': ''},
+                  );
                 }
               }),
             );
@@ -830,18 +796,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                _persistBackgroundAssistant(
                   chatIdForStream,
+                  placeholderIndex,
+                  {'text': paymentMessage, 'reasoning': ''},
                 );
-                if (backgroundMsgs != null &&
-                    placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
-                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
-                  _persistChatWithIdAndMessages(
-                    chatIdForStream,
-                    backgroundMsgs,
-                  );
-                }
               }
               _showPaymentRequiredDialog();
               return;
@@ -856,16 +815,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
               _persistChatWithId(chatIdForStream);
             } else {
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+              _persistBackgroundAssistant(
                 chatIdForStream,
+                placeholderIndex,
+                {'text': 'Error: $errorMessage', 'reasoning': ''},
               );
-              if (backgroundMsgs != null &&
-                  placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] =
-                    'Error: $errorMessage';
-                backgroundMsgs[placeholderIndex]['reasoning'] = '';
-                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-              }
             }
           },
         );
@@ -1030,6 +984,100 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // Request cancellation for in-flight send setup.
       _cancelPendingSendOperation();
     }
+  }
+
+  /// True when a send / tool-loop turn is still in flight for [chatId], even
+  /// if no stream is momentarily active (e.g. between two tool-loop passes).
+  /// Backed by the per-chat ChatRuntime so the answer keeps a home after the
+  /// user switches away from the chat.
+  bool _isSendingForChat(String chatId) =>
+      ChatRuntimeRegistry.instance.lookup(chatId)?.isSending.value ?? false;
+
+  /// Persist a background (switched-away) turn's assistant message for
+  /// [chatId] straight to storage, decoupled from the visible chat.
+  ///
+  /// The turn's logic keeps running after the user leaves the chat; this is
+  /// where its result lands. It sources the message list from the live
+  /// StreamingManager snapshot and, when that snapshot is missing (e.g. the
+  /// user switched during a tool-loop pass boundary before a snapshot was
+  /// taken), rebuilds from the stored chat so a finished turn is never
+  /// silently dropped — the root cause behind "answer missing / half" on
+  /// desktop.
+  void _persistBackgroundAssistant(
+    String chatId,
+    int placeholderIndex,
+    Map<String, String?> updates, {
+    bool foldVariant = false,
+  }) {
+    List<Map<String, dynamic>>? messages = _streamingManager
+        .getBackgroundMessages(chatId);
+    final bool fromSnapshot = messages != null;
+
+    // Fallback: no live snapshot for this turn. Rebuild the list from the
+    // persisted chat so the finished answer still lands instead of vanishing.
+    if (messages == null) {
+      final stored = ChatStorageService.getChatById(chatId);
+      if (stored != null && stored.messages.isNotEmpty) {
+        messages = stored.messages
+            .map((m) => Map<String, dynamic>.from(_messageToRawMap(m)))
+            .toList();
+      }
+    }
+    if (messages == null || messages.isEmpty) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [Desktop-BG] dropped background turn for $chatId: '
+          'no snapshot and no stored chat',
+        );
+      }
+      return;
+    }
+
+    // Resolve the assistant slot for this turn. In snapshot mode the index is
+    // authoritative. In the storage-rebuild path the turn's assistant message
+    // is always the tail — never overwrite a middle / earlier message.
+    final List<Map<String, dynamic>> target = messages;
+    int idx;
+    if (fromSnapshot &&
+        placeholderIndex >= 0 &&
+        placeholderIndex < target.length) {
+      idx = placeholderIndex;
+    } else {
+      final int last = target.length - 1;
+      final String? lastSender = last >= 0
+          ? target[last]['sender']?.toString()
+          : null;
+      if (lastSender == 'ai' || lastSender == 'assistant') {
+        idx = last;
+      } else {
+        target.add(<String, dynamic>{'sender': 'ai', 'text': ''});
+        idx = target.length - 1;
+      }
+    }
+
+    updates.forEach((key, value) {
+      if (value != null) target[idx][key] = value;
+    });
+
+    if (foldVariant) {
+      final bgMessage = <String, String>{
+        for (final e in target[idx].entries)
+          if (e.value != null) e.key: e.value.toString(),
+      };
+      _foldRegenVariantOnto(bgMessage);
+      final String? bgVariants = bgMessage['variants'];
+      if (bgVariants != null) {
+        target[idx]['variants'] = bgVariants;
+        target[idx]['activeVariant'] = bgMessage['activeVariant'];
+      }
+    }
+
+    // Keep the live snapshot in step (no-op when the stream entry is gone) so
+    // a later tool-loop pass builds on the merged state, not a stale copy.
+    if (_streamingManager.hasBackgroundMessages(chatId)) {
+      _streamingManager.setBackgroundMessages(chatId, target);
+    }
+    _persistChatWithIdAndMessages(chatId, target);
   }
 
   /// Show dialog when API returns 402 (free messages exhausted)
@@ -1706,20 +1754,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       }
                       _persistChatWithId(chatIdForStream);
                     } else {
-                      final backgroundMsgs = _streamingManager
-                          .getBackgroundMessages(chatIdForStream);
-                      if (backgroundMsgs != null &&
-                          placeholderIndex < backgroundMsgs.length) {
-                        backgroundMsgs[placeholderIndex]['text'] = '';
-                        backgroundMsgs[placeholderIndex]['reasoning'] =
-                            finalReasoning;
-                        backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                            contentBlocksJson;
-                        _persistChatWithIdAndMessages(
-                          chatIdForStream,
-                          backgroundMsgs,
-                        );
-                      }
+                      _persistBackgroundAssistant(
+                        chatIdForStream,
+                        placeholderIndex,
+                        {
+                          'text': '',
+                          'reasoning': finalReasoning,
+                          'contentBlocks': contentBlocksJson,
+                        },
+                      );
                     }
 
                     final next = loopResult.nextStep!;
@@ -1893,27 +1936,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     );
                     _persistChatWithId(chatIdForStream);
                   } else {
-                    final backgroundMsgs = _streamingManager
-                        .getBackgroundMessages(chatIdForStream);
-                    if (backgroundMsgs != null &&
-                        placeholderIndex < backgroundMsgs.length) {
-                      backgroundMsgs[placeholderIndex]['text'] =
-                          effectiveContent;
-                      backgroundMsgs[placeholderIndex]['reasoning'] =
-                          resolvedReasoning;
-                      if (contentBlocksJson != null) {
-                        backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                            contentBlocksJson;
-                      }
-                      if (tps != null) {
-                        backgroundMsgs[placeholderIndex]['tps'] = tps
-                            .toString();
-                      }
-                      _persistChatWithIdAndMessages(
-                        chatIdForStream,
-                        backgroundMsgs,
-                      );
-                    }
+                    _persistBackgroundAssistant(
+                      chatIdForStream,
+                      placeholderIndex,
+                      {
+                        'text': effectiveContent,
+                        'reasoning': resolvedReasoning,
+                        'contentBlocks': ?contentBlocksJson,
+                        if (tps != null) 'tps': tps.toString(),
+                      },
+                    );
                   }
                 } catch (error) {
                   _autoSaveTimer?.cancel();
@@ -1929,16 +1961,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     _finalizeAiMessage(placeholderIndex, errorText);
                     _persistChatWithId(chatIdForStream);
                   } else {
-                    final backgroundMsgs = _streamingManager
-                        .getBackgroundMessages(chatIdForStream);
-                    if (backgroundMsgs != null &&
-                        placeholderIndex < backgroundMsgs.length) {
-                      backgroundMsgs[placeholderIndex]['text'] = errorText;
-                      _persistChatWithIdAndMessages(
-                        chatIdForStream,
-                        backgroundMsgs,
-                      );
-                    }
+                    _persistBackgroundAssistant(
+                      chatIdForStream,
+                      placeholderIndex,
+                      {'text': errorText},
+                    );
                   }
                 }
               })().catchError((Object error, StackTrace stackTrace) {
@@ -1976,18 +2003,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                _persistBackgroundAssistant(
                   chatIdForStream,
+                  placeholderIndex,
+                  {'text': paymentMessage, 'reasoning': ''},
                 );
-                if (backgroundMsgs != null &&
-                    placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
-                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
-                  _persistChatWithIdAndMessages(
-                    chatIdForStream,
-                    backgroundMsgs,
-                  );
-                }
               }
               _showPaymentRequiredDialog();
               return;
@@ -2074,14 +2094,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }
               _persistChatWithId(chatIdForStream);
             } else {
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+              _persistBackgroundAssistant(
                 chatIdForStream,
+                placeholderIndex,
+                {'text': errorText},
               );
-              if (backgroundMsgs != null &&
-                  placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = errorText;
-                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-              }
             }
           },
         );
