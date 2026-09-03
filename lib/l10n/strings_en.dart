@@ -103,10 +103,6 @@ const Map<String, String> stringsEn = {
   'themeFonts': 'Fonts',
   'interfaceFont': 'Interface font',
   'interfaceFontSubtitle': 'Menus, settings and buttons.',
-  'themeLivePreview': 'Preview',
-  'themePreviewIncoming': 'How does the new theme look?',
-  'themePreviewOutgoing': 'Surfaces and outlines read clearly.',
-  'themePreviewSend': 'Send',
   // ── Downloads page ─────────────────────────────────────────
   'downloads': 'Downloads',
   'downloadsSubtitle': 'Where saved files go and whether to prompt each time',

@@ -226,39 +226,6 @@ class _ThemePageState extends State<ThemePage> {
     }
   }
 
-  // Memoised preview theme. Building a full ThemeData on every drag frame is
-  // wasteful, so the last result is cached and rebuilt only when one of the
-  // six inputs actually changes.
-  ThemeData? _cachedPreview;
-  Object? _previewKey;
-
-  /// The theme the live-preview card renders in, built from the currently
-  /// selected values so the card reflects edits immediately — before the
-  /// debounced global rebuild lands.
-  ThemeData get _previewTheme {
-    final key = Object.hash(
-      _selectedAccentColor,
-      _selectedIconFgColor,
-      _selectedBgColor,
-      _selectedThemeMode,
-      _selectedContrast,
-      _selectedUiFont,
-    );
-    if (_cachedPreview != null && _previewKey == key) {
-      return _cachedPreview!;
-    }
-    _previewKey = key;
-    _cachedPreview = buildAppTheme(
-      accent: _selectedAccentColor,
-      iconFg: _selectedIconFgColor,
-      bg: _selectedBgColor,
-      brightness: _selectedThemeMode,
-      contrast: _selectedContrast,
-      uiFont: _selectedUiFont,
-    );
-    return _cachedPreview!;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -278,8 +245,9 @@ class _ThemePageState extends State<ThemePage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // Presets + a live preview of the current look, up top so the
-          // effect of every control below is visible while editing.
+          // Presets, up top so a whole look can be applied before tuning the
+          // individual controls below. Every change is applied live, so there
+          // is no preview card.
           ExpressiveSectionHeader(l.themePresets),
           ExpressiveGroup(
             children: [
@@ -291,7 +259,6 @@ class _ThemePageState extends State<ThemePage> {
                 subtitle: l.themePresetPackSubtitle,
                 customLabel: l.themePresetCustom,
               ),
-              _LivePreview(theme: _previewTheme, l: l),
             ],
           ),
 
@@ -1135,131 +1102,3 @@ class _FontCard extends StatelessWidget {
   }
 }
 
-// A miniature, non-interactive chat rendered in the currently selected theme,
-// so every colour, contrast and font choice is visible while editing.
-class _LivePreview extends StatelessWidget {
-  final ThemeData theme;
-  final AppLocalizations l;
-  const _LivePreview({required this.theme, required this.l});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final TextStyle body =
-        theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface) ??
-        TextStyle(color: cs.onSurface);
-
-    Widget bubble({
-      required Color color,
-      required Color textColor,
-      required String text,
-      required Alignment align,
-    }) {
-      return Align(
-        alignment: align,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          constraints: const BoxConstraints(maxWidth: 240),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(text, style: body.copyWith(color: textColor)),
-        ),
-      );
-    }
-
-    // The preview only illustrates the theme — it is not a real chat, so it
-    // is excluded from focus traversal, the semantics tree and pointer input
-    // to keep its buttons from becoming dead controls.
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(8),
-      child: ExcludeSemantics(
-        child: ExcludeFocus(
-          child: IgnorePointer(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  border: Border.all(color: m3.outlineVariant),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: Icon(
-                            Icons.auto_awesome,
-                            size: 16,
-                            color: cs.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          l.themeLivePreview,
-                          style:
-                              theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                              ) ??
-                              body,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    bubble(
-                      color: m3.surfaceContainerHigh,
-                      textColor: cs.onSurface,
-                      text: l.themePreviewIncoming,
-                      align: Alignment.centerLeft,
-                    ),
-                    bubble(
-                      color: cs.primary,
-                      textColor: cs.onPrimary,
-                      text: l.themePreviewOutgoing,
-                      align: Alignment.centerRight,
-                    ),
-                    const SizedBox(height: 6),
-                    Divider(color: m3.outlineVariant, height: 1),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Theme(
-                          data: theme,
-                          child: FilledButton(
-                            onPressed: () {},
-                            child: Text(l.themePreviewSend),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Theme(
-                          data: theme,
-                          child: OutlinedButton(
-                            onPressed: () {},
-                            child: Text(l.cancel),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
