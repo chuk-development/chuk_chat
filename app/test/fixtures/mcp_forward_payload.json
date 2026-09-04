@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Frozen shape of the `mcp_servers` list the app forwards inside the sealed",
+    "task frame. Asserted from both sides: app/test/services/mcp/mcp_store_test.dart",
+    "builds it from a live McpStore, agent/tests/test_mcp_client.py parses it.",
+    "The contract is additive — a receiver ignores fields it does not know — so",
+    "entries may gain fields, but no field here may be renamed or removed.",
+    "The four entries are the four kinds a connector can be.",
+    "Values are fake."
+  ],
+  "mcp_servers": [
+    {
+      "name": "Notion",
+      "url": "https://mcp.notion.example/mcp",
+      "auth": "oauth",
+      "access_token": "at-notion",
+      "oauth": {
+        "token_endpoint": "https://auth.notion.example/token",
+        "client_id": "cid-notion",
+        "refresh_token": "rt-notion",
+        "expires_at": "2126-09-05T10:00:00.000Z",
+        "resource": "https://mcp.notion.example/mcp",
+        "scope": "read write",
+        "issuer": "https://auth.notion.example"
+      }
+    },
+    {
+      "name": "Legacy",
+      "url": "https://legacy.example/mcp",
+      "auth": "oauth",
+      "access_token": "at-legacy"
+    },
+    {
+      "name": "Brave",
+      "url": "https://brave.example/mcp?key=k-123"
+    },
+    {
+      "name": "GitHub",
+      "url": "https://api.example/v1/mcp/github",
+      "auth": "appSession"
+    }
+  ]
+}

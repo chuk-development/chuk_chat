@@ -121,6 +121,42 @@ ModelFactory = Callable[[], ModelClient]
 # keeps working.
 ModelSelect = Callable[[str | None, str | None, str | None], ModelClient]
 
+# Fields of a forwarded ``mcp_servers`` entry that ROTATE without the connector
+# changing (docs/WIRE_CONTRACT.md, "A rotated token is not a changed connector"):
+# the device's live bearer, and inside the ``oauth`` block the refresh token and
+# its informational expiry. They are dropped from the cache signature below.
+# Everything else — name, url, auth kind, token_endpoint, client_id, client_secret,
+# resource, scope, issuer — identifies the connector and stays in the hash.
+_ROTATING_TOP_LEVEL = ("access_token",)
+_ROTATING_OAUTH = ("refresh_token", "expires_at")
+
+
+def _mcp_signature(mcp_servers: list[dict]) -> str:
+    """The cache key for a session's MCPManager: the forwarded list, minus the
+    rotating credential fields, serialized canonically.
+
+    Hashing the raw list meant every task after a token refresh rebuilt the
+    manager — transport threads torn down and restarted, tool lists re-fetched —
+    although not one connector had changed. Only a real change (a connector
+    added, removed, re-pointed, re-authorized with a different client) should
+    do that. Non-dict entries pass through untouched; an unserializable list
+    falls back to ``repr`` rather than failing the task.
+    """
+    projected: list[Any] = []
+    for entry in mcp_servers:
+        if not isinstance(entry, dict):
+            projected.append(entry)
+            continue
+        clean = {k: v for k, v in entry.items() if k not in _ROTATING_TOP_LEVEL}
+        oauth = clean.get("oauth")
+        if isinstance(oauth, dict):
+            clean["oauth"] = {k: v for k, v in oauth.items() if k not in _ROTATING_OAUTH}
+        projected.append(clean)
+    try:
+        return json.dumps(projected, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return repr(projected)
+
 
 class StreamingModelClient:
     """Wraps a ``ModelClient`` and reports the assistant text as deltas.
@@ -1663,10 +1699,9 @@ class Executor:
         """
         if not mcp_servers:
             return None
-        try:
-            signature = json.dumps(mcp_servers, sort_keys=True, default=str)
-        except (TypeError, ValueError):
-            signature = repr(mcp_servers)
+        # Redacted projection: a rotated access/refresh token or a new expiry is
+        # NOT a changed connector and must reuse the cached manager.
+        signature = _mcp_signature(mcp_servers)
         with self._mcp_lock:
             existing = self._mcp_managers.get(session_key)
             if existing is not None and self._mcp_signatures.get(session_key) == signature:
