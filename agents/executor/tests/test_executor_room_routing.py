@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 
 from cowork_executor import ControllerSession, Executor, loopback_pair
 from cowork_executor.protocol import room_create_payload
