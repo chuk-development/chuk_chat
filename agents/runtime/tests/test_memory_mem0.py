@@ -240,3 +240,46 @@ def test_snapshot_neutralizes_injection_in_persona(tmp_path):
     # The override line is redacted and the tag is no longer live markup.
     assert "line removed by the injection scan" in snapshot
     assert "<tool_call>" not in snapshot
+
+
+def test_one_mem0_handle_per_workspace_root_across_stores(tmp_path, monkeypatch):
+    """Two MemoryStores on the SAME root (two tasks on one workspace) must share
+    one Mem0 handle: the embedded local-path Qdrant refuses a second client on
+    the same folder while the first is alive, and before the cache that made
+    memory a silent no-op from the second task on. A different root still gets
+    its own handle."""
+    import mem0
+
+    from cowork_agent import memory as memory_mod
+    from cowork_agent import mem0_provider
+
+    monkeypatch.setattr(memory_mod, "_MEM_BY_ROOT", {})
+    monkeypatch.setattr(mem0_provider, "register_provider", lambda: None)
+    built: list[dict] = []
+
+    class _Handle:
+        pass
+
+    def fake_from_config(config):
+        built.append(config)
+        return _Handle()
+
+    monkeypatch.setattr(mem0.Memory, "from_config", staticmethod(fake_from_config))
+
+    class _Client:
+        def complete(self, messages):  # pragma: no cover - never called here
+            raise AssertionError("not called")
+
+    first = MemoryStore(tmp_path / "ws" / "memory", llm_client=_Client())
+    second = MemoryStore(tmp_path / "ws" / "memory", llm_client=_Client())  # same root
+    other = MemoryStore(tmp_path / "other" / "memory", llm_client=_Client())
+
+    h1 = first._memory()
+    h2 = second._memory()  # first is still alive — the production shape
+    h3 = other._memory()
+
+    assert h1 is not None and h2 is h1, "same root must reuse the one handle"
+    assert h3 is not None and h3 is not h1, "a different root gets its own handle"
+    assert len(built) == 2, f"from_config must run once per root, ran {len(built)}"
+    # The writer follows the store that last asked: each task re-points it.
+    assert mem0_provider._backend_client is other._llm_client

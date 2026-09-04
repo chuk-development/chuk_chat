@@ -580,14 +580,24 @@ def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> 
     }
 
 
-def browser_view_payload(status: str, *, message: str = "") -> dict[str, Any]:
+def browser_view_payload(
+    status: str, *, message: str = "", password: str | None = None
+) -> dict[str, Any]:
     """Executor -> app status for the live browser view.
 
     ``status`` is ``"started"`` (the stream is live, the app may show the view),
     ``"stopped"`` (torn down — user asked, or the pipe/container went away), or
     ``"error"`` (could not bring the view up; ``message`` says why).
+
+    ``password`` rides only on ``"started"``: the per-view VNC secret x11vnc was
+    (re)armed with. It travels inside the sealed frame, so only the paired app
+    ever sees it; inside the sandbox the secret sits in a root-only file, so the
+    agent's own code cannot read the screen or inject input (§9.1 hardening).
     """
-    return {"type": "browser_view", "status": status, "message": message}
+    payload: dict[str, Any] = {"type": "browser_view", "status": status, "message": message}
+    if password is not None:
+        payload["password"] = password
+    return payload
 
 
 def encode_payload(payload: dict[str, Any]) -> bytes:
