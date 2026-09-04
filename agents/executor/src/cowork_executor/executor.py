@@ -75,6 +75,7 @@ from cowork_agent import (
     SubagentLimits,
     WorkspaceMount,
     build_runtime,
+    close_cached_memories,
     configs_from_entries,
 )
 from cowork_crypto import (
@@ -638,6 +639,14 @@ class Executor:
         # Per-session MCP managers own transport threads (and stdio subprocesses);
         # close them so nothing outlives the executor.
         self._close_mcp_managers()
+        # The per-workspace mem0 handles are cached for the life of the process
+        # (memory.py) so a second task can reopen the same embedded Qdrant. Close
+        # and forget them here, or the storage lock outlives the executor that
+        # owned the workspace and the next start hits "already accessed".
+        try:
+            close_cached_memories()
+        except Exception:  # noqa: BLE001 — teardown must not mask the stop
+            pass
         self._environment.cleanup()
 
     def serve_forever(self) -> None:
@@ -757,24 +766,7 @@ class Executor:
         if kind == "stop":
             self._handle_stop(request_id, payload)
             return
-        if kind == "browser_start":
-            with self._vnc_lock:
-                self._vnc_generation += 1
-                generation = self._vnc_generation
-            threading.Thread(
-                target=self._vnc_start,
-                args=(request_id, payload, generation),
-                name="vnc-start",
-                daemon=True,
-            ).start()
-            return
-        if kind == "browser_stop":
-            with self._vnc_lock:
-                self._vnc_generation += 1
-            self._vnc_teardown(reason="stopped")
-            return
-        if kind == "browser_data":
-            self._vnc_feed(payload)
+        if self._handle_browser_kind(kind, request_id, payload):
             return
         if kind == "replay":
             # A reconnecting/reinstalled client re-streams a thread's transcript
@@ -998,6 +990,35 @@ class Executor:
         return run_state_payload(session_key, "idle")
 
     # -- live browser view (§9.1) ----------------------------------------
+    def _handle_browser_kind(self, kind: str, request_id: str, payload: dict) -> bool:
+        """Dispatch the three live-view frames. Returns False for other kinds.
+
+        `browser_start` is handed to its own thread: bringing x11vnc up can take
+        seconds and must not stall `stop` and every other frame behind it. The
+        generation counter lets a later stop/start win over a start still in
+        flight (see `_vnc_start`).
+        """
+        if kind == "browser_start":
+            with self._vnc_lock:
+                self._vnc_generation += 1
+                generation = self._vnc_generation
+            threading.Thread(
+                target=self._vnc_start,
+                args=(request_id, payload, generation),
+                name="vnc-start",
+                daemon=True,
+            ).start()
+            return True
+        if kind == "browser_stop":
+            with self._vnc_lock:
+                self._vnc_generation += 1
+            self._vnc_teardown(reason="stopped")
+            return True
+        if kind == "browser_data":
+            self._vnc_feed(payload)
+            return True
+        return False
+
     def _vnc_exec_prefix(self) -> tuple[list[str], str] | None:
         """`docker exec` prefix + container id for this agent's box, or None.
 

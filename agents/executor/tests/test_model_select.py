@@ -175,3 +175,37 @@ def test_selector_failure_is_an_error_terminal_and_the_worker_survives(tmp_path)
         assert _answer(events2) == "from-factory"
     finally:
         executor.stop()
+
+
+def test_stop_closes_and_forgets_the_cached_mem0_handles(tmp_path, monkeypatch):
+    """The teardown half of the per-workspace mem0 cache. One Memory handle per
+    workspace root is kept for the life of the process so task 2 can open the
+    same embedded Qdrant folder; when the executor stops, those handles must be
+    closed and forgotten, or the storage lock outlives the process that owns the
+    workspace and the next start hits "already accessed"."""
+    from cowork_agent import memory as memory_mod
+
+    closed: list[str] = []
+
+    class _Client:
+        def close(self):
+            closed.append("closed")
+
+    class _Store:
+        client = _Client()
+
+    class _Handle:
+        vector_store = _Store()
+
+    monkeypatch.setattr(memory_mod, "_MEM_BY_ROOT", {str(tmp_path / "ws"): _Handle()})
+
+    executor, _controller = _wire(
+        tmp_path,
+        model_factory=lambda: _scripted_model("from-factory"),
+        model_select=None,
+    )
+    executor.start()
+    executor.stop()
+
+    assert closed == ["closed"], "stop() must close the cached Qdrant client"
+    assert memory_mod._MEM_BY_ROOT == {}, "stop() must forget the cached handles"
