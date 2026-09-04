@@ -56,6 +56,7 @@ import inspect
 import json
 import re
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from collections.abc import Callable
 from contextlib import AsyncExitStack
@@ -92,6 +93,15 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
 #: ``(server, tool) -> bearer token or None``. Satisfied by
 #: :class:`cowork_agent.oauth_bridge.CredentialStash`.
 TokenProvider = Callable[[str], "str | None"]
+
+#: ``(server_name, config) -> None``, called when a refresh came back with a
+#: DIFFERENT refresh token than the one that was spent. The provider has killed
+#: the old one at that moment, so the device's copy is now dead: the executor
+#: uses this to send the new one back to the app (``mcp_credentials``,
+#: docs/WIRE_CONTRACT.md). Rotation is the only event worth reporting — a server
+#: that only issues a new access token has told us nothing the app cannot work
+#: out for itself.
+RotationListener = Callable[[str, "MCPServerConfig"], None]
 
 
 def _read_timeout(seconds: float) -> Any:
@@ -168,10 +178,22 @@ class MCPServerConfig:
     #: ``token_provider`` (the OAuth stash) still wins over this static value, and
     #: the stdio path never sees it. ``None`` -> today's behavior.
     auth_token: str | None = None
-    #: Optional OAuth block for a server that authorizes its own clients:
-    #: ``{"token_url": ..., "client_id": ..., "scopes": [...]}``. The redirect
-    #: URI is never configured here — it is always the backend's public callback
-    #: (§10, :mod:`cowork_agent.oauth_bridge`).
+    #: Optional OAuth block. Two shapes share this field, told apart by their
+    #: keys, because both describe "how this server authorizes":
+    #:
+    #: * The §10 bridge shape, from ``mcp.json``:
+    #:   ``{"token_url": ..., "client_id": ..., "scopes": [...]}``. The redirect
+    #:   URI is never configured here — it is always the backend's public
+    #:   callback (:mod:`cowork_agent.oauth_bridge`).
+    #: * The forwarded device shape, from the app's sealed ``mcp_servers``
+    #:   payload: ``{"token_endpoint": ..., "client_id": ..., "client_secret"?,
+    #:   "refresh_token": ..., "expires_at"?, "resource"?, "scope"?, "issuer"?}``
+    #:   (docs/WIRE_CONTRACT.md). The user already signed in on the device; this
+    #:   is what lets the host mint its own access tokens afterwards.
+    #:
+    #: ``refresh_access_token`` reads the second shape only, and
+    #: :func:`cowork_agent.oauth_bridge.config_token_exchange` reads the first
+    #: only, so a block of one shape is inert in the other's code path.
     oauth: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
     connect_timeout: float = CONNECT_TIMEOUT
@@ -331,6 +353,11 @@ def configs_from_entries(
 #: How long before the stated expiry a token is treated as already dead, so a
 #: call does not race the clock on its way to the server.
 TOKEN_SKEW = timedelta(seconds=30)
+#: The shortest gap between two unforced refreshes of one server. It exists for
+#: a server whose tokens live no longer than :data:`TOKEN_SKEW`: such a token is
+#: "expired" the moment it arrives, and without a floor every single request
+#: would mint another one. A 401 still forces a refresh through this.
+REFRESH_FLOOR = 30.0
 
 
 def _parse_expiry(raw: Any) -> datetime | None:
@@ -447,12 +474,30 @@ def refresh_access_token(
     return token, updated
 
 
+#: A refused credential, as it shows up in a transport error string. ``401`` is
+#: matched only as a standalone word: a plain substring test also fired on a URL
+#: path like ``/mcp/401k-planner`` and on port ``4010``, and a needless refresh
+#: spends the refresh token, which a rotating server then invalidates.
+_UNAUTHORIZED = re.compile(
+    r"(?<!\w)401(?!\w)|unauthorized|invalid_token|invalid_grant", re.IGNORECASE
+)
+
+
 def _looks_unauthorized(error: str | None) -> bool:
-    """Whether a connect error reads as "the server refused this token"."""
-    if not error:
-        return False
-    lowered = error.lower()
-    return "401" in lowered or "unauthorized" in lowered
+    """Whether an error reads as "the server refused this credential"."""
+    return bool(error) and bool(_UNAUTHORIZED.search(error))
+
+
+#: Query parameters are where an API-key connector keeps the user's key: the
+#: app forwards it on the URL rather than as a bearer. Transport errors quote
+#: the URL, and an error string is what ``MCPManager.status`` calls "what the
+#: operator sees", so the values are stripped before an error is recorded.
+_QUERY_VALUE = re.compile(r"([?&][^=&\s]+=)[^&\s]+")
+
+
+def _redact(text: str) -> str:
+    """An error string with any query-parameter values removed."""
+    return _QUERY_VALUE.sub(r"\1<redacted>", text)
 
 
 def load_mcp_config(
@@ -501,14 +546,21 @@ class MCPConnection:
         config: MCPServerConfig,
         *,
         token_provider: TokenProvider | None = None,
+        on_credentials_rotated: RotationListener | None = None,
     ) -> None:
         self.config = config
         self._token_provider = token_provider
+        self._on_rotated = on_credentials_rotated
         #: Serializes token refreshes. Two tool calls that both see an expired
         #: token must not both spend the refresh token — some servers rotate it
         #: and invalidate the old one, so the loser would be left holding a
         #: dead credential.
         self._refresh_lock = threading.Lock()
+        #: When the last successful refresh landed (monotonic). A server that
+        #: issues a very short-lived token — ``expires_in`` at or under the skew
+        #: — would otherwise be "already expired" the instant it answers, and
+        #: every request would spend another refresh token on it.
+        self._refreshed_at: float | None = None
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._session: Any = None
@@ -517,6 +569,10 @@ class MCPConnection:
         self._tools: list[MCPToolInfo] = []
         self._error: str | None = None
         self._closed = False
+        #: True once a handshake has succeeded. It separates "this server is
+        #: unreachable" from "this session dropped": the second is worth
+        #: redialing on the next task, the first only wastes a connect timeout.
+        self._connected_once = False
 
     # -- lifecycle --------------------------------------------------------
 
@@ -531,6 +587,11 @@ class MCPConnection:
     @property
     def tools(self) -> list[MCPToolInfo]:
         return list(self._tools)
+
+    @property
+    def connected_once(self) -> bool:
+        """Whether this server ever completed a handshake."""
+        return self._connected_once
 
     def alive(self) -> bool:
         """The ``check_fn`` behind every tool of this server."""
@@ -618,11 +679,12 @@ class MCPConnection:
                 self._error = "connect timed out"
                 return
             except Exception as exc:  # noqa: BLE001
-                self._error = f"{type(exc).__name__}: {_clip(exc, 300)}"
+                self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
                 return
             self._tools = _tool_infos(listed)
             self._session = session
             self._error = None
+            self._connected_once = True
             self._ready.set()
             # Park. The session stays open until close() sets the stop event, so
             # every tool call reuses this handshake.
@@ -717,14 +779,27 @@ class MCPConnection:
                 return None
             # Another caller may have refreshed while this one waited on the
             # lock; a token that is live again needs no second round trip.
-            if not force and self.config.auth_token and not token_expired(oauth):
-                return self.config.auth_token
+            if not force and self.config.auth_token:
+                if not token_expired(oauth):
+                    return self.config.auth_token
+                minted = self._refreshed_at
+                if minted is not None and time.monotonic() - minted < REFRESH_FLOOR:
+                    return self.config.auth_token
             token, updated = refresh_access_token(oauth)
             if not token:
                 return None
+            rotated = updated.get("refresh_token") != oauth.get("refresh_token")
             self.config.auth_token = token
             self.config.oauth = updated
-            return token
+            self._refreshed_at = time.monotonic()
+        # Outside the lock: the listener writes a frame, and the executor takes
+        # this same lock when it adopts credentials from a task payload.
+        if rotated and self._on_rotated is not None:
+            try:
+                self._on_rotated(self.config.name, self.config)
+            except Exception:  # noqa: BLE001 — reporting must not fail a call
+                pass
+        return token
 
     # -- calls ------------------------------------------------------------
 
@@ -761,7 +836,7 @@ class MCPConnection:
                 "ok": False,
                 "server": self.config.name,
                 "tool": tool,
-                "error": f"{type(exc).__name__}: {_clip(exc, 500)}",
+                "error": _redact(f"{type(exc).__name__}: {_clip(exc, 500)}"),
             }
         return _normalize_result(self.config.name, tool, result)
 
@@ -844,14 +919,20 @@ class MCPManager:
         *,
         errors: list[str] | None = None,
         token_provider: TokenProvider | None = None,
+        on_credentials_rotated: RotationListener | None = None,
         connection_factory: Callable[[MCPServerConfig], MCPConnection] | None = None,
     ) -> None:
         self.configs = list(configs or [])
         self.errors: list[str] = list(errors or [])
         self.connections: dict[str, MCPConnection] = {}
         self._token_provider = token_provider
+        self._on_rotated = on_credentials_rotated
         self._factory = connection_factory or (
-            lambda config: MCPConnection(config, token_provider=token_provider)
+            lambda config: MCPConnection(
+                config,
+                token_provider=token_provider,
+                on_credentials_rotated=on_credentials_rotated,
+            )
         )
         self._registered: set[str] = set()
 
@@ -861,6 +942,7 @@ class MCPManager:
         workspace: str | None,
         *,
         token_provider: TokenProvider | None = None,
+        on_credentials_rotated: RotationListener | None = None,
         connection_factory: Callable[[MCPServerConfig], MCPConnection] | None = None,
     ) -> "MCPManager":
         configs, errors = load_mcp_config(workspace)
@@ -868,6 +950,7 @@ class MCPManager:
             configs,
             errors=errors,
             token_provider=token_provider,
+            on_credentials_rotated=on_credentials_rotated,
             connection_factory=connection_factory,
         )
 
@@ -883,7 +966,11 @@ class MCPManager:
             if not config.enabled:
                 continue
             if config.name in self.connections:
-                status[config.name] = self.connections[config.name].alive()
+                # A manager is cached per session and started again for every
+                # task. A server that died during the last task must get a
+                # chance to come back, or its tools are simply absent from the
+                # prompt for the rest of the session.
+                status[config.name] = self._revive(config.name)
                 continue
             connection = self._factory(config)
             self.connections[config.name] = connection
@@ -891,7 +978,7 @@ class MCPManager:
                 ok = connection.start()
             except Exception as exc:  # noqa: BLE001
                 ok = False
-                connection._error = f"{type(exc).__name__}: {exc}"  # noqa: SLF001
+                connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
             if not ok and self._retry_with_fresh_token(config.name):
                 ok = True
             status[config.name] = ok
@@ -902,7 +989,27 @@ class MCPManager:
                 )
         return status
 
-    def _retry_with_fresh_token(self, server: str) -> bool:
+    def _revive(self, server: str) -> bool:
+        """Whether [server] is usable, redialing it once if it is not.
+
+        Called on an already-known connection. A refused credential is renewed
+        and redialed; a session that dropped after a good handshake is redialed
+        as it is; a server that never answered at all is left alone, because
+        redialing it costs a full connect timeout on every task and it has
+        already had its chance.
+        """
+        connection = self.connections.get(server)
+        if connection is None:
+            return False
+        if connection.alive():
+            return True
+        if self._retry_with_fresh_token(server):
+            return True
+        if connection.connected_once:
+            return self.reconnect(server)
+        return False
+
+    def _retry_with_fresh_token(self, server: str, *, refused: bool = False) -> bool:
         """After a refused handshake, mint a new token and dial again, once.
 
         This is the case the whole forwarded ``oauth`` block exists for: the app
@@ -912,7 +1019,12 @@ class MCPManager:
         other reason is left alone — retrying a 404 achieves nothing.
         """
         connection = self.connections.get(server)
-        if connection is None or not _looks_unauthorized(connection.error):
+        if connection is None:
+            return False
+        # ``refused`` is the caller saying "the server just answered a call with
+        # a 401", which the connection itself cannot know: a tool-call failure
+        # leaves the session up and ``error`` unset.
+        if not refused and not _looks_unauthorized(connection.error):
             return False
         if connection.refresh_token(force=True) is None:
             return False
@@ -977,9 +1089,18 @@ class MCPManager:
         # A long task can outlive the token the session was opened with. If the
         # session went down on a refused handshake, renew and redial before
         # telling the model the tool is gone.
-        if not connection.alive() and self._retry_with_fresh_token(server):
+        if not connection.alive() and self._revive(server):
             connection = self.connections.get(server, connection)
-        return connection.call(tool, arguments)
+        result = connection.call(tool, arguments)
+        # The headers are fixed when the transport is built, so a token that
+        # lapses mid-session cannot be renewed in place — the server answers the
+        # call with a 401 while the session stays up and healthy-looking. That is
+        # the normal case for a run that outlives its token, so it is worth one
+        # renew-and-redial before the model is told the tool failed.
+        if result.get("ok") is False and _looks_unauthorized(result.get("error")):
+            if self._retry_with_fresh_token(server, refused=True):
+                return self.connections.get(server, connection).call(tool, arguments)
+        return result
 
     def reconnect(self, server: str) -> bool:
         """Drop and re-open one server's session.
@@ -1002,7 +1123,7 @@ class MCPManager:
         try:
             ok = connection.start()
         except Exception as exc:  # noqa: BLE001
-            connection._error = f"{type(exc).__name__}: {exc}"  # noqa: SLF001
+            connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
             ok = False
         return ok
 

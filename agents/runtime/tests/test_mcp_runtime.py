@@ -146,21 +146,64 @@ def test_a_dead_server_in_the_config_does_not_stop_the_runtime(workspace):
         loop.mcp.close()
 
 
-def test_oauth_tool_is_registered_only_with_a_session_and_a_server(workspace):
+def test_oauth_tool_is_registered_only_with_a_session_and_an_exchange_server(workspace):
+    """``mcp_oauth_connect`` runs the §10 token EXCHANGE, so it is offered only
+    for a server that declares that form (``oauth.token_url`` + ``client_id``).
+    A plain server, or a device-forwarded oauth block (``token_endpoint`` +
+    ``refresh_token`` — the host refreshes those itself), gets no tool: offering
+    it there only led the model into "no token exchange configured"."""
+    from cowork_agent.mcp_client import STDIO, MCPManager, MCPServerConfig
+
     class Session:
         access_token = "token"
 
         def refresh(self) -> None:
             pass
 
-    write_config(workspace, extra_tools=0)
-    with_session = build(workspace, session=Session())
-    try:
-        assert with_session.registry.has("mcp_oauth_connect")
-    finally:
-        with_session.mcp.close()
+    def records(oauth: dict | None = None) -> MCPManager:
+        return MCPManager(
+            [
+                MCPServerConfig(
+                    name="records",
+                    transport=STDIO,
+                    command=sys.executable,
+                    args=[FAKE_SERVER],
+                    env={"FAKE_MCP_EXTRA_TOOLS": "0"},
+                    connect_timeout=30,
+                    oauth=dict(oauth or {}),
+                )
+            ]
+        )
 
-    without = build(workspace)
+    # A plain server: a session alone does not earn the tool.
+    write_config(workspace, extra_tools=0)
+    plain = build(workspace, session=Session())
+    try:
+        assert not plain.registry.has("mcp_oauth_connect")
+    finally:
+        plain.mcp.close()
+
+    # A device-forwarded oauth block is not an exchange either.
+    device = build(
+        workspace,
+        session=Session(),
+        mcp=records({"token_endpoint": "https://auth.example/token", "refresh_token": "rt"}),
+    )
+    try:
+        assert not device.registry.has("mcp_oauth_connect")
+    finally:
+        device.mcp.close()
+
+    # The exchange form + a session -> the tool.
+    exchange = {"token_url": "https://api.chuk.chat/token", "client_id": "cid"}
+    with_exchange = build(workspace, session=Session(), mcp=records(exchange))
+    try:
+        assert with_exchange.registry.has("mcp_oauth_connect")
+    finally:
+        with_exchange.mcp.close()
+
+    # The exchange form without a session -> still no tool (nobody can pay the flow).
+    without = build(workspace, mcp=records(exchange))
     try:
         assert not without.registry.has("mcp_oauth_connect")
     finally:

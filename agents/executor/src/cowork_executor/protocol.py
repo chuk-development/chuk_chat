@@ -513,6 +513,44 @@ def done_payload(
     return payload
 
 
+def mcp_credentials_payload(
+    *,
+    session_key: str,
+    name: str,
+    url: str,
+    oauth: dict[str, Any],
+    access_token: str | None = None,
+    connector_id: str | None = None,
+    rotated_at: str | None = None,
+) -> dict[str, Any]:
+    """Build a ``mcp_credentials`` frame (docs/WIRE_CONTRACT.md, inbound to the
+    app): the host refreshed a connector and the provider ROTATED its refresh
+    token, so the device's copy is dead. The app overwrites its record's
+    refresh_token / expires_at / access_token (only when ``oauth.client_id``
+    matches its record) and forwards the new token next time.
+
+    Field names are exactly those of the outgoing ``mcp_servers`` entry, so both
+    sides share one projection. ``client_secret`` is never sent back — the device
+    is where it came from. ``id`` is echoed verbatim when the device sent one.
+    """
+    from datetime import UTC, datetime
+
+    clean_oauth = {k: v for k, v in (oauth or {}).items() if k != "client_secret"}
+    payload: dict[str, Any] = {
+        "type": "mcp_credentials",
+        "session_key": session_key,
+        "name": name,
+        "url": url,
+        "oauth": clean_oauth,
+        "rotated_at": rotated_at or datetime.now(UTC).isoformat(),
+    }
+    if connector_id:
+        payload["id"] = connector_id
+    if access_token:
+        payload["access_token"] = access_token
+    return payload
+
+
 def error_payload(message: str) -> dict[str, Any]:
     return {"type": "error", "message": message}
 

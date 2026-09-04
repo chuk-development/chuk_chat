@@ -434,9 +434,20 @@ def build_runtime(
         manager = MCPManager.from_workspace(workspace, token_provider=stash.get)
     if manager is not None:
         register_mcp_tools(registry, manager)
-        # One tool, for every configured server, to run the §10 bridge. Needs the
+        # One tool, for the servers that carry a §10 token EXCHANGE
+        # (``oauth.token_url`` + ``client_id``: the bridge form
+        # ``config_token_exchange`` reads). A device-forwarded oauth block
+        # (``token_endpoint`` + ``refresh_token``, docs/WIRE_CONTRACT.md) is a
+        # different thing — the host refreshes those itself in mcp_client — and
+        # offering ``mcp_oauth_connect`` for it only led the model into "no token
+        # exchange configured". No exchange-form server -> no tool. Needs the
         # account session: the backend holds the pending flow and pays for it.
-        if session is not None and manager.configs:
+        exchange_configs = {
+            c.name: c.oauth
+            for c in manager.configs
+            if c.oauth and c.oauth.get("token_url")
+        }
+        if session is not None and exchange_configs:
             register_oauth_tool(
                 registry,
                 OAuthBridge(),
@@ -445,7 +456,7 @@ def build_runtime(
                 ),
                 stash=stash,
                 exchange=config_token_exchange(
-                    {c.name: c.oauth for c in manager.configs if c.oauth},
+                    exchange_configs,
                     base_url=base_url,
                     http_client=oauth_http_client,
                 ),
