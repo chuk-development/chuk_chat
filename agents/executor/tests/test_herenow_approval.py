@@ -22,7 +22,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from cowork_agent import MockModelClient
+from cowork_agent import MockModelClient, tool_call_response
 from cowork_manager import decode_frames
 from cowork_sandbox import LocalEnvironment
 
@@ -162,7 +162,7 @@ def _start(tmp_path, workspace, model_factory):
 
 def _publish_model():
     return MockModelClient([
-        '<tool_call>{"name":"herenow_publish","arguments":{"path":"site","name":"My Page"}}</tool_call>',
+        tool_call_response(("herenow_publish", {"path": "site", "name": "My Page"})),
         "done",
     ])
 

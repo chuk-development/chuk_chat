@@ -8,9 +8,11 @@ This is the whole platform on one machine, no production relay:
 - a :class:`~cowork_host.party.HostParty` that pairs, provisions the account
   token, and serves tasks through the real :class:`~cowork_executor.Executor`.
 
-For production the model factory is built from the provisioned Supabase token
-(``resolve_backend_model_factory`` reads ``/v1/models_info`` once). Tests inject
-``model_factory_override`` so no credits are spent and nothing hits prod.
+For production the model wiring is built from the provisioned Supabase token
+(``resolve_backend_model_wiring`` reads ``/v1/models_info`` once and returns both
+the default factory and the per-task selector). Tests inject
+``model_factory_override``, which wires no selector, so no credits are spent and
+nothing hits prod even when a task names a model.
 """
 
 from __future__ import annotations
@@ -40,9 +42,10 @@ from cowork_sandbox import BaseEnvironment, make_environment
 
 from cowork_executor import (
     ModelFactory,
+    ModelSelect,
     encode_payload,
     frame_to_b64,
-    resolve_backend_model_factory,
+    resolve_backend_model_wiring,
 )
 
 from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
@@ -431,10 +434,16 @@ class LocalHost:
             return self._containers.environment(self._agent.id)
         return make_environment("local", workdir=self._agent.workspace_dir)
 
-    def _make_model_factory(self, token: dict) -> ModelFactory:
+    def _make_model_wiring(
+        self, token: dict
+    ) -> tuple[ModelFactory, ModelSelect | None]:
+        """Build the default model factory and, in production, the per-task model
+        selector. The mock/override path returns no selector, so an offline run
+        always uses the injected factory and spends no credits regardless of what
+        model a task names."""
         if self._model_factory_override is not None:
             self._log("using injected model factory (no backend, no credits)")
-            return self._model_factory_override
+            return self._model_factory_override, None
         supabase_url = token.get("supabase_url") or self._supabase_url
         anon_key = token.get("anon_key") or self._anon_key
         if not supabase_url or not anon_key:
@@ -452,7 +461,7 @@ class LocalHost:
         # access token to the executor for appSession MCP connectors.
         self._session = session
         self._log("resolving a model from the account (one /v1/models_info call)...")
-        return resolve_backend_model_factory(
+        return resolve_backend_model_wiring(
             session, preferred_model_id=self._model_id
         )
 
@@ -463,7 +472,7 @@ class LocalHost:
         token: dict,
         party: HostParty,
     ) -> TaskServer:
-        model_factory = self._make_model_factory(token)
+        model_factory, model_select = self._make_model_wiring(token)
         environment = self._make_environment()
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
@@ -492,6 +501,7 @@ class LocalHost:
             sealer=sealer,
             environment=environment,
             model_factory=model_factory,
+            model_select=model_select,
             db_path=self._db_path,
             send_frame=party.send_result_frame,
             system_prompt=self._agent.persona or DEFAULT_SYSTEM_PROMPT,

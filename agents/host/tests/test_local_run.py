@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from websockets.sync.client import connect
 
-from cowork_agent import MockModelClient
+from cowork_agent import MockModelClient, tool_call_response
 from cowork_crypto import (
     ApprovedDevices,
     CoworkFrameOpener,
@@ -69,11 +69,10 @@ class AppTrust:
 
 def _scripted_model() -> MockModelClient:
     """First a run_command tool call, then a final answer — the one wire format a
-    real backend model produces (a ``<tool_call>`` block in the content)."""
+    real backend model produces (a native ``tool_calls`` turn)."""
     return MockModelClient(
         [
-            '<tool_call>{"name":"run_command",'
-            '"arguments":{"command":"echo hello > f.txt"}}</tool_call>',
+            tool_call_response(("run_command", {"command": "echo hello > f.txt"})),
             "done",
         ]
     )

@@ -14,11 +14,16 @@ Joins the four foundation packages into one fully local, encrypted path:
 
 from __future__ import annotations
 
-from .backend import make_backend_model_factory, resolve_backend_model_factory
+from .backend import (
+    make_backend_model_factory,
+    make_backend_model_select,
+    resolve_backend_model_factory,
+    resolve_backend_model_wiring,
+)
 from .controller import ControllerSession
 from .room_sender import make_room_task_sender
 from .environment import SandboxEnvironment
-from .executor import Executor, ModelFactory, StreamingModelClient
+from .executor import Executor, ModelFactory, ModelSelect, StreamingModelClient
 from .protocol import (
     INBOUND_METHODS,
     MAX_FILE_BYTES,
@@ -68,6 +73,7 @@ __all__ = [
     "LoopbackEndpoint",
     "MAX_FILE_BYTES",
     "ModelFactory",
+    "ModelSelect",
     "PayloadTooLarge",
     "approval_decision_payload",
     "approval_request_payload",
@@ -102,7 +108,9 @@ __all__ = [
     "room_done_payload",
     "loopback_pair",
     "make_backend_model_factory",
+    "make_backend_model_select",
     "resolve_backend_model_factory",
+    "resolve_backend_model_wiring",
     "task_payload",
     "tool_payload",
 ]

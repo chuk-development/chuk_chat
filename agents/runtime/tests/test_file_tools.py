@@ -81,16 +81,22 @@ def test_list_dir_reports_a_missing_directory(registry):
 
 
 def test_a_write_file_call_from_the_model_lands_on_disk(tmp_path, monkeypatch):
-    """The whole point: a model turn that emits a write_file block creates the
-    file. This is the path that silently did nothing before — the model printed
-    the script and the loop had no file tool to call."""
-    from cowork_agent import LocalEnvironment, MockModelClient, build_runtime
+    """The whole point: a model turn that calls write_file creates the file.
+    This is the path that silently did nothing before — the model printed the
+    script and the loop had no file tool to call."""
+    from cowork_agent import (
+        LocalEnvironment,
+        MockModelClient,
+        build_runtime,
+        tool_call_response,
+    )
 
     monkeypatch.chdir(tmp_path)
     model = MockModelClient(
         [
-            '<tool_call>{"name":"write_file","arguments":'
-            '{"path":"hello.py","content":"print(\'hi\')\\n"}}</tool_call>',
+            tool_call_response(
+                ("write_file", {"path": "hello.py", "content": "print('hi')\n"})
+            ),
             "Wrote `hello.py`.",
         ]
     )

@@ -17,7 +17,7 @@ import pytest
 
 from cowork_agent.environment import LocalEnvironment
 from cowork_agent.loop import KillSwitch, LoopResult, StopReason
-from cowork_agent.model import MockModelClient, response_from_content
+from cowork_agent.model import MockModelClient, tool_call_response
 from cowork_agent.registry import ToolRegistry
 from cowork_agent.runtime import SubagentConfig, build_runtime
 from cowork_agent.state import StateStore
@@ -202,8 +202,12 @@ def test_child_runs_a_real_runtime_isolated_from_the_parent(tmp_path):
     )
     parent_model = MockModelClient(
         [
-            '<tool_call>{"name":"delegate_task","arguments":{"tasks":'
-            '[{"prompt":"summarise the file","title":"kid"}]}}</tool_call>',
+            tool_call_response(
+                (
+                    "delegate_task",
+                    {"tasks": [{"prompt": "summarise the file", "title": "kid"}]},
+                )
+            ),
             "parent is done",
         ]
     )
@@ -256,15 +260,15 @@ def test_max_child_tokens_caps_a_looping_child(tmp_path):
     """A child that never finishes and reports token usage stops at its token
     budget instead of running to max_iterations — the §7.6 cost guard for a
     fan-out the parent has stopped waiting on."""
-    ECHO = '<tool_call>{"name":"echo","arguments":{}}</tool_call>'
-
     class Spender:
         def __init__(self):
             self.calls = 0
 
         def complete(self, messages):
             self.calls += 1
-            r = response_from_content(ECHO)
+            # A native tool call every turn, so the child never reaches a
+            # bare-text answer and only the token budget can stop it.
+            r = tool_call_response(("echo", {}))
             r.raw = dict(r.raw)
             r.raw["usage"] = {"total_tokens": 50}
             return r
@@ -292,8 +296,12 @@ def test_max_child_tokens_caps_a_looping_child(tmp_path):
     )
     parent_model = MockModelClient(
         [
-            '<tool_call>{"name":"delegate_task","arguments":{"tasks":'
-            '[{"prompt":"loop forever","title":"kid"}]}}</tool_call>',
+            tool_call_response(
+                (
+                    "delegate_task",
+                    {"tasks": [{"prompt": "loop forever", "title": "kid"}]},
+                )
+            ),
             "parent is done",
         ]
     )
@@ -1002,12 +1010,9 @@ def test_a_stop_at_the_root_reaches_children_and_grandchildren(tmp_path):
         def complete(self, messages):
             self._turn += 1
             if self._turn == 1:
-                return MockModelClient(
-                    [
-                        '<tool_call>{"name":"delegate_task","arguments":'
-                        '{"tasks":"go one deeper","wait":true}}</tool_call>'
-                    ]
-                ).complete(messages)
+                return tool_call_response(
+                    ("delegate_task", {"tasks": "go one deeper", "wait": True})
+                )
             parked.append("parked")
             release.wait(WAIT_S)
             return MockModelClient(["stopped mid-flight"]).complete(messages)

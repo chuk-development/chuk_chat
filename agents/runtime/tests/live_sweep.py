@@ -1,8 +1,8 @@
-"""Diagnostic sweep: which models actually emit a parseable tool call?
+"""Diagnostic sweep: which models actually call a tool when offered one?
 
-One turn per model, same prompt, same system prompt. Prints per model whether a
-``<tool_call>`` block survived to the client. This is what decides the default
-model until the backend can carry native tool calls.
+One turn per model, same prompt, same system prompt, the same native ``tools``
+array. Prints per model which calls came back on the ``tool_calls`` frame. This
+is what decides the default model.
 
     cd agent && uv run --with pytest python tests/live_sweep.py [model ...]
 """
@@ -25,8 +25,6 @@ from cowork_agent import (  # noqa: E402
     register_builtin_tools,
     resolve_model,
 )
-from cowork_agent.model import extract_tool_calls  # noqa: E402
-
 PROMPT = (
     "Write a small Python test script named test_demo.py in the workspace. "
     "It must print 'cowork ok'. Then run it and report the output."
@@ -54,6 +52,9 @@ def main(argv: list[str]) -> int:
     registry = ToolRegistry()
     register_builtin_tools(registry, LocalEnvironment())
     system_prompt = build_system_prompt(registry, workspace="/tmp/ws")
+    # The schemas travel natively, so every candidate is asked the same way the
+    # runtime asks: one `tools` array, no in-band format.
+    tools = registry.openai_tools()
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": PROMPT},
@@ -76,6 +77,7 @@ def main(argv: list[str]) -> int:
             provider_slug=resolved.provider_slug,
             max_tokens=900,
         )
+        client.set_tools(tools)
         try:
             response = client.complete(messages)
         except Exception as exc:
@@ -85,8 +87,7 @@ def main(argv: list[str]) -> int:
             client.close()
 
         raw = response.raw.get("content", "") or ""
-        _, calls = extract_tool_calls(raw)
-        names = ",".join(c.name for c in calls) or "-"
+        names = ",".join(c.name for c in response.tool_calls) or "-"
         usage = response.raw.get("usage") or {}
         cost = usage.get("cost", 0.0)
         print(

@@ -4,11 +4,9 @@ The loop must execute the command via LocalEnvironment, append every message to
 SQLite, and return the final answer.
 """
 
-import json
-
 from cowork_agent.environment import LocalEnvironment
 from cowork_agent.loop import StopReason
-from cowork_agent.model import MockModelClient
+from cowork_agent.model import MockModelClient, tool_call_response
 from cowork_agent.runtime import build_runtime
 from cowork_agent.state import StateStore
 
@@ -17,14 +15,11 @@ def test_run_command_end_to_end(tmp_path):
     db = str(tmp_path / "run.db")
     marker = tmp_path / "made-by-agent.txt"
 
-    # The tool call travels as a <tool_call> block in the assistant content — the
-    # one wire format. A stringy timeout still exercises registry coercion.
-    run_call = "<tool_call>" + json.dumps(
-        {
-            "name": "run_command",
-            "arguments": {"command": f"echo hello > {marker}", "timeout": "30"},
-        }
-    ) + "</tool_call>"
+    # The tool call arrives as a native ``tool_calls`` entry, never in the
+    # assistant text. A stringy timeout still exercises registry coercion.
+    run_call = tool_call_response(
+        ("run_command", {"command": f"echo hello > {marker}", "timeout": "30"})
+    )
     model = MockModelClient([run_call, "I created the file."])
 
     loop = build_runtime(
@@ -62,7 +57,7 @@ def test_tool_error_is_captured_not_raised(tmp_path):
     # keeps going and still finishes cleanly.
     model = MockModelClient(
         [
-            '<tool_call>{"name":"run_command","arguments":{"command":"exit 3"}}</tool_call>',
+            tool_call_response(("run_command", {"command": "exit 3"})),
             "done anyway",
         ]
     )

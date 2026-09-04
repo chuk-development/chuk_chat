@@ -108,3 +108,49 @@ def test_double_register_rejected():
     except ValueError:
         return
     raise AssertionError("expected ValueError on duplicate register")
+
+
+def test_openai_tools_shape_and_filters():
+    reg = ToolRegistry()
+    reg.register(
+        "write_file",
+        {
+            "type": "object",
+            "description": "write a file",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+        lambda **k: {"ok": True},
+    )
+    # a deferrable tool that gets deferred must be excluded from native tools
+    reg.register(
+        "mcp_thing",
+        {"type": "object", "properties": {}},
+        lambda **k: {"ok": True},
+        deferrable=True,
+    )
+    reg.defer("mcp_thing")
+    # an unavailable tool must be excluded too
+    reg.register(
+        "gated",
+        {"type": "object", "properties": {}},
+        lambda **k: {"ok": True},
+        check_fn=lambda: False,
+    )
+
+    tools = reg.openai_tools()
+    names = [t["function"]["name"] for t in tools]
+    assert names == ["write_file"]  # deferred + unavailable filtered out
+    fn = tools[0]["function"]
+    assert tools[0]["type"] == "function"
+    assert fn["description"] == "write a file"  # top-level description lifted out
+    # parameters is the schema WITHOUT the description key
+    assert "description" not in fn["parameters"]
+    assert fn["parameters"]["required"] == ["path"]
+
+
+def test_openai_tools_empty_schema_gets_object():
+    reg = ToolRegistry()
+    reg.register("noargs", {}, lambda **k: {"ok": True})
+    tools = reg.openai_tools()
+    assert tools[0]["function"]["parameters"] == {"type": "object", "properties": {}}

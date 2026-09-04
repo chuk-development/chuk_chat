@@ -75,6 +75,16 @@ class Message:
     created_at: float
 
 
+def _as_text(content: Any) -> str:
+    """Coerce a stored message ``content`` to text. A string passes through; a
+    dict tool result is compact JSON; ``None`` is empty."""
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    return json.dumps(content, separators=(",", ":"))
+
+
 class StateStore:
     """Append-only SQLite state.
 
@@ -230,6 +240,78 @@ class StateStore:
             )
             for r in rows
         ]
+
+    def replay_events(self, session_id: int) -> list[dict]:
+        """Rebuild the stored transcript as stream events, in the SAME shapes the
+        executor streams live (see ``cowork_executor.protocol``). Every event
+        carries ``"replay": True`` so a client tells a replayed turn from a live
+        one.
+
+        The server is the source of truth. A fresh or reinstalled client
+        reconnects, asks for this list, and rebuilds the whole thread from it. The
+        order is the stored order — by autoincrement id, never a clock.
+
+        One stored row maps to one event, or to none:
+
+        - a ``system`` row is dropped. The system prompt is not part of the
+          thread the user reads.
+        - a ``user`` row becomes a ``user`` event. The live stream has no such
+          event, because the live client wrote that turn itself; a reconnecting
+          client did not, so replay must carry both sides of the thread.
+        - an ``assistant`` row with text becomes a ``delta`` event — the shape a
+          live assistant text chunk uses.
+        - an ``assistant`` row with tool calls becomes one ``tool`` event per
+          call — the shape a live tool event uses. The matching tool-result row
+          fills ``stdout``, so the verbose view shows what the tool returned.
+        - a ``tool`` row is folded into its call's event by ``tool_call_id``. It
+          is not emitted on its own.
+        """
+        conversation = self.get_conversation(session_id)
+        # First pass: index each tool result by the call id it answers, so an
+        # assistant tool call can carry its own output in one event.
+        results: dict[str, str] = {}
+        for message in conversation:
+            content = message.content
+            if content.get("role") == "tool":
+                call_id = str(content.get("tool_call_id", ""))
+                results[call_id] = _as_text(content.get("content"))
+        events: list[dict] = []
+        for message in conversation:
+            content = message.content
+            role = content.get("role")
+            if role in ("system", "tool"):
+                continue
+            if role == "user":
+                events.append(
+                    {"type": "user", "text": _as_text(content.get("content")), "replay": True}
+                )
+                continue
+            # assistant
+            text = content.get("content")
+            if isinstance(text, str) and text.strip():
+                events.append({"type": "delta", "text": text, "replay": True})
+            for call in content.get("tool_calls") or []:
+                if not isinstance(call, dict):
+                    continue
+                fn = call.get("function", {}) or {}
+                args = fn.get("arguments", {})
+                command = (
+                    args if isinstance(args, str)
+                    else json.dumps(args, separators=(",", ":"))
+                )
+                events.append(
+                    {
+                        "type": "tool",
+                        "name": str(fn.get("name", "")),
+                        "command": command,
+                        "exit_code": 0,
+                        "stdout": results.get(str(call.get("id", "")), ""),
+                        "stderr": "",
+                        "timed_out": False,
+                        "replay": True,
+                    }
+                )
+        return events
 
     # -- subagent handles (§7.6) ------------------------------------------
 

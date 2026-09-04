@@ -1,8 +1,9 @@
 """Tests for the context / long-run cost ladder (§7.3).
 
 Every guarantee the plan states is pinned here: the trigger fires on prompt
-tokens only and not a token earlier, tier-1 dedup is losslessly referenceable, a
-tool_call/tool_result pair is never split, the head is verbatim, the tail holds a
+tokens only and not a token earlier, tier-1 dedup is losslessly referenceable, an
+assistant tool-call turn is never split from its tool result, the head is
+verbatim, the tail holds a
 *token* budget, the anti-thrashing guard bites after two lean passes, tier 3
 updates the summary instead of regenerating it, and no secret survives into the
 summary.
@@ -65,7 +66,9 @@ def _sysuser() -> list[dict]:
 
 
 def _tool_round(index: int, payload: str, *, name: str = "read_file") -> list[dict]:
-    """One assistant tool_call plus its matching tool result."""
+    """One assistant tool-call turn plus its matching tool result. The wire
+    fields are the native OpenAI ones: ``tool_calls`` on the assistant message,
+    ``tool_call_id`` on the result that answers it."""
     return [
         {
             "role": "assistant",
@@ -126,7 +129,7 @@ def _threshold_ladder() -> ContextLadder:
     )
 
 
-# Message framing (role, name, the assistant tool_call turn) costs ~58 tokens on
+# Message framing (role, name, the assistant tool-call turn) costs ~58 tokens on
 # top of the payload, so these two sizes straddle the 240-token trigger exactly.
 _UNDER_THRESHOLD = "x" * 700   # -> 233 estimated tokens
 _OVER_THRESHOLD = "x" * 800    # -> 258 estimated tokens
@@ -404,7 +407,7 @@ def test_tool_call_and_result_are_never_split():
 
 
 def test_pairs_intact_when_the_head_boundary_lands_mid_pair():
-    # head_messages=3 would cut between the assistant tool_call and its result.
+    # head_messages=3 would cut between the assistant tool-call turn and its result.
     messages = _long_history(8)
     ladder = ContextLadder(
         config=LadderConfig(
@@ -420,19 +423,19 @@ def test_pairs_intact_when_the_head_boundary_lands_mid_pair():
 
 
 def _assert_pairs_intact(messages: list[dict]) -> None:
-    """Every tool result is preceded by its assistant tool_call, and every
-    assistant tool_call is followed by a tool result."""
+    """Every tool result is preceded by the assistant turn that called it, and
+    every assistant tool-call turn is followed by a tool result."""
     for i, message in enumerate(messages):
         if message.get("role") == "tool":
             assert i > 0, "orphaned tool result at position 0"
             previous = messages[i - 1]
             assert previous.get("role") in ("assistant", "tool"), (
-                f"tool result at {i} lost its tool_call (prev={previous.get('role')})"
+                f"tool result at {i} lost its caller (prev={previous.get('role')})"
             )
         if message.get("tool_calls"):
-            assert i + 1 < len(messages), "trailing tool_call with no result"
+            assert i + 1 < len(messages), "trailing tool-call turn with no result"
             assert messages[i + 1].get("role") == "tool", (
-                f"tool_call at {i} lost its result"
+                f"tool-call turn at {i} lost its result"
             )
 
 
@@ -603,7 +606,7 @@ def _big_result(tag: str) -> str:
 def test_loop_sends_the_compressed_payload_and_keeps_the_full_history(tmp_path):
     """The store stays the source of truth; only the wire payload is compressed."""
     from cowork_agent.loop import AgentLoop, IterationBudget
-    from cowork_agent.model import MockModelClient
+    from cowork_agent.model import MockModelClient, tool_call_response
     from cowork_agent.registry import ToolRegistry
     from cowork_agent.state import StateStore
 
@@ -613,7 +616,7 @@ def test_loop_sends_the_compressed_payload_and_keeps_the_full_history(tmp_path):
         "peek", {"type": "object", "properties": {}}, lambda: payload
     )
 
-    call = '<tool_call>{"name":"peek","arguments":{}}</tool_call>'
+    call = tool_call_response(("peek", {}))
     model = MockModelClient([call, call, call, "done"])
     store = StateStore(str(tmp_path / "s.db"))
     ladder = ContextLadder(

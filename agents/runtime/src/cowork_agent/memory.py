@@ -20,8 +20,8 @@ Two layers, one facade (:class:`MemoryStore`):
    into the system prompt via :meth:`MemoryStore.snapshot` — the same injection
    seam the old store used, but just the concatenated file text, no search. They
    are attacker-reachable (a user can edit them, a tool can write them), so the
-   text is scanned and neutralized before it reaches the prompt: a
-   ``<tool_call>`` block or an instruction-override line lands as inert text.
+   text is scanned and neutralized before it reaches the prompt: chat-template
+   markup or an instruction-override line lands as inert text.
 
 The privacy contract is unchanged: nothing leaves the host except model calls to
 our own ``api.chuk.chat`` (the writer over the socket, the embedder over
@@ -94,10 +94,11 @@ class MemoryToolError(ValueError):
 
 # -- injection / exfil scan (applied to static markdown before injection) ---
 
-# Tags that must never reach the model as live markup. `<tool_call>` is the one
-# format the runtime parses (see cowork_agent.model.extract_tool_calls), so a
-# persona file able to emit one would be arbitrary tool execution by whoever got
-# text into that file.
+# Tags that must never reach the model as live markup. Tool calls travel
+# natively now, so none of these is a protocol the runtime itself parses — but a
+# provider or a chat template may still act on them, and the cost of neutralizing
+# them is one regex. Defense in depth: text a user or a tool wrote into a persona
+# file must never become markup the model obeys.
 _LIVE_TAGS = ("tool_call", "tool_result", "im_start", "im_end", "system")
 _TAG_OPEN = re.compile(
     r"<(?=/?\s*(?:" + "|".join(_LIVE_TAGS) + r")\b)", re.IGNORECASE

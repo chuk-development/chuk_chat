@@ -68,3 +68,62 @@ def test_concurrent_writers_do_not_lose_rows(tmp_path):
         t.join()
 
     assert len(store.get_conversation(sid)) == 80
+
+
+def test_replay_events_rebuild_the_thread_in_live_shapes(tmp_path):
+    store = StateStore(str(tmp_path / "s.db"))
+    sid = store.route("session-A")
+    # A whole turn: system seed, user ask, assistant tool call, its result, and
+    # the assistant's final text answer.
+    store.append_message(sid, "system", {"role": "system", "content": "be quiet"})
+    store.append_message(sid, "user", {"role": "user", "content": "make a file"})
+    store.append_message(
+        sid,
+        "assistant",
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "write_file", "arguments": {"path": "a.txt"}},
+                }
+            ],
+        },
+    )
+    store.append_message(
+        sid,
+        "tool",
+        {"role": "tool", "tool_call_id": "call_1", "name": "write_file", "content": "wrote a.txt"},
+    )
+    store.append_message(sid, "assistant", {"role": "assistant", "content": "done, it is a.txt"})
+
+    events = store.replay_events(sid)
+    # System is dropped; the other four rows map to four events, in stored order.
+    assert [e["type"] for e in events] == ["user", "tool", "delta"]
+    # Every event is marked as a replay, so a client never mistakes it for live.
+    assert all(e["replay"] is True for e in events)
+
+    user, tool, delta = events
+    assert user["text"] == "make a file"
+    # The tool event uses the live tool shape; its result fills stdout.
+    assert tool["name"] == "write_file"
+    assert tool["stdout"] == "wrote a.txt"
+    assert tool["exit_code"] == 0 and tool["timed_out"] is False
+    assert delta["text"] == "done, it is a.txt"
+
+
+def test_replay_events_survive_a_reopen(tmp_path):
+    path = str(tmp_path / "s.db")
+    store = StateStore(path)
+    sid = store.route("session-A")
+    store.append_message(sid, "user", {"role": "user", "content": "hi"})
+    store.append_message(sid, "assistant", {"role": "assistant", "content": "there"})
+    store.close()
+
+    # A reinstalled client: a fresh store on the same file replays the thread.
+    store2 = StateStore(path)
+    events = store2.replay_events(store2.route("session-A"))
+    assert [e["type"] for e in events] == ["user", "delta"]
+    assert events[0]["text"] == "hi"
+    assert events[1]["text"] == "there"

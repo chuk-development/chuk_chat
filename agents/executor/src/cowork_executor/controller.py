@@ -62,10 +62,33 @@ class ControllerSession:
         self._inbox: dict[str, list[dict[str, Any]]] = {}
         self._closed: set[str] = set()
 
-    def send_task(self, prompt: str, session_key: str = "default") -> str:
-        """Seal and dispatch a task. Returns its ``requestId``."""
+    def send_task(
+        self,
+        prompt: str,
+        session_key: str = "default",
+        *,
+        model: str | None = None,
+        provider: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> str:
+        """Seal and dispatch a task. Returns its ``requestId``.
+
+        ``model`` / ``provider`` / ``reasoning_effort`` optionally name the model
+        the host runs this task on and how hard it thinks; absent, the host uses
+        its default model and default effort.
+        """
         request_id = f"task-{next(self._ids)}"
-        sealed = self._sealer.seal(encode_payload(task_payload(prompt, session_key)))
+        sealed = self._sealer.seal(
+            encode_payload(
+                task_payload(
+                    prompt,
+                    session_key,
+                    model=model,
+                    provider=provider,
+                    reasoning_effort=reasoning_effort,
+                )
+            )
+        )
         envelope = make_request(
             METHOD_RUN_TASK,
             {"frame": frame_to_b64(sealed.to_bytes())},

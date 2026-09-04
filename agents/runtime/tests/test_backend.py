@@ -148,12 +148,20 @@ def test_reasoning_is_separate_channel_not_folded_into_text():
         server.stop()
 
 
-def test_tool_call_parsed_from_content_stream():
+def test_content_is_never_parsed_for_calls():
+    """No text fallback. A turn is a tool-call turn only when the server sent a
+    `tool_calls` frame; content that merely *looks* like a call — a name and an
+    argument object — is the assistant's answer text and is delivered verbatim.
+
+    This is the whole point of the native migration: one protocol, on its own
+    frame, so an answer that quotes JSON can never be executed by accident.
+    """
+    shaped_like_a_call = '{"name":"run_command","arguments":{"command":"ls"}}'
+
     def script(message, payload):
-        block = '<tool_call>{"name":"run_command","arguments":{"command":"ls"}}</tool_call>'
         return [
-            {"kind": "content", "data": "running "},
-            {"kind": "content", "data": block},
+            {"kind": "content", "data": "the call would be "},
+            {"kind": "content", "data": shaped_like_a_call},
             {"kind": "done"},
         ]
 
@@ -161,10 +169,9 @@ def test_tool_call_parsed_from_content_stream():
     try:
         client = _client(server, _session())
         resp = client.complete([{"role": "user", "content": "list files"}])
-        assert resp.has_tool_calls
-        assert resp.tool_calls[0].name == "run_command"
-        assert resp.tool_calls[0].arguments == {"command": "ls"}
-        assert resp.text == "running"  # the <tool_call> block is stripped
+        assert not resp.has_tool_calls
+        assert resp.text == "the call would be " + shaped_like_a_call
+        assert resp.raw.get("native") is False
         client.close()
     finally:
         server.stop()
@@ -218,6 +225,144 @@ def test_payload_carries_system_prompt_history_and_params():
             {"role": "user", "content": "first"},
             {"role": "assistant", "content": "prior answer"},
         ]
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_native_tools_sent_and_tool_calls_frame_parsed():
+    """With tools declared, the payload carries them and a `tool_calls` frame is
+    parsed into structured calls. The content of the same turn stays the
+    assistant's interim text — the two channels never mix."""
+    seen = {}
+
+    def script(message, payload):
+        seen.update(payload)
+        return [
+            {"kind": "content", "data": "sure"},
+            {
+                "kind": "tool_calls",
+                "data": [
+                    {
+                        "id": "call_9",
+                        "type": "function",
+                        "function": {
+                            "name": "run_command",
+                            "arguments": '{"command":"ls"}',
+                        },
+                    }
+                ],
+            },
+            {"kind": "done"},
+        ]
+
+    server = MockWsServer(script, valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        client.set_tools(
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "run_command",
+                        "description": "run a shell command",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"command": {"type": "string"}},
+                            "required": ["command"],
+                        },
+                    },
+                }
+            ]
+        )
+        resp = client.complete([{"role": "user", "content": "list files"}])
+        # tools travelled on the wire — presence is what enables native mode
+        assert seen["tools"][0]["function"]["name"] == "run_command"
+        # the tool_calls frame is the only place a call can come from
+        assert resp.has_tool_calls
+        assert resp.tool_calls[0].id == "call_9"
+        assert resp.tool_calls[0].name == "run_command"
+        assert resp.tool_calls[0].arguments == {"command": "ls"}
+        assert resp.text == "sure"
+        assert resp.raw.get("native") is True
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_native_history_roundtrip_and_empty_message_after_tools():
+    """A stored assistant tool_calls turn + its tool result serialise to native
+    OpenAI history (arguments as a JSON string, tool_call_id kept), and the newest
+    `message` is empty because the tool results are the model's next input."""
+    seen = {}
+
+    def script(message, payload):
+        seen.update(payload)
+        return [{"kind": "content", "data": "done"}, {"kind": "done"}]
+
+    server = MockWsServer(script, valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        client.complete(
+            [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "do it"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "run_command", "arguments": {"command": "ls"}},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call_1",
+                    "name": "run_command",
+                    "content": {"stdout": "a\nb"},
+                },
+            ]
+        )
+        assert seen["message"] == ""  # tool results are the input, not a user turn
+        hist = seen["history"]
+        assert hist[0] == {"role": "user", "content": "do it"}
+        assistant = hist[1]
+        assert assistant["role"] == "assistant"
+        assert assistant["content"] is None  # tool-calls-only turn, like chuk
+        # arguments serialised to a JSON STRING on the wire, not a dict
+        assert assistant["tool_calls"][0]["function"]["arguments"] == '{"command":"ls"}'
+        assert assistant["tool_calls"][0]["id"] == "call_1"
+        tool_turn = hist[2]
+        assert tool_turn["role"] == "tool"
+        assert tool_turn["tool_call_id"] == "call_1"
+        assert isinstance(tool_turn["content"], str)  # dict result stringified
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_malformed_tool_call_arguments_fall_back_to_empty():
+    """Providers emit truncated JSON in arguments; a bad string must not raise."""
+
+    def script(message, payload):
+        return [
+            {
+                "kind": "tool_calls",
+                "data": [
+                    {"id": "c1", "type": "function", "function": {"name": "x", "arguments": "{not json"}},
+                ],
+            },
+            {"kind": "done"},
+        ]
+
+    server = MockWsServer(script, valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        resp = client.complete([{"role": "user", "content": "go"}])
+        assert resp.tool_calls[0].name == "x"
+        assert resp.tool_calls[0].arguments == {}
         client.close()
     finally:
         server.stop()

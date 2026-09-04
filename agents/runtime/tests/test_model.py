@@ -1,9 +1,8 @@
 from cowork_agent.model import (
     MockModelClient,
     ModelResponse,
-    extract_tool_calls,
     parse_openai_response,
-    response_from_content,
+    tool_call_response,
 )
 
 
@@ -43,6 +42,47 @@ def test_parse_tool_calls_with_json_string_args():
     assert call.arguments == {"command": "echo hi", "timeout": 5}
 
 
+def test_parse_tool_calls_with_dict_args():
+    """Some providers hand back the argument object already decoded."""
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "call_a",
+                            "function": {"name": "write_file", "arguments": {"path": "a"}},
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    resp = parse_openai_response(data)
+    assert resp.tool_calls[0].arguments == {"path": "a"}
+
+
+def test_parse_several_tool_calls_keeps_order_and_ids():
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "content": "on it",
+                    "tool_calls": [
+                        {"id": "c1", "function": {"name": "a", "arguments": "{}"}},
+                        {"id": "c2", "function": {"name": "b", "arguments": '{"x":1}'}},
+                    ],
+                }
+            }
+        ]
+    }
+    resp = parse_openai_response(data)
+    assert resp.text == "on it"
+    assert [c.name for c in resp.tool_calls] == ["a", "b"]
+    assert [c.id for c in resp.tool_calls] == ["c1", "c2"]
+    assert resp.tool_calls[1].arguments == {"x": 1}
+
+
 def test_parse_tolerates_bad_json_args():
     data = {
         "choices": [
@@ -69,61 +109,39 @@ def test_mock_records_calls_and_replays_in_order():
     assert mock.complete([]).text == "(mock exhausted)"
 
 
-# -- <tool_call>-in-content protocol (shared by mock and real backend) --------
+# -- native tool calls are the one protocol ----------------------------------
 
 
-def test_extract_bare_text_has_no_calls():
-    clean, calls = extract_tool_calls("just an answer")
-    assert clean == "just an answer"
-    assert calls == []
-
-
-def test_extract_single_tool_call_strips_block():
-    content = (
-        'here goes <tool_call>{"name":"run_command",'
-        '"arguments":{"command":"ls"}}</tool_call>'
-    )
-    clean, calls = extract_tool_calls(content)
-    assert clean == "here goes"
-    assert len(calls) == 1
-    assert calls[0].name == "run_command"
-    assert calls[0].arguments == {"command": "ls"}
-    assert calls[0].id == "call_0"
-
-
-def test_extract_multiple_tool_calls():
-    content = (
-        '<tool_call>{"name":"a","arguments":{}}</tool_call>'
-        '<tool_call>{"name":"b","arguments":{"x":1}}</tool_call>'
-    )
-    clean, calls = extract_tool_calls(content)
-    assert clean == ""
-    assert [c.name for c in calls] == ["a", "b"]
-    assert calls[1].arguments == {"x": 1}
-
-
-def test_extract_repairs_missing_brace_and_trailing_comma():
-    # Missing closing brace.
-    _, calls = extract_tool_calls('<tool_call>{"name":"t","arguments":{"q":"y"}</tool_call>')
-    assert calls and calls[0].arguments == {"q": "y"}
-    # Trailing comma.
-    _, calls2 = extract_tool_calls('<tool_call>{"name":"t","arguments":{"q":"y"},}</tool_call>')
-    assert calls2 and calls2[0].name == "t"
-
-
-def test_extract_skips_nameless_or_unparseable():
-    _, calls = extract_tool_calls('<tool_call>{"arguments":{}}</tool_call>')
-    assert calls == []
-    _, calls2 = extract_tool_calls("<tool_call>not json at all</tool_call>")
-    assert calls2 == []
-
-
-def test_response_from_content_is_structural():
-    # A tool-only turn -> no visible text, has tool calls (loop continues).
-    resp = response_from_content('<tool_call>{"name":"x","arguments":{}}</tool_call>')
-    assert resp.text is None
+def test_tool_call_response_builds_a_native_turn():
+    resp = tool_call_response(("run_command", {"command": "ls"}))
     assert resp.has_tool_calls
-    # A bare-text turn -> final answer, no calls (loop stops).
-    resp2 = response_from_content("the answer")
-    assert resp2.text == "the answer"
-    assert not resp2.has_tool_calls
+    assert resp.text is None
+    call = resp.tool_calls[0]
+    assert (call.id, call.name, call.arguments) == ("call_0", "run_command", {"command": "ls"})
+
+
+def test_tool_call_response_numbers_several_calls():
+    resp = tool_call_response(("a", {}), ("b", {"x": 1}), text="doing both")
+    assert resp.text == "doing both"
+    assert [c.id for c in resp.tool_calls] == ["call_0", "call_1"]
+    assert [c.name for c in resp.tool_calls] == ["a", "b"]
+    assert resp.tool_calls[1].arguments == {"x": 1}
+
+
+def test_mock_string_turn_is_a_final_answer_not_a_protocol():
+    """A scripted string is prose. Even text shaped exactly like a call — a name
+    and an argument object — is answer text: there is no in-band call format
+    left to parse, so nothing about a string can continue the loop."""
+    text = 'call {"name": "run_command", "arguments": {"command": "ls"}} yourself'
+    mock = MockModelClient([text])
+    resp = mock.complete([])
+    assert not resp.has_tool_calls
+    assert resp.text == text
+
+
+def test_mock_passes_a_scripted_tool_turn_through():
+    scripted = tool_call_response(("write_file", {"path": "a.py", "content": "x"}))
+    mock = MockModelClient([scripted, "done"])
+    first = mock.complete([])
+    assert first.tool_calls[0].name == "write_file"
+    assert mock.complete([]).text == "done"

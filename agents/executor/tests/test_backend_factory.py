@@ -3,8 +3,8 @@
 encrypted Executor against a local mock ``/v2/ws`` server. No real credits.
 
 Proves the prod wiring end to end: the executor opens an encrypted task, the
-backend client authenticates over ``/v2/ws``, streams a ``<tool_call>`` in its
-content, the sandbox runs the command, and the controller receives encrypted
+backend client authenticates over ``/v2/ws``, relays a native ``tool_calls``
+frame, the sandbox runs the command, and the controller receives encrypted
 result frames — all without the mock model used elsewhere.
 """
 
@@ -55,12 +55,21 @@ class _MockWsServer:
                     continue
                 req_id = frame["req_id"]
                 if chat_count == 0:
-                    block = (
-                        '<tool_call>{"name":"run_command","arguments":'
-                        '{"command":"echo hi > out.txt"}}</tool_call>'
-                    )
+                    # Native function calling: the server relays complete OpenAI
+                    # call objects on a ``tool_calls`` frame. ``arguments`` is a
+                    # JSON *string*, exactly as a provider streams it.
+                    call = {
+                        "id": "call_0",
+                        "type": "function",
+                        "function": {
+                            "name": "run_command",
+                            "arguments": json.dumps(
+                                {"command": "echo hi > out.txt"}
+                            ),
+                        },
+                    }
                     outs = [
-                        {"kind": "content", "data": block},
+                        {"kind": "tool_calls", "data": [call]},
                         {"kind": "done"},
                     ]
                 else:

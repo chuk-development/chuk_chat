@@ -1,25 +1,25 @@
 """Tool Search / progressive disclosure (§7.2).
 
-Every tool schema in the prompt is paid for on **every** round of **every**
-session. A handful of core tools is cheap. Twelve MCP servers with twenty tools
-each is not: that surface can pass fifty thousand tokens, which is spent before
-the model has read the task.
+Every declared tool schema is paid for on **every** round of **every** session:
+the request's ``tools`` array is re-sent with each turn. A handful of core tools
+is cheap. Twelve MCP servers with twenty tools each is not: that surface can pass
+fifty thousand tokens, which is spent before the model has read the task.
 
 So the surface is measured against the **effective input budget**
 (``context_window − reserved_output``, the same figure the context ladder uses,
-§7.3). Above ~10 % of it, every **deferrable** tool leaves the prompt and three
-bridge tools take its place:
+§7.3). Above ~10 % of it, every **deferrable** tool stops being declared and
+three bridge tools take its place:
 
 - ``tool_search(query)`` — find tools by keyword, get name + one line each.
-- ``tool_describe(name)`` — the full schema of one tool, verbatim the block the
-  prompt would have carried.
+- ``tool_describe(name)`` — the full documentation of one tool, exactly as good
+  as if it had been declared.
 - ``tool_call(name, arguments)`` — run it.
 
 Two invariants:
 
 1. **Core tools are never deferred.** ``run_command``, the file tools,
    ``memory``, ``skill``, ``web_search``, ``web_fetch``, the terminal set and the
-   subagent set stay in the prompt at every size. They are used in almost every
+   subagent set stay declared at every size. They are used in almost every
    task, so hiding them would cost two extra round trips to save nothing. The
    guarantee is structural, not a list-check-at-render-time: a tool can only be
    deferred if it registered ``deferrable=True``
@@ -27,13 +27,18 @@ Two invariants:
    only :mod:`cowork_agent.mcp_client` does that. :data:`CORE_TOOLS` below is a
    second belt — a name on it is refused even if some future caller marks it
    deferrable.
-2. **Deferral is prompt-only.** The tool stays registered and callable;
+2. **Deferral is declaration-only.** The tool stays registered and callable;
    ``tool_call`` dispatches it through the same registry as any direct call, so
    there is no second execution path to keep in sync (journaling, arg coercion
    and the bounded error envelope all still apply).
 
-The measurement is done on :func:`cowork_agent.prompt.render_tool_block`, the
-same renderer the prompt uses, so the reported saving is the real one.
+The measurement is done on
+:meth:`cowork_agent.registry.ToolRegistry.openai_tool` — the *native* schema
+JSON, byte for byte what goes on the wire in the request's ``tools`` array — so
+the reported saving is the real one. It used to be measured on the prompt text
+of the tool docs; that stopped being what the model is billed for when tool
+calling went native, and a threshold measured against text nobody sends would
+defer at the wrong size.
 """
 
 from __future__ import annotations
@@ -102,9 +107,9 @@ _WORD = re.compile(r"[a-z0-9]+")
 TOOL_SEARCH_SCHEMA = {
     "type": "object",
     "description": (
-        "Find a tool by keyword. Many tools are not listed above to save room; "
-        "this searches all of them and returns name plus one line each. Then "
-        "call `tool_describe` for the arguments and `tool_call` to run it."
+        "Find a tool by keyword. Many tools are not in your tool list, to save "
+        "room; this searches all of them and returns name plus one line each. "
+        "Then call `tool_describe` for the arguments and `tool_call` to run it."
     ),
     "properties": {
         "query": {
@@ -135,9 +140,9 @@ TOOL_DESCRIBE_SCHEMA = {
 TOOL_CALL_SCHEMA = {
     "type": "object",
     "description": (
-        "Run a tool that is not listed above. `name` is the exact tool name "
-        "from `tool_search`, `arguments` is the argument object for it. Tools "
-        "that ARE listed above you call directly, not through this."
+        "Run a tool that is not in your tool list. `name` is the exact tool "
+        "name from `tool_search`, `arguments` is the argument object for it. "
+        "Tools that ARE in your tool list you call directly, not through this."
     ),
     "properties": {
         "name": {"type": "string", "description": "Exact tool name."},
@@ -160,10 +165,14 @@ def _clip(text: Any, cap: int) -> str:
 
 
 def tool_doc_tokens(registry: ToolRegistry, names: list[str] | None = None) -> int:
-    """Prompt tokens the given tools' documentation costs.
+    """Input tokens the given tools' *declarations* cost, per round.
 
-    ``names`` defaults to everything currently *visible*: available and not
-    deferred. Unavailable tools are skipped because they are not in the prompt.
+    Measured on the native OpenAI function JSON — the exact bytes the request's
+    ``tools`` array carries — not on any prose rendering of it. The JSON is
+    serialized compactly, the way it travels.
+
+    ``names`` defaults to everything currently *offered*: available and not
+    deferred. Unavailable tools are skipped because they are never declared.
     """
     if names is None:
         names = [
@@ -175,7 +184,8 @@ def tool_doc_tokens(registry: ToolRegistry, names: list[str] | None = None) -> i
     for name in names:
         if not registry.has(name):
             continue
-        total += estimate_tokens(render_tool_block(name, registry.spec(name).schema))
+        entry = registry.openai_tool(name)
+        total += estimate_tokens(json.dumps(entry, separators=(",", ":")))
     return total
 
 
@@ -274,8 +284,8 @@ def make_tool_describe_handler(registry: ToolRegistry):
         return {
             "ok": True,
             "name": key,
-            # The same block the prompt would have carried, so nothing is lost
-            # by having deferred it.
+            # Everything the native declaration would have carried, in prose, so
+            # nothing is lost by having deferred it.
             "documentation": render_tool_block(key, registry.spec(key).schema),
             "schema": registry.spec(key).schema or {},
         }
@@ -296,7 +306,7 @@ def make_tool_call_handler(registry: ToolRegistry):
             return {
                 "ok": False,
                 "error": (
-                    f"{key} is listed in your prompt — call it directly, "
+                    f"{key} is in your tool list — call it directly, "
                     "not through tool_call."
                 ),
             }
@@ -350,9 +360,9 @@ def apply_tool_search(
         if name not in CORE_TOOLS and registry.available(name)
     ]
     deferrable_tokens = tool_doc_tokens(registry, candidates)
-    # The baseline is the prompt *without* tool search: every visible tool, minus
-    # the three bridge tools, which only exist because of it. Excluding them
-    # keeps the reported saving honest when this runs a second time.
+    # The baseline is the tool set *without* tool search: every offered tool,
+    # minus the three bridge tools, which only exist because of it. Excluding
+    # them keeps the reported saving honest when this runs a second time.
     tokens_before = tool_doc_tokens(
         registry,
         [

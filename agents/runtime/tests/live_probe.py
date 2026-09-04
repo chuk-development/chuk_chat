@@ -1,10 +1,11 @@
 """Diagnostic: one real model turn, raw content dumped.
 
 Not a test — a probe. It answers the only question that matters when the model
-refuses to call a tool: *what did it actually emit?* A model trained on another
-tool-call format (Harmony channels, DeepSeek tokens, XML attributes) produces
-text that our ``<tool_call>`` parser silently drops, and the loop then treats a
-tool-only turn as a final answer.
+refuses to call a tool: *what did it actually emit?* A model that ignores the
+native ``tools`` array and narrates its intent in the content instead produces a
+turn with no calls, and the loop then treats that intent as a final answer. The
+probe dumps content, reasoning and the parsed calls side by side, so which of
+the three happened is visible at a glance.
 
     cd agent && uv run python tests/live_probe.py
 """
@@ -27,8 +28,6 @@ from cowork_agent import (  # noqa: E402
     register_builtin_tools,
     resolve_model,
 )
-from cowork_agent.model import extract_tool_calls  # noqa: E402
-
 PROMPT = (
     "Write a small Python test script named test_demo.py in the workspace. "
     "It must print 'cowork ok'. Then run it and report the output."
@@ -54,6 +53,9 @@ def main() -> int:
         provider_slug=resolved.provider_slug,
         max_tokens=1024,
     )
+    # Native tool calling is the one protocol: hand over the schemas the way the
+    # runtime does, or the probe measures a question nobody asks.
+    client.set_tools(registry.openai_tools())
     response = client.complete(
         [
             {"role": "system", "content": system_prompt},
@@ -69,8 +71,8 @@ def main() -> int:
     print("\n--- reasoning ---")
     print(reasoning[:2000] if reasoning else "(none)")
     print("\n--- parsed ---")
-    _, calls = extract_tool_calls(raw)
-    print(f"tool calls parsed: {[c.name for c in calls]}")
+    print(f"native tool_calls frame used: {response.raw.get('native')}")
+    print(f"tool calls: {[(c.name, c.arguments) for c in response.tool_calls]}")
     print(f"usage: {response.raw.get('usage')}")
     return 0
 

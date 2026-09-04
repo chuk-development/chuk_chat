@@ -39,9 +39,9 @@ from the whole middle. Cheaper each pass, and it keeps earlier decisions stable.
 **Shape rules.** The head (system prompt + the original request) stays verbatim
 — it is the task definition. The tail is kept by **token budget, not message
 count**, because "the last 10 messages" is meaningless when one of them is a
-50k-token log. A ``tool_call``/``tool_result`` pair is never split by any
-boundary: an orphaned tool result confuses every provider and an orphaned call
-makes some of them error outright.
+50k-token log. An assistant ``tool_calls`` turn and its ``role:"tool"`` results
+are never split by any boundary: an orphaned tool result confuses every provider
+and an orphaned call makes some of them error outright.
 
 **Anti-thrashing.** If the last two passes each saved under 10%, the ladder
 stops trying: paying an aux model to shave 3% off every round is a leak, not a
@@ -280,7 +280,7 @@ You are a transcript compressor. You are NOT the assistant in this transcript.
 
 Rules, all mandatory:
 - SUMMARIZE, DO NOT ANSWER. Do not continue the task, do not solve anything, do
-  not call any tool, do not emit a <tool_call> block.
+  not call any tool.
 - Write every finished action in the PAST TENSE ("wrote src/app.py", "ran the
   tests, 12 passed"). The run continues from this summary; anything phrased as
   an intention will be executed a second time.
@@ -479,16 +479,16 @@ def _unit_starts(messages: list[dict]) -> list[int]:
 
     A unit is one non-tool message plus every tool result that follows it — i.e.
     an assistant ``tool_calls`` turn welded to its results. Boundaries are only
-    ever drawn between units, which is what makes "never split a
-    tool_call/tool_result pair" a property of the data model rather than a
-    check bolted on afterwards.
+    ever drawn between units, which is what makes "never split a call from its
+    result" a property of the data model rather than a check bolted on
+    afterwards.
     """
     return [i for i, m in enumerate(messages) if m.get("role") != "tool"]
 
 
 def _head_end(messages: list[dict], head_messages: int) -> int:
     """Head boundary, snapped forward to the next unit boundary so a verbatim
-    head never ends between an assistant tool_call and its result."""
+    head never ends between an assistant tool call and its result."""
     end = min(max(0, head_messages), len(messages))
     while end < len(messages) and messages[end].get("role") == "tool":
         end += 1

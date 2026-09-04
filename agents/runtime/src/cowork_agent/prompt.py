@@ -1,18 +1,22 @@
 """The agent instructions (§7.1 / §7.2).
 
-The model only calls tools if the prompt tells it that tools exist, in which
-format to call them, and that printing a file is not the same as writing one.
-The first live run failed exactly there: the host seeded a one-line persona, the
-model answered with a Python file in a code fence, and nothing was ever written
-to disk.
+The model only calls tools if the prompt tells it that tools exist and that
+printing a file is not the same as writing one. The first live run failed
+exactly there: the host seeded a one-line persona, the model answered with a
+Python file in a code fence, and nothing was ever written to disk.
+
+The *schemas* are not this module's job. Tools travel natively, as the OpenAI
+``tools`` array built by
+:meth:`cowork_agent.registry.ToolRegistry.openai_tools`, so the prompt carries
+no wire format and no tool definitions — repeating them here would only pay for
+the same text twice and let the two copies drift.
 
 This module owns the whole system prompt:
 
 - :data:`BASE_INSTRUCTIONS` — the behaviour contract (act, don't describe).
-- :data:`TOOL_PROTOCOL` — the ``<tool_call>``-in-content wire format, the ONE
-  format the runtime parses (see :func:`cowork_agent.model.extract_tool_calls`).
-- :func:`render_tool_docs` — the live tool list, rendered from the registry, so
-  a newly registered tool documents itself and cannot drift from the schema.
+- :func:`render_tool_block` — one tool as readable prose. NOT in the prompt:
+  ``tool_describe`` (§7.2) hands this text back for a deferred tool, which the
+  native ``tools`` array deliberately omits.
 - :func:`build_system_prompt` — the composition, with the operator persona last
   so it overrides the defaults.
 """
@@ -27,6 +31,10 @@ BASE_INSTRUCTIONS = """\
 You are CoWork, an AI coworker. You run on the user's own computer, in the
 user's workspace. The user talks to you from a phone or a desktop app.
 
+The user wants the result, not the process. A problem goes in; a finished result
+comes out. Everything the user sees between those two points is friction. Your
+job is to remove that friction, not to add to it.
+
 # How you work
 
 - You have tools. Use them. Do the work, do not describe the work.
@@ -37,14 +45,36 @@ user's workspace. The user talks to you from a phone or a desktop app.
 - To run a program, a test, or any shell command, call the `run_command` tool.
 - Check your own work. After you write a file, run it or read it back.
 - Do one step at a time. Read the tool result before the next step.
+- When a command fails, a path is wrong, or a tool errors, fix it and try again
+  yourself. Retry, route around it, pick another way. These attempts are your
+  own work, not news for the user.
 - Your last message ends the task, so send it only when the work is done.
+
+# How you talk to the user
+
+- Send as few messages as you can. One message at the end, with the result, is
+  the target. Every extra message is a demand on the user's attention.
+- The final message is the answer or the finished thing: what the user asked
+  for, and where it is. It is NOT a report of steps, a list of the commands you
+  ran, or a tour of what went wrong on the way.
+- Never narrate problems. Do not say that a command failed, that a path was
+  wrong, or that the third try worked. You fixed it; that is all that counts.
+  "I ran into an issue but fixed it" is noise. Leave it out.
+- No apologies, no progress updates, no meta-talk about your own work. If
+  nothing is broken from the user's side, the user hears only the result.
+- Do not interrogate the user for a spec. A vague, misspelled, one-line request
+  is a valid request. Work out the intent and deliver.
+- Ask the user a question ONLY for a fork you genuinely cannot settle alone: a
+  real missing credential or secret you cannot get, or an irreversible action
+  that spends the user's money or destroys data that cannot be recovered.
+  Everything else you decide yourself and just do.
 
 # Style
 
 - Answer in the language of the user.
-- Be short. Report what you did, what the result was, and where the files are.
 - Write the final answer in Markdown. The app renders Markdown. Put code in a
   fenced block with the language, for example ```python.
+- Be short. Give the result, not the journey to it.
 - Never invent the output of a command. Report only what a tool returned.
 
 # What you can do
@@ -61,35 +91,10 @@ user's workspace. The user talks to you from a phone or a desktop app.
 
 - The workspace is the user's real machine. Change only what the task needs.
 - Never print secrets, tokens, passwords, or key material.
-- Before a destructive command (delete, overwrite, `git reset`), say in one
-  sentence what you are about to do, then do it.
+- Reversible work you just do. A command that destroys data the user cannot get
+  back (delete, overwrite, `git reset --hard`) is the one case to stop on: if
+  the user did not clearly ask for it, ask first, then do it.
 """
-
-TOOL_PROTOCOL = """\
-# Tool-call format
-
-To call a tool, write one block in your reply:
-
-<tool_call>{"name": "<tool name>", "arguments": {"<key>": "<value>"}}</tool_call>
-
-Rules:
-
-- The body is strict JSON: double quotes, no comments, no trailing comma.
-- Several blocks in one reply run in order, top to bottom.
-- Never put a tool call inside a code fence, and never show one as an example.
-  Every block you write is executed.
-- A reply with no tool-call block ends the task. Do not end while work is left.
-- Each result comes back as `<tool_result name="...">...</tool_result>`.
-
-Example. The user asks for a Python script that prints the date:
-
-<tool_call>{"name": "write_file", "arguments": {"path": "show_date.py", "content": "import datetime\\nprint(datetime.date.today())\\n"}}</tool_call>
-
-Then, in the next turn, run it:
-
-<tool_call>{"name": "run_command", "arguments": {"command": "python3 show_date.py"}}</tool_call>
-"""
-
 
 def _render_arguments(schema: dict) -> list[str]:
     """One readable line per argument, from the tool's JSON schema."""
@@ -109,13 +114,14 @@ def _render_arguments(schema: dict) -> list[str]:
 
 
 def render_tool_block(name: str, schema: dict | None) -> str:
-    """One tool's prompt block: heading, description, argument lines.
+    """One tool as readable prose: heading, description, argument lines.
 
-    Public because three callers must agree on it to the character:
-    :func:`render_tool_docs` writes it into the prompt, ``tool_describe``
-    (§7.2) hands the same text back for a deferred tool, and the tool-search
-    threshold is measured on it. A second renderer would make the measured
-    saving a fiction.
+    This is NOT what the model is given for a normal tool — those travel as
+    native schemas in the ``tools`` array. It is the text ``tool_describe``
+    (§7.2) hands back for a *deferred* tool, which the native array omits, so a
+    hidden tool is documented exactly as well as a visible one. Kept public
+    because :func:`render_tool_docs` and the tests that ask "is this tool
+    offered at all?" must agree with it to the character.
     """
     schema = schema or {}
     blocks = [f"\n## {name}\n"]
@@ -132,10 +138,18 @@ def render_tool_block(name: str, schema: dict | None) -> str:
 
 
 def render_tool_docs(registry: ToolRegistry) -> str:
-    """Render the registry as prompt text. Unavailable tools (a failing
-    ``check_fn``) are left out — the model must not call what cannot run — and
-    so are deferred tools (§7.2), which the model reaches through
-    ``tool_search`` / ``tool_call`` instead."""
+    """Render every tool the model is offered as one readable document.
+
+    The same filter the native ``tools`` array applies (
+    :meth:`cowork_agent.registry.ToolRegistry.openai_tools`): unavailable tools
+    (a failing ``check_fn``) are left out — the model must not be offered what
+    cannot run — and so are deferred tools (§7.2), which the model reaches
+    through ``tool_search`` / ``tool_call`` instead.
+
+    :func:`build_system_prompt` does NOT include this: the schemas go over the
+    wire natively. It stays as the human-readable view of the offered surface,
+    which is what the tests assert against.
+    """
     blocks: list[str] = ["# Tools you can call"]
     for name in registry.names():
         if not registry.available(name) or registry.is_deferred(name):
@@ -152,16 +166,24 @@ def build_system_prompt(
     skills: str | None = None,
     memory: str | None = None,
 ) -> str:
-    """Compose the full system prompt: behaviour + wire format + live tools +
-    the skill catalogue + the memory snapshot + the operator persona (last, so
-    it wins on any conflict).
+    """Compose the full system prompt: behaviour + the skill catalogue + the
+    memory snapshot + the operator persona (last, so it wins on any conflict).
+
+    No wire format and no tool definitions. Tool calling is native: the schemas
+    are sent as the request's ``tools`` array, so writing them into the prompt
+    as well would buy nothing and cost the whole surface a second time, on every
+    round.
+
+    ``registry`` is still taken because the prompt is per-registry by contract
+    and the composition may key on it again; today it only proves the caller has
+    one.
 
     ``skills`` carries names and descriptions only (§11); ``memory`` is the
     frozen snapshot (§12) — both are read once, when a session is seeded, and
     never rewritten mid-session, so the prefix cache survives the whole run.
     Both are sanitized by their own module before they arrive here.
     """
-    parts = [BASE_INSTRUCTIONS, TOOL_PROTOCOL, render_tool_docs(registry)]
+    parts = [BASE_INSTRUCTIONS]
     if skills and skills.strip():
         parts.append(skills.strip())
     if memory and memory.strip():

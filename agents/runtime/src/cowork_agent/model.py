@@ -1,21 +1,25 @@
 """Model client (§7.4).
 
 The real backend is the ChukChat account proxy. Chat runs over the multiplexed
-``wss://api.chuk.chat/v2/ws`` socket (see :mod:`cowork_agent.backend`), which
-returns assistant **text**; tool calls are embedded in that text as
-``<tool_call>{json}</tool_call>`` blocks and parsed client-side. This is the ONE
-tool-call protocol the runtime speaks — mock and real share :func:`extract_tool_calls`.
+``wss://api.chuk.chat/v2/ws`` socket (see :mod:`cowork_agent.backend`).
+
+**Native tool calling is the one and only protocol.** The runtime declares its
+tools as an OpenAI ``tools`` array (:meth:`cowork_agent.registry.ToolRegistry.openai_tools`)
+and the provider answers with structured ``tool_calls`` — a list of
+``{id, type, function:{name, arguments}}`` objects — which arrive on their own
+frame, never inside the assistant text. There is no text/markdown fallback: a
+turn is a tool-call turn only if the server sent tool calls, and assistant
+content is always plain prose for the user.
 
 The runtime depends only on the ``ModelClient`` protocol, so the real WebSocket
 impl is swappable for a mock in tests. An OpenAI-compatible HTTP client is kept
-for reference / non-``/v2/ws`` deployments, but the ``<tool_call>``-in-content
-protocol is authoritative.
+for reference / non-``/v2/ws`` deployments; it speaks the same native shape
+through :func:`parse_openai_response`.
 """
 
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -51,86 +55,29 @@ class ModelClient(Protocol):
     def complete(self, messages: list[dict]) -> ModelResponse: ...
 
 
-# -- <tool_call>-in-content protocol (the one wire format, matching chuk_chat) --
-
-# Canonical block: `<tool_call>{json}</tool_call>`. Non-greedy, DOTALL,
-# case-insensitive — mirrors `toolCallStart`/`toolCallEnd` in
-# chuk_chat/lib/utils/tool_parser.dart.
-_TOOL_CALL_BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL | re.IGNORECASE)
+# -- native tool calls (the one wire format, matching chuk_chat) --------------
 
 
-def _repair_and_load(raw: str) -> dict | None:
-    """Parse a tool-call JSON body, repairing the two mistakes models make most:
-    a missing closing brace and a trailing comma. Mirrors ``tryParseToolJson``."""
-    text = raw.strip()
-    if not text:
-        return None
-    try:
-        parsed = json.loads(text)
-        return parsed if isinstance(parsed, dict) else None
-    except json.JSONDecodeError:
-        pass
-    # Add missing closing braces (only counting those outside strings is overkill
-    # here; a bounded add-and-retry is enough for the observed failures).
-    opens = text.count("{")
-    closes = text.count("}")
-    if opens > closes:
-        candidate = text + ("}" * (opens - closes))
-        try:
-            parsed = json.loads(candidate)
-            if isinstance(parsed, dict):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-    # Strip trailing commas before } or ].
-    cleaned = re.sub(r",\s*([}\]])", r"\1", text)
-    if cleaned != text:
-        try:
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, dict):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-    return None
+def tool_call_response(
+    *calls: tuple[str, dict],
+    text: str | None = None,
+    housekeeping: bool = False,
+) -> ModelResponse:
+    """Build a native tool-calling turn from ``(name, arguments)`` pairs.
 
-
-def extract_tool_calls(content: str | None) -> tuple[str, list[ToolCall]]:
-    """Split assistant ``content`` into (visible_text, tool_calls).
-
-    Parses every ``<tool_call>{"name":...,"arguments":{...}}</tool_call>`` block
-    out of the text — the single tool-call wire format shared by the mock and the
-    real backend. The blocks are stripped from the returned text so protocol XML
-    never leaks into the final answer. Continue-vs-finish stays structural: a turn
-    with parsed calls continues the loop; a bare-text turn is the final answer.
+    A convenience for tests and scripted runs: it produces exactly the
+    :class:`ModelResponse` the backend builds from a server ``tool_calls`` frame,
+    with sequential ``call_0``, ``call_1``… ids — the ids the loop echoes back as
+    ``tool_call_id``. ``text`` is the assistant's (optional) interim prose for
+    the same turn.
     """
-    if not content:
-        return "", []
-    calls: list[ToolCall] = []
-    for i, match in enumerate(_TOOL_CALL_BLOCK.finditer(content)):
-        data = _repair_and_load(match.group(1))
-        if data is None:
-            continue
-        name_raw = data.get("name")
-        name = name_raw.strip() if isinstance(name_raw, str) else ""
-        if not name:
-            continue
-        raw_args = data.get("arguments", data.get("args", {}))
-        args = raw_args if isinstance(raw_args, dict) else {}
-        calls.append(ToolCall(id=f"call_{i}", name=name, arguments=args))
-    clean = _TOOL_CALL_BLOCK.sub("", content).strip()
-    return clean, calls
-
-
-def response_from_content(content: str | None, *, housekeeping: bool = False) -> ModelResponse:
-    """Build a :class:`ModelResponse` from raw assistant text, routing tool calls
-    through :func:`extract_tool_calls`. The single construction path for both the
-    mock and the real backend."""
-    clean, calls = extract_tool_calls(content)
     return ModelResponse(
-        text=clean or None,
-        tool_calls=calls,
+        text=text,
+        tool_calls=[
+            ToolCall(id=f"call_{i}", name=name, arguments=dict(arguments or {}))
+            for i, (name, arguments) in enumerate(calls)
+        ],
         housekeeping=housekeeping,
-        raw={"content": content} if content is not None else {},
     )
 
 
@@ -211,12 +158,11 @@ class MockModelClient:
     Emits a fixed list of scripted turns in order and records every ``messages``
     list it was called with. Each scripted item is either
 
-    - a ``str`` — raw assistant content, parsed through the SAME
-      :func:`extract_tool_calls` path the real backend uses, so a tool call is
-      written as ``<tool_call>{"name":...,"arguments":{...}}</tool_call>`` in the
-      text; or
-    - a :class:`ModelResponse` — passed through unchanged, for turns that need a
-      flag the content form cannot express (e.g. ``housekeeping``).
+    - a ``str`` — a bare-text turn, i.e. the model's final answer. Strings are
+      NEVER scanned for tool calls: with native tool calling, assistant content
+      is prose and nothing else; or
+    - a :class:`ModelResponse` — passed through unchanged. This is how a tool
+      call is scripted, most readably via :func:`tool_call_response`.
     """
 
     def __init__(self, responses: list[ModelResponse | str]) -> None:
@@ -231,5 +177,5 @@ class MockModelClient:
         item = self._responses.pop(0)
         if isinstance(item, ModelResponse):
             return item
-        # A raw content string -> the converged <tool_call>-in-content path.
-        return response_from_content(item)
+        # A plain string is a final answer, not a protocol to parse.
+        return ModelResponse(text=item or None, raw={"content": item})
