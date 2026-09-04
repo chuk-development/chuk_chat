@@ -60,6 +60,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -142,7 +143,7 @@ def _mcp_signature(mcp_servers: list[dict]) -> str:
     do that. Non-dict entries pass through untouched; an unserializable list
     falls back to ``repr`` rather than failing the task.
     """
-    projected: list[Any] = []
+    projected: list = []
     for entry in mcp_servers:
         if not isinstance(entry, dict):
             projected.append(entry)
@@ -1704,9 +1705,18 @@ class Executor:
         signature = _mcp_signature(mcp_servers)
         with self._mcp_lock:
             existing = self._mcp_managers.get(session_key)
-            if existing is not None and self._mcp_signatures.get(session_key) == signature:
-                return existing
-            stale = existing if existing is not None else None
+            hit = (
+                existing is not None
+                and self._mcp_signatures.get(session_key) == signature
+            )
+            stale = existing if (existing is not None and not hit) else None
+        if hit:
+            # Same connectors, possibly fresher credentials: the signature
+            # ignores the rotating fields on purpose, so carry them into the
+            # cached configs or the device's newer bearer would be ignored and
+            # every connector would pay a refresh round-trip it did not need.
+            self._adopt_rotating_credentials(existing, mcp_servers)
+            return existing
         # Close a superseded manager outside the lock — close() joins threads.
         if stale is not None:
             try:
@@ -1736,6 +1746,46 @@ class Executor:
             self._mcp_managers[session_key] = manager
             self._mcp_signatures[session_key] = signature
         return manager
+
+    def _adopt_rotating_credentials(
+        self, manager: MCPManager, mcp_servers: list[dict]
+    ) -> None:
+        """On a cache hit, adopt the incoming rotating credentials into the cached
+        manager's configs (bead cowork-lwc).
+
+        ``_mcp_signature`` deliberately drops ``access_token``, ``oauth.refresh_token``
+        and ``oauth.expires_at``, so a hit means "same connectors" — not "same
+        tokens". The app refreshes before every forward, so the incoming values
+        are usually the freshest anyone has; parsing them through the same
+        ``configs_from_entries`` the build path uses and writing them into the
+        EXISTING ``MCPServerConfig`` objects is enough, because each live
+        ``MCPConnection`` holds its config by reference and reads ``auth_token`` /
+        ``oauth`` at request time. The write happens under that connection's own
+        refresh lock, so it cannot interleave with a ``refresh_token()`` in flight.
+        Only present values are adopted: an entry that carries no bearer must not
+        wipe a token the host minted itself. Best-effort — never fails the task.
+        """
+        try:
+            account_token = (
+                self._account_token_provider()
+                if self._account_token_provider is not None
+                else None
+            )
+            fresh, _errors = configs_from_entries(mcp_servers, account_token=account_token)
+        except Exception:  # noqa: BLE001 — a bad list must not fail a task that has a manager
+            return
+        by_name = {config.name: config for config in fresh}
+        for config in manager.configs:
+            incoming = by_name.get(config.name)
+            if incoming is None:
+                continue
+            connection = manager.connections.get(config.name)
+            lock = getattr(connection, "_refresh_lock", None)
+            with lock if lock is not None else nullcontext():
+                if incoming.auth_token:
+                    config.auth_token = incoming.auth_token
+                if incoming.oauth:
+                    config.oauth = dict(incoming.oauth)
 
     def _close_mcp_managers(self) -> None:
         with self._mcp_lock:

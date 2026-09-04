@@ -3,7 +3,6 @@ and the whole path RoomBinding -> RoomDriver -> encrypted executor turn."""
 
 from __future__ import annotations
 
-import pytest
 from cowork_manager import GroupRoom, RoomBinding, RoomDriver, RoomMember
 
 from cowork_executor import (
