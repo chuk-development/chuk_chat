@@ -3,13 +3,15 @@
     "Frozen shape of the `mcp_servers` list the app forwards inside the sealed",
     "task frame. Asserted from both sides: app/test/services/mcp/mcp_store_test.dart",
     "builds it from a live McpStore, agent/tests/test_mcp_client.py parses it.",
-    "The contract is additive — a receiver ignores fields it does not know — so",
+    "The contract is additive \u2014 a receiver ignores fields it does not know \u2014 so",
     "entries may gain fields, but no field here may be renamed or removed.",
+    "`id` is the app's own connector id. It is opaque to the host, which only echoes it back in an `mcp_credentials` frame.",
     "The four entries are the four kinds a connector can be.",
     "Values are fake."
   ],
   "mcp_servers": [
     {
+      "id": "notion",
       "name": "Notion",
       "url": "https://mcp.notion.example/mcp",
       "auth": "oauth",
@@ -25,16 +27,19 @@
       }
     },
     {
+      "id": "legacy",
       "name": "Legacy",
       "url": "https://legacy.example/mcp",
       "auth": "oauth",
       "access_token": "at-legacy"
     },
     {
+      "id": "brave",
       "name": "Brave",
       "url": "https://brave.example/mcp?key=k-123"
     },
     {
+      "id": "github",
       "name": "GitHub",
       "url": "https://api.example/v1/mcp/github",
       "auth": "appSession"

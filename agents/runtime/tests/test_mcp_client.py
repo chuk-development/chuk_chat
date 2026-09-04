@@ -24,6 +24,8 @@ from cowork_agent.mcp_client import (
     MCPConnection,
     MCPManager,
     MCPServerConfig,
+    _looks_unauthorized,
+    _redact,
     configs_from_entries,
     load_mcp_config,
     parse_mcp_config,
@@ -1043,3 +1045,280 @@ def test_the_forwarded_payload_survives_the_whole_chain(
     # live one on and the old one is never spent twice.
     assert configs[0].oauth["refresh_token"] == "rt-2"
     assert configs[0].auth_token == "at-renewed"
+
+
+# -- review follow-ups: a token that dies mid-run, and a manager that is reused
+
+
+def _live(connection: MCPConnection) -> None:
+    """Mark a fake connection as handshaken, without a transport."""
+    connection._error = None  # noqa: SLF001
+    connection._session = object()  # noqa: SLF001
+    connection._thread = threading.current_thread()  # noqa: SLF001
+    connection._connected_once = True  # noqa: SLF001
+    connection._ready.set()  # noqa: SLF001
+
+
+def test_a_401_from_a_live_session_is_renewed_and_the_call_retried(monkeypatch):
+    """The case the whole feature exists for, and the one connect-time refresh
+    does not cover: the run outlives its token.
+
+    Headers are fixed when the transport is built, so a token that lapses
+    mid-session cannot be swapped in place. The server answers the tool call
+    with a 401 while the session stays up and looks healthy, so nothing else
+    notices."""
+    monkeypatch.setattr("httpx.post", _FakeTokenServer())
+    config = _oauth_config(name="notion", expires_at=_far_future())
+    seen: list[str | None] = []
+
+    class _Lapsing(MCPConnection):
+        def start(self) -> bool:
+            _live(self)
+            return True
+
+        def call(self, tool, arguments=None):
+            seen.append(self.config.auth_token)
+            if self.config.auth_token != "at-new":
+                return {
+                    "ok": False,
+                    "server": self.config.name,
+                    "tool": tool,
+                    "error": "McpError: HTTP 401 Unauthorized",
+                }
+            return {"ok": True, "server": self.config.name, "tool": tool,
+                    "content": "HI"}
+
+    manager = MCPManager([config], connection_factory=_Lapsing)
+    try:
+        assert manager.start() == {"notion": True}
+        result = manager.call("notion", "shout", {"text": "hi"})
+    finally:
+        manager.close()
+
+    assert result["ok"] is True
+    assert seen == ["at-old", "at-new"]
+
+
+def test_a_tool_error_that_is_not_a_401_is_returned_untouched(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = _oauth_config(name="notion", expires_at=_far_future())
+
+    class _Failing(MCPConnection):
+        def start(self) -> bool:
+            _live(self)
+            return True
+
+        def call(self, tool, arguments=None):
+            return {"ok": False, "server": self.config.name, "tool": tool,
+                    "error": "ValueError: bad argument"}
+
+    manager = MCPManager([config], connection_factory=_Failing)
+    try:
+        manager.start()
+        result = manager.call("notion", "shout", {})
+    finally:
+        manager.close()
+
+    assert result["error"] == "ValueError: bad argument"
+    # Spending a refresh token on a plain tool error would be free damage on a
+    # server that rotates them.
+    assert server.calls == []
+
+
+def test_a_dropped_session_is_redialed_on_the_next_task(monkeypatch):
+    """A manager is cached per session and started again for every task. A
+    server that died during the last task must get another chance, or its tools
+    are missing from the prompt for the rest of the session."""
+    monkeypatch.setattr("httpx.post", _FakeTokenServer())
+    config = _oauth_config(name="notion", expires_at=_far_future())
+    starts: list[int] = []
+
+    class _Droppable(MCPConnection):
+        def start(self) -> bool:
+            starts.append(1)
+            _live(self)
+            return True
+
+    manager = MCPManager([config], connection_factory=_Droppable)
+    try:
+        assert manager.start() == {"notion": True}
+        first = manager.connections["notion"]
+        # The transport thread went away between tasks.
+        first._session = None  # noqa: SLF001
+        assert first.alive() is False
+
+        assert manager.start() == {"notion": True}
+        assert manager.connections["notion"] is not first
+    finally:
+        manager.close()
+
+    assert len(starts) == 2
+
+
+def test_a_server_that_never_answered_is_not_redialed_every_task(monkeypatch):
+    """The other half of the same rule: redialing a server that has never
+    completed a handshake costs a full connect timeout on every task, and it
+    has already had its chance."""
+    monkeypatch.setattr("httpx.post", _FakeTokenServer())
+    config = _oauth_config(name="notion", expires_at=_far_future())
+    starts: list[int] = []
+
+    class _Missing(MCPConnection):
+        def start(self) -> bool:
+            starts.append(1)
+            self._error = "ConnectError: [Errno 111] Connection refused"
+            return False
+
+    manager = MCPManager([config], connection_factory=_Missing)
+    try:
+        assert manager.start() == {"notion": False}
+        assert manager.start() == {"notion": False}
+    finally:
+        manager.close()
+
+    assert len(starts) == 1
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        "McpError: HTTP 401 Unauthorized",
+        "401 unauthorized",
+        "OAuthError: invalid_token",
+        "OAuthError: invalid_grant",
+    ],
+)
+def test_a_refused_credential_is_recognised(error):
+    assert _looks_unauthorized(error) is True
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        None,
+        "",
+        # A path segment that merely contains the digits.
+        "HTTPStatusError: 404 for https://api.example/mcp/401k-planner",
+        # A port number that contains them.
+        "ConnectError: connection refused to 127.0.0.1:4010",
+        "HTTPStatusError: 1401 unknown",
+        "TimeoutError: connect timed out",
+    ],
+)
+def test_an_error_that_is_not_a_refused_credential_is_left_alone(error):
+    assert _looks_unauthorized(error) is False
+
+
+def test_a_recorded_error_does_not_carry_an_api_key():
+    """An apiKey connector's secret rides in the URL query, and transport errors
+    quote the URL. ``MCPManager.status`` calls that string "what the operator
+    sees"."""
+    redacted = _redact(
+        "ConnectError: failed for https://mcp.brave.example/mcp"
+        "?key=SECRET-123&project=abc"
+    )
+
+    assert "SECRET-123" not in redacted
+    assert "abc" not in redacted
+    assert "mcp.brave.example" in redacted
+
+
+def test_a_very_short_lived_token_is_not_refreshed_on_every_request(monkeypatch):
+    """A token whose lifetime is inside the skew window is "expired" the moment
+    it arrives. Without a floor every single request would mint another one."""
+    server = _FakeTokenServer(
+        payload={"access_token": "at-new", "expires_in": 5}
+    )
+    monkeypatch.setattr("httpx.post", server)
+    connection = MCPConnection(_oauth_config(expires_at=_long_past()))
+
+    for _ in range(3):
+        assert connection._http_headers()["Authorization"] == "Bearer at-new"  # noqa: SLF001
+
+    assert len(server.calls) == 1
+    # A 401 still gets through the floor: the server has said the token is bad.
+    assert connection.refresh_token(force=True) == "at-new"
+    assert len(server.calls) == 2
+
+
+def test_a_rotated_refresh_token_is_reported_to_the_listener(monkeypatch):
+    """The hook the executor hangs the ``mcp_credentials`` frame on.
+
+    The moment the provider hands back a different refresh token it has killed
+    the old one, so the copy the device still holds is dead. Nobody but this
+    process knows yet."""
+    monkeypatch.setattr(
+        "httpx.post",
+        _FakeTokenServer(
+            payload={
+                "access_token": "at-new",
+                "refresh_token": "rt-2",
+                "expires_in": 3600,
+            }
+        ),
+    )
+    seen: list[tuple[str, str | None, str]] = []
+    config = _oauth_config(name="notion", expires_at=_long_past())
+    connection = MCPConnection(
+        config,
+        on_credentials_rotated=lambda name, cfg: seen.append(
+            (name, cfg.auth_token, cfg.oauth["refresh_token"])
+        ),
+    )
+
+    connection.refresh_token()
+
+    assert seen == [("notion", "at-new", "rt-2")]
+
+
+def test_a_refresh_without_rotation_reports_nothing(monkeypatch):
+    """A server that only issues a new access token has told us nothing the app
+    cannot work out for itself — a frame for that is pure noise."""
+    monkeypatch.setattr("httpx.post", _FakeTokenServer())
+    seen: list[str] = []
+    connection = MCPConnection(
+        _oauth_config(name="notion", expires_at=_long_past()),
+        on_credentials_rotated=lambda name, cfg: seen.append(name),
+    )
+
+    assert connection.refresh_token() == "at-new"
+    assert seen == []
+
+
+def test_a_listener_that_throws_does_not_fail_the_call(monkeypatch):
+    monkeypatch.setattr(
+        "httpx.post",
+        _FakeTokenServer(
+            payload={"access_token": "at-new", "refresh_token": "rt-2"}
+        ),
+    )
+
+    def _boom(name, config):
+        raise RuntimeError("the relay is gone")
+
+    connection = MCPConnection(
+        _oauth_config(name="notion", expires_at=_long_past()),
+        on_credentials_rotated=_boom,
+    )
+
+    assert connection.refresh_token() == "at-new"
+
+
+def test_the_manager_hands_the_listener_to_every_connection(monkeypatch):
+    monkeypatch.setattr(
+        "httpx.post",
+        _FakeTokenServer(
+            payload={"access_token": "at-new", "refresh_token": "rt-2"}
+        ),
+    )
+    seen: list[str] = []
+    config = _oauth_config(name="notion", expires_at=_long_past())
+    manager = MCPManager([config], on_credentials_rotated=lambda n, c: seen.append(n))
+    try:
+        manager.connections["notion"] = manager._factory(config)  # noqa: SLF001
+        manager.connections["notion"].refresh_token()
+    finally:
+        manager.close()
+
+    assert seen == ["notion"]

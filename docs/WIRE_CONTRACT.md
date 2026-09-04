@@ -69,6 +69,68 @@ Who authenticates what:
 `oauth.refresh_token`, when hashing this list to decide whether an MCP manager has
 to be rebuilt. A rotated token is not a changed connector.
 
+### `mcp_credentials` (NEW, executor → app)
+
+The return half of the forward payload above. It lives in this section because
+the two shapes must not drift: an entry here uses exactly the field names of an
+`mcp_servers` entry.
+
+One frame per connector. Rotations are rare, so there is nothing to batch.
+
+```json
+{"type": "mcp_credentials", "session_key": "<key>",
+ "id": "<device connector id>"?, "name": "<connector name>", "url": "<https endpoint>",
+ "access_token": "<bearer>"?,
+ "oauth": {"refresh_token": "<token>", "expires_at": "<iso 8601 UTC>"?,
+           "token_endpoint": "<url>", "client_id": "<id>",
+           "resource": "<url>"?, "scope": "<space separated>"?, "issuer": "<url>"?},
+ "rotated_at": "<iso 8601>"}
+```
+
+The app also accepts the same entries under a `servers` array, so batching them
+later needs no change on the app side. `session_key` and `rotated_at` are read by
+nobody on the app side today — connectors are global, not per session — but they
+are carried because the executor needs them.
+
+Why it exists: the host mints its own access tokens from the refresh material
+the device handed it. A provider that rotates refresh tokens (Google, Okta,
+Auth0 with rotation on) issues a NEW one and kills the old one in the same
+response — at which point the copy in the device's keychain is dead and only the
+host knows the live one. Without this frame the connector works until the host
+process ends and is then unrecoverable except by a fresh sign-in.
+
+**When the executor sends it.** For every connector whose host-side
+`(refresh_token, expires_at)` still differ from what the app last forwarded:
+at the end of every task, before the `done` terminal, and on every replay or
+reconnect. A new access token alone is NOT a trigger — the app can mint that
+itself. There is no durable outbox and a result frame sent to a detached
+controller is dropped, so the frame repeats until the app forwards the new token
+back. **That forward is the acknowledgement**: once the two sides agree, nothing
+more is sent.
+
+**What the app does with it.** It updates the stored record for that connector
+(secure storage, plus the encrypted Supabase mirror) with `refresh_token`,
+`expires_at` and, when present, `access_token`. Applying it is idempotent — last
+one wins, and a frame that changes nothing writes nothing.
+
+**What the app does NOT do.** The device stays the authority on connector
+identity. A frame never creates a connection, never re-points a `url` and never
+changes the registered client. `client_secret` is never sent back: the host got
+it from the device, so the device already has it.
+
+Silently ignored, with no user-facing failure — a wrong frame must not cost a
+working connector:
+
+- an entry for a connector this device does not have,
+- an entry with no `refresh_token` (there is nothing to rescue),
+- an entry whose `oauth.client_id` differs from the stored one. That means the
+  user signed in again, dynamic registration issued a new client, and this
+  rotation is against a registration that no longer exists.
+
+Matching is on `id` — the app's own connector id, which the app puts on the
+outbound entry and the host echoes back unchanged. `name` is a display name and
+two connectors may share one. A frame with no `id` falls back to `url` + `name`.
+
 ## Inbound: executor → app
 
 Existing event types stay as they are: `delta`, `reasoning`, `tool`, `file`,

@@ -108,3 +108,65 @@ def test_a_changed_connector_still_rebuilds(tmp_path):
 
     assert second is not None and second is not first
     assert _config(second, "Notion").url == "https://moved.example/mcp"
+
+
+def test_a_host_rotated_refresh_token_survives_a_stale_device_payload(tmp_path):
+    """The dangerous case 47's review caught. The host refreshed the connector
+    itself and the provider ROTATED the refresh token (Google/Okta/Auth0 issue a
+    new one and kill the old). The device still holds the old one and forwards it
+    again. Replacing the oauth block wholesale would put the dead token back and
+    every later refresh would fail with invalid_grant. The host's values must
+    stay; only the identity fields merge in."""
+    executor = _executor(tmp_path)
+    servers = _servers()
+    manager = executor._session_mcp_manager("s", servers)
+    notion = _config(manager, "Notion")
+    device_rt = notion.oauth["refresh_token"]
+
+    # What refresh_token() records after a rotating provider answered.
+    notion.oauth["refresh_token"] = "rt-host-rotated"
+    notion.oauth["expires_at"] = "2031-06-01T00:00:00Z"
+    notion.auth_token = "at-host-minted"
+
+    stale = copy.deepcopy(servers)  # device: still the OLD refresh token
+    stale_notion = next(e for e in stale if e["name"] == "Notion")
+    assert stale_notion["oauth"]["refresh_token"] == device_rt
+    stale_notion["oauth"]["scope"] = "read write"  # an identity field changed
+
+    again = executor._session_mcp_manager("s", stale)
+
+    assert again is manager
+    kept = _config(manager, "Notion")
+    assert kept.oauth["refresh_token"] == "rt-host-rotated"
+    assert kept.oauth["expires_at"] == "2031-06-01T00:00:00Z"
+    assert kept.auth_token == "at-host-minted"
+    assert kept.oauth["scope"] == "read write"  # identity fields still merge
+
+
+def test_a_device_re_sign_in_replaces_a_host_rotated_token(tmp_path):
+    """The user signed in again on the device: its refresh token differs from the
+    one the connector was started with. That wins over whatever the host holds —
+    and becomes the new baseline, so a later replay of the stale token does not
+    flip it back."""
+    executor = _executor(tmp_path)
+    servers = _servers()
+    manager = executor._session_mcp_manager("s", servers)
+    notion = _config(manager, "Notion")
+    notion.oauth["refresh_token"] = "rt-host-rotated"
+    notion.auth_token = "at-host-minted"
+
+    reauth = copy.deepcopy(servers)
+    entry = next(e for e in reauth if e["name"] == "Notion")
+    entry["oauth"]["refresh_token"] = "rt-device-new"
+    entry["oauth"]["expires_at"] = "2032-01-01T00:00:00Z"
+    entry["access_token"] = "at-device-new"
+
+    assert executor._session_mcp_manager("s", reauth) is manager
+    adopted = _config(manager, "Notion")
+    assert adopted.oauth["refresh_token"] == "rt-device-new"
+    assert adopted.oauth["expires_at"] == "2032-01-01T00:00:00Z"
+    assert adopted.auth_token == "at-device-new"
+
+    # A stale replay of the ORIGINAL device token must not revert the new one.
+    executor._session_mcp_manager("s", copy.deepcopy(servers))
+    assert _config(manager, "Notion").oauth["refresh_token"] == "rt-device-new"

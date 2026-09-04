@@ -104,6 +104,7 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    mcp_credentials_payload,
     run_state_payload,
     stop_ack_payload,
     subagent_payload,
@@ -157,6 +158,26 @@ def _mcp_signature(mcp_servers: list[dict]) -> str:
         return json.dumps(projected, sort_keys=True, default=str)
     except (TypeError, ValueError):
         return repr(projected)
+
+
+def _entry_meta(mcp_servers: list[dict]) -> dict[str, dict]:
+    """``name -> {id?, name, url}`` from the forwarded entries: the device's own
+    identity for each connector, echoed back verbatim in ``mcp_credentials`` so
+    the app can match its record (``id`` is the stable connector id the client
+    sends additively; an old client sends none and the app falls back to url+name).
+    Python never interprets ``id``."""
+    meta: dict[str, dict] = {}
+    for entry in mcp_servers:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
+        item: dict = {"name": name, "url": str(entry.get("url") or "")}
+        if entry.get("id"):
+            item["id"] = str(entry["id"])
+        meta[name] = item
+    return meta
 
 
 class StreamingModelClient:
@@ -594,6 +615,29 @@ class Executor:
         # worker builds it while ``stop`` closes it.
         self._mcp_managers: dict[str, MCPManager] = {}
         self._mcp_signatures: dict[str, str] = {}
+        # Per session, per connector: the refresh token the connector was
+        # STARTED with (the device's forward at build time). It is the reference
+        # that tells a device re-sign-in (new token ≠ baseline → adopt) apart
+        # from a stale device payload after the host rotated the token itself
+        # (device token == baseline while the host holds a newer one → keep).
+        self._mcp_refresh_baseline: dict[str, dict[str, str | None]] = {}
+        # Per session, per connector: EVERY refresh token the device has ever
+        # forwarded. A token the device sends that was never seen is a genuine
+        # re-sign-in; a token that was seen before is a replay of an old payload
+        # and must not roll a newer grant back.
+        self._mcp_refresh_seen: dict[str, dict[str, set[str]]] = {}
+        # Per session, per connector: the identity the device forwarded (its
+        # stable ``id`` plus name/url), echoed back verbatim in the
+        # ``mcp_credentials`` back-channel so the app can match its record.
+        self._mcp_entry_meta: dict[str, dict[str, dict]] = {}
+        # Per session, per connector: a ``mcp_credentials`` frame the app has not
+        # acknowledged yet (ack = the device forwards the rotated token back).
+        # Re-sent at every task start and replay until then — there is no durable
+        # outbox, and a frame sent while the controller was detached is dropped.
+        self._mcp_pending_credentials: dict[str, dict[str, dict]] = {}
+        # Per session: the request id of the task currently running, so a rotation
+        # that happens mid-task can ride the live event stream immediately.
+        self._mcp_active_request: dict[str, str] = {}
         self._mcp_lock = threading.Lock()
 
         self._stop = threading.Event()
@@ -976,6 +1020,9 @@ class Executor:
                 session_id = store.route(session_key)
                 # First the state header: is a run for this thread in flight?
                 self._event(request_id, self._run_state_for(store, session_key))
+                # A reconnecting app also gets every rotated MCP credential it
+                # has not acknowledged yet (docs/WIRE_CONTRACT.md, mcp_credentials).
+                self._flush_pending_mcp_credentials(session_key, request_id)
                 events = store.replay_events(session_id, after_id=after_id)
                 terminals = store.run_terminals(session_key, after_id=after_id)
                 # Merge by message id so a run's terminal comes right after its
@@ -1407,6 +1454,9 @@ class Executor:
     # -- one task --------------------------------------------------------
     def _run_task(self, run: _Run) -> None:
         request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
+        # A credential rotation that happens mid-task rides this task's stream.
+        with self._mcp_lock:
+            self._mcp_active_request[session_key] = request_id
         # Bind the streaming hooks for this task.
         self._env_shim.on_run = lambda cmd, result: self._event(
             request_id,
@@ -1487,6 +1537,9 @@ class Executor:
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
+        # Anything the device has not acknowledged yet (a rotated refresh token
+        # from an earlier task) goes out again on this task's stream.
+        self._flush_pending_mcp_credentials(session_key, request_id)
 
         # here.now publish connector (§10-style consent): off unless the app
         # forwarded an enabled setting. ``ask`` mode binds the approval gate so a
@@ -1589,6 +1642,11 @@ class Executor:
                     subagents.supervisor.shutdown()
                 except Exception:  # noqa: BLE001 — cleanup must not mask a result
                     pass
+            # This task's stream is closing; a rotation after this point waits
+            # as pending for the next task start or replay.
+            with self._mcp_lock:
+                if self._mcp_active_request.get(session_key) == request_id:
+                    self._mcp_active_request.pop(session_key, None)
             # Every per-task client owns its own socket (and, for a backend
             # client, a reader thread): the main model, the hero/aux clone and
             # the browser client. Close all three with the task so no connection
@@ -1715,7 +1773,7 @@ class Executor:
             # ignores the rotating fields on purpose, so carry them into the
             # cached configs or the device's newer bearer would be ignored and
             # every connector would pay a refresh round-trip it did not need.
-            self._adopt_rotating_credentials(existing, mcp_servers)
+            self._adopt_rotating_credentials(session_key, existing, mcp_servers)
             return existing
         # Close a superseded manager outside the lock — close() joins threads.
         if stale is not None:
@@ -1738,32 +1796,69 @@ class Executor:
                 with self._mcp_lock:
                     self._mcp_managers.pop(session_key, None)
                     self._mcp_signatures.pop(session_key, None)
+                    self._mcp_refresh_baseline.pop(session_key, None)
+                    self._mcp_refresh_seen.pop(session_key, None)
+                    self._mcp_entry_meta.pop(session_key, None)
+                    self._mcp_pending_credentials.pop(session_key, None)
                 return None
-            manager = MCPManager(configs, errors=errors)
+            manager = MCPManager(
+                configs,
+                errors=errors,
+                # Fires from refresh_token() after its lock is released, only
+                # when the provider issued a DIFFERENT refresh token: the
+                # back-channel that brings a rotated token home (mcp_credentials).
+                on_credentials_rotated=self._mcp_rotation_listener(session_key),
+            )
+            with self._mcp_lock:
+                self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
         except Exception:  # noqa: BLE001 — building MCP must never crash a task
             return None
         with self._mcp_lock:
             self._mcp_managers[session_key] = manager
             self._mcp_signatures[session_key] = signature
+            baseline: dict[str, str | None] = {}
+            seen: dict[str, set[str]] = {}
+            for c in configs:
+                rt = (c.oauth or {}).get("refresh_token")
+                baseline[c.name] = rt
+                seen[c.name] = {rt} if rt else set()
+            self._mcp_refresh_baseline[session_key] = baseline
+            self._mcp_refresh_seen[session_key] = seen
         return manager
 
     def _adopt_rotating_credentials(
-        self, manager: MCPManager, mcp_servers: list[dict]
+        self, session_key: str, manager: MCPManager, mcp_servers: list[dict]
     ) -> None:
-        """On a cache hit, adopt the incoming rotating credentials into the cached
-        manager's configs (bead cowork-lwc).
+        """On a cache hit, MERGE the incoming credentials into the cached configs
+        (bead cowork-lwc, tightened after 47's review).
 
-        ``_mcp_signature`` deliberately drops ``access_token``, ``oauth.refresh_token``
-        and ``oauth.expires_at``, so a hit means "same connectors" — not "same
-        tokens". The app refreshes before every forward, so the incoming values
-        are usually the freshest anyone has; parsing them through the same
-        ``configs_from_entries`` the build path uses and writing them into the
-        EXISTING ``MCPServerConfig`` objects is enough, because each live
-        ``MCPConnection`` holds its config by reference and reads ``auth_token`` /
-        ``oauth`` at request time. The write happens under that connection's own
-        refresh lock, so it cannot interleave with a ``refresh_token()`` in flight.
-        Only present values are adopted: an entry that carries no bearer must not
-        wipe a token the host minted itself. Best-effort — never fails the task.
+        ``_mcp_signature`` drops ``access_token``, ``oauth.refresh_token`` and
+        ``oauth.expires_at``, so a hit means "same connectors", not "same tokens".
+        The device forwards what IT holds. That is usually fresh — but not the
+        truth once the host has refreshed a connector itself: providers that
+        rotate refresh tokens (Google, Okta, Auth0) issue a NEW one and kill the
+        old, and the device still holds the old. Replacing the block wholesale
+        would put the dead token back, and every later refresh would fail with
+        ``invalid_grant`` — the connector dies for good. Hence a merge:
+
+        - identity fields (token_endpoint, client_id, client_secret, resource,
+          scope, issuer) are always taken from the device;
+        - ``refresh_token`` / ``expires_at`` are taken ONLY when the device sends
+          a refresh token it has NEVER sent before (``_mcp_refresh_seen``) — the
+          user signed in again on the device, or the device is handing the host's
+          own rotated token back. That token becomes the device's current grant
+          (``_mcp_refresh_baseline``). A token seen before is a replay of an old
+          payload and changes nothing;
+        - ``access_token`` follows the same rule, plus: while the host has not
+          rotated anything AND the payload belongs to the current grant, a
+          fresher device bearer (and expiry) is welcome.
+
+        The write happens under the connection's refresh lock, so it cannot
+        interleave with a ``refresh_token()`` in flight. The config is read when
+        the transport is (re)built and inside ``refresh_token()``; the headers of
+        an already-open transport were frozen at connect, so an adopted bearer
+        takes effect at the next (re)connect or refresh, not mid-flight. Only
+        present values are adopted; best-effort — never fails the task.
         """
         try:
             account_token = (
@@ -1775,23 +1870,116 @@ class Executor:
         except Exception:  # noqa: BLE001 — a bad list must not fail a task that has a manager
             return
         by_name = {config.name: config for config in fresh}
+        with self._mcp_lock:
+            baseline = self._mcp_refresh_baseline.setdefault(session_key, {})
+            seen_by_name = self._mcp_refresh_seen.setdefault(session_key, {})
+            # The device may have renamed/re-identified; keep the echo current.
+            self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
+            pending = self._mcp_pending_credentials.setdefault(session_key, {})
         for config in manager.configs:
             incoming = by_name.get(config.name)
             if incoming is None:
                 continue
+            incoming_oauth = incoming.oauth or {}
             connection = manager.connections.get(config.name)
             lock = getattr(connection, "_refresh_lock", None)
             with lock if lock is not None else nullcontext():
-                if incoming.auth_token:
-                    config.auth_token = incoming.auth_token
-                if incoming.oauth:
-                    config.oauth = dict(incoming.oauth)
+                current_oauth = config.oauth or {}
+                seen = seen_by_name.setdefault(config.name, set())
+                device_grant = baseline.get(config.name)  # the device's current grant
+                host_current = current_oauth.get("refresh_token")
+                incoming_rt = incoming_oauth.get("refresh_token")
+                # Never seen from this device -> a re-sign-in (or the host's own
+                # rotated token handed back). Seen before -> a stale replay.
+                device_reauth = bool(incoming_rt) and incoming_rt not in seen
+                host_rotated = host_current is not None and host_current != device_grant
+                same_grant = not incoming_rt or incoming_rt == device_grant
+
+                merged = dict(current_oauth)
+                for key, value in incoming_oauth.items():
+                    if key not in _ROTATING_OAUTH:
+                        merged[key] = value  # identity fields: device is authoritative
+                if device_reauth:
+                    for key in _ROTATING_OAUTH:
+                        if key in incoming_oauth:
+                            merged[key] = incoming_oauth[key]
+                    with self._mcp_lock:
+                        baseline[config.name] = incoming_rt
+                        seen.add(incoming_rt)
+                        # Either the device hands the host's rotated token back
+                        # (the ack) or it re-signed-in and the pending frame is
+                        # obsolete. Both stop the re-send.
+                        pending.pop(config.name, None)
+                    if incoming.auth_token:
+                        config.auth_token = incoming.auth_token
+                elif not host_rotated and same_grant:
+                    if "expires_at" in incoming_oauth:
+                        merged["expires_at"] = incoming_oauth["expires_at"]
+                    if incoming.auth_token:
+                        config.auth_token = incoming.auth_token
+                # else: the host rotated (device stale) or the payload belongs to
+                # an older grant — keep the host's refresh_token / expires_at /
+                # access_token untouched.
+                if merged != current_oauth:
+                    config.oauth = merged
+
+    def _mcp_rotation_listener(self, session_key: str):
+        """The ``on_credentials_rotated`` hook for this session's MCPManager.
+
+        ``refresh_token()`` calls it AFTER releasing its lock, only when the
+        provider issued a different refresh token (a rotation), with the config
+        already updated. The listener builds the ``mcp_credentials`` frame
+        (docs/WIRE_CONTRACT.md) from the config plus the device's own identity
+        echo, sends it at once on the running task's stream, and parks it as
+        pending so it is re-sent at every task start and replay until the device
+        forwards the rotated token back. Never raises into the tool call.
+        """
+
+        def listener(name: str, config) -> None:
+            try:
+                with self._mcp_lock:
+                    meta = self._mcp_entry_meta.get(session_key, {}).get(name, {})
+                payload = mcp_credentials_payload(
+                    session_key=session_key,
+                    connector_id=meta.get("id"),
+                    name=str(meta.get("name") or name),
+                    url=str(meta.get("url") or getattr(config, "url", "") or ""),
+                    access_token=getattr(config, "auth_token", None),
+                    oauth=dict(getattr(config, "oauth", None) or {}),
+                )
+                with self._mcp_lock:
+                    self._mcp_pending_credentials.setdefault(session_key, {})[name] = payload
+                    request_id = self._mcp_active_request.get(session_key)
+                if request_id:
+                    self._event(request_id, payload)
+            except Exception:  # noqa: BLE001 — a relay problem must not kill a tool call
+                pass
+
+        return listener
+
+    def _flush_pending_mcp_credentials(self, session_key: str, request_id: str) -> None:
+        """Re-send every unacknowledged ``mcp_credentials`` frame of this session
+        on ``request_id`` (a task start or a replay). Idempotent for the app —
+        last one wins — and it stops on its own once the device forwards the
+        rotated token back (see ``_adopt_rotating_credentials``)."""
+        with self._mcp_lock:
+            payloads = list(self._mcp_pending_credentials.get(session_key, {}).values())
+        for payload in payloads:
+            try:
+                self._event(request_id, payload)
+            except Exception:  # noqa: BLE001 — best-effort
+                pass
 
     def _close_mcp_managers(self) -> None:
         with self._mcp_lock:
             managers = list(self._mcp_managers.values())
             self._mcp_managers.clear()
             self._mcp_signatures.clear()
+            self._mcp_refresh_baseline.clear()
+            self._mcp_refresh_seen.clear()
+            self._mcp_entry_meta.clear()
+            self._mcp_pending_credentials.clear()
+            self._mcp_active_request.clear()
         for manager in managers:
             try:
                 manager.close()
