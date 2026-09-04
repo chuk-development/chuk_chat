@@ -55,6 +55,7 @@ from __future__ import annotations
 import base64
 import json
 import queue
+import secrets
 import subprocess
 import threading
 import time
@@ -582,6 +583,11 @@ class Executor:
         self._vnc: _VncBridge | None = None
         self._vnc_stream_id: str = ""
         self._vnc_framer: _RfbClientFramer | None = None
+        # Bumped by every browser_start / browser_stop / executor stop. A start
+        # runs OFF the serve thread (cowork-vnc-up can take seconds and must not
+        # stall `stop` and every other frame behind it); when it finally has a
+        # bridge it only registers it if no newer start/stop happened meanwhile.
+        self._vnc_generation = 0
         self._vnc_lock = threading.Lock()
 
     @property
@@ -609,7 +615,11 @@ class Executor:
         """
         self._stop.set()
         # A live browser view holds a `docker exec` pipe; drop it before the
-        # container is released so no socat outlives the executor.
+        # container is released so no socat outlives the executor. Bump the
+        # generation too, so a browser_start still bringing x11vnc up on its
+        # own thread never registers a bridge into a stopped executor.
+        with self._vnc_lock:
+            self._vnc_generation += 1
         self._vnc_teardown(reason="stopped", notify=False)
         for run in self._live_runs():
             run.kill.interrupt()
@@ -696,6 +706,10 @@ class Executor:
                 # frame for the app, and every later task queued forever. So the
                 # failure becomes an ``error`` terminal and the worker lives on.
                 message = f"task failed: {type(exc).__name__}: {exc}"
+                # The run never reached _run_task's finally, so unbind the shim
+                # hook it had already pointed at this request (hygiene: the next
+                # task rebinds it anyway, but a stale binding is a stale binding).
+                self._env_shim.on_run = None
                 # The durable record closes first (docs/WIRE_CONTRACT.md): an
                 # app that reconnects later must see this run as failed too.
                 self._record_run(run, failed=message)
@@ -744,9 +758,19 @@ class Executor:
             self._handle_stop(request_id, payload)
             return
         if kind == "browser_start":
-            self._vnc_start(request_id, payload)
+            with self._vnc_lock:
+                self._vnc_generation += 1
+                generation = self._vnc_generation
+            threading.Thread(
+                target=self._vnc_start,
+                args=(request_id, payload, generation),
+                name="vnc-start",
+                daemon=True,
+            ).start()
             return
         if kind == "browser_stop":
+            with self._vnc_lock:
+                self._vnc_generation += 1
             self._vnc_teardown(reason="stopped")
             return
         if kind == "browser_data":
@@ -1020,7 +1044,16 @@ class Executor:
             "args": [*prefix[1:], cid, "cowork-browser-mcp"],
         }
 
-    def _vnc_start(self, request_id: str, payload: dict) -> None:
+    def _vnc_start(
+        self, request_id: str, payload: dict, generation: int | None = None
+    ) -> None:
+        # ``generation``: the value the dispatcher assigned this start. If a
+        # newer start or a stop bumps it while we are still bringing x11vnc up,
+        # this start is stale and must not register its bridge.
+        if generation is None:
+            with self._vnc_lock:
+                self._vnc_generation += 1
+                generation = self._vnc_generation
         # Only ever one live view; replace any prior one silently.
         self._vnc_teardown(reason="stopped", notify=False)
 
@@ -1040,9 +1073,23 @@ class Executor:
         # harmless `-i` also dropped the username when a user was set, producing
         # `docker exec -i -u <cid> cowork-vnc-up` — a malformed command that failed
         # with "could not start the VNC server". `-i` on a captured run is a no-op.
+        # Per-view VNC secret (§9.1 hardening). The sandbox runs untrusted code
+        # as the `cowork` user; x11vnc must not be reachable from inside it
+        # without a secret. `cowork-vnc-up` therefore runs as ROOT and writes
+        # the secret to a root-only file that x11vnc re-reads on every client
+        # connect (`-passwdfile read:`), so each view gets a fresh secret with
+        # no x11vnc restart. The secret reaches the app inside the sealed
+        # `started` frame and nowhere else. VNC auth keys are 8 bytes; 8
+        # url-safe chars is what x11vnc/DES actually use.
+        secret = secrets.token_urlsafe(6)[:8]
+        vnc_up_argv = [
+            prefix[0], "exec", "-i", "-u", "root",
+            "-e", f"COWORK_VNC_PASSWD={secret}",
+            cid, "cowork-vnc-up",
+        ]
         try:
             up = subprocess.run(  # noqa: S603 — argv built by us
-                prefix + [cid, "cowork-vnc-up"],
+                vnc_up_argv,
                 capture_output=True,
                 timeout=15,
             )
@@ -1092,10 +1139,19 @@ class Executor:
         holder.append(bridge)
         # Register first, THEN start the pump, so an instantly-dying socat is
         # torn down (and reported) instead of lingering as a dead "live" view.
+        # Stale start (a stop or a newer start won while x11vnc came up): drop
+        # this bridge quietly; whoever bumped the generation owns the view now.
         with self._vnc_lock:
-            self._vnc = bridge
-            self._vnc_stream_id = request_id
-            self._vnc_framer = _RfbClientFramer()
+            if generation != self._vnc_generation:
+                stale = True
+            else:
+                stale = False
+                self._vnc = bridge
+                self._vnc_stream_id = request_id
+                self._vnc_framer = _RfbClientFramer()
+        if stale:
+            bridge.close()
+            return
         bridge.start()
         # If the display has no browser window, the stream is an all-black frame.
         # Say so, so the user knows to ask the agent to open a page rather than
@@ -1110,7 +1166,10 @@ class Executor:
                     break
         except (AttributeError, ValueError):
             pass
-        self._event(request_id, browser_view_payload("started", message=message))
+        self._event(
+            request_id,
+            browser_view_payload("started", message=message, password=secret),
+        )
 
     def _vnc_feed(self, payload: dict) -> None:
         # One lock acquisition for both: a teardown between two separate reads
@@ -1452,7 +1511,14 @@ class Executor:
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
-                subagents.supervisor.shutdown()
+                # Guarded like the client closes below: a raising teardown here
+                # would discard the `return` of the except above and reach _work's
+                # handler — a SECOND terminal, a second failed record and a second
+                # notification for the same task.
+                try:
+                    subagents.supervisor.shutdown()
+                except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                    pass
             # Every per-task client owns its own socket (and, for a backend
             # client, a reader thread): the main model, the hero/aux clone and
             # the browser client. Close all three with the task so no connection

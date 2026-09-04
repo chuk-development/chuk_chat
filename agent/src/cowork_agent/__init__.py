@@ -94,6 +94,7 @@ from .memory import (
     MAX_FILE_CHARS,
     MemoryStore,
     MemoryToolError,
+    close_cached_memories,
     register_memory_tool,
 )
 from .media import (
@@ -413,6 +414,7 @@ __all__ = [
     "register_builtin_tools",
     "register_file_tools",
     "register_media_tools",
+    "close_cached_memories",
     "register_memory_tool",
     "register_read_document",
     "register_run_command",

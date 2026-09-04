@@ -51,6 +51,7 @@ plaintext secret in the workspace, which is exactly what §10 avoids. Prefer
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 import re
@@ -136,8 +137,6 @@ def tool_name(server: str, tool: str) -> str:
     full name appended, so it stays unique, stable across runs (``tool_call`` /
     ``tool_describe`` resolve the same string every time) and within the contract.
     """
-    import hashlib
-
     name = f"{TOOL_PREFIX}{sanitize(server)}__{sanitize(tool)}"
     if len(name) <= MAX_TOOL_NAME:
         return name

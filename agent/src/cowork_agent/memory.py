@@ -33,7 +33,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 from pathlib import Path
+from typing import Any
 
 from .model import ModelClient
 from .registry import ToolRegistry
@@ -86,6 +88,45 @@ _EMBED_PROVIDER = os.environ.get("COWORK_MEM_EMBED_PROVIDER", "proxy")
 _COLLECTION = os.environ.get("COWORK_MEM_COLLECTION", "cowork_memory")
 _QDRANT_DIRNAME = os.environ.get("COWORK_MEM_QDRANT_DIRNAME", "qdrant")
 _USER_ID = os.environ.get("COWORK_MEM_USER_ID", "default")
+
+
+# -- one Mem0 handle per workspace, process-wide -----------------------------
+# The embedded local-path Qdrant refuses a second client on the same folder
+# ("already accessed by another instance") while the first is still alive. The
+# executor builds a fresh MemoryStore for EVERY task on the SAME workspace, and
+# the previous task's handle is not reliably collected by then — so without this
+# cache the second task's ``Memory.from_config`` raised, ``_memory()`` swallowed
+# it, and memory silently became a no-op from task 2 on. One handle per root,
+# shared by every store built for that root, is the fix; the writer client is
+# re-pointed per task (see ``_memory``), because the hero client is per task.
+_MEM_LOCK = threading.Lock()
+_MEM_BY_ROOT: dict[str, Any] = {}
+
+
+def close_cached_memories() -> int:
+    """Close every cached Mem0 handle and forget it. Returns how many were closed.
+
+    The teardown half of the per-root cache: call it when the process that owned
+    the workspaces stops (an executor shutting down) or before a workspace is
+    removed/recreated at the same path, so the embedded Qdrant releases its
+    storage folder and a later open does not hit "already accessed". Best-effort
+    and never raises — a client that is already gone is simply dropped.
+    """
+    with _MEM_LOCK:
+        handles = list(_MEM_BY_ROOT.values())
+        _MEM_BY_ROOT.clear()
+    closed = 0
+    for handle in handles:
+        store = getattr(handle, "vector_store", None)
+        client = getattr(store, "client", None)
+        close = getattr(client, "close", None)
+        if callable(close):
+            try:
+                close()
+                closed += 1
+            except Exception:  # noqa: BLE001 — teardown must not raise
+                pass
+    return closed
 
 
 class MemoryToolError(ValueError):
@@ -347,18 +388,30 @@ class MemoryStore:
         logs once and leaves the store a no-op for the rest of the process.
         """
         if self._mem_built:
+            if self._mem is not None:
+                # The handle is shared across tasks; the writer must talk to
+                # THIS task's client (the previous task's hero is closed).
+                from . import mem0_provider
+
+                mem0_provider.set_backend_client(self._llm_client)
             return self._mem
-        self._mem_built = True  # try once; do not hammer a broken backend
+        self._mem_built = True  # try once per store; do not hammer a broken backend
         try:
             from mem0 import Memory
 
             from . import mem0_provider
 
             mem0_provider.register_provider()
-            # Hand the writer its backend before Mem0 builds the provider.
+            # Hand the writer its backend before Mem0 builds (or reuses) the provider.
             mem0_provider.set_backend_client(self._llm_client)
-            self._root.mkdir(parents=True, exist_ok=True)
-            self._mem = Memory.from_config(self._build_config())
+            key = str(self._root.resolve())
+            with _MEM_LOCK:
+                cached = _MEM_BY_ROOT.get(key)
+                if cached is None:
+                    self._root.mkdir(parents=True, exist_ok=True)
+                    cached = Memory.from_config(self._build_config())
+                    _MEM_BY_ROOT[key] = cached
+            self._mem = cached
         except Exception:  # noqa: BLE001 — best-effort: any failure degrades to no-op
             logger.warning(
                 "memory backend unavailable; the memory tool is a no-op",

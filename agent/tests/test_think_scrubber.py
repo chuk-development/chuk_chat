@@ -141,3 +141,20 @@ def test_scrub_text_one_shot():
     visible, reasoning = scrub_text("<think>a</think>b")
     assert (visible, reasoning) == ("b", "a")
     assert scrub_text(None) == ("", "")
+
+
+def test_a_pure_reasoning_turn_with_tool_calls_gets_null_content():
+    """Native round-trip shape: an assistant turn that was only <think> around
+    its tool calls has no visible text left, and the wire form for that is
+    ``content: null`` (the same "tool-calls only" rule the backend applies) —
+    not an empty string. A pure-reasoning turn WITHOUT tool calls keeps the
+    empty string, since there is no call for null to mark."""
+    call = {"id": "call_0", "type": "function", "function": {"name": "run_command", "arguments": "{}"}}
+    with_calls = {"role": "assistant", "content": "<think>plan</think>", "tool_calls": [call]}
+    without_calls = {"role": "assistant", "content": "<think>plan</think>"}
+
+    out = scrub_history([with_calls, without_calls], keep_newest=False)
+
+    assert out[0]["content"] is None
+    assert out[0]["tool_calls"] == [call]
+    assert out[1]["content"] == ""
