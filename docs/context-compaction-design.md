@@ -250,10 +250,15 @@ Built this session and proven on the real backend (`deepseek-v4-flash`):
   allowlisted, unused alias (`lmstudio`). The embedder falls back to local
   fastembed when no proxy embed key is set, so memory works out of the box. Live
   add/search recalled "codename BLUEFALCON ... launch date of November 15, 2026".
-- **Known gap (filed):** `deepseek-v4-flash` sometimes emits tool calls in its
-  native `<｜DSML｜tool_call>` format, which the `<tool_call>` parser misses — so
-  a `memory.search` the model tried went unexecuted. Recall still worked from the
-  in-context hero summary. Tracked as a bug to extend the parser.
+- **Tool calls are native-only (52d429d).** The `<tool_call>` text protocol is
+  removed from the Python runtime; tools ride as OpenAI `tools[]` and come back
+  as the server's `tool_calls` frame (contract: chuk_chat
+  `docs/NATIVE_TOOL_CALLING.md`, `docs/WIRE_CONTRACT.md`). The earlier gap —
+  `deepseek-v4-flash` emitting `<｜DSML｜tool_call>` that the text parser missed,
+  so a `memory.search` went unexecuted — is structurally gone: model text is never
+  parsed for calls. The hero `cheap_clone` carries no tools (housekeeping turns
+  must not call tools). Per-task `model`/`provider`/`reasoning_effort` reach the
+  `BackendModelClient`, so Fast Mode (light model + low/none reasoning) works.
 
 ## 11. How this maps onto cowork today
 
