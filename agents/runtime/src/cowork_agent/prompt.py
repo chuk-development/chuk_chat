@@ -24,6 +24,7 @@ This module owns the whole system prompt:
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 
 from .registry import ToolRegistry
 
@@ -80,9 +81,10 @@ job is to remove that friction, not to add to it.
 # What you can do
 
 - When the user asks what you can do, what tools, skills, or integrations you
-  have, answer from your real inventory: name the SKILLS listed for you and the
-  connected MCP servers and their tools. That list is in this prompt — read it
-  and report it.
+  have, answer from your real inventory: name the SKILLS listed in this prompt
+  and the CONNECTED MCP SERVERS listed in this prompt, plus the tools you have
+  been given natively (use `tool_search` to list any that are deferred). Report
+  what is actually wired up; never invent an integration.
 - Do NOT answer such a question with programming languages or "I can write
   Python". The user is asking which capabilities are wired up, not which
   languages exist.
@@ -165,9 +167,16 @@ def build_system_prompt(
     workspace: str | None = None,
     skills: str | None = None,
     memory: str | None = None,
+    mcp_servers: Sequence[str] | None = None,
 ) -> str:
     """Compose the full system prompt: behaviour + the skill catalogue + the
-    memory snapshot + the operator persona (last, so it wins on any conflict).
+    connected MCP server names + the memory snapshot + the operator persona
+    (last, so it wins on any conflict).
+
+    ``mcp_servers`` is names only. The tools themselves ride natively (or behind
+    ``tool_search`` when deferred), but the model must still be able to answer
+    "what integrations do you have" from the prompt — so the *inventory* is
+    listed, at a cost of one line per server, never the schemas.
 
     No wire format and no tool definitions. Tool calling is native: the schemas
     are sent as the request's ``tools`` array, so writing them into the prompt
@@ -186,6 +195,14 @@ def build_system_prompt(
     parts = [BASE_INSTRUCTIONS]
     if skills and skills.strip():
         parts.append(skills.strip())
+    names = [str(n).strip() for n in (mcp_servers or []) if str(n).strip()]
+    if names:
+        parts.append(
+            "# Connected MCP servers\n\n"
+            + "\n".join(f"- {name}" for name in names)
+            + "\n\nThese are wired up for you. Their tools are in your tool list, or "
+            "reachable through `tool_search` when deferred."
+        )
     if memory and memory.strip():
         parts.append(memory.strip())
     if workspace:

@@ -69,6 +69,10 @@ class TaskServer:
         on_room_frame=None,
         account_token_provider: Callable[[], str | None] | None = None,
         browser_mcp: bool = False,
+        on_run_finished: Callable[[dict], None] | None = None,
+        on_approval_pending: Callable[[dict], None] | None = None,
+        on_account_frame: Callable[[dict], None] | None = None,
+        on_run_ack: Callable[[dict], None] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -100,6 +104,13 @@ class TaskServer:
                 # Give the agent the Playwright MCP + watchable browser when the
                 # sandbox is the browser image (§9.1).
                 browser_mcp=browser_mcp,
+                # Run-ownership hooks (docs/WIRE_CONTRACT.md): the host notifies
+                # on a run that ends with no app attached, reacts to a pending
+                # approval, and re-provisions tokens from a second account frame.
+                on_run_finished=on_run_finished,
+                on_approval_pending=on_approval_pending,
+                on_account_frame=on_account_frame,
+                on_run_ack=on_run_ack,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)
@@ -143,6 +154,14 @@ class TaskServer:
         self._submitted.append(request_id)
         self._controller_ep.send(encode_frame(envelope))
         return request_id
+
+    def rebind(self, opener: CoworkFrameOpener, sealer: CoworkFrameSealer) -> None:
+        """Hand the Executor a fresh frame codec for a new app session. The
+        Executor, its queue, the sandbox and a run in flight all stay as they
+        are (docs/WIRE_CONTRACT.md: a run belongs to the host, not a socket)."""
+        executor = self._supervisor.executor(self._agent_id)
+        if executor is not None:
+            executor.rebind_codec(opener, sealer)
 
     def stop(self) -> None:
         self._stop.set()

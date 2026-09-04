@@ -492,6 +492,11 @@ def build_runtime(
             workspace=workspace,
             skills=library.catalog(),
             memory=memory.snapshot() if memory else None,
+            # Names only (§9): lets the model answer "what integrations do you
+            # have" truthfully now that tool schemas no longer live in the prompt.
+            mcp_servers=(
+                [c.name for c in manager.configs] if manager is not None else None
+            ),
         )
 
     prompt = _prompt_factory if include_tool_docs else system_prompt

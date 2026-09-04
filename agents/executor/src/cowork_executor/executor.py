@@ -101,6 +101,7 @@ from .protocol import (
     error_payload,
     file_payload,
     frame_to_b64,
+    run_state_payload,
     stop_ack_payload,
     subagent_payload,
     tool_payload,
@@ -191,6 +192,11 @@ class _Run:
     model: str | None = None
     provider: str | None = None
     reasoning_effort: str | None = None
+    # docs/WIRE_CONTRACT.md: the host-side id of this run and when it was
+    # accepted. The relay request id is per socket, so it cannot name a run
+    # across a reconnect; this id can.
+    run_id: str = ""
+    started_at: float = 0.0
 
 
 #: How long a here.now publish waits for the user before it gives up and denies.
@@ -240,6 +246,9 @@ class _RfbClientFramer:
         self._buf = bytearray()
         self._phase = "version"
         self.dropped_cut_text = 0
+        # RFB 3.3 has no client security-type selection byte (the server
+        # dictates); 3.7/3.8 do. Learned from the client's version string.
+        self._client_selects_security = True
 
     def feed(self, data: bytes) -> bytes | None:
         """Return the bytes safe to forward, or None on a protocol violation."""
@@ -267,6 +276,18 @@ class _RfbClientFramer:
                 return 0, False
             if not buf.startswith(b"RFB ") or buf[11:12] != b"\n":
                 return None, False
+            try:
+                major = int(buf[4:7])
+                minor = int(buf[8:11])
+            except ValueError:
+                return None, False
+            # RFB 3.3 is not framable from the client side alone: the server
+            # picks the security type silently, so we cannot know whether a
+            # 16-byte VNC-auth response follows. Our client speaks 3.8; refuse
+            # 3.3 outright (fail closed) rather than guess and desync.
+            if (major, minor) < (3, 7):
+                return None, False
+            self._client_selects_security = True
             self._phase = "security"
             return 12, True
         if self._phase == "security":
@@ -453,6 +474,10 @@ class Executor:
         on_room_frame: Callable[[dict], None] | None = None,
         account_token_provider: Callable[[], str | None] | None = None,
         browser_mcp: bool = False,
+        on_run_finished: Callable[[dict], None] | None = None,
+        on_approval_pending: Callable[[dict], None] | None = None,
+        on_account_frame: Callable[[dict], None] | None = None,
+        on_run_ack: Callable[[dict], None] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -505,6 +530,25 @@ class Executor:
         # does not exist. The server runs INSIDE the container (the runtime is
         # host-side), reached over `docker exec` stdio — see `_browser_mcp_entry`.
         self._browser_mcp = browser_mcp
+        # Run-ownership hooks (docs/WIRE_CONTRACT.md). A run belongs to this
+        # process, not to a socket. The host uses these to notify the user when
+        # a run ends with no app attached, to react to a pending approval, to
+        # re-provision tokens when a second account frame arrives mid-session,
+        # and to learn that the app saw a live ``done``. All optional; a raising
+        # hook is swallowed so a notifier can never take a run down.
+        self._on_run_finished = on_run_finished
+        self._on_approval_pending = on_approval_pending
+        self._on_account_frame = on_account_frame
+        self._on_run_ack = on_run_ack
+        # The frame codec is per app session: a reconnecting app mints a fresh
+        # sealer (its seq guard restarts), so the host hands us a fresh opener /
+        # sealer pair through ``rebind_codec`` while the run registry, the
+        # sandbox and the MCP managers stay untouched. Guarded because the serve
+        # thread reads it while the party thread swaps it.
+        self._codec_lock = threading.RLock()
+        # Replay and a live run's stream are mutually exclusive (see
+        # ``_handle_replay``). Re-entrant: a replay emits through ``_event``.
+        self._emit_lock = threading.RLock()
         # MCP managers live per session (§9): one manager owns the transport
         # threads for a session's forwarded servers, is reused across that
         # session's tasks, and is closed on executor stop. Guarded because the
@@ -601,6 +645,21 @@ class Executor:
         )
         self._worker.start()
 
+    def rebind_codec(
+        self, opener: CoworkFrameOpener, sealer: CoworkFrameSealer
+    ) -> None:
+        """Swap the frame codec for a new app session (docs/WIRE_CONTRACT.md).
+
+        The app mints a fresh sealer per socket, so after a reconnect the old
+        opener would reject every frame on its seq guard. Only the codec
+        changes: queued and running tasks, the sandbox and the per-session MCP
+        managers all stay as they are — that is what lets a run outlive the
+        socket it was started from.
+        """
+        with self._codec_lock:
+            self._opener = opener
+            self._sealer = sealer
+
     # -- serve loop ------------------------------------------------------
     def _serve(self) -> None:
         while not self._stop.is_set():
@@ -629,6 +688,24 @@ class Executor:
                 continue
             try:
                 self._run_task(run)
+            except Exception as exc:  # noqa: BLE001 — one bad task must not kill the worker
+                # ``_run_task`` builds the model (a per-task ``ModelSelect`` can
+                # raise on an unknown model id) and the runtime BEFORE its own
+                # try/finally. Left uncaught, that exception would end this
+                # worker thread for the rest of the executor's life: no terminal
+                # frame for the app, and every later task queued forever. So the
+                # failure becomes an ``error`` terminal and the worker lives on.
+                message = f"task failed: {type(exc).__name__}: {exc}"
+                # The durable record closes first (docs/WIRE_CONTRACT.md): an
+                # app that reconnects later must see this run as failed too.
+                self._record_run(run, failed=message)
+                self._terminal(run.request_id, error_payload(message))
+                self._call_hook(
+                    self._on_run_finished,
+                    self._run_summary(
+                        run, reason="failed", final_answer=None, error=message
+                    ),
+                )
             finally:
                 self._forget(run.request_id)
 
@@ -648,8 +725,10 @@ class Executor:
         # Open the encrypted frame. Default deny: an unapproved device or a bad
         # signature dies here and never reaches the loop — which is also what
         # keeps a stranger from stopping somebody else's run.
+        with self._codec_lock:
+            opener = self._opener
         try:
-            plaintext = self._opener.open(sealed)
+            plaintext = opener.open(sealed)
         except CoworkFrameRejected as exc:
             self._terminal(request_id, error_payload(f"rejected: {exc.rejection.value}"))
             return
@@ -684,6 +763,19 @@ class Executor:
             # like a stop: it resolves a wait, it does not open or close a task,
             # so there is no request-scoped terminal to send.
             self._resolve_approval(payload)
+            return
+        if kind == "run_ack":
+            # The app saw a live ``done`` for this run. Record it so a later
+            # replay does not flag the run as finished "while away", and tell
+            # the host so it skips a completion notification.
+            self._handle_run_ack(payload)
+            return
+        if kind == "account_authentication":
+            # A second account frame mid-session (token rotation, a
+            # re-provision after a reconnect). It is not a task: route it up to
+            # the host, which refreshes its session in place. No terminal — it
+            # is a control frame like a stop.
+            self._call_hook(self._on_account_frame, payload)
             return
         if kind == "task" or kind is None:
             # ``None`` keeps the original contract: the first frames of this
@@ -733,10 +825,50 @@ class Executor:
             reasoning_effort=(
                 str(reasoning_effort) if reasoning_effort is not None else None
             ),
+            run_id=uuid4().hex,
+            started_at=time.time(),
         )
+        # Record the run before it is queued (docs/WIRE_CONTRACT.md): from here
+        # on it exists on the host whether or not the socket survives. A store
+        # failure never refuses the task; the run just has no durable record.
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.begin_run(
+                    run.run_id, store.route(run.session_key), run.session_key, prompt
+                )
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — bookkeeping must not block a task
+            pass
         with self._runs_lock:
             self._runs[request_id] = run
         self._queue.put(run)
+
+    def _handle_run_ack(self, payload: dict) -> None:
+        run_id = payload.get("run_id")
+        if not isinstance(run_id, str) or not run_id:
+            return
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.mark_run_seen(run_id)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — an ack is best-effort
+            pass
+        self._call_hook(self._on_run_ack, {"run_id": run_id})
+
+    @staticmethod
+    def _call_hook(hook: Callable[[dict], None] | None, payload: dict) -> None:
+        """Call an optional host hook. A raising hook is swallowed: a notifier
+        or a token refresh must never take the serve loop or a run down."""
+        if hook is None:
+            return
+        try:
+            hook(payload)
+        except Exception:  # noqa: BLE001 — hooks are observers, not owners
+            pass
 
     # -- transcript replay (server is the truth) -------------------------
     def _handle_replay(self, request_id: str, payload: dict) -> None:
@@ -757,6 +889,12 @@ class Executor:
         stream with an ``error`` instead of killing the serve loop.
         """
         session_key = str(payload.get("session_key", "default"))
+        # The replay cursor (docs/WIRE_CONTRACT.md): a client that already holds
+        # the thread up to a message id asks only for what came after it.
+        try:
+            after_id = max(0, int(payload.get("after_id") or 0))
+        except (TypeError, ValueError):
+            after_id = 0
         try:
             store = StateStore(self._db_path)
         except Exception as exc:  # noqa: BLE001 — a bad db must not wedge serving
@@ -764,29 +902,76 @@ class Executor:
                 request_id, error_payload(f"replay failed: {type(exc).__name__}")
             )
             return
-        try:
-            session_id = store.route(session_key)
-            for event in store.replay_events(session_id):
-                self._event(request_id, event)
-        except Exception as exc:  # noqa: BLE001 — report, do not crash the thread
-            self._terminal(
-                request_id, error_payload(f"replay failed: {type(exc).__name__}")
-            )
-            return
-        finally:
+        # Replay and a live run's stream never interleave: the emit lock is held
+        # across the whole emission, so a turn persisted while this replay runs
+        # is not sent twice (once here, once live). A large thread costs the
+        # worker a few hundred milliseconds of back-pressure, which is bounded.
+        with self._emit_lock:
             try:
-                store.close()
-            except Exception:  # noqa: BLE001 — cleanup must not mask the result
-                pass
-        # Close the stream the way a live run does. ``replay`` marks it so the
-        # client never renders a spurious "done" card or mistakes it for a run.
-        self._terminal(
-            request_id,
-            {
-                **done_payload(final_answer=None, reason="replay", iterations=0),
-                "replay": True,
-            },
-        )
+                session_id = store.route(session_key)
+                # First the state header: is a run for this thread in flight?
+                self._event(request_id, self._run_state_for(store, session_key))
+                events = store.replay_events(session_id, after_id=after_id)
+                terminals = store.run_terminals(session_key, after_id=after_id)
+                # Merge by message id so a run's terminal comes right after its
+                # last turn. Same id: the turn first, then the terminal.
+                merged = sorted(
+                    [(int(e.get("mid", 0)), 0, i, e) for i, e in enumerate(events)]
+                    + [(int(t.get("mid", 0)), 1, i, t) for i, t in enumerate(terminals)],
+                    key=lambda item: (item[0], item[1], item[2]),
+                )
+                for _, _, _, event in merged:
+                    self._event(request_id, event)
+            except Exception as exc:  # noqa: BLE001 — report, do not crash the thread
+                self._terminal(
+                    request_id, error_payload(f"replay failed: {type(exc).__name__}")
+                )
+                return
+            finally:
+                try:
+                    store.close()
+                except Exception:  # noqa: BLE001 — cleanup must not mask the result
+                    pass
+            # Close the stream the way a live run does. ``reason: replay`` is the
+            # history-end marker: the client renders nothing for it and never
+            # mistakes it for a finished or a stopped run.
+            self._terminal(
+                request_id,
+                {
+                    **done_payload(final_answer=None, reason="replay", iterations=0),
+                    "replay": True,
+                },
+            )
+
+    def _run_state_for(self, store: StateStore, session_key: str) -> dict:
+        """The ``run_state`` header of a replay: ``running`` when a run for the
+        session is queued or in flight here, else ``idle``. The registry is the
+        live truth; the store covers a run this process recorded but has since
+        forgotten (it never does today, but the order of checks is safe)."""
+        live: _Run | None = None
+        with self._runs_lock:
+            for run in self._runs.values():
+                if run.session_key == session_key:
+                    live = run
+                    break
+        if live is not None:
+            return run_state_payload(
+                session_key,
+                "running",
+                run_id=live.run_id,
+                started_at=live.started_at,
+                prompt=live.prompt,
+            )
+        latest = store.latest_run(session_key)
+        if latest is not None and latest.get("state") == "running":
+            return run_state_payload(
+                session_key,
+                "running",
+                run_id=latest.get("run_id"),
+                started_at=latest.get("started_at"),
+                prompt=latest.get("prompt"),
+            )
+        return run_state_payload(session_key, "idle")
 
     # -- live browser view (§9.1) ----------------------------------------
     def _vnc_exec_prefix(self) -> tuple[list[str], str] | None:
@@ -892,10 +1077,9 @@ class Executor:
             # Only tear down if THIS bridge is still the registered one: a late
             # close from a bridge that was already replaced must not kill its
             # successor.
-            with self._vnc_lock:
-                if not holder or self._vnc is not holder[0]:
-                    return
-            self._vnc_teardown(reason="stopped")
+            if not holder:
+                return
+            self._vnc_teardown(reason="stopped", expected=holder[0])
 
         try:
             bridge = _VncBridge(argv, emit=emit, on_closed=on_closed, autostart=False)
@@ -929,9 +1113,12 @@ class Executor:
         self._event(request_id, browser_view_payload("started", message=message))
 
     def _vnc_feed(self, payload: dict) -> None:
+        # One lock acquisition for both: a teardown between two separate reads
+        # could otherwise hand us a bridge without its framer (or vice versa).
         with self._vnc_lock:
             bridge = self._vnc
-        if bridge is None:
+            framer = self._vnc_framer
+        if bridge is None or framer is None:
             return
         raw = payload.get("data")
         if not isinstance(raw, str):
@@ -942,17 +1129,15 @@ class Executor:
             return
         # Mirror the outbound MAX_BROWSER_CHUNK ceiling on the way in: a single
         # RFB client message is tiny (pointer 6 B, key 8 B, a big SetEncodings
-        # still well under this), so anything larger is malformed and is dropped
-        # rather than forwarded into x11vnc.
+        # still well under this), so anything larger is malformed. Tear the
+        # view down (fail closed): silently dropping it would leave a hole in
+        # the stream that the framer later misreports as "not RFB".
         if len(data) > MAX_BROWSER_CHUNK:
+            self._vnc_teardown(reason="error", expected=bridge)
             return
         # Enforce "only RFB protocol" on the way in (see _RfbClientFramer): pass
         # framed protocol messages, drop ClientCutText, and on anything that is
         # not RFB tear the view down instead of piping it into x11vnc.
-        with self._vnc_lock:
-            framer = self._vnc_framer
-        if framer is None:
-            return
         safe = framer.feed(data)
         if safe is None:
             self._vnc_teardown(reason="error")
@@ -960,12 +1145,24 @@ class Executor:
         if safe:
             bridge.feed(safe)
 
-    def _vnc_teardown(self, *, reason: str = "stopped", notify: bool = True) -> None:
+    def _vnc_teardown(
+        self,
+        *,
+        reason: str = "stopped",
+        notify: bool = True,
+        expected: _VncBridge | None = None,
+    ) -> None:
+        # ``expected``: only tear down if THIS bridge is still the registered
+        # one — checked and cleared under a single lock acquisition, so a late
+        # close from an already-replaced bridge can never kill its successor.
         with self._vnc_lock:
             bridge = self._vnc
+            if expected is not None and bridge is not expected:
+                return
             stream_id = self._vnc_stream_id
             self._vnc = None
             self._vnc_stream_id = ""
+            self._vnc_framer = None
         if bridge is None:
             return
         bridge.close()
@@ -1036,6 +1233,12 @@ class Executor:
                         public=req.public,
                     ),
                 )
+                # The host may notify a user who is not looking at the app: the
+                # run is blocked on them until they answer.
+                self._call_hook(
+                    self._on_approval_pending,
+                    {"approval_id": approval_id, "request_id": request_id},
+                )
                 deadline = time.monotonic() + APPROVAL_TIMEOUT
                 # Poll so a Stop reaches the wait: the loop only checks the kill
                 # switch between tool calls, and this call is inside one.
@@ -1095,12 +1298,23 @@ class Executor:
         # Everything downstream — the hero ``cheap_clone``, ``set_tools``, the
         # streaming wrapper, the cancel hooks — works off this one base client
         # exactly as before; only where it comes from changed.
-        if (run.model or run.reasoning_effort) and self._model_select is not None:
+        # ``model``, ``provider`` and ``reasoning_effort`` are three independent
+        # optional fields (docs/WIRE_CONTRACT.md); any one of them routes the
+        # task through the selector.
+        if (
+            run.model or run.provider or run.reasoning_effort
+        ) and self._model_select is not None:
             inner_model = self._model_select(
                 run.model, run.provider, run.reasoning_effort
             )
         else:
             inner_model = self._model_factory()
+        # The browser fallback (§8) gets its own client: the loop's client is
+        # wrapped to stream deltas into the chat, and a browser step's per-step
+        # JSON has no business there. Built here, not inline, so the ``finally``
+        # below can close it — a per-task backend client owns a socket and a
+        # reader thread, and one leaked per task adds up on a long-running host.
+        browser_client = self._model_factory()
         model = StreamingModelClient(
             inner_model,
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
@@ -1214,14 +1428,23 @@ class Executor:
             # actually runs, which itself needs a Chromium in the sandbox
             # (`check_fn`), so this stays out of the prompt on the browser-free
             # base image and costs nothing there.
-            browser_model=self._model_factory(),
+            browser_model=browser_client,
         )
 
         try:
             result = loop.run(session_key, prompt)
         except Exception as exc:  # a crashing loop must not kill the serve thread
-            self._terminal(
-                request_id, error_payload(f"loop failed: {type(exc).__name__}")
+            message = f"loop failed: {type(exc).__name__}"
+            # The durable record closes BEFORE the stream: it must exist even if
+            # nobody is listening (docs/WIRE_CONTRACT.md).
+            self._record_run(run, failed=message)
+            self._terminal(request_id, error_payload(message))
+            # The run is over once its terminal went out: drop it from the
+            # registry now, so a replay that races the hook below reports idle.
+            self._forget(request_id)
+            self._call_hook(
+                self._on_run_finished,
+                self._run_summary(run, reason="failed", final_answer=None, error=message),
             )
             return
         finally:
@@ -1230,16 +1453,22 @@ class Executor:
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
                 subagents.supervisor.shutdown()
-            # The hero/aux client owns its own socket; close it with the task so
-            # no aux connection outlives the run.
-            if hero_model is not None:
-                close_hero = getattr(hero_model, "close", None)
-                if callable(close_hero):
+            # Every per-task client owns its own socket (and, for a backend
+            # client, a reader thread): the main model, the hero/aux clone and
+            # the browser client. Close all three with the task so no connection
+            # outlives the run — one leaked socket per task is a slow bleed on a
+            # host that runs for weeks.
+            for client in (hero_model, inner_model, browser_client):
+                close = getattr(client, "close", None) if client is not None else None
+                if callable(close):
                     try:
-                        close_hero()
+                        close()
                     except Exception:  # noqa: BLE001 — cleanup must not mask a result
                         pass
 
+        # The durable record closes BEFORE the stream, so the run's end exists on
+        # the host even when the app is gone and the frame is dropped.
+        self._record_run(run, result=result)
         self._terminal(
             request_id,
             done_payload(
@@ -1247,8 +1476,74 @@ class Executor:
                 reason=result.reason.value,
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
+                run_id=run.run_id,
             ),
         )
+        # The run is over once its terminal went out: drop it from the registry
+        # before the hook, so a replay arriving while a notifier runs reports
+        # idle. ``_work``'s own ``_forget`` is idempotent.
+        self._forget(request_id)
+        self._call_hook(
+            self._on_run_finished,
+            self._run_summary(
+                run,
+                reason=result.reason.value,
+                final_answer=result.final_answer,
+                iterations=result.iterations,
+                tokens_spent=result.tokens_spent,
+            ),
+        )
+
+    # -- run records (docs/WIRE_CONTRACT.md) -----------------------------
+    def _record_run(self, run: _Run, *, result=None, failed: str | None = None) -> None:
+        """Close the run's ``runs`` row. Best-effort: a store failure loses the
+        record, never the result the app is about to receive."""
+        if not run.run_id:
+            return
+        try:
+            store = StateStore(self._db_path)
+            try:
+                if failed is not None:
+                    store.fail_run(run.run_id, reason=failed)
+                elif result is not None:
+                    store.finish_run(
+                        run.run_id,
+                        reason=result.reason.value,
+                        final_answer=result.final_answer,
+                        iterations=result.iterations,
+                        tokens_spent=result.tokens_spent,
+                    )
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            pass
+
+    @staticmethod
+    def _run_summary(
+        run: _Run,
+        *,
+        reason: str,
+        final_answer: str | None,
+        iterations: int = 0,
+        tokens_spent: int = 0,
+        error: str | None = None,
+    ) -> dict:
+        """What the host's ``on_run_finished`` hook receives. No transcript: the
+        host decides whether and how to notify; content stays in the store."""
+        return {
+            "run_id": run.run_id,
+            "session_key": run.session_key,
+            "request_id": run.request_id,
+            "prompt": run.prompt,
+            "reason": reason,
+            "has_answer": bool(final_answer),
+            "final_answer": final_answer,
+            "iterations": iterations,
+            "tokens_spent": tokens_spent,
+            "error": error,
+            "started_at": run.started_at,
+            "finished_at": time.time(),
+        }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
     def _session_mcp_manager(
@@ -1352,17 +1647,21 @@ class Executor:
 
     # -- outbound (all sealed) -------------------------------------------
     def _seal_b64(self, payload: dict) -> str:
-        return frame_to_b64(self._sealer.seal(encode_payload(payload)).to_bytes())
+        with self._codec_lock:
+            sealer = self._sealer
+        return frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())
 
     def _event(self, request_id: str, payload: dict) -> None:
         """Stream a progress event as a relay notification carrying a sealed frame."""
-        envelope = make_request(
-            METHOD_EVENT,
-            {"requestId": request_id, "frame": self._seal_b64(payload)},
-        )
-        self._endpoint.send(encode_frame(envelope))
+        with self._emit_lock:
+            envelope = make_request(
+                METHOD_EVENT,
+                {"requestId": request_id, "frame": self._seal_b64(payload)},
+            )
+            self._endpoint.send(encode_frame(envelope))
 
     def _terminal(self, request_id: str, payload: dict) -> None:
         """Close the stream with a relay response correlated to the task."""
-        envelope = make_response(request_id, {"frame": self._seal_b64(payload)})
-        self._endpoint.send(encode_frame(envelope))
+        with self._emit_lock:
+            envelope = make_response(request_id, {"frame": self._seal_b64(payload)})
+            self._endpoint.send(encode_frame(envelope))

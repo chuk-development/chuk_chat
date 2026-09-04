@@ -203,7 +203,38 @@ def task_payload(
     return payload
 
 
-def replay_payload(session_key: str = "default") -> dict[str, Any]:
+def run_state_payload(
+    session_key: str,
+    state: str,
+    *,
+    run_id: str | None = None,
+    started_at: float | None = None,
+    prompt: str | None = None,
+) -> dict[str, Any]:
+    """Build the ``run_state`` event that opens every replay response (see
+    ``docs/WIRE_CONTRACT.md``). ``state`` is ``running`` when a run for the
+    session is in flight on the host, else ``idle``."""
+    payload: dict[str, Any] = {
+        "type": "run_state",
+        "session_key": session_key,
+        "state": state,
+    }
+    if run_id:
+        payload["run_id"] = run_id
+    if started_at is not None:
+        payload["started_at"] = started_at
+    if prompt is not None:
+        payload["prompt"] = prompt
+    return payload
+
+
+def run_ack_payload(run_id: str) -> dict[str, Any]:
+    """Build a ``run_ack`` frame: the app confirms it rendered a live ``done``
+    for ``run_id``, so the host can skip a completion notification."""
+    return {"type": "run_ack", "run_id": run_id}
+
+
+def replay_payload(session_key: str = "default", *, after_id: int = 0) -> dict[str, Any]:
     """Build a ``replay`` frame: ask the executor to re-stream a thread's whole
     stored transcript (the server is the truth — see ``docs/PRODUCT_PHILOSOPHY``).
 
@@ -217,7 +248,11 @@ def replay_payload(session_key: str = "default") -> dict[str, Any]:
     ``done`` at once. So a client can always ask, and never has to know first
     whether the thread has any stored turns.
     """
-    return {"type": "replay", "session_key": session_key}
+    payload: dict[str, Any] = {"type": "replay", "session_key": session_key}
+    if after_id > 0:
+        # The replay cursor: only the rows after this message id come back.
+        payload["after_id"] = int(after_id)
+    return payload
 
 
 def approval_request_payload(
@@ -452,9 +487,15 @@ def room_done_payload(
 
 
 def done_payload(
-    *, final_answer: str | None, reason: str, iterations: int, tokens_spent: int = 0
+    *,
+    final_answer: str | None,
+    reason: str,
+    iterations: int,
+    tokens_spent: int = 0,
+    run_id: str | None = None,
+    while_away: bool = False,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "type": "done",
         "final_answer": final_answer,
         "reason": reason,
@@ -463,6 +504,13 @@ def done_payload(
         # (§7.6). Zero when the backend reported no usage.
         "tokens_spent": tokens_spent,
     }
+    # docs/WIRE_CONTRACT.md: which run ended, and whether it ended with no app
+    # attached (so the app shows "answer ready" instead of a live end).
+    if run_id:
+        payload["run_id"] = run_id
+    if while_away:
+        payload["while_away"] = True
+    return payload
 
 
 def error_payload(message: str) -> dict[str, Any]:

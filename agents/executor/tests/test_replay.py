@@ -95,12 +95,17 @@ def test_replay_restreams_the_whole_thread_marked_replay(tmp_path):
     finally:
         executor.stop()
 
-    # The stored turn comes back in live shapes: user ask, the tool call with its
-    # result folded in, then the assistant's final text. System is dropped.
+    # The stored turn comes back in live shapes: first the run-state header
+    # (docs/WIRE_CONTRACT.md), then user ask, the tool call with its result
+    # folded in, then the assistant's final text. System is dropped.
     kinds = [e["type"] for e in events]
-    assert kinds == ["user", "tool", "delta", "done"]
+    assert kinds == ["run_state", "user", "tool", "delta", "done"]
 
-    user, tool, delta, done = events
+    state, user, tool, delta, done = events
+    # No run is in flight for this thread: the header says idle.
+    assert state["state"] == "idle" and state["session_key"] == "thread-1"
+    # Every replayed row carries its message id, the client's replay cursor.
+    assert user["mid"] < tool["mid"] < delta["mid"]
     # Every non-terminal event is flagged replay, so the client never mistakes it
     # for a live run.
     assert user["replay"] is True
@@ -145,6 +150,113 @@ def test_replay_of_unknown_thread_is_an_empty_stream(tmp_path):
     finally:
         executor.stop()
 
-    # Just the terminal: an unknown thread is safe to ask for and replays empty.
-    assert [e["type"] for e in events] == ["done"]
-    assert events[0]["reason"] == "replay"
+    # Just the header and the terminal: an unknown thread is safe to ask for and
+    # replays empty.
+    assert [e["type"] for e in events] == ["run_state", "done"]
+    assert events[0]["state"] == "idle"
+    assert events[1]["reason"] == "replay"
+
+
+def test_replay_cursor_returns_only_the_rows_after_it(tmp_path):
+    """A client that holds the thread up to a message id asks with ``after_id``
+    and gets only what came later (docs/WIRE_CONTRACT.md)."""
+    db_path = str(tmp_path / "state.db")
+    _seed_thread(db_path, "thread-1")
+    store = StateStore(db_path)
+    sid = store.route("thread-1")
+    # Everything up to (and including) the tool call is already on the client.
+    all_events = store.replay_events(sid)
+    cursor = all_events[1]["mid"]  # the tool event
+    store.close()
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, db_path, channel, executor_ep)
+    controller = ControllerSession(
+        endpoint=controller_ep,
+        sealer=channel.controller.sealer,
+        opener=channel.controller.opener,
+    )
+    executor.start()
+    try:
+        rid = controller.send_payload(
+            {"type": "replay", "session_key": "thread-1", "after_id": cursor}
+        )
+        events = controller.collect(rid, timeout=10.0)
+    finally:
+        executor.stop()
+
+    # Header, then only the final assistant text, then the history-end marker.
+    assert [e["type"] for e in events] == ["run_state", "delta", "done"]
+    assert events[1]["text"] == "done, made a.txt"
+    assert events[1]["mid"] > cursor
+
+
+def test_a_finished_run_is_replayed_with_its_done_after_its_last_turn(tmp_path):
+    """A run recorded as finished on the host comes back as a real completion
+    card placed after its last message, flagged ``while_away`` when nobody
+    acknowledged it (docs/WIRE_CONTRACT.md)."""
+    db_path = str(tmp_path / "state.db")
+    store = StateStore(db_path)
+    sid = store.route("thread-1")
+    store.begin_run("run-1", sid, "thread-1", "make a file")
+    store.append_message(sid, "user", {"role": "user", "content": "make a file"})
+    store.append_message(sid, "assistant", {"role": "assistant", "content": "made it"})
+    store.finish_run(
+        "run-1", reason="finished", final_answer="made it", iterations=2, tokens_spent=7
+    )
+    store.close()
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, db_path, channel, executor_ep)
+    controller = ControllerSession(
+        endpoint=controller_ep,
+        sealer=channel.controller.sealer,
+        opener=channel.controller.opener,
+    )
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "replay", "session_key": "thread-1"})
+        events = controller.collect(rid, timeout=10.0)
+    finally:
+        executor.stop()
+
+    assert [e["type"] for e in events] == ["run_state", "user", "delta", "done", "done"]
+    run_done, history_end = events[3], events[4]
+    # The run's own terminal: a finished run, replayed, unacknowledged.
+    assert run_done["replay"] is True
+    assert run_done["reason"] == "finished"
+    assert run_done["run_id"] == "run-1"
+    assert run_done["while_away"] is True
+    assert run_done["final_answer"] == "made it"
+    assert run_done["tokens_spent"] == 7
+    # The stream still closes with the history-end marker, unchanged.
+    assert history_end["reason"] == "replay"
+
+
+def test_run_state_reports_a_run_recorded_as_running(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    store = StateStore(db_path)
+    sid = store.route("thread-1")
+    store.begin_run("run-9", sid, "thread-1", "count to 20")
+    store.close()
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, db_path, channel, executor_ep)
+    controller = ControllerSession(
+        endpoint=controller_ep,
+        sealer=channel.controller.sealer,
+        opener=channel.controller.opener,
+    )
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "replay", "session_key": "thread-1"})
+        events = controller.collect(rid, timeout=10.0)
+    finally:
+        executor.stop()
+
+    state = events[0]
+    assert state["type"] == "run_state" and state["state"] == "running"
+    assert state["run_id"] == "run-9" and state["prompt"] == "count to 20"
