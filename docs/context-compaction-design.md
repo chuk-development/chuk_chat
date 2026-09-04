@@ -260,6 +260,20 @@ Built this session and proven on the real backend (`deepseek-v4-flash`):
   must not call tools). Per-task `model`/`provider`/`reasoning_effort` reach the
   `BackendModelClient`, so Fast Mode (light model + low/none reasoning) works.
 
+- **mem0 survives the second task (50f114c, bb5239a).** Found by a two-task
+  proof: the executor builds a fresh `MemoryStore` per task on the same
+  workspace, and the embedded local-path Qdrant refused the second open
+  ("already accessed by another instance") — memory silently became a no-op from
+  task 2 on. Fix: one `Memory` handle per workspace root, process-wide, with the
+  writer client re-pointed per task and `close_cached_memories()` called from
+  `Executor.stop()`. `agent/tests/live_memory_two_tasks.py` is the proof; it
+  passes.
+- **Review discipline.** An Opus full review found 8 defects (one blocker: an
+  exception while building a task's model killed the executor's worker thread
+  for good); all fixed and re-verified read-only by a second Opus pass. Keep
+  doing this: build → review → fix → re-verify, with real-model probes on the
+  load-bearing paths.
+
 ## 11. How this maps onto cowork today
 
 - Backend is text-only ChukChat `/v2/ws`; the only current trimming is the
