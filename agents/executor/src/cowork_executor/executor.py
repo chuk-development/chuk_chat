@@ -817,6 +817,18 @@ class Executor:
         except (KeyError, TypeError):
             self._terminal(request_id, error_payload("bad task payload"))
             return
+        # The prompt must be text. Checked HERE, before the runs row is written:
+        # a non-string prompt used to slip into the durable record under the
+        # swallowing except below (or lose the record silently) and only fail
+        # later in the worker. Refuse it up front with a terminal the app renders.
+        if not isinstance(prompt, str):
+            self._terminal(
+                request_id,
+                error_payload(
+                    f"bad task payload: prompt must be a string, got {type(prompt).__name__}"
+                ),
+            )
+            return
         raw_servers = payload.get("mcp_servers")
         mcp_servers = list(raw_servers) if isinstance(raw_servers, list) else None
         raw_herenow = payload.get("herenow")
