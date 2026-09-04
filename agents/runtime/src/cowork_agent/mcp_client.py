@@ -56,7 +56,7 @@ import inspect
 import json
 import re
 import threading
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
@@ -314,12 +314,145 @@ def configs_from_entries(
             token = str(raw["access_token"]) if raw.get("access_token") else None
         if token:
             config.auth_token = token
+        # An oauth entry may arrive with no ``access_token`` at all and only an
+        # ``oauth`` block: the app has the sign-in but let the bearer lapse
+        # while it was closed. That entry is NOT unauthenticated — the first
+        # request mints a token from ``oauth.refresh_token``
+        # (:meth:`MCPConnection._http_headers`). ``_one_config`` already carried
+        # the block over; dropping the entry here is the bug this replaced.
         problem = config.validate()
         if problem:
             errors.append(f"{name}: {problem}")
             continue
         configs.append(config)
     return configs, errors
+
+
+#: How long before the stated expiry a token is treated as already dead, so a
+#: call does not race the clock on its way to the server.
+TOKEN_SKEW = timedelta(seconds=30)
+
+
+def _parse_expiry(raw: Any) -> datetime | None:
+    """The ``expires_at`` of an ``oauth`` block as an aware UTC datetime.
+
+    The app sends ISO 8601 in UTC. A stamp with no zone is read as UTC too:
+    guessing the host's local zone would silently shift the expiry by hours,
+    and reading it early only costs one extra refresh.
+    """
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def token_expired(oauth: dict[str, Any] | None) -> bool:
+    """True when the ``oauth`` block says its access token has lapsed.
+
+    No ``expires_at`` means "no opinion", which reads as live — an unexpiring
+    token is a real thing, and refreshing a working token on every task would
+    be worse than the occasional 401.
+    """
+    expires_at = _parse_expiry((oauth or {}).get("expires_at"))
+    if expires_at is None:
+        return False
+    return datetime.now(UTC) >= expires_at - TOKEN_SKEW
+
+
+def refresh_access_token(
+    oauth: dict[str, Any] | None,
+    *,
+    timeout: float = 20.0,
+) -> tuple[str | None, dict[str, Any]]:
+    """Mint a fresh access token from a forwarded ``oauth`` block (RFC 6749).
+
+    This is what lets a run outlive the app. The device signed in once, in a
+    browser, and handed over the refresh token, the token endpoint and the
+    client it registered; from here on the executor renews the access token
+    itself, with the app closed and nobody to consent to anything.
+
+    Returns ``(token, oauth)``. On success ``oauth`` is a copy carrying the new
+    ``expires_at`` and, when the server rotated it, the new ``refresh_token``.
+    On any failure the token is ``None`` and the block comes back unchanged —
+    this never raises, because a connector that cannot renew must cost that
+    connector and not the task.
+    """
+    block = dict(oauth or {})
+    refresh_token = str(block.get("refresh_token") or "")
+    token_endpoint = str(block.get("token_endpoint") or "")
+    if not refresh_token or not token_endpoint:
+        return None, block
+
+    import httpx
+
+    client_id = str(block.get("client_id") or "")
+    client_secret = block.get("client_secret")
+    body = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    if client_id:
+        body["client_id"] = client_id
+    for optional in ("resource", "scope"):
+        value = block.get(optional)
+        if value:
+            body[optional] = str(value)
+
+    try:
+        response = httpx.post(
+            token_endpoint,
+            data=body,
+            headers={"accept": "application/json"},
+            # The client secret goes in the Basic header, not the body: a
+            # server that issued one usually insists on it there.
+            auth=(client_id, str(client_secret)) if client_secret else None,
+            timeout=timeout,
+            follow_redirects=True,
+        )
+        if response.status_code >= 400:
+            return None, block
+        payload = response.json()
+    except Exception:  # noqa: BLE001 — a dead refresh is a dead connector, not a crash
+        return None, block
+
+    if not isinstance(payload, dict):
+        return None, block
+    token = str(payload.get("access_token") or "")
+    if not token:
+        return None, block
+
+    updated = dict(block)
+    # Servers may rotate the refresh token, or keep the old one.
+    rotated = payload.get("refresh_token")
+    if rotated:
+        updated["refresh_token"] = str(rotated)
+    expires_in = payload.get("expires_in")
+    seconds: int | None
+    try:
+        seconds = int(expires_in) if expires_in is not None else None
+    except (TypeError, ValueError):
+        seconds = None
+    if seconds is not None:
+        updated["expires_at"] = (
+            datetime.now(UTC) + timedelta(seconds=seconds)
+        ).isoformat()
+    else:
+        updated.pop("expires_at", None)
+    scope = payload.get("scope")
+    if scope:
+        updated["scope"] = str(scope)
+    return token, updated
+
+
+def _looks_unauthorized(error: str | None) -> bool:
+    """Whether a connect error reads as "the server refused this token"."""
+    if not error:
+        return False
+    lowered = error.lower()
+    return "401" in lowered or "unauthorized" in lowered
 
 
 def load_mcp_config(
@@ -371,6 +504,11 @@ class MCPConnection:
     ) -> None:
         self.config = config
         self._token_provider = token_provider
+        #: Serializes token refreshes. Two tool calls that both see an expired
+        #: token must not both spend the refresh token — some servers rotate it
+        #: and invalidate the old one, so the loser would be left holding a
+        #: dead credential.
+        self._refresh_lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._session: Any = None
@@ -536,6 +674,14 @@ class MCPConnection:
         )
 
     def _http_headers(self) -> dict[str, str]:
+        """The request headers, with the bearer resolved.
+
+        Precedence, in order: a live OAuth token from the stash; the forwarded
+        bearer while it has not lapsed; a token minted here from the forwarded
+        refresh material; and, if that fails, the forwarded bearer anyway — the
+        server is the authority on whether it is still good, and a request that
+        gets a 401 is better than one sent with no credential at all.
+        """
         headers = dict(self.config.headers)
         token = None
         if self._token_provider is not None:
@@ -543,14 +689,42 @@ class MCPConnection:
                 token = self._token_provider(self.config.name)
             except Exception:  # noqa: BLE001 — a stash miss is not a failure
                 token = None
-        # The forwarded bearer is the fallback: a live OAuth token from the stash
-        # wins, but with no stash (the per-session forwarded path) the resolved
-        # token from the sealed payload is what authenticates the server.
         if not token:
-            token = self.config.auth_token or None
+            forwarded = self.config.auth_token or None
+            if forwarded and not token_expired(self.config.oauth):
+                token = forwarded
+            else:
+                token = self.refresh_token() or forwarded
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
+
+    def refresh_token(self, *, force: bool = False) -> str | None:
+        """Mint a new access token from the forwarded ``oauth`` block.
+
+        Returns the token, or ``None`` when there is no refresh material or the
+        server refused. The new token and the possibly rotated refresh token are
+        written back onto the config, so the rest of the task uses them and the
+        executor can forward the fresh state on.
+
+        ``force`` skips the "is it expired" question, which is what a 401 means:
+        the server has already told us the token is no good, whatever its stated
+        expiry said.
+        """
+        with self._refresh_lock:
+            oauth = self.config.oauth
+            if not oauth.get("refresh_token"):
+                return None
+            # Another caller may have refreshed while this one waited on the
+            # lock; a token that is live again needs no second round trip.
+            if not force and self.config.auth_token and not token_expired(oauth):
+                return self.config.auth_token
+            token, updated = refresh_access_token(oauth)
+            if not token:
+                return None
+            self.config.auth_token = token
+            self.config.oauth = updated
+            return token
 
     # -- calls ------------------------------------------------------------
 
@@ -718,12 +892,31 @@ class MCPManager:
             except Exception as exc:  # noqa: BLE001
                 ok = False
                 connection._error = f"{type(exc).__name__}: {exc}"  # noqa: SLF001
+            if not ok and self._retry_with_fresh_token(config.name):
+                ok = True
             status[config.name] = ok
             if not ok:
+                connection = self.connections[config.name]
                 self.errors.append(
                     f"{config.name}: not available ({connection.error or 'unknown error'})"
                 )
         return status
+
+    def _retry_with_fresh_token(self, server: str) -> bool:
+        """After a refused handshake, mint a new token and dial again, once.
+
+        This is the case the whole forwarded ``oauth`` block exists for: the app
+        is closed, the bearer it handed over has died, and the server answers
+        the handshake with a 401. Nobody can open a browser, so the executor
+        renews the token itself and reconnects. A server that refuses for any
+        other reason is left alone — retrying a 404 achieves nothing.
+        """
+        connection = self.connections.get(server)
+        if connection is None or not _looks_unauthorized(connection.error):
+            return False
+        if connection.refresh_token(force=True) is None:
+            return False
+        return self.reconnect(server)
 
     def register(self, registry: ToolRegistry) -> list[str]:
         """Register the tools of every connected server.
@@ -781,6 +974,11 @@ class MCPManager:
                 "tool": tool,
                 "error": f"mcp server not configured: {server}",
             }
+        # A long task can outlive the token the session was opened with. If the
+        # session went down on a refused handshake, renew and redial before
+        # telling the model the tool is gone.
+        if not connection.alive() and self._retry_with_fresh_token(server):
+            connection = self.connections.get(server, connection)
         return connection.call(tool, arguments)
 
     def reconnect(self, server: str) -> bool:
