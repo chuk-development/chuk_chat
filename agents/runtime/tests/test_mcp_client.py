@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -25,7 +27,9 @@ from cowork_agent.mcp_client import (
     configs_from_entries,
     load_mcp_config,
     parse_mcp_config,
+    refresh_access_token,
     register_mcp_tools,
+    token_expired,
     tool_name,
 )
 from cowork_agent.prompt import render_tool_docs
@@ -469,3 +473,573 @@ def test_reconnect_swaps_the_session_under_registered_tools():
         assert after["calls"] == 1
     finally:
         manager.close()
+
+
+# -- forwarded oauth block: the host renews its own tokens (§10, WS-5) -----
+#
+# The device signs in once, in a browser, and forwards the whole record. From
+# then on the app may be closed for days while the run continues, so the
+# executor mints its own access tokens from the refresh token. These tests are
+# the contract for that.
+
+FORWARD_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "app"
+    / "test"
+    / "fixtures"
+    / "mcp_forward_payload.json"
+)
+
+
+def _far_future() -> str:
+    return (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+
+
+def _long_past() -> str:
+    return (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+
+
+def _oauth_config(name: str = "notion", **oauth) -> MCPServerConfig:
+    block = {
+        "token_endpoint": "https://auth.example/token",
+        "client_id": "cid-1",
+        "refresh_token": "rt-1",
+        "resource": "https://mcp.example/mcp",
+        "scope": "read write",
+    }
+    block.update(oauth)
+    return MCPServerConfig(
+        name=name,
+        transport=HTTP,
+        url="https://mcp.example/mcp",
+        auth_token="at-old",
+        oauth=block,
+    )
+
+
+class _FakeTokenServer:
+    """Stands in for ``httpx.post`` against a token endpoint."""
+
+    def __init__(self, *, status=200, payload=None, boom=False):
+        self.status = status
+        self.payload = payload if payload is not None else {
+            "access_token": "at-new",
+            "expires_in": 3600,
+        }
+        self.boom = boom
+        self.calls: list[dict] = []
+
+    def __call__(self, url, *, data=None, headers=None, auth=None, **kwargs):
+        self.calls.append({"url": url, "data": dict(data or {}), "auth": auth})
+        if self.boom:
+            raise RuntimeError("network is down")
+        server = self
+
+        class _Response:
+            status_code = server.status
+
+            @staticmethod
+            def json():
+                return server.payload
+
+        return _Response()
+
+
+def test_the_frozen_forward_payload_parses_into_configs():
+    """The fixture the Dart side asserts against is read here too, so the two
+    languages cannot drift apart silently."""
+    body = json.loads(FORWARD_FIXTURE.read_text(encoding="utf-8"))
+    configs, errors = configs_from_entries(
+        body["mcp_servers"], account_token="ACCOUNT-BEARER"
+    )
+
+    assert errors == []
+    by_name = {c.name: c for c in configs}
+    assert set(by_name) == {"Notion", "Legacy", "Brave", "GitHub"}
+
+    notion = by_name["Notion"]
+    assert notion.auth_token == "at-notion"
+    assert notion.oauth["refresh_token"] == "rt-notion"
+    assert notion.oauth["token_endpoint"] == "https://auth.notion.example/token"
+    assert notion.oauth["client_id"] == "cid-notion"
+    assert notion.oauth["resource"] == "https://mcp.notion.example/mcp"
+
+    # Signed in by a build that had no oauth block: bearer only.
+    assert by_name["Legacy"].auth_token == "at-legacy"
+    assert by_name["Legacy"].oauth == {}
+
+    # An API-key connector: credentials already on the URL, no bearer.
+    assert by_name["Brave"].auth_token is None
+    assert by_name["Brave"].url.endswith("?key=k-123")
+
+    # appSession: the executor's own account bearer.
+    assert by_name["GitHub"].auth_token == "ACCOUNT-BEARER"
+
+
+def test_an_oauth_entry_with_only_refresh_material_is_kept():
+    """The reported bug: the app was closed long enough for the bearer to die,
+    so the entry arrives with a refresh token and no ``access_token``. It must
+    stay a configured server, not silently become an unauthenticated one."""
+    configs, errors = configs_from_entries(
+        [
+            {
+                "name": "notion",
+                "url": "https://mcp.notion.example/mcp",
+                "auth": AUTH_OAUTH,
+                "oauth": {
+                    "token_endpoint": "https://auth.notion.example/token",
+                    "client_id": "cid",
+                    "refresh_token": "rt-notion",
+                },
+            }
+        ]
+    )
+
+    assert errors == []
+    assert configs[0].auth_token is None
+    assert configs[0].oauth["refresh_token"] == "rt-notion"
+
+
+def test_token_expired_reads_the_block():
+    assert token_expired(None) is False
+    # No stated expiry means no opinion, which reads as live.
+    assert token_expired({"refresh_token": "rt"}) is False
+    assert token_expired({"expires_at": _far_future()}) is False
+    assert token_expired({"expires_at": _long_past()}) is True
+    # Inside the skew window, so already treated as dead.
+    soon = (datetime.now(UTC) + timedelta(seconds=5)).isoformat()
+    assert token_expired({"expires_at": soon}) is True
+    # A stamp with no zone is read as UTC rather than guessed at.
+    naive = (datetime.now(UTC) + timedelta(hours=1)).replace(tzinfo=None)
+    assert token_expired({"expires_at": naive.isoformat()}) is False
+    assert token_expired({"expires_at": "not a date"}) is False
+
+
+def test_refresh_access_token_mints_and_records_the_new_expiry(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+
+    token, block = refresh_access_token(_oauth_config().oauth)
+
+    assert token == "at-new"
+    assert server.calls[0]["url"] == "https://auth.example/token"
+    sent = server.calls[0]["data"]
+    assert sent["grant_type"] == "refresh_token"
+    assert sent["refresh_token"] == "rt-1"
+    assert sent["client_id"] == "cid-1"
+    assert sent["resource"] == "https://mcp.example/mcp"
+    assert sent["scope"] == "read write"
+    # No client secret was issued, so no Basic header.
+    assert server.calls[0]["auth"] is None
+    # The old refresh token survives a server that did not rotate it.
+    assert block["refresh_token"] == "rt-1"
+    assert token_expired(block) is False
+
+
+def test_refresh_access_token_takes_a_rotated_refresh_token(monkeypatch):
+    server = _FakeTokenServer(
+        payload={
+            "access_token": "at-new",
+            "refresh_token": "rt-2",
+            "expires_in": 60,
+            "scope": "read",
+        }
+    )
+    monkeypatch.setattr("httpx.post", server)
+
+    token, block = refresh_access_token(_oauth_config().oauth)
+
+    assert token == "at-new"
+    assert block["refresh_token"] == "rt-2"
+    assert block["scope"] == "read"
+
+
+def test_refresh_access_token_sends_a_client_secret_as_basic_auth(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+
+    refresh_access_token(_oauth_config(client_secret="shh").oauth)
+
+    assert server.calls[0]["auth"] == ("cid-1", "shh")
+
+
+@pytest.mark.parametrize(
+    "server",
+    [
+        _FakeTokenServer(status=400),
+        _FakeTokenServer(boom=True),
+        _FakeTokenServer(payload={"error": "invalid_grant"}),
+        _FakeTokenServer(payload="not an object"),
+    ],
+)
+def test_refresh_access_token_never_raises(monkeypatch, server):
+    monkeypatch.setattr("httpx.post", server)
+
+    token, block = refresh_access_token(_oauth_config().oauth)
+
+    assert token is None
+    # The block comes back untouched, so the caller can still forward it.
+    assert block["refresh_token"] == "rt-1"
+
+
+def test_refresh_access_token_without_material_does_not_call_out(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+
+    assert refresh_access_token(None) == (None, {})
+    assert refresh_access_token({"token_endpoint": "https://x/token"})[0] is None
+    assert refresh_access_token({"refresh_token": "rt"})[0] is None
+    assert server.calls == []
+
+
+def test_headers_use_the_forwarded_bearer_while_it_lives(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    connection = MCPConnection(_oauth_config(expires_at=_far_future()))
+
+    headers = connection._http_headers()  # noqa: SLF001
+
+    assert headers["Authorization"] == "Bearer at-old"
+    assert server.calls == []
+
+
+def test_headers_refresh_a_lapsed_bearer_and_write_it_back(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = _oauth_config(expires_at=_long_past())
+    connection = MCPConnection(config)
+
+    headers = connection._http_headers()  # noqa: SLF001
+
+    assert headers["Authorization"] == "Bearer at-new"
+    # Written back, so the next call in this task does not refresh again.
+    assert config.auth_token == "at-new"
+    assert token_expired(config.oauth) is False
+    assert connection._http_headers()["Authorization"] == "Bearer at-new"  # noqa: SLF001
+    assert len(server.calls) == 1
+
+
+def test_headers_mint_a_bearer_when_the_payload_carried_none(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = _oauth_config()
+    config.auth_token = None
+    connection = MCPConnection(config)
+
+    headers = connection._http_headers()  # noqa: SLF001
+
+    assert headers["Authorization"] == "Bearer at-new"
+
+
+def test_headers_fall_back_to_the_stale_bearer_when_the_refresh_fails(
+    monkeypatch,
+):
+    monkeypatch.setattr("httpx.post", _FakeTokenServer(status=400))
+    connection = MCPConnection(_oauth_config(expires_at=_long_past()))
+
+    headers = connection._http_headers()  # noqa: SLF001
+
+    # The server is the authority on whether the token is dead. Sending it and
+    # getting a 401 beats sending nothing.
+    assert headers["Authorization"] == "Bearer at-old"
+
+
+def test_headers_send_nothing_when_there_is_nothing_to_send(monkeypatch):
+    monkeypatch.setattr("httpx.post", _FakeTokenServer(status=400))
+    config = _oauth_config(expires_at=_long_past())
+    config.auth_token = None
+    connection = MCPConnection(config)
+
+    assert "Authorization" not in connection._http_headers()  # noqa: SLF001
+
+
+def test_the_stash_still_wins_over_the_forwarded_material(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    connection = MCPConnection(
+        _oauth_config(expires_at=_long_past()),
+        token_provider=lambda name: "stash-token",
+    )
+
+    headers = connection._http_headers()  # noqa: SLF001
+
+    assert headers["Authorization"] == "Bearer stash-token"
+    assert server.calls == []
+
+
+def test_a_forwarded_oauth_entry_renews_itself_against_a_real_server(
+    http_transport, monkeypatch
+):
+    """End to end on a real socket: the bearer the app forwarded has lapsed, so
+    the connection mints a new one before the handshake and the server sees it."""
+    transport, url, seen_headers = http_transport
+    server = _FakeTokenServer(
+        payload={"access_token": "at-renewed", "expires_in": 3600}
+    )
+    monkeypatch.setattr("httpx.post", server)
+
+    configs, errors = configs_from_entries(
+        [
+            {
+                "name": "http-fake",
+                "url": url,
+                "transport": transport,
+                "auth": AUTH_OAUTH,
+                "access_token": "at-dead",
+                "oauth": {
+                    "token_endpoint": "https://auth.example/token",
+                    "client_id": "cid-1",
+                    "refresh_token": "rt-1",
+                    "expires_at": _long_past(),
+                },
+            }
+        ]
+    )
+    assert errors == []
+    connection = MCPConnection(configs[0])
+    try:
+        assert connection.start() is True, connection.error
+        assert connection.call("shout", {"text": "hi"})["content"] == "HI"
+    finally:
+        connection.close()
+
+    assert len(server.calls) == 1
+    assert any(
+        headers.get("authorization") == "Bearer at-renewed"
+        for headers in seen_headers
+    )
+    assert not any(
+        headers.get("authorization") == "Bearer at-dead"
+        for headers in seen_headers
+    )
+
+
+def test_a_refused_handshake_is_retried_once_with_a_fresh_token(monkeypatch):
+    """A 401 on connect is the case the whole block exists for: nobody can open
+    a browser, so the executor renews the token itself and dials again."""
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = _oauth_config(name="notion", expires_at=_far_future())
+    attempts: list[str | None] = []
+
+    class _Refusing(MCPConnection):
+        def start(self) -> bool:
+            attempts.append(self.config.auth_token)
+            if self.config.auth_token == "at-new":
+                self._error = None
+                self._ready.set()
+                self._session = object()
+                self._thread = threading.current_thread()
+                return True
+            self._error = "McpError: HTTP 401 Unauthorized"
+            return False
+
+    manager = MCPManager([config], connection_factory=_Refusing)
+    try:
+        status = manager.start()
+    finally:
+        manager.close()
+
+    assert status == {"notion": True}
+    assert attempts == ["at-old", "at-new"]
+    assert manager.errors == []
+
+
+def test_a_failure_that_is_not_a_refused_token_is_not_retried(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = _oauth_config(name="notion", expires_at=_far_future())
+    attempts: list[str | None] = []
+
+    class _Missing(MCPConnection):
+        def start(self) -> bool:
+            attempts.append(self.config.auth_token)
+            self._error = "HTTPStatusError: 404 Not Found"
+            return False
+
+    manager = MCPManager([config], connection_factory=_Missing)
+    try:
+        status = manager.start()
+    finally:
+        manager.close()
+
+    assert status == {"notion": False}
+    assert attempts == ["at-old"]
+    # Refreshing a token a 404 never looked at would spend it for nothing.
+    assert server.calls == []
+    assert len(manager.errors) == 1
+
+
+def test_a_refused_handshake_without_refresh_material_stays_failed(monkeypatch):
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    config = MCPServerConfig(
+        name="legacy",
+        transport=HTTP,
+        url="https://mcp.example/mcp",
+        auth_token="at-legacy",
+    )
+
+    class _Refusing(MCPConnection):
+        def start(self) -> bool:
+            self._error = "401 Unauthorized"
+            return False
+
+    manager = MCPManager([config], connection_factory=_Refusing)
+    try:
+        status = manager.start()
+    finally:
+        manager.close()
+
+    assert status == {"legacy": False}
+    assert server.calls == []
+    assert "not available" in manager.errors[0]
+
+
+# -- the whole chain on real sockets, no mocks -----------------------------
+
+
+@pytest.fixture
+def token_server():
+    """A real OAuth token endpoint on loopback.
+
+    The refresh path is what keeps a run alive after the app is gone, so it is
+    worth exercising over an actual socket with the actual ``httpx`` call rather
+    than a patched-out ``post``.
+    """
+    import http.server
+    import threading as _threading
+    import urllib.parse
+
+    seen: list[dict[str, str]] = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 — the base class names it
+            length = int(self.headers.get("content-length") or 0)
+            body = self.rfile.read(length).decode()
+            form = {
+                k: v[0] for k, v in urllib.parse.parse_qs(body).items()
+            }
+            form["_authorization"] = self.headers.get("authorization") or ""
+            seen.append(form)
+            if form.get("refresh_token") != "rt-1":
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"invalid_grant")
+                return
+            payload = json.dumps(
+                {
+                    "access_token": "at-renewed",
+                    "refresh_token": "rt-2",
+                    "expires_in": 3600,
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):  # noqa: A003 — silence the test output
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = _threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/token", seen
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)
+
+
+def test_refresh_over_a_real_socket_renews_and_rotates(token_server):
+    endpoint, seen = token_server
+
+    token, block = refresh_access_token(
+        {
+            "token_endpoint": endpoint,
+            "client_id": "cid-1",
+            "client_secret": "shh",
+            "refresh_token": "rt-1",
+            "resource": "https://mcp.example/mcp",
+            "expires_at": _long_past(),
+        }
+    )
+
+    assert token == "at-renewed"
+    assert block["refresh_token"] == "rt-2"
+    assert token_expired(block) is False
+    assert seen[0]["grant_type"] == "refresh_token"
+    assert seen[0]["resource"] == "https://mcp.example/mcp"
+    assert seen[0]["_authorization"].startswith("Basic ")
+
+
+def test_a_dead_refresh_token_over_a_real_socket_is_not_fatal(token_server):
+    endpoint, _ = token_server
+
+    token, block = refresh_access_token(
+        {
+            "token_endpoint": endpoint,
+            "client_id": "cid-1",
+            "refresh_token": "rt-revoked",
+        }
+    )
+
+    assert token is None
+    assert block["refresh_token"] == "rt-revoked"
+
+
+def test_the_forwarded_payload_survives_the_whole_chain(
+    http_transport, token_server
+):
+    """Device payload in, live MCP tool call out, with nothing mocked.
+
+    The entry is exactly what ``McpStore.forwardPayloads`` puts on the wire for
+    a connector whose bearer died while the app was closed: no ``access_token``
+    at all, only the ``oauth`` block. The executor has to mint its own token
+    against a real endpoint, hand it to a real MCP server and call a tool.
+    """
+    transport, url, seen_headers = http_transport
+    endpoint, seen_tokens = token_server
+
+    configs, errors = configs_from_entries(
+        [
+            {
+                "name": "http-fake",
+                "url": url,
+                "transport": transport,
+                "auth": AUTH_OAUTH,
+                "oauth": {
+                    "token_endpoint": endpoint,
+                    "client_id": "cid-1",
+                    "refresh_token": "rt-1",
+                    "resource": "https://mcp.example/mcp",
+                    "scope": "read",
+                    "expires_at": _long_past(),
+                },
+            }
+        ]
+    )
+    assert errors == []
+
+    manager = MCPManager(configs)
+    try:
+        assert manager.start() == {"http-fake": True}, manager.errors
+        registry = ToolRegistry()
+        assert tool_name("http-fake", "shout") in manager.register(registry)
+        result = manager.call("http-fake", "shout", {"text": "hi"})
+    finally:
+        manager.close()
+
+    assert result["content"] == "HI"
+    assert len(seen_tokens) == 1
+    assert any(
+        headers.get("authorization") == "Bearer at-renewed"
+        for headers in seen_headers
+    )
+    # The rotated refresh token is on the config, so the executor forwards the
+    # live one on and the old one is never spent twice.
+    assert configs[0].oauth["refresh_token"] == "rt-2"
+    assert configs[0].auth_token == "at-renewed"

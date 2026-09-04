@@ -28,11 +28,61 @@ fields they do not know.
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. |
 | `account_authentication` | (existing provisioning fields) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. |
 
+### `mcp_servers` on `task` (extended, additive)
+
+One entry per connector the user has configured, assembled by
+`McpStore.forwardPayloads()` and read by `mcp_client.configs_from_entries()`.
+The frozen example both sides assert against is
+`app/test/fixtures/mcp_forward_payload.json`.
+
+```json
+{"name": "<connector name>", "url": "<https endpoint>", "auth": "oauth" | "appSession",
+ "access_token": "<bearer>"?,
+ "oauth": {"token_endpoint": "<url>", "client_id": "<id>", "client_secret": "<secret>"?,
+           "refresh_token": "<token>", "expires_at": "<iso 8601>"?, "resource": "<url>"?,
+           "scope": "<space separated>"?, "issuer": "<url>"?}?}
+```
+
+The `oauth` block is NEW. Everything else is unchanged, and a receiver that does
+not know the block keeps working off `access_token` alone.
+
+Who authenticates what:
+
+- `auth: "oauth"` — the device ran the sign-in (browser + loopback redirect, see
+  `lib/services/mcp/mcp_oauth.dart`). `access_token` is the bearer it holds; the
+  app refreshes it before forwarding when it has already lapsed, so a running app
+  always hands over a live one.
+- `oauth` — present only when the record holds a `refresh_token` AND a
+  `token_endpoint`. It is what lets the host outlive the app: with the app closed
+  there is nobody to open a browser, so the executor mints its own access tokens
+  from `refresh_token` at `token_endpoint` (RFC 6749, `client_secret` via HTTP
+  Basic when the server issued one). A connector signed in by a build before P5
+  has a bearer and no block; it works until that bearer dies, then the user signs
+  in again.
+- `auth: "appSession"` — no device token. The executor authenticates with its own
+  account bearer.
+- An API-key connector carries neither `auth` nor `access_token`: its credentials
+  are already query parameters on `url`. Unchanged.
+
+`expires_at` is informational — the host may treat the token as live until a `401`
+— and it is the field to drop, together with `access_token` and
+`oauth.refresh_token`, when hashing this list to decide whether an MCP manager has
+to be rebuilt. A rotated token is not a changed connector.
+
 ## Inbound: executor → app
 
 Existing event types stay as they are: `delta`, `reasoning`, `tool`, `file`,
 `subagent`, `user`, `done`, `error`, `debug_context`, `approval_request`, `room_*`,
 `browser_*`. The changes below are additive.
+
+### `browser_view` `started` (extended, additive)
+
+```json
+{"type": "browser_view", "status": "started", "message": "<text>", "password": "<vnc secret>"?}
+```
+
+`password` is optional: the per-view VNC secret the executor set on the sandbox
+`x11vnc`. The app passes it to its RFB client; an old app ignores it.
 
 ### `run_state` (NEW)
 
