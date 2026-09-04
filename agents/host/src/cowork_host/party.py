@@ -110,8 +110,16 @@ class HostParty:
         controller_token: ControllerToken | None = None,
         reconnect_factory: ReconnectFactory | None = None,
         on_pair_established: PairEstablished | None = None,
+        on_reprovision: Callable[[dict], None] | None = None,
     ) -> None:
         self._url = url
+        # docs/WIRE_CONTRACT.md: called with the token of a later account frame
+        # so the host refreshes its session in place (the task server outlives
+        # the socket, so it is never rebuilt for a new token).
+        self._on_reprovision = on_reprovision
+        # Result frames sent while no controller was attached are dropped, not
+        # buffered. Counted for diagnostics.
+        self.frames_dropped_while_away = 0
         self._channel_id = channel_id
         self._pairing_factory = pairing_factory
         self._reconnect_factory = reconnect_factory
@@ -153,6 +161,10 @@ class HostParty:
         self._task_server: TaskServer | None = None
         self._provisioned = False
         self._paired = threading.Event()
+        # True while a controller socket is connected. Read by the result pump
+        # (drop while away) and by the host's notifier (tell the user another
+        # way when a run ends with nobody watching).
+        self._controller_present = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -191,40 +203,56 @@ class HostParty:
 
     # -- controller lifecycle (driven by the relay's peer events) --------
 
+    @property
+    def controller_attached(self) -> bool:
+        """True while a controller socket is connected to this channel. The
+        notifier reads it: a run that ends with no controller attached is one
+        the user must be told about some other way."""
+        with self._session_lock:
+            return self._controller_present
+
     def on_controller_joined(self, token: int) -> None:
         """A controller connected. Remember it and start a session if we can."""
         with self._session_lock:
             self._active_token = token
+            self._controller_present = True
         self._maybe_start_session()
 
     def on_controller_left(self, token: int) -> None:
-        """The controller for ``token`` dropped. Reset so the next one pairs
-        cleanly. A stale leave from a superseded connection is ignored."""
-        task_server = None
+        """The controller for ``token`` dropped. Reset the pairing session so the
+        next one pairs cleanly — but NOT the task server: a run belongs to this
+        host process, not to the socket (docs/WIRE_CONTRACT.md). It keeps going,
+        keeps writing the transcript, and is replayable from any device. A stale
+        leave from a superseded connection is ignored."""
         with self._session_lock:
             if self._active_token != token:
                 return
             self._active_token = None
             self._started_token = None
-            task_server = self._reset_session_locked()
-        if task_server is not None:
-            task_server.stop()
-        self._log("controller disconnected; pairing session reset")
+            self._controller_present = False
+            # The codec is NOT cleared here. The leave arrives on the relay's
+            # thread while frames from that same socket (a token, the task it
+            # sent just before closing) can still be queued for this party's
+            # run loop; clearing the codec now would drop them as "before
+            # pairing" and lose the task. The next controller's join resets
+            # the whole session in ``_maybe_start_session`` anyway.
+        self._log("controller disconnected; runs keep going, results are held in the store")
 
     def _reset_session_locked(self) -> TaskServer | None:
-        """Clear per-session state. Returns any task server to stop OUTSIDE the
-        lock (stopping it can block on the supervisor)."""
-        task_server = self._task_server
-        self._task_server = None
+        """Clear per-session (codec + pairing) state. The task server is NOT
+        part of a session any more: it lives for the host process and is only
+        stopped by :meth:`stop`. Returns None; kept for the callers' shape."""
         self._pairing = None
         self._reconnect = None
         self._reconnect_channel_key = None
         self._reconnect_approved = None
         self._opener = None
         self._sealer = None
+        # The next token frame re-provisions the long-lived task server
+        # (rebinds its codec, refreshes the account session in place).
         self._provisioned = False
         self._paired = threading.Event()
-        return task_server
+        return None
 
     def _maybe_start_session(self) -> None:
         """Open a fresh session for the pending controller, once — but only when
@@ -485,6 +513,29 @@ class HostParty:
             )
             return
 
+        with self._session_lock:
+            existing = self._task_server
+        if existing is not None:
+            # Re-provision (docs/WIRE_CONTRACT.md): the task server outlived the
+            # previous socket. Give it this session's codec and refresh the
+            # account tokens in place; queued and running work is untouched.
+            try:
+                existing.rebind(opener, sealer)
+            except Exception as exc:
+                self._log(f"could not rebind the task server: {type(exc).__name__}: {exc}")
+                return
+            reprovision = getattr(self, "_on_reprovision", None)
+            if reprovision is not None:
+                try:
+                    reprovision(token)
+                except Exception as exc:  # noqa: BLE001 — a refresh must not drop the session
+                    self._log(f"re-provision hook failed: {type(exc).__name__}: {exc}")
+            with self._session_lock:
+                if self._opener is opener:
+                    self._provisioned = True
+            self._log("token re-provisioned; task server rebound to the new session")
+            return
+
         try:
             task_server = self._build_task_server(opener, sealer, token, self)
             task_server.start()
@@ -507,5 +558,15 @@ class HostParty:
     # -- outbound (used by the TaskServer result pump) -------------------
 
     def send_result_frame(self, frame_b64: str) -> None:
-        """Emit one sealed result frame to the app over the relay."""
+        """Emit one sealed result frame to the app over the relay.
+
+        Dropped, not buffered, while no controller is attached: the relay would
+        otherwise hold every frame of a long run for a peer that may never come
+        back, and a late flush would fail the app's replay window anyway. The
+        transcript is in the store; the app replays it on reconnect."""
+        with self._session_lock:
+            present = self._controller_present
+        if not present:
+            self.frames_dropped_while_away += 1
+            return
         self._send(frame_envelope(frame_b64))

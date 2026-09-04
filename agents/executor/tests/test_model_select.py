@@ -143,3 +143,35 @@ def test_named_model_without_select_uses_factory(tmp_path):
 
     assert events[-1]["type"] == "done"
     assert _answer(events) == "from-factory"
+
+
+def test_selector_failure_is_an_error_terminal_and_the_worker_survives(tmp_path):
+    """The blocker the review caught. Building the task's model happens BEFORE
+    ``_run_task``'s own try/finally, so an exception there — a real ``ModelSelect``
+    raises on an unknown model id — used to escape the worker thread and kill it
+    for the rest of the executor's life: no terminal frame for the app, and every
+    later task queued forever. Now it is an ``error`` terminal, and a plain task on
+    the SAME executor still runs afterwards."""
+
+    def factory():
+        return _scripted_model("from-factory")
+
+    def select(model, provider, reasoning_effort):
+        raise ValueError(f"model {model!r} has no providers")
+
+    executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
+    executor.start()
+    try:
+        rid = controller.send_task("do it", session_key="s", model="x/y")
+        events = controller.collect(rid, timeout=15.0)
+        assert events, "the failed task produced no frames at all (dead worker)"
+        assert events[-1]["type"] == "error"
+        assert "task failed" in str(events[-1])
+
+        # The worker is still alive: the next task completes on the same executor.
+        rid2 = controller.send_task("again", session_key="s")
+        events2 = controller.collect(rid2, timeout=15.0)
+        assert events2 and events2[-1]["type"] == "done"
+        assert _answer(events2) == "from-factory"
+    finally:
+        executor.stop()

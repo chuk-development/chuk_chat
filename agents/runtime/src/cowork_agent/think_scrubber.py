@@ -178,6 +178,10 @@ def scrub_history(messages: list[dict], *, keep_newest: bool = True) -> list[dic
             out.append(message)
             continue
         clone = dict(message)
-        clone["content"] = visible
+        # A turn that was pure reasoning around its tool calls has no visible
+        # text left. The native round-trip carries that as ``content: null``
+        # (the same "tool-calls only" rule ``_assistant_turn`` applies), not as
+        # an empty string.
+        clone["content"] = visible if visible or not message.get("tool_calls") else None
         out.append(clone)
     return out
