@@ -21,7 +21,7 @@ from cowork_agent import (
     resolve_model,
 )
 
-from .executor import ModelFactory
+from .executor import ModelFactory, ModelSelect
 
 
 def make_backend_model_factory(
@@ -79,4 +79,85 @@ def resolve_backend_model_factory(
     )
 
 
-__all__ = ["make_backend_model_factory", "resolve_backend_model_factory"]
+def make_backend_model_select(
+    session: SupabaseSession,
+    models: list[dict],
+    *,
+    base_url: str = DEFAULT_BASE_URL,
+    max_tokens: int = 2048,
+    temperature: float = 0.7,
+    reasoning_effort: str | None = None,
+) -> ModelSelect:
+    """A per-task selector: given the ``(model, provider, reasoning_effort)`` a
+    task asked for, resolve it against the account's ``/v1/models_info`` list and
+    build a :class:`BackendModelClient` for it. An unknown id falls back through
+    :func:`resolve_model` to the default, so a stale client can never pin the host
+    to a model the account cannot serve. ``models`` is fetched once at wiring time
+    and reused across tasks.
+
+    The task's own ``reasoning_effort`` reaches the client — that is what Fast
+    Mode is: the same model with thinking turned down. When the task names none,
+    the factory-level default passed in here is used instead.
+    """
+
+    def select(
+        model: str | None,
+        provider: str | None,
+        task_reasoning_effort: str | None = None,
+    ) -> ModelClient:
+        resolved = resolve_model(
+            models,
+            preferred_model_id=model,
+            preferred_provider=provider,
+        )
+        return BackendModelClient(
+            session,
+            model_id=resolved.model_id,
+            provider_slug=resolved.provider_slug,
+            base_url=base_url,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            reasoning_effort=(
+                task_reasoning_effort
+                if task_reasoning_effort is not None
+                else reasoning_effort
+            ),
+        )
+
+    return select
+
+
+def resolve_backend_model_wiring(
+    session: SupabaseSession,
+    *,
+    base_url: str = DEFAULT_BASE_URL,
+    preferred_model_id: str | None = None,
+    preferred_provider: str | None = None,
+    **kwargs,
+) -> tuple[ModelFactory, ModelSelect]:
+    """Fetch ``/v1/models_info`` once and build BOTH the default model factory and
+    the per-task selector from the same list. One network call at wiring time. The
+    factory serves tasks that name no model; the selector serves those that do."""
+    models = fetch_models_info(session, base_url=base_url)
+    resolved = resolve_model(
+        models,
+        preferred_model_id=preferred_model_id,
+        preferred_provider=preferred_provider,
+    )
+    factory = make_backend_model_factory(
+        session,
+        model_id=resolved.model_id,
+        provider_slug=resolved.provider_slug,
+        base_url=base_url,
+        **kwargs,
+    )
+    select = make_backend_model_select(session, models, base_url=base_url, **kwargs)
+    return factory, select
+
+
+__all__ = [
+    "make_backend_model_factory",
+    "make_backend_model_select",
+    "resolve_backend_model_factory",
+    "resolve_backend_model_wiring",
+]

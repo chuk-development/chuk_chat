@@ -18,7 +18,7 @@ import base64
 import os
 
 import pytest
-from cowork_agent import MockModelClient
+from cowork_agent import MockModelClient, tool_call_response
 from cowork_crypto import ApprovedDevices, CoworkFrameOpener
 from cowork_manager import decode_frames
 from cowork_sandbox import LocalEnvironment
@@ -38,7 +38,9 @@ from wiring import KEY_VERSION, paired_channel
 BINARY = bytes(range(256)) * 40
 
 
-def _model(*script: str) -> MockModelClient:
+def _model(*script) -> MockModelClient:
+    """A scripted model. A ``ModelResponse`` (built by ``tool_call_response``) is
+    a native tool-calling turn; a bare string is a final answer."""
     return MockModelClient(list(script))
 
 
@@ -113,8 +115,9 @@ def test_binary_file_survives_the_encrypted_round_trip(tmp_path):
 
     def factory():
         return _model(
-            '<tool_call>{"name":"send_file_to_user",'
-            '"arguments":{"path":"report.bin","name":"report.bin"}}</tool_call>',
+            tool_call_response(
+                ("send_file_to_user", {"path": "report.bin", "name": "report.bin"})
+            ),
             "sent it",
         )
 
@@ -138,8 +141,7 @@ def test_the_file_never_appears_in_the_prompt_result(tmp_path):
 
     def factory():
         return _model(
-            '<tool_call>{"name":"send_file_to_user",'
-            '"arguments":{"path":"note.txt"}}</tool_call>',
+            tool_call_response(("send_file_to_user", {"path": "note.txt"})),
             "sent",
         )
 
@@ -175,8 +177,7 @@ def test_the_file_is_encrypted_on_the_wire(tmp_path):
         environment=LocalEnvironment(workdir=str(workspace)),
         db_path=str(tmp_path / "state.db"),
         model_factory=lambda: _model(
-            '<tool_call>{"name":"send_file_to_user",'
-            '"arguments":{"path":"secret.txt"}}</tool_call>',
+            tool_call_response(("send_file_to_user", {"path": "secret.txt"})),
             "sent",
         ),
         workspace=str(workspace),
@@ -237,8 +238,7 @@ def test_an_oversized_file_is_refused_and_the_model_is_told(tmp_path):
 
     def factory():
         return _model(
-            '<tool_call>{"name":"send_file_to_user",'
-            '"arguments":{"path":"big.bin"}}</tool_call>',
+            tool_call_response(("send_file_to_user", {"path": "big.bin"})),
             "could not send it",
         )
 
@@ -289,24 +289,28 @@ def test_an_oversized_file_is_refused_and_the_model_is_told(tmp_path):
 
 def test_media_tools_are_absent_without_a_mount(tmp_path):
     """An executor with no workspace mount must not advertise ffmpeg: the model
-    would call a tool that cannot run, and pay prompt tokens for it (§7.9)."""
+    would call a tool that cannot run, and pay tokens for its schema (§7.9).
+
+    With native tool calling the offer is the ``tools`` array the runtime hands
+    the client through ``set_tools`` — not prose in the system prompt — so that
+    is where the absence has to be proven."""
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    seen: list[list[dict]] = []
+    declared: list[list[dict]] = []
 
-    class PromptSpy(MockModelClient):
-        def complete(self, messages):
-            seen.append(messages)
-            return super().complete(messages)
+    class ToolSpy(MockModelClient):
+        def set_tools(self, tools):
+            declared.append(list(tools or []))
 
     def factory():
-        return PromptSpy(["nothing to do"])
+        return ToolSpy(["nothing to do"])
 
     _channel, events = _run(tmp_path, workspace, factory)
 
     assert events[-1]["type"] == "done"
-    system = seen[0][0]["content"]
-    assert "run_ffmpeg" not in system
-    assert "run_ffprobe" not in system
+    assert declared, "the runtime never declared a tools array"
+    names = {t["function"]["name"] for t in declared[0]}
+    assert "run_ffmpeg" not in names
+    assert "run_ffprobe" not in names
     # send_file_to_user, in contrast, always has a channel here.
-    assert "send_file_to_user" in system
+    assert "send_file_to_user" in names

@@ -39,6 +39,7 @@ from cowork_executor import (
     Executor,
     ExecutorSupervisor,
     ModelFactory,
+    ModelSelect,
     loopback_pair,
 )
 
@@ -58,6 +59,7 @@ class TaskServer:
         sealer: CoworkFrameSealer,
         environment: BaseEnvironment,
         model_factory: ModelFactory,
+        model_select: ModelSelect | None = None,
         db_path: str,
         send_frame: FrameSink,
         system_prompt: str | None = None,
@@ -82,6 +84,9 @@ class TaskServer:
                 environment=environment,
                 db_path=db_path,
                 model_factory=model_factory,
+                # Per-task model selection (§ model picker). ``None`` offline, so
+                # the injected factory runs every task and no credits are spent.
+                model_select=model_select,
                 system_prompt=system_prompt,
                 workspace=workspace or agent.workspace_dir or None,
                 max_iterations=max_iterations,

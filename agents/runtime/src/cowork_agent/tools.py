@@ -125,8 +125,8 @@ LIST_DIR_SCHEMA = {
 # string run in the sandbox. A single action can carry a whole multi-step plan —
 # loops, branches, intermediate variables, composition of several operations —
 # instead of one JSON tool call per step. Measured ~20% higher task success and
-# ~30% fewer turns vs one-tool-per-turn. `<tool_call>` stays for simple things;
-# the model drops into `python` for anything multi-step.
+# ~30% fewer turns vs one-tool-per-turn. A plain tool call stays for simple
+# things; the model drops into `python` for anything multi-step.
 RUN_PYTHON_SCHEMA = {
     "type": "object",
     "description": (

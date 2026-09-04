@@ -20,7 +20,7 @@ from cowork_crypto import CoworkFrameSealer, DeviceIdentity
 from cowork_manager import encode_frame, make_request
 from cowork_sandbox import LocalEnvironment
 
-from cowork_agent import MockModelClient, ModelResponse
+from cowork_agent import MockModelClient, ModelResponse, tool_call_response
 from cowork_executor import (
     METHOD_STOP,
     ControllerSession,
@@ -249,8 +249,12 @@ def test_a_stop_kills_the_command_in_flight(tmp_path):
     controller_ep, executor_ep = loopback_pair()
     model = MockModelClient(
         [
-            '<tool_call>{"name":"run_command","arguments":'
-            '{"command":"touch running && sleep 60","timeout":120}}</tool_call>',
+            tool_call_response(
+                (
+                    "run_command",
+                    {"command": "touch running && sleep 60", "timeout": 120},
+                )
+            ),
             "done",
         ]
     )

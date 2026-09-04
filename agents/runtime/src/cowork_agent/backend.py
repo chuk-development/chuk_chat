@@ -17,8 +17,9 @@ Three pieces:
   drives ``wss://api.chuk.chat/v2/ws``: auth handshake with the access token,
   chat request, accumulate the streamed ``content``/``reasoning``, surface
   ``error``, end on ``done``. Credits are consumed server-side, tied to the JWT.
-  Tool calls are parsed from the assistant *content* as ``<tool_call>`` blocks —
-  the one wire format, via :func:`~cowork_agent.model.extract_tool_calls`.
+  Tool calls are **native**: the client sends an OpenAI ``tools`` array and the
+  server answers on its own ``tool_calls`` frame. Assistant content is prose;
+  it is never scanned for a tool-call protocol.
 - :func:`fetch_models_info` / :func:`resolve_model` — read ``/v1/models_info``
   with the token and pick a default model + provider slug.
 
@@ -32,12 +33,13 @@ The confirmed ``/v2/ws`` protocol (source of truth: chuk_chat Dart client):
 - chat: client -> ``{"req_id":<id>,"type":"chat","payload":{...}}``
   (multiplex_connection.dart:430-434).
 - frames: routed by ``req_id`` + ``kind`` — ``content``/``reasoning`` carry
-  ``data`` (string), ``usage``/``meta`` carry ``data`` (object), ``tps`` a number,
+  ``data`` (string), ``tool_calls`` carries ``data`` (a list of OpenAI call
+  objects), ``usage``/``meta`` carry ``data`` (object), ``tps`` a number,
   ``error`` carries ``detail``+``code``, ``done`` closes the stream
   (multiplex_connection.dart:289-368).
 - payload fields: ``message``, ``model_id``, ``provider_slug``, ``max_tokens``,
-  ``temperature``, optional ``system_prompt``, ``history``, ``reasoning_effort``
-  (websocket_chat_service.dart:101-124).
+  ``temperature``, optional ``system_prompt``, ``history``, ``reasoning_effort``,
+  ``tools`` (websocket_chat_service.dart:101-124).
 """
 
 from __future__ import annotations
@@ -46,20 +48,19 @@ import json
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect as _ws_connect
 
-from .model import ModelClient, ModelResponse, extract_tool_calls
+from .model import ModelClient, ModelResponse, ToolCall
 
 # The single default backend. Callers may override.
 DEFAULT_BASE_URL = "https://api.chuk.chat"
-# The default model. It MUST be one whose tool calls survive the backend, which
-# streams only `content` + `reasoning` and drops anything the provider parsed
-# into structured `tool_calls`. Measured live (tests/live_sweep.py):
+# The default model. It MUST be one that actually calls tools when it is handed
+# a `tools` array. Measured live (tests/live_sweep.py):
 #
 #   works: deepseek-v4-flash, qwen3-32b, kimi-k2.6, minimax-m2.7,
 #          llama-3.3-70b, mistral-small-2603
@@ -68,11 +69,11 @@ DEFAULT_BASE_URL = "https://api.chuk.chat"
 #
 # gpt-oss-20b was the old default and is exactly the failure the user hit: the
 # model says "I'll use write_file" in its reasoning and then prints the file.
-# Cheapest of the working set, and it emits the block reliably.
+# Cheapest of the working set, and it calls tools reliably.
 DEFAULT_MODEL_ID = "deepseek/deepseek-v4-flash"
 
-# Models proven to emit a parseable `<tool_call>` block, cheapest first. Kept as
-# data so a fallback chain can walk it when the preferred model is unavailable.
+# Models proven to emit usable tool calls, cheapest first. Kept as data so a
+# fallback chain can walk it when the preferred model is unavailable.
 TOOL_CALL_CAPABLE_MODELS = (
     "deepseek/deepseek-v4-flash",
     "meta-llama/llama-3.3-70b-instruct",
@@ -332,25 +333,70 @@ def _content_to_str(content: Any) -> str:
     return json.dumps(content, separators=(",", ":"))
 
 
-def _assistant_text(message: dict) -> str:
-    """Reconstruct an assistant turn as canonical text: its content plus any
-    structured tool calls re-serialised as ``<tool_call>`` blocks, so the backend
-    model sees its own prior calls in the one wire format."""
-    parts: list[str] = []
+def _wire_tool_call(call: dict) -> dict:
+    """One stored assistant tool call as the backend's native OpenAI shape. The
+    loop stores ``function.arguments`` as a dict (loop.py); on the wire it MUST be
+    a JSON *string* (chuk_chat sends it pre-encoded) or the upstream 400s / sees
+    empty args."""
+    fn = call.get("function", {}) if isinstance(call, dict) else {}
+    args = fn.get("arguments", {})
+    if not isinstance(args, str):
+        args = json.dumps(args, separators=(",", ":"))
+    return {
+        "id": str(call.get("id", "")),
+        "type": "function",
+        "function": {"name": str(fn.get("name", "")), "arguments": args},
+    }
+
+
+def _assistant_turn(message: dict) -> dict[str, Any]:
+    """A stored assistant turn as a native history entry: its text (``None`` when
+    the turn was tool-calls only, like chuk) plus any structured ``tool_calls``
+    passed through in OpenAI shape — never flattened into text."""
     content = message.get("content")
-    if isinstance(content, str) and content:
-        parts.append(content)
-    for call in message.get("tool_calls") or []:
-        fn = call.get("function", {}) if isinstance(call, dict) else {}
-        name = fn.get("name")
-        args = fn.get("arguments", {})
-        if name:
-            parts.append(
-                "<tool_call>"
-                + json.dumps({"name": name, "arguments": args}, separators=(",", ":"))
-                + "</tool_call>"
+    if isinstance(content, str) or content is None:
+        text: str | None = content
+    else:
+        text = _content_to_str(content)
+    turn: dict[str, Any] = {"role": "assistant", "content": text}
+    calls = message.get("tool_calls") or []
+    if calls:
+        turn["tool_calls"] = [_wire_tool_call(c) for c in calls]
+    return turn
+
+
+def _native_calls_from_frame(data: list, offset: int) -> list[ToolCall]:
+    """Parse a ``tool_calls`` frame (a list of OpenAI call objects) into
+    :class:`ToolCall`. ``function.arguments`` is a JSON *string* on the wire;
+    decode it defensively (providers emit malformed/truncated JSON — fall back to
+    ``{}``). ``offset`` seeds a synthetic id for a call missing one, so a turn
+    split across several frames keeps unique ids. The server's real ``id`` is kept
+    when present — it must match the ``tool_call_id`` we echo back."""
+    out: list[ToolCall] = []
+    for i, call in enumerate(data):
+        if not isinstance(call, dict):
+            continue
+        fn = call.get("function", {}) or {}
+        raw_args = fn.get("arguments", "")
+        if isinstance(raw_args, dict):
+            args = raw_args
+        elif isinstance(raw_args, str) and raw_args.strip():
+            try:
+                args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                args = {}
+        else:
+            args = {}
+        if not isinstance(args, dict):
+            args = {}
+        out.append(
+            ToolCall(
+                id=str(call.get("id") or f"call_{offset + i}"),
+                name=str(fn.get("name") or ""),
+                arguments=args,
             )
-    return "\n".join(parts)
+        )
+    return out
 
 
 class BackendModelClient:
@@ -396,6 +442,14 @@ class BackendModelClient:
         # StreamingModelClient. ``None`` -> no live streaming (the caller may fall
         # back to one delta at the end).
         self.on_delta: Callable[[str], None] | None = None
+        # The OpenAI-format ``tools`` array for native tool calling, or ``None``.
+        # Set once per run by ``build_runtime`` via :meth:`set_tools` after the
+        # registry is assembled. When present it is sent on every ``chat``
+        # payload, which is what switches the backend into native function
+        # calling (§ native tool calls); the server then streams a ``tool_calls``
+        # frame. Deliberately NOT copied by ``cheap_clone`` — housekeeping turns
+        # want no tools.
+        self._tools: list[dict] | None = None
 
     # -- ModelClient -----------------------------------------------------
 
@@ -470,34 +524,57 @@ class BackendModelClient:
     def close(self) -> None:
         self._close()
 
+    def set_tools(self, tools: list[dict] | None) -> None:
+        """Declare the native tool set for this client (OpenAI ``tools`` JSON).
+
+        Called once per run after the registry is built. ``None`` or ``[]`` sends
+        no ``tools`` on the wire, so the model gets no tools at all — that is the
+        housekeeping case (compaction, fact extraction), not a fallback protocol.
+        Mirrors the settable ``on_delta`` seam so the executor's streaming
+        wrappers can forward it to the inner client without knowing its concrete
+        type.
+        """
+        self._tools = tools or None
+
     # -- payload mapping -------------------------------------------------
 
     def _messages_to_payload(self, messages: list[dict]) -> dict[str, Any]:
         system_prompt: str | None = None
-        turns: list[dict[str, str]] = []
+        turns: list[dict[str, Any]] = []
         for message in messages:
             role = message.get("role")
             if role == "system":
                 system_prompt = _content_to_str(message.get("content"))
                 continue
             if role == "assistant":
-                turns.append({"role": "assistant", "content": _assistant_text(message)})
+                # Native pass-through: content + structured tool_calls (chuk shape).
+                turns.append(_assistant_turn(message))
             elif role == "tool":
-                # Fold the tool result into a text turn the model can read back.
-                name = message.get("name", "tool")
+                # Native tool result: a role:"tool" turn keyed by tool_call_id, the
+                # id the server issued for the matching assistant call. content is
+                # a string (dict results are stringified) like chuk's sanitized
+                # result. No more <tool_result> text folding.
                 turns.append(
                     {
                         "role": "tool",
-                        "content": f"<tool_result name=\"{name}\">"
-                        + _content_to_str(message.get("content"))
-                        + "</tool_result>",
+                        "tool_call_id": str(message.get("tool_call_id", "")),
+                        "content": _content_to_str(message.get("content")),
                     }
                 )
             else:
                 turns.append({"role": "user", "content": _content_to_str(message.get("content"))})
 
-        message_text = turns[-1]["content"] if turns else ""
-        history = turns[:-1]
+        # The `message` field is the newest USER text. When we are looping after a
+        # tool call the conversation ends with an assistant tool_calls turn and its
+        # tool results — those stay in `history` and `message` is empty; the tool
+        # results are the model's next input (chuk sends message:"" here). Only a
+        # trailing user turn is lifted out as `message`.
+        if turns and turns[-1].get("role") == "user":
+            message_text = str(turns[-1].get("content", ""))
+            history = turns[:-1]
+        else:
+            message_text = ""
+            history = turns
 
         payload: dict[str, Any] = {
             "message": message_text,
@@ -512,6 +589,9 @@ class BackendModelClient:
             payload["history"] = history
         if self._reasoning_effort is not None:
             payload["reasoning_effort"] = self._reasoning_effort
+        # Presence of `tools` is what turns on native function calling upstream.
+        if self._tools:
+            payload["tools"] = self._tools
         return payload
 
     # -- transport -------------------------------------------------------
@@ -547,6 +627,7 @@ class BackendModelClient:
 
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
+        native_calls: list[ToolCall] = []
         usage: dict | None = None
         deadline = time.monotonic() + self._recv_timeout
         while True:
@@ -578,6 +659,15 @@ class BackendModelClient:
                 data = frame.get("data")
                 if isinstance(data, dict):
                     usage = data
+            elif kind == "tool_calls":
+                # Native function calling: the server accumulates the provider's
+                # streamed tool-call fragments and relays complete OpenAI calls
+                # ({id,type,function:{name,arguments}}) in this frame. arguments is
+                # a JSON *string* — parse it defensively (providers emit truncated
+                # JSON). Several such frames may arrive; append, do not replace.
+                data = frame.get("data")
+                if isinstance(data, list):
+                    native_calls.extend(_native_calls_from_frame(data, len(native_calls)))
             elif kind in ("meta", "tps"):
                 continue
             elif kind == "error":
@@ -591,14 +681,19 @@ class BackendModelClient:
                 break
 
         content = "".join(content_parts)
-        clean, tool_calls = extract_tool_calls(content)
+        # Native tool calls are the ONE protocol, exactly like chuk_chat: a turn
+        # is a tool-call turn only when the server sent a `tool_calls` frame, and
+        # the content is then the assistant's (optional) interim text. With no
+        # such frame the content is a bare-text final answer — it is never
+        # scanned for an in-band call format.
         return ModelResponse(
-            text=clean or None,
-            tool_calls=tool_calls,
+            text=content.strip() or None,
+            tool_calls=native_calls,
             raw={
                 "content": content,
                 "reasoning": "".join(reasoning_parts),
                 "usage": usage,
+                "native": bool(native_calls),
             },
         )
 

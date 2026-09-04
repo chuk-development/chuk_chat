@@ -8,16 +8,19 @@ same stream as the parent's deltas.
 
 from __future__ import annotations
 
-from cowork_agent import MockModelClient
+from cowork_agent import MockModelClient, tool_call_response
 from cowork_sandbox import LocalEnvironment
 
 from cowork_executor import ControllerSession, Executor, loopback_pair
 
 from wiring import paired_channel
 
-DELEGATE = (
-    '<tool_call>{"name":"delegate_task","arguments":{"tasks":'
-    '[{"prompt":"write the summary","title":"writer"}]}}</tool_call>'
+# One native tool call turn: delegate a single child task.
+DELEGATE = tool_call_response(
+    (
+        "delegate_task",
+        {"tasks": [{"prompt": "write the summary", "title": "writer"}]},
+    )
 )
 
 

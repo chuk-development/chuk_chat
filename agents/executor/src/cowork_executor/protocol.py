@@ -18,6 +18,9 @@ In-frame payload protocol
 Controller -> executor (one, opens the task)::
 
     {"type": "task", "prompt": "...", "session_key": "...",
+     "model": "anthropic/claude-x",                      # optional: this task's
+     "provider": "anthropic",                            #   model, its provider,
+     "reasoning_effort": "low",                          #   and its think level
      "mcp_servers": [                                    # optional (§9, §10)
        {"name": "github", "url": "https://api.example/v1/mcp/github",
         "transport": "http", "auth": "appSession"},
@@ -38,6 +41,15 @@ Controller -> executor (any time after it, aborts a run — §7.1, §16)::
     {"type": "stop", "session_key": "default"}      # thread-level: that thread's run
     {"type": "approval_decision",                   # answer a here.now publish ask
      "approval_id": "ap-1", "approved": true}
+    {"type": "replay", "session_key": "default"}    # re-stream a thread's transcript
+
+A ``replay`` asks the executor to re-send a thread's whole stored transcript. The
+server is the source of truth, so a reconnecting or reinstalled client sends this
+and rebuilds the thread from the answer. The executor streams the stored turns as
+the SAME ``user`` / ``delta`` / ``tool`` events a live run uses, each carrying
+``"replay": true``, and closes with a ``done`` (``reason`` ``"replay"``, also
+marked ``replay``). An unknown ``session_key`` replays an empty thread: just the
+``done``.
 
 A stop is a frame like every other one: sealed, signed, replay-checked. That is
 deliberate — the kill switch is reachable only by an **approved device**, so a
@@ -138,6 +150,9 @@ def task_payload(
     mcp_servers: list[dict] | None = None,
     herenow: dict | None = None,
     debug: bool = False,
+    model: str | None = None,
+    provider: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     """Build the ``task`` frame that opens a run.
 
@@ -159,6 +174,14 @@ def task_payload(
     ``debug`` (optional, off by default) turns on the "copy raw context" tap: the
     executor wires a debug observer that streams one ``debug_context`` event per
     model round. Absent or false -> no observer, and the frame is unchanged.
+
+    ``model`` / ``provider`` / ``reasoning_effort`` name the model this one task
+    runs on, and how hard it thinks. They are what the app's mode selector sends:
+    ``model`` is the model id, ``provider`` its provider slug (empty -> the host
+    routes), ``reasoning_effort`` the Fast/Thinking level. All three are optional
+    and additive; absent, the host uses its default model and default effort, so
+    an older client that sends none keeps working unchanged. The keys ride
+    *inside* the sealed frame, so this does not touch the frame crypto.
     """
     payload: dict[str, Any] = {
         "type": "task",
@@ -171,7 +194,30 @@ def task_payload(
         payload["herenow"] = dict(herenow)
     if debug:
         payload["debug"] = True
+    if model:
+        payload["model"] = model
+    if provider:
+        payload["provider"] = provider
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
     return payload
+
+
+def replay_payload(session_key: str = "default") -> dict[str, Any]:
+    """Build a ``replay`` frame: ask the executor to re-stream a thread's whole
+    stored transcript (the server is the truth — see ``docs/PRODUCT_PHILOSOPHY``).
+
+    A reconnecting or reinstalled client has no local transcript for the thread.
+    It sends this one frame, and the executor answers with the same ``user`` /
+    ``delta`` / ``tool`` events a live run streams, each marked ``replay``, then
+    closes the stream with a ``done`` (also marked ``replay``). The client rebuilds
+    the thread as history, not as a running task.
+
+    A frame with an unknown ``session_key`` replays an empty thread: no events, a
+    ``done`` at once. So a client can always ask, and never has to know first
+    whether the thread has any stored turns.
+    """
+    return {"type": "replay", "session_key": session_key}
 
 
 def approval_request_payload(
