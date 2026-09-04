@@ -13,10 +13,10 @@ is provably safe to emit. Two properties matter and both are tested:
 - **Chunk-boundary safety.** A tag may be cut in half by the transport
   (``"<thi"`` + ``"nk>"``). The scrubber holds back any suffix that could still
   grow into a tag and emits it later once it is proven not to be one.
-- **``<tool_call>`` integrity.** The tool-call wire format (:mod:`cowork_agent.model`)
-  travels in the same stream. The scrubber removes think/reasoning tags only, so
-  a ``<tool_call>`` block passes through byte-identical — even when split across
-  deltas.
+- **Markup integrity.** The scrubber removes think/reasoning tags and nothing
+  else. Any other markup the model writes — an HTML snippet, an XML sample, a
+  tag inside a code fence — passes through byte-identical, even when split
+  across deltas. It is a filter for two tag families, not a sanitizer.
 
 :func:`scrub_history` implements the send-side half of the rule: **only the
 newest turn's reasoning is replayed**; every older assistant turn is sent with
@@ -42,8 +42,9 @@ def _holdback_len(buf: str) -> int:
 
     A delta ending in ``"<thi"`` must not be emitted: the next delta may complete
     ``<think>``. Only *proper* prefixes count — a complete tag is handled by the
-    matcher, not held back. ``<tool_call>`` is unaffected: no suffix of it is a
-    proper prefix of any think tag.
+    matcher, not held back. Unrelated markup is unaffected unless one of its own
+    prefixes is also a prefix of a think tag, and even then it is emitted intact
+    on the next delta.
     """
     limit = min(len(buf), _MAX_TAG_LEN - 1)
     for k in range(limit, 0, -1):

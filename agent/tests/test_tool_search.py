@@ -1,13 +1,21 @@
 """Tool Search / progressive disclosure tests (§7.2).
 
 The load-bearing claims: under the threshold nothing changes, above it exactly
-the deferrable tools leave the prompt, core tools never do, and the three bridge
-tools can find, describe and run what was hidden.
+the deferrable tools stop being declared, core tools never do, and the three
+bridge tools can find, describe and run what was hidden.
+
+"Declared" means the native OpenAI ``tools`` array — that is what the request
+carries and what the model is billed for every round, so it is what the
+threshold is measured on. ``render_tool_docs`` is used below only as the
+readable view of that same offered set; the two share one filter.
 """
 
 from __future__ import annotations
 
-from cowork_agent.prompt import build_system_prompt, render_tool_docs
+import json
+
+from cowork_agent.context import estimate_tokens
+from cowork_agent.prompt import render_tool_docs
 from cowork_agent.registry import ToolRegistry
 from cowork_agent.tool_search import (
     CORE_TOOLS,
@@ -63,7 +71,7 @@ def build_registry(*, servers: int = 0, tools_per_server: int = 20) -> ToolRegis
 # -- the threshold ---------------------------------------------------------
 
 
-def test_below_the_threshold_every_tool_stays_in_the_prompt():
+def test_below_the_threshold_every_tool_stays_declared():
     registry = build_registry(servers=1, tools_per_server=3)
     decision = apply_tool_search(registry, context_window=128_000, reserved_output=8_000)
     assert decision.active is False
@@ -97,12 +105,33 @@ def test_the_saving_is_real_and_large():
     after = tool_doc_tokens(registry)
     assert decision.tokens_before == before
     assert decision.tokens_after == after
-    # 160 MCP tools cost far more than the whole prompt keeps afterwards.
+    # 160 MCP tools cost far more than the declared set keeps afterwards.
     assert after < before / 5
     assert decision.saved_tokens > 10_000
-    # And the prompt itself shrank by the same order.
-    assert len(build_system_prompt(registry)) < len(
-        build_system_prompt(build_registry(servers=8, tools_per_server=20))
+    # And the thing actually sent — the native `tools` array — shrank with it.
+    untouched = build_registry(servers=8, tools_per_server=20)
+    assert len(registry.openai_tools()) < len(untouched.openai_tools())
+    assert len(json.dumps(registry.openai_tools())) < len(
+        json.dumps(untouched.openai_tools())
+    ) / 5
+
+
+def test_the_cost_is_measured_on_the_native_schema_not_on_prose():
+    """What the model is billed for is the `tools` array on every request, so
+    that — compactly serialized, byte for byte — is what the threshold weighs.
+
+    Measuring the old prompt-text rendering instead would defer at the wrong
+    size, because the two are not the same length.
+    """
+    registry = build_registry(servers=1, tools_per_server=1)
+    name = "mcp__server0__tool0"
+    expected = estimate_tokens(
+        json.dumps(registry.openai_tool(name), separators=(",", ":"))
+    )
+    assert tool_doc_tokens(registry, [name]) == expected
+    # The whole visible surface is just the sum of the same per-tool measure.
+    assert tool_doc_tokens(registry) == sum(
+        tool_doc_tokens(registry, [n]) for n in registry.names()
     )
 
 
@@ -143,7 +172,7 @@ def test_registry_refuses_to_defer_a_tool_that_did_not_opt_in():
 
 
 def test_a_core_name_marked_deferrable_is_still_never_deferred():
-    """The second belt: even a mis-registered core tool stays in the prompt."""
+    """The second belt: even a mis-registered core tool stays declared."""
     registry = build_registry(servers=8, tools_per_server=20)
     registry.register(
         "web_search",
@@ -209,14 +238,14 @@ def test_tool_search_reports_no_match_without_inventing_one():
     assert "No match" in result["hint"]
 
 
-def test_tool_describe_returns_the_schema_the_prompt_would_have_carried():
+def test_tool_describe_returns_everything_the_declaration_would_have_carried():
     registry = deferred_registry()
     result = registry.dispatch("tool_describe", {"name": "mcp__github__create_issue"})
     assert result["ok"] is True
     assert "Create an issue" in result["documentation"]
     assert "`repo` (string, required)" in result["documentation"]
     assert result["schema"]["required"] == ["repo", "title"]
-    # Character-for-character what render_tool_docs would have written.
+    # Character-for-character the block a non-deferred tool renders to.
     from cowork_agent.prompt import render_tool_block
 
     assert result["documentation"] == render_tool_block(
@@ -266,8 +295,8 @@ def test_tool_call_of_an_unknown_tool_is_a_bounded_error():
 
 
 def test_a_deferred_tool_is_still_dispatchable_directly():
-    """Deferral is prompt-only: journaling, coercion and the error envelope stay
-    on the one dispatch path."""
+    """Deferral is declaration-only: journaling, coercion and the error envelope
+    stay on the one dispatch path."""
     registry = deferred_registry()
     assert registry.is_deferred("mcp__github__create_issue") is True
     direct = registry.dispatch(

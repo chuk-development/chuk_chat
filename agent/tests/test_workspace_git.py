@@ -432,17 +432,14 @@ def test_no_workspace_means_no_versioning():
 
 
 def test_build_runtime_versions_the_workspace_end_to_end(tmp_path):
-    from cowork_agent.model import MockModelClient
+    from cowork_agent.model import MockModelClient, tool_call_response
     from cowork_agent.runtime import build_runtime
 
     workspace = tmp_path / "ws"
     target = workspace / "made.txt"
-    call = "<tool_call>" + json.dumps(
-        {
-            "name": "write_file",
-            "arguments": {"path": str(target), "content": "from the loop\n"},
-        }
-    ) + "</tool_call>"
+    call = tool_call_response(
+        ("write_file", {"path": str(target), "content": "from the loop\n"})
+    )
     loop = build_runtime(
         MockModelClient([call, "done"]),
         db_path=str(tmp_path / "state.db"),

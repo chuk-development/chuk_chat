@@ -90,6 +90,52 @@ class ToolRegistry:
         except Exception:
             return False
 
+    def openai_tool(self, name: str) -> dict:
+        """One registered tool as OpenAI function-tool JSON.
+
+        Split out of :meth:`openai_tools` because two callers must agree on it to
+        the byte: the wire, and the tool-search threshold (§7.2), which measures
+        the surface in exactly the shape the model is billed for. A second
+        renderer would make the measured saving a fiction.
+
+        The registry schema's top-level ``description`` becomes
+        ``function.description``; the rest becomes ``function.parameters``. A
+        tool with no schema still gets ``{"type":"object","properties":{}}`` or
+        providers reject the definition.
+        """
+        schema = dict(self._tools[name].schema or {})
+        description = str(schema.pop("description", "") or "")
+        if not schema.get("type"):
+            schema = {"type": "object", "properties": {}}
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": schema,
+            },
+        }
+
+    def openai_tools(self) -> list[dict]:
+        """The registered tools as the ``tools`` array on a native chat request
+        (§ native tool calls). Mirrors chuk_chat's
+        ``ClientTool.toOpenAiFunction`` + ``nativeToolDefinitions`` filtering:
+
+        - **Deferred** tools are omitted — they stay callable through the
+          ``tool_call`` bridge, so declaring them natively would be redundant
+          (chuk drops ``find_tools`` for the same reason).
+        - **Unavailable** tools are omitted — the model must not be offered a tool
+          it cannot call.
+        """
+        out: list[dict] = []
+        for name in self._tools:
+            if name in self._deferred:
+                continue
+            if not self.available(name):
+                continue
+            out.append(self.openai_tool(name))
+        return out
+
     # -- progressive disclosure (§7.2) ------------------------------------
 
     def deferrable_names(self) -> list[str]:

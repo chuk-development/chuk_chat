@@ -69,6 +69,7 @@ from cowork_agent import (
     ModelClient,
     ModelResponse,
     PublishRequest,
+    StateStore,
     SubagentConfig,
     SubagentLimits,
     WorkspaceMount,
@@ -86,6 +87,7 @@ from cowork_sandbox import BaseEnvironment, make_environment
 from .environment import SandboxEnvironment
 from .protocol import (
     INBOUND_METHODS,
+    MAX_BROWSER_CHUNK,
     METHOD_EVENT,
     approval_request_payload,
     b64_to_frame,
@@ -108,6 +110,14 @@ from .protocol import (
 # the factory hands back a new one each time; a real client can be reused.
 ModelFactory = Callable[[], ModelClient]
 
+# A per-task model builder. Given the ``(model, provider, reasoning_effort)`` a
+# task asked for, it returns the ModelClient to run that task on. Wired only in
+# production; when it is None, or a task names nothing, the default ModelFactory
+# is used instead. So the mock/offline path (no select wired) always runs the
+# injected factory and spends no credits, and an old client that sends no model
+# keeps working.
+ModelSelect = Callable[[str | None, str | None, str | None], ModelClient]
+
 
 class StreamingModelClient:
     """Wraps a ``ModelClient`` and reports the assistant text as deltas.
@@ -128,6 +138,14 @@ class StreamingModelClient:
         if on_delta is not None and hasattr(inner, "on_delta"):
             inner.on_delta = on_delta  # type: ignore[attr-defined]
             self._inner_streams = True
+
+    def set_tools(self, tools: list[dict] | None) -> None:
+        """Forward the native tool set to the inner client (§ native tool calls).
+        ``build_runtime`` calls this on the model it was handed; the seam mirrors
+        ``on_delta`` so the inner backend client gets its ``tools`` array."""
+        inner = self._inner
+        if hasattr(inner, "set_tools"):
+            inner.set_tools(tools)  # type: ignore[attr-defined]
 
     def complete(self, messages: list[dict]) -> ModelResponse:
         response = self._inner.complete(messages)
@@ -166,6 +184,13 @@ class _Run:
     # a debug observer that streams one ``debug_context`` event per model round;
     # absent/false -> no observer and zero overhead.
     debug: bool = False
+    # The model this task named, its provider slug, and its reasoning effort, as
+    # the app's mode selector sent them. All ``None`` -> the task named nothing
+    # and runs on the executor's default ``model_factory``. Captured at accept
+    # time, like everything else the frame carried.
+    model: str | None = None
+    provider: str | None = None
+    reasoning_effort: str | None = None
 
 
 #: How long a here.now publish waits for the user before it gives up and denies.
@@ -182,6 +207,110 @@ class _PendingApproval:
 
     event: threading.Event = field(default_factory=threading.Event)
     approved: bool = False
+
+
+class _RfbClientFramer:
+    """Frames the app's client->server RFB bytes and lets only protocol through.
+
+    The view is a sealed tunnel, but "only VNC bytes" should be a property the
+    executor ENFORCES, not one it trusts the client for. Client->server RFB is
+    easy to frame without decoding pixels: after the fixed handshake every
+    message starts with a type byte and has a fixed or self-describing length.
+    Allowed: SetPixelFormat(0), SetEncodings(2), FramebufferUpdateRequest(3),
+    KeyEvent(4), PointerEvent(5). ClientCutText(6) — the one message that
+    carries arbitrary host data (a clipboard) — is DROPPED. Anything else is a
+    protocol violation and the framer fails closed: ``feed`` returns None and
+    the owner tears the view down.
+
+    Handshake (RFB 3.8 as our client speaks it): 12-byte ProtocolVersion, then
+    a 1-byte security type — 2 (VNC auth) is followed by a 16-byte challenge
+    response, 1 (None) by nothing — then a 1-byte ClientInit. Bytes may arrive
+    split across sealed chunks, so the framer buffers partial messages.
+
+    Server->client is left opaque on purpose: framing it would need the full
+    Tight/raw rectangle decoder, and the client already discards ServerCutText.
+    """
+
+    _ALLOWED_FIXED = {0: 20, 3: 10, 4: 8, 5: 6}
+    _SET_ENCODINGS = 2
+    _CLIENT_CUT_TEXT = 6
+    _MAX_BUFFER = 1024 * 1024  # a stuck partial message must not grow forever
+
+    def __init__(self) -> None:
+        self._buf = bytearray()
+        self._phase = "version"
+        self.dropped_cut_text = 0
+
+    def feed(self, data: bytes) -> bytes | None:
+        """Return the bytes safe to forward, or None on a protocol violation."""
+        self._buf.extend(data)
+        if len(self._buf) > self._MAX_BUFFER:
+            return None
+        out = bytearray()
+        while True:
+            consumed, forward = self._next()
+            if consumed is None:
+                return None
+            if consumed == 0:
+                break
+            if forward:
+                out.extend(self._buf[:consumed])
+            del self._buf[:consumed]
+        return bytes(out)
+
+    def _next(self) -> tuple[int | None, bool]:
+        """(bytes consumed, forward?) for the next complete unit; (0, _) if
+        incomplete; (None, _) on violation."""
+        buf = self._buf
+        if self._phase == "version":
+            if len(buf) < 12:
+                return 0, False
+            if not buf.startswith(b"RFB ") or buf[11:12] != b"\n":
+                return None, False
+            self._phase = "security"
+            return 12, True
+        if self._phase == "security":
+            if len(buf) < 1:
+                return 0, False
+            sec = buf[0]
+            if sec == 2:  # VNC auth: 16-byte DES response follows
+                self._phase = "auth"
+            elif sec == 1:
+                self._phase = "clientinit"
+            else:
+                return None, False
+            return 1, True
+        if self._phase == "auth":
+            if len(buf) < 16:
+                return 0, False
+            self._phase = "clientinit"
+            return 16, True
+        if self._phase == "clientinit":
+            if len(buf) < 1:
+                return 0, False
+            self._phase = "messages"
+            return 1, True
+        # messages
+        if len(buf) < 1:
+            return 0, False
+        mtype = buf[0]
+        if mtype in self._ALLOWED_FIXED:
+            n = self._ALLOWED_FIXED[mtype]
+            return (n, True) if len(buf) >= n else (0, False)
+        if mtype == self._SET_ENCODINGS:
+            if len(buf) < 4:
+                return 0, False
+            n = 4 + 4 * int.from_bytes(buf[2:4], "big")
+            return (n, True) if len(buf) >= n else (0, False)
+        if mtype == self._CLIENT_CUT_TEXT:
+            if len(buf) < 8:
+                return 0, False
+            n = 8 + int.from_bytes(buf[4:8], "big")
+            if len(buf) < n:
+                return 0, False
+            self.dropped_cut_text += 1
+            return n, False  # consumed, NOT forwarded
+        return None, False  # unknown client message: fail closed
 
 
 class _VncBridge:
@@ -205,6 +334,7 @@ class _VncBridge:
         emit: Callable[[bytes], None],
         on_closed: Callable[[], None],
         chunk_size: int = 64 * 1024,
+        autostart: bool = True,
     ) -> None:
         self._emit = emit
         self._on_closed = on_closed
@@ -218,7 +348,20 @@ class _VncBridge:
             stderr=subprocess.DEVNULL,
         )
         self._reader = threading.Thread(target=self._pump, name="vnc-pump", daemon=True)
-        self._reader.start()
+        # ``autostart=False`` lets the owner register the bridge BEFORE the pump
+        # can fire ``on_closed`` — otherwise a socat that dies instantly reports
+        # its close to an owner that has not stored the bridge yet, the teardown
+        # finds nothing, and a dead bridge is then registered as live.
+        if autostart:
+            self.start()
+
+    def start(self) -> None:
+        """Start the reader thread. Idempotent."""
+        if not self._reader.is_alive() and not self._closed.is_set():
+            try:
+                self._reader.start()
+            except RuntimeError:
+                pass  # already started
 
     def _pump(self) -> None:
         out = self._proc.stdout
@@ -297,6 +440,7 @@ class Executor:
         environment: BaseEnvironment,
         db_path: str,
         model_factory: ModelFactory,
+        model_select: ModelSelect | None = None,
         system_prompt: str | None = None,
         workspace: str | None = None,
         media_mount: WorkspaceMount | None = None,
@@ -318,6 +462,10 @@ class Executor:
         self._env_shim = SandboxEnvironment(environment)
         self._db_path = db_path
         self._model_factory = model_factory
+        # Per-task model selection (§ model picker). ``None`` in the offline/mock
+        # path, so a task that names a model there still runs on the injected
+        # factory and never builds a backend client — no credits are spent.
+        self._model_select = model_select
         self._system_prompt = system_prompt
         self._workspace = workspace
         # The host directory the sandbox workspace really is, for the host-side
@@ -389,6 +537,7 @@ class Executor:
         # because it is touched from the serve thread and the pump's close hook.
         self._vnc: _VncBridge | None = None
         self._vnc_stream_id: str = ""
+        self._vnc_framer: _RfbClientFramer | None = None
         self._vnc_lock = threading.Lock()
 
     @property
@@ -524,6 +673,12 @@ class Executor:
         if kind == "browser_data":
             self._vnc_feed(payload)
             return
+        if kind == "replay":
+            # A reconnecting/reinstalled client re-streams a thread's transcript
+            # from the server (the source of truth). It runs like a task in that
+            # it opens and closes one request stream, so it keeps this request id.
+            self._handle_replay(request_id, payload)
+            return
         if kind == "approval_decision":
             # The user's answer to a pending here.now publish. A control frame
             # like a stop: it resolves a wait, it does not open or close a task,
@@ -558,6 +713,11 @@ class Executor:
         mcp_servers = list(raw_servers) if isinstance(raw_servers, list) else None
         raw_herenow = payload.get("herenow")
         herenow = dict(raw_herenow) if isinstance(raw_herenow, dict) else None
+        # What model this task asked for, exactly as the app's mode selector sends
+        # it. Any of the three may be absent; absent means "the host decides".
+        model = payload.get("model") or None
+        provider = payload.get("provider") or None
+        reasoning_effort = payload.get("reasoning_effort") or None
         run = _Run(
             request_id=request_id,
             session_key=str(session_key),
@@ -568,10 +728,65 @@ class Executor:
             mcp_servers=mcp_servers,
             herenow=herenow,
             debug=bool(payload.get("debug")),
+            model=str(model) if model is not None else None,
+            provider=str(provider) if provider is not None else None,
+            reasoning_effort=(
+                str(reasoning_effort) if reasoning_effort is not None else None
+            ),
         )
         with self._runs_lock:
             self._runs[request_id] = run
         self._queue.put(run)
+
+    # -- transcript replay (server is the truth) -------------------------
+    def _handle_replay(self, request_id: str, payload: dict) -> None:
+        """Re-stream one thread's whole stored transcript to a reconnecting client.
+
+        The server holds the authoritative transcript (see
+        ``docs/PRODUCT_PHILOSOPHY``). A fresh or reinstalled client has no local
+        copy, so it sends one ``replay`` frame and gets the thread back as the SAME
+        ``user`` / ``delta`` / ``tool`` events a live run streams, each marked
+        ``replay``. The stream closes with a ``done`` so the client leaves its
+        loading state; the ``done`` is marked ``replay`` and its ``reason`` is
+        ``replay``, so nothing reads it as a finished or a stopped run.
+
+        Read only, so it runs on the serve thread and never touches the task
+        worker or the shared session that a live run uses. A separate
+        :class:`StateStore` opens on this thread (SQLite connections are not shared
+        across threads); WAL lets it read while a task writes. Any failure ends the
+        stream with an ``error`` instead of killing the serve loop.
+        """
+        session_key = str(payload.get("session_key", "default"))
+        try:
+            store = StateStore(self._db_path)
+        except Exception as exc:  # noqa: BLE001 — a bad db must not wedge serving
+            self._terminal(
+                request_id, error_payload(f"replay failed: {type(exc).__name__}")
+            )
+            return
+        try:
+            session_id = store.route(session_key)
+            for event in store.replay_events(session_id):
+                self._event(request_id, event)
+        except Exception as exc:  # noqa: BLE001 — report, do not crash the thread
+            self._terminal(
+                request_id, error_payload(f"replay failed: {type(exc).__name__}")
+            )
+            return
+        finally:
+            try:
+                store.close()
+            except Exception:  # noqa: BLE001 — cleanup must not mask the result
+                pass
+        # Close the stream the way a live run does. ``replay`` marks it so the
+        # client never renders a spurious "done" card or mistakes it for a run.
+        self._terminal(
+            request_id,
+            {
+                **done_payload(final_answer=None, reason="replay", iterations=0),
+                "replay": True,
+            },
+        )
 
     # -- live browser view (§9.1) ----------------------------------------
     def _vnc_exec_prefix(self) -> tuple[list[str], str] | None:
@@ -670,21 +885,34 @@ class Executor:
         def emit(chunk: bytes) -> None:
             self._event(request_id, browser_data_payload(chunk))
 
+        holder: list[_VncBridge] = []
+
         def on_closed() -> None:
             # The pipe died on its own (view closed, x11vnc/container gone).
+            # Only tear down if THIS bridge is still the registered one: a late
+            # close from a bridge that was already replaced must not kill its
+            # successor.
+            with self._vnc_lock:
+                if not holder or self._vnc is not holder[0]:
+                    return
             self._vnc_teardown(reason="stopped")
 
         try:
-            bridge = _VncBridge(argv, emit=emit, on_closed=on_closed)
+            bridge = _VncBridge(argv, emit=emit, on_closed=on_closed, autostart=False)
         except (OSError, subprocess.SubprocessError) as exc:
             self._event(
                 request_id,
                 browser_view_payload("error", message=f"vnc bridge failed: {type(exc).__name__}"),
             )
             return
+        holder.append(bridge)
+        # Register first, THEN start the pump, so an instantly-dying socat is
+        # torn down (and reported) instead of lingering as a dead "live" view.
         with self._vnc_lock:
             self._vnc = bridge
             self._vnc_stream_id = request_id
+            self._vnc_framer = _RfbClientFramer()
+        bridge.start()
         # If the display has no browser window, the stream is an all-black frame.
         # Say so, so the user knows to ask the agent to open a page rather than
         # staring at a silent black screen. The bridge stays live: the moment the
@@ -712,7 +940,25 @@ class Executor:
             data = base64.b64decode(raw, validate=True)
         except (ValueError, TypeError):
             return
-        bridge.feed(data)
+        # Mirror the outbound MAX_BROWSER_CHUNK ceiling on the way in: a single
+        # RFB client message is tiny (pointer 6 B, key 8 B, a big SetEncodings
+        # still well under this), so anything larger is malformed and is dropped
+        # rather than forwarded into x11vnc.
+        if len(data) > MAX_BROWSER_CHUNK:
+            return
+        # Enforce "only RFB protocol" on the way in (see _RfbClientFramer): pass
+        # framed protocol messages, drop ClientCutText, and on anything that is
+        # not RFB tear the view down instead of piping it into x11vnc.
+        with self._vnc_lock:
+            framer = self._vnc_framer
+        if framer is None:
+            return
+        safe = framer.feed(data)
+        if safe is None:
+            self._vnc_teardown(reason="error")
+            return
+        if safe:
+            bridge.feed(safe)
 
     def _vnc_teardown(self, *, reason: str = "stopped", notify: bool = True) -> None:
         with self._vnc_lock:
@@ -841,7 +1087,20 @@ class Executor:
                 timed_out=result.timed_out,
             ),
         )
-        inner_model = self._model_factory()
+        # A task may name the model to run on and how hard it thinks. If it named
+        # either and a per-task selector is wired (production), build that model;
+        # otherwise fall back to the default factory — which is both the
+        # offline/mock path (no select wired, so no backend client is ever built
+        # and no credits are spent) and a task that named nothing at all.
+        # Everything downstream — the hero ``cheap_clone``, ``set_tools``, the
+        # streaming wrapper, the cancel hooks — works off this one base client
+        # exactly as before; only where it comes from changed.
+        if (run.model or run.reasoning_effort) and self._model_select is not None:
+            inner_model = self._model_select(
+                run.model, run.provider, run.reasoning_effort
+            )
+        else:
+            inner_model = self._model_factory()
         model = StreamingModelClient(
             inner_model,
             on_delta=lambda text: self._event(request_id, delta_payload(text)),

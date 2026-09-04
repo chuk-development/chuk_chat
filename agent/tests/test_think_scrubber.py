@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from cowork_agent.think_scrubber import ThinkScrubber, scrub_history, scrub_text
 
-TOOL_CALL = '<tool_call>{"name":"write_file","arguments":{"path":"a.py"}}</tool_call>'
+# The scrubber removes think/reasoning tags and NOTHING else. Any other markup
+# in the stream is ordinary text and must survive byte-identical, even when the
+# transport cuts it in half. This stand-in stands for all of it.
+SNIPPET = '<snippet lang="py">print("hi")</snippet>'
 
 
 def _stream(chunks: list[str]) -> tuple[str, str]:
@@ -83,31 +86,32 @@ def test_stray_closing_tag_is_dropped_not_emitted():
     assert "</think>" not in visible
 
 
-# -- <tool_call> integrity ------------------------------------------------
+# -- markup integrity: non-think tags are never touched -------------------
 
 
-def test_tool_call_block_passes_through_untouched():
-    visible, _ = _stream([f"here you go {TOOL_CALL}"])
-    assert TOOL_CALL in visible
+def test_non_think_markup_passes_through_untouched():
+    visible, _ = _stream([f"here you go {SNIPPET}"])
+    assert SNIPPET in visible
 
 
-def test_tool_call_split_across_chunks_survives():
-    mid = len(TOOL_CALL) // 2
-    visible, _ = _stream(["<think>plan</think>", TOOL_CALL[:mid], TOOL_CALL[mid:]])
-    assert visible == TOOL_CALL
+def test_non_think_markup_split_across_chunks_survives():
+    mid = len(SNIPPET) // 2
+    visible, _ = _stream(["<think>plan</think>", SNIPPET[:mid], SNIPPET[mid:]])
+    assert visible == SNIPPET
 
 
-def test_tool_call_prefix_does_not_trigger_a_holdback_loss():
-    # "<t" is a prefix of "<think>", so it is held back — and must come back.
-    visible, _ = _stream(["<t", "ool_call>{}", "</tool_call>"])
-    assert visible == "<tool_call>{}</tool_call>"
+def test_a_think_prefix_boundary_does_not_lose_text():
+    # "<t" is a prefix of "<think>", so it is held back — and must come back
+    # whole once the next chunk proves it was never a think tag.
+    visible, _ = _stream(["<t", "able>cell", "</table>"])
+    assert visible == "<table>cell</table>"
 
 
-def test_think_block_containing_a_tool_call_is_removed_with_it():
-    # A tool call the model only *considered* inside its thinking is not a call.
-    visible, reasoning = _stream([f"<think>maybe {TOOL_CALL}</think>final"])
+def test_markup_inside_a_think_block_is_removed_with_it():
+    # Whatever the model only *considered* inside its thinking stays there.
+    visible, reasoning = _stream([f"<think>maybe {SNIPPET}</think>final"])
     assert visible == "final"
-    assert TOOL_CALL in reasoning
+    assert SNIPPET in reasoning
 
 
 # -- send-side: only the newest turn replays its reasoning -----------------

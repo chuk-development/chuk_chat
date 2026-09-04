@@ -11,15 +11,21 @@ from cowork_agent.loop import (
 from cowork_agent.model import (
     MockModelClient,
     ModelResponse,
-    response_from_content,
+    tool_call_response,
 )
 from cowork_agent.registry import ToolRegistry
 from cowork_agent.state import StateStore
 
-# A tool call is written as a <tool_call> block in the assistant content — the one
-# wire format shared by the mock and the real backend.
-ECHO_CALL = '<tool_call>{"name":"echo","arguments":{"v":"hi"}}</tool_call>'
-ECHO_CALL_EMPTY = '<tool_call>{"name":"echo","arguments":{}}</tool_call>'
+
+def _echo_call(**arguments) -> ModelResponse:
+    """One native tool-calling turn asking for ``echo``.
+
+    Tool calls never live in the assistant text: they arrive as structured
+    ``tool_calls``, which is exactly what :func:`tool_call_response` builds — the
+    one wire format shared by the mock and the real backend. A fresh response is
+    built per call so a test may safely stamp usage onto ``raw``.
+    """
+    return tool_call_response(("echo", arguments))
 
 
 def _store(tmp_path):
@@ -75,7 +81,7 @@ def test_loop_finishes_on_bare_text(tmp_path):
 
 
 def test_loop_continues_on_tool_call_then_finishes(tmp_path):
-    model = MockModelClient([ECHO_CALL, "finished"])
+    model = MockModelClient([_echo_call(v="hi"), "finished"])
     store = _store(tmp_path)
     loop = AgentLoop(model, _reg_with_echo(), store)
     result = loop.run("k2", "go")
@@ -89,7 +95,8 @@ def test_loop_continues_on_tool_call_then_finishes(tmp_path):
 # The explicit terminal action: a `finish` tool call ends the run with its
 # summary as the final answer, even though it is structurally a tool call (which
 # would otherwise continue the loop).
-FINISH_CALL = '<tool_call>{"name":"finish","arguments":{"summary":"the result"}}</tool_call>'
+def _finish_call(summary: str = "the result") -> ModelResponse:
+    return tool_call_response(("finish", {"summary": summary}))
 
 
 def test_finish_tool_terminates_with_summary(tmp_path):
@@ -99,7 +106,7 @@ def test_finish_tool_terminates_with_summary(tmp_path):
     register_finish(reg)
     store = _store(tmp_path)
     # A tool round, then the model calls `finish` instead of returning bare text.
-    model = MockModelClient([ECHO_CALL, FINISH_CALL])
+    model = MockModelClient([_echo_call(v="hi"), _finish_call()])
     loop = AgentLoop(model, reg, store)
     result = loop.run("kf", "go")
     assert result.reason is StopReason.FINISHED
@@ -112,10 +119,7 @@ def test_finish_tool_terminates_with_summary(tmp_path):
 
 # -- CodeAct python tool: really runs code in the env --------------------
 
-PYTHON_CALL = (
-    '<tool_call>{"name":"python","arguments":'
-    '{"code":"import sys\\nprint(6 * 7)\\nsys.exit(3)"}}</tool_call>'
-)
+PYTHON_CODE = "import sys\nprint(6 * 7)\nsys.exit(3)"
 
 
 def test_python_tool_runs_code_in_env(tmp_path):
@@ -126,7 +130,9 @@ def test_python_tool_runs_code_in_env(tmp_path):
     register_run_python(reg, LocalEnvironment())
 
     # The model calls `python`, then finishes with bare text.
-    model = MockModelClient([PYTHON_CALL, "done"])
+    model = MockModelClient(
+        [tool_call_response(("python", {"code": PYTHON_CODE})), "done"]
+    )
     store = _store(tmp_path)
     loop = AgentLoop(model, reg, store)
     result = loop.run("kpy", "go")
@@ -146,10 +152,11 @@ def test_python_tool_runs_code_in_env(tmp_path):
 
 
 def test_max_iterations_ceiling(tmp_path):
-    # Model never finishes — always emits a tool call (via the content path).
+    # Model never finishes — every turn carries a tool call, so the loop only
+    # ever continues.
     class Endless:
         def complete(self, messages):
-            return response_from_content(ECHO_CALL_EMPTY)
+            return _echo_call()
 
     loop = AgentLoop(Endless(), _reg_with_echo(), _store(tmp_path), max_iterations=4)
     result = loop.run("k3", "go")
@@ -160,7 +167,7 @@ def test_max_iterations_ceiling(tmp_path):
 def test_budget_exhausted_stops_before_ceiling(tmp_path):
     class Endless:
         def complete(self, messages):
-            return response_from_content(ECHO_CALL_EMPTY)
+            return _echo_call()
 
     loop = AgentLoop(
         Endless(),
@@ -179,9 +186,9 @@ def test_housekeeping_round_is_refunded(tmp_path):
     # Without refunds this would exhaust; with refunds it reaches the answer.
     model = MockModelClient(
         [
-            response_from_content(ECHO_CALL_EMPTY, housekeeping=True),
-            response_from_content(ECHO_CALL_EMPTY, housekeeping=True),
-            ECHO_CALL_EMPTY,
+            tool_call_response(("echo", {}), housekeeping=True),
+            tool_call_response(("echo", {}), housekeeping=True),
+            _echo_call(),
             "done",
         ]
     )
@@ -196,10 +203,10 @@ def test_housekeeping_round_is_refunded(tmp_path):
 # -- token budget (§7.6) --------------------------------------------------
 
 
-def _usage_turn(content, total):
+def _usage_turn(total):
     """A tool-call turn that reports ``total`` tokens spent, so a token budget
     can be driven deterministically."""
-    r = response_from_content(content)
+    r = _echo_call()
     r.raw = dict(r.raw)
     r.raw["usage"] = {"total_tokens": total}
     return r
@@ -215,7 +222,7 @@ def test_token_budget_stops_before_the_next_round(tmp_path):
 
         def complete(self, messages):
             self.calls += 1
-            return _usage_turn(ECHO_CALL_EMPTY, 40)
+            return _usage_turn(40)
 
     model = Spender()
     loop = AgentLoop(
@@ -233,7 +240,7 @@ def test_token_budget_stops_before_the_next_round(tmp_path):
 
 
 def test_no_token_budget_means_no_token_stop(tmp_path):
-    model = MockModelClient([_usage_turn(ECHO_CALL_EMPTY, 10_000), "done"])
+    model = MockModelClient([_usage_turn(10_000), "done"])
     loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path))
     result = loop.run("tk2", "go")
     assert result.reason is StopReason.FINISHED
@@ -243,7 +250,7 @@ def test_no_token_budget_means_no_token_stop(tmp_path):
 
 def test_prompt_plus_completion_counts_when_no_total(tmp_path):
     def turn(p, c):
-        r = response_from_content(ECHO_CALL_EMPTY)
+        r = _echo_call()
         r.raw = {"usage": {"prompt_tokens": p, "completion_tokens": c}}
         return r
 
@@ -260,7 +267,7 @@ def test_prompt_plus_completion_counts_when_no_total(tmp_path):
 def test_missing_usage_does_not_advance_the_budget(tmp_path):
     # A backend that sends no usage frame must not silently exhaust the cap; the
     # run instead ends on its own terms (here, the bare-text answer).
-    model = MockModelClient([ECHO_CALL_EMPTY, "done"])
+    model = MockModelClient([_echo_call(), "done"])
     loop = AgentLoop(
         model, _reg_with_echo(), _store(tmp_path), max_iterations=100, token_budget=50
     )
@@ -433,10 +440,6 @@ def test_an_interrupt_mid_batch_skips_the_rest_but_answers_every_call(tmp_path):
     would read an assistant turn with a dangling tool call."""
     ks = KillSwitch()
     ran: list[str] = []
-    three_calls = "".join(
-        '<tool_call>{"name":"step","arguments":{"n":"%s"}}</tool_call>' % n
-        for n in ("1", "2", "3")
-    )
 
     def step(n: str = "") -> dict:
         ran.append(n)
@@ -452,8 +455,12 @@ def test_an_interrupt_mid_batch_skips_the_rest_but_answers_every_call(tmp_path):
     )
 
     class _ThreeToolCalls:
+        """One turn, three native tool calls — the batch the stop lands inside."""
+
         def complete(self, messages):
-            return response_from_content(three_calls)
+            return tool_call_response(
+                *(("step", {"n": n}) for n in ("1", "2", "3"))
+            )
 
     loop = AgentLoop(_ThreeToolCalls(), reg, _store(tmp_path), kill_switch=ks)
     result = loop.run("k11", "go")
@@ -479,7 +486,7 @@ def test_debug_observer_gets_each_round_in_the_contract_shape(tmp_path):
     from cowork_agent.context import ContextLadder
 
     # Round 1 makes a tool call (continues); round 2 is bare text (finishes).
-    model = MockModelClient([ECHO_CALL, "done"])
+    model = MockModelClient([_echo_call(v="hi"), "done"])
     ladder = ContextLadder()
     captured: list[dict] = []
 

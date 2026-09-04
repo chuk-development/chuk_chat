@@ -643,7 +643,6 @@ class SubagentSupervisor:
             self._stop_pulse_if_idle()
 
     def _settle(self, live: "_LiveChild", result: LoopResult) -> None:
-        record = live.record
         state = _TERMINAL_STATE.get(result.reason, SubagentState.FAILED)
         error: str | None = None
         if state is SubagentState.FAILED:

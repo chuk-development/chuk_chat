@@ -113,6 +113,12 @@ class _ChildStreamingModel:
         self._inner = inner
         self._emit = emit
 
+    def set_tools(self, tools: list[dict] | None) -> None:
+        """Forward native tools to the child's inner client, so a subagent gets
+        the same native tool calling as its parent (§ native tool calls)."""
+        if hasattr(self._inner, "set_tools"):
+            self._inner.set_tools(tools)  # type: ignore[attr-defined]
+
     def complete(self, messages: list[dict]) -> ModelResponse:
         response = self._inner.complete(messages)
         if response.text:
@@ -250,10 +256,11 @@ def build_runtime(
     debug_observer: Callable[[dict], None] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
-    behaviour contract, the ``<tool_call>`` wire format and the live tool list
-    are prepended from :mod:`cowork_agent.prompt`, so a tool can never be
-    registered without being documented to the model. Pass
-    ``include_tool_docs=False`` to use ``system_prompt`` verbatim (tests).
+    behaviour contract is prepended from :mod:`cowork_agent.prompt` and the live
+    tool schemas are handed to the model natively (``set_tools`` below), so a
+    tool can never be registered without being offered to the model. Pass
+    ``include_tool_docs=False`` to use ``system_prompt`` verbatim and declare no
+    tools (tests).
 
     ``session`` is the account session. Pass it and ``web_search`` joins the
     tool set (it bills the account through our backend); leave it out and only
@@ -463,6 +470,16 @@ def build_runtime(
             reserved_output=ladder_config.reserved_output,
             threshold=tool_search_threshold,
         )
+
+    # Native tool calling (§ native tool calls): hand the model the OpenAI `tools`
+    # array built from the registry AFTER deferral, so deferred tools (which stay
+    # reachable through the tool_search bridge) are not double-declared. The seam
+    # is a settable `set_tools`, mirroring `on_delta`; the backend client and the
+    # streaming wrappers forward it, and a client without it (the mock, which is
+    # scripted anyway) simply ignores it. Gated on `include_tool_docs`: a bare
+    # run that was told to use its persona verbatim declares no tools either.
+    if include_tool_docs and hasattr(model, "set_tools"):
+        model.set_tools(registry.openai_tools())  # type: ignore[attr-defined]
 
     def _prompt_factory() -> str:
         """Resolved once, when a session is seeded (see ``AgentLoop.run``).

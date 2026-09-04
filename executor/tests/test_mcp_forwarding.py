@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from cowork_agent import MockModelClient
+from cowork_agent import MockModelClient, tool_call_response
 from cowork_sandbox import LocalEnvironment
 
 from cowork_executor import ControllerSession, Executor, loopback_pair
@@ -150,8 +150,7 @@ def test_forwarded_server_tool_is_registered_and_dispatchable(tmp_path):
         # Turn 1 calls the forwarded MCP tool; turn 2 finishes.
         return MockModelClient(
             [
-                '<tool_call>{"name":"mcp__fake__shout",'
-                '"arguments":{"text":"via mcp"}}</tool_call>',
+                tool_call_response(("mcp__fake__shout", {"text": "via mcp"})),
                 "done",
             ]
         )

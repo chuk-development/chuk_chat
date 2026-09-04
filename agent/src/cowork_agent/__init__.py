@@ -127,9 +127,8 @@ from .model import (
     MockModelClient,
     OpenAICompatModelClient,
     ToolCall,
-    extract_tool_calls,
     parse_openai_response,
-    response_from_content,
+    tool_call_response,
 )
 from .oauth_bridge import (
     BackendOAuthClient,
@@ -144,7 +143,6 @@ from .oauth_bridge import (
 )
 from .prompt import (
     BASE_INSTRUCTIONS,
-    TOOL_PROTOCOL,
     build_system_prompt,
     render_tool_block,
     render_tool_docs,
@@ -306,9 +304,9 @@ __all__ = [
     "SUMMARY_PREFIX",
     "SUMMARY_TEMPLATE",
     "SUBAGENT_BRANCH_PREFIX",
+    "tool_call_response",
     "tool_doc_tokens",
     "tool_name",
-    "TOOL_PROTOCOL",
     "ActivityMonitor",
     "AgentLoop",
     "AuxSummarizer",
@@ -391,7 +389,6 @@ __all__ = [
     "estimate_tokens",
     "expand_back_references",
     "diff_screens",
-    "extract_tool_calls",
     "fetch_bytes",
     "fetch_models_info",
     "html_to_markdown",
@@ -431,7 +428,6 @@ __all__ = [
     "render_transcript",
     "resolve_in_workspace",
     "resolve_model",
-    "response_from_content",
     "sanitize_match",
     "sanitize_name",
     "search_messages",
