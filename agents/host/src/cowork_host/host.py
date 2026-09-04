@@ -55,7 +55,8 @@ from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
 from .seed_skills import seed_workspace_skills
-from .desktop_notify import DesktopNotifier, completion_text
+from .desktop_notify import DesktopNotifier
+from .notify import SupabaseNotifier
 from .serve import TaskServer
 
 DEFAULT_WORKSPACE = "~/.cowork"
@@ -348,6 +349,16 @@ class LocalHost:
         # The desktop channel for "your answer is ready" when no app is attached
         # (docs/WIRE_CONTRACT.md). Needs no cloud; a no-op without a display.
         self._desktop_notifier = DesktopNotifier()
+        # The cloud channel (P7): a row with the user's own token, then the
+        # Edge Function pushes to the user's devices. Best-effort, outboxed.
+        self._notifier = SupabaseNotifier(
+            session_provider=lambda: self._session,
+            user_id_provider=lambda: getattr(self, "_user_id", "") or "",
+            agent_provider=lambda: (self._agent.id, self._agent.name),
+            db_path=self._db_path,
+            desktop=self._desktop_notifier,
+            logger=self._log,
+        )
         self._relay.start()
         self._port = self._relay.port
         self._party = HostParty(
@@ -482,6 +493,8 @@ class LocalHost:
         # Keep the live session so the task server can hand its (refreshable)
         # access token to the executor for appSession MCP connectors.
         self._session = session
+        # The account owner, for the notification rows (owner-only RLS).
+        self._user_id = str(token.get("user_id") or "")
         self._log("resolving a model from the account (one /v1/models_info call)...")
         return resolve_backend_model_wiring(
             session, preferred_model_id=self._model_id
@@ -565,7 +578,14 @@ class LocalHost:
         expires = token.get("expires_at")
         if isinstance(expires, (int, float)) and not isinstance(expires, bool):
             session.expires_at = float(expires)
+        user_id = token.get("user_id")
+        if isinstance(user_id, str) and user_id:
+            self._user_id = user_id
         self._log("account session refreshed in place from a new token frame")
+        # A fresh token is the moment to retry what could not be delivered.
+        notifier = getattr(self, "_notifier", None)
+        if notifier is not None:
+            notifier.flush_outbox()
 
     def _controller_attached(self) -> bool:
         party = self._party
@@ -578,38 +598,19 @@ class LocalHost:
         same hook. The notification never carries the answer."""
         if self._controller_attached():
             return
-        run_id = str(summary.get("run_id") or "")
-        # One notification per run, whichever channel fires first.
-        first = True
-        if run_id:
-            try:
-                store = StateStore(self._db_path)
-                try:
-                    first = store.mark_run_notified(run_id)
-                finally:
-                    store.close()
-            except Exception:  # noqa: BLE001 — bookkeeping must not block a toast
-                first = True
-        if not first:
-            return
-        title, body = completion_text(
-            self._agent.name, failed=bool(summary.get("error"))
-        )
-        notifier = getattr(self, "_desktop_notifier", None)
+        notifier = getattr(self, "_notifier", None)
         if notifier is not None:
-            notifier.notify(title, body)
+            # Desktop toast + cloud push, one per run, on a background thread.
+            notifier.notify_run_finished(summary)
 
     def _on_approval_pending(self, info: dict) -> None:
         """A run is blocked on a here.now publish approval. With no app attached
         the user cannot see the card, so nudge them to open the app."""
         if self._controller_attached():
             return
-        notifier = getattr(self, "_desktop_notifier", None)
+        notifier = getattr(self, "_notifier", None)
         if notifier is not None:
-            notifier.notify(
-                f"{self._agent.name} needs your approval",
-                "Open the app to allow or deny the publish",
-            )
+            notifier.notify_approval_pending(info)
 
     @property
     def estop_path(self) -> str:

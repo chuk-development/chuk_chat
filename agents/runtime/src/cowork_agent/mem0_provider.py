@@ -126,7 +126,13 @@ class ChukBackendLLM(LLMBase):
         client: ModelClient | None = None,
     ) -> None:
         super().__init__(config)
-        self._client = client if client is not None else _backend_client
+        # An explicit client (tests) is pinned. The factory path stores NOTHING
+        # and resolves the module-level client on every call instead — see
+        # ``generate_response``. The Memory object is cached per workspace across
+        # tasks (memory.py), while the executor hands each task a fresh hero
+        # client and closes the previous one; capturing the client here would
+        # leave the cached provider talking to a closed socket from task 2 on.
+        self._client = client
 
     def generate_response(
         self,
@@ -141,7 +147,8 @@ class ChukBackendLLM(LLMBase):
         are accepted and ignored: the backend answers in text, and Mem0 parses
         the JSON out of that text itself.
         """
-        client = self._client
+        # Resolve late: the current task's client, not the one alive at build.
+        client = self._client if self._client is not None else _backend_client
         if client is None:
             raise RuntimeError(
                 "ChukBackendLLM has no backend client; call set_backend_client() "

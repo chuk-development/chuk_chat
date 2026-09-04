@@ -281,6 +281,106 @@ def test_rfb_framer_reassembles_messages_split_across_chunks():
     assert f.feed(pointer[1:]) == pointer
 
 
+def test_rfb_framer_passes_vnc_auth_response():
+    """With a per-view secret x11vnc offers security type 2: the client sends
+    the type byte then a 16-byte DES response. Both must pass the framer."""
+    from cowork_executor.executor import _RfbClientFramer
+
+    f = _RfbClientFramer()
+    handshake = b"RFB 003.008\n" + b"\x02" + bytes(range(16)) + b"\x01"
+    assert f.feed(handshake) == handshake
+    pointer = b"\x05\x00\x00\x0a\x00\x14"
+    assert f.feed(pointer) == pointer  # message phase reached
+
+
+def test_vnc_start_arms_a_per_view_secret_as_root(tmp_path, monkeypatch):
+    """cowork-vnc-up runs as ROOT with the secret in its env (root-only
+    password file inside the sandbox), and the secret rides in `started`."""
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    env = _FakeDockerEnv()
+    executor = _executor_with(tmp_path, env, browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kw):
+        calls.append(list(argv))
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", fake_run)
+    real_bridge = ex_mod._VncBridge
+    monkeypatch.setattr(
+        ex_mod, "_VncBridge", lambda _argv, **kw: real_bridge(["cat"], **kw)
+    )
+    try:
+        executor._vnc_start("req-secret", {})
+        assert calls, "cowork-vnc-up was not invoked"
+        argv = calls[0]
+        assert argv[:4] == ["docker", "exec", "-i", "-u"] and argv[4] == "root"
+        env_arg = next(a for a in argv if a.startswith("COWORK_VNC_PASSWD="))
+        secret = env_arg.split("=", 1)[1]
+        assert len(secret) == 8
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["password"] == secret
+        # The socat bridge itself still runs as the sandbox user.
+        assert "root" not in ex_mod._VncBridge.__name__  # sanity: unchanged class
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_browser_start_runs_off_the_serve_thread_and_a_stop_wins(tmp_path, monkeypatch):
+    """cowork-vnc-up may take seconds. The start must not block the serve
+    thread, and a `browser_stop` that lands while x11vnc is still coming up
+    must win: the late bridge is closed, never registered, no 'started'."""
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    env = _FakeDockerEnv()
+    executor = _executor_with(tmp_path, env, browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    in_vnc_up = threading.Event()
+    release = threading.Event()
+
+    def slow_run(argv, **_kw):  # cowork-vnc-up "hangs" until released
+        in_vnc_up.set()
+        release.wait(5.0)
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", slow_run)
+    real_bridge = ex_mod._VncBridge
+    made: list = []
+
+    def fake_bridge(_argv, **kw):
+        b = real_bridge(["cat"], **kw)
+        made.append(b)
+        return b
+
+    monkeypatch.setattr(ex_mod, "_VncBridge", fake_bridge)
+
+    # Dispatch a start the way the serve loop does: it must return at once.
+    t0 = time.time()
+    executor._handle_browser_kind("browser_start", "req-slow", {})
+    assert time.time() - t0 < 1.0, "browser_start blocked the serve thread"
+    assert in_vnc_up.wait(5.0)
+    # The user closes the view while x11vnc is still starting.
+    executor._handle_browser_kind("browser_stop", "req-slow", {})
+    release.set()
+    deadline = time.time() + 5.0
+    while time.time() < deadline and not made:
+        time.sleep(0.02)
+    deadline = time.time() + 5.0
+    while time.time() < deadline and not made[0]._closed.is_set():
+        time.sleep(0.02)
+    assert made and made[0]._closed.is_set(), "stale bridge was not closed"
+    assert executor._vnc is None
+    assert not any(e.get("status") == "started" for e in events), events
+
+
 def test_rfb_framer_refuses_rfb_3_3():
     """RFB 3.3 cannot be framed from the client side (the server picks the
     security type silently, so a 16-byte auth response may or may not

@@ -494,8 +494,15 @@ def build_runtime(
             memory=memory.snapshot() if memory else None,
             # Names only (§9): lets the model answer "what integrations do you
             # have" truthfully now that tool schemas no longer live in the prompt.
+            # Only servers that actually connected: a configured-but-dead server
+            # presented as "wired up" is exactly the invented integration the
+            # inventory exists to prevent. The manager was started by
+            # register_mcp_tools above, so liveness is known by the time a
+            # session is seeded.
             mcp_servers=(
-                [c.name for c in manager.configs] if manager is not None else None
+                [c.name for c in manager.configs if manager.is_alive(c.name)]
+                if manager is not None
+                else None
             ),
         )
 
