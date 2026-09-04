@@ -168,6 +168,19 @@ def test_selector_failure_is_an_error_terminal_and_the_worker_survives(tmp_path)
         assert events[-1]["type"] == "error"
         assert "task failed" in str(events[-1])
 
+        # The durable record agrees with the terminal (docs/WIRE_CONTRACT.md): an
+        # app that reconnects later must see this run as failed, not running.
+        from cowork_agent import StateStore
+
+        store = StateStore(str(tmp_path / "s.db"))
+        try:
+            row = store.latest_run("s")
+        finally:
+            store.close()
+        assert row is not None, "the failed run must have a runs row"
+        assert row["state"] == "failed"
+        assert "task failed" in str(row)
+
         # The worker is still alive: the next task completes on the same executor.
         rid2 = controller.send_task("again", session_key="s")
         events2 = controller.collect(rid2, timeout=15.0)
@@ -209,3 +222,31 @@ def test_stop_closes_and_forgets_the_cached_mem0_handles(tmp_path, monkeypatch):
 
     assert closed == ["closed"], "stop() must close the cached Qdrant client"
     assert memory_mod._MEM_BY_ROOT == {}, "stop() must forget the cached handles"
+
+
+def test_a_non_string_prompt_is_refused_before_anything_is_recorded(tmp_path):
+    """A task frame whose prompt is not text is refused at accept time with an
+    error terminal — not written into the runs table and not handed to the
+    worker to fail later. (The controller's type hint says str; the wire does
+    not enforce it, so the executor must.)"""
+    executor, controller = _wire(
+        tmp_path,
+        model_factory=lambda: _scripted_model("from-factory"),
+        model_select=None,
+    )
+    executor.start()
+    try:
+        rid = controller.send_task(123, session_key="s")  # type: ignore[arg-type]
+        events = controller.collect(rid, timeout=15.0)
+        assert events and events[-1]["type"] == "error"
+        assert "prompt must be a string" in str(events[-1])
+
+        from cowork_agent import StateStore
+
+        store = StateStore(str(tmp_path / "s.db"))
+        try:
+            assert store.latest_run("s") is None, "nothing may be recorded for a refused task"
+        finally:
+            store.close()
+    finally:
+        executor.stop()
