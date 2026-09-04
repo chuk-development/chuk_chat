@@ -121,8 +121,28 @@ def sanitize(part: str) -> str:
     return _UNSAFE.sub("_", (part or "").strip()).strip("_") or "unnamed"
 
 
+# The native tool-calling contract requires ``^[a-zA-Z0-9_-]{1,64}$`` for a
+# function name (chuk_chat docs/NATIVE_TOOL_CALLING.md). A long server + tool
+# pair overflows that easily, and an over-long name in ``tools[]`` makes the
+# provider reject EVERY request of the run, not just one call.
+MAX_TOOL_NAME = 64
+_HASH_LEN = 8
+
+
 def tool_name(server: str, tool: str) -> str:
-    return f"{TOOL_PREFIX}{sanitize(server)}__{sanitize(tool)}"
+    """``mcp__<server>__<tool>``, capped at 64 characters.
+
+    An over-long name keeps a prefix and gets a short deterministic hash of the
+    full name appended, so it stays unique, stable across runs (``tool_call`` /
+    ``tool_describe`` resolve the same string every time) and within the contract.
+    """
+    import hashlib
+
+    name = f"{TOOL_PREFIX}{sanitize(server)}__{sanitize(tool)}"
+    if len(name) <= MAX_TOOL_NAME:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:_HASH_LEN]
+    return f"{name[: MAX_TOOL_NAME - _HASH_LEN - 1]}_{digest}"
 
 
 # -- configuration ---------------------------------------------------------

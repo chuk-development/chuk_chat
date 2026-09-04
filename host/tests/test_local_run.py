@@ -31,7 +31,9 @@ from cowork_crypto import (
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
+from cowork_agent import StateStore
 from cowork_executor import frame_to_b64, stop_payload, task_payload
+from cowork_executor.protocol import replay_payload
 from cowork_host import KEY_VERSION, LocalHost
 from cowork_host.protocol import (
     STEP_CONFIRM_D,
@@ -92,12 +94,21 @@ class ControllerDouble:
         *,
         reconnect_trust: AppTrust | None = None,
         stop_when: threading.Event | None = None,
+        replay_key: str | None = None,
+        leave_after_task: bool = False,
     ) -> None:
         self._url = url
         self._channel_id = channel_id
         self._reconnect_trust = reconnect_trust
         # When set, this double presses Stop as soon as the event fires.
         self._stop_when = stop_when
+        # When set, this double closes its socket right after it sent the task:
+        # the app walking away mid-run, deterministically (no timer race).
+        self._leave_after_task = leave_after_task
+        self._leaving = False
+        # When set, this double sends a ``replay`` for that thread instead of a
+        # task, and collects until the history-end marker (docs/WIRE_CONTRACT).
+        self._replay_key = replay_key
         if reconnect_trust is not None:
             self._identity = reconnect_trust.identity
             self._pairing = None
@@ -151,12 +162,19 @@ class ControllerDouble:
                 kind = msg.get("type")
                 if kind == "pairing":
                     self._on_pairing(ws, msg.get("data") or {}, prompt)
+                    if self._leaving:
+                        return results
                 elif kind == "frame":
                     self.raw_result_frames.append(msg["frame"])
                     payload = self._open(msg["frame"])
                     results.append(payload)
-                    if payload.get("type") in ("done", "error"):
+                    if payload.get("type") == "error":
                         return results
+                    if payload.get("type") == "done":
+                        # A replay stream ends at the history-end marker only;
+                        # a replayed run terminal is a real event, not the end.
+                        if self._replay_key is None or payload.get("reason") == "replay":
+                            return results
         return results
 
     # -- joiner ceremony -------------------------------------------------
@@ -232,7 +250,15 @@ class ControllerDouble:
             "user_id": "user-123",
         }
         ws.send(json.dumps(frame_envelope(self._seal(token))))
+        if self._replay_key is not None:
+            ws.send(
+                json.dumps(frame_envelope(self._seal(replay_payload(self._replay_key))))
+            )
+            return
         ws.send(json.dumps(frame_envelope(self._seal(task_payload(prompt, "thread-1")))))
+        if self._leave_after_task:
+            self._leaving = True
+            return
         if self._stop_when is not None:
             # The app's Stop button: pressed once the run is provably working,
             # and sent as a plain sealed frame like everything else.
@@ -293,6 +319,96 @@ def test_full_local_run(tmp_path):
     produced = tmp_path / "agents" / "test-worker" / "f.txt"
     assert produced.exists(), "sandbox did not run the command"
     assert produced.read_text().strip() == "hello"
+
+
+class _SlowModel(MockModelClient):
+    """The scripted model, but every turn takes ``delay`` seconds: long enough
+    for the controller to walk away mid-run."""
+
+    def __init__(self, delay: float) -> None:
+        super().__init__(
+            [
+                tool_call_response(("run_command", {"command": "echo hello > f.txt"})),
+                "done",
+            ]
+        )
+        self._delay = delay
+
+    def complete(self, messages):  # type: ignore[override]
+        time.sleep(self._delay)
+        return super().complete(messages)
+
+
+def test_a_run_survives_the_controller_disconnecting(tmp_path, monkeypatch):
+    """docs/WIRE_CONTRACT.md: a run belongs to the host, not to a socket.
+
+    The app sends a task and closes its socket while the model is still
+    thinking. The run must keep going on the host, write its transcript and its
+    ``runs`` row, and a fresh controller reconnecting from the stored trust must
+    get the finished run back from a ``replay`` — with the answer, flagged
+    ``while_away`` — and the sandbox side effect must exist. Result frames sent
+    while nobody was attached are dropped, not buffered.
+    """
+    # No real desktop toast on the developer's screen from a test run.
+    monkeypatch.setenv("COWORK_DESKTOP_NOTIFY", "0")
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="test-worker",
+        channel_id="testchannel00",
+        digits="428913",
+        model_factory_override=lambda: _SlowModel(1.0),
+    )
+    host.start()
+    try:
+        first = ControllerDouble(
+            host.url, host.channel_id, host.pairing_code, leave_after_task=True
+        )
+        # Send the task and walk away at once: the run has just started
+        # (1 s per model turn), so nothing of it reached this socket.
+        partial = first.run("run the slow task", timeout=20.0)
+        assert not any(e["type"] == "done" for e in partial), "the run ended too early"
+        trust = first.trust()
+
+        # Nobody is attached now. The run keeps going and finishes on its own.
+        produced = tmp_path / "agents" / "test-worker" / "f.txt"
+        store = StateStore(host._db_path)
+        deadline = time.monotonic() + 20.0
+        finished = None
+        while time.monotonic() < deadline:
+            latest = store.latest_run("thread-1")
+            if latest is not None and latest["state"] == "finished":
+                finished = latest
+                break
+            time.sleep(0.2)
+        store.close()
+        assert finished is not None, "the run did not finish after the app left"
+        assert finished["final_answer"] == "done"
+        assert produced.exists() and produced.read_text().strip() == "hello"
+        # Frames for the absent app were dropped, not held for it.
+        assert host.party is not None
+        assert host.party.frames_dropped_while_away > 0
+
+        # A fresh app (same stored trust) reconnects with no code and replays.
+        second = ControllerDouble(
+            host.url, host.channel_id, reconnect_trust=trust, replay_key="thread-1"
+        )
+        events = second.run("unused", timeout=15.0)
+    finally:
+        host.stop()
+
+    types = [e["type"] for e in events]
+    assert types[0] == "run_state" and events[0]["state"] == "idle"
+    assert "user" in types and "tool" in types and "delta" in types
+    dones = [e for e in events if e["type"] == "done"]
+    assert len(dones) == 2, f"expected the run terminal and the history end: {types}"
+    run_done, history_end = dones
+    assert run_done["replay"] is True
+    assert run_done["reason"] == "finished"
+    assert run_done["final_answer"] == "done"
+    assert run_done["run_id"] == finished["run_id"]
+    assert run_done["while_away"] is True
+    assert history_end["reason"] == "replay"
 
 
 def _docker_ready() -> bool:

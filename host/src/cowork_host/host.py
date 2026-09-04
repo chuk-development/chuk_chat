@@ -22,7 +22,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from cowork_agent import DEFAULT_MODEL_ID, SupabaseSession
+from cowork_agent import DEFAULT_MODEL_ID, StateStore, SupabaseSession
 from cowork_crypto import (
     ApprovedDevices,
     CoworkFrameOpener,
@@ -55,6 +55,7 @@ from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
 from .seed_skills import seed_workspace_skills
+from .desktop_notify import DesktopNotifier, completion_text
 from .serve import TaskServer
 
 DEFAULT_WORKSPACE = "~/.cowork"
@@ -343,6 +344,10 @@ class LocalHost:
     def start(self) -> None:
         """Start the relay and the host party. Non-blocking."""
         self._reap_orphan_containers()
+        self._sweep_orphan_runs()
+        # The desktop channel for "your answer is ready" when no app is attached
+        # (docs/WIRE_CONTRACT.md). Needs no cloud; a no-op without a display.
+        self._desktop_notifier = DesktopNotifier()
         self._relay.start()
         self._port = self._relay.port
         self._party = HostParty(
@@ -359,6 +364,7 @@ class LocalHost:
             ),
             reconnect_factory=self._reconnect_factory,
             on_pair_established=self._persist_pairing,
+            on_reprovision=self._on_reprovision,
         )
         self._party.start()
 
@@ -373,6 +379,22 @@ class LocalHost:
             # reuses it (§6). Task-scoped children are removed by their cleanup.
             self._containers.shutdown()
         self._roster.close()
+
+    def _sweep_orphan_runs(self) -> None:
+        """A run still ``running`` in the store was cut off by a crash or a
+        restart of this host. Close it as failed so no client ever sees a stale
+        run as live (docs/WIRE_CONTRACT.md)."""
+        try:
+            store = StateStore(self._db_path)
+            try:
+                swept = store.sweep_orphan_runs()
+            finally:
+                store.close()
+        except Exception as exc:  # noqa: BLE001 — a sweep must not block startup
+            self._log(f"could not sweep orphan runs: {type(exc).__name__}: {exc}")
+            return
+        if swept:
+            self._log(f"closed {swept} run(s) left running by a previous host process")
 
     def _reap_orphan_containers(self) -> None:
         """Remove containers a killed previous run left behind (§6 orphan reaper).
@@ -515,7 +537,79 @@ class LocalHost:
                 (lambda: self._session.access_token if self._session else None)
             ),
             browser_mcp=self._browser_mcp,
+            # Run ownership (docs/WIRE_CONTRACT.md): the run outlives the socket;
+            # the host is told when it ends, when it waits on an approval, and
+            # when a later account frame carries fresh tokens.
+            on_run_finished=self._on_run_finished,
+            on_approval_pending=self._on_approval_pending,
+            on_account_frame=self._on_reprovision,
         )
+
+    # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
+
+    def _on_reprovision(self, token: dict) -> None:
+        """A later ``account_authentication`` frame: refresh the live Supabase
+        session in place. The model factory closes over this object, so every
+        later model call carries the new token with no rebuild. This is also
+        the fix for a host token going stale when the app rotates its refresh
+        token mid-session."""
+        session = self._session
+        if session is None or not isinstance(token, dict):
+            return
+        access = token.get("access_token")
+        refresh = token.get("refresh_token")
+        if isinstance(access, str) and access:
+            session.access_token = access
+        if isinstance(refresh, str) and refresh:
+            session.refresh_token = refresh
+        expires = token.get("expires_at")
+        if isinstance(expires, (int, float)) and not isinstance(expires, bool):
+            session.expires_at = float(expires)
+        self._log("account session refreshed in place from a new token frame")
+
+    def _controller_attached(self) -> bool:
+        party = self._party
+        return bool(party is not None and party.controller_attached)
+
+    def _on_run_finished(self, summary: dict) -> None:
+        """A run ended on this host. With an app attached the user is watching
+        the stream; with none, tell them another way. Here: the desktop
+        notification. The cloud push is added by the notification phase on the
+        same hook. The notification never carries the answer."""
+        if self._controller_attached():
+            return
+        run_id = str(summary.get("run_id") or "")
+        # One notification per run, whichever channel fires first.
+        first = True
+        if run_id:
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    first = store.mark_run_notified(run_id)
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — bookkeeping must not block a toast
+                first = True
+        if not first:
+            return
+        title, body = completion_text(
+            self._agent.name, failed=bool(summary.get("error"))
+        )
+        notifier = getattr(self, "_desktop_notifier", None)
+        if notifier is not None:
+            notifier.notify(title, body)
+
+    def _on_approval_pending(self, info: dict) -> None:
+        """A run is blocked on a here.now publish approval. With no app attached
+        the user cannot see the card, so nudge them to open the app."""
+        if self._controller_attached():
+            return
+        notifier = getattr(self, "_desktop_notifier", None)
+        if notifier is not None:
+            notifier.notify(
+                f"{self._agent.name} needs your approval",
+                "Open the app to allow or deny the publish",
+            )
 
     @property
     def estop_path(self) -> str:

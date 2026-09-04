@@ -63,7 +63,36 @@ CREATE TABLE IF NOT EXISTS subagents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_subagents_parent ON subagents(parent_key);
+
+-- One row per accepted task (see docs/WIRE_CONTRACT.md). A run belongs to the
+-- host process, not to a socket: it is recorded here when accepted, closed here
+-- when it ends, and replayed from here to a client that was away. Kept in the
+-- same file as the messages so one file stays the truth.
+CREATE TABLE IF NOT EXISTS runs (
+    run_id       TEXT PRIMARY KEY,
+    session_id   INTEGER NOT NULL REFERENCES sessions(session_id),
+    session_key  TEXT NOT NULL,
+    prompt       TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    reason       TEXT,
+    final_answer TEXT,
+    iterations   INTEGER NOT NULL DEFAULT 0,
+    tokens_spent INTEGER NOT NULL DEFAULT 0,
+    first_mid    INTEGER,
+    last_mid     INTEGER,
+    started_at   REAL NOT NULL,
+    finished_at  REAL,
+    notified_at  REAL,
+    seen_at      REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
 """
+
+#: Run states (the ``runs.state`` column).
+RUN_RUNNING = "running"
+RUN_FINISHED = "finished"
+RUN_FAILED = "failed"
 
 
 @dataclass
@@ -241,7 +270,7 @@ class StateStore:
             for r in rows
         ]
 
-    def replay_events(self, session_id: int) -> list[dict]:
+    def replay_events(self, session_id: int, *, after_id: int = 0) -> list[dict]:
         """Rebuild the stored transcript as stream events, in the SAME shapes the
         executor streams live (see ``cowork_executor.protocol``). Every event
         carries ``"replay": True`` so a client tells a replayed turn from a live
@@ -277,19 +306,30 @@ class StateStore:
                 results[call_id] = _as_text(content.get("content"))
         events: list[dict] = []
         for message in conversation:
+            # The replay cursor (docs/WIRE_CONTRACT.md): a client that already
+            # holds the thread up to ``after_id`` gets only what came later.
+            if message.id <= after_id:
+                continue
             content = message.content
             role = content.get("role")
             if role in ("system", "tool"):
                 continue
+            # ``mid`` is the row id, so the client can persist a cursor.
+            mid = message.id
             if role == "user":
                 events.append(
-                    {"type": "user", "text": _as_text(content.get("content")), "replay": True}
+                    {
+                        "type": "user",
+                        "text": _as_text(content.get("content")),
+                        "replay": True,
+                        "mid": mid,
+                    }
                 )
                 continue
             # assistant
             text = content.get("content")
             if isinstance(text, str) and text.strip():
-                events.append({"type": "delta", "text": text, "replay": True})
+                events.append({"type": "delta", "text": text, "replay": True, "mid": mid})
             for call in content.get("tool_calls") or []:
                 if not isinstance(call, dict):
                     continue
@@ -309,9 +349,181 @@ class StateStore:
                         "stderr": "",
                         "timed_out": False,
                         "replay": True,
+                        "mid": mid,
                     }
                 )
         return events
+
+    # -- runs (docs/WIRE_CONTRACT.md) ------------------------------------
+
+    def max_message_id(self, session_id: int) -> int:
+        """The highest message row id in a session, or 0 for an empty one. Used
+        as a run's first/last message cursor."""
+        row = self._conn().execute(
+            "SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        return int(row["m"]) if row else 0
+
+    def begin_run(
+        self, run_id: str, session_id: int, session_key: str, prompt: str
+    ) -> None:
+        """Record an accepted task as ``running``. ``first_mid`` is the message
+        cursor at that moment, so the run's own turns are the rows after it."""
+        first_mid = self.max_message_id(session_id)
+
+        def op(cur: sqlite3.Cursor) -> None:
+            cur.execute(
+                "INSERT INTO runs(run_id, session_id, session_key, prompt, state, "
+                "first_mid, started_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(run_id) DO NOTHING",
+                (run_id, session_id, session_key, prompt, RUN_RUNNING, first_mid, time.time()),
+            )
+
+        self._write(op)
+
+    def finish_run(
+        self,
+        run_id: str,
+        *,
+        reason: str,
+        final_answer: str | None,
+        iterations: int,
+        tokens_spent: int,
+    ) -> None:
+        """Close a run as ``finished``. ``last_mid`` is the message cursor at the
+        end, so a replay can place the run's terminal after its last turn."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            row = cur.execute(
+                "SELECT session_id FROM runs WHERE run_id=?", (run_id,)
+            ).fetchone()
+            if row is None:
+                return
+            last = cur.execute(
+                "SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE session_id=?",
+                (int(row["session_id"]),),
+            ).fetchone()
+            cur.execute(
+                "UPDATE runs SET state=?, reason=?, final_answer=?, iterations=?, "
+                "tokens_spent=?, last_mid=?, finished_at=? WHERE run_id=?",
+                (
+                    RUN_FINISHED,
+                    reason,
+                    final_answer,
+                    int(iterations),
+                    int(tokens_spent),
+                    int(last["m"]) if last else 0,
+                    time.time(),
+                    run_id,
+                ),
+            )
+
+        self._write(op)
+
+    def fail_run(self, run_id: str, *, reason: str) -> None:
+        """Close a run as ``failed`` (a crashed loop, a host restart)."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            row = cur.execute(
+                "SELECT session_id FROM runs WHERE run_id=?", (run_id,)
+            ).fetchone()
+            if row is None:
+                return
+            last = cur.execute(
+                "SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE session_id=?",
+                (int(row["session_id"]),),
+            ).fetchone()
+            cur.execute(
+                "UPDATE runs SET state=?, reason=?, last_mid=?, finished_at=? "
+                "WHERE run_id=?",
+                (RUN_FAILED, reason, int(last["m"]) if last else 0, time.time(), run_id),
+            )
+
+        self._write(op)
+
+    def get_run(self, run_id: str) -> dict | None:
+        row = self._conn().execute(
+            "SELECT * FROM runs WHERE run_id=?", (run_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def latest_run(self, session_key: str) -> dict | None:
+        """The most recently started run for a session, or None."""
+        row = self._conn().execute(
+            "SELECT * FROM runs WHERE session_key=? ORDER BY started_at DESC, "
+            "rowid DESC LIMIT 1",
+            (session_key,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def run_terminals(self, session_key: str, *, after_id: int = 0) -> list[dict]:
+        """The closed runs of a session as replay ``done`` events, so a client
+        that was away sees each run's end after its last turn. Only runs whose
+        last message is past ``after_id`` — the client already has the rest."""
+        rows = self._conn().execute(
+            "SELECT * FROM runs WHERE session_key=? AND state IN (?, ?) "
+            "AND COALESCE(last_mid, 0) > ? ORDER BY COALESCE(last_mid, 0), started_at",
+            (session_key, RUN_FINISHED, RUN_FAILED, after_id),
+        ).fetchall()
+        events: list[dict] = []
+        for r in rows:
+            events.append(
+                {
+                    "type": "done",
+                    "final_answer": r["final_answer"],
+                    "reason": r["reason"] or ("finished" if r["state"] == RUN_FINISHED else "failed"),
+                    "iterations": int(r["iterations"] or 0),
+                    "tokens_spent": int(r["tokens_spent"] or 0),
+                    "replay": True,
+                    "run_id": r["run_id"],
+                    # "Finished while the user was away": the app never
+                    # acknowledged this run's live ``done`` (``run_ack``).
+                    "while_away": r["seen_at"] is None,
+                    "mid": int(r["last_mid"] or 0),
+                }
+            )
+        return events
+
+    def mark_run_notified(self, run_id: str) -> bool:
+        """Set ``notified_at`` once. Returns True the first time only, so two
+        notifiers cannot both fire for one run. This is the notification dedup
+        key; it says nothing about whether the user opened the app."""
+
+        def op(cur: sqlite3.Cursor) -> bool:
+            cur.execute(
+                "UPDATE runs SET notified_at=? WHERE run_id=? AND notified_at IS NULL",
+                (time.time(), run_id),
+            )
+            return cur.rowcount > 0
+
+        return bool(self._write(op))
+
+    def mark_run_seen(self, run_id: str) -> bool:
+        """Set ``seen_at`` once: the app rendered this run's live ``done``
+        (``run_ack``), so a later replay no longer flags it ``while_away``."""
+
+        def op(cur: sqlite3.Cursor) -> bool:
+            cur.execute(
+                "UPDATE runs SET seen_at=? WHERE run_id=? AND seen_at IS NULL",
+                (time.time(), run_id),
+            )
+            return cur.rowcount > 0
+
+        return bool(self._write(op))
+
+    def sweep_orphan_runs(self, *, reason: str = "host_restarted") -> int:
+        """On host start: a run still ``running`` was cut off by a crash or a
+        restart. Close it as failed so it never shows as live. Returns the count."""
+
+        def op(cur: sqlite3.Cursor) -> int:
+            cur.execute(
+                "UPDATE runs SET state=?, reason=?, finished_at=? WHERE state=?",
+                (RUN_FAILED, reason, time.time(), RUN_RUNNING),
+            )
+            return int(cur.rowcount)
+
+        return int(self._write(op))
 
     # -- subagent handles (§7.6) ------------------------------------------
 

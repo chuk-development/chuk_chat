@@ -51,11 +51,23 @@ def _mock_model_factory():
     """Offline/dev model: a canned 2-turn agent that runs one demo command and
     finishes. Lets the transport + pairing + sandbox path be exercised with no
     account and no credits. Not for real use."""
+    # Tool calls are native (no text protocol): the first turn is a structured
+    # run_command call, the second a bare-text final answer.
+    from cowork_agent.model import tool_call_response
+
     return MockModelClient(
         [
-            '<tool_call>{"name": "run_command", "arguments": {"command": '
-            '"echo hello from the CoWork mock agent > cowork_smoke.txt && echo ran"}}'
-            "</tool_call>",
+            tool_call_response(
+                (
+                    "run_command",
+                    {
+                        "command": (
+                            "echo hello from the CoWork mock agent > cowork_smoke.txt "
+                            "&& echo ran"
+                        )
+                    },
+                )
+            ),
             "Ran the demo command and wrote cowork_smoke.txt (mock model, no account used).",
         ]
     )
