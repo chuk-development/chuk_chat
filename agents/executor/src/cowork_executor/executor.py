@@ -111,6 +111,7 @@ from .protocol import (
     approval_request_payload,
     b64_to_frame,
     browser_data_payload,
+    browser_state_from_tool,
     browser_view_payload,
     debug_context_payload,
     decode_payload,
@@ -796,6 +797,12 @@ class Executor:
         # bridge it only registers it if no newer start/stop happened meanwhile.
         self._vnc_generation = 0
         self._vnc_lock = threading.Lock()
+        # Whether the agent has a browser window right now (Bead cowork-vzm):
+        # derived from its Playwright tool calls and from what cowork-vnc-up
+        # counts on the display. Pushed to the app as `browser_view`
+        # opened/closed on every change and carried in every `run_state`, so the
+        # app shows its browser button only while there is something to see.
+        self._browser_open = False
 
     @property
     def name(self) -> str:
@@ -837,6 +844,8 @@ class Executor:
         with self._vnc_lock:
             self._vnc_generation += 1
         self._vnc_teardown(reason="stopped", notify=False)
+        # The sandbox goes with us; the next replay's run_state says so.
+        self._browser_open = False
         for run in self._live_runs():
             run.kill.interrupt()
         serve, worker = self._thread, self._worker
@@ -1355,6 +1364,7 @@ class Executor:
                 run_id=live.run_id,
                 started_at=live.started_at,
                 prompt=live.prompt,
+                browser_open=self._browser_open,
             )
         latest = store.latest_run(session_key)
         if latest is not None and latest.get("state") == "running":
@@ -1364,8 +1374,19 @@ class Executor:
                 run_id=latest.get("run_id"),
                 started_at=latest.get("started_at"),
                 prompt=latest.get("prompt"),
+                browser_open=self._browser_open,
             )
-        return run_state_payload(session_key, "idle")
+        return run_state_payload(session_key, "idle", browser_open=self._browser_open)
+
+    def _set_browser_open(self, open_: bool, request_id: str) -> None:
+        """Record the browser state; on a change, tell the app once
+        (``browser_view`` ``opened`` / ``closed`` on the stream that learned it)."""
+        with self._vnc_lock:
+            if self._browser_open == open_:
+                return
+            self._browser_open = open_
+        if request_id:
+            self._event(request_id, browser_view_payload("opened" if open_ else "closed"))
 
     # -- live browser view (§9.1) ----------------------------------------
     def _handle_browser_kind(self, kind: str, request_id: str, payload: dict) -> bool:
@@ -1557,14 +1578,21 @@ class Executor:
         # staring at a silent black screen. The bridge stays live: the moment the
         # agent opens a browser the window appears in the same stream.
         message = ""
+        windows: int | None = None
         try:
             for line in up.stdout.decode("utf-8", "replace").splitlines():
                 if line.startswith("WINDOWS="):
-                    if line[len("WINDOWS=") :].strip() == "0":
+                    windows = int(line[len("WINDOWS=") :].strip())
+                    if windows == 0:
                         message = "no page open yet — ask the agent to open a browser"
                     break
         except (AttributeError, ValueError):
             pass
+        # The display is the ground truth when we have it (-1 = xdotool could
+        # not tell): flip the browser state before `started`, so the app has
+        # the verdict by the time it decides whether to show the view.
+        if windows is not None and windows >= 0:
+            self._set_browser_open(windows > 0, request_id)
         self._event(
             request_id,
             browser_view_payload("started", message=message, password=secret),
@@ -2226,7 +2254,14 @@ class Executor:
     # -- transcript export (the agent's long-term search) ----------------
     def _on_tool_event(self, request_id: str, session_key: str, fields: dict) -> None:
         """One finished native tool call: the wire frame to the app, then the
-        transcript file catches up with the store (best-effort)."""
+        transcript file catches up with the store (best-effort). A Playwright
+        browser tool first updates the browser state, so a `browser_view`
+        opened/closed lands before the tool frame it came from."""
+        state = browser_state_from_tool(
+            fields.get("name"), fields.get("arguments"), fields.get("status")
+        )
+        if state is not None:
+            self._set_browser_open(state, request_id)
         self._event(request_id, tool_payload(**fields))
         self._export_transcript(session_key)
 

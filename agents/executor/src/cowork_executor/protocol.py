@@ -219,15 +219,20 @@ def run_state_payload(
     run_id: str | None = None,
     started_at: float | None = None,
     prompt: str | None = None,
+    browser_open: bool | None = None,
 ) -> dict[str, Any]:
     """Build the ``run_state`` event that opens every replay response (see
     ``docs/WIRE_CONTRACT.md``). ``state`` is ``running`` when a run for the
-    session is in flight on the host, else ``idle``."""
+    session is in flight on the host, else ``idle``. ``browser_open`` is the
+    host's word on whether the agent has a browser open (Bead cowork-vzm);
+    left out when the caller does not know."""
     payload: dict[str, Any] = {
         "type": "run_state",
         "session_key": session_key,
         "state": state,
     }
+    if browser_open is not None:
+        payload["browser_open"] = bool(browser_open)
     if run_id:
         payload["run_id"] = run_id
     if started_at is not None:
@@ -738,7 +743,11 @@ def browser_view_payload(
 
     ``status`` is ``"started"`` (the stream is live, the app may show the view),
     ``"stopped"`` (torn down — user asked, or the pipe/container went away), or
-    ``"error"`` (could not bring the view up; ``message`` says why).
+    ``"error"`` (could not bring the view up; ``message`` says why). Two more
+    are unsolicited and about the BROWSER, not the stream (Bead cowork-vzm):
+    ``"opened"`` — the agent has a browser window now — and ``"closed"``. They
+    are sent once per change, so the app can show its button only while there
+    is something to look at; see :func:`browser_state_from_tool`.
 
     ``password`` rides only on ``"started"``: the per-view VNC secret x11vnc was
     (re)armed with. It travels inside the sealed frame, so only the paired app
@@ -749,6 +758,45 @@ def browser_view_payload(
     if password is not None:
         payload["password"] = password
     return payload
+
+
+# The Playwright MCP server is the agent's browser: Chromium comes up on the
+# first ``browser_*`` tool and goes away on ``browser_close``. Its tools reach
+# the loop as ``mcp__playwright__browser_<x>`` (``cowork_agent.mcp_client
+# .tool_name``), or wrapped in ``tool_call`` when deferred.
+BROWSER_TOOL_PREFIX = "mcp__playwright__"
+BROWSER_CLOSE_TOOL = "browser_close"
+_TOOL_CALL_WRAPPER = "tool_call"
+
+
+def _tool_part(name: str) -> str:
+    idx = name.rfind("__")
+    return name if idx < 0 else name[idx + 2 :]
+
+
+def browser_state_from_tool(name: Any, arguments: Any, status: Any) -> bool | None:
+    """What one finished tool call says about the agent's browser.
+
+    ``True`` = a page is open (any completed Playwright ``browser_*`` tool other
+    than ``browser_close``), ``False`` = it is gone (a completed
+    ``browser_close``), ``None`` = nothing: not a browser tool, or a call that
+    failed and so proves nothing. A ``tool_call`` wrapper is looked through to
+    ``arguments["name"]``. Mirrors the app's ``BrowserPresence`` so both sides
+    read the same transcript the same way.
+    """
+    if not isinstance(name, str) or not name:
+        return None
+    if name == _TOOL_CALL_WRAPPER and isinstance(arguments, dict):
+        inner = arguments.get("name")
+        if not isinstance(inner, str) or not inner:
+            return None
+        name = inner
+    part = _tool_part(name)
+    if not (name.startswith(BROWSER_TOOL_PREFIX) or part.startswith("browser_")):
+        return None
+    if status != "completed":
+        return None
+    return part != BROWSER_CLOSE_TOOL
 
 
 def encode_payload(payload: dict[str, Any]) -> bytes:

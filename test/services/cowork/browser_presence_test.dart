@@ -130,6 +130,26 @@ void main() {
     expect(presence.value, isTrue);
   });
 
+  test('a current host says it outright: opened/closed and run_state', () {
+    controller.emit(const CoworkRelayBrowserView(status: 'opened'));
+    expect(presence.value, isTrue);
+    controller.emit(const CoworkRelayBrowserView(status: 'closed'));
+    expect(presence.value, isFalse);
+    controller.emit(
+      const CoworkRelayRunState(
+        sessionKey: 't', state: 'idle', browserOpen: true),
+    );
+    expect(presence.value, isTrue);
+    // An old host's run_state (no field) leaves the derived state alone.
+    controller.emit(const CoworkRelayRunState(sessionKey: 't', state: 'idle'));
+    expect(presence.value, isTrue);
+    controller.emit(
+      const CoworkRelayRunState(
+        sessionKey: 't', state: 'running', browserOpen: false),
+    );
+    expect(presence.value, isFalse);
+  });
+
   test('reset forgets, dispose stops listening', () {
     controller.emit(
       const CoworkRelayTool('mcp__playwright__browser_navigate',
