@@ -18,6 +18,7 @@ class FakeRelayController implements CoworkRelayController {
       StreamController<CoworkRelayInbound>.broadcast(sync: true);
 
   int connectCalls = 0;
+  final List<(String, int, int)> replayPages = <(String, int, int)>[];
   int reconnectCalls = 0;
   bool provisioned = false;
 
@@ -165,8 +166,12 @@ class FakeRelayController implements CoworkRelayController {
   Future<void> requestReplay({
     String sessionKey = 'default',
     int afterId = 0,
+    int beforeId = 0,
+    int limit = 0,
   }) async {
     replayRequests.add((sessionKey, afterId));
+    // Replay paging (Bead cowork-axx): the page a request asked for.
+    replayPages.add((sessionKey, beforeId, limit));
   }
 
   /// The session keys the view asked to replay, in order.

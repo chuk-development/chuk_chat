@@ -151,6 +151,8 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> requestReplay({
     String sessionKey = 'default',
     int afterId = 0,
+    int beforeId = 0,
+    int limit = 0,
   }) async {}
 
   @override

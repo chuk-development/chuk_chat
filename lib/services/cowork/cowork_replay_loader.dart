@@ -71,6 +71,13 @@ class _Draft {
   /// The `after_id` this replay was asked with.
   int afterId = 0;
 
+  /// Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): the `before_id`
+  /// this page was asked with (0 = the newest page or an unpaged replay), and
+  /// what its history-end `done` said about older rows.
+  int beforeId = 0;
+  bool hasMore = false;
+  int? oldestMid;
+
   /// True once a frame has folded into this draft: the host is answering the
   /// request it was made for, and a later `expect` must not move it.
   bool started = false;
@@ -98,6 +105,8 @@ class CoworkReplayLoader extends ChangeNotifier {
   final Map<String, bool> _answerReady = <String, bool>{};
   final Map<String, String?> _answerReadyRun = <String, String?>{};
   final Set<String> _replayWanted = <String>{};
+  // Replay paging: the lowest `before_id` already asked per session.
+  final Map<String, int> _pagingFloor = <String, int>{};
   final Map<String, String?> _hostPrompts = <String, String?>{};
   final Set<String> _hostRunning = <String>{};
 
@@ -185,8 +194,10 @@ class CoworkReplayLoader extends ChangeNotifier {
   /// decided by that header (or, for a header-less host, by the order of the
   /// requests) — never by the most recent `expect`, which would fold the tail
   /// of one thread's answer into the next thread's draft (review F1).
-  void expect(String sessionKey, {int afterId = 0}) {
-    final fresh = _Draft(sessionKey)..afterId = afterId;
+  void expect(String sessionKey, {int afterId = 0, int beforeId = 0}) {
+    final fresh = _Draft(sessionKey)
+      ..afterId = afterId
+      ..beforeId = beforeId;
     final inFlight = _drafts[sessionKey];
     if (inFlight != null && inFlight.started) {
       // The same thread again while its answer is still arriving: the answer
@@ -245,6 +256,7 @@ class CoworkReplayLoader extends ChangeNotifier {
     _answerReady.clear();
     _answerReadyRun.clear();
     _replayWanted.clear();
+    _pagingFloor.clear();
     _hostRunning.clear();
     _hostPrompts.clear();
     _activeSession = null;
@@ -384,6 +396,9 @@ class CoworkReplayLoader extends ChangeNotifier {
         if (!event.isReplay) return;
         final draft = _draftFor();
         if (event.isHistoryEnd) {
+          // Replay paging: what the host says about rows below this page.
+          draft.hasMore = event.hasMore;
+          draft.oldestMid = event.oldestMid;
           await _commit(draft);
           return;
         }
@@ -528,7 +543,13 @@ class CoworkReplayLoader extends ChangeNotifier {
     }
 
     var rows = draft.rows;
-    if (honouredCursor) {
+    if (draft.beforeId > 0) {
+      // An OLDER page (replay paging): it goes in front of what the newer
+      // pages already put in the cache. Nothing there yet (the cache was lost
+      // between pages) is not an error — the page is then simply the thread.
+      final existing = await _cachedRows(session);
+      rows = <Map<String, String>>[...draft.rows, ...existing];
+    } else if (honouredCursor) {
       final existing = await _cachedRows(session);
       if (existing.isEmpty) {
         // A delta with nothing to append it to. That is a cache MISS, not an
@@ -564,6 +585,33 @@ class CoworkReplayLoader extends ChangeNotifier {
     _advanceCursor(session, draft.maxMid);
     _revisions[session] = (_revisions[session] ?? 0) + 1;
     notifyListeners();
+    _requestOlderPage(draft);
+  }
+
+  /// Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): the page just
+  /// committed said older rows exist — ask for the next one, below its first
+  /// row. Only ever downwards (a page that does not move the floor is not asked
+  /// again), and only while the transport is paired; a page that cannot be
+  /// asked for now is asked for by the next full replay.
+  void _requestOlderPage(_Draft draft) {
+    final int? oldest = draft.oldestMid;
+    if (!draft.hasMore || oldest == null || oldest <= 1) return;
+    final session = draft.sessionKey;
+    final int? floor = _pagingFloor[session];
+    if (floor != null && oldest >= floor) return;
+    final controller = CoworkRelayLink.instance.controller.value;
+    if (controller == null || !controller.state.value.isPaired) return;
+    _pagingFloor[session] = oldest;
+    expect(session, beforeId: oldest);
+    unawaited(
+      controller
+          .requestReplay(
+            sessionKey: session,
+            beforeId: oldest,
+            limit: kReplayPageSize,
+          )
+          .catchError((Object _) {}),
+    );
   }
 
   Future<List<Map<String, String>>> _cachedRows(String session) async {

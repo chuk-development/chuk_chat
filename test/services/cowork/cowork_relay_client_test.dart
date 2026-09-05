@@ -1709,10 +1709,49 @@ void main() {
     expect(replays[0]['session_key'], 'amber-otter-2');
     expect(replays[0]['after_id'], 42);
     // A fresh thread asks for the whole history: no cursor on the frame, so an
-    // old host sees exactly the frame it always saw.
+    // old host sees exactly the frame it always saw — plus the page size, which
+    // an old host ignores (Bead cowork-axx).
     expect(replays[1]['session_key'], 'cobalt-fox-1');
     expect(replays[1].containsKey('after_id'), isFalse);
+    expect(replays[1]['limit'], kReplayPageSize);
+    // A delta replay is never paged.
+    expect(replays[0].containsKey('limit'), isFalse);
 
+    await client.dispose();
+  });
+
+  test('requestReplay pages: before_id and limit ride the frame, the done '
+      'brings has_more / oldest_mid back', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await client.requestReplay(
+        sessionKey: 'cobalt-fox-1', beforeId: 120, limit: 50);
+    await Future<void>.delayed(Duration.zero);
+    final page = host.received.singleWhere((m) => m['type'] == 'replay');
+    expect(page['before_id'], 120);
+    expect(page['limit'], 50);
+    expect(page.containsKey('after_id'), isFalse);
+
+    await host.emit(<String, dynamic>{
+      'type': 'done',
+      'reason': 'replay',
+      'replay': true,
+      'final_answer': null,
+      'iterations': 0,
+      'has_more': true,
+      'oldest_mid': 71,
+      'before_id': 120,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final done = events.whereType<CoworkRelayDone>().single;
+    expect(done.isHistoryEnd, isTrue);
+    expect(done.hasMore, isTrue);
+    expect(done.oldestMid, 71);
+    expect(done.pageBeforeId, 120);
+
+    await sub.cancel();
     await client.dispose();
   });
 
