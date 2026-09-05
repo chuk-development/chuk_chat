@@ -259,3 +259,384 @@ restart.** Twice, restarting the host left the app on a dead socket and its
 by hand. Worth chasing separately (the socket-close path may not be reaching the thread
 view's reconnect scheduler). Practical rule until then: after any host restart, expect one
 manual reconnect in the app.
+
+---
+
+## 9. Native OpenAI tool calls + full platform verification (autonomous session)
+
+Driven under a /loop; tracked as bead epic `cowork-05v` (all children closed except
+the reconnect edge `cowork-05v.3`).
+
+### 9.1 Native tool-call migration (bead cowork-05v.12) — DONE, LIVE-VERIFIED
+chuk_chat migrated fully to native structured tool calls; api.chuk.chat supports them.
+cowork was still parsing `<tool_call>` from assistant CONTENT. Migrated cowork to native:
+- `ToolRegistry.openai_tools()` — OpenAI function JSON (`{type:function,function:{name,
+  description,parameters}}`); deferred + unavailable tools filtered; empty schema →
+  `{"type":"object","properties":{}}`.
+- `BackendModelClient`: `set_tools()` + `payload["tools"]`; native history pass-through —
+  assistant `tool_calls` with **arguments as a JSON string**, `role:"tool"` with
+  `tool_call_id`, empty `message` after a tool pass — replacing the `<tool_call>` /
+  `<tool_result>` text flattening; `_chat_once` parses the `tool_calls` frame with native
+  priority and keeps `extract_tool_calls` as the fallback for non-native models.
+- `set_tools` forwarded through `StreamingModelClient` (executor) + `_ChildStreamingModel`
+  (runtime) + wired in `build_runtime` after deferral.
+- Tests: 3 native backend + 2 registry tests + full agent/executor suites green, ruff clean.
+- **Live-verified** (`agent/tests/live_native_probe.py`): deepseek-v4-flash returned
+  `native:True`, `tool_calls=[run_command{command:'ls -la'}]`, 0 text. Server does native.
+- Host restarted + app reconnected → native tool calls live in the running system.
+
+### 9.2 App fixes
+- Browser-view crash (unhandled broken-pipe SocketException) + AppBar overflow — fixed in
+  `browser_view_page.dart` (guarded socket writes + done.catchError; single-line banner).
+- `websocket_connector_io.dart`: added WebSocket `pingInterval` (20s) so a dropped host is
+  detected and the app auto-reconnects (was: silent half-open socket). Common network-drop
+  case fixed; the host-PROCESS-restart reconnect loop is a deeper race (see cowork-05v.3).
+- Chat UI restyled to the chuk_chat look (bead cowork-05v.10): user-bubble tail + accent
+  fill + 0.8 width, message grouping, assistant copy button, rounded borderless composer,
+  new `app/lib/utils/color_extensions.dart`. analyze clean, 26/26 thread tests pass,
+  hot-reloaded live with no errors.
+
+### 9.3 Verification (all green)
+- Streaming (05v.8): live, 14 incremental deltas, not one-shot.
+- VNC E2E (05v.4): stream out (framebuffer decoded) AND input in ('COWORK VNC OK' typed via
+  RFB into a browser field) through the real docker-exec socat bridge.
+- Security (05v.7): cowork_crypto 65 tests (default-deny, GCM, replay, pairing, reconnect
+  vectors); host localhost-only; blind sealed relay; no published container ports; x11vnc
+  localhost-only. here.now approval (05v.9): 13 tests. Lifecycle (05v.11): verified.
+- MCP servers: 16 PASS / 14 auth-required / 2 known-broken. Skills: 1 (youtube-transcript),
+  hardened + seeded; improved (env LANGS, JS-runtime note).
+- Full sweep: host 98, executor 71, crypto 65, agent full, app 267 pass. (3 pre-existing
+  `settings_page_test` failures from another session's settings rework — bead cowork-73z,
+  not caused by this work.)
+
+### 9.4 Still open
+- `cowork-05v.3`: reconnect after a host **process** restart loops at reconnect-confirm
+  (unawaited old-controller dispose races the new reconnect on the reused channel). Needs a
+  focused reproduction session; the common network-drop case is handled.
+
+### 9.5 Reconnect after host restart — FIXED (bead cowork-05v.3)
+Clean experiment (host log = source of truth): after a host **process** restart the app
+did NOT re-dial for 70s (0 controller-joins). Root cause: the event-driven reconnect
+(`_onStateChanged` on a `closed` transition → `_scheduleAutoReconnect`) was flaky — a
+dropped socket that never surfaced as a clean `closed` transition, or a missed rebuild,
+left the app idle on a dead link. Fix (`cowork_thread_view.dart`): a reconnect
+**watchdog** (`Timer.periodic` 8s) that forces `_scheduleAutoReconnect` whenever the
+controller is down (closed/error/null) with a stored pairing and nothing in flight,
+resetting the backoff for prompt recovery — recovery no longer depends on one fragile
+transition. Together with the WS `pingInterval` (drop detection). Verified live: two
+consecutive host restarts, app auto-reconnected in ~10s each, no manual action. analyze
+clean; thread + shell tests 39 pass (watchdog cancelled in dispose, FakeAsync-safe).
+
+### 9.6 Final verification sweep
+host 98 · executor 71 · crypto 65 · agent full · app 267 (the only 3 failures are the
+pre-existing `settings_page_test` from another session's settings rework — bead
+cowork-73z, not this work). ruff clean on all changed Python. Epic `cowork-05v` closed.
+Live system: host running native tool calls, app connected with all fixes + working
+auto-reconnect.
+
+---
+
+## 10. VNC view: fit-to-screen + clipboard leak removed (bead cowork-8k6)
+
+The live browser view rendered (a real NYT page showed), but two defects remained,
+found by driving the running app and reading its status banner.
+
+### 10.1 The framebuffer did not scale
+`RemoteFrameBufferWidget` (flutter_rfb 0.6.2) renders a `RawImage` at the framebuffer's
+native pixel size (1280x800) pinned top-left — no scaling — so on a wide window or a
+phone it sat in the corner with a large black margin. Fix (`app/lib/widgets/browser_view_page.dart`):
+wrap it in `Center > FittedBox(fit: BoxFit.contain)`. FittedBox lays the child out under
+unbounded constraints, so `RawImage` keeps its native size and `SizeTrackingWidget` still
+measures that size — which is what the gesture detector maps input against; FittedBox only
+scales at paint time and Flutter inverts that transform for hit-testing, so taps stay on
+the correct pixel at any scale. The connecting placeholder had to become a definite-size
+`SizedBox(1280x800)` — a bare `Center` throws under FittedBox's unbounded constraints.
+
+### 10.2 The red error banner and the clipboard leak
+The banner read `invalid argument (string): Contains invalid characters.: 'Fertig: docs/...'`.
+Root cause (confirmed by subagents): flutter_rfb runs a 1 Hz clipboard monitor that reads
+the local OS clipboard and sends it into the sandbox as an RFB ClientCutText; dart_rfb's
+`client_cut_text_message.dart` does `latin1.encode(text)`, which throws on any non-latin1
+character (em-dash, typographic quote). The uncaught isolate error surfaces through
+`onError` into the app's banner, embedding the offending clipboard string — which made it
+look like chat text had entered the pixel stream. It had not; the inbound framebuffer path
+is separate and was always clean.
+
+Beyond the crash, the clipboard sync is a genuine cross-boundary leak in both directions:
+local clipboard -> sandbox (ClientCutText) and sandbox -> local clipboard (ServerCutText ->
+`Clipboard.setData`). For a sealed VNC tunnel no clipboard path should exist. Fix: vendor
+flutter_rfb into `app/third_party/flutter_rfb` (a `path:` dependency; dart_rfb stays from
+pub, no codegen needed) and strip the clipboard feature both directions — remove
+`_monitorClipBoard`, no-op the inbound `clipBoardUpdate` branch in the widget, and
+drain-and-discard `serverClipBoardStream` in the isolate (it is a non-broadcast controller
+that would otherwise buffer forever). The client now emits strictly RFB derived from the
+handshake, the render loop, and user pointer/key input.
+
+### 10.3 Loopback socket hardened
+The app bridges `browser_data` to `RemoteFrameBufferWidget` over a loopback `ServerSocket`
+(127.0.0.1:0). It accepted every connection with no auth (last-writer-wins), so on a
+shared host a stray local process could read the agent's screen or inject RFB bytes.
+`_onRfbClient` now accepts exactly one client and `destroy()`s any further connection.
+
+### 10.4 Executor inbound size cap
+`_vnc_feed` had no size ceiling (the outbound pump has `MAX_BROWSER_CHUNK` = 512 KiB). A
+single RFB client message is tiny, so inbound chunks over that ceiling are now dropped
+rather than forwarded into x11vnc. Pinned by `test_vnc_feed_forwards_normal_input_but_drops_oversize`.
+
+### 10.5 Not done on purpose (tracked)
+- Enforced RFB-only via a client->server message-type allow-list in the executor (drop
+  ClientCutText type 6 / ServerCutText type 3). Would make "only VNC bytes" a structural
+  guarantee rather than a client-side property, but turns the opaque pipe into a stateful
+  RFB parser in the hot path — deferred as a hardening task. The clipboard removal already
+  closes the real leak. Bead filed.
+- `_vnc_start` register-after-death race (a dead bridge can show as live). Cosmetic. Bead filed.
+
+### 10.6 Verification
+Executor: 13 browser-view tests + full suite 72 passed; ruff clean. `flutter analyze`
+clean on the app (`third_party/**` excluded — it carries upstream deprecation infos we do
+not own). No dedicated widget test exists for `browser_view_page.dart`; the scaling and
+socket changes are verified by analyze + live rebuild.
+
+Load note: the app must be fully rebuilt (`flutter run`) to pick up the vendored path
+dependency and the widget change — a hot reload is not enough for a pubspec dependency
+change. The executor size cap loads on a host restart (the executor runs in the host
+process).
+
+### 10.7 Performance: the view was unusably slow — x11vnc was throttling itself
+After the fixes above the view rendered and scaled, but takeover felt laggy. A live probe
+(`executor/tests/live_vnc_speed_probe.py`, speaks minimal RFB 3.8 through the exact
+`docker exec socat` path, mimicking flutter_rfb's bgra8888 + {raw,copyRect}) turned it into
+numbers:
+
+  - A full 1280x800 refresh is 4.10 MB **uncompressed** (dart_rfb decodes only raw +
+    copyRect, so there is no compressed encoding to negotiate). base64 inflates it to
+    5.46 MB on the sealed channel = 84 JSON frames per full screen.
+  - With x11vnc's **defaults** that frame transferred at 3.9 MB/s = **0.9 FPS**. The
+    docker-exec pipe itself does ~82 MB/s (measured), so x11vnc — not the pipe, not the
+    sealed channel, not the debug build — was the throttle.
+  - Cause: x11vnc's default `-defer 30 -wait 20` and no threading. Adding
+    `-threads -defer 1 -wait 2` (in `sandbox/docker/vnc-up.sh`) lifted a full refresh to
+    ~5-17 FPS (measured 60-209 ms/frame across runs), a 5-18x win, with no client change.
+    Incremental idle updates were always tiny (~2.4 KiB, so idle was never the problem).
+
+Applied live (hot-copied the patched script into the running container and restarted its
+x11vnc → 16.7 FPS on the live port) and baked into `cowork-browser:latest` (rebuilt; the
+`COPY vnc-up.sh` layer is near the end so the rebuild is seconds). `-noxdamage` is kept on
+purpose (correct full-screen polling on Xvfb; dropping it roughly doubles FPS again but
+risks missed damage regions).
+
+The remaining ceiling was the 4 MB uncompressed frame — solved in §10.8.
+
+### 10.8 Tight encoding in the Dart client: 4.1 MB -> ~0.2 MB per frame
+The owner's requirement: frames in the tens/hundreds of KB, <= 1 MB/s, ~30 FPS — "noVNC
+manages it". noVNC manages it because it decodes compressed RFB encodings; our pure-Dart
+client asked for `raw` only. Measured on the real screen (NYT page, photos + text, worst
+case) with the probe, one full 1280x800 refresh per encoding:
+
+| encoding | full frame | vs raw | server time | sealed-channel frames |
+|---|---|---|---|---|
+| raw | 4.10 MB | 1x | 128 ms | 84 |
+| hextile | 1.53 MB | 2.7x | 4042 ms | 32 |
+| zlib | 1.02 MB | 4x | 134 ms | 21 |
+| ZRLE | 0.91 MB | 4.5x | 183 ms | 19 |
+| **Tight, JPEG q6** | **0.255 MB** | **16x** | **33 ms** | **6** |
+
+zlib/ZRLE only reach 4x because photos do not zlib-compress; Tight uses JPEG for those and
+palette/fill for UI. Quality 5/6/8 = 215/255/390 KB; q6 kept (noVNC's default).
+
+**Implementation** (vendored `app/third_party/dart_rfb`, plus the already-vendored
+flutter_rfb, both `path:` deps; dart_rfb's dev_dependencies dropped so no codegen runs):
+- `lib/src/protocol/tight_decoder.dart` — `TightDecoder`: control byte (reset bits, sub-
+  encoding), fill, JPEG (`package:image`, pure Dart — `dart:ui` codecs are not available in
+  a spawned isolate), basic with copy/palette(1-bit MSB-first row-padded, 8-bit)/gradient
+  filters, the <12-byte inline rule, the "no-zlib" 0xA/0xE sub-encoding, 4 persistent zlib
+  streams. Streams use `RawZLibFilter.inflateFilter()` + `processed(flush: true)`
+  (Z_SYNC_FLUSH): the chunked `ZLibDecoder` sink was tested and does NOT return output
+  synchronously after `add`, which Tight needs per rectangle. Output is bgra8888 `[B,G,R,FF]`.
+- `frame_buffer_update_message.dart` — the rectangle loop intercepts encoding 7, decodes it
+  and hands it on as a plain `raw` rectangle, so flutter_rfb needs no new variant and no
+  freezed regeneration (the freezed toolchain no longer resolves on this SDK). Any other
+  unknown encoding now fails loudly instead of silently desynchronising the stream.
+- `encoding_type.dart` — `unsupported` round-trips its numeric id (was -1), `fromId`, Tight
+  constants. `remote_frame_buffer_client.dart` — one `TightDecoder` per client (reset on
+  connect), SetEncodings = [Tight, copyRect, raw, JPEG-quality 6]. No compression-level
+  pseudo-encoding on purpose (level 0 would make libvncserver emit no-zlib rects).
+
+**Tests** — `app/test/vnc/tight_decoder_test.dart` (11): three REAL x11vnc vectors captured
+with `live_vnc_speed_probe.py --dump` (raw pixels + Tight bytes of the same region, only
+accepted when the screen held still): 4 rects pixel-exact (zlib copy over a persistent
+stream, palette with explicit filter), 4 JPEG rects with mean error < 8/255; synthetic
+fill, inline-<12, 1-bit palette packing, gradient round-trip, stream reset, truncation.
+
+**Live in the app (end-to-end meter in `browser_view_page.dart`, debug builds, bytes
+received off the sealed channel):**
+- black display (browser closed between tasks): full frame **0.2 KiB** (16 fill rects).
+- NYT front page, photos + text: full frame **~193 KB** (was 4.1 MB), then 7.9 KiB/s while
+  the page settled, then **0.1 KiB/s idle**.
+- interaction (click in the page, cookie banner dismissed, partial scroll): bursts of
+  36–97 KiB/s. Input verified through the same Tight session.
+- server side: a full frame in 33 ms => 30 FPS possible; at 1 MB/s that is ~4 full
+  photo-page repaints per second, and real interaction only repaints dirty rectangles.
+Client log confirms the path: the first update arrived as 16 Tight rectangles and was
+rendered; incremental updates are 1-3 small rectangles.
+
+Also fixed while at it: flutter_rfb forwarded taps only — no mouse wheel — so a page could
+not be scrolled from the app. Wheel/trackpad scroll now maps to RFB buttons 4/5 (6/7
+horizontal) at the pointer position.
+
+Note for the probe: `--quality -1` requests Tight without JPEG (gradient/palette only).
+
+### 10.9 "Only VNC bytes" is now enforced, not trusted (P2) + the start race (P3)
+- `_RfbClientFramer` (executor, VNC block) frames every client->server byte the app sends:
+  ProtocolVersion, security type (+16-byte VNC-auth response), ClientInit, then typed
+  messages with fixed / self-describing lengths. Forwarded: SetPixelFormat(0),
+  SetEncodings(2), FramebufferUpdateRequest(3), KeyEvent(4), PointerEvent(5).
+  ClientCutText(6) — the only message carrying arbitrary host data — is dropped. Anything
+  that is not RFB fails closed: the view is torn down with `browser_view("error")` rather
+  than piped into x11vnc. Messages split across sealed chunks are reassembled; a partial
+  message may not exceed 1 MiB. Server->client stays opaque on purpose (framing it needs
+  the full rectangle decoder; the client already discards ServerCutText). Tests: framer
+  unit tests + an end-to-end `_vnc_feed` test (clipboard never reaches the bridge, garbage
+  kills the view). Executor suite 83 passed.
+- `_vnc_start` race: `_VncBridge(autostart=False)` + `start()` — the bridge is registered
+  under the lock BEFORE its pump can fire `on_closed`, and `on_closed` only tears down if
+  that bridge is still the registered one. Test simulates an instantly-dying socat and
+  asserts the registry is cleared and the app gets `stopped`.
+- Both loaded with a host restart (coordinated with the other sessions). Note: stopping
+  the host removes the task container (executor `stop()` -> sandbox cleanup), so a page the
+  agent had open is gone after a restart; the next task builds a fresh container.
+- Probe gotcha for future sessions: `pkill -f '<pattern>'` from a shell whose own command
+  line contains the pattern kills that shell. Use `pgrep -f '[c]owork-host'` style patterns.
+
+### 10.10 Review pass (Sonnet; the Opus pass is owed once the Opus quota resets) — fixed
+Findings and what changed:
+1. HIGH — rect size unbounded: w/h are raw uint16s, a corrupt header could allocate
+   ~536 MB (Tight) or park the raw reader waiting for GBs. Fix: every rectangle must fit the
+   negotiated framebuffer (`frame_buffer_update_message.dart`, fails the update loudly) and
+   `TightDecoder` also caps area at 4 Mpx before allocating. Test: absurd sizes rejected
+   with nothing consumed.
+2. MEDIUM — TOCTOU: a late `on_closed` from a replaced bridge could tear down its
+   successor (check outside the lock, teardown inside). Fix: `_vnc_teardown(expected=)`
+   does identity check + clear under one lock acquisition; `on_closed` passes its bridge.
+   Test: stale teardown is a no-op, matching one closes.
+3. MEDIUM — framer assumed RFB >= 3.7 (client security-selection byte); a 3.3 client
+   would desync and be torn down. Fix: version parsed from the client string; 3.3 skips
+   the selection phase. Test added. (dart_rfb sends 3.8, so this was dormant.)
+4. MEDIUM — JPEG amplification: the JPEG's own SOF size is server-controlled. Fix: header
+   dimensions checked via `JpegDecoder().startDecode` BEFORE decoding; mismatch throws.
+   Test: a 4x4 JPEG claimed as 64x64 is rejected.
+5. LOW — the client still forwarded ServerCutText into a stream nobody read. Fix: dropped at
+   the source in `handleIncomingMessages` (consumed off the wire, never surfaced).
+6. LOW (upstream, not fixed) — `SizeTrackingWidget` measures once; a mid-session
+   framebuffer resize would stale the tap/wheel mapping. Inert at the fixed 1280x800.
+7. INFO — `x11vnc -nopw -shared` is reachable only via `docker exec`; acceptable.
+Executor suite 88 passed, Tight decoder tests 13 passed, analyze clean.
+
+### 10.11 Opus-5 review pass — 18 findings, 13 fixed, 4 filed, 1 stale-comment
+Fixed (with tests where it matters):
+- (1 HIGH) zlib bomb: `_inflate` now throws the moment the stream overshoots the rect's
+  filtered size, instead of buffering the whole expansion first. Test: 200 KiB bomb on a
+  12-byte rect.
+- (3 HIGH) copyRect SOURCE coordinates were never bounds-checked and the copy ran outside
+  any catch on the UI isolate (RangeError = dead view). Now rejected; and the copy is
+  per-row `setRange`, not one 4-byte view per pixel.
+- (4 MEDIUM, and very likely why the wheel was "unconfirmed") `SizeTrackingWidget` writes
+  the size in a post-frame callback that only lands on the next rebuild; on a still screen
+  it stays `Size.zero`, the wheel handler silently dropped every event and the first tap
+  divided by zero. Under FittedBox the child lays out at the image's own size, so that is
+  now the fallback for both wheel and tap mapping.
+- (5 MEDIUM) the global `RawKeyboard` listener forwarded keystrokes typed into anything
+  pushed over the view page. Now only while the page's route is current.
+- (6 MEDIUM) `SetColorMapEntries` body read was a dropped `Task` (never run) — stream
+  desync on any type-1 server message. `.run()`ed.
+- (10 MEDIUM) `config.pixelFormat` kept the server's native format while the wire carried
+  the negotiated bgra8888; raw rect bodies were sized from the wrong bpp (dormant at depth
+  24). Config now records the negotiated format.
+- (11 LOW) ServerCutText text was logged at INFO; length only now.
+- (12 LOW) RFB 3.3 cannot be framed from the client side (server-chosen auth); the framer
+  refuses 3.3 outright (fail closed) instead of guessing. Test updated.
+- (13 LOW) `_vnc_feed` reads bridge + framer under one lock acquisition.
+- (14 LOW) oversize inbound chunk now tears the view down (fail closed) instead of leaving
+  a hole the framer would misreport. Test updated.
+- (15 LOW) 1-colour palette rejected; 1-bit path only for exactly 2 colours. Test.
+- (16 LOW perf) raw blit is per-row `setRange` instead of per-pixel get/set (~1M calls per
+  frame on the UI isolate).
+- (17 LOW) `vnc-up.sh` waits for the RFB PORT (`/dev/tcp` probe), not the process; stale
+  comment about "dart_rfb only decodes raw" removed.
+- (18 LOW) the widget's `ReceivePort` is closed in dispose.
+Also added tests: zlib output shorter than expected, area-cap boundary (2048x2047 ok,
+2048x2048 rejected).
+Filed as beads (design-level, not for a hot path change): (2) x11vnc passwordless inside
+the container — VNC auth per view is possible (dart_rfb speaks it, framer allows it) but
+the agent already controls that Chromium via Playwright, so decide with the owner;
+(7) browser_data send ordering in the relay client (seq taken before awaits; only safe
+while AES-GCM is pure Dart); (8) busy-spin socket reads without a deadline (upstream
+dart_rfb); (9) `_vnc_start` blocks the serve thread up to 15 s.
+Review test-coverage notes accepted as-is: the framer handshake fixture is hand-written
+(a captured dart_rfb handshake would pin it), and gradient conformance is a round-trip
+against our own formula (no real x11vnc gradient vector — x11vnc/libvncserver never emit
+gradient; only TightVNC does).
+
+### 10.12 Per-view VNC secret: the sandbox can no longer watch its own screen
+Threat (Opus finding 2): x11vnc ran `-nopw -localhost`; `-localhost` keeps the network
+out, not the container — the agent's own bash tool or JS in its Chromium could open
+127.0.0.1:5900 and read the framebuffer / inject input while the user logs in.
+Fix:
+- executor `_vnc_start` generates an 8-char secret per view and runs `cowork-vnc-up` as
+  ROOT (`docker exec -u root -e COWORK_VNC_PASSWD=…`); the secret rides to the app only
+  inside the sealed `started` frame (`browser_view_payload(password=)`), never logged.
+- `vnc-up.sh` writes it to `/run/cowork-vnc.pass` (root, 0600 — the `cowork` user gets
+  "Permission denied", verified) and starts x11vnc with `-passwdfile read:FILE`, which is
+  re-read on every client connect, so each view rotates the secret with no x11vnc restart
+  (verified: second run rewrites the file, still one x11vnc). A passwordless x11vnc from
+  an older start is replaced. Without the env var the script behaves as before.
+- verified in a throwaway container: a client is offered security type 2 only.
+- app: `CoworkRelayBrowserView.password` (additive), `browser_view_page.dart` builds the
+  RFB widget only after `started` (the secret is needed at handshake time) and passes it;
+  dart_rfb's VNC-auth (bit-reversed DES key, 16-byte response) was checked and the
+  executor framer already admits the security-type-2 response (test).
+- root x11vnc attaches to the `cowork`-owned Xvfb (no xauth on that display); the socat
+  bridge keeps running as `cowork` — it only proxies bytes and never needs the secret.
+- image rebuilt. Executor VNC tests 22, incl. "vnc-up runs as root with the secret in its
+  env and `started` carries it".
+- `cowork-vnc-up` REFUSES to start without `COWORK_VNC_PASSWD` (exit 4): the script is on
+  the agent's PATH, so otherwise the agent could start its own passwordless x11vnc (this
+  session did exactly that by accident from a diagnostic). Only the explicit
+  `COWORK_VNC_ALLOW_NOPW=1`, which the executor never sets, permits `-nopw`. As `cowork`
+  the script cannot write the root-only password file either.
+- Live proof with the REAL client (`app/test/vnc/live_auth_probe.dart`, `dart run`,
+  against the real x11vnc from the rebuilt image via an in-container relay published on
+  127.0.0.1:59000): with the secret → framebuffer update received; wrong secret →
+  "password check failed"; no secret → "Server does not support security type none".
+- Also: `browser_start` now runs on its own thread (Opus finding 9): `cowork-vnc-up` can
+  take seconds and no longer stalls `stop` and every other frame. A generation counter
+  (`_vnc_generation`, bumped by start/stop/executor stop) makes a stop or newer start win
+  over a start still bringing x11vnc up: the late bridge is closed, never registered, no
+  `started`. Dispatcher seam `_handle_browser_kind`. Test simulates the hang.
+
+### 10.13 Outbound frame ordering (Opus finding 7)
+`CoworkRelayClient._sendFramePayload` takes its `seq` synchronously inside `seal` but sent
+after an await, so two in-flight sends could reach the wire out of order and the opener
+(strictly increasing seq) would reject the loser — for `browser_data` a hole in the RFB
+stream that the executor framer then reports as not-RFB. All sends are now chained
+through one future (`_sendChain`, FIFO, a failure does not poison the chain). A
+`@visibleForTesting` `debugBeforeSeal` seam lets the tests delay or fail one send:
+slow-first-send keeps wire order; failed send, next one still goes out. Relay client
+tests 35/35.
+
+### 10.14 The two P3s (Opus findings 8 and 6)
+- Socket reads no longer busy-spin (`dart_rfb` `readSync`): bytes already buffered are
+  drained with no delay, a 16-round microtask spin covers "a few µs away", then the wait
+  sleeps in 1→5 ms steps so timers and the isolate port keep running (on a phone: CPU and
+  battery), and 30 s without progress throws `TimeoutException` instead of hanging the
+  read loop forever on a server that announced a length and went silent. Tests: a read
+  split over two chunks completes while a 10 ms timer keeps firing (a spin would starve
+  it); buffered bytes return without sleeping; a stalled read times out.
+- `SizeTrackingWidget` re-measures after every build and notifies only on change, so a
+  framebuffer resize no longer stales the tap/wheel mapping. Widget test.
+All VNC tests: 21 (17 Tight decoder, 3 socket read, 1 size tracking).
+
+Open: the mouse-wheel path is in the running build but its live confirmation is pending —
+XTEST/xdotool input stopped reaching the XWayland window of the rebuilt app (an
+environment problem, not an app one; the earlier window accepted the same clicks). A
+10-second manual check does it: open "Agent browser", scroll the wheel over the page.
