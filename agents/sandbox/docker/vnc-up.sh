@@ -46,6 +46,38 @@ if command -v xdotool >/dev/null 2>&1; then
     [ -n "${WINDOWS}" ] || WINDOWS=-1
 fi
 
+# Per-view secret (§9.1 hardening). When the executor passes COWORK_VNC_PASSWD
+# (it runs this script as root), the secret is written to a root-only file and
+# x11vnc is started with `-passwdfile read:FILE` — re-read on EVERY client
+# connect, so a new view can rotate the secret without restarting x11vnc. The
+# agent's own code runs as `cowork` and cannot read the file, so nothing inside
+# the sandbox can watch the screen or inject input without the secret the app
+# received inside its sealed frame. Without the variable (old callers) x11vnc
+# stays passwordless as before.
+PASS_FILE="${COWORK_VNC_PASS_FILE:-/run/cowork-vnc.pass}"
+# A secret is REQUIRED. Anything in the sandbox can run this script (it is on
+# PATH for the agent's own shell); without this rule the agent could start a
+# passwordless x11vnc itself and watch the login hand-off. The only way to get
+# `-nopw` is the explicit COWORK_VNC_ALLOW_NOPW=1, which the executor never
+# sets — it exists for manual debugging in a throwaway container.
+if [ -z "${COWORK_VNC_PASSWD:-}" ] && [ "${COWORK_VNC_ALLOW_NOPW:-0}" != "1" ]; then
+    echo "cowork-vnc-up: refusing to start x11vnc without COWORK_VNC_PASSWD" >&2
+    exit 4
+fi
+AUTH_ARGS="-nopw"
+if [ -n "${COWORK_VNC_PASSWD:-}" ]; then
+    umask 077
+    printf '%s\n' "${COWORK_VNC_PASSWD}" > "${PASS_FILE}.tmp"
+    chmod 600 "${PASS_FILE}.tmp"
+    mv -f "${PASS_FILE}.tmp" "${PASS_FILE}"
+    AUTH_ARGS="-passwdfile read:${PASS_FILE}"
+    # An x11vnc started passwordless earlier must not keep serving: replace it.
+    if pgrep -f "x11vnc.*-rfbport ${PORT}.*-nopw" >/dev/null 2>&1; then
+        pkill -f "x11vnc.*-rfbport ${PORT}.*-nopw" || true
+        sleep 0.3
+    fi
+fi
+
 # Start x11vnc only if none is already serving the port. `setsid … </dev/null
 # >>LOG 2>&1` fully detaches the daemon from this script's stdin/stdout/stderr,
 # so `docker exec` gets EOF and returns at once and no fd is leaked into the
@@ -58,22 +90,38 @@ if ! pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1; then
         -display "${DISPLAY_NUM}" \
         -rfbport "${PORT}" \
         -localhost \
-        -nopw \
+        ${AUTH_ARGS} \
         -forever \
         -shared \
         -noxdamage \
         -noshm \
         -quiet \
+        -threads \
+        -defer 1 \
+        -wait 2 \
         -o "${LOG}" \
         -bg </dev/null >>"${LOG}" 2>&1 || true
+        # Throughput tuning (measured with executor/tests/live_vnc_speed_probe.py):
+        # x11vnc's defaults (-defer 30, -wait 20, no threads) throttled a full
+        # 1280x800 frame to ~3.9 MB/s = 0.9 FPS through the docker-exec pipe,
+        # while the pipe itself does ~82 MB/s. -threads + -defer 1 -wait 2 lifts a
+        # full refresh to ~19 MB/s = ~5 FPS (5x), and incremental updates stay
+        # tiny. Frame size is handled by the client negotiating the Tight
+        # encoding (JPEG for photos, zlib'd palette/copy for UI): ~0.2 MB per
+        # full 1280x800 frame instead of the 4 MB raw pixels the client asked
+        # for before it could decode Tight.
 
     # Wait briefly for the RFB port to accept connections. If a concurrent caller
     # won the port race our own x11vnc exited, but theirs is coming up — either
     # way we only need SOME x11vnc listening. Fail only if none appears.
+    # Probe the PORT, not the process: `-bg` returns before x11vnc necessarily
+    # accepts connections, and a socat bridge that dials too early gets
+    # ECONNREFUSED and the view flashes "stopped". socat is in the image (the
+    # bridge itself uses it); this script is /bin/sh, so no bash /dev/tcp.
     up=0
     i=0
     while [ "${i}" -lt 50 ]; do
-        if pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1; then
+        if socat -u /dev/null "TCP:127.0.0.1:${PORT},connect-timeout=1" >/dev/null 2>&1; then
             up=1
             break
         fi
