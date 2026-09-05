@@ -68,3 +68,32 @@ dem Host abgeschaltet (Neuinstallation, zurueckgesetzte Host-DB).
   gehoert einer anderen Session).
 - Live-Nachweis mit laufendem Host (#5/#6 Neustart) und Screenshot der Seite
   nach "Bildschirm frei".
+
+## Nachtrag: Connector-Status-Sync mit chuk_chat (bead cowork-hza, session cowork-18)
+
+Symptom: in chuk_chat verbundene MCP-Connectoren zeigten in CoWork "connect".
+Ursache: zwei getrennte Spiegel im selben Supabase-Projekt. chuk_chat schreibt
+`service_credentials` (eine Zeile pro Connector, `service_name = 'mcp_<id>'`,
+`encrypted_data` = Envelope von `{"connection": McpConnection.toJson,
+"secrets": _McpSecrets.toJson | null}`); CoWork las nur seine eigene Tabelle
+`cowork_mcp_connectors` (ein Blob pro User). Gleicher Key, gleiche Modelle,
+gleiche Katalog-Ids, also direkt lesbar.
+
+Gebaut (`app/lib/services/mcp/`):
+- `chuk_mcp_mirror.dart`: `ChukMcpRow` (fromBlob/toBlob in chuks Form),
+  `ChukMcpMirror`-Interface, `ChukMcpSync` (select `mcp_%`, decrypt, upsert,
+  delete; alles best-effort, nichts Entschluesseltes im Log), `Noop`.
+- `mcp_service.dart`: `_pullRemote` = eigener Blob, dann `_pullChukMirror`
+  (fehlende Connection anlegen, Secrets nur wenn lokal kein brauchbarer Record
+  (47's Regel), API-Credentials nur wenn lokal leer, Liste danach neu);
+  `_pushRemote` schreibt zusaetzlich `_pushChukRows` (eine `mcp_<id>`-Zeile
+  pro lokalem Connector, Tools entfernt); `disconnect` loescht chuks Zeile nur
+  nach Ruecklesen und Id-Abgleich (`_deleteChukRow`), nie pauschal.
+  `resetForTest(chukMirror:)`, `pushRemoteForTest()`.
+- Tests `app/test/services/mcp/chuk_mcp_mirror_test.dart` (17): Lesepfad,
+  Vorrang des eigenen Spiegels, appSession/apiKey, unlesbare Tabelle,
+  Rueckweg-Form, Loeschregeln.
+
+Kein Python, kein Contract, keine Migration (chuks Tabelle existiert). Offen:
+Live-Nachweis nach Login (chuk-Connector erscheint in CoWork als verbunden,
+Token kommt beim naechsten Task am Host an).

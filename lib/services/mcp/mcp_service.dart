@@ -34,6 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:cowork/services/mcp/mcp_catalogue.dart';
 import 'package:cowork/services/mcp/mcp_connection.dart';
+import 'package:cowork/services/mcp/chuk_mcp_mirror.dart';
 import 'package:cowork/services/mcp/mcp_connector_sync.dart';
 import 'package:cowork/services/mcp/mcp_oauth.dart';
 import 'package:cowork/services/mcp/mcp_redirect.dart';
@@ -84,6 +85,10 @@ class McpService {
   /// The encrypted Supabase mirror. Swappable in tests through [resetForTest].
   static McpConnectorSync sync = const McpConnectorSync();
 
+  /// chuk_chat's per-connector rows in `service_credentials` (bead
+  /// cowork-hza): read after the own mirror to fill what chuk connected.
+  static ChukMcpMirror chukMirror = const ChukMcpSync();
+
   static final ValueNotifier<List<McpConnection>> connections =
       ValueNotifier<List<McpConnection>>(const <McpConnection>[]);
 
@@ -105,9 +110,14 @@ class McpService {
 
   /// Reset for a test: inject a store / sync and forget the loaded state.
   @visibleForTesting
-  static void resetForTest({McpStore? store, McpConnectorSync? sync}) {
+  static void resetForTest({
+    McpStore? store,
+    McpConnectorSync? sync,
+    ChukMcpMirror? chukMirror,
+  }) {
     McpService.store = store ?? McpStore();
     McpService.sync = sync ?? const McpConnectorSync();
+    McpService.chukMirror = chukMirror ?? const ChukMcpSync();
     connections.value = const <McpConnection>[];
     launcher = null;
     oauthFactory = null;
@@ -137,9 +147,17 @@ class McpService {
   @visibleForTesting
   static Future<void> pullRemoteForTest() => _pullRemote();
 
+  @visibleForTesting
+  static Future<void> pushRemoteForTest() => _pushRemote();
+
   /// Best-effort adopt the encrypted mirror. A no-op when nothing is stored,
   /// no user is signed in, or the key is locked.
   static Future<void> _pullRemote() async {
+    await _pullOwnMirror();
+    await _pullChukMirror();
+  }
+
+  static Future<void> _pullOwnMirror() async {
     try {
       final blob = await sync.load();
       if (blob == null) return;
@@ -193,6 +211,57 @@ class McpService {
 
   /// Read the whole connector set and its secrets and push it to the encrypted
   /// mirror. Best-effort; never throws into the caller.
+  /// What chuk_chat connected, adopted where this device has nothing
+  /// (bead cowork-hza). A connector chuk knows and CoWork does not is added
+  /// with chuk's config; its secrets are taken only when the local record is
+  /// unusable (47's rule — never over a live one, a mirror can be older); its
+  /// API credentials only when none are stored here. Then the list is the
+  /// truth again and the next task forwards the tokens to the host.
+  static Future<void> _pullChukMirror() async {
+    try {
+      final rows = await chukMirror.load();
+      if (rows == null || rows.isEmpty) return;
+      final local = {for (final c in await store.load()) c.id: c};
+      var changed = false;
+      for (final row in rows.values) {
+        final connection = McpConnection.fromJson(row.connection)
+            .copyWith(tools: const <McpTool>[]);
+        if (connection.id.isEmpty || connection.url.isEmpty) continue;
+        if (!local.containsKey(connection.id)) {
+          await store.upsert(connection);
+          changed = true;
+        }
+        final secrets = row.secrets;
+        if (secrets == null) continue;
+        McpSecrets? record;
+        try {
+          record = McpSecrets.fromJson(secrets);
+        } catch (_) {
+          record = null;
+        }
+        if (record != null &&
+            _isUsable(record) &&
+            !await _hasUsableRecord(connection.id)) {
+          await store.setSecrets(connection.id, record);
+          changed = true;
+        }
+        final creds = secrets['api_credentials'];
+        if (creds is Map &&
+            creds.isNotEmpty &&
+            (await store.apiCredentialsFor(connection.id)).isEmpty) {
+          await store.setApiCredentials(connection.id, <String, String>{
+            for (final e in creds.entries) e.key.toString(): e.value.toString(),
+          });
+          changed = true;
+        }
+      }
+      // The list is the truth again either way; a pull is rare and cheap.
+      if (changed || rows.isNotEmpty) connections.value = await store.load();
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [MCP] Could not read chuk\'s mirror: $e');
+    }
+  }
+
   static Future<void> _pushRemote() async {
     try {
       final list = await store.load();
@@ -225,8 +294,63 @@ class McpService {
         'connections': <Map<String, dynamic>>[for (final c in list) c.toJson()],
         'secrets': secrets,
       });
+      await _pushChukRows(list);
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [MCP] Could not push the mirror: $e');
+    }
+  }
+
+  /// The write-back into chuk_chat's table (bead cowork-hza): one
+  /// `mcp_<id>` row per local connector, in exactly chuk's blob shape
+  /// (`connection` without tools, `secrets` = the record with the API
+  /// credentials folded in, or null), so a connector connected here shows up
+  /// connected in chuk_chat. Rows are only ever upserted here; a delete
+  /// happens in [disconnect] alone, after the row was read back and verified.
+  static Future<void> _pushChukRows(List<McpConnection> list) async {
+    for (final c in list) {
+      try {
+        await chukMirror.save(await _chukRowFor(c));
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ [MCP] chuk row for ${c.id} skipped: $e');
+      }
+    }
+  }
+
+  static Future<ChukMcpRow> _chukRowFor(McpConnection c) async {
+    Map<String, dynamic>? secrets;
+    if (c.auth == McpAuth.oauth) {
+      final record = await store.secretsFor(c.id);
+      if (record != null && !record.isEmpty) secrets = record.toJson();
+    }
+    if (c.auth == McpAuth.apiKey) {
+      final creds = await store.apiCredentialsFor(c.id);
+      if (creds.isNotEmpty) {
+        secrets = <String, dynamic>{
+          'credentials': const {'client_id': ''},
+          'tokens': const {'access_token': ''},
+          'api_credentials': creds,
+        };
+      }
+    }
+    return ChukMcpRow(
+      id: c.id,
+      connection: c.copyWith(tools: const <McpTool>[]).toJson(),
+      secrets: secrets,
+    );
+  }
+
+  /// Removes chuk's row for [id], but only a row that is really this
+  /// connector: read back first and checked to name the same catalogue id.
+  /// A missing or foreign row is left alone. Never a bulk delete.
+  static Future<void> _deleteChukRow(String id) async {
+    try {
+      final rows = await chukMirror.load();
+      final row = rows?[id];
+      if (row == null) return;
+      if (row.id != id || (row.connection['id'] ?? '').toString() != id) return;
+      await chukMirror.delete(id);
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [MCP] chuk row delete for $id skipped: $e');
     }
   }
 
@@ -393,6 +517,7 @@ class McpService {
     await store.remove(id);
     connections.value = await store.load();
     unawaited(_pushRemote());
+    unawaited(_deleteChukRow(id));
   }
 
   // ─── Signing in ────────────────────────────────────────────────────────
