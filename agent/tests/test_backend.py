@@ -599,3 +599,140 @@ def test_live_smoke_real_backend():  # pragma: no cover - opt-in, spends real cr
     )
     assert resp.text
     client.close()
+
+
+# -- who refreshes (bead cowork-c91) -----------------------------------------
+
+
+def _attached_session(monkeypatch, *, timeout=2.0):
+    """A session with a controller attached: the host must never touch GoTrue."""
+    from cowork_agent import backend as backend_mod
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("GoTrue must not be called while the app is attached")
+
+    monkeypatch.setattr(backend_mod, "_gotrue", forbidden)
+    session = _session(token="expired", refresh_token="shared-rt")
+    session.may_self_refresh = lambda: False
+    session.reprovision_timeout = timeout
+    return session
+
+
+def test_attached_refresh_asks_the_app_and_waits_for_the_new_pair(monkeypatch):
+    import threading
+
+    session = _attached_session(monkeypatch)
+    asked: list[str] = []
+
+    def request(reason: str) -> None:
+        asked.append(reason)
+
+        def app_answers():
+            # What the host does when the account_authentication frame lands.
+            session.access_token = "fresh-from-app"
+            session.refresh_token = "rt-from-app"
+            session.mark_reprovisioned()
+
+        threading.Timer(0.05, app_answers).start()
+
+    session.request_reprovision = request
+    before = session.generation
+
+    session.refresh()
+
+    assert asked == ["token_expired"]
+    assert session.access_token == "fresh-from-app"
+    assert session.generation == before + 1
+
+
+def test_attached_refresh_gives_up_after_the_deadline(monkeypatch):
+    from cowork_agent.backend import SupabaseAuthError
+
+    session = _attached_session(monkeypatch, timeout=0.05)
+    session.request_reprovision = lambda reason: None  # the app never answers
+    with pytest.raises(SupabaseAuthError, match="did not re-provision"):
+        session.refresh(reason="refresh_failed")
+
+
+def test_detached_refresh_uses_gotrue_and_reports_the_rotated_pair():
+    http, calls = _gotrue_transport(new_token="rotated")
+    try:
+        session = _session(token="old", refresh_token="r-old", http_client=http)
+        session.may_self_refresh = lambda: True  # no controller attached
+        reported: list = []
+        session.on_self_refreshed = reported.append
+
+        session.refresh()
+
+        assert calls["refresh"] == 1
+        assert session.access_token == "rotated"
+        assert reported == [session]  # the host relays this pair to the app
+        assert session.generation == 1
+    finally:
+        http.close()
+
+
+def test_refresh_is_single_flight():
+    """The loop's client and the hero clone share one session; when both hit an
+    expired token at once, GoTrue is spent ONCE and the late-comer sees the
+    fresh pair instead of burning a second (now invalid) refresh."""
+    import threading
+
+    http, calls = _gotrue_transport(new_token="rotated")
+    try:
+        session = _session(token="old", refresh_token="r-old", http_client=http)
+        session.may_self_refresh = lambda: True
+        gate = threading.Barrier(2)
+
+        def go():
+            gate.wait()
+            # Both callers saw the SAME token fail; whoever comes second finds it
+            # already replaced and must not spend another refresh.
+            session.refresh(seen_token="old")
+
+        threads = [threading.Thread(target=go) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(5)
+        assert calls["refresh"] == 1
+        assert session.access_token == "rotated"
+    finally:
+        http.close()
+
+
+def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatch):
+    """The c91 symptom end to end at the client: the backend rejects the token,
+    the client asks the app (not GoTrue), the app's re-provision lands, and the
+    SAME request is retried and succeeds — the task loop never sees an error."""
+    import threading
+
+    from cowork_agent.backend import BackendModelClient, _AuthRejected
+    from cowork_agent.model import ModelResponse
+
+    session = _attached_session(monkeypatch)
+
+    def request(reason: str) -> None:
+        def app_answers():
+            session.access_token = "fresh-from-app"
+            session.mark_reprovisioned()
+
+        threading.Timer(0.05, app_answers).start()
+
+    session.request_reprovision = request
+    client = BackendModelClient(session, model_id="m", provider_slug="p")
+
+    attempts: list[str] = []
+
+    def fake_chat_once(payload):
+        attempts.append(session.access_token)
+        if len(attempts) == 1:
+            raise _AuthRejected("token expired")
+        return ModelResponse(text="ok")
+
+    monkeypatch.setattr(client, "_chat_once", fake_chat_once)
+
+    response = client.complete([{"role": "user", "content": "hi"}])
+
+    assert response.text == "ok"
+    assert attempts == ["expired", "fresh-from-app"]

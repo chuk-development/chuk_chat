@@ -45,10 +45,11 @@ The confirmed ``/v2/ws`` protocol (source of truth: chuk_chat Dart client):
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -142,6 +143,50 @@ class SupabaseSession:
     expires_at: float | None = None  # epoch seconds
     http_client: httpx.Client | None = None
 
+    # -- who is allowed to refresh (bead cowork-c91) ------------------------
+    # Supabase ROTATES the refresh token on every use. The app and the host held
+    # the SAME pair, so whichever side refreshed killed the other's token; the
+    # host then failed its next refresh with SupabaseAuthError and the task loop
+    # died. Rule now: while a controller (the app) is attached, the APP is the
+    # token source — the host never spends the refresh token itself; it asks the
+    # app to re-provision (``request_reprovision``) and waits for the fresh pair
+    # to be written into this object (``mark_reprovisioned``). Only with no
+    # controller attached does the host refresh via GoTrue on its own, and then
+    # it reports the rotated pair back through ``on_self_refreshed`` so the app
+    # can adopt it (docs/WIRE_CONTRACT.md ``account_session_rotated``).
+    # All three hooks are set by the host; standalone use (probes, tests) leaves
+    # them None and refreshes directly, as before.
+    may_self_refresh: Callable[[], bool] | None = field(default=None, repr=False, compare=False)
+    request_reprovision: Callable[[str], None] | None = field(
+        default=None, repr=False, compare=False
+    )
+    on_self_refreshed: Callable[["SupabaseSession"], None] | None = field(
+        default=None, repr=False, compare=False
+    )
+    #: How long a refresh waits for the app's ``account_authentication`` frame
+    #: before giving up with SupabaseAuthError (-> the task's error terminal).
+    reprovision_timeout: float = 20.0
+    # Single-flight: concurrent refreshers (the loop's client and the hero clone
+    # share this session) serialize here, and a late-comer sees the fresh token
+    # instead of spending a second, now-invalid refresh.
+    _flight: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    _cond: threading.Condition = field(
+        default_factory=threading.Condition, repr=False, compare=False
+    )
+    _generation: int = field(default=0, repr=False, compare=False)
+
+    @property
+    def generation(self) -> int:
+        """Bumped every time the pair changes (self-refresh or re-provision)."""
+        return self._generation
+
+    def mark_reprovisioned(self) -> None:
+        """The host wrote a fresh pair into this object (a later
+        ``account_authentication`` frame). Wakes every refresh waiting for it."""
+        with self._cond:
+            self._generation += 1
+            self._cond.notify_all()
+
     def is_expired(self, *, skew: float = 30.0) -> bool:
         """True when the access token is expired (or within ``skew`` seconds of
         it). No ``expires_at`` -> assume valid; an ``auth_error`` frame is the
@@ -150,17 +195,69 @@ class SupabaseSession:
             return False
         return time.time() >= (self.expires_at - skew)
 
-    def refresh(self) -> None:
-        """Mint a new access token from the refresh token via GoTrue. Rotates the
-        refresh token too (GoTrue single-use refresh tokens)."""
-        data = _gotrue(
-            self.supabase_url,
-            self.anon_key,
-            "refresh_token",
-            {"refresh_token": self.refresh_token},
-            self.http_client,
-        )
-        self._absorb(data)
+    def refresh(
+        self, *, reason: str = "token_expired", seen_token: str | None = None
+    ) -> None:
+        """Get a fresh access token — from the app when it is attached, from
+        GoTrue only when it is not. Single-flight; see the field notes above.
+
+        ``seen_token`` is the access token the caller just saw REJECTED. If it is
+        no longer the current one, another refresher (the hero clone, a prior
+        turn, the app's own re-provision) already replaced the pair and this call
+        returns at once instead of spending a second refresh on a token that is
+        not stale anymore. Without it, only refreshes that overlap are folded.
+
+        Raises :class:`SupabaseAuthError` when the app does not re-provision
+        within ``reprovision_timeout`` (attached) or GoTrue rejects the refresh
+        (detached). The caller (``BackendModelClient.complete``) retries once
+        after a successful refresh, so a refresh that returns means the retry
+        carries a token that was just issued or just handed over.
+        """
+        entry = self._generation
+        with self._flight:
+            if self._generation != entry:
+                return  # another refresher already replaced the pair while we waited
+            if seen_token is not None and self.access_token != seen_token:
+                return  # the token that failed is already gone; nothing to refresh
+            if self.may_self_refresh is None or self.may_self_refresh():
+                # Nobody attached (or standalone): the host is on its own. This
+                # ROTATES the pair — GoTrue refresh tokens are single-use — so
+                # the app's copy is now dead; report the new pair back to it.
+                data = _gotrue(
+                    self.supabase_url,
+                    self.anon_key,
+                    "refresh_token",
+                    {"refresh_token": self.refresh_token},
+                    self.http_client,
+                )
+                self._absorb(data)
+                with self._cond:
+                    self._generation += 1
+                    self._cond.notify_all()
+                if self.on_self_refreshed is not None:
+                    try:
+                        self.on_self_refreshed(self)
+                    except Exception:  # noqa: BLE001 — reporting must not fail the refresh
+                        pass
+                return
+            # The app is attached: it owns the token. Ask it and wait for the
+            # fresh pair to land (``mark_reprovisioned``); do NOT touch GoTrue,
+            # that would kill the app's token.
+            if self.request_reprovision is not None:
+                try:
+                    self.request_reprovision(reason)
+                except Exception:  # noqa: BLE001 — a failed ask still leaves the wait
+                    pass
+            deadline = time.monotonic() + self.reprovision_timeout
+            with self._cond:
+                while self._generation == entry:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise SupabaseAuthError(
+                            f"the app did not re-provision within "
+                            f"{self.reprovision_timeout:g}s ({reason})"
+                        )
+                    self._cond.wait(remaining)
 
     def _absorb(self, data: dict[str, Any]) -> None:
         token = data.get("access_token")
@@ -458,12 +555,16 @@ class BackendModelClient:
         # A cancel only applies to the call it interrupted. Clearing it here is
         # what lets one client serve the next task after a stopped one.
         self._cancelled = False
+        seen_token = self._session.access_token
         try:
             return self._chat_once(payload)
         except _AuthRejected:
-            # Token expired or the socket was rejected: refresh, reconnect, retry once.
+            # Token expired or the socket was rejected: get a fresh pair (from
+            # the app while it is attached, from GoTrue otherwise — see
+            # SupabaseSession.refresh), reconnect, retry once. ``seen_token``
+            # folds the case where the pair was already replaced meanwhile.
             self._close()
-            self._session.refresh()
+            self._session.refresh(seen_token=seen_token)
             return self._chat_once(payload)
         except ConnectionClosed:
             if self._cancelled:
