@@ -1,0 +1,1484 @@
+// lib/widgets/model_selection_dropdown.dart
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import 'package:cowork/models/chat_model.dart';
+import 'package:cowork/services/api_config_service.dart';
+import 'package:cowork/services/model_cache_service.dart';
+import 'package:cowork/services/model_capabilities_service.dart';
+import 'package:cowork/services/user_preferences_service.dart';
+import 'package:cowork/core/model_selection_events.dart';
+import 'package:cowork/services/network_status_service.dart';
+import 'package:cowork/services/api_status_service.dart';
+import 'package:cowork/services/diagnostics_log_service.dart';
+import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/utils/theme_extensions.dart';
+import 'package:cowork/l10n/app_localizations.dart';
+
+const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
+const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
+const double _menuExtraAllowance = 12.0; // Safety margin against glyph clipping
+const double _buttonHorizontalPadding = 20.0; // 10 left + 10 right
+const double _buttonTrailingAllowance = 56.0; // Icon + arrow + spacing + extra
+
+/// Sentinel value stored in user preferences when the user picks
+/// "Auto (cheapest)". Resolved at send time to the cheapest provider for
+/// the model, based on completion (output) pricing.
+const String kAutoCheapestProviderSlug = '__auto_cheapest__';
+
+class ModelProviderSummary {
+  final String slug;
+  final String name;
+  final double promptPrice;
+  final double completionPrice;
+
+  const ModelProviderSummary({
+    required this.slug,
+    required this.name,
+    required this.promptPrice,
+    required this.completionPrice,
+  });
+}
+
+class _WidthMetrics {
+  final double menuWidth;
+  final double buttonWidth;
+
+  const _WidthMetrics({required this.menuWidth, required this.buttonWidth});
+}
+
+class ModelProviderLimits {
+  final int? contextLength;
+  final int? maxCompletionTokens;
+
+  const ModelProviderLimits({this.contextLength, this.maxCompletionTokens});
+}
+
+class _AuthRequiredException implements Exception {
+  const _AuthRequiredException();
+}
+
+class _FilteredModelResult {
+  const _FilteredModelResult({
+    required this.models,
+    required this.enabledProviders,
+    required this.invalidModelIds,
+    required this.providerLimits,
+    required this.availableProviders,
+  });
+
+  final List<ModelItem> models;
+  final Map<String, String> enabledProviders;
+  final Set<String> invalidModelIds;
+  final Map<String, ModelProviderLimits> providerLimits;
+  final Map<String, List<ModelProviderSummary>> availableProviders;
+}
+
+class ModelSelectionDropdown extends StatefulWidget {
+  final String initialSelectedModelId;
+  final ValueChanged<String> onModelSelected;
+  final FocusNode textFieldFocusNode;
+  final bool isCompactMode;
+  final String? compactLabel;
+  final bool transparentStyle;
+
+  /// Render as the right half of a merged segmented control: no own border,
+  /// no trailing chevron, transparent background with a right-rounded hover
+  /// fill. The outer pill (built by the caller) supplies the border/rounding
+  /// and a left sibling segment (e.g. the reasoning toggle).
+  final bool mergedSegmentStyle;
+
+  const ModelSelectionDropdown({
+    super.key,
+    required this.initialSelectedModelId,
+    required this.onModelSelected,
+    required this.textFieldFocusNode,
+    this.isCompactMode = false,
+    this.compactLabel,
+    this.transparentStyle = false,
+    this.mergedSegmentStyle = false,
+  });
+
+  static final ValueNotifier<String> selectedModelNotifier =
+      ValueNotifier<String>('');
+  static final Set<_ModelSelectionDropdownState> _activeStates =
+      <_ModelSelectionDropdownState>{};
+  static bool _isRefreshingAll = false;
+  static final Map<String, ModelProviderLimits> _cachedProviderLimits =
+      <String, ModelProviderLimits>{};
+  static StreamSubscription<void>? _refreshSubscription;
+  static StreamSubscription<String>? _modelSelectedSubscription;
+
+  // ── Static model cache ──
+  // Survives widget dispose/re-init cycles so re-mounts are instant.
+  static List<ModelItem> _cachedModels = [];
+  static Map<String, String> _cachedProviders = {};
+  static final Map<String, List<ModelProviderSummary>>
+      _cachedAvailableProviders = {};
+  static bool _hasEverLoaded = false;
+
+  static ValueListenable<String> get selectedModelListenable =>
+      selectedModelNotifier;
+
+  static void _registerState(_ModelSelectionDropdownState state) {
+    _activeStates.add(state);
+    _initializeEventBus();
+  }
+
+  static void _unregisterState(_ModelSelectionDropdownState state) {
+    _activeStates.remove(state);
+    if (_activeStates.isEmpty) {
+      _disposeEventBus();
+    }
+  }
+
+  static void _initializeEventBus() {
+    if (_refreshSubscription != null) return; // Already initialized
+
+    final eventBus = ModelSelectionEventBus();
+    _refreshSubscription = eventBus.refreshStream.listen((_) async {
+      await refreshActiveDropdowns();
+    });
+
+    _modelSelectedSubscription = eventBus.modelSelectedStream.listen((modelId) {
+      selectedModelNotifier.value = modelId;
+    });
+  }
+
+  static void _disposeEventBus() {
+    _refreshSubscription?.cancel();
+    _modelSelectedSubscription?.cancel();
+    _refreshSubscription = null;
+    _modelSelectedSubscription = null;
+  }
+
+  static Future<void> refreshActiveDropdowns() async {
+    if (_isRefreshingAll) return;
+    _isRefreshingAll = true;
+    try {
+      final List<_ModelSelectionDropdownState> states =
+          List<_ModelSelectionDropdownState>.from(_activeStates);
+      await Future.wait(states.map((state) => state.refreshModels()));
+    } finally {
+      _isRefreshingAll = false;
+    }
+  }
+
+  static String? providerSlugForModel(String modelId) {
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final String? slug = state.providerSlugFor(modelId);
+      if (slug != null && slug.isNotEmpty) {
+        return slug;
+      }
+    }
+    return null;
+  }
+
+  static bool modelSupportsReasoning(String modelId) {
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final bool? result = state.supportsReasoningFor(modelId);
+      if (result != null) return result;
+    }
+    return true; // Default to true if model info not loaded yet
+  }
+
+  static ModelProviderLimits? providerLimitsForModel(String modelId) {
+    final ModelProviderLimits? cached = _cachedProviderLimits[modelId];
+    if (cached != null) return cached;
+
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final ModelProviderLimits? limits = state.providerLimitsFor(modelId);
+      if (limits != null) {
+        _cachedProviderLimits[modelId] = limits;
+        return limits;
+      }
+    }
+    return null;
+  }
+
+  /// Static, in-memory list of providers known for [modelId]. Survives
+  /// network glitches because it is hydrated from the cached models list
+  /// fetched at startup. Returns an empty list if the model is unknown.
+  static List<ModelProviderSummary> availableProvidersForModel(String modelId) {
+    final cached = _cachedAvailableProviders[modelId];
+    if (cached != null && cached.isNotEmpty) return cached;
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final list = state._availableProviders[modelId];
+      if (list != null && list.isNotEmpty) {
+        _cachedAvailableProviders[modelId] = list;
+        return list;
+      }
+    }
+    return const <ModelProviderSummary>[];
+  }
+
+  /// Pick the cheapest provider for [modelId] by completion (output) price.
+  /// Returns null if no providers are known.
+  static ModelProviderSummary? cheapestProviderForModel(String modelId) {
+    final providers = availableProvidersForModel(modelId);
+    if (providers.isEmpty) return null;
+    ModelProviderSummary best = providers.first;
+    for (final p in providers.skip(1)) {
+      if (p.completionPrice < best.completionPrice) {
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  /// Resolve [savedSlug] (which may be [kAutoCheapestProviderSlug]) to a
+  /// concrete provider slug for the given [modelId]. Returns null if the
+  /// model has no known providers and the slug is the auto marker.
+  static String? resolveProviderSlugForSend(String modelId, String savedSlug) {
+    if (savedSlug != kAutoCheapestProviderSlug) return savedSlug;
+    return cheapestProviderForModel(modelId)?.slug;
+  }
+
+  /// Show a model selection bottom sheet.
+  /// Used when the compact model selector is hidden (e.g., user is typing)
+  /// and the user opens the attachment menu.
+  static void showModelSelectionSheet(
+    BuildContext context, {
+    required String currentModelId,
+    required ValueChanged<String> onModelSelected,
+  }) {
+    // Gather models from any active dropdown state
+    List<ModelItem> models = const [];
+    for (final state in _activeStates) {
+      if (state._allModels.isNotEmpty) {
+        models = state._allModels;
+        break;
+      }
+    }
+    if (models.isEmpty) return;
+
+    final theme = Theme.of(context);
+    final iconFg = theme.colorScheme.onSurface;
+    final indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: models.length,
+                    itemBuilder: (_, index) {
+                      final model = models[index];
+                      final selected = currentModelId == model.value;
+                      return ListTile(
+                        dense: true,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        title: Text(
+                          model.name,
+                          style: TextStyle(
+                            color: iconFg,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                        trailing: selected
+                            ? Icon(Icons.check, color: iconFg, size: 18)
+                            : null,
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          onModelSelected(model.value);
+                          selectedModelNotifier.value = model.value;
+                          try {
+                            await UserPreferencesService.saveSelectedModel(
+                              model.value,
+                            );
+                          } catch (error) {
+                            if (kDebugMode) {
+                              debugPrint(
+                                'Failed to save selected model: $error',
+                              );
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
+}
+
+class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
+  String _selectedModelId = '';
+  String _selectedModelName = 'Loading Models...';
+  List<ModelItem> _allModels = [];
+  final Map<String, String> _enabledModelProviders = {};
+  final Map<String, ModelProviderLimits> _providerLimits =
+      <String, ModelProviderLimits>{};
+  final Map<String, List<ModelProviderSummary>> _availableProviders =
+      <String, List<ModelProviderSummary>>{};
+  bool _isLoadingModels = true;
+  String _errorMessage = '';
+  Timer? _apiAvailabilityTimer;
+  Map<String, String> _lastSavedPreferences = {};
+  late final VoidCallback _selectedModelListener;
+  final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false);
+  double _lastStableMaxWidth = 220.0;
+  DateTime? _lastConstraintWarningAt;
+
+  double _menuWidth = 260.0;
+  double _buttonWidth = 180.0;
+
+  static const Duration _apiPollInterval = Duration(seconds: 8);
+  static const Duration _backgroundFetchDelay = Duration(seconds: 5);
+  static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8);
+  String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    ModelSelectionDropdown._registerState(this);
+    _selectedModelId = widget.initialSelectedModelId;
+    _selectedModelListener = _handleSelectedModelNotifierChange;
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _selectedModelListener,
+    );
+
+    // Fast path: if we already loaded models in a previous mount, reuse
+    // the static cache. Zero async work, zero setState, zero jank.
+    if (ModelSelectionDropdown._hasEverLoaded &&
+        ModelSelectionDropdown._cachedModels.isNotEmpty) {
+      _allModels = ModelSelectionDropdown._cachedModels;
+      _enabledModelProviders.addAll(ModelSelectionDropdown._cachedProviders);
+      _providerLimits.addAll(ModelSelectionDropdown._cachedProviderLimits);
+      _availableProviders.addAll(
+        ModelSelectionDropdown._cachedAvailableProviders,
+      );
+      _isLoadingModels = false;
+      _updateSelectedModelNameSync();
+      // Width metrics need BuildContext — recalculate after the first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _updateSelectedModelName();
+      });
+      unawaited(
+        DiagnosticsLogService.info(
+          'model_menu',
+          'Dropdown initialized (cached)',
+          data: {'initial_model_id_len': _selectedModelId.length},
+        ),
+      );
+    } else {
+      unawaited(
+        DiagnosticsLogService.info(
+          'model_menu',
+          'Dropdown initialized',
+          data: {'initial_model_id_len': _selectedModelId.length},
+        ),
+      );
+      unawaited(_initializeModelSelection());
+    }
+  }
+
+  void _handleSelectedModelNotifierChange() {
+    final String nextModelId =
+        ModelSelectionDropdown.selectedModelNotifier.value;
+    if (nextModelId == _selectedModelId || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedModelId = nextModelId;
+    });
+    _updateSelectedModelName();
+  }
+
+  @override
+  void didUpdateWidget(covariant ModelSelectionDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId ||
+        widget.isCompactMode != oldWidget.isCompactMode) {
+      _selectedModelId = widget.initialSelectedModelId;
+      _updateSelectedModelName();
+    }
+  }
+
+  Future<void> _initializeModelSelection() async {
+    final stopwatch = Stopwatch()..start();
+    setState(() {
+      _isLoadingModels = _allModels.isEmpty;
+      _errorMessage = '';
+    });
+
+    try {
+      // Load saved model preference (fast local cache)
+      final savedModelId = await UserPreferencesService.loadSelectedModel();
+      if (savedModelId != null && savedModelId.isNotEmpty) {
+        _selectedModelId = savedModelId;
+      }
+
+      // Hydrate from cache first for fast initial display
+      await _hydrateFromCache();
+
+      // Mark loading complete after cache - UI is now usable
+      if (mounted && _allModels.isNotEmpty) {
+        setState(() => _isLoadingModels = false);
+      }
+
+      // Fetch fresh models in background (don't await).
+      // When cache is populated, defer the network fetch on ALL platforms
+      // so startup stays smooth — cache is assumed correct until proven
+      // otherwise. Linux gets an extra-long delay for GTK thread reasons.
+      if (_allModels.isNotEmpty) {
+        final delay = _isLinuxDesktop
+            ? _linuxBackgroundFetchDelay
+            : _backgroundFetchDelay;
+        unawaited(
+          Future<void>.delayed(delay, () async {
+            if (!mounted) return;
+            await _fetchModels();
+          }).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('Deferred model fetch failed: $e');
+            }
+          }),
+        );
+      } else {
+        unawaited(
+          _fetchModels().catchError((e) {
+            if (kDebugMode) {
+              debugPrint('Background model fetch failed: $e');
+            }
+          }),
+        );
+      }
+    } catch (error) {
+      _errorMessage = 'Error initializing model selection: $error';
+      _selectedModelName = 'Error Loading';
+      unawaited(
+        DiagnosticsLogService.error(
+          'model_menu',
+          'Dropdown initialize failed',
+          error: error,
+        ),
+      );
+      if (kDebugMode) {
+        debugPrint('Error initializing model selection: $error');
+      }
+    } finally {
+      if (mounted && _isLoadingModels) {
+        setState(() => _isLoadingModels = false);
+      }
+      unawaited(
+        DiagnosticsLogService.timing(
+          'model_menu',
+          'initialize_dropdown',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'models': _allModels.length,
+            'has_error': _errorMessage.isNotEmpty,
+          },
+        ),
+      );
+    }
+  }
+
+  Future<void> _hydrateFromCache() async {
+    final String? userId =
+        SupabaseService.auth.currentSession?.user.id ??
+        SupabaseService.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final List<Map<String, dynamic>> cachedModels =
+        await ModelCacheService.loadAvailableModels();
+    if (cachedModels.isEmpty) return;
+
+    // Ensure in-memory vision support cache is populated from disk cache
+    // so image upload buttons work immediately on app start.
+    await ModelCapabilitiesService.initialize();
+
+    final Map<String, String> cachedProviders =
+        await ModelCacheService.loadProviderPreferences(userId);
+
+    final _FilteredModelResult result = _filterModels(
+      cachedModels,
+      cachedProviders,
+    );
+
+    await _applyModels(
+      models: result.models,
+      enabledProviders: result.enabledProviders,
+      providerLimits: result.providerLimits,
+      availableProviders: result.availableProviders,
+      savedPreferences: cachedProviders,
+    );
+  }
+
+  _FilteredModelResult _filterModels(
+    List<Map<String, dynamic>> payload,
+    Map<String, String> providerPrefs,
+  ) {
+    final Map<String, String> enabledProviders = {};
+    final Set<String> invalidModelIds = <String>{};
+    final List<ModelItem> filteredModels = [];
+    final Map<String, ModelProviderLimits> providerLimits =
+        <String, ModelProviderLimits>{};
+    final Map<String, List<ModelProviderSummary>> availableProviders =
+        <String, List<ModelProviderSummary>>{};
+
+    for (final Map<String, dynamic> modelJson in payload) {
+      final ModelItem modelItem = ModelItem.fromJson(modelJson);
+      if (modelItem.value.isEmpty) {
+        continue;
+      }
+      final String? savedProviderSlug = providerPrefs[modelItem.value];
+      if (savedProviderSlug == null || savedProviderSlug.isEmpty) {
+        continue;
+      }
+      final List<dynamic>? providers = modelJson['providers'] as List<dynamic>?;
+      if (providers == null || providers.isEmpty) {
+        invalidModelIds.add(modelItem.value);
+        continue;
+      }
+
+      // Build the lightweight pricing summary list for the model — used by
+      // dropdown/sub-sheets to display per-provider prices and by the auto
+      // resolver to pick the cheapest provider at send time.
+      final List<ModelProviderSummary> summaries = [];
+      for (final dynamic providerEntry in providers) {
+        if (providerEntry is! Map<String, dynamic>) continue;
+        final String? slug = providerEntry['slug'] as String?;
+        final String? name = providerEntry['name'] as String?;
+        if (slug == null || slug.isEmpty) continue;
+        final Map<String, dynamic>? pricing =
+            providerEntry['pricing'] as Map<String, dynamic>?;
+        summaries.add(
+          ModelProviderSummary(
+            slug: slug,
+            name: name ?? slug,
+            promptPrice: _parseDouble(pricing?['prompt']),
+            completionPrice: _parseDouble(pricing?['completion']),
+          ),
+        );
+      }
+
+      final bool isAuto = savedProviderSlug == kAutoCheapestProviderSlug;
+
+      Map<String, dynamic>? matchedProvider;
+      Map<String, dynamic>? fallbackProvider;
+      if (isAuto) {
+        // Pick cheapest by completion price for the "Auto" preset.
+        Map<String, dynamic>? cheapest;
+        double cheapestPrice = double.infinity;
+        for (final dynamic providerEntry in providers) {
+          if (providerEntry is! Map<String, dynamic>) continue;
+          fallbackProvider ??= providerEntry;
+          final Map<String, dynamic>? pricing =
+              providerEntry['pricing'] as Map<String, dynamic>?;
+          final double price = _parseDouble(pricing?['completion']);
+          if (cheapest == null || price < cheapestPrice) {
+            cheapest = providerEntry;
+            cheapestPrice = price;
+          }
+        }
+        matchedProvider = cheapest;
+      } else {
+        for (final dynamic providerEntry in providers) {
+          if (providerEntry is! Map<String, dynamic>) continue;
+          fallbackProvider ??= providerEntry;
+          if (providerEntry['slug'] == savedProviderSlug) {
+            matchedProvider = providerEntry;
+            break;
+          }
+        }
+      }
+      // If the saved provider slug is stale (e.g. backend renamed
+      // `fireworks/serverless` to `fireworks`), keep the model visible by
+      // falling back to the first available provider instead of silently
+      // dropping it from the dropdown.
+      final Map<String, dynamic>? resolvedProvider =
+          matchedProvider ?? fallbackProvider;
+      if (resolvedProvider != null) {
+        // Store the AUTO sentinel literally so consumers know the user wants
+        // dynamic resolution. The resolved cheapest provider is used for
+        // limits + UX display, but not as the persisted preference.
+        final String slugForState = isAuto
+            ? kAutoCheapestProviderSlug
+            : ((resolvedProvider['slug'] as String?) ?? savedProviderSlug);
+        filteredModels.add(modelItem);
+        enabledProviders[modelItem.value] = slugForState;
+        providerLimits[modelItem.value] = ModelProviderLimits(
+          contextLength: _parseNullableInt(resolvedProvider['context_length']),
+          maxCompletionTokens: _parseNullableInt(
+            resolvedProvider['max_completion_tokens'],
+          ),
+        );
+        if (summaries.isNotEmpty) {
+          availableProviders[modelItem.value] = summaries;
+        }
+      } else {
+        invalidModelIds.add(modelItem.value);
+      }
+    }
+
+    filteredModels.sort((a, b) => a.name.compareTo(b.name));
+
+    return _FilteredModelResult(
+      models: filteredModels,
+      enabledProviders: enabledProviders,
+      invalidModelIds: invalidModelIds,
+      providerLimits: providerLimits,
+      availableProviders: availableProviders,
+    );
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  Future<void> _applyModels({
+    required List<ModelItem> models,
+    required Map<String, String> enabledProviders,
+    required Map<String, ModelProviderLimits> providerLimits,
+    required Map<String, List<ModelProviderSummary>> availableProviders,
+    required Map<String, String> savedPreferences,
+  }) async {
+    final String previousModelId = _selectedModelId;
+    String newModelId = previousModelId;
+
+    final bool selectionValid =
+        enabledProviders.containsKey(newModelId) &&
+        models.any((model) => model.value == newModelId);
+
+    if (!selectionValid) {
+      if (models.isEmpty) {
+        if (newModelId.isNotEmpty) {
+          await UserPreferencesService.clearSelectedModel();
+        }
+        newModelId = '';
+      } else {
+        newModelId = models.first.value;
+        if (newModelId != previousModelId && newModelId.isNotEmpty) {
+          await UserPreferencesService.saveSelectedModel(newModelId);
+        }
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _lastSavedPreferences = Map<String, String>.from(savedPreferences);
+      _allModels = models;
+      _enabledModelProviders
+        ..clear()
+        ..addAll(enabledProviders);
+      _providerLimits
+        ..clear()
+        ..addAll(providerLimits);
+      _availableProviders
+        ..clear()
+        ..addAll(availableProviders);
+      _selectedModelId = newModelId;
+      _isLoadingModels = false;
+      _errorMessage = '';
+    });
+
+    // Update static cache so future mounts are instant.
+    ModelSelectionDropdown._cachedModels = models;
+    ModelSelectionDropdown._cachedProviders = Map<String, String>.from(
+      enabledProviders,
+    );
+    if (providerLimits.isNotEmpty) {
+      ModelSelectionDropdown._cachedProviderLimits.addAll(providerLimits);
+    }
+    if (availableProviders.isNotEmpty) {
+      ModelSelectionDropdown._cachedAvailableProviders
+        ..clear()
+        ..addAll(availableProviders);
+    }
+    ModelSelectionDropdown._hasEverLoaded = true;
+
+    // Only notify if model actually changed to avoid duplicate callbacks
+    if (newModelId != previousModelId) {
+      ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
+      widget.onModelSelected(_selectedModelId);
+    }
+    _updateSelectedModelName();
+  }
+
+  String? providerSlugFor(String modelId) {
+    return _enabledModelProviders[modelId];
+  }
+
+  ModelProviderLimits? providerLimitsFor(String modelId) {
+    return _providerLimits[modelId];
+  }
+
+  bool? supportsReasoningFor(String modelId) {
+    for (final model in _allModels) {
+      if (model.value == modelId) {
+        return model.supportsReasoning;
+      }
+    }
+    return null;
+  }
+
+  Future<void> refreshModels() async {
+    if (!mounted) return;
+    // Clear cached preferences to force reload of fresh data
+    _lastSavedPreferences.clear();
+    await _initializeModelSelection();
+  }
+
+  Future<void> _fetchModels() async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      // Use current session directly — avoid the expensive refreshSession()
+      // network round-trip. We only refresh on an actual 401 below.
+      var session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        throw const _AuthRequiredException();
+      }
+      String accessToken = session.accessToken;
+      if (accessToken.isEmpty) {
+        throw const _AuthRequiredException();
+      }
+      if (_lastSavedPreferences.isEmpty) {
+        _lastSavedPreferences =
+            await UserPreferencesService.loadAllProviderPreferences();
+      }
+      var response = await http.get(
+        Uri.parse('$_apiBaseUrl/v1/models_info'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
+
+      // On 401, refresh the session once and retry.
+      if (response.statusCode == 401) {
+        session = await SupabaseService.refreshSession();
+        if (session == null) {
+          throw const _AuthRequiredException();
+        }
+        accessToken = session.accessToken;
+        response = await http.get(
+          Uri.parse('$_apiBaseUrl/v1/models_info'),
+          headers: {'Authorization': 'Bearer $accessToken'},
+        );
+      }
+
+      if (response.statusCode == 200) {
+        _stopApiAvailabilityPolling();
+        final dynamic decoded = response.body.isNotEmpty
+            ? json.decode(response.body)
+            : const <dynamic>[];
+        final List<Map<String, dynamic>> payload = decoded is List
+            ? decoded
+                  .whereType<Map<String, dynamic>>()
+                  .map((entry) => Map<String, dynamic>.from(entry))
+                  .toList(growable: false)
+            : const <Map<String, dynamic>>[];
+
+        final _FilteredModelResult result = _filterModels(
+          payload,
+          _lastSavedPreferences,
+        );
+
+        if (result.invalidModelIds.isNotEmpty) {
+          await Future.wait(
+            result.invalidModelIds.map(
+              UserPreferencesService.clearSelectedProvider,
+            ),
+          );
+          _lastSavedPreferences =
+              await UserPreferencesService.loadAllProviderPreferences();
+        }
+
+        if (payload.isNotEmpty) {
+          // Launch cache save operations in background without blocking
+          Future(() async {
+            try {
+              await ModelCacheService.saveAvailableModels(payload);
+              // Refresh in-memory vision support cache so image upload
+              // buttons reflect the latest model capabilities immediately.
+              await ModelCapabilitiesService.refresh();
+            } catch (error) {
+              if (kDebugMode) {
+                debugPrint('Failed to save available models to cache: $error');
+              }
+            }
+          });
+
+          Future(() async {
+            try {
+              final userId = session?.user.id;
+              if (userId == null) return;
+              await ModelCacheService.saveProviderPreferences(
+                userId,
+                _lastSavedPreferences,
+              );
+            } catch (error) {
+              if (kDebugMode) {
+                debugPrint(
+                  'Failed to save provider preferences to cache: $error',
+                );
+              }
+            }
+          });
+        }
+
+        await _applyModels(
+          models: result.models,
+          enabledProviders: result.enabledProviders,
+          providerLimits: result.providerLimits,
+          availableProviders: result.availableProviders,
+          savedPreferences: _lastSavedPreferences,
+        );
+        unawaited(
+          DiagnosticsLogService.timing(
+            'model_menu',
+            'fetch_models',
+            stopwatch.elapsedMilliseconds,
+            data: {
+              'models': result.models.length,
+              'status_code': response.statusCode,
+            },
+          ),
+        );
+      } else if (response.statusCode == 401) {
+        throw const _AuthRequiredException();
+      } else {
+        await _handleApiUnavailable(
+          debugDetails: 'Status ${response.statusCode} - ${response.body}'
+              .trim(),
+        );
+      }
+    } on _AuthRequiredException {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingModels = false;
+        _errorMessage = 'Session expired. Please sign in again.';
+        _selectedModelName = 'Sign In Required';
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Session expired. Please sign in again.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+      unawaited(
+        DiagnosticsLogService.warning(
+          'model_menu',
+          'Model fetch requires authentication',
+        ),
+      );
+    } catch (error) {
+      await _handleApiUnavailable(debugDetails: '$error');
+      unawaited(
+        DiagnosticsLogService.warning(
+          'model_menu',
+          'Model fetch unavailable',
+          data: {'error': error.toString()},
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleApiUnavailable({required String debugDetails}) async {
+    if (kDebugMode) {
+      debugPrint('Model fetch unavailable: $debugDetails');
+    }
+    final bool hasConnectivity =
+        await NetworkStatusService.hasInternetConnection();
+    final String message = _buildApiUnavailableMessage(
+      hasConnectivity: hasConnectivity,
+    );
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = message;
+      _selectedModelName = message;
+      _isLoadingModels = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
+    _startApiAvailabilityPolling();
+  }
+
+  String _buildApiUnavailableMessage({required bool hasConnectivity}) {
+    if (!hasConnectivity) {
+      return 'You appear to be offline. Please check your internet connection.';
+    }
+
+    final Uri? apiUri = Uri.tryParse(_apiBaseUrl);
+    final String host = apiUri?.host.toLowerCase() ?? '';
+    final bool isLocalHost =
+        host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host == '10.0.3.2';
+
+    if (kDebugMode && isLocalHost) {
+      return 'Cannot reach local API server at $_apiBaseUrl.';
+    }
+
+    return 'We are currently doing maintenance and will be right back.';
+  }
+
+  void _startApiAvailabilityPolling() {
+    _apiAvailabilityTimer ??= Timer.periodic(_apiPollInterval, (_) async {
+      final bool reachable = await ApiStatusService.isApiReachable(
+        baseUrl: _apiBaseUrl,
+      );
+      if (!reachable) return;
+      if (!mounted) return;
+      _stopApiAvailabilityPolling();
+      setState(() {
+        _isLoadingModels = true;
+        _errorMessage = '';
+      });
+      await _fetchModels();
+    });
+  }
+
+  void _stopApiAvailabilityPolling() {
+    _apiAvailabilityTimer?.cancel();
+    _apiAvailabilityTimer = null;
+  }
+
+  /// Update name + widths synchronously (no setState — for use in initState).
+  void _updateSelectedModelNameSync() {
+    final bool hasModels = _allModels.isNotEmpty;
+    final ModelItem selectedItem = _allModels.firstWhere(
+      (model) => model.value == _selectedModelId,
+      orElse: () => ModelItem(
+        name: hasModels ? 'Select Model' : 'No Enabled Models',
+        value: '',
+      ),
+    );
+    _selectedModelName = selectedItem.name;
+    // Skip width calculation here — it needs BuildContext which isn't
+    // available in initState. Widths are recalculated on first build via
+    // LayoutBuilder anyway.
+  }
+
+  void _updateSelectedModelName() {
+    final bool hasModels = _allModels.isNotEmpty;
+    final l = AppLocalizations.of(context)!;
+    final ModelItem selectedItem = _allModels.firstWhere(
+      (model) => model.value == _selectedModelId,
+      orElse: () => ModelItem(
+        name: hasModels ? l.selectModel : l.noEnabledModels,
+        value: '',
+      ),
+    );
+
+    final metrics = _calculateWidthMetrics(selectedItem.name);
+
+    if (mounted) {
+      setState(() {
+        _selectedModelName = selectedItem.name;
+        _menuWidth = metrics.menuWidth;
+        _buttonWidth = metrics.buttonWidth;
+      });
+    }
+  }
+
+  _WidthMetrics _calculateWidthMetrics(String selectedLabel) {
+    if (!mounted) {
+      return const _WidthMetrics(menuWidth: 260.0, buttonWidth: 180.0);
+    }
+
+    final mediaQuery = MediaQuery.of(context);
+    final textStyle =
+        Theme.of(context).textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
+    final textDirection = Directionality.of(context);
+    final textScaler = mediaQuery.textScaler;
+
+    double measure(String text) =>
+        _measureTextWidth(text, textStyle, textDirection, textScaler);
+
+    double longestTextWidth = measure(_stripLabPrefix(selectedLabel));
+    for (final model in _allModels.where((m) => !m.isToggle)) {
+      longestTextWidth =
+          math.max(longestTextWidth, measure(_stripLabPrefix(model.name)));
+    }
+
+    final selectedTextWidth = measure(_stripLabPrefix(selectedLabel));
+
+    final desiredMenuWidth = _menuWidthFromTextWidth(longestTextWidth);
+    final desiredButtonWidth = _buttonWidthFromTextWidth(selectedTextWidth);
+
+    final double safeMaxWidth = math.max(
+      160.0,
+      mediaQuery.size.width - 32.0,
+    ); // padding to screen edge
+
+    final double menuLowerBound = math.min(220.0, safeMaxWidth);
+    final double menuUpperBound = safeMaxWidth;
+    final double menuWidth = desiredMenuWidth
+        .clamp(menuLowerBound, menuUpperBound)
+        .toDouble();
+
+    final double buttonLowerBound = math.min(140.0, menuWidth);
+    final double buttonWidth = desiredButtonWidth
+        .clamp(buttonLowerBound, menuWidth)
+        .toDouble();
+
+    return _WidthMetrics(menuWidth: menuWidth, buttonWidth: buttonWidth);
+  }
+
+  double _measureTextWidth(
+    String text,
+    TextStyle textStyle,
+    TextDirection textDirection,
+    TextScaler textScaler,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: textDirection,
+      maxLines: 1,
+      textScaler: textScaler,
+    )..layout();
+    return painter.width;
+  }
+
+  double _menuWidthFromTextWidth(double textWidth) {
+    return textWidth +
+        _menuHorizontalPadding +
+        _menuTrailingAllowance +
+        _menuExtraAllowance;
+  }
+
+  double _buttonWidthFromTextWidth(double textWidth) {
+    return textWidth + _buttonHorizontalPadding + _buttonTrailingAllowance;
+  }
+
+  double _effectiveButtonWidth(double maxAvailableWidth) {
+    if (widget.isCompactMode) {
+      return 32.0;
+    }
+
+    if (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0) {
+      _lastStableMaxWidth = maxAvailableWidth;
+    }
+
+    final effectiveMaxWidth =
+        (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0)
+        ? maxAvailableWidth
+        : _lastStableMaxWidth;
+
+    if ((maxAvailableWidth.isFinite && maxAvailableWidth <= 48.0) ||
+        maxAvailableWidth.isNaN) {
+      final now = DateTime.now();
+      if (_lastConstraintWarningAt == null ||
+          now.difference(_lastConstraintWarningAt!) >=
+              const Duration(seconds: 2)) {
+        _lastConstraintWarningAt = now;
+        unawaited(
+          DiagnosticsLogService.warning(
+            'model_menu',
+            'Unstable dropdown width constraints',
+            data: {
+              'max_width': maxAvailableWidth.isFinite
+                  ? maxAvailableWidth.toStringAsFixed(2)
+                  : 'non_finite',
+              'last_stable_width': _lastStableMaxWidth.toStringAsFixed(2),
+            },
+          ),
+        );
+      }
+    }
+
+    // Allow button to grow to fit full model name while preventing
+    // transient 0-width layouts from making the control disappear.
+    double width = math.max(140.0, _buttonWidth);
+    if (effectiveMaxWidth.isFinite) {
+      width = math.min(width, effectiveMaxWidth);
+    }
+    if (maxAvailableWidth.isFinite &&
+        maxAvailableWidth > 0 &&
+        maxAvailableWidth < 80.0) {
+      return maxAvailableWidth;
+    }
+    width = math.max(80.0, width);
+    return width;
+  }
+
+  Widget _buildDropdownButtonContent(double buttonWidth) {
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFgColor = Theme.of(context).resolvedIconColor;
+
+    final double effectiveWidth = widget.isCompactMode ? 32.0 : buttonWidth;
+
+    return MouseRegion(
+      onEnter: (_) => _isHovered.value = true,
+      onExit: (_) => _isHovered.value = false,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _isHovered,
+        builder: (context, hovered, child) {
+          // Compact mode: 32x32 circle matching icon buttons
+          if (widget.isCompactMode) {
+            return Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: hovered
+                    ? iconFgColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.tag_rounded,
+                size: 18,
+                color: iconFgColor.withValues(alpha: 0.6),
+              ),
+            );
+          }
+
+          // Merged-segment mode: borderless, no chevron, transparent bg with a
+          // subtle right-rounded hover fill. The outer pill owns the border.
+          if (widget.mergedSegmentStyle) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.only(left: 10, right: 12),
+              height: 36,
+              decoration: BoxDecoration(
+                color: hovered
+                    ? iconFgColor.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(17),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              // No `#` icon and no chevron in merged mode — just the model
+              // name; the reasoning toggle sits to its left.
+              child: Text(
+                _stripLabPrefix(_selectedModelName),
+                style: TextStyle(
+                  color: iconFgColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                softWrap: false,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+              ),
+            );
+          }
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 36,
+            width: effectiveWidth,
+            decoration: BoxDecoration(
+              color: widget.transparentStyle ? Colors.transparent : bgColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: hovered
+                    ? iconFgColor
+                    : iconFgColor.withValues(alpha: 0.3),
+                width: hovered ? 2.2 : 1.8,
+              ),
+            ),
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Icon(Icons.tag_rounded, color: iconFgColor, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _stripLabPrefix(_selectedModelName),
+                    style: TextStyle(
+                      color: iconFgColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    softWrap: false,
+                    maxLines: 1,
+                  ),
+                ),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  color: iconFgColor.withValues(alpha: 0.8),
+                  size: 16,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ThemeData theme = Theme.of(context);
+        final ThemeData compactTapTargetTheme = theme.copyWith(
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        );
+        final double buttonWidth = _effectiveButtonWidth(constraints.maxWidth);
+        final Widget buttonContent = _buildDropdownButtonContent(buttonWidth);
+
+        if (_isLoadingModels || _errorMessage.isNotEmpty) {
+          return buttonContent;
+        }
+
+        if (_allModels.isEmpty) {
+          return buttonContent;
+        }
+
+        final double popupWidth = math.max(buttonWidth, _menuWidth);
+
+        return Theme(
+          data: compactTapTargetTheme,
+          child: PopupMenuButton<String>(
+            color: widget.transparentStyle
+                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.94)
+                : theme.scaffoldBackgroundColor,
+            constraints: BoxConstraints.tightFor(width: popupWidth),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: theme.resolvedIconColor.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            onCanceled: () {
+              // Maintain keyboard focus when popup is cancelled
+              widget.textFieldFocusNode.requestFocus();
+            },
+            onSelected: (value) async {
+              final previousModelId = _selectedModelId;
+
+              // Immediately request focus to keep keyboard open
+              widget.textFieldFocusNode.requestFocus();
+
+              setState(() {
+                _selectedModelId = value;
+              });
+              _updateSelectedModelName();
+              widget.onModelSelected(value);
+              ModelSelectionDropdown.selectedModelNotifier.value = value;
+
+              try {
+                await UserPreferencesService.saveSelectedModel(value);
+              } catch (error) {
+                if (kDebugMode) {
+                  debugPrint('Failed to save selected model: $error');
+                }
+
+                if (!context.mounted) return;
+
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Failed to save model selection. Please try again.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    duration: const Duration(seconds: 3),
+                    dismissDirection: DismissDirection.horizontal,
+                  ),
+                );
+
+                setState(() {
+                  _selectedModelId = previousModelId;
+                });
+                _updateSelectedModelName();
+                widget.onModelSelected(previousModelId);
+                // Re-request focus after error handling
+                widget.textFieldFocusNode.requestFocus();
+              }
+            },
+            itemBuilder: (context) {
+              final iconFgColor = Theme.of(context).resolvedIconColor;
+              return _allModels.map((model) {
+                final selected = _selectedModelId == model.value;
+                return PopupMenuItem<String>(
+                  value: model.value,
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      if (model.isToggle)
+                        Row(
+                          children: [
+                            Switch(
+                              value: selected,
+                              onChanged: (_) {},
+                              activeThumbColor: iconFgColor,
+                              activeTrackColor: iconFgColor.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(AppLocalizations.of(context)!.best, style: TextStyle(color: iconFgColor)),
+                          ],
+                        )
+                      else ...[
+                        Expanded(
+                          child: Text(
+                            _stripLabPrefix(model.name),
+                            style: TextStyle(
+                              color: selected
+                                  ? iconFgColor
+                                  : iconFgColor.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 12),
+                      if (!model.isToggle && selected)
+                        Icon(Icons.check, color: iconFgColor, size: 18),
+                      if (model.badge != null)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: model.badge == 'new'
+                                ? Colors.teal
+                                : Colors.orange,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            model.badge!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+            child: buttonContent,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(
+      DiagnosticsLogService.info(
+        'model_menu',
+        'Dropdown disposed',
+        data: {'selected_model_id_len': _selectedModelId.length},
+      ),
+    );
+    _isHovered.dispose();
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _selectedModelListener,
+    );
+    ModelSelectionDropdown._unregisterState(this);
+    _stopApiAvailabilityPolling();
+    super.dispose();
+  }
+
+  int? _parseNullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+}
+
+bool get _isLinuxDesktop =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+/// OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
+/// In the compact in-chat selector the lab prefix is redundant — it eats space
+/// and the lab is usually obvious from the model name itself. Strip it here only;
+/// the full "Lab: Model" name stays in the model selector page.
+String _stripLabPrefix(String name) {
+  final idx = name.indexOf(': ');
+  if (idx <= 0) return name;
+  final stripped = name.substring(idx + 2).trim();
+  return stripped.isEmpty ? name : stripped;
+}
