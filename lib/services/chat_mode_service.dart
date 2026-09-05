@@ -125,12 +125,17 @@ class ChatModeService {
   /// effort". Sent for models that reason but expose only an on/off toggle.
   static const String reasoningOn = 'on';
 
-  /// The graded ladder both OpenRouter and Fireworks accept. `minimal` and
-  /// `xhigh` are intentionally NOT offered any more.
+  /// The graded ladder offered when the catalog has not said otherwise.
+  /// `minimal` and `xhigh` are intentionally NOT offered any more, and neither
+  /// is `medium`: the models the app ships as defaults (glm-5.3-flash,
+  /// deepseek-v4-pro) do not accept it, and a request with an unsupported
+  /// effort is answered WITHOUT any reasoning — silently. `low` and `high` are
+  /// on every graded ladder the catalog has shown so far, so a cold-cache
+  /// clamp can only land on a level the server honours. The server's own
+  /// `supported_efforts` list replaces this the moment it is known.
   static const List<String> reasoningLevelsGraded = <String>[
     'none',
     'low',
-    'medium',
     'high',
   ];
 
@@ -149,11 +154,11 @@ class ChatModeService {
     'max',
   ];
 
-  /// What Fireworks providers accept — no `minimal`, no `xhigh`.
+  /// What Fireworks providers accept — no `minimal`, no `xhigh`, and no
+  /// `medium` as a cold-cache guess (see [reasoningLevelsGraded]).
   static const List<String> reasoningLevelsFireworks = <String>[
     'none',
     'low',
-    'medium',
     'high',
   ];
 
@@ -161,7 +166,9 @@ class ChatModeService {
   ///
   /// Both modes run the direct Fireworks provider (`fireworks/serverless`).
   /// Fast pairs a quick model with a low reasoning pass; Thinking pairs a
-  /// stronger model with a medium reasoning pass. Both are changeable in
+  /// stronger model with a high reasoning pass (`high`, not `medium`: the
+  /// default models' ladders have no `medium`, and the server answers an
+  /// unsupported effort with no reasoning at all). Both are changeable in
   /// settings.
   static const Map<ChatMode, ModeConfig> _defaults = <ChatMode, ModeConfig>{
     // Fast's default is the general fallback — derived from the constants
@@ -174,7 +181,7 @@ class ChatModeService {
     ChatMode.thinking: ModeConfig(
       modelId: 'deepseek/deepseek-v4-pro-0813',
       providerSlug: defaultProviderSlug,
-      reasoningEffort: 'medium',
+      reasoningEffort: 'high',
     ),
     // Custom starts on the general fallback with reasoning off. It is only a
     // seed: the reader replaces the model the moment they pick one, so the
@@ -207,11 +214,12 @@ class ChatModeService {
   ///
   /// A model that cannot reason offers only off. A model that reasons but
   /// exposes no graded effort offers a plain on/off toggle. A model with
-  /// graded effort offers the low/medium/high ladder — the same set on both
-  /// OpenRouter and Fireworks now, so the provider no longer splits the list.
+  /// graded effort offers the low/high ladder — the same set on both
+  /// OpenRouter and Fireworks now, so the provider no longer splits the list
+  /// (no `medium` here: see [reasoningLevelsGraded]).
   /// [reasoningMandatory] models forbid disabling reasoning: the server rejects
   /// a "reasoning off" request with a hard 400, so `none` is dropped from the
-  /// list entirely. A mandatory graded model offers low/medium/high; a mandatory
+  /// list entirely. A mandatory graded model offers low/high; a mandatory
   /// toggle model collapses to a single "on" (always on, nothing to turn off).
   static List<String> reasoningLevelsFor({
     required String providerSlug,
@@ -226,7 +234,7 @@ class ChatModeService {
           : const <String>[reasoningOff, reasoningOn];
     }
     return reasoningMandatory
-        ? const <String>['low', 'medium', 'high']
+        ? const <String>['low', 'high']
         : reasoningLevelsGraded;
   }
 
@@ -327,11 +335,14 @@ class ChatModeService {
     final wantRank = reasoningLevelsAll.indexOf(wantToken);
     if (wantRank < 0) {
       // Unknown token — prefer the model's advertised default, else a safe
-      // graded level rather than off.
+      // graded level rather than off (the ladder may have no `medium`).
       if (defaultEffort != null && allowed.contains(defaultEffort)) {
         return defaultEffort;
       }
-      return allowed.contains('medium') ? 'medium' : allowed.first;
+      for (final safe in const <String>['medium', 'low', 'high']) {
+        if (allowed.contains(safe)) return safe;
+      }
+      return allowed.first;
     }
 
     String best = allowed.first;
