@@ -660,3 +660,22 @@ transcript or a workspace file, and the model only ever sees
 injected like any other but are NOT masked in outputs (too short to be a
 real key, too likely to collide with ordinary text) — the settings page
 says so next to the value field.
+
+## `cowork_skill_settings` — the user's skill switches (session cowork-18)
+
+The host is the truth for which skills exist and which are on
+(`docs/WIRE_CONTRACT.md`, "Skills"). This table mirrors the switches per
+account so a reinstalled app or a reset host database gets them back. One row
+per (user, skill name). A skill name is a label, not a secret, so the row is
+plaintext; owner-only RLS as everywhere.
+
+DDL: `supabase/migrations/20260905150000_cowork_skill_settings.sql`. Run it
+once in the SQL editor. The app runs without the table (best-effort mirror,
+`app/lib/services/skills/skill_settings_sync.dart`).
+
+| column       | type          | notes                                                  |
+| ------------ | ------------- | ------------------------------------------------------ |
+| `user_id`    | `uuid`        | PK part. Owner; FK to `auth.users`, cascade.           |
+| `name`       | `text`        | PK part. The SKILL.md frontmatter name on the host.    |
+| `enabled`    | `boolean`     | `false` = switched off; the agent does not get it.     |
+| `updated_at` | `timestamptz` | Last write. Set by the client on every upsert.         |
