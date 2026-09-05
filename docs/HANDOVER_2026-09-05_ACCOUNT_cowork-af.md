@@ -10,6 +10,7 @@ an app rebuild and a host restart is the only thing left.
 | hash | what |
 |---|---|
 | `b21dd18` | Dart: chuk account page + services restored from the manifest, `credit_display.dart` original again, footer pill = chuk's `_buildFooterRow` (profile name + `BalanceBadge`), rename/create dialog, `agent_create` / `agent_rename` / `agent_list` on the controller, roster merge. Also carried f5's browser-presence hunks and 18's skills frames (named in the body). |
+| `39b8fcf` | Dart: `requestAgentList` waits on the provision gate like a replay (Host #6 finding: the request reached the host before the account token and was dropped, and nothing asked again). relay_client_test 52. |
 | `13f3ee4` | Python: `cowork_host/coworker_names.py` (store + frame handler), executor `on_agent_frame`, protocol helpers, host/serve wiring, 6 tests. Committed from a private index (`GIT_INDEX_FILE`) so the foreign uncommitted hunks in `executor.py` / `host.py` / `serve.py` (`account_session_provider`, `skills_seed_root`) stayed out. |
 
 ## 4ih — what the user sees
@@ -78,7 +79,7 @@ handover (relay+serve group first).
 
 ## Open — the live proof (needs "Bildschirm frei")
 
-1. Host restart with 13f3ee4 (the running host predates `agent_list`: the app
+1. Host restart with 13f3ee4 and an app rebuild with 39b8fcf (the running host predates `agent_list`: the app
    will get `error: unknown payload type 'agent_list'` on pair until then —
    harmless, the roster just keeps the device id).
 2. App rebuild (c6 holds the instance).
