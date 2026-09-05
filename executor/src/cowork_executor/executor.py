@@ -55,6 +55,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import queue
 import secrets
 import subprocess
@@ -70,6 +71,7 @@ from uuid import uuid4
 from cowork_agent import (
     HereNowConfig,
     KillSwitch,
+    StopReason,
     MCPManager,
     ModelClient,
     ModelResponse,
@@ -294,6 +296,9 @@ class _Run:
     # a debug observer that streams one ``debug_context`` event per model round;
     # absent/false -> no observer and zero overhead.
     debug: bool = False
+    # Set by the wall-clock guard (``RUN_MAX_SECONDS``) when it fired this run's
+    # kill switch, so the loop's ``interrupted`` is reported as ``timeout``.
+    timed_out: bool = False
     # The model this task named, its provider slug, and its reasoning effort, as
     # the app's mode selector sent them. All ``None`` -> the task named nothing
     # and runs on the executor's default ``model_factory``. Captured at accept
@@ -322,6 +327,15 @@ class _Run:
 #: Long enough to walk to the phone and read the prompt; bounded so a run cannot
 #: hang forever on an approval nobody will ever answer.
 APPROVAL_WAIT_SECONDS = 600.0
+
+#: Wall-clock guard for a run (Bead cowork-qxa): a run that keeps going after
+#: the app detached has no other upper bound on the host. After this many
+#: seconds the executor fires the run's kill switch; the loop stops at its next
+#: poll and the run closes with ``reason == "timeout"`` (persisted, notified,
+#: rendered by the app like a stop). Generous by default; ``0`` disables it.
+RUN_MAX_SECONDS = float(os.environ.get("COWORK_RUN_MAX_SECONDS", "7200") or 0)
+#: The ``done.reason`` of a run the guard stopped (docs/WIRE_CONTRACT.md, ``done``).
+RUN_TIMEOUT_REASON = "timeout"
 
 
 #: How long ``request_secrets`` waits for the user before it reports every
@@ -624,6 +638,7 @@ class Executor:
         on_approval_pending: Callable[[dict], None] | None = None,
         on_account_frame: Callable[[dict], None] | None = None,
         on_run_ack: Callable[[dict], None] | None = None,
+        run_max_seconds: float | None = None,
         secrets: SecretsVault | None = None,
         on_secret_request_pending: Callable[[dict], None] | None = None,
         automations=None,
@@ -693,6 +708,8 @@ class Executor:
         self._on_approval_pending = on_approval_pending
         self._on_account_frame = on_account_frame
         self._on_run_ack = on_run_ack
+        # The wall-clock guard (Bead cowork-qxa); ``None`` = the module default.
+        self._run_max_seconds = RUN_MAX_SECONDS if run_max_seconds is None else float(run_max_seconds)
         # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"), owned by
         # the host and shared by every task: ``run_command`` / ``python`` get
         # the values as child environment, the model gets ``set`` / ``missing``,
@@ -2195,6 +2212,9 @@ class Executor:
             browser_model=browser_client,
         )
 
+        # The wall-clock guard (Bead cowork-qxa): armed for the loop's lifetime
+        # only; cancelled in the ``finally`` below whatever way the run ends.
+        guard = self._arm_run_guard(run)
         try:
             result = loop.run(session_key, prompt, regenerate=run.regenerate)
         except Exception as exc:  # a crashing loop must not kill the serve thread
@@ -2212,6 +2232,8 @@ class Executor:
             )
             return
         finally:
+            if guard is not None:
+                guard.cancel()
             self._env_shim.on_run = None
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
@@ -2242,10 +2264,17 @@ class Executor:
                     except Exception:  # noqa: BLE001 — cleanup must not mask a result
                         pass
 
+        # The guard fired and the loop stopped for it: that is a timeout, not the
+        # user's stop. Anything else the loop reports stands as it is.
+        reason = (
+            RUN_TIMEOUT_REASON
+            if run.timed_out and result.reason is StopReason.INTERRUPTED
+            else result.reason.value
+        )
         # The durable record closes BEFORE the stream, so the run's end exists on
         # the host even when the app is gone and the frame is dropped. The
         # closed row also stamps the done (clock + message rows).
-        run_stamps = self._record_run(run, result=result)
+        run_stamps = self._record_run(run, result=result, reason=reason)
         # The finished turn lands in <workspace>/transcript/ (read-only, the
         # agent's long-term search) before the app hears ``done``.
         self._export_transcript(session_key)
@@ -2253,7 +2282,7 @@ class Executor:
             request_id,
             done_payload(
                 final_answer=result.final_answer,
-                reason=result.reason.value,
+                reason=reason,
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
                 run_id=run.run_id,
@@ -2270,12 +2299,39 @@ class Executor:
             self._on_run_finished,
             self._run_summary(
                 run,
-                reason=result.reason.value,
+                reason=reason,
                 final_answer=result.final_answer,
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
             ),
         )
+
+    # -- wall-clock guard (Bead cowork-qxa) --------------------------------
+    def _arm_run_guard(self, run: _Run) -> threading.Timer | None:
+        """Start the run's wall-clock timer, or ``None`` when the guard is off."""
+        limit = self._run_max_seconds
+        if not limit or limit <= 0:
+            return None
+        timer = threading.Timer(limit, self._on_run_guard, args=(run,))
+        timer.daemon = True
+        timer.start()
+        return timer
+
+    def _on_run_guard(self, run: _Run) -> None:
+        """The run outlived its wall-clock budget: stop it the way a user's stop
+        does (kill switch -> the model call is cancelled, the loop ends at its
+        next poll). ``timed_out`` turns the resulting ``interrupted`` into
+        ``timeout`` when the run closes."""
+        run.timed_out = True
+        logger.warning(
+            "task %s: run exceeded %.0fs wall clock; stopping it",
+            run.request_id,
+            self._run_max_seconds,
+        )
+        try:
+            run.kill.interrupt()
+        except Exception:  # noqa: BLE001 — the guard must never take the worker down
+            pass
 
     # -- transcript export (the agent's long-term search) ----------------
     def _on_tool_event(self, request_id: str, session_key: str, fields: dict) -> None:
@@ -2339,7 +2395,12 @@ class Executor:
             pass
 
     def _record_run(
-        self, run: _Run, *, result=None, failed: str | None = None
+        self,
+        run: _Run,
+        *,
+        result=None,
+        failed: str | None = None,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Close the run's ``runs`` row. Best-effort: a store failure loses the
         record, never the result the app is about to receive. Returns the closed
@@ -2355,7 +2416,7 @@ class Executor:
                 elif result is not None:
                     store.finish_run(
                         run.run_id,
-                        reason=result.reason.value,
+                        reason=reason or result.reason.value,
                         # Masked before it is a row; the ``done`` frame is masked
                         # again by the sealer.
                         final_answer=self._scrub_text(result.final_answer),
