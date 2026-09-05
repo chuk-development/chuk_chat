@@ -169,16 +169,21 @@ def test_python_tool_print_environ_is_masked_including_base64():
     assert VALUE not in str(out)
 
 
-def test_file_tools_do_not_get_the_secret_env():
+def test_file_tools_do_not_get_the_secret_env(tmp_path):
     reg = _registry(DictSecrets({"X": VALUE}))
+    # The stand-in environment runs in the process cwd, so the probe file gets
+    # an absolute path under tmp_path and never lands in the repo.
+    probe = tmp_path / "probe.txt"
     # read_file runs a shell too, but without the secrets: $X is empty there.
-    out = reg.dispatch("run_command", {"command": "echo -n \"$X\" > probe.txt; wc -c < probe.txt"})
+    out = reg.dispatch(
+        "run_command", {"command": f"echo -n \"$X\" > {probe}; wc -c < {probe}"}
+    )
     assert out["stdout"].strip() == str(len(VALUE))
     # The file holds the value (the model wrote it). Reading it back is masked.
-    read = reg.dispatch("read_file", {"path": "probe.txt"})
+    read = reg.dispatch("read_file", {"path": str(probe)})
     assert read["content"] == "[REDACTED:X]"
     # And a plain probe shell (no secrets) does not see the variable.
-    listing = reg.dispatch("list_dir", {"path": "."})
+    listing = reg.dispatch("list_dir", {"path": str(tmp_path)})
     assert VALUE not in str(listing)
 
 
