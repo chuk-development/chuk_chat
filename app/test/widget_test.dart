@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cowork/pages/account_settings_page.dart';
 import 'package:cowork/pages/desktop_settings_modal.dart';
 import 'package:cowork/pages/login_page.dart';
 import 'package:cowork/pages/messenger_shell.dart';
@@ -135,6 +136,9 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> renameAgent(String agentId, String name) async {}
 
   @override
+  Future<void> requestAgentList() async {}
+
+  @override
   Future<void> addRoomMember(String roomId, String agentId, String handle) async {}
 
   @override
@@ -239,8 +243,11 @@ void main() {
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       expect(find.byType(DesktopSettingsModal), findsOneWidget);
-      // Twice: the modal's own footer row and the Account page it opens on.
-      expect(find.byIcon(Icons.logout), findsNWidgets(2));
+      // Once: the modal's own footer row. The Account page it opens on is
+      // chuk's (bead cowork-4ih): profile, password, recovery, delete account —
+      // and no second sign-out, exactly like chuk.
+      expect(find.byIcon(Icons.logout), findsOneWidget);
+      expect(find.byType(AccountSettingsPage), findsOneWidget);
 
       // Dispose inside the body and drain what the imported pages started
       // (see test/pages/settings_page_test.dart, closeSettings).

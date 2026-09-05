@@ -17,10 +17,11 @@
 /// none.
 ///
 /// The CONTENT is CoWork's. The sidebar lists coworkers, not chats
-/// (`AgentRosterView`, on chuk's sidebar chrome). The three mini-rail slots are
-/// New coworker, Control Rooms and Agent's browser. The right panel shows the
-/// room list or the agent's browser. The top-right row has FOUR buttons — Agent
-/// controls, Control Rooms, Agent's browser and, in chuk's own slot, Copy full
+/// (`AgentRosterView`, on chuk's sidebar chrome). The two mini-rail slots are
+/// New coworker and Control Rooms. The right panel shows the room list. The
+/// top-right row has up to FOUR buttons — Agent controls, Control Rooms,
+/// Agent's browser (only while the agent has a browser open; it opens as a
+/// full-screen route, Bead cowork-vzm) and, in chuk's own slot, Copy full
 /// chat. Settings is where chuk keeps it: the gear in the sidebar's footer
 /// pill, opening chuk's settings modal (desktop) or hub (phone); Sign out is
 /// in the settings footer and in the phone sheet.
@@ -73,9 +74,11 @@ import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:cowork/services/cowork/browser_presence.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/room_source.dart';
 // Built by the persistence agent: restores the account's encrypted pairing from
 // Supabase so a fresh install reconnects with no code.
@@ -88,7 +91,6 @@ import 'package:cowork/services/notifications/notification_router.dart';
 import 'package:cowork/services/settings/theme_controller.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
-import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
@@ -101,7 +103,8 @@ import 'package:cowork/widgets/room_thread_view.dart';
 part 'cowork_shell_state.dart';
 
 /// The messenger: coworkers down the left, the selected thread in the middle,
-/// Control Rooms or the agent's browser on the right, the control surface
+/// Control Rooms on the right, the agent's browser as a full-screen route, the
+/// control surface
 /// behind one button (§1, §16). Layout: see the library doc above.
 class MessengerShell extends StatefulWidget {
   const MessengerShell({
@@ -188,12 +191,17 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   bool _isSidebarExpanded = true;
   bool _hasOpenedSidebar = true;
 
-  /// 'rooms' | 'browser' | null — chuk's `_activePanel` ('projects' / 'media').
+  /// 'rooms' | null — chuk's `_activePanel` ('projects'). The agent's browser
+  /// is not a panel any more (Bead cowork-vzm): it opens as a full-screen
+  /// route from the one top-right button.
   String? _activePanel;
 
-  /// The width the user dragged the browser panel to. Null = chuk's default,
-  /// half the content width.
-  double? _userBrowserPanelWidth;
+  /// Whether the agent has a browser open, derived from the live transport's
+  /// frames (see [BrowserPresence]). Rebuilt on every reconnect; null while
+  /// there is no transport. The "Agent's browser" button exists only while
+  /// this reads true.
+  BrowserPresence? _browserPresence;
+  bool get _browserOpen => _browserPresence?.value ?? false;
 
   // Read by handlers that run after build (the same trick chuk's settings
   // modal uses for `_compact`): which layout the last frame chose.
@@ -205,12 +213,33 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   void initState() {
     super.initState();
     _hostInit();
+    _controller.addListener(_onControllerForBrowser);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerForBrowser);
+    _browserPresence?.dispose();
+    _browserPresence = null;
     _hostDispose();
     super.dispose();
+  }
+
+  /// A transport arrived or changed: follow it with a fresh [BrowserPresence]
+  /// (its replay re-derives the browser state), and repaint the button when the
+  /// state flips.
+  void _onControllerForBrowser() {
+    final controller = _controller.value;
+    final old = _browserPresence;
+    if (old != null && old.controller == controller) return;
+    old?.dispose();
+    _browserPresence = controller == null ? null : BrowserPresence(controller);
+    _browserPresence?.addListener(_onBrowserPresenceChanged);
+    if (mounted) setState(() {});
+  }
+
+  void _onBrowserPresenceChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -250,20 +279,13 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     );
   }
 
-  /// The agent's browser: the right panel on a desktop window, a route on a
-  /// phone. Nothing to show before the transport is paired.
+  /// The agent's browser: a full-screen route on every form factor (Bead
+  /// cowork-vzm), never a side panel. Nothing to show before the transport is
+  /// paired.
   void _openBrowserView() {
     final controller = _pairedControllerOrExplain();
     if (controller == null) return;
-    if (!_isPhone) {
-      _togglePanel('browser');
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => BrowserViewPage(controller: controller),
-      ),
-    );
+    BrowserViewPage.open(context, controller);
   }
 
   /// chuk's `_openWorkspacesPage` / `_openMediaPage`: the same id toggles the
@@ -372,30 +394,13 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     );
     final bool showContent = !isCompactMode || !_isSidebarExpanded;
 
-    // Right panel width for Control Rooms / the browser. Minimum chat width of
-    // 300 px required to show a panel. The browser uses the user-dragged
-    // width (default 50 %), the room list caps at 400 px — chuk's artifact /
-    // list split.
+    // Right panel width for Control Rooms. Minimum chat width of 300 px
+    // required to show a panel; the room list caps at 400 px — chuk's list
+    // split.
     final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
     final double availableForPanel = screenWidth - sidebarWidth - _minChatWidth;
-    final double contentWidth = screenWidth - sidebarWidth;
-    final bool browserPanel = _activePanel == 'browser';
-    final double panelCeiling = math.max(
-      _minPanelWidth,
-      contentWidth - _minChatWidth,
-    );
-    final double defaultBrowserWidth = (contentWidth * 0.5).clamp(
-      _minPanelWidth,
-      panelCeiling,
-    );
-    final double maxPanelWidth = browserPanel
-        ? (_userBrowserPanelWidth ?? defaultBrowserWidth).clamp(
-            _minPanelWidth,
-            panelCeiling,
-          )
-        : _listPanelWidth;
     final double panelWidth = availableForPanel >= _minPanelWidth
-        ? math.min(maxPanelWidth, availableForPanel)
+        ? math.min(_listPanelWidth, availableForPanel)
         : 0;
     final bool showPanel =
         _activePanel != null && !isCompactMode && panelWidth > 0;
@@ -413,46 +418,14 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
           child: Offstage(offstage: !showContent, child: _buildThread()),
         ),
 
-        // Right panel (Control Rooms / browser)
+        // Right panel (Control Rooms)
         if (showPanel)
           Positioned(
             right: 0,
             top: 0,
             bottom: 0,
             width: panelWidth,
-            child: _buildPanel(context, iconFg, browserPanel),
-          ),
-
-        // Draggable divider — only for the browser panel (user can resize).
-        if (showPanel && browserPanel)
-          Positioned(
-            right: panelWidth - 3,
-            top: 0,
-            bottom: 0,
-            width: 6,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragUpdate: (details) {
-                  setState(() {
-                    final newW =
-                        (_userBrowserPanelWidth ?? panelWidth) -
-                        details.delta.dx;
-                    _userBrowserPanelWidth = newW.clamp(
-                      _minPanelWidth,
-                      panelCeiling,
-                    );
-                  });
-                },
-                child: Center(
-                  child: Container(
-                    width: 1,
-                    color: iconFg.withValues(alpha: 0.15),
-                  ),
-                ),
-              ),
-            ),
+            child: _buildPanel(context, iconFg),
           ),
 
         // The sidebar. Lazy-mounted in chuk; it starts open here, so it is in
@@ -475,8 +448,10 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
                   onSelect: _select,
                   onAddAgent: _openOnboarding,
                   onDeleteAgent: _deleteAgent,
+                  onRenameAgent: _renameAgent,
                   onOpenRooms: _openRooms,
-                  onOpenBrowser: agent == null ? null : _openBrowserView,
+                  // No browser row in the sidebar (cowork-vzm): the top-right
+                  // button is the one way in, and only while a browser is open.
                   onOpenSettings: widget.shellConfig == null
                       ? null
                       : _openSettings,
@@ -528,8 +503,8 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     );
   }
 
-  /// chuk's `_buildMiniRail`, with CoWork's three slots: New coworker, Control
-  /// Rooms, Agent's browser (the last only once a coworker is selected).
+  /// chuk's `_buildMiniRail`, with CoWork's two slots: New coworker and Control
+  /// Rooms. The agent's browser lives only in the top-right row (cowork-vzm).
   List<Widget> _buildMiniRail(Color iconFg, CoworkAgent? agent) {
     final List<Widget> items = [];
     int rowIndex = 0;
@@ -578,21 +553,13 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
         onPressed: _openRooms,
       ),
     );
-    if (agent != null) {
-      items.add(
-        railIcon(
-          icon: Icons.desktop_windows_outlined,
-          tooltip: "Agent's browser",
-          onPressed: _openBrowserView,
-        ),
-      );
-    }
     return items;
   }
 
-  /// The four top-right buttons, in chuk's `IconButton` style (icon colour
+  /// The top-right buttons, in chuk's `IconButton` style (icon colour
   /// `resolvedIconColor`, size 20). Copy full chat is chuk's own slot, verbatim
-  /// (same icon, size and tooltip).
+  /// (same icon, size and tooltip). "Agent's browser" is there only while the
+  /// agent has a browser open ([_browserOpen]); the button is the only way in.
   List<Widget> _buildTopRightActions(Color iconFg, CoworkAgent? agent) {
     return <Widget>[
       if (agent != null)
@@ -606,7 +573,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
         onPressed: _openRooms,
         tooltip: 'Control Rooms',
       ),
-      if (agent != null)
+      if (agent != null && _browserOpen)
         IconButton(
           icon: Icon(Icons.desktop_windows_outlined, color: iconFg, size: 20),
           onPressed: _openBrowserView,
@@ -622,9 +589,8 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
 
   /// chuk's right panel: the same container, header (icon, title, close) and
   /// content slot. Control Rooms embeds the room list (a room still opens as
-  /// its own route, so `rebind` keeps working); the browser embeds
-  /// `BrowserViewPage` on the live controller and follows a reconnect.
-  Widget _buildPanel(BuildContext context, Color iconFg, bool browser) {
+  /// its own route, so `rebind` keeps working).
+  Widget _buildPanel(BuildContext context, Color iconFg) {
     // A Material paints the background (chuk uses a coloured Container; the
     // room list's ListTiles need a Material to paint their ink on, so the
     // colour moves there and the DecoratedBox keeps only the border).
@@ -649,15 +615,10 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    browser
-                        ? Icons.desktop_windows_outlined
-                        : Icons.groups_outlined,
-                    color: iconFg,
-                  ),
+                  Icon(Icons.groups_outlined, color: iconFg),
                   const SizedBox(width: 12),
                   Text(
-                    browser ? "Agent's browser" : 'Control Rooms',
+                    'Control Rooms',
                     style: TextStyle(
                       color: iconFg,
                       fontSize: 18,
@@ -674,18 +635,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
               ),
             ),
             // Panel content
-            Expanded(
-              child: browser
-                  ? ValueListenableBuilder<CoworkRelayController?>(
-                      valueListenable: _controller,
-                      builder: (context, controller, _) => controller == null
-                          ? const Center(
-                              child: Text('Connect to the agent first.'),
-                            )
-                          : BrowserViewPage(controller: controller),
-                    )
-                  : _buildRoomList(),
-            ),
+            Expanded(child: _buildRoomList()),
           ],
         ),
       ),
@@ -701,7 +651,8 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
         agent: agent,
         onBack: () => setState(() => _showThreadOnNarrow = false),
         onOpenProfile: _openControlDrawer,
-        onOpenBrowser: _openBrowserView,
+        // Same gate as the desktop row: no chip until the agent has a browser.
+        onOpenBrowser: _browserOpen ? _openBrowserView : null,
         onMore: () => MobileAgentSheet.show(
           context,
           agent: agent,

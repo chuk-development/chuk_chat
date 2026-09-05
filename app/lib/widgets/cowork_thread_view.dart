@@ -600,9 +600,12 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       case CoworkRelayBrowserView():
       case CoworkRelayAutomation():
       case CoworkRelayAutomationList():
+      case CoworkRelaySkillsList():
+      case CoworkRelayAgentList():
         // Transcript events belong to the adapter and the replay loader; room
         // and browser frames to the shell's own pages; automation frames to
-        // the automations source. Nothing to do here.
+        // the automations source; the coworker names (agent_list) to the
+        // shell's roster. Nothing to do here.
         break;
     }
   }

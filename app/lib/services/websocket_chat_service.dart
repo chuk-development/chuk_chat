@@ -198,6 +198,8 @@ class WebSocketChatService {
           ledger.automation(sessionKey, event);
 
         case CoworkRelayAutomationList():
+        case CoworkRelaySkillsList():
+        case CoworkRelayAgentList():
           break;
 
         case CoworkRelayApprovalRequest():
