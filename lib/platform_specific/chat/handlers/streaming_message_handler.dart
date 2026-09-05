@@ -1,0 +1,1576 @@
+// lib/platform_specific/chat/handlers/streaming_message_handler.dart
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:cowork/models/chat_stream_event.dart';
+import 'package:cowork/services/chat_history_builder.dart';
+import 'package:cowork/models/content_block.dart';
+import 'package:cowork/models/tool_call.dart';
+import 'package:cowork/services/app_lifecycle_service.dart';
+import 'package:cowork/services/websocket_chat_service.dart';
+import 'package:cowork/services/streaming_manager.dart';
+import 'package:cowork/services/artifact_tag_processor.dart';
+import 'package:cowork/services/message_composition_service.dart';
+import 'package:cowork/services/tool_call_handler.dart';
+import 'package:cowork/services/tool_image_result_service.dart';
+import 'package:cowork/services/tool_result_cache_registry.dart';
+import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/services/network_status_service.dart';
+import 'package:cowork/services/streaming_foreground_service.dart';
+import 'package:cowork/services/round_content_block_service.dart';
+import 'package:cowork/models/chat_model.dart';
+import 'package:cowork/utils/tool_parser.dart';
+
+/// Handles message streaming and sending
+class StreamingMessageHandler {
+  StreamingMessageHandler() {
+    // Hook app lifecycle so we can flush the in-progress snapshot to disk
+    // before the OS suspends us. Without this the last few hundred ms of
+    // streamed text get dropped when the user backgrounds the app mid-stream.
+    AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
+  }
+
+  final StreamingManager _streamingManager = StreamingManager();
+  final ToolCallHandler _toolCallHandler = ToolCallHandler();
+
+  // Callbacks
+  Function(String)? onShowSnackBar;
+  Function()? onUpdateUI;
+  Function(int index, String content, String reasoning, String chatId)?
+  onMessageUpdate;
+  Function(
+    int index,
+    String content,
+    String reasoning,
+    String chatId,
+    double? tps,
+  )?
+  onMessageFinalize;
+  Function(int index, List<ToolCall> toolCalls, String chatId)?
+  onToolCallsUpdate;
+  Function(
+    int index,
+    List<String> imagePaths,
+    String imageMetasJson,
+    String? imageCostEur,
+    String? imageGeneratedAt,
+    String toolCallsJson,
+    String chatId,
+  )?
+  onToolImagesProcessed;
+
+  /// Called when content blocks are updated during or after the tool loop.
+  /// [contentBlocksJson] is a JSON-encoded list of [ContentBlock] objects.
+  Function(int index, String contentBlocksJson, String chatId)?
+  onContentBlocksUpdate;
+
+  /// Called when an outbound request payload is prepared for a streaming pass.
+  /// Used by debug export to inspect exactly what was sent.
+  Function(int index, String requestPayloadJson, String chatId)?
+  onRequestPayloadUpdate;
+
+  Function(String chatId, int index, String content, String reasoning)?
+  onBackgroundUpdate;
+
+  /// Called when the active stream is torn down (dispose / cancel /
+  /// untrapped error) before [onMessageFinalize] had a chance to run.
+  /// Hosts use this to flag the persisted assistant message with
+  /// `ChatMessageStatus.interrupted` so the UI can offer "Continue
+  /// generation" on next render.
+  Function(String chatId, int index)? onStreamInterrupted;
+
+  /// Fires on a periodic timer (and immediately on lifecycle pause /
+  /// dispose) while a stream is active. Carries the most recent
+  /// snapshot of the in-progress assistant message so the host can
+  /// persist it to disk — even when the chat is foregrounded and
+  /// [onBackgroundUpdate] would be a no-op. Hosts should write
+  /// [content] + [reasoning] (+ [contentBlocksJson] when present)
+  /// onto the message row at [index] in chat [chatId] without
+  /// triggering a full chat re-encode each tick. [forceImmediate]
+  /// is true when the flush is triggered by lifecycle-pause or
+  /// dispose — the host should bypass any debounce in that case.
+  Function(
+    String chatId,
+    int index,
+    String content,
+    String reasoning,
+    String? contentBlocksJson,
+    bool forceImmediate,
+  )?
+  onStreamTick;
+
+  Function()? onPaymentRequired;
+
+  bool _isStreaming = false;
+  bool _isSending = false;
+  bool _isDisposed = false;
+  // Set by cancelStream(); checked at every agentic-pass boundary so a
+  // cancel that lands while a tool is still running (e.g. image gen, 3-5s)
+  // stops the loop instead of firing one more streaming pass once the tool
+  // resolves. Reset at the start of each sendMessage().
+  bool _cancelRequested = false;
+  bool _hasForegroundKeepAliveLock = false;
+  Future<void>? _activeToolLoopFuture;
+
+  // --- Periodic streaming snapshot persistence ---
+  //
+  // The streaming callbacks emit interim text into the active chat UI on
+  // every token, but the chat is only written to disk on round boundaries
+  // (and via the debounced background path). When the app is suspended
+  // mid-token the trailing text is lost.  We mirror the most recent
+  // (content, reasoning) into [_currentSnapshot] and flush it every
+  // [_snapshotInterval] (or immediately on lifecycle pause / dispose).
+  static const Duration _snapshotInterval = Duration(milliseconds: 500);
+  Timer? _snapshotTimer;
+  _StreamingSnapshot? _currentSnapshot;
+  bool _streamFinalized = false;
+
+  bool get isStreaming => _isStreaming;
+  bool get isSending => _isSending;
+  Future<void>? get activeToolLoopFuture => _activeToolLoopFuture;
+
+  // In-memory cache for resolved Base64 images (storage path -> data URL)
+
+  /// Send a message with streaming response
+  Future<void> sendMessage({
+    required String userInput,
+    required List<AttachedFile> attachedFiles,
+    required String selectedModelId,
+    required String? selectedProviderSlug,
+    required List<Map<String, String>> messages,
+    required String? systemPrompt,
+    required String? activeChatId,
+    required int placeholderIndex,
+    required Future<String?> Function() getProviderSlug,
+    required bool isOffline,
+    bool includeRecentImagesInHistory = true,
+    bool includeAllImagesInHistory = false,
+    bool includeReasoningInHistory = false,
+    bool includeToolResultsInHistory = true,
+    bool toolCallingEnabled = true,
+    bool toolDiscoveryMode = true,
+    String? reasoningEffort,
+    String? continuePriorText,
+    String? continuePriorContentBlocksJson,
+    bool regenerate = false,
+  }) async {
+    if (_isDisposed) return;
+
+    // Check if THIS specific chat is currently streaming (not some other chat)
+    final bool thisChatIsStreaming =
+        activeChatId != null && _streamingManager.isStreaming(activeChatId);
+
+    if (thisChatIsStreaming) {
+      await cancelStream(activeChatId);
+      return;
+    }
+
+    if (_isSending) {
+      onShowSnackBar?.call('Please wait');
+      return;
+    }
+
+    // Check network status before sending
+    if (isOffline) {
+      onShowSnackBar?.call('You are offline. Please check your connection.');
+      return;
+    }
+
+    if (attachedFiles.any((f) => f.isUploading)) {
+      onShowSnackBar?.call('Upload in progress');
+      return;
+    }
+
+    if (activeChatId == null || activeChatId.isEmpty) {
+      onShowSnackBar?.call('Cannot send message without an active chat.');
+      return;
+    }
+
+    // Debug: Log attached files
+    if (kDebugMode) {
+      debugPrint(
+        '📎 [StreamingHandler] Received ${attachedFiles.length} attached files',
+      );
+      for (final f in attachedFiles) {
+        debugPrint(
+          '  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}',
+        );
+      }
+    }
+
+    // Build API history (with optional images and reasoning)
+    final List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
+      messages,
+      userInput,
+      includeRecentImages: includeRecentImagesInHistory,
+      includeAllImages: includeAllImagesInHistory,
+      includeReasoning: includeReasoningInHistory,
+      includeToolResults: includeToolResultsInHistory,
+    );
+
+    // Prepare message using MessageCompositionService
+    final result = await MessageCompositionService.prepareMessage(
+      userInput: userInput,
+      attachedFiles: attachedFiles,
+      selectedModelId: selectedModelId,
+      apiHistory: apiHistory,
+      systemPrompt: systemPrompt,
+      getProviderSlug: getProviderSlug,
+    );
+
+    if (!result.isValid) {
+      onShowSnackBar?.call(result.errorMessage ?? 'Invalid message');
+      return;
+    }
+
+    // Extract prepared values
+    final String accessToken = result.accessToken!;
+    final String providerSlug = result.providerSlug!;
+    final int maxResponseTokens = result.maxResponseTokens!;
+    final String? effectiveSystemPrompt = result.effectiveSystemPrompt;
+    final String aiPromptContent = result.aiPromptContent!;
+    final List<String>? images = result.images;
+
+    // Debug: Log what images we're sending
+    if (kDebugMode) {
+      debugPrint('🚀 [StreamingHandler] Sending to API:');
+      debugPrint('  - images: ${images?.length ?? 0}');
+      if (images != null && images.isNotEmpty) {
+        for (int i = 0; i < images.length; i++) {
+          final preview = images[i].length > 50
+              ? images[i].substring(0, 50)
+              : images[i];
+          debugPrint('  - image[$i]: $preview...');
+        }
+      }
+    }
+
+    _isSending = true;
+    _isStreaming = true;
+    _cancelRequested = false;
+    _streamFinalized = false;
+    _clearSnapshot();
+    onUpdateUI?.call();
+    await _acquireForegroundKeepAlive();
+
+    final chatId = activeChatId;
+
+    // Capture an immutable copy of `messages` at send start. The caller
+    // passes the widget's live _messages list by reference; if the user
+    // switches chats during a tool-loop multi-pass turn the live list is
+    // cleared and refilled with another chat's content. Using the
+    // captured copy keeps the background snapshot anchored to *this*
+    // chat's user message + placeholder pair, no matter what the widget
+    // does afterwards.
+    final List<Map<String, dynamic>> capturedMessagesSnapshot = messages
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+
+    late ToolLoopSession toolSession;
+    late final String initialSystemPrompt;
+    try {
+      toolSession = _toolCallHandler.createSession(
+        initialUserMessage: aiPromptContent,
+        history: apiHistory,
+        accessToken: accessToken,
+        discoveryContextKey: chatId,
+        baseSystemPrompt: effectiveSystemPrompt,
+        modelId: selectedModelId,
+        toolCallingEnabled: toolCallingEnabled,
+        discoveryMode: toolDiscoveryMode,
+        // Native OpenAI tool calling over the /v2/ws transport. Web falls back
+        // to the prompt-based scheme (its stream manager does not consume
+        // native tool_calls frames).
+        nativeToolCalling: !kIsWeb,
+      );
+      initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to initialize tool session: $error');
+      }
+      const failureMessage = 'Failed to start streaming. Please try again.';
+      if (onMessageFinalize != null) {
+        onMessageFinalize!(placeholderIndex, failureMessage, '', chatId, null);
+      }
+      onShowSnackBar?.call(failureMessage);
+      _markStreamFinalized();
+      _isStreaming = false;
+      _isSending = false;
+      onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
+      return;
+    }
+    const int kMaxStreamingPasses = 20;
+    // Weak / flapping mobile links drop the multiplex WS mid-turn (see the
+    // backend `websocket_disconnected` analytics). A single reconnect attempt
+    // often races the link's recovery and loses, escalating to the far more
+    // expensive message-level restart (which rebuilds the whole tool session
+    // and resends from scratch). Give the link a few cheap pass-level
+    // reconnects with exponential backoff before giving up.
+    const int kMaxPassReconnectRetries = 3;
+
+    // Message-level auto-retry: if the final answer is empty after all
+    // tool-loop retries, re-send the last user message once to give the
+    // model another chance (separate from the tool-loop internal retries).
+    const int kMaxMessageLevelRetries = 1;
+    int messageLevelRetries = 0;
+
+    // A server `cache_miss` means a tool-result reference expired/evicted. We
+    // clear the local cache registry (so the retry sends full content) and
+    // replay the pass once. After clearing, no refs are emitted, so a second
+    // miss is impossible — one retry is the ceiling.
+    const int kMaxCacheMissRetries = 1;
+
+    // Accumulates display text across all streaming passes so that AI text
+    // from earlier passes is never lost when a new pass begins.
+    final accumulatedText = StringBuffer();
+
+    // Ordered content blocks built across streaming passes.
+    // Each completed pass adds its text + tool_calls blocks here.
+    final contentBlocks = <ContentBlock>[];
+    int previousToolCallCount = 0;
+
+    // "Continue generation" mode: seed the accumulator with the prior
+    // partial body so newly streamed tokens append to what was already
+    // captured before the interruption. Without this seed the new stream
+    // would overwrite the previously persisted text on the very first
+    // token.
+    if (continuePriorText != null && continuePriorText.trim().isNotEmpty) {
+      accumulatedText.write(continuePriorText.trimRight());
+      accumulatedText.write('\n\n');
+    }
+    if (continuePriorContentBlocksJson != null &&
+        continuePriorContentBlocksJson.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(continuePriorContentBlocksJson);
+        if (decoded is List) {
+          for (final raw in decoded) {
+            if (raw is Map<String, dynamic>) {
+              try {
+                contentBlocks.add(ContentBlock.fromJson(raw));
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    /// Encode current content blocks to JSON.
+    String encodeBlocks() =>
+        jsonEncode(contentBlocks.map((b) => b.toJson()).toList());
+
+    /// Merge accumulated multi-pass text with the final pass text while
+    /// avoiding duplicated prefixes/suffixes when the model restarts or
+    /// repeats its final answer across passes.
+    String mergeAccumulatedWithFinal({
+      required String accumulated,
+      required String finalText,
+    }) {
+      final normalizedAccumulated = accumulated.trim();
+      final normalizedFinal = finalText.trim();
+
+      if (normalizedAccumulated.isEmpty) return normalizedFinal;
+      if (normalizedFinal.isEmpty) return normalizedAccumulated;
+
+      if (normalizedFinal == normalizedAccumulated) {
+        return normalizedFinal;
+      }
+      if (normalizedFinal.startsWith(normalizedAccumulated)) {
+        return normalizedFinal;
+      }
+      if (normalizedAccumulated.startsWith(normalizedFinal)) {
+        return normalizedAccumulated;
+      }
+      // The last interim fragment of the preceding pass often equals the
+      // next pass's final answer — drop that trailing duplicate so the flat
+      // text field does not contain the final answer twice back-to-back.
+      if (normalizedAccumulated.endsWith(normalizedFinal)) {
+        return normalizedAccumulated;
+      }
+
+      return '$normalizedAccumulated\n\n$normalizedFinal';
+    }
+
+    /// Remove text already represented by finalized content blocks so we do
+    /// not show duplicated "partial final answer + full final answer".
+    String dedupeFinalTextAgainstBlocks(String finalText) {
+      final normalizedFinalText = finalText.trim();
+      if (normalizedFinalText.isEmpty || contentBlocks.isEmpty) {
+        return normalizedFinalText;
+      }
+
+      // If the most recent text block already contains this exact final
+      // answer, drop it — re-appending would duplicate the same text block.
+      ContentBlock? lastTextBlock;
+      for (var i = contentBlocks.length - 1; i >= 0; i--) {
+        final b = contentBlocks[i];
+        if (b.type == ContentBlockType.text &&
+            b.text != null &&
+            b.text!.trim().isNotEmpty) {
+          lastTextBlock = b;
+          break;
+        }
+      }
+      if (lastTextBlock != null &&
+          lastTextBlock.text!.trim() == normalizedFinalText) {
+        return '';
+      }
+      // Fuzzy duplicate check (whitespace-normalized + contains) catches
+      // near-duplicates that exact comparison misses, e.g. when a retry pass
+      // re-emits the same answer with minor punctuation/whitespace drift.
+      if (RoundContentBlockService.isDuplicateOfEarlierTextBlock(
+        normalizedFinalText,
+        contentBlocks,
+      )) {
+        return '';
+      }
+
+      final finalizedPrefix = contentBlocks
+          .where(
+            (block) =>
+                block.type == ContentBlockType.text &&
+                block.text != null &&
+                block.text!.trim().isNotEmpty,
+          )
+          .map((block) => block.text!.trim())
+          .join('\n\n')
+          .trim();
+
+      if (finalizedPrefix.isEmpty) {
+        return normalizedFinalText;
+      }
+      if (normalizedFinalText == finalizedPrefix) {
+        return '';
+      }
+      if (normalizedFinalText.startsWith('$finalizedPrefix\n\n')) {
+        return normalizedFinalText.substring(finalizedPrefix.length).trim();
+      }
+      if (finalizedPrefix.startsWith(normalizedFinalText)) {
+        return '';
+      }
+
+      return normalizedFinalText;
+    }
+
+    /// Finalize stale tool calls and notify/persist updated UI state.
+    ///
+    /// This is used in terminal/error paths where tool execution can be
+    /// interrupted, leaving running/pending calls orphaned.
+    void finalizeStaleToolState() {
+      final sessionToolCalls = toolSession.toolCalls;
+      if (sessionToolCalls.isNotEmpty) {
+        finalizeStaleToolCalls(sessionToolCalls);
+        onToolCallsUpdate?.call(placeholderIndex, sessionToolCalls, chatId);
+      }
+
+      var blocksChanged = false;
+      for (final block in contentBlocks) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null &&
+            finalizeStaleToolCalls(block.toolCalls!)) {
+          blocksChanged = true;
+        }
+      }
+
+      if (blocksChanged) {
+        onContentBlocksUpdate?.call(placeholderIndex, encodeBlocks(), chatId);
+      }
+    }
+
+    Future<void> startStreamingPass({
+      required String message,
+      required List<Map<String, dynamic>> history,
+      required String? systemPrompt,
+      List<String>? passImages,
+      int currentPass = 0,
+      int reconnectRetries = 0,
+      int cacheMissRetries = 0,
+    }) async {
+      // A cancel landed (button) — the current stream was already torn down
+      // and the message finalized by cancelStream(); do not open another pass.
+      if (_cancelRequested) {
+        await _releaseForegroundKeepAlive();
+        return;
+      }
+
+      if (currentPass >= kMaxStreamingPasses) {
+        const stopMessage =
+            'Tool loop stopped after reaching the safety limit.';
+        finalizeStaleToolState();
+        if (onMessageFinalize != null) {
+          onMessageFinalize!(placeholderIndex, stopMessage, '', chatId, null);
+        }
+        if (onBackgroundUpdate != null) {
+          onBackgroundUpdate!(chatId, placeholderIndex, stopMessage, '');
+        }
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
+        return;
+      }
+
+      if (_hasForegroundKeepAliveLock && _streamingManager.isAppInBackground) {
+        try {
+          await StreamingForegroundService.startService();
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              'Failed to start foreground service in background: $error',
+            );
+          }
+        }
+      }
+
+      if (onRequestPayloadUpdate != null) {
+        final requestPayload = <String, dynamic>{
+          'pass': currentPass + 1,
+          'message': message,
+          'history_count': history.length,
+          'history': history,
+          if (systemPrompt != null && systemPrompt.trim().isNotEmpty)
+            'system_prompt': systemPrompt,
+          if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+        };
+        onRequestPayloadUpdate!(
+          placeholderIndex,
+          jsonEncode(requestPayload),
+          chatId,
+        );
+      }
+
+      final stream = WebSocketChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: message,
+        modelId: selectedModelId,
+        providerSlug: providerSlug,
+        history: history.isEmpty ? null : history,
+        systemPrompt: systemPrompt,
+        maxTokens: maxResponseTokens,
+        images: passImages,
+        reasoningEffort: reasoningEffort,
+        // Pin the chat id so MultiplexSession enforces single-stream-
+        // per-chat and cancels any racing concurrent send (e.g. an
+        // overlapping title generation call) before this pass starts.
+        chatId: chatId,
+        // Native tool calling: the enabled tools as OpenAI function defs. Sent
+        // on every pass; empty (prompt-based) when native mode is off.
+        tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+        // A retry REPLACES the last answer, so the host drops the turn being
+        // retried instead of storing the same question again. Only the first
+        // pass says so: later passes of the same turn are continuations, and
+        // telling the host to drop again would eat the turn this retry started.
+        regenerate: regenerate && currentPass == 0,
+      );
+
+      await _streamingManager.startStream(
+        chatId: chatId,
+        messageIndex: placeholderIndex,
+        stream: stream,
+        onUpdate: (content, reasoning) {
+          if (_isDisposed) return;
+          // Structural, no text matching: the streamed content is the model
+          // working (not the answer) whenever we're mid tool-loop (a prior
+          // round already produced blocks) OR a tool-call token has appeared
+          // in this round's stream. It then folds into the round's reasoning
+          // on completion. A plain round with no tool calls streams live.
+          final isWorkingRound =
+              contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
+          final displayContent =
+              isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+          final prefix = accumulatedText.toString();
+          final fullDisplay = prefix.isEmpty
+              ? displayContent
+              : '$prefix$displayContent';
+
+          if (onMessageUpdate != null) {
+            onMessageUpdate!(placeholderIndex, fullDisplay, reasoning, chatId);
+          }
+          if (onBackgroundUpdate != null) {
+            onBackgroundUpdate!(
+              chatId,
+              placeholderIndex,
+              fullDisplay,
+              reasoning,
+            );
+          }
+          // Mirror the latest streamed snapshot so the periodic flusher
+          // can persist it even if no further tokens arrive (e.g. the OS
+          // suspends us between rounds).
+          _recordSnapshot(
+            chatId: chatId,
+            index: placeholderIndex,
+            content: fullDisplay,
+            reasoning: reasoning,
+          );
+        },
+        onComplete: (finalContent, finalReasoning, tps) {
+          if (_isDisposed) return;
+
+          // onComplete is sync in StreamingManager, so tool-loop continuation
+          // runs asynchronously and is tracked for lifecycle safety.
+          final completionFuture = () async {
+            try {
+              await _updateForegroundNotification(
+                title: 'Running tools...',
+                content: 'AI is processing tool calls',
+              );
+              final turnSignals = ToolTurnSignals.fromMeta(
+                _streamingManager.getLatestMeta(chatId),
+              );
+
+              final loopResult = await _toolCallHandler
+                  .processAssistantResponse(
+                    session: toolSession,
+                    content: finalContent,
+                    reasoning: finalReasoning,
+                    turnSignals: turnSignals,
+                    // Native tool calls assembled server-side this pass. When
+                    // non-empty the loop drives a native assistant(tool_calls) +
+                    // tool round-trip; empty means a plain text turn (or the
+                    // prompt-based fallback), handled by text parsing.
+                    nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
+                    onToolCallsUpdated: (toolCalls) {
+                      onToolCallsUpdate?.call(
+                        placeholderIndex,
+                        toolCalls,
+                        chatId,
+                      );
+                    },
+                  );
+
+              if (_isDisposed) return;
+
+              if (loopResult.shouldContinue && loopResult.nextStep != null) {
+                final interimText = loopResult.interimContent?.trim() ?? '';
+
+                // --- Build content blocks for this completed pass ---
+                // Determine which tool calls are new in this round.
+                final allToolCalls = loopResult.toolCalls;
+                final newToolCalls = allToolCalls.length > previousToolCallCount
+                    ? allToolCalls.sublist(previousToolCallCount)
+                    : <ToolCall>[];
+                previousToolCallCount = allToolCalls.length;
+
+                // When the model emitted text BETWEEN tool calls in the
+                // same round, prefer the segmented builder so the UI can
+                // show "intro text → tool → result text → next tool" in
+                // the original order instead of bundling all tools at top.
+                // We still pass the same set of new tool calls to the
+                // legacy path as a fallback when no interleaving occurred.
+                final newSegments = loopResult.interleavedSegments
+                    .where(
+                      (s) =>
+                          s.isText ||
+                          (s.toolCall != null &&
+                              !contentBlocks.any(
+                                (block) =>
+                                    block.toolCalls?.any(
+                                      (tc) => tc.id == s.toolCall!.id,
+                                    ) ??
+                                    false,
+                              )),
+                    )
+                    .toList();
+                final useSegmented =
+                    newSegments.isNotEmpty &&
+                    newSegments.any((s) => s.isToolCall);
+                final roundResult = useSegmented
+                    ? RoundContentBlockService.buildSegmentedRoundBlocks(
+                        segments: newSegments,
+                        providerReasoning: finalReasoning,
+                        existingBlocks: contentBlocks,
+                      )
+                    : RoundContentBlockService.buildRoundBlocks(
+                        interimText: interimText,
+                        providerReasoning: finalReasoning,
+                        newToolCalls: newToolCalls,
+                        interimBeforeToolCalls:
+                            loopResult.interimBeforeToolCalls,
+                        // Never fold content into reasoning: reasoning is a
+                        // toggleable channel, so folded prose vanishes when the
+                        // user hides reasoning. The content channel is the
+                        // answer and is always shown verbatim.
+                        existingBlocks: contentBlocks,
+                      );
+                final appendedBlocks = roundResult.blocks;
+                contentBlocks.addAll(appendedBlocks);
+
+                // Append side-effect blocks produced by tools this round
+                // (e.g. send_file_to_user -> sandboxArtifact). These ride
+                // after the tool-calls block they came from so the user
+                // sees the artifact right next to the call that produced it.
+                final producedThisRound = loopResult.producedBlocks;
+                if (producedThisRound.isNotEmpty) {
+                  contentBlocks.addAll(producedThisRound);
+                }
+
+                // Fire content blocks update so the UI can render them.
+                if (appendedBlocks.isNotEmpty ||
+                    producedThisRound.isNotEmpty) {
+                  onContentBlocksUpdate?.call(
+                    placeholderIndex,
+                    encodeBlocks(),
+                    chatId,
+                  );
+                  // Refresh the snapshot's contentBlocks payload so the
+                  // periodic flusher persists the new blocks alongside the
+                  // text mid-stream.
+                  _recordSnapshot(
+                    chatId: chatId,
+                    index: placeholderIndex,
+                    content: _currentSnapshot?.content ?? accumulatedText.toString(),
+                    reasoning: _currentSnapshot?.reasoning ?? '',
+                    contentBlocksJson: encodeBlocks(),
+                  );
+                }
+
+                // Interim content-channel prose is folded into this round's
+                // reasoning block (collapsed in the tool-call bar), so it must
+                // NOT accumulate into the flat answer text — otherwise the
+                // model's chain-of-thought + draft code leaks into the body.
+
+                // Keep accumulated visible text between passes so the user
+                // never sees earlier assistant text disappear.
+                final persistedInterim = accumulatedText.toString();
+                if (onMessageUpdate != null) {
+                  onMessageUpdate!(
+                    placeholderIndex,
+                    persistedInterim,
+                    finalReasoning,
+                    chatId,
+                  );
+                }
+                if (onBackgroundUpdate != null) {
+                  onBackgroundUpdate!(
+                    chatId,
+                    placeholderIndex,
+                    persistedInterim,
+                    finalReasoning,
+                  );
+                }
+
+                if (_isDisposed) return;
+                if (_cancelRequested) {
+                  await _releaseForegroundKeepAlive();
+                  return;
+                }
+
+                final next = loopResult.nextStep!;
+                await _updateForegroundNotification(
+                  title: 'Generating response...',
+                  content: 'AI is continuing the response',
+                );
+                // Yield to event loop so interim UI updates can paint first.
+                await Future<void>.delayed(Duration.zero);
+                await startStreamingPass(
+                  message: next.message,
+                  history: next.history,
+                  systemPrompt: next.systemPrompt,
+                  passImages: images,
+                  currentPass: currentPass + 1,
+                );
+                return;
+              }
+
+              if (_isDisposed) return;
+
+              // Persist tool-generated images to encrypted storage
+              await _processToolImages(
+                loopResult.toolCalls,
+                placeholderIndex,
+                chatId,
+              );
+
+              // Defensive: finalize any tool calls that are still
+              // running/pending (e.g. due to background race conditions).
+              final finalToolCalls = loopResult.toolCalls;
+              finalizeStaleToolCalls(finalToolCalls);
+
+              // Also finalize stale tool calls inside content blocks.
+              for (final block in contentBlocks) {
+                if (block.type == ContentBlockType.toolCalls &&
+                    block.toolCalls != null) {
+                  finalizeStaleToolCalls(block.toolCalls!);
+                }
+              }
+
+              // Notify UI with finalized tool calls.
+              if (finalToolCalls.isNotEmpty) {
+                onToolCallsUpdate?.call(
+                  placeholderIndex,
+                  finalToolCalls,
+                  chatId,
+                );
+              }
+
+              final resolvedFinalContent =
+                  loopResult.finalContent ?? finalContent;
+
+              // Message-level auto-retry: if the model returned an empty
+              // response after all tool-loop retries, re-send the original
+              // user message once more so the model gets a fresh chance.
+              if (resolvedFinalContent.trim().isEmpty &&
+                  messageLevelRetries < kMaxMessageLevelRetries &&
+                  !_isDisposed) {
+                messageLevelRetries++;
+
+                if (kDebugMode) {
+                  debugPrint(
+                    '[StreamingHandler] Empty response after tool loop — '
+                    'auto-retrying (attempt $messageLevelRetries/$kMaxMessageLevelRetries)',
+                  );
+                }
+
+                // Reset the tool session for a clean retry
+                final retrySession = _toolCallHandler.createSession(
+                  initialUserMessage: aiPromptContent,
+                  history: apiHistory,
+                  accessToken: accessToken,
+                  discoveryContextKey: chatId,
+                  baseSystemPrompt: effectiveSystemPrompt,
+                  modelId: selectedModelId,
+                  toolCallingEnabled: toolCallingEnabled,
+                  discoveryMode: toolDiscoveryMode,
+                  nativeToolCalling: !kIsWeb,
+                );
+                final retryPrompt = await _toolCallHandler
+                    .buildInitialSystemPrompt(retrySession);
+
+                // Replace the tool session for subsequent passes
+                toolSession = retrySession;
+                contentBlocks.clear();
+                accumulatedText.clear();
+                previousToolCallCount = 0;
+
+                await Future<void>.delayed(const Duration(milliseconds: 500));
+                if (_isDisposed) return;
+                if (_cancelRequested) {
+                  await _releaseForegroundKeepAlive();
+                  return;
+                }
+
+                await startStreamingPass(
+                  message: aiPromptContent,
+                  history: apiHistory,
+                  systemPrompt: retryPrompt,
+                  passImages: images,
+                  currentPass: currentPass + 1,
+                );
+                return;
+              }
+
+              final rawContent = resolvedFinalContent.isEmpty
+                  ? 'The model returned an empty response. Tap resend on your last message to continue.'
+                  : resolvedFinalContent;
+              final effectiveReasoning =
+                  loopResult.finalReasoning ?? finalReasoning;
+
+              // Prepend accumulated text from previous passes so nothing
+              // is lost in the flat message field (backward compat).
+              final effectiveContent = mergeAccumulatedWithFinal(
+                accumulated: accumulatedText.toString(),
+                finalText: rawContent,
+              );
+
+              // Process inline <artifact> tags in the finalized text.
+              // Each tag becomes a synthetic artifact_manager ToolCall so the
+              // existing inline-card render path picks it up, and the tag is
+              // persisted via ArtifactStorageService (create or rewrite) for
+              // version history.
+              final syntheticArtifactCalls =
+                  await ArtifactTagProcessor.processTags(
+                    content: effectiveContent,
+                    chatId: chatId,
+                  );
+              if (syntheticArtifactCalls.isNotEmpty) {
+                finalToolCalls.addAll(syntheticArtifactCalls);
+                onToolCallsUpdate?.call(
+                  placeholderIndex,
+                  finalToolCalls,
+                  chatId,
+                );
+              }
+
+              // Append any side-effect blocks (e.g. sandboxArtifact) carried
+              // on the final-answer loop result. They may arrive here if a
+              // producing tool ran in the same pass that emitted the final
+              // text instead of continuing the loop.
+              final finalProducedBlocks = loopResult.producedBlocks;
+              if (finalProducedBlocks.isNotEmpty) {
+                contentBlocks.addAll(finalProducedBlocks);
+              }
+
+              // --- Build final content blocks ---
+              if (contentBlocks.isNotEmpty) {
+                // The final pass's reasoning — the model "thinking" after the
+                // tools ran, just before it writes the final answer — only
+                // lived in the flat message reasoning field, which the bubble
+                // suppresses in content-block mode. So it never rendered: a
+                // web-search turn showed the pass-1 "I should search"
+                // reasoning but silently dropped the pass-2 "based on the
+                // results…" reasoning. Emit it as its own reasoning block,
+                // right before the final text, mirroring how each tool round's
+                // reasoning is captured. Skip if an identical reasoning block
+                // is already present (model repeated itself / single-pass).
+                final finalReasoningText = effectiveReasoning.trim();
+                final reasoningAlreadyShown = contentBlocks.any(
+                  (b) =>
+                      b.type == ContentBlockType.reasoning &&
+                      (b.text?.trim() ?? '') == finalReasoningText,
+                );
+                if (finalReasoningText.isNotEmpty && !reasoningAlreadyShown) {
+                  contentBlocks.add(ContentBlock.reasoning(finalReasoningText));
+                }
+
+                // Only use the final pass's text for the text block —
+                // interim text from earlier passes is already in content
+                // blocks.
+                final finalText = dedupeFinalTextAgainstBlocks(
+                  stripToolCallBlocksForDisplay(rawContent),
+                ).trim();
+                if (finalText.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.text(finalText));
+                }
+                onContentBlocksUpdate?.call(
+                  placeholderIndex,
+                  encodeBlocks(),
+                  chatId,
+                );
+              }
+
+              if (onMessageFinalize != null) {
+                onMessageFinalize!(
+                  placeholderIndex,
+                  effectiveContent,
+                  effectiveReasoning,
+                  chatId,
+                  tps,
+                );
+              }
+              if (onBackgroundUpdate != null) {
+                onBackgroundUpdate!(
+                  chatId,
+                  placeholderIndex,
+                  effectiveContent,
+                  effectiveReasoning,
+                );
+              }
+
+              await _updateForegroundNotification(
+                title: 'Response ready',
+                content: effectiveContent,
+              );
+
+              _markStreamFinalized();
+              _isStreaming = false;
+              _isSending = false;
+              onUpdateUI?.call();
+              await _releaseForegroundKeepAlive();
+            } catch (error) {
+              if (_isDisposed) return;
+              if (kDebugMode) {
+                debugPrint('Tool loop processing failed: $error');
+              }
+              finalizeStaleToolState();
+              const userMessage =
+                  'An unexpected error occurred while processing tools.';
+              if (onMessageFinalize != null) {
+                onMessageFinalize!(
+                  placeholderIndex,
+                  userMessage,
+                  '',
+                  chatId,
+                  null,
+                );
+              }
+              onShowSnackBar?.call(
+                'An unexpected error occurred. Please try again.',
+              );
+              _markStreamFinalized();
+              _isStreaming = false;
+              _isSending = false;
+              onUpdateUI?.call();
+              await _releaseForegroundKeepAlive();
+            }
+          }();
+
+          _activeToolLoopFuture = completionFuture;
+          unawaited(completionFuture);
+        },
+        onError: (errorMessage, {String? code}) {
+          if (_isDisposed) return;
+
+          // A referenced tool result is no longer cached server-side. Drop the
+          // registry so the replay uploads full content, then retry this pass
+          // once. Refs can't miss again after the clear.
+          if ((code == kCacheMissErrorCode ||
+                  errorMessage.contains(kCacheMissErrorCode)) &&
+              cacheMissRetries < kMaxCacheMissRetries &&
+              !_isDisposed) {
+            ToolResultCacheRegistry.instance.handleMiss();
+            unawaited(() async {
+              if (_isDisposed) return;
+              await startStreamingPass(
+                message: message,
+                history: history,
+                systemPrompt: systemPrompt,
+                passImages: passImages,
+                currentPass: currentPass,
+                reconnectRetries: reconnectRetries,
+                cacheMissRetries: cacheMissRetries + 1,
+              );
+            }());
+            return;
+          }
+
+          // Retryability is a property of the failure, not of the sentence
+          // describing it. The server sends the SAME user-facing text
+          // ("AI service temporarily unavailable. Please try again.") for a
+          // transient upstream stall and for a flat rejection, and tags them
+          // apart with `code`. Sniffing the text got that wrong in both
+          // directions: it treated every one of those as terminal, so a turn
+          // that had already run five tool calls died outright.
+          //
+          // The keyword pass survives only as a fallback for errors raised
+          // somewhere that does not (yet) attach a code.
+          final normalizedError = errorMessage.toLowerCase();
+          final bool isReconnectable;
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            isReconnectable = false;
+          } else if (code != null) {
+            isReconnectable = StreamErrorCodes.retryable.contains(code);
+          } else {
+            isReconnectable =
+                normalizedError.contains('connection') ||
+                normalizedError.contains('websocket') ||
+                normalizedError.contains('socket') ||
+                normalizedError.contains('timed out') ||
+                normalizedError.contains('server may be overloaded') ||
+                normalizedError.contains('no response received');
+          }
+          if (isReconnectable &&
+              reconnectRetries < kMaxPassReconnectRetries &&
+              !_isDisposed) {
+            unawaited(() async {
+              await _updateForegroundNotification(
+                title: 'Reconnecting...',
+                content: 'Retrying connection',
+              );
+              // Exponential backoff: 700ms, 1.4s, 2.8s. Gives a flapping
+              // mobile link progressively more time to recover instead of
+              // hammering it with a single fixed-delay retry.
+              final backoffMs = 700 * (1 << reconnectRetries);
+              await Future<void>.delayed(Duration(milliseconds: backoffMs));
+              if (_isDisposed) return;
+              await startStreamingPass(
+                message: message,
+                history: history,
+                systemPrompt: systemPrompt,
+                passImages: passImages,
+                currentPass: currentPass,
+                reconnectRetries: reconnectRetries + 1,
+              );
+            }());
+            return;
+          }
+
+          finalizeStaleToolState();
+
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            final paymentMessage =
+                'You have used all free messages. Please subscribe to continue chatting.';
+            if (onMessageFinalize != null) {
+              onMessageFinalize!(
+                placeholderIndex,
+                paymentMessage,
+                '',
+                chatId,
+                null,
+              );
+            }
+            if (onBackgroundUpdate != null) {
+              onBackgroundUpdate!(chatId, placeholderIndex, paymentMessage, '');
+            }
+            _markStreamFinalized();
+            _isStreaming = false;
+            _isSending = false;
+            onUpdateUI?.call();
+            onPaymentRequired?.call();
+            unawaited(_releaseForegroundKeepAlive());
+            return;
+          }
+
+          // Keep whatever this turn already produced. Finalizing with the bare
+          // error string overwrote the message body, so a turn that had run
+          // five tool calls and streamed half an answer was reduced to one
+          // sentence — the work was gone and there was nothing to continue
+          // from. The error is appended as a trailing note instead.
+          final salvaged = mergeAccumulatedWithFinal(
+            accumulated: accumulatedText.toString(),
+            finalText: '',
+          );
+          final finalizedText = salvaged.isEmpty
+              ? errorMessage
+              : '$salvaged\n\n$errorMessage';
+
+          if (onMessageFinalize != null) {
+            onMessageFinalize!(
+              placeholderIndex,
+              finalizedText,
+              '',
+              chatId,
+              null,
+            );
+          }
+          onShowSnackBar?.call(errorMessage);
+
+          // Mark the turn continuable. Previously `interrupted` was set only
+          // on user cancel / teardown, so after an error the Continue button
+          // never appeared — the one affordance that could have rescued the
+          // turn was hidden exactly when it was needed. This runs AFTER
+          // onMessageFinalize, which clears the status.
+          onStreamInterrupted?.call(chatId, placeholderIndex);
+
+          _markStreamFinalized();
+          _isStreaming = false;
+          _isSending = false;
+          onUpdateUI?.call();
+          unawaited(_releaseForegroundKeepAlive());
+        },
+      );
+
+      // Snapshot the full message list (with placeholder already appended
+      // by the caller) into the StreamingManager on the FIRST pass only.
+      // This is the authoritative recovery source if the user switches
+      // chats before the periodic cache flush lands the placeholder.
+      // The buffer overlay in getBackgroundMessages applies live tokens
+      // on top of this snapshot.
+      //
+      // Critical: use `capturedMessagesSnapshot`, NOT the live `messages`
+      // reference. By the time pass N>0 runs, the widget may have cleared
+      // its _messages list because the user switched chats — using the
+      // live ref would snapshot the WRONG chat's content into our chat's
+      // recovery slot. Guarding on `currentPass == 0` keeps the snapshot
+      // pinned to the placeholder layout that was set up at send start.
+      if (currentPass == 0) {
+        _streamingManager.setBackgroundMessages(
+          chatId,
+          capturedMessagesSnapshot,
+        );
+      }
+    }
+
+    try {
+      await startStreamingPass(
+        message: aiPromptContent,
+        history: apiHistory,
+        systemPrompt: initialSystemPrompt,
+        passImages: images,
+      );
+    } catch (error) {
+      if (_isDisposed) return;
+      if (kDebugMode) {
+        debugPrint('Failed to start stream: $error');
+      }
+      const failureMessage = 'Failed to start streaming. Please try again.';
+      if (onMessageFinalize != null) {
+        onMessageFinalize!(placeholderIndex, failureMessage, '', chatId, null);
+      }
+      onShowSnackBar?.call(failureMessage);
+
+      finalizeStaleToolState();
+      _markStreamFinalized();
+      _isStreaming = false;
+      _isSending = false;
+      onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
+    }
+  }
+
+  /// Cancel active stream
+  Future<void> cancelStream(String? chatId) async {
+    if (chatId != null && (_isStreaming || _isSending)) {
+      if (kDebugMode) {
+        debugPrint('Cancelling stream for chat $chatId...');
+      }
+      _cancelRequested = true;
+      await _streamingManager.cancelStream(chatId);
+
+      // Mark the placeholder message as interrupted so the UI surfaces the
+      // "Continue generation" affordance. Flush the pending snapshot first
+      // so the partial body is on disk before we hand off.
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+      _markStreamFinalized();
+
+      _isStreaming = false;
+      _isSending = false;
+      onShowSnackBar?.call('Response cancelled');
+      onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
+    }
+  }
+
+  /// Download tool-generated images, encrypt, and persist to Supabase storage.
+  Future<void> _processToolImages(
+    List<ToolCall> toolCalls,
+    int index,
+    String chatId,
+  ) async {
+    if (toolCalls.isEmpty || _isDisposed) return;
+
+    final hasImages = toolCalls.any(
+      (c) =>
+          c.result != null &&
+          (c.result!.startsWith('IMAGE:') ||
+              c.result!.startsWith('IMAGE_DATA:')),
+    );
+    if (!hasImages) return;
+
+    try {
+      final imageResult = await ToolImageResultService.processToolCalls(
+        toolCalls,
+      );
+
+      if (imageResult.imagePaths.isEmpty || _isDisposed) return;
+
+      final updatedToolCallsJson = jsonEncode(
+        imageResult.toolCalls.map((c) => c.toJson()).toList(),
+      );
+      final imageMetasJson = jsonEncode(imageResult.imageMetas);
+
+      onToolImagesProcessed?.call(
+        index,
+        imageResult.imagePaths,
+        imageMetasJson,
+        imageResult.imageCostEur,
+        imageResult.imageGeneratedAt,
+        updatedToolCallsJson,
+        chatId,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to process tool images: $error');
+      }
+    }
+  }
+
+  Future<void> _acquireForegroundKeepAlive() async {
+    if (_hasForegroundKeepAliveLock || _isDisposed) {
+      return;
+    }
+
+    try {
+      await StreamingForegroundService.acquireKeepAliveLock(
+        title: 'Generating response...',
+        content: 'AI is working',
+        startIfNeeded: _streamingManager.isAppInBackground,
+      );
+      _hasForegroundKeepAliveLock = true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to acquire foreground keep-alive lock: $error');
+      }
+    }
+  }
+
+  Future<void> _releaseForegroundKeepAlive() async {
+    if (!_hasForegroundKeepAliveLock) {
+      return;
+    }
+
+    _hasForegroundKeepAliveLock = false;
+    try {
+      await StreamingForegroundService.releaseKeepAliveLock();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to release foreground keep-alive lock: $error');
+      }
+    }
+  }
+
+  Future<void> _updateForegroundNotification({
+    required String title,
+    required String content,
+  }) async {
+    if (!_hasForegroundKeepAliveLock || _isDisposed) {
+      return;
+    }
+
+    try {
+      await StreamingForegroundService.updateNotification(
+        title: title,
+        content: content,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to update foreground notification: $error');
+      }
+    }
+  }
+
+  /// Reset state (use when stuck in invalid state)
+  void resetState() {
+    // If we're forcibly resetting while a stream is active, treat it as an
+    // interruption — the assistant body on disk is partial.
+    if (_isStreaming && !_streamFinalized) {
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+      _markStreamFinalized();
+    }
+    _isStreaming = false;
+    _isSending = false;
+    onUpdateUI?.call();
+    unawaited(_releaseForegroundKeepAlive());
+  }
+
+  /// Check if a specific chat is streaming
+  bool isChatStreaming(String chatId) {
+    return _streamingManager.isStreaming(chatId);
+  }
+
+  /// Get buffered content for a streaming chat
+  String? getBufferedContent(String chatId) {
+    return _streamingManager.getBufferedContent(chatId);
+  }
+
+  /// Get buffered reasoning for a streaming chat
+  String? getBufferedReasoning(String chatId) {
+    return _streamingManager.getBufferedReasoning(chatId);
+  }
+
+  /// Get the streaming message index for a chat
+  int? getStreamingMessageIndex(String chatId) {
+    return _streamingManager.getStreamingMessageIndex(chatId);
+  }
+
+  /// Check if a chat has a completed stream with buffered content
+  bool hasCompletedStream(String chatId) {
+    return _streamingManager.hasCompletedStream(chatId);
+  }
+
+  /// Remove a completed stream entry after its content has been consumed
+  void consumeCompletedStream(String chatId) {
+    _streamingManager.consumeCompletedStream(chatId);
+  }
+
+  /// Store background messages for a streaming chat when user switches away
+  void setBackgroundMessages(
+    String chatId,
+    List<Map<String, dynamic>> messages,
+  ) {
+    _streamingManager.setBackgroundMessages(chatId, messages);
+  }
+
+  /// Get the most recent background snapshot for a chat, with the live buffer
+  /// applied. Returns null if no snapshot was ever taken for this chat.
+  /// Survives the active→completed transition so the switch-back path can
+  /// recover final content after a stream finishes while the user was away.
+  List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
+    return _streamingManager.getBackgroundMessages(chatId);
+  }
+
+  /// Whether a background snapshot exists for this chat.
+  bool hasBackgroundMessages(String chatId) {
+    return _streamingManager.hasBackgroundMessages(chatId);
+  }
+
+  /// Delegates to [ChatHistoryBuilder] — see that file for why this must not
+  /// be reimplemented per platform.
+  Future<List<Map<String, dynamic>>> _buildApiHistory(
+    List<Map<String, String>> messages,
+    String pendingUserText, {
+    bool includeRecentImages = true,
+    bool includeAllImages = false,
+    bool includeReasoning = false,
+    bool includeToolResults = true,
+  }) => ChatHistoryBuilder.build(
+    messages: messages,
+    pendingUserText: pendingUserText,
+    includeRecentImages: includeRecentImages,
+    includeAllImages: includeAllImages,
+    includeReasoning: includeReasoning,
+    includeToolResults: includeToolResults,
+  );
+
+
+
+  /// Get session safely with network error handling
+  Future<dynamic> getSessionSafely() async {
+    try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+
+      if (session == null) {
+        // Check if we're offline before logging out
+        final bool isOnline =
+            await NetworkStatusService.hasInternetConnection();
+        if (!isOnline) {
+          onShowSnackBar?.call('Cannot connect. Please check your network.');
+          return null;
+        }
+
+        // Online but no session = genuinely expired
+        onShowSnackBar?.call('Session expired. Please sign in again.');
+        return null;
+      }
+
+      return session;
+    } catch (error) {
+      // Check if this is a network error
+      if (NetworkStatusService.isNetworkError(error)) {
+        if (kDebugMode) {
+          debugPrint('Network error during session refresh: $error');
+        }
+        onShowSnackBar?.call('Network error. Please check your connection.');
+        return null;
+      }
+
+      // Not a network error, likely auth issue
+      if (kDebugMode) {
+        debugPrint('Auth error during session refresh: $error');
+      }
+      onShowSnackBar?.call('Authentication error. Please sign in again.');
+      return null;
+    }
+  }
+
+  /// Mark the active stream as cleanly finished (a final-answer event ran).
+  /// Tears down the periodic snapshot timer and stops any later cancel/
+  /// dispose paths from raising a spurious "interrupted" flag.
+  void _markStreamFinalized() {
+    _streamFinalized = true;
+    _clearSnapshot();
+  }
+
+  // --- Periodic snapshot persistence ----------------------------------------
+  //
+  // Streaming tokens are accumulated in [_currentSnapshot]. Every
+  // [_snapshotInterval] (or immediately on lifecycle-pause / dispose) we
+  // re-emit the snapshot through [onBackgroundUpdate] so the chat row on
+  // disk always carries the most recent partial text. Without this the
+  // assistant body persisted to SQLite trails the in-memory state by up to
+  // a full streaming pass — long enough to lose minutes of streamed text if
+  // the OS suspends the app between rounds.
+  void _recordSnapshot({
+    required String chatId,
+    required int index,
+    required String content,
+    required String reasoning,
+    String? contentBlocksJson,
+  }) {
+    if (_isDisposed || _streamFinalized) return;
+    _currentSnapshot = _StreamingSnapshot(
+      chatId: chatId,
+      index: index,
+      content: content,
+      reasoning: reasoning,
+      contentBlocksJson: contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
+    );
+    _snapshotTimer ??= Timer.periodic(_snapshotInterval, (_) {
+      _flushSnapshot();
+    });
+  }
+
+  void _flushSnapshot({bool forceImmediate = false}) {
+    final snap = _currentSnapshot;
+    if (snap == null) return;
+    if (_streamFinalized) {
+      _clearSnapshot();
+      return;
+    }
+    try {
+      // Primary path: a dedicated tick callback the host wires directly to
+      // the persistence layer so it fires regardless of whether the chat is
+      // foregrounded. Without this the foreground chat would only persist
+      // on round boundaries and lose the trailing tokens on suspend.
+      onStreamTick?.call(
+        snap.chatId,
+        snap.index,
+        snap.content,
+        snap.reasoning,
+        snap.contentBlocksJson,
+        forceImmediate,
+      );
+      // Background path still fires so the existing background-debounce
+      // logic can coalesce snapshot writes for chats the user isn't on.
+      onBackgroundUpdate?.call(
+        snap.chatId,
+        snap.index,
+        snap.content,
+        snap.reasoning,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[StreamingHandler] snapshot flush failed: $error');
+      }
+    }
+  }
+
+  void _clearSnapshot() {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = null;
+    _currentSnapshot = null;
+  }
+
+  /// Called by the lifecycle service when the app moves to background.
+  /// Forces the most recent streamed snapshot to disk before the OS gets
+  /// a chance to suspend us — otherwise the trailing tokens would be lost.
+  void _handleAppPaused() {
+    if (_isDisposed) return;
+    if (!_isStreaming) return;
+    _flushSnapshot(forceImmediate: true);
+  }
+
+  void _markInterruptedIfStreaming() {
+    if (_streamFinalized) return;
+    final snap = _currentSnapshot;
+    if (snap == null) return;
+    try {
+      onStreamInterrupted?.call(snap.chatId, snap.index);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[StreamingHandler] onStreamInterrupted callback failed: $error',
+        );
+      }
+    }
+  }
+
+  /// Dispose resources
+  void dispose() {
+    _isDisposed = true;
+    // Best-effort: flush in-flight snapshot before tearing down so we don't
+    // lose the tail of an actively streaming response.
+    if (_isStreaming && !_streamFinalized) {
+      _flushSnapshot(forceImmediate: true);
+      _markInterruptedIfStreaming();
+    }
+    _clearSnapshot();
+    AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
+    _activeToolLoopFuture = null;
+    unawaited(_releaseForegroundKeepAlive());
+    // StreamingManager is global, don't dispose it
+  }
+}
+
+class _StreamingSnapshot {
+  _StreamingSnapshot({
+    required this.chatId,
+    required this.index,
+    required this.content,
+    required this.reasoning,
+    this.contentBlocksJson,
+  });
+
+  final String chatId;
+  final int index;
+  final String content;
+  final String reasoning;
+  final String? contentBlocksJson;
+}
