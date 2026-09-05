@@ -382,3 +382,23 @@ COMMIT-RUNDE (Stand): R1 gemeldet: 84 d6e082a, 26 36edbaf, 94 f0a5b64, a4 dcaa60
 - 2026-09-05: 47 alles grün (loader 27, relay 51, adapter 18); Commit-Fenster an 47 (Dart), Compiler-Fenster an f5, danach 84.
 - 2026-09-05: R4 DURCH (b5): 025200c secrets (26), 127fb10 automations (94), 03346e5 workspace/transcript/memory (b5), 16d9b0a shared Python (Reasoning/Tool-Frames/Clamp/regenerate/events/shell+jobs, WIRE_CONTRACT komplett). Suiten agent 865, executor 154, host 149. Offen: agent/skills.py (18), Docs (R5 b7), agent/probe.txt Test-Artefakt (26 fragen).
 - 2026-09-05: 47 Commit ea6daad (replay dedupe; nahm 145 Zeilen von 5c in messenger_shell_test mit, Inhalt ok). BEFUND 47: der verbatim Chat-UI-Import (P2a, ~100 lib-Dateien lt. tools/chat_ui_manifest.txt, inkl. chat_ui_mobile/desktop_send_logic/streaming_message_handler) ist NOCH UNTRACKED → HEAD ohne diese Dateien nicht baubar. Auftrag: a4 committet den Import per Manifest (Body: 98 Import, 5c/47/b5 Kleinhunks). Regel in CLAUDE.md: git diff --stat vor Commit. Compiler-Fenster-Queue: f5 → 84 → af. R5 (Docs) committet b7 jetzt.
+- 2026-09-05: R5 Docs committet 10bf880 (b7). 26 probe.txt-Artefakt gefixt 0740479. a4 committet jetzt den verbatim Chat-UI-Import (102 untracked + Manifest).
+- 14:38 Takt: Abfrage 84, 18. Queue Compiler f5 → 84 → af → 18. Fertig: 13/49/98/5c/f7/9e/94/75/47(Handover). Offen beim User: Secrets-SQL, Login, Bildschirm frei.
+- 14:40: TREE KAPUTT durch af (CoworkRelayAgentList ohne Switch-Cases in thread_view/replay_loader/adapter; CoworkRelayLink-Import in cowork_shell_state fehlt). af fixt sofort; f5 hält Fenster.
+- 14:42: a4 Commit f22a189 verbatim Chat-UI-Import (103 Dateien, 43k Zeilen) → HEAD wieder vollständig. 84 fertig (Tests+Contract committet, Rendering-Dateien via 47 committet), nur Live-Screenshots offen. 18: skills.py 27deda5, executor-Dispatch + Host-Kwarg gebaut, Dart-Seite läuft; 18 braucht einen Supabase-Spiegel cowork_skill_settings → Migration? (prüfen).
+- 14:45: b5 FERTIG (Memory-Livebeweis 6/6, ad6acd4). Offen: 0ia nur UI-Screenshot, 3hk (Dart Thinking-Default medium) Owner offen. Fertig: 13/49/98/5c/f7/9e/94/75/47/84/b5.
+- 14:46: 3hk → f5 (nach Browser). Host-Neustart #6 → f5 nach af/18/f5-Python. Warte: af Compile-Fix, f5 Tests, 18 Dart; User: Secrets-SQL, Login, Bildschirm frei.
+- 14:48: af hat ihre 2 Fehler gefixt; Rest-Fehler = 18's CoworkRelaySkillsList ohne Switch-Cases → af setzt die 3 Zeilen (GO), 18 nimmt sie in den Commit.
+- 14:52: Tree kompiliert wieder (af). af Python (coworker_names, agent_* Frames mit agent_list-Terminal) geschrieben, Tests laufen. f5 fährt messenger_shell_test.
+- 14:55: f5 grün (presence 9, view 3, chrome, Shell-Browser 3); 17 Shell-Fails = af's Dialog-Test (disposed Controller, Kaskade). Reihenfolge: f5 committet 6 eigene Dateien; af fixt Test, committet Shell/Roster/Account (inkl. f5-Hunks in messenger_shell, genannt); dann f5 Rest.
+- 14:58: 18 Python komplett committet (27deda5, 9595e23 inkl. Migration cowork_skill_settings + Contract 'Skills'), executor 158 grün. Host-Suite rot durch af (host.py:127 _device_id, 22 Tests) → af fixt. 18 Dart fertig geschrieben, wartet Fenster hinter af.
+- 15:00: f5 Commit cb93b5b (Browser-Presence + Vollbild-Route). f5 baut d) Python jetzt. messenger_shell-Rest nach af.
+- 15:03: f5 d) gebaut (run_state.browser_open, browser_view opened/closed Push, WINDOWS als Ground Truth; executor 167). Wartet Fenster nach af, Commits nach 'af durch'. Queue: af → f5 → 18 → Host #6 (f5).
+- 14:51 Takt: Abfrage af (Fixes/Tests/Commit), 47 (Handover). RAM 4 GB frei.
+- 15:08: 47 FERTIG (Handover ba4b04d). 47's Sorge geprüft: desktop_send_logic/chat_ui_mobile/streaming_message_handler sind in f22a189 committet, keine offenen Diffs → regenerate-Zeile ist in der Historie und im Build.
+- 15:10: Beads geschlossen: izh, c91, o3j, 6q3 (Dup). hza → 18 nach Skills-Dart. Offen unassigned: 266, axx, qxa, sq3 (P2), 95i.* (P3 Ideen).
+- 15:12: af Dart-Commit b21dd18 (17 Pfade, inkl. f5-Shell/Presence + 18-Relay-Hunks genannt; roster 28, shell 55, widget 3). host.py-Fix drin; Host-Suite 138/14 rot → af prüft. Fenster → f5 → 18.
+- 15:15: f5 presence_test 10/10, committet executor/protocol per HEAD+eigene-Hunks-Index (af hält Staging an). Fenster → 18. Commit-Queue: f5 → af (Python) → 18.
+- 15:18: f5 Commit 7e3ecad (Browser-Presence Python), Bead vzm zu, f5 bereit für Host #6. Commit-Fenster → af (Python).
+- 15:20: Backlog 3hk, 266, sq3, qxa, axx → f5 (nach Host #6).
+- 19:22: User-Entscheidung (via 76's Tab): cowork-76 bleibt Koordinator, b7 hört auf. b7-Cron d2065c0b gelöscht, vollständige Übergabe an 76 gesendet. Alle Meldungen ab jetzt an cowork-76.
