@@ -301,6 +301,14 @@ Semantics, in this order:
    "Answer ready" affordance.
 3. `replay == false`: a live run ended, as today.
 
+`reason` values: `finished`, `max_iterations`, `budget_exhausted`,
+`token_budget_exhausted`, `estop`, `interrupted` (the user's stop), `failed`,
+`host_restarted`, and `timeout` (Bead cowork-qxa): the host's wall-clock guard
+stopped the run — `COWORK_RUN_MAX_SECONDS`, default 7200, `0` disables — the
+way a stop does (kill switch, model call cancelled), persisted with that
+reason, notified like any other terminal. The app renders `timeout` like a
+stop (`wasStopped`).
+
 Persisted run terminals are replayed in message-id order, interleaved with the
 messages of that run.
 
@@ -308,6 +316,7 @@ App-side helpers on `CoworkRelayDone`:
 
 - `isHistoryEnd` = `reason == 'replay'`
 - `isReplay` = `replay == true || reason == 'replay'` (kept for compatibility)
+- `wasStopped` = `reason` is `estop`, `interrupted` or `timeout`
 - `whileAway`, `runId`
 
 ## Host-side record (informative)
