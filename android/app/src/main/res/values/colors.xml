@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Accent behind the status-bar icon of an FCM notification (chuk's blue). -->
+    <color name="cowork_notification">#285DA9</color>
+</resources>
