@@ -189,6 +189,13 @@ class LocalHost:
             host_addr, port, logger=self._log, on_peer_event=self._on_peer_event
         )
         self._party: HostParty | None = None
+        # The sealer of the current controller session (set when its task server
+        # is built), for host-originated frames such as reprovision_request.
+        self._sealer: CoworkFrameSealer | None = None
+        # An ``account_session_rotated`` frame the app has not acknowledged yet
+        # (bead cowork-c91): the host refreshed on its own while no controller
+        # was attached, so the app's pair is dead until it adopts this one.
+        self._pending_session_rotation: dict | None = None
         self._port = port
 
     def _pairing_factory(self) -> Pairing | None:
@@ -493,6 +500,15 @@ class LocalHost:
         # Keep the live session so the task server can hand its (refreshable)
         # access token to the executor for appSession MCP connectors.
         self._session = session
+        # Who may refresh (bead cowork-c91): with a controller attached the APP
+        # is the token source — the host asks it to re-provision and waits;
+        # with none attached the host refreshes itself and reports the rotated
+        # pair back. Wired here so every client built off this session obeys it.
+        session.may_self_refresh = lambda: not self._controller_attached()
+        session.request_reprovision = self._request_reprovision
+        session.on_self_refreshed = self._on_session_self_refreshed
+        # A (re)connecting app that already adopted a rotated pair acks it here.
+        self._note_incoming_token(token)
         # The account owner, for the notification rows (owner-only RLS).
         self._user_id = str(token.get("user_id") or "")
         self._log("resolving a model from the account (one /v1/models_info call)...")
@@ -507,7 +523,12 @@ class LocalHost:
         token: dict,
         party: HostParty,
     ) -> TaskServer:
+        # This session's sealer, for frames the host itself originates.
+        self._sealer = sealer
         model_factory, model_select = self._make_model_wiring(token)
+        # A fresh controller connection: hand over any pair the host rotated
+        # while nobody was attached (unless this provision already carried it).
+        self._flush_pending_session_rotation()
         environment = self._make_environment()
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
@@ -582,10 +603,75 @@ class LocalHost:
         if isinstance(user_id, str) and user_id:
             self._user_id = user_id
         self._log("account session refreshed in place from a new token frame")
+        # An app that adopted our rotated pair sends it back: that is the ack.
+        self._note_incoming_token(token)
+        # Wake a refresh that is waiting for exactly this frame (c91).
+        session.mark_reprovisioned()
         # A fresh token is the moment to retry what could not be delivered.
         notifier = getattr(self, "_notifier", None)
         if notifier is not None:
             notifier.flush_outbox()
+
+    # -- account session: who refreshes, and how the pair stays in sync (c91) --
+
+    def _send_host_payload(self, payload: dict) -> bool:
+        """Seal a host-originated payload with the current session's sealer and
+        send it to the attached app. False when there is no session or no
+        controller (the party drops frames while none is attached)."""
+        party, sealer = self._party, self._sealer
+        if party is None or sealer is None or not self._controller_attached():
+            return False
+        try:
+            sealed = sealer.seal(encode_payload(payload))
+            party.send_result_frame(frame_to_b64(sealed.to_bytes()))
+            return True
+        except Exception as exc:  # noqa: BLE001 — a relay hiccup must not raise into a refresh
+            self._log(f"could not send {payload.get('type')}: {type(exc).__name__}")
+            return False
+
+    def _request_reprovision(self, reason: str) -> None:
+        """Ask the attached app for a fresh token pair (docs/WIRE_CONTRACT.md
+        ``reprovision_request``). The app answers with a normal
+        ``account_authentication`` frame, which lands in ``_on_reprovision``."""
+        self._log(f"asking the app to re-provision ({reason})")
+        self._send_host_payload({"type": "reprovision_request", "reason": reason})
+
+    def _on_session_self_refreshed(self, session: SupabaseSession) -> None:
+        """The host refreshed on its own (no controller attached) and GoTrue
+        rotated the pair — the app's copy is now dead. Report the new pair
+        (``account_session_rotated``): now if someone is attached, else pending
+        until the next connect, until the app acks by sending it back."""
+        from datetime import UTC, datetime
+
+        payload = {
+            "type": "account_session_rotated",
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
+            "rotated_at": datetime.now(UTC).isoformat(),
+        }
+        if session.expires_at is not None:
+            payload["expires_at"] = session.expires_at
+        self._pending_session_rotation = payload
+        self._log("account session refreshed by the host; reporting the rotated pair")
+        self._flush_pending_session_rotation()
+
+    def _flush_pending_session_rotation(self) -> None:
+        """Send the unacknowledged rotated pair if a controller is attached. The
+        frame stays pending until acked — a send while detached is dropped by the
+        party, and we cannot know delivery, only adoption."""
+        pending = self._pending_session_rotation
+        if pending is not None:
+            self._send_host_payload(pending)
+
+    def _note_incoming_token(self, token: dict) -> None:
+        """An ``account_authentication`` frame carrying the refresh token the host
+        rotated to means the app adopted the pair: the rotation is acknowledged."""
+        pending = self._pending_session_rotation
+        if pending is None or not isinstance(token, dict):
+            return
+        if token.get("refresh_token") == pending.get("refresh_token"):
+            self._pending_session_rotation = None
+            self._log("rotated account session acknowledged by the app")
 
     def _controller_attached(self) -> bool:
         party = self._party
