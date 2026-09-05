@@ -567,6 +567,30 @@ def automation_list_request_payload(session_key: str | None = None) -> dict[str,
     return payload
 
 
+def agent_create_payload(*, agent_id: str, name: str) -> dict[str, Any]:
+    """App -> host: the user created a coworker in the app (docs/WIRE_CONTRACT.md,
+    "Coworker names"). The app owns the id; the host keeps the name."""
+    return {"type": "agent_create", "agent_id": agent_id, "name": name}
+
+
+def agent_rename_payload(*, agent_id: str, name: str) -> dict[str, Any]:
+    """App -> host: the user renamed a coworker (the host agent included)."""
+    return {"type": "agent_rename", "agent_id": agent_id, "name": name}
+
+
+def agent_list_request_payload() -> dict[str, Any]:
+    """App -> host: list every coworker name this host keeps."""
+    return {"type": "agent_list"}
+
+
+def agent_list_payload(agents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Host -> app: the coworker names. One entry per id:
+    ``{"agent_id", "name", "host"}`` — ``host`` marks the coworker that runs
+    on this host. Answers ``agent_list`` and follows every applied
+    ``agent_create`` / ``agent_rename``."""
+    return {"type": "agent_list", "agents": list(agents)}
+
+
 def skills_list_payload(
     skills: list[dict[str, Any]], errors: list[str] | tuple[str, ...] = ()
 ) -> dict[str, Any]:
