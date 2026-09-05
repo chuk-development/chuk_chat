@@ -48,3 +48,6 @@ session.txt
 # and report its ~65 unresolved references. The P4-rest work adapts them from
 # here into app/lib/pages/. Delete the folder and this rule when it is empty.
 _p4_pending/
+
+# Host boot log written by host/ on every start; not source.
+.hostlive

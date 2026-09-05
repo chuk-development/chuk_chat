@@ -46,12 +46,66 @@ dependencies:
   http: ^1.5.0
   dio: ^5.4.0
 
+  # Opens the connector legal pages (Terms / Privacy) in the browser from the
+  # MCP connectors screen. Same version chuk_chat pins.
+  url_launcher: ^6.3.0
+
   # Markdown rendering for agent replies (same renderer as chuk_chat).
   markdown_widget: ^2.3.2+8
 
   # Where a file the agent produced is written when the user saves it.
   path_provider: ^2.1.6
-  flutter_rfb: ^0.6.2
+  # Vendored fork of flutter_rfb 0.6.2 (third_party/flutter_rfb): the clipboard
+  # sync is stripped out so the VNC tunnel carries strictly RFB derived from
+  # user input + the render loop — no local-clipboard exfil into the sandbox and
+  # no writing the sandbox clipboard back onto the host. dart_rfb stays from pub.
+  flutter_rfb:
+    path: third_party/flutter_rfb
+  # Direct dependency so app tests can exercise the Tight decoder
+  # (third_party/dart_rfb) against real x11vnc vectors.
+  dart_rfb:
+    path: third_party/dart_rfb
+
+  # --- WS-0 foundations: verbatim chuk_chat UI import ------------------------
+  # Constraints copied from chuk_chat/pubspec.yaml where they exist. The caps
+  # below are load-bearing (chuk_chat's own comments explain why); do not widen
+  # them without re-reading that file.
+  flutter_localizations:
+    sdk: flutter
+  # Pinned by flutter_localizations; `any` lets pub pick the matching build.
+  intl: any
+  flutter_svg: ^2.2.2
+  # Held below 2.0.0: dynamic_color 2.x hands its palette back as a
+  # `material_ui` ColorScheme, which does not match Flutter 3.47's own
+  # ColorScheme, so DynamicColorBuilder's builder types stop matching.
+  dynamic_color: ">=1.9.0 <2.0.0"
+  web: ^1.1.1
+
+  # --- Deps the chat-UI import (WS-5/WS-6) and notifications (WS-7) need -----
+  # Landed here so pubspec.yaml is touched once, not per work stream.
+  archive: ^4.0.7
+  desktop_drop: ^0.8.0
+  file_picker: ^12.0.0
+  fl_chart: ^1.1.1
+  flutter_map: ^8.3.0
+  latlong2: ^0.10.1
+  geolocator: ^14.0.3
+  flutter_math_fork: ^0.7.2
+  highlight: ^0.7.0
+  image: ^4.8.0
+  image_picker: ^1.1.2
+  markdown: ^7.3.0
+  pasteboard: ^0.5.0
+  pdfrx: ^2.2.24
+  pdfx: ^2.8.0
+  # Held at 12.x: permission_handler 13.x pulls permission_handler_android
+  # 14.0.0, which hardcodes compileSdk 37.
+  permission_handler: ">=12.0.1 <13.0.0"
+  record: ^7.1.1
+  share_plus: ^13.3.0
+  flutter_local_notifications: ^22.0.0
+  firebase_core: ^4.1.1
+  firebase_messaging: ^16.0.3
 
   # --- Local chat cache: SQLite on native, same versions as chuk_chat --------
   # chuk_chat/lib/services/local_chat_cache_native.dart is imported verbatim
@@ -82,6 +136,34 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/icons/
+
+  # The three selectable chat fonts, bundled locally (chuk_chat's block,
+  # imported verbatim). Arimo and JetBrains Mono are variable fonts (the wght
+  # axis covers every weight); Merriweather ships as static weights.
+  fonts:
+    - family: Arimo
+      fonts:
+        - asset: assets/fonts/Arimo-wght.ttf
+        - asset: assets/fonts/Arimo-Italic-wght.ttf
+          style: italic
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather-Regular.ttf
+        - asset: assets/fonts/Merriweather-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Merriweather-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Merriweather-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-wght.ttf
+        - asset: assets/fonts/JetBrainsMono-Italic-wght.ttf
+          style: italic
 
   # To add assets to your application, add an assets section, like this:
   # assets:
