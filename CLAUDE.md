@@ -157,6 +157,10 @@ exact defines (`PRINT_DEFINES=1 ./run.sh`) + `CHUK_MULTI_INSTANCE=1`. Voice mode
 is OFF by default in run.sh; CoWork was removed from this branch (developed
 elsewhere) — do not re-add it here.
 
+**Working from the `claudecode` host:** the agent runs there, the app runs on the
+laptop. Use `flutter-remote` instead of `flutter-hot` — same verbs, plus `sync`,
+`shot` and `projects`. See `docs/REMOTE_DEV_SETUP.md`.
+
 ## Key Entry Points
 
 | What | Where |
@@ -449,6 +453,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
+| `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->

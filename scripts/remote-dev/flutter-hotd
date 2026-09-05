@@ -1,0 +1,601 @@
+#!/usr/bin/env python3
+"""flutter-hotd — HTTP control plane for flutter-hot, bound to the Tailscale IP.
+
+Runs as a `systemd --user` service inside the desktop session, so it holds the
+session environment (DISPLAY / WAYLAND_DISPLAY) and can screenshot real app
+windows. A Claude on another host drives Flutter apps here over Tailscale with
+a bearer token. It never reimplements flutter-hot; it only shells out to it.
+
+Projects are mirrors under MIRROR_ROOT (default ~/git/_remote). The user's own
+checkouts are never touched, so `sync` can hard-reset a mirror safely.
+
+Endpoints (all except /health need `Authorization: Bearer <token>`):
+  GET  /health                              -> {"ok": true, ...}
+  GET  /projects                            -> mirrors and their git state
+  POST /sync   {project, repo?, ref?}       -> clone, or fetch + hard reset
+  POST /run    {project, args[], timeout?}  -> run `flutter-hot <args>`
+  POST /shot   {project, pattern?}          -> PNG bytes of the app window
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import secrets
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+HOME = Path.home()
+CONF = HOME / ".config" / "flutter-hotd"
+TOKEN_FILE = CONF / "token"
+MIRROR_ROOT = Path(os.environ.get("FLUTTER_HOTD_ROOT", str(HOME / "git" / "_remote")))
+FLUTTER_HOT = os.environ.get("FLUTTER_HOT_BIN", str(HOME / ".claude" / "tools" / "flutter-hot"))
+PORT = int(os.environ.get("FLUTTER_HOTD_PORT", "8787"))
+SHOT_DIR = CONF / "shots"
+
+NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+REPO_RE = re.compile(r"^(?:git@[A-Za-z0-9._-]+:|https://[A-Za-z0-9._-]+/)[A-Za-z0-9._/-]+?(?:\.git)?$")
+REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+MAX_BODY = 1 << 20
+DEFAULT_TIMEOUT = 300
+MAX_TIMEOUT = 1800
+
+
+def load_token() -> str:
+    CONF.mkdir(parents=True, exist_ok=True)
+    if not TOKEN_FILE.exists():
+        TOKEN_FILE.write_text(secrets.token_urlsafe(32) + "\n")
+        TOKEN_FILE.chmod(0o600)
+    return TOKEN_FILE.read_text().strip()
+
+
+TOKEN = load_token()
+
+# run-hot.sh and friends call `flutter-hot` and `flutter` by name, and a systemd
+# unit does not inherit the login shell's PATH.
+TOOL_ENV = {
+    "PATH": os.pathsep.join([
+        str(HOME / ".claude" / "tools"),
+        str(HOME / "development" / "flutter" / "bin"),
+        str(HOME / ".local" / "bin"),
+        os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+    ]),
+    # Force the app onto XWayland. A native Wayland window cannot be captured
+    # on its own — GNOME refuses per-window grabs to unsandboxed callers, and
+    # the only thing left would be a full-desktop shot, which this daemon must
+    # never take. Under XWayland the window is a normal X client, so
+    # `import -window <id>` captures exactly it and nothing else.
+    "GDK_BACKEND": "x11",
+}
+
+
+def bind_host() -> str:
+    """Tailscale IP when there is one, else loopback. Never a wildcard bind."""
+    forced = os.environ.get("FLUTTER_HOTD_HOST")
+    if forced:
+        return forced
+    try:
+        out = subprocess.run(["tailscale", "ip", "-4"], capture_output=True,
+                             text=True, timeout=10)
+        for line in out.stdout.splitlines():
+            ip = line.strip()
+            if ip:
+                return ip
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+class BadRequest(Exception):
+    pass
+
+
+def project_dir(name: str, must_exist: bool = True) -> Path:
+    """Resolve a mirror name to its path. Rejects traversal and absolute paths."""
+    if not name or not NAME_RE.match(name) or name in (".", ".."):
+        raise BadRequest(f"bad project name: {name!r}")
+    root = MIRROR_ROOT.resolve()
+    path = root / name
+    if path.parent != root:
+        raise BadRequest(f"project escapes mirror root: {name!r}")
+    if must_exist and not (path / "pubspec.yaml").exists() and not (path / ".git").exists():
+        raise BadRequest(f"no mirror at {path} — POST /sync with a repo url first")
+    return path
+
+
+def run(cmd, cwd=None, timeout=DEFAULT_TIMEOUT, env=None):
+    """Run a command and collect its output through temp FILES, not pipes.
+
+    flutter-hot detaches a FIFO holder that inherits stdout. With pipes,
+    subprocess.run would then block until the timeout waiting for an EOF that
+    never comes, even though `start` itself returned in two seconds.
+    """
+    merged = dict(os.environ)
+    if env:
+        merged.update(env)
+    pretty = " ".join(shlex.quote(str(c)) for c in cmd)
+    with tempfile.TemporaryFile("w+") as fout, tempfile.TemporaryFile("w+") as ferr:
+        try:
+            p = subprocess.run(cmd, cwd=cwd, stdin=subprocess.DEVNULL,
+                               stdout=fout, stderr=ferr, timeout=timeout, env=merged)
+            rc = p.returncode
+            err_extra = ""
+        except subprocess.TimeoutExpired:
+            rc = 124
+            err_extra = f"\ntimeout after {timeout}s"
+        fout.seek(0)
+        ferr.seek(0)
+        return {"rc": rc, "stdout": fout.read(), "stderr": ferr.read() + err_extra,
+                "cmd": pretty}
+
+
+# --------------------------------------------------------------------------
+# screenshots — GNOME/Wayland first, X11 as a fallback
+# --------------------------------------------------------------------------
+
+def _try(cmd, out: Path, timeout=30) -> bool:
+    r = run(cmd, timeout=timeout)
+    return r["rc"] == 0 and out.exists() and out.stat().st_size > 0
+
+
+def app_pattern(project: Path, pattern: str | None) -> str:
+    if pattern:
+        return pattern
+    pubspec = project / "pubspec.yaml"
+    if pubspec.exists():
+        for line in pubspec.read_text(errors="replace").splitlines():
+            if line.startswith("name:"):
+                return line.split(":", 1)[1].strip()
+    return project.name
+
+
+# --------------------------------------------------------------------------
+# nested X display — one private screen per project
+# --------------------------------------------------------------------------
+# A remotely driven app gets its own Xephyr server. Two reasons:
+#  1. Privacy: that display contains the app and nothing else, so a screenshot
+#     of its root window can never leak the rest of the desktop. There is no
+#     code path that captures the real screen.
+#  2. It works on Wayland. GNOME refuses per-window grabs to unsandboxed
+#     callers, and XWayland's root holds no composited content, so a native
+#     grab returns black. A nested X server is a real X screen we can read.
+# The user still sees the app: Xephyr is an ordinary window on their desktop.
+
+NESTED_DIR = CONF / "nested"
+NESTED_RANGE = range(90, 100)
+NESTED_SIZE = os.environ.get("FLUTTER_HOTD_SCREEN", "1600x1000")
+
+
+def host_display() -> str:
+    """The display Xephyr's own window opens on.
+
+    The daemon can start before the desktop session has pushed DISPLAY into the
+    systemd user environment (and under a plain WM it may never do so via
+    graphical-session.target at all), so resolve it lazily and late.
+    """
+    if os.environ.get("DISPLAY"):
+        return os.environ["DISPLAY"]
+    r = run(["systemctl", "--user", "show-environment"], timeout=15)
+    for line in r["stdout"].splitlines():
+        if line.startswith("DISPLAY="):
+            os.environ["DISPLAY"] = line.split("=", 1)[1]
+            return os.environ["DISPLAY"]
+    for n in range(0, 4):  # last resort: a session on the usual socket
+        if Path(f"/tmp/.X11-unix/X{n}").exists():
+            os.environ["DISPLAY"] = f":{n}"
+            return os.environ["DISPLAY"]
+    raise BadRequest("no DISPLAY on the laptop — is a desktop session running?")
+
+
+def nested_meta(project: Path) -> Path:
+    NESTED_DIR.mkdir(parents=True, exist_ok=True)
+    return NESTED_DIR / f"{project.name}.json"
+
+
+def read_nested(project: Path) -> dict | None:
+    meta = nested_meta(project)
+    if not meta.exists():
+        return None
+    try:
+        d = json.loads(meta.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    pid = str(d.get("pid", ""))
+    if pid.isdigit() and Path(f"/proc/{pid}").exists():
+        return d
+    meta.unlink(missing_ok=True)
+    return None
+
+
+def free_display() -> int:
+    for n in NESTED_RANGE:
+        if not Path(f"/tmp/.X11-unix/X{n}").exists():
+            return n
+    raise BadRequest("no free nested display in :90-:99")
+
+
+def ensure_nested(project: Path) -> dict:
+    """Start (or reuse) the project's private Xephyr screen."""
+    existing = read_nested(project)
+    if existing:
+        return existing
+    if not shutil.which("Xephyr"):
+        raise BadRequest("Xephyr is not installed (apt install xserver-xephyr)")
+    host_display()
+    n = free_display()
+    title = f"{project.name} — remote"
+    proc = subprocess.Popen(
+        ["Xephyr", f":{n}", "-screen", NESTED_SIZE, "-title", title,
+         "-resizeable", "-no-host-grab"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    for _ in range(60):
+        if Path(f"/tmp/.X11-unix/X{n}").exists():
+            break
+        time.sleep(0.25)
+    else:
+        proc.kill()
+        raise BadRequest(f"Xephyr :{n} did not come up")
+    d = {"display": f":{n}", "pid": proc.pid, "screen": NESTED_SIZE}
+    nested_meta(project).write_text(json.dumps(d))
+    return d
+
+
+def stop_nested(project: Path) -> None:
+    d = read_nested(project)
+    if not d:
+        return
+    try:
+        os.kill(int(d["pid"]), 15)
+    except (OSError, ValueError, KeyError):
+        pass
+    nested_meta(project).unlink(missing_ok=True)
+
+
+def flutter_hot_state(project: Path) -> Path:
+    """Mirror of flutter-hot's own per-project state directory."""
+    p = subprocess.run(["cksum"], input=str(project).encode(), capture_output=True)
+    h = p.stdout.decode().split()[0]
+    return HOME / ".claude" / "flutter-hot" / h
+
+
+def app_pids(project: Path) -> list[str]:
+    """PIDs of processes whose executable lives inside this project.
+
+    flutter-hot's run.pid/dart.pid are the tool wrappers, not the window owner:
+    the window belongs to build/linux/.../<app>. Matching on the executable path
+    also guarantees the window we grab belongs to THIS project and not to some
+    other app that happens to have a similar title.
+    """
+    root = str(project.resolve()) + "/"
+    pids: list[str] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            exe = os.readlink(entry / "exe")
+        except OSError:
+            continue
+        if exe.startswith(root):
+            pids.append(entry.name)
+    # Wrapper pids as a last resort, deduplicated.
+    state = flutter_hot_state(project)
+    for f in ("dart.pid", "run.pid"):
+        try:
+            pid = (state / f).read_text().strip()
+        except OSError:
+            continue
+        if pid.isdigit() and pid not in pids and Path(f"/proc/{pid}").exists():
+            pids.append(pid)
+    return pids
+
+
+def _window_ids_for(pids: list[str], pattern: str, env: dict) -> list[tuple[str, str]]:
+    """Candidate (window id, why) pairs, PID-matched first, name-matched after."""
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for pid in pids:
+        r = run(["xdotool", "search", "--pid", pid], timeout=30, env=env)
+        for wid in r["stdout"].split():
+            if wid not in seen:
+                seen.add(wid)
+                found.append((wid, f"pid {pid}"))
+    r = run(["xdotool", "search", "--name", pattern], timeout=30, env=env)
+    for wid in r["stdout"].split():
+        if wid not in seen:
+            seen.add(wid)
+            found.append((wid, f"name {pattern!r}"))
+    return found
+
+
+SHOT_KEEP = int(os.environ.get("FLUTTER_HOTD_SHOT_KEEP", "20"))
+
+
+def prune_shots(project: Path) -> None:
+    """Keep only the newest few shots per project.
+
+    A screenshot of the app shows decrypted chat content, so the on-disk history
+    is capped instead of growing without limit.
+    """
+    shots = sorted(SHOT_DIR.glob(f"{project.name}-*.png"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in shots[SHOT_KEEP:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def take_shot(project: Path, pattern: str | None) -> tuple[Path, str]:
+    """Capture ONLY the project's own app.
+
+    There is deliberately no path that captures the real screen: a desktop-wide
+    grab would put whatever else is open into a remote agent's context. When the
+    app runs on its own nested display, that display's root IS the app, so the
+    root grab is both the most reliable and the tightest option.
+    """
+    SHOT_DIR.mkdir(parents=True, exist_ok=True)
+    out = SHOT_DIR / f"{project.name}-{time.strftime('%Y%m%d-%H%M%S')}.png"
+
+    if not (shutil.which("xdotool") and shutil.which("import")):
+        raise BadRequest("need xdotool and imagemagick's import for window-only capture")
+
+    nested = read_nested(project)
+    env: dict = {}
+    where = "desktop"
+    if nested:
+        env = {"DISPLAY": nested["display"]}
+        where = f"nested {nested['display']}"
+
+    pat = app_pattern(project, pattern)
+    pids = app_pids(project)
+    candidates = _window_ids_for(pids, pat, env)
+    if not candidates:
+        raise BadRequest(
+            f"no window found for {project.name} on {where} "
+            f"(pids={pids or 'none'}, name={pat!r}). Is the app running? `start` it first."
+        )
+
+    # Largest mapped window wins: Flutter creates 1x1 helper windows alongside
+    # the real one.
+    best: tuple[int, str, str] | None = None
+    for wid, why in candidates:
+        geo = run(["xdotool", "getwindowgeometry", "--shell", wid], timeout=15, env=env)
+        if geo["rc"] != 0:
+            continue
+        dims = dict(l.split("=", 1) for l in geo["stdout"].splitlines() if "=" in l)
+        try:
+            area = int(dims.get("WIDTH", 0)) * int(dims.get("HEIGHT", 0))
+        except ValueError:
+            continue
+        if area < 10000:  # 100x100 — helper/offscreen window, not the app
+            continue
+        if best is None or area > best[0]:
+            best = (area, wid, why)
+
+    if best is None:
+        raise BadRequest(f"only helper windows found for {project.name}; the app window is not mapped")
+
+    _, wid, why = best
+    cmd = ["import"]
+    if env.get("DISPLAY"):
+        cmd += ["-display", env["DISPLAY"]]
+    if _try(cmd + ["-window", wid, str(out)], out, timeout=45):
+        prune_shots(project)
+        return out, f"{where}, window {wid} via {why}"
+    raise BadRequest(f"import failed on window {wid} of {project.name} ({where})")
+
+
+# --------------------------------------------------------------------------
+# git mirror
+# --------------------------------------------------------------------------
+
+def git(args, cwd, timeout=600):
+    return run(["git"] + args, cwd=cwd, timeout=timeout,
+               env={"GIT_TERMINAL_PROMPT": "0"})
+
+
+def do_sync(name: str, repo: str | None, ref: str | None):
+    if repo is not None and not REPO_RE.match(repo):
+        raise BadRequest(f"bad repo url: {repo!r}")
+    if ref is not None and not REF_RE.match(ref):
+        raise BadRequest(f"bad ref: {ref!r}")
+    MIRROR_ROOT.mkdir(parents=True, exist_ok=True)
+    path = project_dir(name, must_exist=False)
+    steps = []
+
+    if not (path / ".git").exists():
+        if not repo:
+            raise BadRequest(f"mirror {name} does not exist — pass repo to clone it")
+        steps.append(run(["git", "clone", repo, str(path)], cwd=str(MIRROR_ROOT),
+                         timeout=1800, env={"GIT_TERMINAL_PROMPT": "0"}))
+        if steps[-1]["rc"] != 0:
+            return {"ok": False, "project": name, "path": str(path), "steps": steps}
+
+    steps.append(git(["fetch", "--prune", "origin"], cwd=str(path)))
+    target = ref or "HEAD"
+    if ref:
+        # Prefer the remote branch when the ref names one.
+        probe = git(["rev-parse", "--verify", "--quiet", f"origin/{ref}"], cwd=str(path), timeout=60)
+        target = f"origin/{ref}" if probe["rc"] == 0 else ref
+    else:
+        head = git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+                   cwd=str(path), timeout=60)
+        target = head["stdout"].strip() or "origin/master"
+    steps.append(git(["reset", "--hard", target], cwd=str(path)))
+    steps.append(git(["clean", "-fd", "-e", ".env", "-e", ".dart_tool", "-e", "build"], cwd=str(path)))
+    sha = git(["rev-parse", "--short", "HEAD"], cwd=str(path), timeout=60)
+    ok = all(s["rc"] == 0 for s in steps)
+    return {"ok": ok, "project": name, "path": str(path), "target": target,
+            "head": sha["stdout"].strip(), "steps": steps}
+
+
+def list_projects():
+    MIRROR_ROOT.mkdir(parents=True, exist_ok=True)
+    items = []
+    for p in sorted(MIRROR_ROOT.iterdir()):
+        if not p.is_dir():
+            continue
+        head = git(["rev-parse", "--short", "HEAD"], cwd=str(p), timeout=30)
+        branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=str(p), timeout=30)
+        status = run([FLUTTER_HOT, "status"], cwd=str(p), timeout=30)
+        items.append({
+            "project": p.name,
+            "path": str(p),
+            "flutter": (p / "pubspec.yaml").exists(),
+            "head": head["stdout"].strip(),
+            "branch": branch["stdout"].strip(),
+            "app": status["stdout"].strip(),
+        })
+    return items
+
+
+# --------------------------------------------------------------------------
+# HTTP
+# --------------------------------------------------------------------------
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "flutter-hotd/1.0"
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("%s %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
+
+    # -- helpers ----------------------------------------------------------
+    def _send(self, code, payload, ctype="application/json"):
+        body = payload if isinstance(payload, bytes) else json.dumps(payload, indent=1).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _authed(self) -> bool:
+        got = self.headers.get("Authorization", "")
+        want = f"Bearer {TOKEN}"
+        if len(got) == len(want) and secrets.compare_digest(got, want):
+            return True
+        self._send(401, {"error": "unauthorized"})
+        return False
+
+    def _body(self) -> dict:
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > MAX_BODY:
+            raise BadRequest("body too large")
+        if n == 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except json.JSONDecodeError as e:
+            raise BadRequest(f"bad json: {e}")
+
+    # -- routes -----------------------------------------------------------
+    def do_GET(self):
+        if self.path == "/health":
+            return self._send(200, {"ok": True, "host": os.uname().nodename,
+                                    "root": str(MIRROR_ROOT),
+                                    "session": os.environ.get("XDG_SESSION_TYPE", "?")})
+        if not self._authed():
+            return
+        try:
+            if self.path == "/projects":
+                return self._send(200, {"projects": list_projects()})
+        except BadRequest as e:
+            return self._send(400, {"error": str(e)})
+        self._send(404, {"error": "no such endpoint"})
+
+    def do_POST(self):
+        if not self._authed():
+            return
+        try:
+            body = self._body()
+            if self.path == "/sync":
+                return self._send(200, do_sync(body.get("project", ""),
+                                               body.get("repo"), body.get("ref")))
+            if self.path == "/run":
+                name = body.get("project", "")
+                args = body.get("args") or []
+                if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+                    raise BadRequest("args must be a list of strings")
+                timeout = min(int(body.get("timeout") or DEFAULT_TIMEOUT), MAX_TIMEOUT)
+                path = project_dir(name)
+                # A bare `flutter-hot start` drops every --dart-define, which
+                # silently changes feature flags and Supabase creds. Projects
+                # that ship run-hot.sh define the correct launch, so use it.
+                runhot = path / "run-hot.sh"
+                env = dict(TOOL_ENV)
+                verb = args[0] if args else ""
+
+                if verb == "start":
+                    # `nested: false` opts out and puts the app on the real
+                    # desktop; then screenshots need an X11 session.
+                    if body.get("nested", True):
+                        nested = ensure_nested(path)
+                        env["DISPLAY"] = nested["display"]
+                        env.pop("WAYLAND_DISPLAY", None)
+                        env["WAYLAND_DISPLAY"] = ""
+                    if runhot.exists():
+                        cmd = ["bash", str(runhot)] + args[1:]
+                        via = "run-hot.sh"
+                    else:
+                        cmd = [FLUTTER_HOT] + args
+                        via = "flutter-hot"
+                else:
+                    nested = read_nested(path)
+                    if nested:
+                        env["DISPLAY"] = nested["display"]
+                    cmd = [FLUTTER_HOT] + args
+                    via = "flutter-hot"
+
+                res = run(cmd, cwd=str(path), timeout=timeout, env=env)
+                if verb in ("stop", "kill"):
+                    stop_nested(path)
+                res["project"] = name
+                res["via"] = via
+                res["display"] = env.get("DISPLAY")
+                return self._send(200, res)
+            if self.path == "/shot":
+                path = project_dir(body.get("project", ""))
+                out, how = take_shot(path, body.get("pattern"))
+                data = out.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("X-Shot-Method", how)
+                self.send_header("X-Shot-Path", str(out))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+        except BadRequest as e:
+            return self._send(400, {"error": str(e)})
+        except Exception as e:  # noqa: BLE001 - report, do not kill the daemon
+            return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+        self._send(404, {"error": "no such endpoint"})
+
+
+def main():
+    host = bind_host()
+    MIRROR_ROOT.mkdir(parents=True, exist_ok=True)
+    srv = ThreadingHTTPServer((host, PORT), Handler)
+    srv.daemon_threads = True
+    print(f"flutter-hotd listening on http://{host}:{PORT}", flush=True)
+    print(f"  mirror root : {MIRROR_ROOT}", flush=True)
+    print(f"  flutter-hot : {FLUTTER_HOT}", flush=True)
+    print(f"  token file  : {TOKEN_FILE}", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
