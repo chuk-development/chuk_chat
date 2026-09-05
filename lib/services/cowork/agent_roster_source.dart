@@ -18,6 +18,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/services/cowork/cowork_relay_client.dart'
+    show CoworkHostAgentName;
 import 'package:cowork/services/cowork/schedule_spec.dart';
 
 /// Read/write access to the roster, as a [ChangeNotifier] the UI listens to.
@@ -57,6 +59,23 @@ abstract class AgentRosterSource extends ChangeNotifier {
     String? brief,
     ScheduleSpec? schedule,
     List<String> attachmentNames,
+  });
+
+  /// Renames a coworker (bead cowork-817). The trimmed name replaces the old
+  /// one; an empty name or an unknown id is a no-op. The id and the thread key
+  /// never change — a name is a label, not an identity.
+  void renameAgent(String id, String name);
+
+  /// Merges the host's `agent_list` (bead cowork-817, WIRE_CONTRACT "Coworker
+  /// names"): a known id takes the listed name; an unknown id is added as a
+  /// coworker with that name and its one permanent thread; the entry marked
+  /// `host` renames the `host:<peerDeviceId>` row (skipped when the host is
+  /// not paired). Ids in [ignore] — deleted in this session — are left out.
+  /// A list never removes anything.
+  void applyHostNames(
+    List<CoworkHostAgentName> names, {
+    required String? peerDeviceId,
+    Set<String> ignore = const <String>{},
   });
 
   /// Marks a run as in flight (or finished) for [agentId].
@@ -161,6 +180,48 @@ class LocalAgentRosterSource extends AgentRosterSource {
     _agents.add(agent);
     notifyListeners();
     return agent;
+  }
+
+  @override
+  void renameAgent(String id, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final index = _indexOf(id, orNull: true);
+    if (index < 0 || _agents[index].name == trimmed) return;
+    _agents[index] = _agents[index].copyWith(name: trimmed);
+    notifyListeners();
+  }
+
+  @override
+  void applyHostNames(
+    List<CoworkHostAgentName> names, {
+    required String? peerDeviceId,
+    Set<String> ignore = const <String>{},
+  }) {
+    var changed = false;
+    for (final entry in names) {
+      final id = entry.host
+          ? (peerDeviceId == null ? null : 'host:$peerDeviceId')
+          : entry.agentId;
+      if (id == null || ignore.contains(id)) continue;
+      final index = _indexOf(id, orNull: true);
+      if (index >= 0) {
+        if (_agents[index].name == entry.name) continue;
+        _agents[index] = _agents[index].copyWith(name: entry.name);
+        changed = true;
+        continue;
+      }
+      // The host agent is created by [ensureHostAgent] on pairing, never from
+      // a list: a name for a host that is not paired has nowhere to go.
+      if (entry.host) continue;
+      _agents.add(CoworkAgent(
+        id: id,
+        name: entry.name,
+        threads: <CoworkThreadInfo>[CoworkThreadInfo(key: id, title: 'General')],
+      ));
+      changed = true;
+    }
+    if (changed) notifyListeners();
   }
 
   @override

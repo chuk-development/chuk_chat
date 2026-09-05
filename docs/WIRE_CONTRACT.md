@@ -228,6 +228,25 @@ Emitted first in every replay response.
   before this app connected). The app shows "Working…" with the original prompt.
 - `idle`: no run in flight.
 
+### `run_state.browser_open` and `browser_view` `opened` / `closed` (additive, cowork-vzm)
+
+```json
+{"type": "run_state", ..., "browser_open": true | false}
+{"type": "browser_view", "status": "opened" | "closed", "message": ""}
+```
+
+The host's word on whether the agent has a browser window right now. The
+agent's browser is the Playwright MCP server in its sandbox: a completed
+`mcp__playwright__browser_*` tool (also through the `tool_call` wrapper) means
+a page is open, a completed `browser_close` means it is gone, and
+`cowork-vnc-up`'s window count (`WINDOWS=<n>`) on a `browser_start` is the
+ground truth when the display is asked. `browser_open` rides in every
+`run_state`; `opened` / `closed` are pushed once per change, on the stream that
+learned it, and land BEFORE the `tool` frame that caused the flip. `started` /
+`stopped` / `error` keep their meaning (the VNC stream, not the browser). The
+app shows its "Agent's browser" button only while the browser is open; on an
+old host it derives the same from the `tool` frames itself.
+
 ### `reasoning` (now emitted; live and replayed)
 
 ```json
@@ -927,6 +946,88 @@ automations manager, `kind: job` goes to the executor's job router. The router:
 
 Rate limits and the 16 KB payload cap of the automations do not apply: a job
 ends once, and the tail is read from the log, not from the trigger line.
+
+## Coworker names (bead cowork-817, session cowork-af)
+
+Additive. Nothing above changes. The app's roster is in memory only; a
+reinstall or a second device forgets every coworker the user created and
+every name the user chose. The host keeps them from now on, keyed by the
+app's own agent id, so the name is the same on every install that pairs with
+this host.
+
+### The idea
+
+- The app is the source of the id (`local:<name>:<n>:<random>` for a created
+  coworker, `host:<peer_device_id>` for the coworker that really runs on the
+  host). The host never invents an agent id for the app.
+- The host stores `(agent_id, name, created_by_app, updated_at)` in its own
+  small table (`coworker_names` in `roster.db`). It does NOT touch the
+  `RosterStore` row of the running agent: that row's `name` is also the
+  workspace directory name (`~/.cowork/agents/<name>`), and a rename must
+  never move a workspace. A display name is a label, not an identity.
+- The app asks for the list on every pair (`agent_list` request, like
+  `automation_list`), and every `agent_create` / `agent_rename` is answered
+  with the list too. The app merges: a listed id it knows gets the listed
+  name; a listed id it does not know is added as a coworker with that name
+  (never as the host agent); the host agent's entry (`host: true`) renames
+  the `host:<peer_device_id>` row. Nothing is deleted by a list.
+
+### Frames
+
+App → host, `agent_create` — the user created a coworker in the app:
+
+```json
+{"type": "agent_create", "agent_id": "local:crypto-desk:1:74112", "name": "Crypto Desk"}
+```
+
+App → host, `agent_rename` — the user renamed a coworker (also the host agent):
+
+```json
+{"type": "agent_rename", "agent_id": "host:hostlaptop-3f2a", "name": "Laptop Bot"}
+```
+
+App → host, `agent_list` — list request, no fields:
+
+```json
+{"type": "agent_list"}
+```
+
+All three are answered with ONE terminal `agent_list` frame on the request
+stream (like a replay's `done`). The host trims the name; an empty name, a
+name over 80 characters, or a missing `agent_id` is dropped with a log line
+and the unchanged list is still answered. `agent_create` on a known id
+behaves like `agent_rename`; `agent_rename` on an unknown id inserts it
+(`created_by_app: false`). Without the host hook the executor answers
+`error` ("coworker names not enabled").
+
+Host → app, `agent_list`:
+
+```json
+{"type": "agent_list",
+ "agents": [
+   {"agent_id": "host:hostlaptop-3f2a", "name": "Laptop Bot", "host": true},
+   {"agent_id": "local:crypto-desk:1:74112", "name": "Crypto Desk", "host": false}
+ ]}
+```
+
+- `host: true` marks the coworker that runs on this host: the entry whose
+  `agent_id` is `host:<host device id>` (`cowork-host`, the `peer_device_id`
+  the app sees). When no name was ever set for it there is no entry, and the
+  app keeps showing the device id, as today.
+- Order is `updated_at` ascending. The app does not care about order.
+- A deleted coworker (`removeAgent` in the app) is not on the wire yet; the
+  host keeps the row and the app ignores an id it deleted in this session
+  only. Bead to follow if it matters.
+
+### Implemented
+
+App: `CoworkRelayController.createAgent` / `renameAgent` / `requestAgentList`
+send the frames; `CoworkRelayAgentList` on `inbound`; the shell asks in
+`_onPaired` and merges through `AgentRosterSource.applyHostNames` (ids deleted
+in this session are skipped). Host: `cowork_host/coworker_names.py`
+(`CoworkerNameStore` on `roster.db`, `handle_agent_frame`), wired as the
+executor's `on_agent_frame`; payload helpers `agent_create_payload`,
+`agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
 
 ## Skills: the host's list, the user's switches (session cowork-18, bead cowork-qk7)
 

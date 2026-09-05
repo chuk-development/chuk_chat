@@ -1,67 +1,780 @@
-import 'package:flutter/material.dart';
+// lib/pages/account_settings_page.dart
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:cowork/l10n/app_localizations.dart';
+import 'package:cowork/pages/recover_chats_page.dart';
+import 'package:cowork/services/api_config_service.dart';
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/services/key_version_service.dart';
+import 'package:cowork/services/password_change_service.dart';
+import 'package:cowork/services/password_reset_service.dart';
+import 'package:cowork/services/profile_service.dart';
 import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
-/// The account surface: who is signed in, and the way out.
-///
-/// The email and id come straight from the live Supabase session. Sign-out
-/// runs the same [AuthService] the shell's app-bar button does; the auth gate
-/// takes the app back to the login screen when the session clears.
-class AccountSettingsPage extends StatelessWidget {
-  const AccountSettingsPage({super.key, this.onSignOut});
+class AccountSettingsPage extends StatefulWidget {
+  const AccountSettingsPage({super.key});
 
-  /// Injectable sign-out, so a test can prove the button without Supabase.
-  /// Defaults to the real [AuthService].
-  final Future<void> Function()? onSignOut;
+  @override
+  State<AccountSettingsPage> createState() => _AccountSettingsPageState();
+}
+
+class _AccountSettingsPageState extends State<AccountSettingsPage> {
+  final ProfileService _profileService = const ProfileService();
+  final TextEditingController _displayNameCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _currentPasswordCtrl = TextEditingController();
+  final TextEditingController _newPasswordCtrl = TextEditingController();
+  final TextEditingController _confirmPasswordCtrl = TextEditingController();
+
+  bool _isSaving = false;
+  bool _isLoading = true;
+  bool _isDeletingAccount = false;
+  bool _isChangingPassword = false;
+  bool _obscureCurrentPassword = true;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
+  ProfileRecord? _profile;
+  String? _errorMessage;
+  String? _passwordChangeError;
+  String? _passwordChangeNotice;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _displayNameCtrl.dispose();
+    _emailCtrl.dispose();
+    _currentPasswordCtrl.dispose();
+    _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final record = await _profileService.loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = record;
+        _displayNameCtrl.text = record.displayName;
+        _emailCtrl.text = record.email;
+        _isLoading = false;
+      });
+    } on ProfileServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = AppLocalizations.of(context)!.failedToLoadProfile(error.toString());
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveAccountSettings() async {
+    if (_profile == null) return;
+
+    // Cache localizations before any async gap.
+    final l = AppLocalizations.of(context)!;
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final updatedRecord = _profile!.copyWith(
+        displayName: _displayNameCtrl.text.trim(),
+      );
+
+      await _profileService.saveProfile(updatedRecord);
+
+      final newEmail = _emailCtrl.text.trim();
+      String? emailNotice;
+
+      if (newEmail.isEmpty) {
+        throw ProfileServiceException(l.emailCannotBeEmpty);
+      }
+
+      if (newEmail != _profile!.email) {
+        await SupabaseService.auth.updateUser(UserAttributes(email: newEmail));
+        emailNotice = l.emailUpdated(newEmail);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _profile = updatedRecord.copyWith(email: newEmail);
+        _isSaving = false;
+      });
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            emailNotice ?? l.saved,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = error.message;
+      });
+    } on ProfileServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = error.message;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = l.failedToSaveProfile(error.toString());
+      });
+    }
+  }
+
+  // Recovery section shows whenever the account has previous encryption keys
+  // (i.e. the password was reset/changed at least once). It must NOT gate on
+  // lockedChatCount: the local plaintext cache (kept on desktop) can hold
+  // readable copies of old-key chats, which zeroes that count even though the
+  // server copies are still encrypted with the old key and need recovery.
+  Widget _buildRecoverChatsSection([AppLocalizations? localizations]) {
+    final l = localizations ?? AppLocalizations.of(context)!;
+    final user = SupabaseService.auth.currentUser;
+    if (user == null || !KeyVersionService.hasPreviousKeys(user)) {
+      return const SizedBox.shrink();
+    }
+
+    // Informational only — show the locked count when reliably known (>0),
+    // otherwise a generic prompt. Never use it to hide the section.
+    final lockedCount = PasswordResetService.lockedChatCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const ExpressiveSectionHeader('Chat recovery'),
+        ExpressiveInfoCard(
+          text: lockedCount > 0
+              ? l.lockedChatsCount(lockedCount)
+              : l.recoverOldChatsAvailable,
+          icon: Icons.lock_outline,
+        ),
+        const SizedBox(height: 12),
+        ExpressiveGroup(
+          children: [
+            ExpressiveRow(
+              icon: Icons.lock_open,
+              title: l.encryptedChatRecovery,
+              subtitle: l.recoverChats,
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RecoverChatsPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _changePassword() async {
+    if (_isChangingPassword) return;
+
+    final newPassword = _newPasswordCtrl.text;
+    final confirmPassword = _confirmPasswordCtrl.text;
+    if (newPassword.trim() != confirmPassword.trim()) {
+      setState(() {
+        _passwordChangeError = AppLocalizations.of(context)!.passwordsDoNotMatch;
+        _passwordChangeNotice = null;
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isChangingPassword = true;
+      _passwordChangeError = null;
+      _passwordChangeNotice = null;
+    });
+
+    const service = PasswordChangeService();
+    try {
+      final notice = await service.changePassword(
+        currentPassword: _currentPasswordCtrl.text,
+        newPassword: newPassword,
+      );
+      if (!mounted) return;
+      _currentPasswordCtrl.clear();
+      _newPasswordCtrl.clear();
+      _confirmPasswordCtrl.clear();
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeNotice = notice;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            notice,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    } on PasswordChangeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeError = error.message;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeError = AppLocalizations.of(context)!.failedToChangePassword(error.toString());
+      });
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final l = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
+    // ── Step 1: First warning ──
+    final step1 = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
+            const SizedBox(width: 10),
+            Expanded(child: Text(l.deleteAccountQuestion)),
+          ],
+        ),
+        content: Text(l.deleteAccountConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.cancel),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l.yesDelete),
+          ),
+        ],
+      ),
+    );
+
+    if (step1 != true || !mounted) return;
+
+    // ── Step 2: Final warning ──
+    final step2 = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.delete_forever, color: cs.error, size: 28),
+            const SizedBox(width: 10),
+            Expanded(child: Text(l.thisIsPermanent)),
+          ],
+        ),
+        content: Text(l.finalDeleteWarning),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.noKeepMyAccount),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l.deleteEverything),
+          ),
+        ],
+      ),
+    );
+
+    if (step2 != true || !mounted) return;
+
+    // ── Step 3: Password confirmation ──
+    // The dialog returns the verified password (not just a bool): the server
+    // re-verifies it on the delete request, so this client-side check is only
+    // a fast-fail and the password must travel to Step 4.
+    final passwordController = TextEditingController();
+    final confirmedPassword = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        String? errorText;
+        bool isVerifying = false;
+
+        Future<void> verify(StateSetter setDialogState) async {
+          final password = passwordController.text.trim();
+          if (password.isEmpty) {
+            setDialogState(() => errorText = l.passwordRequired);
+            return;
+          }
+          setDialogState(() {
+            isVerifying = true;
+            errorText = null;
+          });
+          try {
+            final email = Supabase.instance.client.auth.currentUser?.email;
+            if (email == null) {
+              throw Exception('No email found');
+            }
+            await Supabase.instance.client.auth.signInWithPassword(
+              email: email,
+              password: password,
+            );
+            if (ctx.mounted) Navigator.of(ctx).pop(password);
+          } on AuthException catch (e) {
+            setDialogState(() {
+              isVerifying = false;
+              errorText = e.message;
+            });
+          } catch (e) {
+            setDialogState(() {
+              isVerifying = false;
+              errorText = l.verificationFailed(e.toString());
+            });
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: Text(l.confirmYourPassword),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l.confirmPasswordBody),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: l.password,
+                    errorText: errorText,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted:
+                      isVerifying ? null : (_) => verify(setDialogState),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isVerifying
+                    ? null
+                    : () => Navigator.of(ctx).pop(),
+                child: Text(l.cancel),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: cs.error),
+                onPressed: isVerifying ? null : () => verify(setDialogState),
+                child: isVerifying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l.verifyAndDelete),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    passwordController.dispose();
+    if (confirmedPassword == null || confirmedPassword.isEmpty || !mounted) {
+      return;
+    }
+
+    // ── Step 4: Execute deletion ──
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isDeletingAccount = true);
+
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) throw Exception('Not authenticated');
+
+      final response = await http.delete(
+        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/delete-account'),
+        headers: {
+          'Authorization': 'Bearer ${session.accessToken}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'password': confirmedPassword}),
+      );
+
+      if (response.statusCode != 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        throw Exception(body['detail'] ?? 'Failed to delete account');
+      }
+
+      await const AuthService().signOut();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            l.failedToDeleteAccount(error.toString()),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 3),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final user = SupabaseService.isInitialized
-        ? SupabaseService.auth.currentUser
-        : null;
-    final email = user?.email ?? 'Signed in';
-    final userId = user?.id ?? '';
+    final l = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          const ExpressiveTitle('Account', subtitle: 'Your CoWork identity'),
-          const ExpressiveSectionHeader('Signed in as'),
-          ExpressiveGroup(
+    Widget bodyContent;
+
+    if (_isLoading) {
+      bodyContent = const Center(child: CircularProgressIndicator());
+    } else if (_profile == null) {
+      bodyContent = Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              ExpressiveRow(
-                icon: Icons.person_outline,
-                title: email,
-                subtitle: userId.isEmpty ? null : userId,
+              Text(
+                _errorMessage ?? l.unableToLoadProfile,
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loadProfile,
+                child: Text(l.retry),
               ),
             ],
           ),
-          const ExpressiveSectionHeader('Session'),
-          ExpressiveGroup(
-            children: [
-              ExpressiveRow(
-                icon: Icons.logout,
-                title: 'Sign out',
-                subtitle: 'End this session on this device',
-                tone: Theme.of(context).colorScheme.errorContainer,
-                onTap: () async {
-                  final navigator = Navigator.of(context);
-                  if (onSignOut != null) {
-                    await onSignOut!();
-                  } else {
-                    await const AuthService().signOut();
-                  }
-                  navigator.pop();
+        ),
+      );
+    } else {
+      bodyContent = SettingsListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ExpressiveInfoCard(
+                text: _errorMessage!,
+                icon: Icons.error_outline,
+                tone: cs.errorContainer,
+              ),
+            ),
+
+          // Profile
+          const ExpressiveSectionHeader('Profile'),
+          _FieldLabel(l.displayName),
+          TextFormField(
+            controller: _displayNameCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              hintText: l.displayNameHint,
+              prefixIcon: const Icon(Icons.person_outline),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.emailAddress),
+          TextFormField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              hintText: l.emailAddressHint,
+              prefixIcon: const Icon(Icons.mail_outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              icon: _isSaving
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          cs.onPrimary,
+                        ),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.check),
+              label: Text(_isSaving ? l.saving : l.saveChanges),
+              onPressed: _isSaving || _profile == null
+                  ? null
+                  : _saveAccountSettings,
+            ),
+          ),
+
+          // Security
+          const ExpressiveSectionHeader('Security'),
+          if (_passwordChangeError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ExpressiveInfoCard(
+                text: _passwordChangeError!,
+                icon: Icons.error_outline,
+                tone: cs.errorContainer,
+              ),
+            ),
+          if (_passwordChangeNotice != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ExpressiveInfoCard(
+                text: _passwordChangeNotice!,
+                icon: Icons.check_circle_outline,
+                tone: m3.successContainer,
+              ),
+            ),
+          _FieldLabel(l.currentPassword),
+          TextField(
+            controller: _currentPasswordCtrl,
+            obscureText: _obscureCurrentPassword,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureCurrentPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureCurrentPassword = !_obscureCurrentPassword;
+                  });
                 },
               ),
-            ],
+            ),
           ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.newPassword, helper: l.minCharsPassword),
+          TextField(
+            controller: _newPasswordCtrl,
+            obscureText: _obscureNewPassword,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.lock_reset),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureNewPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureNewPassword = !_obscureNewPassword;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.confirmNewPassword),
+          TextField(
+            controller: _confirmPasswordCtrl,
+            obscureText: _obscureConfirmPassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_isChangingPassword) {
+                _changePassword();
+              }
+            },
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.check_circle_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureConfirmPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureConfirmPassword = !_obscureConfirmPassword;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              icon: _isChangingPassword
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          cs.onSecondaryContainer,
+                        ),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.password),
+              label: Text(l.updatePassword),
+              onPressed: _isChangingPassword ? null : _changePassword,
+            ),
+          ),
+
+          // Chat Recovery (conditional).
+          _buildRecoverChatsSection(l),
+
+          const SizedBox(height: 24),
+
+          // Danger Zone
+          ExpressiveSectionHeader('Danger zone', color: cs.error),
+          ExpressiveInfoCard(
+            text: l.deleteAccountWarning,
+            icon: Icons.warning_amber_rounded,
+            tone: cs.errorContainer,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.errorContainer,
+                foregroundColor: cs.onErrorContainer,
+              ),
+              icon: _isDeletingAccount
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          cs.onErrorContainer,
+                        ),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.delete_forever),
+              onPressed: _isDeletingAccount ? null : _deleteAccount,
+              label: Text(l.deleteAccount),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l.accountSettings),
+        centerTitle: false,
+      ),
+      body: bodyContent,
+    );
+  }
+}
+
+// ───────── private shared widgets ─────────
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.label, {this.helper});
+
+  final String label;
+  final String? helper;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+          if (helper != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              helper!,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: m3.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
+

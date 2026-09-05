@@ -17,7 +17,10 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 /// * a completed `browser_close` means it is gone;
 /// * the executor's own `browser_view` verdicts refine that: `started` with an
 ///   empty message = a window is on the display, `started` with the "no page
-///   open yet" message or the "no browser open yet" error = nothing to show.
+///   open yet" message or the "no browser open yet" error = nothing to show;
+/// * a current host says it outright: `browser_view` `opened` / `closed`
+///   pushed on every change, and `browser_open` in every `run_state` (the
+///   replay header), which wins over anything derived here.
 ///
 /// A replay after a reconnect carries the same tool frames, so the state is
 /// rebuilt from the transcript and the app and the host agree again. The
@@ -80,6 +83,10 @@ class BrowserPresence extends ValueNotifier<bool> {
   static bool? stateFromView(CoworkRelayBrowserView view) {
     final String message = view.message.toLowerCase();
     switch (view.status) {
+      case 'opened':
+        return true;
+      case 'closed':
+        return false;
       case 'started':
       case 'live':
         return !message.contains('no page open');
@@ -95,6 +102,9 @@ class BrowserPresence extends ValueNotifier<bool> {
     final bool? next = switch (event) {
       CoworkRelayTool() => stateFromTool(event),
       CoworkRelayBrowserView() => stateFromView(event),
+      // The host's word in the replay header (a current host; null on an old
+      // one, which leaves the derived state alone).
+      CoworkRelayRunState() => event.browserOpen,
       _ => null,
     };
     if (next != null && next != value) value = next;
