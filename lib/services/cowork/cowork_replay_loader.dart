@@ -500,6 +500,25 @@ class CoworkReplayLoader extends ChangeNotifier {
         draft.afterId > 0 && (draft.minMid == null || draft.minMid! > draft.afterId);
 
     if (draft.rows.isEmpty && honouredCursor) {
+      // "Nothing new" is only good news when there is something to be new
+      // ABOVE. A cursor outlives the rows it was earned on — it lives in
+      // preferences, the transcript lives in the store — so a store that lost
+      // its threads (the JSON to SQLite move) leaves a cursor pointing at rows
+      // nobody has. The host then answers "nothing after 106", the thread stays
+      // empty, and because the cursor keeps advancing it is never asked for
+      // again: the reader's history is gone for good although the host still
+      // has every word of it (bead cowork-izh). The check is cheap — a row
+      // count, no payload decode, no cloud.
+      if (!await ChatStorageService.hasLocalThread(session)) {
+        if (kDebugMode) {
+          debugPrint('[cowork-replay] $session: cursor ${draft.afterId} with no '
+              'local thread, replaying from zero');
+        }
+        invalidateCursor(session);
+        _replayWanted.add(session);
+        notifyListeners();
+        return;
+      }
       // Nothing new: the cache is already current.
       _advanceCursor(session, draft.maxMid);
       return;
