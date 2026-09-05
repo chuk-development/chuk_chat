@@ -1,0 +1,188 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/encryption_service.dart';
+import 'package:cowork/services/password_revision_service.dart';
+import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/services/user_preferences_service.dart';
+import 'package:cowork/utils/client_platform.dart';
+import 'package:cowork/utils/input_validator.dart';
+
+class PasswordChangeService {
+  const PasswordChangeService();
+
+  Future<String> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final trimmedCurrent = currentPassword.trim();
+    final trimmedNew = newPassword.trim();
+
+    if (trimmedCurrent.isEmpty) {
+      throw const PasswordChangeException(
+        'Enter your current password to continue.',
+      );
+    }
+    if (trimmedNew.isEmpty) {
+      throw const PasswordChangeException('Enter a new password.');
+    }
+    final passwordError = InputValidator.validatePassword(trimmedNew);
+    if (passwordError != null) {
+      throw PasswordChangeException(passwordError);
+    }
+    if (trimmedCurrent == trimmedNew) {
+      throw const PasswordChangeException(
+        'New password must be different from your current password.',
+      );
+    }
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw const PasswordChangeException(
+        'You need to be signed in to change your password.',
+      );
+    }
+
+    try {
+      await EncryptionService.initializeForPassword(trimmedCurrent);
+    } on StateError catch (error) {
+      throw PasswordChangeException(error.message);
+    }
+
+    await ChatStorageService.loadChats();
+    final chatsSnapshot = ChatStorageService.savedChats
+        .map(
+          (chat) =>
+              chat.copyWith(messages: List<ChatMessage>.from(chat.messages)),
+        )
+        .toList();
+
+    // Load system prompt snapshot for migration
+    String? systemPromptSnapshot;
+    try {
+      systemPromptSnapshot = await UserPreferencesService.loadSystemPrompt();
+    } catch (_) {
+      // If loading fails, we'll just skip system prompt migration
+      systemPromptSnapshot = null;
+    }
+
+    try {
+      await _rotateEncryptionForPasswordChange(
+        chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
+        fromPassword: trimmedCurrent,
+        toPassword: trimmedNew,
+      );
+    } on StateError catch (error) {
+      throw PasswordChangeException(error.message);
+    } catch (error) {
+      throw PasswordChangeException(
+        'Failed to prepare encrypted chats for the new password: $error',
+      );
+    }
+
+    try {
+      await SupabaseService.auth.updateUser(
+        UserAttributes(
+          password: trimmedNew,
+          data: {'pw_change_client': clientPlatformName()},
+        ),
+      );
+    } on AuthException catch (error) {
+      final restored = await _tryRestoreEncryption(
+        chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
+        currentPassword: trimmedNew,
+        previousPassword: trimmedCurrent,
+      );
+      final reason = restored
+          ? 'Supabase rejected the password change: ${error.message}'
+          : 'Supabase rejected the password change and the encrypted data could not be restored: ${error.message}';
+      throw PasswordChangeException(reason);
+    } catch (error) {
+      final restored = await _tryRestoreEncryption(
+        chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
+        currentPassword: trimmedNew,
+        previousPassword: trimmedCurrent,
+      );
+      final reason = restored
+          ? 'Failed to update password: $error'
+          : 'Failed to update password and the encrypted data could not be restored: $error';
+      throw PasswordChangeException(reason);
+    }
+
+    try {
+      await PasswordRevisionService.bumpRevision(user);
+    } on AuthException catch (error) {
+      throw PasswordChangeException(
+        'Password was updated but notifying other sessions failed: ${error.message}',
+      );
+    } catch (error) {
+      throw PasswordChangeException(
+        'Password was updated but notifying other sessions failed: $error',
+      );
+    }
+
+    await ChatStorageService.loadChats();
+    return 'Password updated.';
+  }
+
+  Future<void> _rotateEncryptionForPasswordChange({
+    required List<StoredChat> chatsSnapshot,
+    required String? systemPromptSnapshot,
+    required String fromPassword,
+    required String toPassword,
+  }) async {
+    await EncryptionService.rotateKeyForPasswordChange(
+      currentPassword: fromPassword,
+      newPassword: toPassword,
+      migrateWithNewKey: () async {
+        // Re-encrypt chats with new key
+        await ChatStorageService.reencryptChats(chatsSnapshot);
+
+        // Re-encrypt system prompt with new key if it exists
+        if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
+          await UserPreferencesService.saveSystemPrompt(systemPromptSnapshot);
+        }
+      },
+      rollbackWithOldKey: () async {
+        // Rollback chats to old key
+        await ChatStorageService.reencryptChats(chatsSnapshot);
+
+        // Rollback system prompt to old key if it exists
+        if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
+          await UserPreferencesService.saveSystemPrompt(systemPromptSnapshot);
+        }
+      },
+    );
+  }
+
+  Future<bool> _tryRestoreEncryption({
+    required List<StoredChat> chatsSnapshot,
+    required String? systemPromptSnapshot,
+    required String currentPassword,
+    required String previousPassword,
+  }) async {
+    try {
+      await _rotateEncryptionForPasswordChange(
+        chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
+        fromPassword: currentPassword,
+        toPassword: previousPassword,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+class PasswordChangeException implements Exception {
+  const PasswordChangeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}

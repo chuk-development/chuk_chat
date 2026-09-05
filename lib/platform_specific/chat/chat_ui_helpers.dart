@@ -1,0 +1,1056 @@
+// lib/platform_specific/chat/chat_ui_helpers.dart
+
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import 'package:uuid/uuid.dart';
+
+import 'package:cowork/models/chat_model.dart';
+import 'package:cowork/models/content_block.dart';
+import 'package:cowork/models/tool_call.dart';
+import 'package:cowork/pages/coming_soon_page.dart';
+import 'package:cowork/platform_config.dart';
+import 'package:cowork/services/artifact_context_service.dart';
+import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/model_capabilities_service.dart';
+import 'package:cowork/services/workspace_message_service.dart';
+import 'package:cowork/services/user_preferences_service.dart';
+import 'package:cowork/widgets/message_bubble.dart'
+    show DocumentAttachment, ImageMeta;
+import 'package:cowork/widgets/model_selection_dropdown.dart';
+
+/// Data class holding pre-parsed render information for a single chat message.
+///
+/// Shared by both desktop and mobile chat UIs to avoid duplicating parsing
+/// logic.
+class MessageRenderData {
+  const MessageRenderData({
+    required this.sender,
+    required this.displayText,
+    required this.reasoning,
+    required this.isReasoningStreaming,
+    this.modelLabel,
+    this.modelProvider,
+    this.tps,
+    this.images,
+    this.imageMetas,
+    this.imageCostEur,
+    this.imageGeneratedAt,
+    this.attachments,
+    this.toolCalls,
+    this.contentBlocks,
+    this.isStreamingMessage = false,
+    this.turnStartedAt,
+    this.workedFor,
+    this.status,
+    this.queueId,
+    this.lastError,
+    this.variantIndex = 0,
+    this.variantCount = 0,
+  });
+
+  final String sender;
+  final String displayText;
+  final String reasoning;
+  final bool isReasoningStreaming;
+  final String? modelLabel;
+  final String? modelProvider;
+  final double? tps;
+  final List<String>? images;
+
+  /// Per-image metadata aligned with [images]. Each entry carries a
+  /// `source` ("generated"|"fetched") and optional `caption`.
+  final List<ImageMeta>? imageMetas;
+  final double? imageCostEur;
+  final DateTime? imageGeneratedAt;
+  final List<DocumentAttachment>? attachments;
+  final List<ToolCall>? toolCalls;
+  final List<ContentBlock>? contentBlocks;
+  final bool isStreamingMessage;
+
+  /// When the request behind this answer went out. The header counts from
+  /// here while the turn runs.
+  final DateTime? turnStartedAt;
+
+  /// How long the finished turn took, as written down when it was saved.
+  /// Null while it still runs, and on messages from before it was recorded.
+  final Duration? workedFor;
+
+  /// Local-only delivery status. `pending` / `failed` apply to user
+  /// messages (offline queue); `interrupted` applies to assistant
+  /// messages whose stream was torn down mid-emission. `null` = sent.
+  final ChatMessageStatus? status;
+
+  /// Offline queue id linking this user message to its pending entry.
+  final String? queueId;
+
+  /// Last error message recorded while trying to send (for failed status).
+  final String? lastError;
+
+  /// Zero-based index of the answer variant currently shown, for the OpenAI-
+  /// style ‹ k/n › pager. `0` when the message was never regenerated.
+  final int variantIndex;
+
+  /// Number of answer variants on this message. `0` or `1` means no pager
+  /// (nothing to switch between); `> 1` renders the pager.
+  final int variantCount;
+
+  bool get isUser => sender == 'user';
+}
+
+
+/// Static utility functions shared between the desktop and mobile chat UIs.
+class ChatUiHelpers {
+  const ChatUiHelpers._();
+
+  /// Ephemeral, UI-only field holding a stable per-message identity key for
+  /// `ListView` item keys. Never persisted (the raw-map -> [ChatMessage]
+  /// conversion reads only known keys) and never sent to the API.
+  static const String kUiKeyField = '_uiKey';
+
+  /// Returns a stable per-message key for `ListView` identity, assigning one
+  /// lazily (idempotent) if absent.
+  ///
+  /// Index-based keys (`ValueKey('msg_$i')`) make Flutter discard and rebuild
+  /// bubble element state (and its decode/markdown caches) whenever a message
+  /// is edited, resent, or inserted and the indices shift. A stable per-message
+  /// key keeps each bubble's state attached to its message.
+  ///
+  /// Prefers the persisted [ChatMessage.messageId] so the key survives reloads
+  /// for assistant messages; falls back to a fresh UUID for user/legacy
+  /// messages. The assigned value is stored back into the (mutable, by-ref)
+  /// message map so it stays constant for the message's lifetime in the list.
+  static String stableUiKey(Map<String, String> raw, Uuid uuid) {
+    final String? existing = raw[kUiKeyField];
+    if (existing != null && existing.isNotEmpty) return existing;
+    final String? messageId = raw['messageId'];
+    final String id = (messageId != null && messageId.isNotEmpty)
+        ? messageId
+        : uuid.v4();
+    raw[kUiKeyField] = id;
+    return id;
+  }
+
+  /// Format model info for display in message bubble.
+  static String? formatModelInfo(String? modelId, String? provider) {
+    final String normalizedModel = (modelId ?? '').trim();
+    final String normalizedProvider = (provider ?? '').trim();
+    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
+      return null;
+    }
+    if (normalizedModel.isEmpty) {
+      return normalizedProvider;
+    }
+    return normalizedModel;
+  }
+
+  /// Check if the selected model supports image input.
+  static bool modelSupportsImageInput(String selectedModelId) =>
+      ModelCapabilitiesService.supportsImageInputSync(selectedModelId);
+
+  /// Show a styled snack bar.
+  static void showSnackBar(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
+  }
+
+  /// Navigate to Coming Soon page.
+  static void openComingSoonFeature(BuildContext context, String featureName) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ComingSoonPage(
+          title: featureName,
+          message: 'Stay tuned for $featureName.',
+        ),
+      ),
+    );
+  }
+
+  /// Load provider slug for a model.
+  static Future<String?> loadProviderSlugForModel(String modelId) async {
+    if (modelId.isEmpty) return null;
+
+    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
+      modelId,
+    );
+    if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
+      return dropdownSlug;
+    }
+
+    final String? prefsSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
+    if (prefsSlug != null && prefsSlug.isNotEmpty) return prefsSlug;
+
+    // Third fallback: use the static in-memory providers list — survives
+    // network glitches.
+    final providers =
+        ModelSelectionDropdown.availableProvidersForModel(modelId);
+    return providers.isNotEmpty ? providers.first.slug : null;
+  }
+
+  /// Ensure provider slug is available for the current model.
+  static Future<String?> ensureProviderSlug(
+    String selectedModelId,
+    String? currentSlug,
+  ) async {
+    if (selectedModelId.isEmpty) return null;
+    String? slug = (currentSlug != null && currentSlug.isNotEmpty)
+        ? currentSlug
+        : await loadProviderSlugForModel(selectedModelId);
+    if (slug == null || slug.isEmpty) return null;
+    if (slug == kAutoCheapestProviderSlug) {
+      return ModelSelectionDropdown.resolveProviderSlugForSend(
+        selectedModelId,
+        slug,
+      );
+    }
+    return slug;
+  }
+
+  /// Load system prompt from preferences.
+  static Future<String?> loadSystemPrompt() async {
+    try {
+      return await UserPreferencesService.loadSystemPrompt();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error loading system prompt: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Resolve system prompt with workspace + artifact context.
+  static Future<String?> resolveSystemPromptForSend({
+    required String? cachedSystemPrompt,
+    required String? selectedWorkspaceId,
+    required String? activeChatId,
+  }) async {
+    String? basePrompt;
+    try {
+      // Fast path: in-memory / local cache, no per-send Supabase round-trip.
+      basePrompt = await UserPreferencesService.loadSystemPromptFast();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Error resolving system prompt for send: $error');
+      }
+      basePrompt = cachedSystemPrompt;
+    }
+
+    var resolvedPrompt = basePrompt;
+
+    // If a workspace is active, prepend workspace context.
+    if (selectedWorkspaceId != null) {
+      try {
+        final projectContext =
+            await WorkspaceMessageService.buildProjectSystemMessage(
+              selectedWorkspaceId,
+            );
+        if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+          resolvedPrompt =
+              '$projectContext\n\n---\n\nAdditional User Instructions:\n$resolvedPrompt';
+        } else {
+          resolvedPrompt = projectContext;
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Error building workspace system message: $error');
+        }
+      }
+    }
+
+    // Inject active artifact context for this chat (when feature is enabled).
+    if (kFeatureArtifacts) {
+      final chatId = activeChatId ?? ChatStorageService.selectedChatId;
+      if (chatId != null && chatId.isNotEmpty) {
+        try {
+          final artifactContext =
+              await ArtifactContextService.buildArtifactsSystemMessage(chatId);
+          if (artifactContext != null && artifactContext.isNotEmpty) {
+            if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+              resolvedPrompt = '$artifactContext\n\n---\n\n$resolvedPrompt';
+            } else {
+              resolvedPrompt = artifactContext;
+            }
+          }
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('Error building artifact system message: $error');
+          }
+        }
+      }
+    }
+
+    return resolvedPrompt;
+  }
+
+  /// Convert a [ChatMessage] to a raw `Map<String, String>`.
+  static Map<String, String> messageToRawMap(ChatMessage message) {
+    final map = <String, String>{
+      'sender': message.sender,
+      'text': message.text,
+      'reasoning': message.reasoning ?? '',
+    };
+    if (message.modelId != null && message.modelId!.isNotEmpty) {
+      map['modelId'] = message.modelId!;
+    }
+    if (message.provider != null && message.provider!.isNotEmpty) {
+      map['provider'] = message.provider!;
+    }
+    if (message.images != null && message.images!.isNotEmpty) {
+      map['images'] = message.images!;
+    }
+    if (message.imageMetas != null && message.imageMetas!.isNotEmpty) {
+      map['imageMetas'] = message.imageMetas!;
+    }
+    if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
+      map['imageCostEur'] = message.imageCostEur!;
+    }
+    if (message.imageGeneratedAt != null &&
+        message.imageGeneratedAt!.isNotEmpty) {
+      map['imageGeneratedAt'] = message.imageGeneratedAt!;
+    }
+    if (message.attachments != null && message.attachments!.isNotEmpty) {
+      map['attachments'] = message.attachments!;
+    }
+    if (message.attachedFilesJson != null &&
+        message.attachedFilesJson!.isNotEmpty) {
+      map['attachedFilesJson'] = message.attachedFilesJson!;
+    }
+    if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
+      map['toolCalls'] = message.toolCalls!;
+    }
+    if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
+      map['contentBlocks'] = message.contentBlocks!;
+    }
+    if (message.messageId != null && message.messageId!.isNotEmpty) {
+      map['messageId'] = message.messageId!;
+    }
+    // The turn's clock survives reload: without these two, a reloaded answer
+    // loses the request timestamp and its recorded duration, so the header
+    // falls back to the tool-call stamps for a turn that had already timed
+    // itself.
+    if (message.startedAt != null && message.startedAt!.isNotEmpty) {
+      map['startedAt'] = message.startedAt!;
+    }
+    if (message.generationMs != null && message.generationMs!.isNotEmpty) {
+      map['generationMs'] = message.generationMs!;
+    }
+    // Preserve local delivery status + offline-queue id so a message that was
+    // pending/failed/interrupted keeps its state (and "Continue generation"
+    // affordance) across reload instead of silently reverting to "sent".
+    final String? statusStr = message.statusString;
+    if (statusStr != null) {
+      map['status'] = statusStr;
+    }
+    if (message.queueId != null && message.queueId!.isNotEmpty) {
+      map['queueId'] = message.queueId!;
+    }
+    // Answer-version pager: carry the variant archive + active index back into
+    // the UI map so a reloaded regenerated answer keeps its ‹ k/n › pager and
+    // can still switch between versions. `variants` stays a JSON string;
+    // `activeVariant` is stringified (the map is String-valued).
+    if (message.variants != null && message.variants!.isNotEmpty) {
+      map['variants'] = message.variants!;
+    }
+    if (message.activeVariant != null) {
+      map['activeVariant'] = message.activeVariant!.toString();
+    }
+    return map;
+  }
+
+  /// Content keys that make up one answer variant — the swappable body of an
+  /// assistant answer. Snapshotting copies these (plus [kVariantArchiveOnlyKeys]);
+  /// switching a variant copies only these back onto the message's top level.
+  static const List<String> kVariantContentKeys = <String>[
+    'text',
+    'reasoning',
+    'contentBlocks',
+    'toolCalls',
+    'modelId',
+    'provider',
+    'generationMs',
+    'tps',
+    'images',
+    'imageMetas',
+    'imageCostEur',
+    'imageGeneratedAt',
+  ];
+
+  /// Extra keys captured into a variant snapshot for round-trip completeness
+  /// but never restored onto the top level when switching — the message keeps
+  /// its own stable [ChatMessage.messageId] (UI key + artifact rollback anchor)
+  /// and [ChatMessage.startedAt].
+  static const List<String> kVariantArchiveOnlyKeys = <String>[
+    'messageId',
+    'startedAt',
+  ];
+
+  /// Build a variant snapshot of one assistant message's swappable content.
+  /// Only present, non-empty keys are captured, mirroring the JSON guards on
+  /// [ChatMessage.toJson].
+  static Map<String, dynamic> variantSnapshotOf(Map<String, String> message) {
+    final snapshot = <String, dynamic>{};
+    for (final key in kVariantContentKeys) {
+      final value = message[key];
+      if (value != null && value.isNotEmpty) snapshot[key] = value;
+    }
+    for (final key in kVariantArchiveOnlyKeys) {
+      final value = message[key];
+      if (value != null && value.isNotEmpty) snapshot[key] = value;
+    }
+    return snapshot;
+  }
+
+  /// Decode the variant archive stored on a message map. Returns an empty list
+  /// when absent or malformed.
+  static List<Map<String, dynamic>> decodeVariants(String? variantsJson) {
+    if (variantsJson == null || variantsJson.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final decoded = jsonDecode(variantsJson);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    } catch (_) {}
+    return <Map<String, dynamic>>[];
+  }
+
+  /// Write a variant archive + active index onto [message]. [seed] holds the
+  /// previously archived variants (the discarded answers) and [current] is the
+  /// snapshot of the freshly generated answer, appended as the last (active)
+  /// variant. Idempotent per call: it always rebuilds from `seed + current`.
+  static void writeVariants({
+    required Map<String, String> message,
+    required List<Map<String, dynamic>> seed,
+    required Map<String, dynamic> current,
+  }) {
+    final all = <Map<String, dynamic>>[...seed, current];
+    message['variants'] = jsonEncode(all);
+    message['activeVariant'] = '${all.length - 1}';
+  }
+
+  /// Switch [message] to variant [newIndex]: copy that variant's content keys
+  /// onto the top level (removing any key the target variant lacks so stale
+  /// images/tool cards do not linger) and update `activeVariant`. Returns true
+  /// when the switch was applied.
+  static bool switchVariant(Map<String, String> message, int newIndex) {
+    final variants = decodeVariants(message['variants']);
+    if (newIndex < 0 || newIndex >= variants.length) return false;
+    final target = variants[newIndex];
+    for (final key in kVariantContentKeys) {
+      final value = target[key];
+      if (value != null && value.toString().isNotEmpty) {
+        message[key] = value.toString();
+      } else {
+        message.remove(key);
+      }
+    }
+    message['activeVariant'] = '$newIndex';
+    return true;
+  }
+
+  /// Finalize stale tool-call statuses in a raw message map.
+  ///
+  /// This heals orphaned `running/pending` tool calls that can remain after
+  /// app/process interruptions. Returns `true` if the message was modified.
+  static bool finalizeStaleToolCallsInRawMessage(Map<String, String> message) {
+    var modified = false;
+
+    final toolCallsJson = message['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(toolCallsJson);
+        if (decoded is List) {
+          final toolCalls = decoded
+              .whereType<Map>()
+              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          if (_finalizeStaleToolCallsForRecovery(toolCalls)) {
+            message['toolCalls'] = jsonEncode(
+              toolCalls.map((call) => call.toJson()).toList(),
+            );
+            modified = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    final contentBlocksJson = message['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(contentBlocksJson);
+        if (decoded is List) {
+          final blocks = decoded
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+          var blockModified = false;
+          for (final block in blocks) {
+            if (block.type == ContentBlockType.toolCalls &&
+                block.toolCalls != null &&
+                _finalizeStaleToolCallsForRecovery(block.toolCalls!)) {
+              blockModified = true;
+            }
+          }
+          if (blockModified) {
+            message['contentBlocks'] = jsonEncode(
+              blocks.map((block) => block.toJson()).toList(),
+            );
+            modified = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return modified;
+  }
+
+  static bool _finalizeStaleToolCallsForRecovery(List<ToolCall> toolCalls) {
+    return finalizeStaleToolCalls(toolCalls);
+  }
+
+  /// Decode images from JSON with caching support.
+  static List<String>? decodeImages(
+    String json,
+    Map<String, List<String>?> cache,
+  ) {
+    if (cache.containsKey(json)) {
+      return cache[json];
+    }
+    List<String>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded.cast<String>();
+      }
+    } catch (_) {}
+    cache[json] = parsed;
+    return parsed;
+  }
+
+  /// Decode document attachments from JSON with caching support.
+  static List<DocumentAttachment>? decodeAttachments(
+    String json,
+    Map<String, List<DocumentAttachment>?> cache,
+  ) {
+    if (cache.containsKey(json)) {
+      return cache[json];
+    }
+    List<DocumentAttachment>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  DocumentAttachment.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+    } catch (_) {}
+    cache[json] = parsed;
+    return parsed;
+  }
+
+  /// Decode tool calls from JSON with caching support.
+  static List<ToolCall>? decodeToolCalls(
+    String json,
+    Map<String, List<ToolCall>?> cache,
+  ) {
+    if (cache.containsKey(json)) {
+      return cache[json];
+    }
+    List<ToolCall>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (_) {}
+    cache[json] = parsed;
+    return parsed;
+  }
+
+  /// Decode content blocks from JSON with caching support.
+  static List<ContentBlock>? decodeContentBlocks(
+    String json,
+    Map<String, List<ContentBlock>?> cache,
+  ) {
+    if (cache.containsKey(json)) {
+      return cache[json];
+    }
+    List<ContentBlock>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map(
+              (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+    } catch (_) {}
+    cache[json] = parsed;
+    return parsed;
+  }
+
+  /// Extracts artifact_ids emitted by `artifact_manager` tool calls inside a
+  /// raw message map. Scans both the legacy `toolCalls` JSON and the newer
+  /// `contentBlocks` JSON. Used on resend to delete artifacts that belonged
+  /// to the AI message being replaced so no orphan cards linger in the chat.
+  static Set<String> extractArtifactIdsFromRawMessage(
+    Map<String, String> message,
+  ) {
+    final ids = <String>{};
+
+    void scanCalls(List<ToolCall> calls) {
+      for (final call in calls) {
+        if (call.name != 'artifact_manager') continue;
+        final raw = call.arguments['artifact_id'];
+        if (raw is String && raw.trim().isNotEmpty) {
+          ids.add(raw.trim());
+        }
+      }
+    }
+
+    final toolCallsJson = message['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(toolCallsJson);
+        if (decoded is List) {
+          scanCalls(
+            decoded
+                .whereType<Map>()
+                .map(
+                  (item) => ToolCall.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList(),
+          );
+        }
+      } catch (_) {}
+    }
+
+    final contentBlocksJson = message['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(contentBlocksJson);
+        if (decoded is List) {
+          for (final item in decoded.whereType<Map>()) {
+            final block = ContentBlock.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+            if (block.type == ContentBlockType.toolCalls &&
+                block.toolCalls != null) {
+              scanCalls(block.toolCalls!);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return ids;
+  }
+
+  /// Trim decode caches if they get too large.
+  static void trimCachesIfNeeded(List<Map<dynamic, dynamic>> caches) {
+    const int maxEntriesPerCache = 240;
+    for (final cache in caches) {
+      if (cache.length > maxEntriesPerCache) {
+        cache.clear();
+      }
+    }
+  }
+
+  /// Reconstruct [AttachedFile] objects from stored JSON for resend.
+  static List<AttachedFile> reconstructAttachedFilesForResend(
+    Map<String, String> message,
+    Uuid uuid,
+  ) {
+    final attachedFiles = <AttachedFile>[];
+    final String? attachedFilesJson = message['attachedFilesJson'];
+
+    if (attachedFilesJson != null && attachedFilesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachedFilesJson);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map) {
+              attachedFiles.add(
+                AttachedFile.fromJson(Map<String, dynamic>.from(item)),
+              );
+            }
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to parse attachedFilesJson: $e');
+        }
+      }
+    }
+
+    if (attachedFiles.isNotEmpty) {
+      return attachedFiles;
+    }
+
+    // Fallback for older messages.
+    final String? attachmentsJson = message['attachments'];
+    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachmentsJson);
+        if (decoded is List) {
+          for (final item in decoded.whereType<Map>()) {
+            final data = Map<String, dynamic>.from(item);
+            final String fileName = (data['fileName'] as String? ?? '').trim();
+            final String markdownContent =
+                (data['markdownContent'] as String? ?? '').trim();
+            if (fileName.isEmpty || markdownContent.isEmpty) continue;
+            attachedFiles.add(
+              AttachedFile(
+                id: uuid.v4(),
+                fileName: fileName,
+                markdownContent: markdownContent,
+                isUploading: false,
+                isImage: false,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to parse attachments JSON: $e');
+        }
+      }
+    }
+
+    return attachedFiles;
+  }
+
+  /// Overwrite a stored message's attachment fields so the rendered bubble and
+  /// any future edit/resend reflect [attachedFiles] (e.g. after the user removed
+  /// an image while editing). Mirrors the field layout written on first send:
+  ///   * `images`           — encrypted storage paths for image attachments,
+  ///   * `attachments`      — document attachments (fileName + markdownContent),
+  ///   * `attachedFilesJson`— full AttachedFile objects for resend.
+  /// Fields are removed entirely when the corresponding set becomes empty.
+  static void writeAttachmentsToMessage(
+    Map<String, String> message,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final imagePaths = attachedFiles
+        .where((f) => f.isImage && f.encryptedImagePath != null)
+        .map((f) => f.encryptedImagePath!)
+        .toList();
+    if (imagePaths.isNotEmpty) {
+      message['images'] = jsonEncode(imagePaths);
+    } else {
+      message.remove('images');
+    }
+
+    final documents = attachedFiles
+        .where((f) => !f.isImage && f.markdownContent != null)
+        .map((f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent})
+        .toList();
+    if (documents.isNotEmpty) {
+      message['attachments'] = jsonEncode(documents);
+    } else {
+      message.remove('attachments');
+    }
+
+    if (attachedFiles.isNotEmpty) {
+      message['attachedFilesJson'] = jsonEncode(
+        attachedFiles.map((f) => f.toJson()).toList(),
+      );
+    } else {
+      message.remove('attachedFilesJson');
+    }
+  }
+
+  /// Extract the user's original query from display text that may include
+  /// attachment headers.
+  static String extractResendUserQuery(
+    String displayText,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final text = displayText.trim();
+    if (text.isEmpty || attachedFiles.isEmpty) return text;
+
+    final separatorIndex = text.indexOf('\n\n');
+    if (separatorIndex < 0) {
+      return _looksLikeGeneratedAttachmentHeader(text) ? '' : text;
+    }
+
+    final header = text.substring(0, separatorIndex).trim();
+    if (!_looksLikeGeneratedAttachmentHeader(header)) return text;
+
+    return text.substring(separatorIndex + 2).trim();
+  }
+
+  static bool _looksLikeGeneratedAttachmentHeader(String text) {
+    if (text.startsWith('Documents: ')) return true;
+    return RegExp(r'^\d+ images? attached(?:, Documents: .+)?$').hasMatch(text);
+  }
+
+  /// Build the user prompt for resending with attachments.
+  static String buildResendUserPrompt(
+    String userQuery,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final normalizedQuery = userQuery.trim();
+    final documentFiles = attachedFiles
+        .where(
+          (file) =>
+              !file.isImage &&
+              file.markdownContent != null &&
+              file.markdownContent!.isNotEmpty,
+        )
+        .toList(growable: false);
+
+    if (documentFiles.isEmpty) {
+      if (normalizedQuery.isNotEmpty) return normalizedQuery;
+      final hasImageAttachments = attachedFiles.any(
+        (file) => file.isImage && file.encryptedImagePath != null,
+      );
+      return hasImageAttachments ? '1 image attached' : '';
+    }
+
+    final markdownSections = documentFiles
+        .map((file) {
+          final safeName = file.fileName
+              .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
+              .replaceAll('"', "'")
+              .trim();
+          final content = file.markdownContent ?? '';
+          final fence = _buildMarkdownFence(content);
+          return 'Document: "$safeName"\n$fence\n$content\n$fence';
+        })
+        .join('\n\n');
+
+    final effectiveQuery = normalizedQuery.isNotEmpty
+        ? normalizedQuery
+        : 'Please review the uploaded documents.';
+
+    return '$markdownSections\n\nUser query: $effectiveQuery';
+  }
+
+  static String _buildMarkdownFence(String content) {
+    var maxBacktickRun = 0;
+    for (final match in RegExp(r'`+').allMatches(content)) {
+      final runLength = match.group(0)?.length ?? 0;
+      if (runLength > maxBacktickRun) maxBacktickRun = runLength;
+    }
+    final fenceLength = math.max(3, maxBacktickRun + 1);
+    return List<String>.filled(fenceLength, '`').join();
+  }
+
+  /// Detect image MIME type from byte header.
+  static String detectImageMimeType(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return 'image/png';
+    }
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38 &&
+        (bytes[4] == 0x37 || bytes[4] == 0x39) &&
+        bytes[5] == 0x61) {
+      return 'image/gif';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return 'image/bmp';
+    }
+    return 'image/jpeg';
+  }
+
+  /// Build a [MessageRenderData] from a raw message map, using decode caches.
+  static MessageRenderData buildMessageRenderData({
+    required Map<String, String> raw,
+    required int index,
+    required int messageCount,
+    required bool isStreaming,
+    required Map<String, List<String>?> imagesCache,
+    required Map<String, List<DocumentAttachment>?> attachmentsCache,
+    required Map<String, List<ToolCall>?> toolCallsCache,
+    required Map<String, List<ContentBlock>?> contentBlocksCache,
+  }) {
+    final String sender = raw['sender'] ?? 'ai';
+    final String displayText = (raw['text'] ?? '').trimRight();
+    final String reasoning = raw['reasoning'] ?? '';
+    final bool isAiMessage = sender != 'user';
+    final bool isStreamingMessage =
+        isStreaming && index == messageCount - 1 && isAiMessage;
+    final bool hasReasoning = reasoning.isNotEmpty;
+    // The turn's own clock. `startedAt` is stamped on the placeholder and
+    // `generationMs` when the answer is saved, so a running turn counts up
+    // from the first and a finished one shows the second unchanged.
+    final DateTime? turnStartedAt = isAiMessage
+        ? DateTime.tryParse(raw['startedAt'] ?? '')
+        : null;
+    final int? workedForMs = isAiMessage
+        ? int.tryParse(raw['generationMs'] ?? '')
+        : null;
+    final String? modelLabel = isAiMessage
+        ? formatModelInfo(raw['modelId'], raw['provider'])
+        : null;
+    final String? modelProvider = isAiMessage
+        ? (raw['provider'] ?? '').trim()
+        : null;
+
+    List<String>? images;
+    final String? imagesJson = raw['images'];
+    if (imagesJson != null && imagesJson.isNotEmpty) {
+      images = decodeImages(imagesJson, imagesCache);
+    }
+
+    List<DocumentAttachment>? attachments;
+    final String? attachmentsJson = raw['attachments'];
+    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+      attachments = decodeAttachments(attachmentsJson, attachmentsCache);
+    }
+
+    final tpsStr = raw['tps'];
+    final double? tps = (tpsStr != null && tpsStr.isNotEmpty)
+        ? double.tryParse(tpsStr)
+        : null;
+
+    List<ToolCall>? toolCalls;
+    final String? toolCallsJson = raw['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      toolCalls = decodeToolCalls(toolCallsJson, toolCallsCache);
+    }
+
+    List<ContentBlock>? parsedContentBlocks;
+    final String? contentBlocksJson = raw['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      parsedContentBlocks = decodeContentBlocks(
+        contentBlocksJson,
+        contentBlocksCache,
+      );
+    }
+
+    final String? imageCostStr = raw['imageCostEur'];
+    final double? imageCostEur = imageCostStr != null && imageCostStr.isNotEmpty
+        ? double.tryParse(imageCostStr)
+        : null;
+    final String? imageGeneratedAtStr = raw['imageGeneratedAt'];
+    final DateTime? imageGeneratedAt =
+        imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
+        ? DateTime.tryParse(imageGeneratedAtStr)
+        : null;
+    final List<ImageMeta>? imageMetas = ImageMeta.decode(raw['imageMetas']);
+
+    ChatMessageStatus? status;
+    final statusRaw = raw['status'];
+    if (statusRaw != null && statusRaw.isNotEmpty) {
+      switch (statusRaw) {
+        case 'pending':
+          status = ChatMessageStatus.pending;
+          break;
+        case 'failed':
+          status = ChatMessageStatus.failed;
+          break;
+        case 'sent':
+          status = ChatMessageStatus.sent;
+          break;
+        case 'interrupted':
+          status = ChatMessageStatus.interrupted;
+          break;
+      }
+    }
+    final queueId = raw['queueId'];
+    final lastError = raw['lastError'];
+
+    // Answer-version pager: how many variants exist and which is shown.
+    int variantCount = 0;
+    int variantIndex = 0;
+    if (isAiMessage) {
+      final variants = decodeVariants(raw['variants']);
+      variantCount = variants.length;
+      if (variantCount > 0) {
+        final parsed = int.tryParse(raw['activeVariant'] ?? '') ?? 0;
+        variantIndex = parsed.clamp(0, variantCount - 1);
+      }
+    }
+
+    return MessageRenderData(
+      sender: sender,
+      displayText: displayText,
+      reasoning: reasoning,
+      isReasoningStreaming:
+          isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+      modelLabel: modelLabel,
+      modelProvider: modelProvider,
+      tps: tps,
+      images: images,
+      imageMetas: imageMetas,
+      imageCostEur: imageCostEur,
+      imageGeneratedAt: imageGeneratedAt,
+      attachments: attachments,
+      toolCalls: toolCalls,
+      contentBlocks: parsedContentBlocks,
+      isStreamingMessage: isStreamingMessage,
+      turnStartedAt: turnStartedAt,
+      workedFor: workedForMs == null || workedForMs < 0
+          ? null
+          : Duration(milliseconds: workedForMs),
+      status: status,
+      queueId: queueId,
+      lastError: lastError,
+      variantIndex: variantIndex,
+      variantCount: variantCount,
+    );
+  }
+}

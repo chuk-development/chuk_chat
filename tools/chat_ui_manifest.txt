@@ -159,3 +159,18 @@ lib/services/api_config_service.dart
 lib/utils/theme_extensions.dart
 lib/widgets/anchored_menu.dart
 lib/widgets/expressive_settings.dart
+
+# --- Account settings + credits (bead cowork-4ih, session cowork-af) ---
+# chuk's account page and footer BalanceBadge verbatim; the credits come from
+# chuk's hosted account API (ApiConfigService -> api.chuk.chat), the same call
+# chuk makes. credit_display.dart was a stub before; it is the original now.
+pages/account_settings_page.dart
+pages/recover_chats_page.dart
+services/profile_service.dart
+services/password_change_service.dart
+services/password_reset_service.dart
+services/password_revision_service.dart
+services/key_version_service.dart
+services/user_status_service.dart
+utils/client_platform.dart
+widgets/credit_display.dart
