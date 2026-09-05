@@ -63,6 +63,10 @@ from .automations import AutomationManager
 from .notify import SupabaseNotifier
 from .serve import TaskServer
 
+# Bead cowork-sq3: how long a run that ended with an app attached may go
+# without the app's ``run_ack`` before it is announced as finished while away.
+RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("COWORK_RUN_ACK_TIMEOUT_SECONDS", "15") or 15)
+
 DEFAULT_WORKSPACE = "~/.cowork"
 KEY_VERSION = 1
 DEFAULT_SYSTEM_PROMPT = "You are a CoWork coworker running on the user's own machine."
@@ -117,6 +121,14 @@ class LocalHost:
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")
         self._db_path = str(self._workspace / "executor-state.db")
+        # Bead cowork-sq3: a live ``done`` the app never acknowledged. One timer
+        # per run, armed when the run ends with an app attached, cancelled by
+        # its ``run_ack``; on expiry the run is treated as finished while away
+        # and announced like one (desktop toast + cloud push, deduped by
+        # ``notified_at``). Guarded: the executor's serve thread arms, the
+        # ack arrives on the same thread, the timer fires on its own.
+        self._ack_pending: dict[str, threading.Timer] = {}
+        self._ack_lock = threading.Lock()
         # The app-free kill switch (§7.1): `touch ~/.cowork/ESTOP` stops the run.
         self._estop_path = str(self._workspace / "ESTOP")
 
@@ -442,6 +454,7 @@ class LocalHost:
             self._party.stop()
             self._party = None
         self._relay.stop()
+        self._cancel_ack_timers()
         if self._containers is not None:
             # Releases the handles. The agent's own container is deliberately left
             # in place: it is the box the agent installed into, and the next start
@@ -636,6 +649,9 @@ class LocalHost:
             on_run_finished=self._on_run_finished,
             on_approval_pending=self._on_approval_pending,
             on_account_frame=self._on_reprovision,
+            # The app rendered a live ``done`` (docs/WIRE_CONTRACT.md,
+            # ``run_ack``): disarm that run's while-away timer.
+            on_run_ack=self._on_run_ack,
             # The secret set every task injects and masks against.
             secrets=self._secrets_vault,
             on_secret_request_pending=self._on_secret_request_pending,
@@ -766,6 +782,10 @@ class LocalHost:
         # ``automation`` and ``job`` runs are unattended by definition.
         automation = isinstance(summary, dict) and summary.get("origin") in ("automation", "job")
         if attached and not automation:
+            # The user is (supposedly) watching. Hold the announcement until the
+            # app confirms it rendered the ``done`` (``run_ack``); if that never
+            # comes, the answer must not stay unannounced (Bead cowork-sq3).
+            self._arm_ack_timer(summary)
             return
         notifier = getattr(self, "_notifier", None)
         if notifier is None:
@@ -782,6 +802,60 @@ class LocalHost:
             return
         # Desktop toast + cloud push, one per run, on a background thread.
         notifier.notify_run_finished(summary)
+
+    # -- run_ack delivery confirmation (Bead cowork-sq3) -------------------
+
+    def _arm_ack_timer(self, summary: dict) -> None:
+        """Start the while-away clock for a run that ended with an app attached.
+        A second ``done`` for the same run (a retry) restarts the clock."""
+        run_id = str(summary.get("run_id") or "") if isinstance(summary, dict) else ""
+        if not run_id:
+            return
+        timer = threading.Timer(
+            RUN_ACK_TIMEOUT_SECONDS, self._on_ack_timeout, args=(run_id, summary)
+        )
+        timer.daemon = True
+        with self._ack_lock:
+            old = self._ack_pending.pop(run_id, None)
+            self._ack_pending[run_id] = timer
+        if old is not None:
+            old.cancel()
+        timer.start()
+
+    def _on_run_ack(self, payload: dict) -> None:
+        """The app rendered the live ``done``: the run is seen, no announcement."""
+        run_id = str(payload.get("run_id") or "") if isinstance(payload, dict) else ""
+        if not run_id:
+            return
+        with self._ack_lock:
+            timer = self._ack_pending.pop(run_id, None)
+        if timer is not None:
+            timer.cancel()
+
+    def _on_ack_timeout(self, run_id: str, summary: dict) -> None:
+        """No ``run_ack`` within the window: the app was attached but did not
+        show the answer (backgrounded, a socket half-open, a lost frame). Treat
+        the run as finished while away: the same desktop toast + cloud push a
+        detached run gets, once per run (``notified_at``). ``seen_at`` stays
+        unset, so the next replay says ``while_away`` too."""
+        with self._ack_lock:
+            if self._ack_pending.pop(run_id, None) is None:
+                return  # acked or cancelled in the meantime
+        notifier = getattr(self, "_notifier", None)
+        if notifier is None:
+            return
+        try:
+            self._log(f"run {run_id}: no run_ack within {RUN_ACK_TIMEOUT_SECONDS:.0f}s, notifying")
+            notifier.notify_run_finished(summary)
+        except Exception:  # noqa: BLE001 — a notifier must never take the host down
+            pass
+
+    def _cancel_ack_timers(self) -> None:
+        with self._ack_lock:
+            timers = list(self._ack_pending.values())
+            self._ack_pending.clear()
+        for timer in timers:
+            timer.cancel()
 
     # -- automations (docs/WIRE_CONTRACT.md, "Automations") ---------------
 

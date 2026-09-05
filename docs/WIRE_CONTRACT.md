@@ -25,7 +25,7 @@ fields they do not know.
 | `task` | `prompt`, `session_key`, `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. |
 | `stop` | `session_key` | Existing. |
 | `replay` | `session_key`, `after_id`? (int, default 0) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). |
-| `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. |
+| `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`COWORK_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
 | `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
 
 ### Token freshness (bead cowork-c91)
@@ -320,6 +320,14 @@ key for notifications (set once, whichever channel fires first). `seen_at` is se
 `run_ack`: the app showed the live `done`. `while_away` in a replayed `done` is
 `seen_at IS NULL`. On host start, rows left in `running` are set to
 `failed` / `host_restarted`.
+
+A `done` sent while an app is attached is not announced (the user is watching),
+but only the `run_ack` proves the app showed it. The host therefore arms a
+15 s timer per run at `done` (`COWORK_RUN_ACK_TIMEOUT_SECONDS`); the ack cancels
+it, expiry treats the run as finished while away and notifies exactly as a
+detached run would (`notified_at` dedups). `seen_at` stays unset, so the next
+replay's `done` says `while_away` too. Runs an automation or job started are
+unattended by definition and skip the timer (they notify at once).
 
 ## Detachment rule (informative)
 
