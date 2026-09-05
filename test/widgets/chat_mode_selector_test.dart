@@ -12,7 +12,7 @@ import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 
 // Fireworks levels, the common case in the composer.
-const _fireworksLevels = <String>['none', 'low', 'medium', 'high'];
+const _fireworksLevels = <String>['none', 'low', 'high'];
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -69,7 +69,7 @@ void main() {
       final thinking = ChatModeService.defaultConfig(ChatMode.thinking);
       expect(thinking.modelId, 'deepseek/deepseek-v4-pro-0813');
       expect(thinking.providerSlug, 'fireworks/serverless');
-      expect(thinking.reasoningEffort, 'medium');
+      expect(thinking.reasoningEffort, 'high');
     });
 
     test('an unknown stored value falls back instead of throwing', () {
@@ -242,7 +242,7 @@ void main() {
       await _pump(
         tester,
         mode: ChatMode.thinking,
-        reasoningEffort: 'medium',
+        reasoningEffort: 'high',
         onReasoningEffortChanged: levels.add,
         onOpenModelScreen: () {},
       );
@@ -259,15 +259,16 @@ void main() {
       await tester.tap(find.text('Reasoning'));
       await tester.pumpAndSettle();
 
-      // The reasoning ladder for a Fireworks provider, in the cascade.
+      // The reasoning ladder for a Fireworks provider, in the cascade. The
+      // current level (High) also shows as the row's value, hence two.
       expect(find.text('REASONING'), findsOneWidget);
       expect(find.text('Off'), findsOneWidget);
       expect(find.text('Low'), findsOneWidget);
-      expect(find.text('High'), findsOneWidget);
+      expect(find.text('High'), findsWidgets);
 
-      await tester.tap(find.text('High'));
+      await tester.tap(find.text('Low'));
       await tester.pumpAndSettle();
-      expect(levels, ['high']);
+      expect(levels, ['low']);
     });
 
     testWidgets('picking the active level reports nothing', (tester) async {
@@ -275,7 +276,7 @@ void main() {
       await _pump(
         tester,
         mode: ChatMode.thinking,
-        reasoningEffort: 'medium',
+        reasoningEffort: 'high',
         onReasoningEffortChanged: levels.add,
         onOpenModelScreen: () {},
       );
@@ -288,7 +289,7 @@ void main() {
       await tester.pumpAndSettle();
       // 'Medium' also shows as the opener's trailing label; the cascade row
       // is the later one.
-      await tester.tap(find.text('Medium').last);
+      await tester.tap(find.text('High').last);
       await tester.pumpAndSettle();
 
       expect(levels, isEmpty);

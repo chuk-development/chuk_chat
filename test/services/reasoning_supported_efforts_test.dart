@@ -125,7 +125,7 @@ void main() {
           modelId: 'cold/start',
           providerSlug: 'openai',
         ),
-        <String>['none', 'low', 'medium', 'high'],
+        <String>['none', 'low', 'high'],
       );
     });
   });

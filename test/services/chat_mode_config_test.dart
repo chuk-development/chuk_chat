@@ -18,12 +18,38 @@ void main() {
       expect(fast.reasoningOn, isTrue);
     });
 
-    test('Thinking is pro-0813 on fireworks/serverless, reasoning medium', () {
+    test('Thinking is pro-0813 on fireworks/serverless, reasoning high', () {
       final thinking = ChatModeService.defaultConfig(ChatMode.thinking);
       expect(thinking.modelId, 'deepseek/deepseek-v4-pro-0813');
       expect(thinking.providerSlug, 'fireworks/serverless');
-      expect(thinking.reasoningEffort, 'medium');
+      // Not `medium`: pro-0813's ladder is none/low/high/max and the server
+      // answers an unsupported effort with no reasoning at all.
+      expect(thinking.reasoningEffort, 'high');
       expect(thinking.reasoningOn, isTrue);
+    });
+
+    test('the cold-cache ladders never offer medium', () {
+      // With no catalog entry the derived ladder is the only guard; `medium`
+      // is exactly the level the default models reject, so it is not on it.
+      expect(ChatModeService.reasoningLevelsGraded, isNot(contains('medium')));
+      expect(ChatModeService.reasoningLevelsFireworks, isNot(contains('medium')));
+      expect(
+        ChatModeService.reasoningLevelsFor(
+          providerSlug: 'fireworks/serverless',
+          reasoningMandatory: true,
+        ),
+        isNot(contains('medium')),
+      );
+      // A stored `medium` on a cold cache clamps to the strongest level below
+      // it that every graded ladder honours — never to a silent no-op.
+      expect(
+        ChatModeService.sanitizeReasoningForModel(
+          'medium',
+          modelId: 'z-ai/glm-5.3-flash',
+          providerSlug: 'fireworks/serverless',
+        ),
+        'low',
+      );
     });
 
     test('the general fallback matches Fast', () {
@@ -176,7 +202,7 @@ void main() {
         const ModeConfig(
           modelId: 'deepseek/deepseek-v4-pro-0813',
           providerSlug: 'fireworks/serverless',
-          reasoningEffort: 'medium',
+          reasoningEffort: 'high',
         ),
       );
       // An unresolved pin ('') must not be stored: keep the prior provider.
@@ -187,7 +213,7 @@ void main() {
       );
       expect(updated.modelId, 'other/model');
       expect(updated.providerSlug, 'fireworks/serverless');
-      expect(updated.reasoningEffort, 'medium');
+      expect(updated.reasoningEffort, 'high');
     });
 
     test('an empty stored provider field reads back as the default', () async {
@@ -195,12 +221,12 @@ void main() {
       // setModelForMode, but a hand-edited record must still resolve sanely.
       SharedPreferences.setMockInitialValues({
         'chat_mode_config_v1_fast':
-            '{"model":"x/y","provider":"","reasoning":"medium"}',
+            '{"model":"x/y","provider":"","reasoning":"high"}',
       });
       final loaded = await ChatModeService.loadConfig(ChatMode.fast);
       expect(loaded.modelId, 'x/y');
       expect(loaded.providerSlug, 'fireworks/serverless');
-      expect(loaded.reasoningEffort, 'medium');
+      expect(loaded.reasoningEffort, 'high');
     });
 
     test('setReasoningForMode clamps to the current provider', () async {
@@ -223,7 +249,7 @@ void main() {
     test('a Fireworks provider never yields minimal or xhigh', () {
       for (final slug in ['fireworks', 'fireworks/serverless']) {
         final levels = ChatModeService.reasoningLevelsFor(providerSlug: slug);
-        expect(levels, ['none', 'low', 'medium', 'high']);
+        expect(levels, ['none', 'low', 'high']);
         expect(levels, isNot(contains('minimal')));
         expect(levels, isNot(contains('xhigh')));
       }
@@ -231,10 +257,10 @@ void main() {
 
     test('a non-Fireworks provider offers the same graded ladder', () {
       // The Fireworks-vs-all split is gone: a graded model offers
-      // none/low/medium/high on every provider now.
+      // none/low/high on every provider now (no `medium` as a cold guess).
       expect(
         ChatModeService.reasoningLevelsFor(providerSlug: 'openai'),
-        ['none', 'low', 'medium', 'high'],
+        ['none', 'low', 'high'],
       );
     });
 
@@ -264,7 +290,7 @@ void main() {
           providerSlug: 'openai',
           supportsReasoningEffort: true,
         ),
-        ['none', 'low', 'medium', 'high'],
+        ['none', 'low', 'high'],
       );
     });
 
@@ -278,9 +304,15 @@ void main() {
     test('sanitize keeps a valid level and clamps an invalid one down', () {
       // Valid stays.
       expect(
+        ChatModeService.sanitizeReasoning('high',
+            providerSlug: 'fireworks/serverless'),
+        'high',
+      );
+      // medium is not a cold-cache level any more: nearest weaker is low.
+      expect(
         ChatModeService.sanitizeReasoning('medium',
             providerSlug: 'fireworks/serverless'),
-        'medium',
+        'low',
       );
       // xhigh → high on Fireworks (nearest allowed no stronger).
       expect(
@@ -299,7 +331,7 @@ void main() {
       expect(
         ChatModeService.sanitizeReasoning('turbo',
             providerSlug: 'fireworks/serverless'),
-        'medium',
+        'low',
       );
       // xhigh on a graded model clamps to high (no ladder split any more).
       expect(
@@ -345,7 +377,7 @@ void main() {
           'on',
           providerSlug: 'openai',
         ),
-        'medium',
+        'low',
       );
       // On a binary model 'on' is valid and survives untouched.
       expect(
