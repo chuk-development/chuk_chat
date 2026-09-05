@@ -24,6 +24,7 @@ class ChatModeSelector extends StatelessWidget {
     this.onOpenModelScreen,
     this.selectedModelId,
     this.modelLabel,
+    this.customModelLabel,
     this.pickedModels = const <ChatModelChoice>[],
     this.showLabel = true,
     this.reasoningEffort = ChatModeService.reasoningOff,
@@ -53,6 +54,12 @@ class ChatModeSelector extends StatelessWidget {
   /// Human name of that model, shown on the second-menu opener.
   final String? modelLabel;
 
+  /// Human name of the model Custom last ran, remembered across mode switches.
+  /// The third point (the Custom entry) shows this even while Fast or Thinking
+  /// is active, so the reader sees which model a tap on it will bring back.
+  /// Null when Custom has never been used — the point then reads "Choose model".
+  final String? customModelLabel;
+
   /// The active mode's reasoning level, ticked in the reasoning rows.
   final String reasoningEffort;
 
@@ -78,15 +85,53 @@ class ChatModeSelector extends StatelessWidget {
   /// row underneath.
   static const int kMaxModelsInMenu = 40;
 
-  static IconData iconFor(ChatMode mode) =>
-      mode == ChatMode.fast ? Icons.bolt : Icons.psychology_outlined;
+  static IconData iconFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return Icons.bolt;
+      case ChatMode.thinking:
+        return Icons.psychology_outlined;
+      case ChatMode.custom:
+        return Icons.tune;
+    }
+  }
 
-  static String labelFor(ChatMode mode) =>
-      mode == ChatMode.fast ? 'Fast' : 'Thinking';
+  static String labelFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return 'Fast';
+      case ChatMode.thinking:
+        return 'Thinking';
+      case ChatMode.custom:
+        return 'Custom model';
+    }
+  }
 
-  static String descriptionFor(ChatMode mode) => mode == ChatMode.fast
-      ? 'Answers right away'
-      : 'Thinks first, then answers';
+  static String descriptionFor(ChatMode mode) {
+    switch (mode) {
+      case ChatMode.fast:
+        return 'Answers right away';
+      case ChatMode.thinking:
+        return 'Thinks first, then answers';
+      case ChatMode.custom:
+        return 'Any model you pick';
+    }
+  }
+
+  /// The label for the third point (Custom). When Custom is active it names
+  /// the running model; otherwise it names the model Custom last ran; only when
+  /// Custom has never been used does it fall back to "Choose model".
+  String get _customPointLabel {
+    if (mode == ChatMode.custom &&
+        modelLabel != null &&
+        modelLabel!.isNotEmpty) {
+      return stripLabPrefix(modelLabel!);
+    }
+    if (customModelLabel != null && customModelLabel!.isNotEmpty) {
+      return stripLabPrefix(customModelLabel!);
+    }
+    return 'Choose model';
+  }
 
   /// Whether the second menu has anything to show.
   bool get _hasDeeperMenu =>
@@ -99,9 +144,14 @@ class ChatModeSelector extends StatelessWidget {
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
-    // The pill always names the mode: each mode carries its own model, so
-    // there is no third state that renames it.
-    final String pillLabel = labelFor(mode);
+    // Fast and Thinking name the mode. Custom names the model it runs — that
+    // is the whole point of the mode, so the pill shows the chosen model
+    // rather than the bare word "Custom".
+    final String pillLabel = mode == ChatMode.custom
+        ? (modelLabel == null || modelLabel!.isEmpty
+            ? labelFor(mode)
+            : stripLabPrefix(modelLabel!))
+        : labelFor(mode);
     final IconData pillIcon = iconFor(mode);
 
     return Semantics(
@@ -155,7 +205,11 @@ class ChatModeSelector extends StatelessWidget {
     final choice = await _showAnchoredMenu<_MenuChoice>(
       context,
       items: <PopupMenuEntry<_MenuChoice>>[
-        for (final option in ChatMode.values)
+        // Exactly three points. Fast and Thinking run the models set on the
+        // model screen, so their rows never surface a model name. The third
+        // point is Custom: an arbitrary model at its own reasoning level,
+        // reached through the model-and-reasoning menu.
+        for (final option in const <ChatMode>[ChatMode.fast, ChatMode.thinking])
           _menuRow<_MenuChoice>(
             value: _MenuChoice.mode(option),
             iconFg: iconFg,
@@ -167,10 +221,13 @@ class ChatModeSelector extends StatelessWidget {
           _menuRow<_MenuChoice>(
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
-            icon: Icons.tune,
-            label: modelLabel == null
-                ? 'Choose model'
-                : stripLabPrefix(modelLabel!),
+            icon: iconFor(ChatMode.custom),
+            // The third point names the Custom model: the active one when
+            // Custom is running, otherwise the one it last ran (remembered
+            // across mode switches). It stays "Choose model" only until Custom
+            // has ever been used. Fast/Thinking models are never surfaced here.
+            label: _customPointLabel,
+            isSelected: mode == ChatMode.custom,
             trailing: Icon(
               Icons.chevron_right,
               size: 18,
@@ -202,16 +259,40 @@ class ChatModeSelector extends StatelessWidget {
     final bool showModels = onModelSelected != null && models.isNotEmpty;
 
     final items = <PopupMenuEntry<_DeeperChoice>>[
-      if (showReasoning) ...[
-        _headerRow<_DeeperChoice>(iconFg: iconFg, label: 'Reasoning'),
-        for (final level in reasoningLevels)
-          _menuRow<_DeeperChoice>(
-            value: _DeeperChoice.reasoning(level),
-            iconFg: iconFg,
-            label: ChatModeService.reasoningLabel(level),
-            isSelected: level == reasoningEffort,
+      // Reasoning is a cascading sub-dropdown that flies out to the right.
+      // It must NOT pop the model menu, so it is an opener row, not a
+      // _menuRow (whose tap would close this menu).
+      if (showReasoning)
+        _SubmenuOpener<_DeeperChoice>(
+          rowHeight: 40,
+          onOpen: _openReasoningMenu,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _rowChild(
+              iconFg: iconFg,
+              icon: Icons.psychology_alt_outlined,
+              label: 'Reasoning',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    ChatModeService.reasoningLabel(reasoningEffort),
+                    style: TextStyle(
+                      color: iconFg.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: iconFg.withValues(alpha: 0.8),
+                  ),
+                ],
+              ),
+            ),
           ),
-      ],
+        ),
       if (showReasoning && (showModels || onOpenModelScreen != null))
         const PopupMenuDivider(),
       if (showModels)
@@ -249,18 +330,38 @@ class ChatModeSelector extends StatelessWidget {
       items: items,
     );
 
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     if (picked.openScreen) {
       onOpenModelScreen?.call();
       return;
     }
-    final level = picked.reasoningLevel;
-    if (level != null) {
-      if (level != reasoningEffort) onReasoningEffortChanged?.call(level);
-      return;
-    }
     final id = picked.modelId;
     if (id != null && id != selectedModelId) onModelSelected?.call(id);
+  }
+
+  // ─── Level 3: reasoning, a right-cascading sub-dropdown ───────────────
+
+  /// [rowContext] is the Reasoning row inside the still-open model menu, so
+  /// the submenu flies out beside that row and the model menu stays put.
+  Future<void> _openReasoningMenu(BuildContext rowContext) async {
+    final iconFg = Theme.of(rowContext).resolvedIconColor;
+    final picked = await _showAnchoredMenu<String>(
+      rowContext,
+      // Cascade out to the right of the row, model menu stays open behind it.
+      besideAnchor: true,
+      items: <PopupMenuEntry<String>>[
+        _headerRow<String>(iconFg: iconFg, label: 'Reasoning'),
+        for (final level in reasoningLevels)
+          _menuRow<String>(
+            value: level,
+            iconFg: iconFg,
+            label: ChatModeService.reasoningLabel(level),
+            isSelected: level == reasoningEffort,
+          ),
+      ],
+    );
+    if (picked == null) return;
+    if (picked != reasoningEffort) onReasoningEffortChanged?.call(picked);
   }
 
   // ─── Shared menu look ─────────────────────────────────────────────────
@@ -300,28 +401,46 @@ class ChatModeSelector extends StatelessWidget {
       value: value,
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: iconFg),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            child: Text(
-              label,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w600,
-              ),
+      child: _rowChild(
+        iconFg: iconFg,
+        label: label,
+        icon: icon,
+        isSelected: isSelected,
+        trailing: trailing,
+      ),
+    );
+  }
+
+  /// The inner row of a menu entry, shared by [_menuRow] and the submenu
+  /// opener (which cannot be a [PopupMenuItem] because it must not pop).
+  Widget _rowChild({
+    required Color iconFg,
+    required String label,
+    IconData? icon,
+    bool isSelected = false,
+    Widget? trailing,
+  }) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 18, color: iconFg),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Text(
+            label,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 12),
-          if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
-          ?trailing,
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
+        ?trailing,
+      ],
     );
   }
 
@@ -332,6 +451,8 @@ class ChatModeSelector extends StatelessWidget {
   Future<T?> _showAnchoredMenu<T>(
     BuildContext context, {
     required List<PopupMenuEntry<T>> items,
+    bool? alignRight,
+    bool besideAnchor = false,
   }) {
     final theme = Theme.of(context);
     return showAnchoredMenu<T>(
@@ -339,8 +460,10 @@ class ChatModeSelector extends StatelessWidget {
       items: items,
       color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
-      minWidth: 220,
+      minWidth: besideAnchor ? 160 : 220,
       preferAbove: menuAbove,
+      alignRight: alignRight,
+      besideAnchor: besideAnchor,
     );
   }
 
@@ -397,18 +520,43 @@ class _MenuChoice {
 /// What a row in the second menu stands for: a reasoning level, a model, or
 /// the way out to the full model screen.
 class _DeeperChoice {
-  const _DeeperChoice.reasoning(String this.reasoningLevel)
-    : modelId = null,
-      openScreen = false;
-  const _DeeperChoice.model(String this.modelId)
-    : reasoningLevel = null,
-      openScreen = false;
-  const _DeeperChoice.openScreen()
-    : reasoningLevel = null,
-      modelId = null,
-      openScreen = true;
+  const _DeeperChoice.model(String this.modelId) : openScreen = false;
+  const _DeeperChoice.openScreen() : modelId = null, openScreen = true;
 
-  final String? reasoningLevel;
   final String? modelId;
   final bool openScreen;
+}
+
+/// A menu row that opens a cascading submenu on tap WITHOUT popping the menu
+/// it sits in — a plain [PopupMenuItem] always pops, which would close the
+/// model menu the submenu is meant to hang off.
+class _SubmenuOpener<T> extends PopupMenuEntry<T> {
+  const _SubmenuOpener({
+    required this.rowHeight,
+    required this.child,
+    required this.onOpen,
+  });
+
+  final double rowHeight;
+  final Widget child;
+  final Future<void> Function(BuildContext rowContext) onOpen;
+
+  @override
+  double get height => rowHeight;
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<_SubmenuOpener<T>> createState() => _SubmenuOpenerState<T>();
+}
+
+class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>> {
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => widget.onOpen(context),
+      child: SizedBox(height: widget.rowHeight, child: widget.child),
+    );
+  }
 }

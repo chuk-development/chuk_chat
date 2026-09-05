@@ -41,3 +41,10 @@ _scratch/
 session.txt
 **/session.txt
 .playwright-mcp/
+
+# P4 holding pen: the chuk settings pages a subagent copied verbatim before it
+# died mid-adaptation. It lives OUTSIDE app/ on purpose: inside the Dart package
+# `flutter analyze` would still walk it (the analyzer does not read .gitignore)
+# and report its ~65 unresolved references. The P4-rest work adapts them from
+# here into app/lib/pages/. Delete the folder and this rule when it is empty.
+_p4_pending/
