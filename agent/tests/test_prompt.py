@@ -134,3 +134,16 @@ def test_build_runtime_can_use_a_verbatim_prompt(tmp_path):
     )
     loop.run("s1", "hi")
     assert model.calls[0][0]["content"] == "only this"
+
+
+def test_system_prompt_states_the_workspace_hygiene_transcript_and_memory_rules():
+    prompt = build_system_prompt(_registry(), workspace="/home/u/ws")
+    # Hygiene: notes/, tmp/, nothing loose in the root.
+    assert "`notes/`" in prompt and "`tmp/`" in prompt
+    assert "workspace root" in prompt
+    # The transcript folder is the long-term search and read-only.
+    assert "`transcript/` is read-only" in prompt
+    assert "long-term search" in prompt
+    # Memory: recall block + the explicit tools.
+    assert "[memory recall]" in prompt
+    assert "`memory_search`" in prompt and "`memory_add`" in prompt

@@ -717,3 +717,24 @@ def test_lean_tier1_passes_do_not_lock_out_a_tier2_escalation():
     assert ladder.last_stats.skipped_reason is None
     assert ladder.last_stats.tier == 2
     assert aux.prompts
+
+
+def test_on_summary_hands_every_new_summary_to_the_memory_hook():
+    """Bead cowork-2tq.3: nothing a compaction summarized away is lost — the
+    ladder hands each new tier-2/3 summary to the hook (memory keeps the facts)."""
+    summaries: list[str] = []
+    ladder = _shape_ladder(AuxSummarizer(RecordingAux(["GOAL: first summary"])))
+    ladder.on_summary = summaries.append
+    ladder.compress(_long_history(10))
+    assert summaries == ["GOAL: first summary"]
+
+
+def test_a_raising_summary_hook_does_not_break_compaction():
+    def boom(_text: str) -> None:
+        raise RuntimeError("memory down")
+
+    ladder = _shape_ladder(AuxSummarizer(RecordingAux(["GOAL: s"])))
+    ladder.on_summary = boom
+    out = ladder.compress(_long_history(10))
+    assert ladder.summary == "GOAL: s"
+    assert out
