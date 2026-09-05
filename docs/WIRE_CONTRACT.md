@@ -927,3 +927,69 @@ automations manager, `kind: job` goes to the executor's job router. The router:
 
 Rate limits and the 16 KB payload cap of the automations do not apply: a job
 ends once, and the tail is read from the log, not from the trigger line.
+
+## Skills: the host's list, the user's switches (session cowork-18, bead cowork-qk7)
+
+Python side IMPLEMENTED 2026-09-05 (agent 27deda5, executor + host in the
+following commit). App side: `SkillsSource`, `SkillsSettingsPage`, the relay
+client's `skills_list` case.
+
+### The idea
+
+A skill is `<workspace>/skills/<name>/SKILL.md` on the host (`cowork_agent.skills`).
+The repository's `skills/` directory is the shipped seed set; the host copies it
+into a fresh workspace once (`cowork_host.seed_skills`). The app compiles nothing
+in and reads no SKILL.md: **the host is the truth for which skills exist**, the
+app shows that list and flips one switch per skill, and the agent gets exactly
+the enabled ones — its catalogue, its `skill` tool, its prompt never see a
+switched-off skill.
+
+The switch lives in the executor's state database (`skill_settings(name,
+enabled, updated_at)`, `SkillSettingsStore`). Absent row = on, so a skill that
+appears later starts enabled. `build_runtime` reads the table on every task, so
+a flip takes effect from the next task on, never mid-run.
+
+### Frames
+
+App → host, `skills_list` (request) / host → app `skills_list` (reply):
+
+```json
+{"type": "skills_list"}
+{"type": "skills_list",
+ "skills": [ {"name": "<name>", "description": "<level-1 text>",
+              "source": "builtin" | "workspace", "enabled": true | false,
+              "path": "<host path of the SKILL.md>"} ],
+ "errors": [ "<a SKILL.md the host could not load, or a refused control>" ]}
+```
+
+- `source` is `builtin` when the name is one of the shipped seeds (the
+  repository's `skills/`), `workspace` for anything the agent or the user put
+  into the workspace. Built-ins come first, each group by name.
+- The reply closes the request stream like a replay's `done`. It is the whole
+  truth: the app replaces its list with it.
+
+App → host, `skill_control`:
+
+```json
+{"type": "skill_control", "name": "<name>", "action": "enable" | "disable"}
+```
+
+Answered with a fresh `skills_list` (same request stream). An unknown name or
+action changes nothing; the reply still carries the list, plus the reason in
+`errors` (`no skill named 'x'`, `unknown action 'x': use enable or disable`).
+
+### Device persistence
+
+Supabase table `cowork_skill_settings` (one row per user and skill name:
+`name`, `enabled`, `updated_at`; a name is a label, not a secret, so plaintext
+under owner-only RLS — `supabase/migrations/20260905150000_cowork_skill_settings.sql`).
+The app writes the host's truth there after every reply. On the first reply
+after a start it goes the other way once: a skill the account has OFF but the
+host reports ON is switched off on the host — a reinstalled app or a reset host
+database gets the user's switches back.
+
+### Not on the wire (bead follows)
+
+Creating or editing a skill from the app (chuk_chat's editor wrote to Supabase
+`user_skills`, which the host never reads). Needs a `skill_put` frame that
+writes `<workspace>/skills/<name>/SKILL.md` and answers with `skills_list`.

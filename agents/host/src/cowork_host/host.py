@@ -56,7 +56,7 @@ from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
 from .secrets_key import secrets_at_rest_key
-from .seed_skills import seed_workspace_skills
+from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
 from .notify import SupabaseNotifier
@@ -638,6 +638,10 @@ class LocalHost:
             # app's control / list frames.
             automations=getattr(self, "_automations", None),
             on_automation_frame=self._on_automation_frame,
+            # Skills (docs/WIRE_CONTRACT.md, "Skills"): the executor answers the
+            # app's ``skills_list`` / ``skill_control`` itself; the seed root
+            # tells it which of the workspace's skills are the shipped ones.
+            skills_seed_root=(lambda d: str(d) if d else None)(seed_skills_dir()),
             # A finished background job's ``job`` frame, when no run of its
             # session is live to carry it.
             job_frame_sender=self._send_host_payload,

@@ -64,6 +64,7 @@ from collections.abc import Callable
 from typing import Any
 from contextlib import nullcontext
 from dataclasses import dataclass, field
+from pathlib import Path
 from uuid import uuid4
 
 from cowork_agent import (
@@ -73,17 +74,21 @@ from cowork_agent import (
     ModelClient,
     ModelResponse,
     PublishRequest,
+    SkillSettingsStore,
     StateStore,
     SubagentConfig,
     SubagentLimits,
     TranscriptExporter,
     WorkspaceMount,
+    apply_skill_control,
     build_runtime,
     close_cached_memories,
     configs_from_entries,
     redact_secrets,
     run_stamp_fields,
+    skills_inventory,
 )
+from cowork_agent.runtime import SKILLS_DIRNAME
 from cowork_crypto import (
     CoworkFrameOpener,
     CoworkFrameRejected,
@@ -120,6 +125,7 @@ from .protocol import (
     reasoning_payload,
     run_state_payload,
     secret_request_payload,
+    skills_list_payload,
     stop_ack_payload,
     subagent_payload,
     tool_payload,
@@ -621,6 +627,7 @@ class Executor:
         automations=None,
         on_automation_frame: Callable[[dict], dict | None] | None = None,
         job_frame_sender: Callable[[dict], Any] | None = None,
+        skills_seed_root: str | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -704,6 +711,13 @@ class Executor:
         # frames. ``None`` -> no automation tools, those frames are unknown.
         self._automations = automations
         self._on_automation_frame = on_automation_frame
+        # Skills (docs/WIRE_CONTRACT.md, "Skills"): the app lists and switches
+        # the workspace's skills through ``skills_list`` / ``skill_control``.
+        # The executor answers both itself from ``<workspace>/skills`` and the
+        # ``skill_settings`` table of its own state database (the one
+        # ``build_runtime`` reads); ``skills_seed_root`` (the repository's
+        # shipped ``skills/``) only decides which rows are "builtin".
+        self._skills_seed_root = skills_seed_root
         # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
         # background commands"): the host's trigger tail hands a finished
         # job to ``job_finished``; the router wakes the model — into the
@@ -1001,6 +1015,12 @@ class Executor:
             # answered with one terminal frame, like a replay.
             self._handle_automation_frame(kind, request_id, payload)
             return
+        if kind in ("skills_list", "skill_control"):
+            # The user manages the skills of this host (docs/WIRE_CONTRACT.md,
+            # "Skills"). Both are answered with one terminal ``skills_list``
+            # frame, like a replay: the list is the truth after any control.
+            self._handle_skills_frame(kind, request_id, payload)
+            return
         if kind == "run_ack":
             # The app saw a live ``done`` for this run. Record it so a later
             # replay does not flag the run as finished "while away", and tell
@@ -1181,6 +1201,29 @@ class Executor:
         if kind == "automation_list":
             rows = answer if isinstance(answer, list) else []
             self._terminal(request_id, automation_list_payload(rows))
+
+    def _handle_skills_frame(self, kind: str, request_id: str, payload: dict) -> None:
+        root = (
+            str(Path(self._workspace) / SKILLS_DIRNAME) if self._workspace else None
+        )
+        try:
+            settings = SkillSettingsStore(self._db_path)
+            if kind == "skill_control":
+                body = apply_skill_control(
+                    root,
+                    settings,
+                    name=payload.get("name"),
+                    action=payload.get("action"),
+                    seed_root=self._skills_seed_root,
+                )
+            else:
+                body = skills_inventory(
+                    root, settings=settings, seed_root=self._skills_seed_root
+                )
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad store
+            self._terminal(request_id, error_payload(f"skills frame failed: {type(exc).__name__}"))
+            return
+        self._terminal(request_id, skills_list_payload(body["skills"], body["errors"]))
 
     def _handle_run_ack(self, payload: dict) -> None:
         run_id = payload.get("run_id")
