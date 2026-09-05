@@ -1,5 +1,12 @@
 # Handover — mobile layer (session cowork-c6, 2026-09-05)
 
+Where it landed in git: the mobile layer, its tests, the previews and the two
+mobile docs are in commit `6d7f75e` — under another session's subject
+("feat(settings): …"), because two sessions committed from the shared index
+at the same moment and that commit swallowed the staged files. The content is
+complete there; `git show --stat 6d7f75e -- app/lib/platform_specific/mobile`
+lists it. The notifications work is commit `2790c89` (its own message).
+
 Task from the user: make the CoWork app feel like a messenger on a phone,
 modelled on the **Grok Bot** app (xAI). Design source: Mobbin only (user's
 instruction); website images only for desktop inspiration.

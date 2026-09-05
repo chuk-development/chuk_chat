@@ -251,3 +251,116 @@ A run belongs to the host process, not to a socket. When the app disconnects the
 keeps going, the transcript keeps landing in the message store, and result frames
 for an absent controller are dropped (not buffered). When the app reconnects it
 re-binds the frame codec and requests `replay` with its cursor.
+
+## Tool events and timestamps (beads cowork-b45, cowork-al2)
+
+Proposed 2026-09-05 by session cowork-84. Additive. Python side: cowork-b5.
+App side (relay client, ledger, replay loader): cowork-47. Rendering: cowork-84.
+
+Python side IMPLEMENTED 2026-09-05 (session cowork-reasoning, uncommitted):
+`cowork_agent.tool_events.tool_event_fields` is the one shape; the loop emits it
+live through `AgentLoop(tool_event_observer=...)` (wired by the executor,
+`_env_shim.on_run` no longer emits tool frames), `StateStore.replay_events`
+rebuilds it from the rows, `StateStore.run_stamp_fields` stamps every `done`.
+Two details beyond the text below: a live `tool` frame carries no `mid` (the
+cursor moves on `done.last_mid`); a replayed call is matched to its result
+row within its own turn, by `tool_call_id` first and by position otherwise,
+so a model that reuses call ids across turns cannot cross-wire results.
+
+### The problem
+
+Today a live `tool` frame and a replayed `tool` frame come from two different
+sources, so the app draws two different sets of cards for the same run:
+
+| | live | replay |
+|---|---|---|
+| source | `_env_shim.on_run`: one frame per shell command `env.run_bash` executes | `StateStore.replay_events`: one frame per native tool call on a stored assistant row |
+| which tools | only `run_command` — but ALSO the internal shell commands of `write_file`, `read_file`, `list_dir`, `run_python` (each shows as a `run_command` card with a `printf ... base64 -d` command line) | every native tool: `run_command`, `write_file`, `web_search`, MCP tools, `finish`, ... |
+| `command` | the shell command line | the native arguments as one JSON string |
+| `exit_code` | real | always `0` |
+| `stdout` | real | the tool result text |
+| failure | real | never |
+| timestamps | none | none |
+
+So the count, the names, the arguments and the status differ, and the app has
+no time for any card. It stamps the time it folded the frame, which makes a
+replayed round 0 seconds long ("Worked for 0s").
+
+### One source: the native tool call
+
+Live and replay both emit ONE `tool` frame per native tool call the model
+made, after its result is known. The executor emits it from the loop's tool
+dispatch, not from the environment hook. `_env_shim.on_run` emits no `tool`
+frame any more (it may feed a future `command` frame for the full-log view;
+not part of this change).
+
+```json
+{"type": "tool", "name": "<tool name>", "call_id": "<native call id>"?,
+ "arguments": {"<key>": "<value>"},
+ "command": "<string>"?,
+ "result": "<tool result as text>",
+ "exit_code": <int>?, "stdout": "<text>"?, "stderr": "<text>"?, "timed_out": <bool>?,
+ "status": "completed" | "error",
+ "started_at": <unix seconds>, "completed_at": <unix seconds>,
+ "duration_ms": <int>?,
+ "replay": <bool>, "mid": <int>?}
+```
+
+- `arguments` (NEW): the native arguments, as an object. When the model sent a
+  string the loop could not parse, the string is sent as it is.
+- `command` (kept for old apps): `arguments.command` for `run_command`,
+  `arguments.code` for `run_python`. Absent for other tools. Never a JSON blob.
+- `result` (NEW): the tool result as one text, the same text the model got
+  (`_as_text(content)` of the stored `tool` row).
+- `exit_code`, `stdout`, `stderr`, `timed_out`: projected from the result when
+  the result is a dict with these keys (`run_command`, `run_python`). Absent
+  otherwise. An old app reads them as before.
+- `status` (NEW): `error` when `exit_code != 0`, or `timed_out`, or the result
+  dict has `error`, or the result dict has `ok: false`, or the dispatch raised.
+  Else `completed`.
+- `started_at` / `completed_at` (NEW, unix seconds, float): live, the clock
+  before and after the dispatch. Replay, `created_at` of the assistant row
+  (the call) and `created_at` of the matching `tool` row (the result).
+- `duration_ms`: `completed_at - started_at`, for old apps that read only this.
+
+Not covered here: `subagent`, `file` and `approval_request` frames. Their
+persistence and replay is the section "Persisted subagent / file / approval
+events" below (bead cowork-266); the contract above does not change them.
+
+### Run timestamps on `done`
+
+`done` gets four more fields, on the live terminal and on a replayed run
+terminal alike (all from the `runs` row: the executor writes `_record_run`
+before it sends the terminal):
+
+```json
+{"type": "done", ..., "started_at": <unix seconds>, "finished_at": <unix seconds>,
+ "first_mid": <int>, "last_mid": <int>}
+```
+
+- `started_at` / `finished_at`: the run's clock on the host. The app shows
+  `finished_at - started_at` as "Worked for", live and replayed alike.
+- `first_mid` / `last_mid`: the message rows of this run. On a LIVE `done` the
+  app moves its replay cursor to `last_mid`. Without that, the next replay
+  (reconnect, host restart) sends the live run's rows again above the old
+  cursor, and the app appends them behind the copy it already drew — the
+  duplicate turn with differently drawn tool cards.
+
+`run_state.started_at` is unchanged.
+
+### What the app does with it
+
+- `ToolCall.startedAt` / `completedAt` come from `started_at` /
+  `completed_at`. One mapping function, used by the live path (ledger) and
+  the replay path (loader); a test asserts that the same frame gives the same
+  `ToolCall` (minus id) on both paths.
+- `ToolCall.arguments` is the `arguments` object (plus `exit_code` when
+  present). `result` is `result`, else `stdout` + `stderr` as today.
+- A replayed answer row gets `generationMs` from the run terminal. It gets NO
+  `startedAt`: the imported persistence handler re-stamps the newest row from
+  `startedAt` at every save, and a host time there would grow the number to
+  the age of the thread.
+- A live answer row keeps chuk's own measurement (`startedAt` on the
+  placeholder, `generationMs` at save). It is within one second of the host
+  number.
+
