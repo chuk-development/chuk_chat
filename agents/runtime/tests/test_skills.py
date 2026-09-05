@@ -286,3 +286,166 @@ def test_the_injected_body_never_overwrites_the_system_prompt(tmp_path):
     # the row keeps its own label, so the transcript still shows where it came from
     rows = loop.store.get_conversation(1)
     assert any(row.role == "skill" for row in rows)
+
+
+# -- the user's switches (docs/WIRE_CONTRACT.md, "Skills") ------------------
+
+
+def _library_names(root, **kw):
+    library = load_skills(root, **kw)
+    return sorted(library.skills), sorted(library.disabled)
+
+
+def test_a_switched_off_skill_never_reaches_the_prompt_or_the_tool(tmp_path):
+    from cowork_agent import SkillSettingsStore
+
+    workspace = tmp_path / "ws"
+    _write_skill(workspace / "skills", "deploy", "Deploys the app to production.")
+    _write_skill(workspace / "skills", "notes", "Keeps the notes folder tidy.")
+    db = str(tmp_path / "s.db")
+    SkillSettingsStore(db).set_enabled("deploy", False)
+
+    model = MockModelClient(
+        [tool_call_response(("skill", {"name": "deploy"})), "done"]
+    )
+    loop = build_runtime(
+        model, db_path=db, environment=LocalEnvironment(), workspace=str(workspace)
+    )
+    loop.run("s1", "hi")
+
+    system = model.calls[0][0]["content"]
+    assert "`notes` — Keeps the notes folder tidy." in system
+    assert "deploy" not in system  # switched off: not even level-1 weight
+    # The tool refuses it like a name that does not exist, and the body never
+    # enters the conversation.
+    second_round = model.calls[1]
+    assert "no skill named 'deploy'" in _texts(second_round)
+    assert "./deploy.sh" not in _texts(second_round)
+
+
+def test_an_absent_row_means_on_and_only_off_rows_are_stored(tmp_path):
+    from cowork_agent import SkillSettingsStore
+
+    store = SkillSettingsStore(tmp_path / "s.db")
+    assert store.disabled() == set()
+    assert store.is_enabled("anything")
+    store.set_enabled("deploy", False)
+    store.set_enabled("notes", True)
+    assert store.disabled() == {"deploy"}
+    store.set_enabled("deploy", True)
+    assert store.disabled() == set()
+    # A second store on the same file sees the same truth (host and executor
+    # share the database).
+    SkillSettingsStore(tmp_path / "s.db").set_enabled("notes", False)
+    assert store.disabled() == {"notes"}
+
+
+def test_load_skills_keeps_a_disabled_skill_out_of_the_catalogue(tmp_path):
+    root = tmp_path / "skills"
+    _write_skill(root, "deploy", "Deploys the app to production.")
+    _write_skill(root, "notes", "Keeps the notes folder tidy.")
+    assert _library_names(root) == (["deploy", "notes"], [])
+    assert _library_names(root, disabled={"deploy"}) == (["notes"], ["deploy"])
+    # Still parsed and still validated: the app shows its description.
+    library = load_skills(root, disabled={"deploy"})
+    assert library.disabled["deploy"].description == "Deploys the app to production."
+    assert "deploy" not in library.catalog()
+
+
+def test_an_unreadable_settings_store_means_all_skills_on(tmp_path):
+    import sqlite3
+
+    class Broken:
+        def disabled(self):
+            raise sqlite3.OperationalError("database is locked")
+
+    root = tmp_path / "skills"
+    _write_skill(root, "deploy", "Deploys the app to production.")
+    library = load_skills(root, settings=Broken())
+    assert sorted(library.skills) == ["deploy"]
+    assert any("all skills on" in error for error in library.errors)
+
+
+def test_the_inventory_lists_every_skill_with_switch_and_source(tmp_path):
+    from cowork_agent import SkillSettingsStore, skills_inventory
+
+    seeds = tmp_path / "seed"
+    _write_skill(seeds, "youtube", "Summarizes a YouTube video.")
+    _write_skill(seeds, "deploy", "Deploys the app to production.")
+    root = tmp_path / "ws" / "skills"
+    _write_skill(root, "notes", "Keeps the notes folder tidy.")
+    _write_skill(root, "youtube", "Summarizes a YouTube video.")
+    _write_skill(root, "deploy", "Deploys the app to production.")
+    _write_skill(root, "broken", "x", front="no frontmatter here")
+    store = SkillSettingsStore(tmp_path / "s.db")
+    store.set_enabled("youtube", False)
+
+    body = skills_inventory(root, settings=store, seed_root=seeds)
+
+    assert [(r["name"], r["source"], r["enabled"]) for r in body["skills"]] == [
+        ("deploy", "builtin", True),
+        ("youtube", "builtin", False),
+        ("notes", "workspace", True),
+    ]
+    assert body["skills"][0]["description"] == "Deploys the app to production."
+    assert body["skills"][0]["path"].endswith("deploy/SKILL.md")
+    assert len(body["errors"]) == 1 and "broken" in body["errors"][0]
+    # No seed directory: everything is a workspace skill.
+    plain = skills_inventory(root, settings=store)
+    assert {r["source"] for r in plain["skills"]} == {"workspace"}
+
+
+def test_a_control_flips_the_switch_and_answers_with_the_list(tmp_path):
+    from cowork_agent import SkillSettingsStore, apply_skill_control
+
+    root = tmp_path / "ws" / "skills"
+    _write_skill(root, "deploy", "Deploys the app to production.")
+    store = SkillSettingsStore(tmp_path / "s.db")
+
+    reply = apply_skill_control(root, store, name="deploy", action="disable")
+    assert reply["skills"] == [
+        {
+            "name": "deploy",
+            "description": "Deploys the app to production.",
+            "source": "workspace",
+            "enabled": False,
+            "path": str(root / "deploy" / "SKILL.md"),
+        }
+    ]
+    assert reply["errors"] == []
+    assert store.disabled() == {"deploy"}
+
+    reply = apply_skill_control(root, store, name=" deploy ", action="enable")
+    assert reply["skills"][0]["enabled"] is True
+    assert store.disabled() == set()
+
+    # A bad name or action changes nothing; the list still comes back.
+    reply = apply_skill_control(root, store, name="nope", action="disable")
+    assert reply["errors"] == ["no skill named 'nope'"]
+    assert reply["skills"][0]["enabled"] is True
+    reply = apply_skill_control(root, store, name="deploy", action="delete")
+    assert "unknown action 'delete'" in reply["errors"][0]
+    assert store.disabled() == set()
+    reply = apply_skill_control(root, store, name=None, action="disable")
+    assert reply["errors"] == ["no skill named ''"]
+
+
+def test_a_switch_flipped_between_sessions_is_seen_by_the_next_prompt(tmp_path):
+    from cowork_agent import SkillSettingsStore
+
+    workspace = tmp_path / "ws"
+    _write_skill(workspace / "skills", "deploy", "Deploys the app to production.")
+    db = str(tmp_path / "s.db")
+    store = SkillSettingsStore(db)
+    store.set_enabled("deploy", False)
+
+    model = MockModelClient(["one", "two"])
+    loop = build_runtime(
+        model, db_path=db, environment=LocalEnvironment(), workspace=str(workspace)
+    )
+    loop.run("s1", "hello")
+    assert "# Skills" not in model.calls[0][0]["content"]
+
+    store.set_enabled("deploy", True)
+    loop.run("s2", "hello again")
+    assert "`deploy` — Deploys the app" in model.calls[1][0]["content"]
