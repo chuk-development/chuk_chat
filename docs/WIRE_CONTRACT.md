@@ -26,7 +26,25 @@ fields they do not know.
 | `stop` | `session_key` | Existing. |
 | `replay` | `session_key`, `after_id`? (int, default 0) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. |
-| `account_authentication` | (existing provisioning fields) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. |
+| `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
+
+### Token freshness (bead cowork-c91)
+
+The host must never run a task on a stale token. Three paths keep it fresh:
+
+1. App → host, proactive: on every Supabase token refresh the app re-sends
+   `account_authentication` with the new pair. The host swaps the tokens in place
+   (no task-server rebuild).
+2. Host → app, on demand: `{"type": "reprovision_request", "reason": "token_expired" | "refresh_failed"}`.
+   The app answers with a fresh `account_authentication` (it refreshes first when
+   the reason says the token expired).
+3. Host → app, after the host refreshed on its own (no app attached): Supabase
+   rotates the refresh token, so the app's copy is dead. The host sends
+   `{"type": "account_session_rotated", "access_token", "refresh_token", "expires_at", "rotated_at"}`
+   (pending, re-sent until acked). The app adopts it (`setSession(refresh_token)`),
+   updates its stores, and acks with an `account_authentication` carrying the new
+   pair. Idempotent: an app that already holds a newer token keeps its own and still
+   acks.
 
 ### `mcp_servers` on `task` (extended, additive)
 
@@ -130,6 +148,29 @@ working connector:
 Matching is on `id` — the app's own connector id, which the app puts on the
 outbound entry and the host echoes back unchanged. `name` is a display name and
 two connectors may share one. A frame with no `id` falls back to `url` + `name`.
+
+### `account_session_rotated` (NEW, host → app)
+
+The mirror of `reprovision_request`. While a controller is attached the APP is
+the token source and the host never spends the refresh token. With no controller
+attached the host must keep working, so it refreshes via GoTrue itself — and
+GoTrue rotates the refresh token, which kills the app's copy. This frame hands
+the new pair to the app so both sides hold the same pair again, whoever refreshed.
+
+```json
+{"type": "account_session_rotated",
+ "access_token": "<bearer>", "refresh_token": "<token>",
+ "expires_at": <epoch seconds>?, "rotated_at": "<iso 8601>"}
+```
+
+- Sent as soon as a controller is attached after the rotation; while none is,
+  it is kept pending and re-sent on the next connect until acknowledged.
+- Ack = the app sends an `account_authentication` frame whose `refresh_token`
+  equals the rotated one (its normal (re-)provision after adopting the pair).
+  Idempotent: last one wins; a frame that changes nothing writes nothing.
+- The app adopts the pair (`setSession`) and writes it to its pairing store, so
+  a reinstall does not come back with the dead token. It never treats this as
+  a login for a different user: `user_id` is not carried and must not change.
 
 ## Inbound: executor → app
 
