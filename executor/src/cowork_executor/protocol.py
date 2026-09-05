@@ -562,6 +562,26 @@ def automation_list_request_payload(session_key: str | None = None) -> dict[str,
     return payload
 
 
+def skills_list_payload(
+    skills: list[dict[str, Any]], errors: list[str] | tuple[str, ...] = ()
+) -> dict[str, Any]:
+    """Host -> app: the answer to a ``skills_list`` request AND to a
+    ``skill_control`` (docs/WIRE_CONTRACT.md, "Skills"). Every skill on the
+    host, enabled or not; ``errors`` names what could not be loaded or what a
+    control refused."""
+    return {"type": "skills_list", "skills": list(skills), "errors": list(errors)}
+
+
+def skill_control_payload(*, name: str, action: str) -> dict[str, Any]:
+    """App -> host: switch one skill ``enable`` / ``disable``."""
+    return {"type": "skill_control", "name": name, "action": action}
+
+
+def skills_list_request_payload() -> dict[str, Any]:
+    """App -> host: list every skill of the host."""
+    return {"type": "skills_list"}
+
+
 def mcp_credentials_payload(
     *,
     session_key: str,
