@@ -487,3 +487,114 @@ result; those stay end-to-end between the host and the paired app. The FCM
 sender identity is bound to the APK, not to the user's Supabase project: a
 self-hoster either uses the shipped Firebase project (the payload has no
 content) or rebuilds the app with their own `google-services.json`.
+
+---
+
+# CoWork threads — `cowork_chats` (bead cowork-sha)
+
+The chat rows. CoWork stores a thread the way chuk_chat stores a chat: the
+verbatim chuk_chat storage modules (`chat_storage_crud/sync/mutations/sidebar`,
+`chat_preload_service`, `chat_sync_service`, `local_chat_cache_native`) are
+imported unchanged, with one mechanical rewrite in `scripts/import_chat_ui.sh`:
+the table name `encrypted_chats` becomes `cowork_chats`. The DDL is in
+`supabase/migrations/20260905000000_cowork_chats.sql`; run it once in the
+project's SQL editor.
+
+Three copies of every thread, in this order of authority:
+
+1. **The Python host** (`agent/src/cowork_agent/state.py`) — the truth. The
+   app asks for a replay with its cursor (`after_id`, docs/WIRE_CONTRACT.md)
+   and folds the answer into the copies below.
+2. **The local SQLite cache** (`chat_cache.db` under the app-support
+   directory, plaintext gzip rows, same file chuk_chat uses) — what a thread
+   paints from the moment it opens, before the host answers.
+3. **This table** — encrypted, so a reinstall on another device paints from
+   the cloud before the host has been paired again, and `ChatSyncService`
+   (30 s poll on `id, updated_at`) pulls what another device wrote.
+
+The write path is `app/lib/services/storage/cowork_chat_store.dart`: memory,
+then the SQLite row, then an `upsert` here on `(user_id, id)`, best-effort.
+Reads and the sidebar go through the chuk_chat modules unchanged
+(`loadFullChat` is cache-first).
+
+## What Supabase stores
+
+Only **ciphertext** for content. `encrypted_payload` is the AES-256-GCM
+envelope of `{"v": 2, "messages": [...], "customName"?}`; `encrypted_title`
+is the first user line, encrypted separately so the sidebar can list threads
+without decrypting payloads. Both use the same per-user password-derived key
+as the pairing and connector mirrors (`EncryptionService`). The row id is the
+executor's `session_key` in plaintext: it is a routing key, not user content.
+
+## Why not `encrypted_chats`
+
+- `encrypted_chats.id` is a `uuid`; a session key (`default`, an agent id) is
+  not one.
+- CoWork and chuk_chat share this Supabase project. A shared table would list
+  every CoWork thread in chuk_chat's chat sidebar and let either app delete
+  the other's rows.
+
+## Table
+
+```sql
+create table if not exists public.cowork_chats (
+  id                text        not null,      -- executor session_key
+  user_id           uuid        not null references auth.users (id) on delete cascade,
+  encrypted_payload text        not null,      -- AES-256-GCM envelope JSON
+  encrypted_title   text,                      -- AES-256-GCM envelope JSON
+  image_paths       text[],                    -- reserved, as in encrypted_chats
+  is_starred        boolean     not null default false,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  primary key (user_id, id)
+);
+create index if not exists idx_cowork_chats_user_updated
+  on public.cowork_chats (user_id, updated_at desc);
+```
+
+A `before update` trigger bumps `updated_at` when the client did not, so a
+star or rename (chuk_chat's `update … eq id`) re-orders the thread the same
+way it does in chuk_chat.
+
+## Row-Level Security
+
+RLS on, owner-only, the same four policies as every other CoWork table:
+
+```sql
+alter table public.cowork_chats enable row level security;
+create policy cowork_chats_select_own on public.cowork_chats
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy cowork_chats_insert_own on public.cowork_chats
+  for insert to authenticated with check ((select auth.uid()) = user_id);
+create policy cowork_chats_update_own on public.cowork_chats
+  for update to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy cowork_chats_delete_own on public.cowork_chats
+  for delete to authenticated using ((select auth.uid()) = user_id);
+grant select, insert, update, delete on public.cowork_chats to authenticated;
+```
+
+## Client access pattern
+
+- Host replay committed → `CoworkChatStore.replaceThread(sessionKey, rows)`:
+  `upsert({id, user_id, encrypted_payload, encrypted_title, updated_at},
+  onConflict: 'user_id,id')`, then the server's `created_at`/`updated_at`
+  are adopted locally so the sync's "cloud newer?" check compares like with
+  like. Fails silently: the SQLite row already holds the thread.
+- The imported screen's own persist after a live turn → chuk_chat's
+  `ChatStorageCrud.saveChat` (insert) / `updateChat` (update), unchanged.
+- Sidebar → `select('id, encrypted_title, created_at, is_starred,
+  updated_at')`; a thread → `loadFullChat` (SQLite first, then this table).
+- Sync → every 30 s `select('id, updated_at')`, fetch the new/changed rows,
+  decrypt in an isolate, merge, refresh the SQLite rows. A row deleted here
+  is removed locally and its replay cursor is dropped, so the next open asks
+  the host for the full thread again (the host stays the truth).
+- Star / rename / delete / export → chuk_chat's mutations, unchanged.
+
+## Security note (business risk)
+
+Same reasoning as the other mirrors: a transcript can carry anything the user
+pasted into a task. Ciphertext keeps a database leak worthless. The session
+key is plaintext on purpose — it is what the sync compares and what the app
+needs to route a row to a thread, and it carries no content.
+
