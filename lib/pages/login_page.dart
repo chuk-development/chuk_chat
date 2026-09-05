@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/services/encryption_service.dart';
 
 /// Minimal email + password login. On success the [AuthGate] stream reacts
 /// and swaps to the messenger shell, so this screen has nothing to do after
@@ -38,12 +39,28 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
+      final password = _passwordController.text;
       await widget.auth.signInWithPassword(
         email: _emailController.text.trim(),
-        password: _passwordController.text,
+        password: password,
       );
+      // Derive the per-user encryption key from the password, here, exactly as
+      // chuk_chat does at its own sign-in (bd cowork-6v5). Everything that
+      // stores user data encrypted — the system prompt and preferences, the
+      // Supabase pairing mirror, the MCP connector mirror — needs this key, and
+      // the password is the only moment it can be derived. Restoring a Supabase
+      // session alone does not carry it, which is why those reads used to fail
+      // with "Encryption key is not available for the current user".
+      //
+      // A failure here is reported instead of swallowed: the user would be
+      // signed in with no key, which is the very bug this fixes.
+      await EncryptionService.initializeForPassword(password);
     } on AuthServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = 'Could not unlock your encrypted data: $error');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

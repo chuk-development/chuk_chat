@@ -1,59 +1,108 @@
+/// The messenger shell: chuk_chat's root-wrapper layout around CoWork's content.
+///
+/// ## What is chuk's here, and what is not
+///
+/// The LAYOUT is `root_wrapper_desktop.dart` from chuk_chat master, rebuilt
+/// with CoWork's content in each slot (plan WS-1, docs/PLAN_2026-09-04_
+/// COWORK_CHUK_ALIGN.md): one `Stack`; the chat area in a `Positioned.fill`
+/// that is inset by the sidebar and the right panel and hidden with `Offstage`
+/// rather than unmounted; a sidebar that slides in from the left and is faded
+/// out and pointer-blocked when closed; the hamburger anchored top-left at
+/// chuk's `kTopInitialSpacing` / `kFixedLeftPadding`; the mini rail under it
+/// when the sidebar is closed, one `kButtonVisualHeight` per row so the icons
+/// line up with the sidebar's rail rows; a right panel at chuk's
+/// Workspaces / Media / Artifacts slot with the same header, the same 400 px
+/// cap and the same draggable divider for the one panel the user resizes; and
+/// the floating top-right row at chuk's anchor. There is no `AppBar`: chuk has
+/// none.
+///
+/// The CONTENT is CoWork's. The sidebar lists coworkers, not chats
+/// (`AgentRosterView`, on chuk's sidebar chrome). The three mini-rail slots are
+/// New coworker, Control Rooms and Agent's browser. The right panel shows the
+/// room list or the agent's browser. The top-right row has FOUR buttons — Agent
+/// controls, Control Rooms, Agent's browser and, in chuk's own slot, Copy full
+/// chat. Settings is where chuk keeps it: the gear in the sidebar's footer
+/// pill, opening chuk's settings modal (desktop) or hub (phone); Sign out is
+/// in the settings footer and in the phone sheet.
+///
+/// ## Deliberate divergences from chuk
+///
+/// * **The chat area owns a socket.** chuk's root wrappers hold no state worth
+///   keeping; ours hosts `CoworkThreadView`, which builds the relay controller
+///   and reconnects from the stored pairing. Everything the shell owns lives in
+///   [CoworkShellHost] (`cowork_shell_state.dart`), ABOVE the desktop / phone
+///   split, and the thread view is built by one method with one [GlobalKey], so
+///   a resize across any breakpoint moves it and never rebuilds it.
+/// * **The sidebar starts open.** chuk's desktop starts collapsed; a
+///   messenger's roster is its navigation, so a wide window opens with it in
+///   place. The hamburger folds it to chuk's mini rail exactly as upstream.
+/// * **Compact mode ends at 720, not chuk's 600.** chuk's compact band covers
+///   narrow desktop windows; CoWork hands anything under 600 to the phone layer
+///   (cowork-c6), so the band moves up to keep a tablet-width window in it: the
+///   sidebar covers 85 % and the chat is off stage while it is open, and
+///   picking a coworker closes it so the chat comes forward.
+/// * **Opening a panel folds the sidebar when they cannot share the width.**
+///   chuk drops the panel silently in that case; with a sidebar that is open by
+///   default that would make Control Rooms look broken at 800 px.
+/// * **Opening settings leaves the sidebar alone.** chuk closes it first; here
+///   it is the navigation, not an overlay the user pulled out.
+///
+/// Below 600 px (or on a real phone) the body is cowork-c6's mobile layer
+/// (`platform_specific/mobile/**`): the coworker inbox and the chat with the
+/// floating chrome, the thread view kept mounted off stage behind the inbox.
+library;
+
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:cowork/constants.dart';
+import 'package:cowork/model_selector_page.dart';
+import 'package:cowork/models/app_shell_config.dart';
 import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/pages/settings/model_settings_page.dart';
-import 'package:cowork/pages/settings/settings_page.dart';
+import 'package:cowork/models/cowork_room.dart';
+import 'package:cowork/pages/desktop_settings_modal.dart';
+import 'package:cowork/pages/settings_page.dart';
+import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/settings/theme_controller.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:cowork/services/cowork/chat_debug_export.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/cowork/room_source.dart';
+// Built by the persistence agent: restores the account's encrypted pairing from
+// Supabase so a fresh install reconnects with no code.
+import 'package:cowork/services/cowork/supabase_pairing_sync.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
+import 'package:cowork/services/secrets/secrets_service.dart';
+import 'package:cowork/services/notifications/cowork_notifications.dart';
+import 'package:cowork/services/notifications/notification_router.dart';
+import 'package:cowork/services/settings/theme_controller.dart';
+import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
-import 'package:cowork/widgets/browser_view_page.dart';
 import 'package:cowork/widgets/agent_onboarding_sheet.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/widgets/browser_view_page.dart';
+import 'package:cowork/widgets/cowork_thread_view.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
 import 'package:cowork/widgets/room_list_view.dart';
 import 'package:cowork/widgets/room_members_sheet.dart';
 import 'package:cowork/widgets/room_thread_page.dart';
 import 'package:cowork/widgets/room_thread_view.dart';
-import 'package:cowork/widgets/cowork_thread_view.dart';
 
-/// Builds the default production relay controller: a real [CoworkRelayClient]
-/// with the app's **stable** long-term device identity, loaded from (or created
-/// in) [store] on first use. A stable key is what lets the host's stored trust
-/// keep matching us across restarts, so the reconnect handshake authenticates
-/// with no code.
-Future<CoworkRelayController> _buildRelayController(
-  CoworkPairingStore store,
-) async {
-  final identity = await store.loadOrCreateIdentity();
-  return CoworkRelayClient(
-    deviceId: identity.deviceId,
-    signingKeyPair: identity.keyPair,
-    // The user's UI-configured MCP servers ride along on each task frame,
-    // resolved with their live bearers at launch (WS-D).
-    mcpStore: McpStore(),
-    // The here.now publishing connector setting rides along the same way, so a
-    // public publish is gated on the user's yes (or their auto-approve opt-in).
-    hereNowStore: HereNowStore(),
-  );
-}
+part 'cowork_shell_state.dart';
 
-/// The messenger: a roster of coworkers on one side, the selected thread on the
-/// other, and the control surface behind one button (§1, §16).
-///
-/// On a wide window the roster and the thread sit side by side. On a phone the
-/// roster is the first screen and the thread slides in — through an
-/// [IndexedStack], not a route, so the socket is never rebuilt by navigation.
-/// The thread view carries a [GlobalKey] so crossing the width breakpoint moves
-/// it instead of recreating it (which would open a second connection).
+/// The messenger: coworkers down the left, the selected thread in the middle,
+/// Control Rooms or the agent's browser on the right, the control surface
+/// behind one button (§1, §16). Layout: see the library doc above.
 class MessengerShell extends StatefulWidget {
   const MessengerShell({
     super.key,
@@ -65,6 +114,8 @@ class MessengerShell extends StatefulWidget {
     this.controlSource,
     this.onSignOut,
     this.themeController,
+    this.shellConfig,
+    this.chatDebugExport,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -92,159 +143,120 @@ class MessengerShell extends StatefulWidget {
   /// Sign-out hook. Defaults to the real [AuthService].
   final VoidCallback? onSignOut;
 
-  /// The app's theme controller, so the settings menu can edit the theme. When
-  /// null the shell builds its own (a session-only controller), so the settings
-  /// icon always works — it just does not survive a full app restart in that
-  /// standalone case.
+  /// The app's theme controller. Kept as the bridge `main.dart` and
+  /// `auth_gate.dart` still take (see HANDOVER_2026-09-05_SHELL_SETTINGS);
+  /// chuk's settings surfaces write the theme through [shellConfig].
   final ThemeController? themeController;
+
+  /// chuk_chat's `AppShellConfig` — the theme, typography and display settings
+  /// with their setters — handed down the tree from `main.dart`, exactly as
+  /// chuk hands it to `RootWrapper(config: …)` (bead `cowork-8y2`). Every
+  /// imported settings surface and the chat screen read it from here. A shell
+  /// built without one (a widget test) has no settings entry; the entries do
+  /// nothing rather than crash.
+  final AppShellConfig? shellConfig;
+
+  /// Copies one thread's debug export and returns the short note to show —
+  /// the "Copy full chat" button at the top right, the same affordance
+  /// chuk_chat master has above its chat area (`root_wrapper_desktop.dart`,
+  /// `_copyDebugChat`).
+  ///
+  /// Defaults to [ChatDebugExport.copyToClipboard], which reads the local row
+  /// cache and the run ledger. Injectable so a widget test can drive the
+  /// button without those.
+  final Future<String> Function(String threadKey)? chatDebugExport;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
 }
 
-class _MessengerShellState extends State<MessengerShell> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
+  /// chuk's compact band, moved up (see the library doc): a window narrower
+  /// than this — and not a phone — gets the 85 % overlay sidebar.
+  static const double _compactBreakpoint = 720;
 
-  /// Owned by the state, not the widget: a parent rebuild must never hand the
-  /// tree a fresh, empty roster or a second pairing store.
-  late final CoworkPairingStore _pairingStore =
-      widget.pairingStore ?? CoworkPairingStore();
-  late final AgentRosterSource _roster =
-      widget.rosterSource ?? LocalAgentRosterSource();
-  late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource();
+  /// chuk's desktop sidebar width outside compact mode.
+  static const double _sidebarWidth = 320;
 
-  /// The live transport, handed up by the thread view so a room can stream over
-  /// the same socket. Null until the thread view has built it; it changes on a
-  /// reconnect, which is what lets an open room re-bind to the new socket.
-  final ValueNotifier<CoworkRelayController?> _controller =
-      ValueNotifier<CoworkRelayController?>(null);
+  /// chuk's panel geometry: the chat keeps at least this much, a panel needs at
+  /// least this much, and a list panel is capped here.
+  static const double _minChatWidth = 300;
+  static const double _minPanelWidth = 320;
+  static const double _listPanelWidth = 400;
 
-  /// Rooms deleted while the socket was down. The host never heard the delete
-  /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
-  /// would keep an orphan. These flush the moment a transport arrives.
-  final Set<String> _pendingHostDeletes = <String>{};
-  late final AgentControlSource _controlSource =
-      widget.controlSource ?? HostUnavailableControlSource();
+  // chuk's root_wrapper_desktop state, same names.
+  bool _isSidebarExpanded = true;
+  bool _hasOpenedSidebar = true;
 
-  /// Only a source this state created is this state's to dispose.
-  late final bool _ownsControlSource = widget.controlSource == null;
+  /// 'rooms' | 'browser' | null — chuk's `_activePanel` ('projects' / 'media').
+  String? _activePanel;
 
-  /// The theme controller the settings menu edits. Falls back to a session-only
-  /// one when the app did not hand one down, so the settings page always opens.
-  late final ThemeController _themeController =
-      widget.themeController ?? ThemeController();
-  late final bool _ownsThemeController = widget.themeController == null;
+  /// The width the user dragged the browser panel to. Null = chuk's default,
+  /// half the content width.
+  double? _userBrowserPanelWidth;
 
-  /// Keeps the one live thread view (and its socket) alive when the layout
-  /// moves it between the wide Row and the narrow IndexedStack.
-  final GlobalKey _threadViewKey = GlobalKey();
+  // Read by handlers that run after build (the same trick chuk's settings
+  // modal uses for `_compact`): which layout the last frame chose.
+  bool _isPhone = false;
+  bool _isCompact = false;
+  double _lastWidth = 0;
 
-  static const double _wideBreakpoint = 720;
-
-  String? _selectedAgentId;
-  String _selectedThreadKey = 'default';
-  bool _showThreadOnNarrow = false;
-
-  CoworkAgent? get _selectedAgent =>
-      _selectedAgentId == null ? null : _roster.byId(_selectedAgentId!);
+  @override
+  void initState() {
+    super.initState();
+    _hostInit();
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
-    if (_ownsControlSource) _controlSource.dispose();
-    if (_ownsThemeController) _themeController.dispose();
+    _hostDispose();
     super.dispose();
   }
 
-  /// Which coworker owns [threadKey]. A run's events belong to the thread that
-  /// started it, which is not always the one on screen.
-  String? _agentIdForThread(String threadKey) {
-    for (final agent in _roster.agents) {
-      if (agent.threads.any((thread) => thread.key == threadKey)) return agent.id;
-    }
-    return _selectedAgentId;
-  }
-
+  @override
   void _select(String agentId, String threadKey) {
     setState(() {
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;
       _showThreadOnNarrow = true;
+      // In the compact band the open sidebar covers the chat; picking a
+      // coworker is the request to see its thread, so the sidebar folds.
+      if (_isCompact && _isSidebarExpanded) _isSidebarExpanded = false;
     });
   }
 
-  void _onPaired(String peerDeviceId) {
-    final agent = _roster.ensureHostAgent(peerDeviceId);
-    if (_selectedAgentId == null) {
-      setState(() {
-        _selectedAgentId = agent.id;
-        _selectedThreadKey = agent.threads.first.key;
-      });
-    }
+  void _toggleSidebar() {
+    setState(() {
+      if (!_isSidebarExpanded) _hasOpenedSidebar = true;
+      _isSidebarExpanded = !_isSidebarExpanded;
+    });
   }
 
-  Future<void> _openOnboarding() async {
-    final taken = _roster.agents.map((agent) => agent.name);
-    final suggested = const AgentNameGenerator().next(taken: taken);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => AgentOnboardingSheet(
-        suggestedName: suggested,
-        onCancel: () => Navigator.of(sheetContext).pop(),
-        onSubmit: (draft) {
-          final agent = _roster.addAgent(
-            name: draft.name,
-            role: draft.role,
-            brief: draft.brief,
-            schedule: draft.schedule,
-            attachmentNames: draft.attachmentNames,
-          );
-          Navigator.of(sheetContext).pop();
-          _select(agent.id, agent.threads.first.key);
-        },
-      ),
-    );
-  }
+  // --- the four surfaces -----------------------------------------------------
 
-  /// Opens the rooms screen as its own route, so the agent thread and its live
-  /// socket stay mounted underneath — a room never disturbs the one-to-one
-  /// connection. Group rooms run on the host; until one is connected and driving
-  /// a room, the room thread shows an honest waiting state rather than faking
-  /// turns.
+  /// Control Rooms: the right panel on a desktop window, a route on a phone.
   void _openRooms() {
+    if (!_isPhone) {
+      _togglePanel('rooms');
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(
-            title: const Text('Rooms'),
-            actions: [
-              IconButton(
-                tooltip: 'New room',
-                icon: const Icon(Icons.group_add_outlined),
-                onPressed: _openRoomCreate,
-              ),
-            ],
-          ),
-          body: RoomListView(
-            source: _rooms,
-            onCreate: _openRoomCreate,
-            onSelect: _openRoom,
-            onDelete: _deleteRoom,
-            onRename: _renameRoom,
-            onManageMembers: _manageRoomMembers,
-          ),
+          appBar: AppBar(title: const Text('Control Rooms')),
+          body: _buildRoomList(),
         ),
       ),
     );
   }
 
+  /// The agent's browser: the right panel on a desktop window, a route on a
+  /// phone. Nothing to show before the transport is paired.
   void _openBrowserView() {
-    final controller = _controller.value;
-    if (controller == null || !controller.state.value.isPaired) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connect to the agent first.')),
-      );
+    final controller = _pairedControllerOrExplain();
+    if (controller == null) return;
+    if (!_isPhone) {
+      _togglePanel('browser');
       return;
     }
     Navigator.of(context).push(
@@ -254,345 +266,476 @@ class _MessengerShellState extends State<MessengerShell> {
     );
   }
 
-  Future<void> _openRoomCreate() async {
-    // Only coworkers the app can actually name can join a room.
-    final agents = _roster.visibleAgents;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => RoomCreateSheet(
-        agents: agents,
-        onCancel: () => Navigator.of(sheetContext).pop(),
-        onSubmit: (draft) {
-          final room = _rooms.addRoom(draft);
-          // Push the room to the host so a later message can drive it. It rides
-          // the shared socket if the transport is up; if not, the create sheet
-          // still succeeds locally and the room syncs on the next open/send.
-          _controller.value?.createRoom(
-            room.id,
-            room.name,
-            <Map<String, String>>[
-              for (final m in room.members)
-                <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-            ],
+  /// chuk's `_openWorkspacesPage` / `_openMediaPage`: the same id toggles the
+  /// panel off, another id switches it.
+  void _togglePanel(String id) {
+    setState(() {
+      if (_activePanel == id) {
+        _activePanel = null;
+        return;
+      }
+      _activePanel = id;
+      // No room for both next to the chat: fold the sidebar rather than let
+      // the panel be dropped silently (see the library doc).
+      if (_isSidebarExpanded &&
+          _lastWidth - _sidebarWidth - _minChatWidth < _minPanelWidth) {
+        _isSidebarExpanded = false;
+      }
+    });
+  }
+
+  void _closePanel() => setState(() => _activePanel = null);
+
+  /// chuk's settings entry: the modal over the chat on a desktop window
+  /// (`showDesktopSettingsModal`), the hub as a route on a phone
+  /// (`SettingsPage`). Both take the `AppShellConfig` handed down the tree.
+  void _openSettings() {
+    final config = widget.shellConfig;
+    if (config == null) return;
+    if (_isPhone) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => SettingsPage(config: config),
+        ),
+      );
+      return;
+    }
+    unawaited(showDesktopSettingsModal(context, config: config));
+  }
+
+  /// The composer's "More models" way out, wired as chuk wires it: the settings
+  /// modal opened on the model section on a desktop window, chuk's own
+  /// `ModelSelectorPage` as a route on a phone (bead `cowork-acu`). Without a
+  /// config the desktop falls back to the page too, so the entry always opens.
+  @override
+  void _openModelScreen() {
+    final config = widget.shellConfig;
+    if (config != null && !_isPhone) {
+      unawaited(
+        showDesktopSettingsModal(
+          context,
+          config: config,
+          initialSectionId: 'model',
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => const ModelSelectorPage()),
+    );
+  }
+
+  // --- build -----------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    // The whole shell listens to the roster: the sidebar, the top-right row
+    // (which buttons apply) and the control panel all read from it.
+    return AnimatedBuilder(
+      animation: _roster,
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final double width = constraints.maxWidth;
+          final bool phone = MobileLayout.isPhoneWidth(width);
+          _isPhone = phone;
+          _isCompact = !phone && width < _compactBreakpoint;
+          _lastWidth = width;
+          final agent = _selectedAgent;
+
+          return Scaffold(
+            key: _scaffoldKey,
+            endDrawer: _buildControlDrawer(context),
+            body: phone
+                ? _buildPhoneBody(context, agent)
+                : _buildDesktopBody(context, width, agent),
           );
-          Navigator.of(sheetContext).pop();
         },
       ),
     );
   }
 
-  void _openRoom(String roomId) {
-    final room = _rooms.byId(roomId);
-    if (room == null) return;
-    final controller = _controller.value;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: Text(room.name)),
-          // With a live socket the room streams over it (RoomThreadPage keeps
-          // only its own room's frames); without one — the thread view has not
-          // built the transport yet — it shows an honest waiting state. Driving
-          // a room is still the host-gated step; the page renders whatever
-          // turns the host sends.
-          body: controller == null
-              ? RoomThreadView(
-                  roomName: room.name,
-                  userMessage: 'Connect your host to start this room.',
-                  turns: const <CoworkRoomTurn>[],
-                  members: room.members,
-                )
-              : RoomThreadPage(
-                  roomId: room.id,
-                  roomName: room.name,
-                  members: room.members,
-                  userMessage: 'Message the room to start.',
-                  inbound: controller.inbound,
-                  // Re-bind to the new socket on a reconnect: the page follows
-                  // _controller, re-subscribes to the fresh inbound and re-runs
-                  // onReady (re-create + re-request history) automatically.
-                  rebind: _controller,
-                  // Read the live controller each time, not the one captured at
-                  // open, so a send after a reconnect goes to the new socket.
-                  onSend: (message) =>
-                      _controller.value?.sendRoomTask(room.id, message),
-                  onReady: () {
-                    final c = _controller.value;
-                    if (c != null) _onRoomOpened(c, room);
-                  },
-                ),
-        ),
-      ),
-    );
-  }
+  /// chuk's `_RootWrapperDesktopState.build`, slot for slot.
+  Widget _buildDesktopBody(
+    BuildContext context,
+    double screenWidth,
+    CoworkAgent? agent,
+  ) {
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final bool isCompactMode = _isCompact;
 
-  /// Called once a room page is ready. Re-sync the room to the host first — it
-  /// is idempotent there, and it repairs the case where the room was created
-  /// while the host was offline, so the host has it before any task or history
-  /// request lands. Then ask for its stored history.
-  void _onRoomOpened(CoworkRelayController controller, CoworkRoom room) {
-    controller.createRoom(
-      room.id,
-      room.name,
-      <Map<String, String>>[
-        for (final m in room.members)
-          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+    final double sidebarVisibleWidth = isCompactMode
+        ? screenWidth * 0.85
+        : _sidebarWidth;
+    final double effectiveSidebarWidth = math.min(
+      screenWidth,
+      sidebarVisibleWidth,
+    );
+    final bool showContent = !isCompactMode || !_isSidebarExpanded;
+
+    // Right panel width for Control Rooms / the browser. Minimum chat width of
+    // 300 px required to show a panel. The browser uses the user-dragged
+    // width (default 50 %), the room list caps at 400 px — chuk's artifact /
+    // list split.
+    final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
+    final double availableForPanel = screenWidth - sidebarWidth - _minChatWidth;
+    final double contentWidth = screenWidth - sidebarWidth;
+    final bool browserPanel = _activePanel == 'browser';
+    final double panelCeiling = math.max(
+      _minPanelWidth,
+      contentWidth - _minChatWidth,
+    );
+    final double defaultBrowserWidth = (contentWidth * 0.5).clamp(
+      _minPanelWidth,
+      panelCeiling,
+    );
+    final double maxPanelWidth = browserPanel
+        ? (_userBrowserPanelWidth ?? defaultBrowserWidth).clamp(
+            _minPanelWidth,
+            panelCeiling,
+          )
+        : _listPanelWidth;
+    final double panelWidth = availableForPanel >= _minPanelWidth
+        ? math.min(maxPanelWidth, availableForPanel)
+        : 0;
+    final bool showPanel =
+        _activePanel != null && !isCompactMode && panelWidth > 0;
+
+    return Stack(
+      children: [
+        // Always keep the chat area in the tree: it owns the socket, and a
+        // GlobalKey removal/insertion would rebuild it. Hide via Offstage when
+        // the sidebar covers the full screen in compact mode.
+        Positioned.fill(
+          left: (!isCompactMode && _isSidebarExpanded)
+              ? effectiveSidebarWidth
+              : 0,
+          right: showPanel ? panelWidth : 0,
+          child: Offstage(offstage: !showContent, child: _buildThread()),
+        ),
+
+        // Right panel (Control Rooms / browser)
+        if (showPanel)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: panelWidth,
+            child: _buildPanel(context, iconFg, browserPanel),
+          ),
+
+        // Draggable divider — only for the browser panel (user can resize).
+        if (showPanel && browserPanel)
+          Positioned(
+            right: panelWidth - 3,
+            top: 0,
+            bottom: 0,
+            width: 6,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    final newW =
+                        (_userBrowserPanelWidth ?? panelWidth) -
+                        details.delta.dx;
+                    _userBrowserPanelWidth = newW.clamp(
+                      _minPanelWidth,
+                      panelCeiling,
+                    );
+                  });
+                },
+                child: Center(
+                  child: Container(
+                    width: 1,
+                    color: iconFg.withValues(alpha: 0.15),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // The sidebar. Lazy-mounted in chuk; it starts open here, so it is in
+        // the tree from the first frame.
+        if (_isSidebarExpanded || _hasOpenedSidebar)
+          Positioned(
+            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
+            top: 0,
+            bottom: 0,
+            width: effectiveSidebarWidth,
+            child: AnimatedOpacity(
+              opacity: _isSidebarExpanded ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_isSidebarExpanded,
+                child: AgentRosterView(
+                  source: _roster,
+                  selectedAgentId: _selectedAgentId,
+                  selectedThreadKey: _selectedThreadKey,
+                  onSelect: _select,
+                  onAddAgent: _openOnboarding,
+                  onDeleteAgent: _deleteAgent,
+                  onOpenRooms: _openRooms,
+                  onOpenBrowser: agent == null ? null : _openBrowserView,
+                  onOpenSettings: widget.shellConfig == null
+                      ? null
+                      : _openSettings,
+                ),
+              ),
+            ),
+          ),
+
+        // Hamburger menu — stays anchored at the top-left, never moves. Sized
+        // 48×40 like chuk's so its splash matches the mini-rail icons below.
+        Positioned(
+          top:
+              kTopInitialSpacing +
+              (kMenuButtonHeight - kButtonVisualHeight) / 2,
+          left: kFixedLeftPadding,
+          child: SizedBox(
+            width: kMenuButtonHeight,
+            height: kButtonVisualHeight,
+            child: IconButton(
+              icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.standard,
+              constraints: const BoxConstraints.tightFor(
+                width: kMenuButtonHeight,
+                height: kButtonVisualHeight,
+              ),
+              onPressed: _toggleSidebar,
+            ),
+          ),
+        ),
+
+        // Mini rail — visible only when the sidebar is collapsed. Each icon's
+        // visual centre lines up with the matching rail row in the open
+        // sidebar: brand row kMenuButtonHeight (48) tall, then rows of
+        // kButtonVisualHeight (40).
+        if (!_isSidebarExpanded) ..._buildMiniRail(iconFg, agent),
+
+        // The floating top-right row (chuk's Copy full chat anchor), four slots.
+        if (showContent)
+          Positioned(
+            top: kTopInitialSpacing,
+            right: (showPanel ? panelWidth : 0) + 12,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: _buildTopRightActions(iconFg, agent),
+            ),
+          ),
       ],
     );
-    controller.requestRoomHistory(room.id);
   }
 
-  Future<void> _manageRoomMembers(String roomId) async {
-    void showSheet(BuildContext ctx) {
-      final room = _rooms.byId(roomId);
-      if (room == null) {
-        Navigator.of(ctx).pop();
-        return;
-      }
-      final inRoom = room.members.map((m) => m.agentId).toSet();
-      final candidates = <CoworkAgent>[
-        for (final a in _roster.visibleAgents) if (!inRoom.contains(a.id)) a,
-      ];
-      showModalBottomSheet<void>(
-        context: ctx,
-        isScrollControlled: true,
-        builder: (sheetContext) => RoomMembersSheet(
-          room: room,
-          candidates: candidates,
-          onAdd: (member) {
-            _rooms.addMemberToRoom(roomId, member);
-            _controller.value?.addRoomMember(roomId, member.agentId, member.handle);
-            Navigator.of(sheetContext).pop();
-            showSheet(ctx); // reopen with the updated room
-          },
-          onRemove: (agentId) {
-            final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
-            // Keep the host consistent: if the room fell below two members it was
-            // deleted locally, so the host must delete it, not just drop a
-            // member (which would strand a one-member room there).
-            if (roomDeleted) {
-              _hostDeleteRoom(roomId);
-            } else {
-              _controller.value?.removeRoomMember(roomId, agentId);
-            }
-            Navigator.of(sheetContext).pop();
-            // If the room survived, reopen the sheet; if it was deleted, stop.
-            if (!roomDeleted) showSheet(ctx);
-          },
+  /// chuk's `_buildMiniRail`, with CoWork's three slots: New coworker, Control
+  /// Rooms, Agent's browser (the last only once a coworker is selected).
+  List<Widget> _buildMiniRail(Color iconFg, CoworkAgent? agent) {
+    final List<Widget> items = [];
+    int rowIndex = 0;
+    Widget railIcon({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onPressed,
+    }) {
+      final double top =
+          kTopInitialSpacing +
+          kMenuButtonHeight +
+          rowIndex * kButtonVisualHeight;
+      rowIndex++;
+      return Positioned(
+        top: top,
+        left: kFixedLeftPadding,
+        child: SizedBox(
+          width: kMenuButtonHeight,
+          height: kButtonVisualHeight,
+          child: IconButton(
+            icon: Icon(icon, color: iconFg, size: 24),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.standard,
+            constraints: const BoxConstraints.tightFor(
+              width: kMenuButtonHeight,
+              height: kButtonVisualHeight,
+            ),
+            tooltip: tooltip,
+            onPressed: onPressed,
+          ),
         ),
       );
     }
 
-    showSheet(context);
-  }
-
-  void _onController(CoworkRelayController controller) {
-    _controller.value = controller;
-    // A transport arrived: flush any room deletes made while it was down.
-    if (_pendingHostDeletes.isNotEmpty) {
-      final pending = List<String>.of(_pendingHostDeletes);
-      _pendingHostDeletes.clear();
-      for (final roomId in pending) {
-        controller.deleteRoom(roomId);
-      }
+    items.add(
+      railIcon(
+        icon: Icons.person_add_alt,
+        tooltip: 'New coworker',
+        onPressed: _openOnboarding,
+      ),
+    );
+    items.add(
+      railIcon(
+        icon: Icons.groups_outlined,
+        tooltip: 'Control Rooms',
+        onPressed: _openRooms,
+      ),
+    );
+    if (agent != null) {
+      items.add(
+        railIcon(
+          icon: Icons.desktop_windows_outlined,
+          tooltip: "Agent's browser",
+          onPressed: _openBrowserView,
+        ),
+      );
     }
+    return items;
   }
 
-  /// Delete a room on the host, or queue it if the socket is down so it is not
-  /// silently dropped and left as an orphan on the host.
-  void _hostDeleteRoom(String roomId) {
-    final controller = _controller.value;
-    if (controller != null) {
-      controller.deleteRoom(roomId);
-    } else {
-      _pendingHostDeletes.add(roomId);
-    }
-  }
-
-  void _deleteRoom(String roomId) {
-    _rooms.removeRoom(roomId);
-    _hostDeleteRoom(roomId);
-  }
-
-  void _renameRoom(String roomId, String name) {
-    _rooms.renameRoom(roomId, name);
-    _controller.value?.renameRoom(roomId, name);
-  }
-
-  void _deleteAgent(String agentId) {
-    // Drop the agent, and cascade: pull it out of every room it is in (a room
-    // that falls below two members is deleted), telling the host to forget each
-    // deleted room so nothing is orphaned. If the deleted agent was selected,
-    // clear the selection so the thread pane does not point at a ghost.
-    _roster.removeAgent(agentId);
-    // The rooms the agent was in, captured before the cascade rewrites them.
-    final wasIn = <String>[
-      for (final room in _rooms.rooms)
-        if (room.members.any((m) => m.agentId == agentId)) room.id,
+  /// The four top-right buttons, in chuk's `IconButton` style (icon colour
+  /// `resolvedIconColor`, size 20). Copy full chat is chuk's own slot, verbatim
+  /// (same icon, size and tooltip).
+  List<Widget> _buildTopRightActions(Color iconFg, CoworkAgent? agent) {
+    return <Widget>[
+      if (agent != null)
+        IconButton(
+          icon: Icon(Icons.tune, color: iconFg, size: 20),
+          onPressed: _openControlDrawer,
+          tooltip: 'Agent controls',
+        ),
+      IconButton(
+        icon: Icon(Icons.groups_outlined, color: iconFg, size: 20),
+        onPressed: _openRooms,
+        tooltip: 'Control Rooms',
+      ),
+      if (agent != null)
+        IconButton(
+          icon: Icon(Icons.desktop_windows_outlined, color: iconFg, size: 20),
+          onPressed: _openBrowserView,
+          tooltip: "Agent's browser",
+        ),
+      IconButton(
+        icon: Icon(Icons.copy_all_rounded, color: iconFg, size: 20),
+        onPressed: _copyFullChat,
+        tooltip: 'Copy full chat',
+      ),
     ];
-    final deleted = _rooms.removeAgentFromRooms(agentId).toSet();
-    // Keep the host consistent: a room that survived lost one member (sync the
-    // removal); a room that fell below two members was deleted (sync that).
-    for (final roomId in wasIn) {
-      if (deleted.contains(roomId)) {
-        _hostDeleteRoom(roomId);
-      } else {
-        _controller.value?.removeRoomMember(roomId, agentId);
-      }
-    }
-    if (_selectedAgentId == agentId) {
-      setState(() {
-        _selectedAgentId = null;
-        _showThreadOnNarrow = false;
-      });
-    }
   }
 
-  /// Opens the full model catalogue (the settings Model page) from the
-  /// composer's "More models" way out.
-  void _openModelScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) =>
-            ModelSettingsPage(sessionSource: widget.sessionSource),
-      ),
-    );
-  }
-
-  /// Opens the settings menu as its own route, so the live thread and its
-  /// socket stay mounted underneath.
-  void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => SettingsPage(
-          themeController: _themeController,
-          sessionSource: widget.sessionSource,
+  /// chuk's right panel: the same container, header (icon, title, close) and
+  /// content slot. Control Rooms embeds the room list (a room still opens as
+  /// its own route, so `rebind` keeps working); the browser embeds
+  /// `BrowserViewPage` on the live controller and follows a reconnect.
+  Widget _buildPanel(BuildContext context, Color iconFg, bool browser) {
+    // A Material paints the background (chuk uses a coloured Container; the
+    // room list's ListTiles need a Material to paint their ink on, so the
+    // colour moves there and the DecoratedBox keeps only the border).
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
+          ),
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // The whole shell listens to the roster: the app-bar title, the control
-    // panel and the list all read from it, so they must refresh together.
-    return AnimatedBuilder(
-      animation: _roster,
-      builder: (context, _) => LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= _wideBreakpoint;
-        final roster = AgentRosterView(
-          source: _roster,
-          selectedAgentId: _selectedAgentId,
-          selectedThreadKey: _selectedThreadKey,
-          onSelect: _select,
-          onAddAgent: _openOnboarding,
-          onDeleteAgent: _deleteAgent,
-        );
-        final thread = CoworkThreadView(
-          key: _threadViewKey,
-          controllerBuilder: widget.relayControllerBuilder ??
-              () => _buildRelayController(_pairingStore),
-          sessionSource: widget.sessionSource,
-          pairingStore: _pairingStore,
-          threadKey: _selectedThreadKey,
-          onPaired: _onPaired,
-          onRunStateChanged: (threadKey, running) {
-            final agentId = _agentIdForThread(threadKey);
-            if (agentId != null) _roster.markRunning(agentId, running);
-          },
-          onActivity: (threadKey, when) {
-            final agentId = _agentIdForThread(threadKey);
-            if (agentId != null) {
-              _roster.markActivity(agentId, threadKey, when);
-            }
-          },
-          onController: _onController,
-          onOpenModelScreen: _openModelScreen,
-        );
-
-        return Scaffold(
-          key: _scaffoldKey,
-          appBar: _buildAppBar(context, wide),
-          endDrawer: _buildControlDrawer(context),
-          body: wide
-              ? Row(
-                  children: [
-                    SizedBox(width: 300, child: roster),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: thread),
-                  ],
-                )
-              : IndexedStack(
-                  index: _showThreadOnNarrow ? 1 : 0,
-                  children: [roster, thread],
+        child: Column(
+          children: [
+            // Panel header with close button
+            Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: iconFg.withValues(alpha: 0.1)),
                 ),
-        );
-      },
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    browser
+                        ? Icons.desktop_windows_outlined
+                        : Icons.groups_outlined,
+                    color: iconFg,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    browser ? "Agent's browser" : 'Control Rooms',
+                    style: TextStyle(
+                      color: iconFg,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: iconFg),
+                    onPressed: _closePanel,
+                    tooltip: 'Close',
+                  ),
+                ],
+              ),
+            ),
+            // Panel content
+            Expanded(
+              child: browser
+                  ? ValueListenableBuilder<CoworkRelayController?>(
+                      valueListenable: _controller,
+                      builder: (context, controller, _) => controller == null
+                          ? const Center(
+                              child: Text('Connect to the agent first.'),
+                            )
+                          : BrowserViewPage(controller: controller),
+                    )
+                  : _buildRoomList(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  AppBar _buildAppBar(BuildContext context, bool wide) {
-    final agent = _selectedAgent;
-    final showBack = !wide && _showThreadOnNarrow;
-    return AppBar(
-      leading: showBack
-          ? IconButton(
-              tooltip: 'Coworkers',
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => setState(() => _showThreadOnNarrow = false),
-            )
-          : null,
-      title: Text(agent?.name ?? 'CoWork'),
-      actions: [
-        if (agent != null)
-          IconButton(
-            tooltip: 'Agent controls',
-            icon: const Icon(Icons.tune),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
-        IconButton(
-          tooltip: 'Rooms',
-          icon: const Icon(Icons.groups_outlined),
-          onPressed: _openRooms,
+  /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the
+  /// coworker list as an inbox, the chat with the floating chrome on top.
+  /// Back (chip, system back, edge swipe) flips the same flag [_select] sets.
+  Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
+    if (_showThreadOnNarrow && agent != null) {
+      return MobileChatScreen(
+        agent: agent,
+        onBack: () => setState(() => _showThreadOnNarrow = false),
+        onOpenProfile: _openControlDrawer,
+        onOpenBrowser: _openBrowserView,
+        onMore: () => MobileAgentSheet.show(
+          context,
+          agent: agent,
+          onControls: _openControlDrawer,
+          onRooms: _openRooms,
+          onCopyChat: _copyFullChat,
+          onSettings: _openSettings,
+          onSignOut: widget.onSignOut ?? () => const AuthService().signOut(),
         ),
-        if (agent != null)
-          IconButton(
-            tooltip: "Agent's browser",
-            icon: const Icon(Icons.desktop_windows_outlined),
-            onPressed: _openBrowserView,
+        bodyBuilder: (context, topInset) =>
+            _buildThread(topInset: topInset, phone: true),
+      );
+    }
+    // The inbox, with the live thread kept mounted behind it (chuk's own
+    // `Positioned.fill(Offstage(chatArea))` pattern, plan WS-1). Without this
+    // the phone would build its transport only once a chat is opened: the
+    // thread view is what creates the relay controller and reports pairing, so
+    // an unmounted one means no socket, no reconnect, and a roster that never
+    // learns about the paired host. Offstage keeps it in the tree — and out of
+    // the layout — so the list is what the reader sees.
+    return Stack(
+      children: [
+        Positioned.fill(child: Offstage(child: _buildThread(phone: true))),
+        Positioned.fill(
+          child: MobileAgentList(
+            source: _roster,
+            selectedAgentId: _selectedAgentId,
+            onSelect: _select,
+            onAddAgent: _openOnboarding,
+            onOpenAccount: _openSettings,
+            accountLabel: null,
           ),
-        IconButton(
-          tooltip: 'Settings',
-          icon: const Icon(Icons.settings_outlined),
-          onPressed: _openSettings,
-        ),
-        IconButton(
-          tooltip: 'Sign out',
-          icon: const Icon(Icons.logout),
-          onPressed: widget.onSignOut ?? () => const AuthService().signOut(),
         ),
       ],
-    );
-  }
-
-  Widget? _buildControlDrawer(BuildContext context) {
-    final agent = _selectedAgent;
-    if (agent == null) return null;
-    return Drawer(
-      width: 360,
-      child: SafeArea(
-        child: AgentControlPanel(
-          agent: agent,
-          source: _controlSource,
-          onScheduleSubmitted: (spec) {
-            // The schedule is real and it is the user's, but it runs in the app's
-            // record only: nothing installs it on the host yet.
-            _roster.setSchedule(agent.id, spec);
-          },
-        ),
-      ),
     );
   }
 }

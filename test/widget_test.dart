@@ -4,12 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cowork/pages/desktop_settings_modal.dart';
 import 'package:cowork/pages/login_page.dart';
 import 'package:cowork/pages/messenger_shell.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/shell_config.dart';
+import 'support/test_app.dart';
 
 /// Auth service that always fails, so the login test can exercise the error
 /// path without a real Supabase backend.
@@ -100,6 +106,7 @@ class _IdleRelayController implements CoworkRelayController {
     String? providerSlug,
     String? reasoningEffort,
     bool debug = false,
+    bool regenerate = false,
   }) async {}
 
   @override
@@ -131,6 +138,15 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> requestStop({String sessionKey = 'default'}) async {}
 
   @override
+  Future<void> requestReplay({
+    String sessionKey = 'default',
+    int afterId = 0,
+  }) async {}
+
+  @override
+  Future<void> sendRunAck(String runId) async {}
+
+  @override
   Future<void> startBrowserView() async {}
 
   @override
@@ -143,6 +159,13 @@ class _IdleRelayController implements CoworkRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+  }) async {}
+
+  @override
+  Future<void> sendSecrets({
+    required Map<String, String> values,
+    required int revision,
+    String? requestId,
   }) async {}
 
   @override
@@ -179,12 +202,20 @@ void main() {
   group('MessengerShell', () {
     testWidgets('is a chat: connect affordance, no account-models panel',
         (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: MessengerShell(
             relayControllerBuilder: () async => _IdleRelayController(),
             sessionSource: const _FakeSessionSource(),
             pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+            shellConfig: testShellConfig(),
           ),
         ),
       );
@@ -193,9 +224,24 @@ void main() {
       // The chat surface, not a dashboard.
       expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
       expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
-      expect(find.byIcon(Icons.logout), findsOneWidget);
       // The old account-models list is gone.
       expect(find.text('Account models'), findsNothing);
+      // No app bar: chuk has none. Settings is the gear in the sidebar's
+      // footer pill and opens chuk's desktop settings modal, whose footer
+      // carries the sign-out — chuk's homes for both.
+      expect(find.byType(AppBar), findsNothing);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DesktopSettingsModal), findsOneWidget);
+      // Twice: the modal's own footer row and the Account page it opens on.
+      expect(find.byIcon(Icons.logout), findsNWidgets(2));
+
+      // Dispose inside the body and drain what the imported pages started
+      // (see test/pages/settings_page_test.dart, closeSettings).
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
     });
   });
 }
