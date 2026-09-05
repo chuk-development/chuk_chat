@@ -24,7 +24,7 @@ fields they do not know.
 |---|---|---|
 | `task` | `prompt`, `session_key`, `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. |
 | `stop` | `session_key` | Existing. |
-| `replay` | `session_key`, `after_id`? (int, default 0) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). |
+| `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`COWORK_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
 | `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
 
@@ -275,6 +275,30 @@ above `none`); a turn without reasoning sends no such frame.
   stronger allowed one (`medium` -> `high`), `none` on a reasoning-mandatory
   model to the weakest allowed. The clamp is logged once per (model, level)
   and the effective level is written to the run's `reasoning_effort` column.
+
+### Replay paging (additive, Bead cowork-axx)
+
+```json
+{"type": "replay", "session_key": "<key>", "after_id": <int>?, "before_id": <int>?, "limit": <int>?}
+{"type": "done", "reason": "replay", "replay": true, "has_more": true | false, "oldest_mid": <int>, "before_id": <int>?}
+```
+
+A full replay (`after_id` 0) of a long thread made the first paint wait for
+everything. With `limit` the host answers with the NEWEST `limit` turn rows
+(`user` / `assistant` messages; their `reasoning` / `tool` / event rows and run
+terminals come along) of the window `after_id < mid < before_id` (`before_id`
+absent = open), in ascending order exactly as today. The page's history-end
+`done` then carries `has_more` (turn rows exist below the page, above
+`after_id`) and `oldest_mid` (the page's first row; ask `before_id: oldest_mid`
+for the next, older page — that page's `done` echoes `before_id`). Without
+`limit` / `before_id` nothing changes: the whole window, no extra fields.
+
+The app asks a full replay with `limit` (200), commits the first page as soon
+as its `done` lands (the thread paints), then fetches older pages one by one
+while `has_more`, prepending each. A delta replay (`after_id` > 0) is never
+paged. An older page is not a reconnect: the host sends no pending
+`mcp_credentials` / `secret_request` frames with it. The replay cursor only
+ever moves up (the highest `mid` seen), so paging cannot regress it.
 
 ### `mid` on replayed events (NEW field)
 

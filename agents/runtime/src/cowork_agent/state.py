@@ -489,11 +489,46 @@ class StateStore:
             for r in rows
         ]
 
-    def replay_events(self, session_id: int, *, after_id: int = 0) -> list[dict]:
+    def replay_page_bounds(
+        self, session_id: int, *, after_id: int = 0, before_id: int = 0, limit: int = 0
+    ) -> tuple[int, bool]:
+        """The lower bound of one replay page (docs/WIRE_CONTRACT.md, "Replay
+        paging"): the newest ``limit`` turn rows (``user`` / ``assistant``) of the
+        window ``after_id < id < before_id`` (``before_id`` 0 = open). Returns
+        ``(page_after_id, has_more)``: replay ``mid > page_after_id`` to get the
+        page, and whether turn rows exist at or below ``page_after_id`` (still
+        above ``after_id``) — the next, older page. ``limit`` 0 = no paging:
+        ``(after_id, False)``."""
+        if limit <= 0:
+            return after_id, False
+        sql = (
+            "SELECT id FROM messages WHERE session_id=? AND role IN ('user','assistant') "
+            "AND id > ?" + (" AND id < ?" if before_id > 0 else "") + " ORDER BY id DESC LIMIT 1 OFFSET ?"
+        )
+        params: list = [session_id, after_id]
+        if before_id > 0:
+            params.append(before_id)
+        params.append(limit - 1)
+        row = self._conn().execute(sql, params).fetchone()
+        if row is None:
+            # Fewer turn rows than a page: everything from ``after_id`` on.
+            return after_id, False
+        page_after_id = int(row["id"]) - 1
+        older = self._conn().execute(
+            "SELECT 1 FROM messages WHERE session_id=? AND role IN ('user','assistant') "
+            "AND id > ? AND id <= ? LIMIT 1",
+            (session_id, after_id, page_after_id),
+        ).fetchone()
+        return page_after_id, older is not None
+
+    def replay_events(
+        self, session_id: int, *, after_id: int = 0, before_id: int = 0
+    ) -> list[dict]:
         """Rebuild the stored transcript as stream events, in the SAME shapes the
         executor streams live (see ``cowork_executor.protocol``). Every event
         carries ``"replay": True`` so a client tells a replayed turn from a live
-        one.
+        one. ``before_id`` (docs/WIRE_CONTRACT.md, "Replay paging") caps the
+        window: only rows with ``mid < before_id`` (0 = no cap).
 
         The server is the source of truth. A fresh or reinstalled client
         reconnects, asks for this list, and rebuilds the whole thread from it. The
@@ -609,6 +644,10 @@ class StateStore:
         # Thread order is row order. The sort is stable, so a turn's reasoning /
         # delta / tool events (same ``mid``) keep the order they were built in.
         events.sort(key=lambda event: int(event.get("mid", 0)))
+        if before_id > 0:
+            # Replay paging: the window's upper edge. Every event carries its
+            # row id, so the cap is one filter, not a second query per shape.
+            events = [e for e in events if int(e.get("mid", 0)) < before_id]
         return events
 
     # -- runs (docs/WIRE_CONTRACT.md) ------------------------------------
@@ -755,14 +794,20 @@ class StateStore:
         ).fetchone()
         return dict(row) if row else None
 
-    def run_terminals(self, session_key: str, *, after_id: int = 0) -> list[dict]:
+    def run_terminals(
+        self, session_key: str, *, after_id: int = 0, before_id: int = 0
+    ) -> list[dict]:
         """The closed runs of a session as replay ``done`` events, so a client
         that was away sees each run's end after its last turn. Only runs whose
-        last message is past ``after_id`` — the client already has the rest."""
+        last message is past ``after_id`` — the client already has the rest —
+        and, with ``before_id`` (replay paging), below it."""
         rows = self._conn().execute(
             "SELECT * FROM runs WHERE session_key=? AND state IN (?, ?) "
-            "AND COALESCE(last_mid, 0) > ? ORDER BY COALESCE(last_mid, 0), started_at",
-            (session_key, RUN_FINISHED, RUN_FAILED, after_id),
+            "AND COALESCE(last_mid, 0) > ? "
+            + ("AND COALESCE(last_mid, 0) < ? " if before_id > 0 else "")
+            + "ORDER BY COALESCE(last_mid, 0), started_at",
+            (session_key, RUN_FINISHED, RUN_FAILED, after_id)
+            + ((before_id,) if before_id > 0 else ()),
         ).fetchall()
         events: list[dict] = []
         for r in rows:

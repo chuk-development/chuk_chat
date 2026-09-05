@@ -414,6 +414,9 @@ class CoworkRelayDone extends CoworkRelayInbound {
     this.finishedAt,
     this.firstMid,
     this.lastMid,
+    this.hasMore = false,
+    this.oldestMid,
+    this.pageBeforeId,
   });
 
   /// The loop's own final answer, when it sent one.
@@ -437,6 +440,14 @@ class CoworkRelayDone extends CoworkRelayInbound {
   /// replay cursor moves to, so the next replay does not send this run again.
   final int? firstMid;
   final int? lastMid;
+
+  /// Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx), on the
+  /// history-end `done` of a paged replay only: whether an older page exists,
+  /// the first row of this page (ask `before_id: oldestMid` for the next), and
+  /// the `before_id` this page was asked with (null on the newest page).
+  final bool hasMore;
+  final int? oldestMid;
+  final int? pageBeforeId;
 
   /// The termination reason the runtime reported (`finished`, `estop`,
   /// `interrupted`, …).
@@ -1012,6 +1023,11 @@ class CoworkRelaySecretRequest extends CoworkRelayInbound {
 
 /// Read-only surface the UI depends on, so widget tests can drive a fake
 /// without a socket or a real pairing ceremony.
+/// How many turn rows a full replay asks for first (docs/WIRE_CONTRACT.md,
+/// "Replay paging"): enough for a screenful and a scroll, small enough to
+/// paint a long thread at once. Older pages follow while the host has more.
+const int kReplayPageSize = 200;
+
 abstract interface class CoworkRelayController {
   /// Current lifecycle state; rebuild the UI when it changes.
   ValueListenable<CoworkRelayState> get state;
@@ -1145,7 +1161,12 @@ abstract interface class CoworkRelayController {
   /// Sent automatically on (re)connect for the session keys a replay-sessions
   /// provider reports (see [CoworkRelayClient]'s constructor); call this directly
   /// for an on-demand re-hydrate.
-  Future<void> requestReplay({String sessionKey, int afterId});
+  Future<void> requestReplay({
+    String sessionKey,
+    int afterId,
+    int beforeId,
+    int limit,
+  });
 
   /// Tell the host the app rendered the live `done` of [runId] (§ run
   /// detachment). The host marks the run seen, so a later replay does not flag
@@ -1957,10 +1978,18 @@ class CoworkRelayClient
   Future<void> requestReplay({
     String sessionKey = 'default',
     int afterId = 0,
+    int beforeId = 0,
+    int limit = 0,
   }) async {
     // Auth first, then replay — see [_provisionGate].
     await _awaitProvisionGate();
     if (_disposed) return;
+    // Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): a full replay
+    // asks for the newest page only, so a long thread paints at once; the
+    // loader then fetches the older pages with `beforeId`. A delta replay
+    // (`afterId` > 0) is never paged. An old host ignores both keys.
+    final int effectiveLimit =
+        limit > 0 ? limit : (afterId == 0 ? kReplayPageSize : 0);
     return _sendFramePayload(<String, dynamic>{
         'type': 'replay',
         'session_key': sessionKey,
@@ -1968,6 +1997,8 @@ class CoworkRelayClient
         // without the key already means to the executor. Sending it only when
         // it advances keeps a full replay byte-identical to the old frame.
         if (afterId > 0) 'after_id': afterId,
+        if (beforeId > 0) 'before_id': beforeId,
+        if (effectiveLimit > 0) 'limit': effectiveLimit,
     });
   }
 
@@ -2311,6 +2342,9 @@ class CoworkRelayClient
             finishedAt: epochSecondsToDateTime(payload['finished_at']),
             firstMid: CoworkRelayTool._asInt(payload['first_mid']),
             lastMid: CoworkRelayTool._asInt(payload['last_mid']),
+            hasMore: payload['has_more'] == true,
+            oldestMid: CoworkRelayTool._asInt(payload['oldest_mid']),
+            pageBeforeId: CoworkRelayTool._asInt(payload['before_id']),
           ),
         );
       case 'reprovision_request':
