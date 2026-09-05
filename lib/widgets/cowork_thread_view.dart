@@ -1,37 +1,51 @@
 import 'dart:async';
-import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import 'package:cowork/constants.dart';
+import 'package:cowork/models/app_shell_config.dart';
+import 'package:cowork/platform_config.dart';
+import 'package:cowork/platform_specific/chat/chat_ui_desktop.dart';
+import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/chat_mode_service.dart';
+import 'package:cowork/services/app_theme_service.dart';
+import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
+import 'package:cowork/services/cowork/chat_debug_export.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/model_cache_service.dart';
-import 'package:cowork/services/model_info_service.dart';
-import 'package:cowork/services/settings/debug_settings.dart';
-import 'package:cowork/widgets/agent_markdown.dart';
-import 'package:cowork/widgets/agent_run_views.dart';
-import 'package:cowork/widgets/chat_mode_selector.dart';
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
+import 'package:cowork/services/cowork/cowork_replay_loader.dart';
+import 'package:cowork/services/cowork/cowork_run_ledger.dart';
+import 'package:cowork/services/notifications/cowork_notifications.dart';
+import 'package:cowork/services/secrets/secrets_service.dart';
+import 'package:cowork/services/settings/verbose_service.dart';
+import 'package:cowork/services/automations/automations_source.dart';
+import 'package:cowork/services/automations/cowork_automation.dart';
+import 'package:cowork/widgets/ask_user_card.dart';
+import 'package:cowork/widgets/automation_card.dart';
 
-/// The CoWork chat surface: one scrolling conversation with the agent running
-/// on the user's own host.
+/// The CoWork chat surface: the imported chuk_chat chat screen, wired to the
+/// agent running on the user's own host.
 ///
-/// It reads like any messenger — the user's messages, the agent's reply
-/// streaming in as deltas arrive, the run's tool calls as quiet collapsible
-/// lines, reasoning folded away in its own block, files and screenshots as
-/// cards — with the composer pinned at the bottom. While a run is in flight the
-/// send button becomes **Stop** (§7.1's kill switch, from the user's side).
+/// This widget owns two halves that never mix:
 ///
-/// The connection is deliberately not on screen: no "connected to", no SAS, no
-/// disconnect. While disconnected the bottom bar is a compact connect bar, and
-/// only before the very first pairing does it ask for a code.
+///  * **The transport.** Building the [CoworkRelayController], the pairing /
+///    connect bar, auto-reconnect with a watchdog, provisioning the account
+///    token, and asking the host to replay the thread. None of that is on
+///    screen once the socket is up: the connection is not the user's job.
+///  * **The window.** Once paired the body IS `ChukChatUIDesktop` /
+///    `ChukChatUIMobile` — chuk_chat's renderer, imported verbatim. It reads
+///    the thread out of [ChatStorageService] (the local instant-paint cache
+///    the replay loader fills) and sends through
+///    `WebSocketChatService.sendStreamingChat`, which is CoWork's relay
+///    adapter. Nothing about the chat is drawn here.
 ///
-/// One view serves many threads. [threadKey] is the executor's `session_key`, so
-/// switching threads switches the conversation on both sides; the log of each
-/// thread is kept, so switching back shows it again.
+/// One view serves many threads. [threadKey] is the executor's `session_key`
+/// AND the imported screen's `selectedChatId` — one id, so a send, a replay and
+/// a cache row all name the same thing.
 ///
 /// All transport lives behind [CoworkRelayController], so the UI is the same
 /// whether it drives a real socket or a fake in a widget test.
@@ -49,6 +63,9 @@ class CoworkThreadView extends StatefulWidget {
     this.onPaired,
     this.onController,
     this.onOpenModelScreen,
+    this.shellConfig,
+    this.topInset = 0,
+    this.phoneLayout = false,
   });
 
   /// Builds the transport controller. Async because a real client generates a
@@ -74,15 +91,19 @@ class CoworkThreadView extends StatefulWidget {
   /// Prefilled host URL for a local run.
   final String defaultHostUrl;
 
-  /// The executor-side session this view talks to (§4: many threads per agent).
+  /// The executor-side session this view talks to (§4: many threads per agent),
+  /// and the imported screen's chat id.
   final String threadKey;
 
-  /// Where a file card writes when the user saves. Injected so a test can prove
-  /// the action without a filesystem.
+  /// Where a file card writes when the user saves.
+  ///
+  /// Kept for API compatibility with the callers. A relayed file now lands in
+  /// the local blob store and renders as the imported `sandboxArtifact` card,
+  /// which has its own download action, so nothing in this view reads it.
   final AgentFileSaver fileSaver;
 
   /// Reports whether a run is in flight, and for which thread, so the roster can
-  /// show "working" against the right coworker.
+  /// show "working" against the right coworker. Driven off [CoworkRunLedger].
   final void Function(String threadKey, bool running)? onRunStateChanged;
 
   /// Reports that something happened in [threadKey], for "last active".
@@ -92,58 +113,83 @@ class CoworkThreadView extends StatefulWidget {
   /// roster can list the agent that really runs over there.
   final void Function(String peerDeviceId)? onPaired;
 
-  /// Opens the full model catalogue — the composer's mode picker offers a
-  /// "More models" way out that calls this. Wired by the shell to the
-  /// settings Model page. Null hides that row (the quick picks still work).
+  /// Opens the full model catalogue — the composer's "More models" row calls
+  /// it. Wired by the shell to the settings Model page.
   final VoidCallback? onOpenModelScreen;
 
+  /// chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
+  /// The imported screen reads its display flags from it; null (a widget
+  /// test) falls back to the verbose toggle.
+  final AppShellConfig? shellConfig;
+
+  /// Extra top padding for the phone chat list, so its first row scrolls
+  /// under a floating top bar (the mobile chrome) instead of starting behind
+  /// it. Handed straight to `ChukChatUIMobile.topInset`; the desktop screen
+  /// has no floating bar and ignores it.
+  final double topInset;
+
+  /// Force chuk's phone screen. The mobile shell sets it below the phone
+  /// breakpoint on every platform, so a narrow desktop window renders the
+  /// phone layout too — that is how the layout is checked on Linux.
+  final bool phoneLayout;
+
   @override
-  State<CoworkThreadView> createState() => _CoworkThreadViewState();
+  State<CoworkThreadView> createState() => CoworkThreadViewState();
 }
 
-/// Where a run is, from the user's point of view.
-enum _RunPhase { idle, running, stopping }
-
-class _CoworkThreadViewState extends State<CoworkThreadView> {
+class CoworkThreadViewState extends State<CoworkThreadView> {
   late final TextEditingController _hostController;
   final TextEditingController _codeController = TextEditingController();
-  final TextEditingController _composerController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
 
   CoworkRelayController? _controller;
   StreamSubscription<CoworkRelayInbound>? _inboundSub;
 
-  /// One log per thread, so switching threads keeps both conversations.
-  final Map<String, List<_ThreadEntry>> _logs = <String, List<_ThreadEntry>>{};
+  final CoworkRelayLink _link = CoworkRelayLink.instance;
+  final CoworkRunLedger _ledger = CoworkRunLedger.instance;
+  final CoworkReplayLoader _loader = CoworkReplayLoader.instance;
 
-  /// The latest `debug_context` payload per session key, kept only when the
-  /// developer "capture model context" toggle is on. The copy button reads the
-  /// one for the current thread; nothing here ever renders in the conversation.
-  final Map<String, Map<String, dynamic>> _debugContexts =
-      <String, Map<String, dynamic>>{};
+  /// Mirrors [VerboseService.instance]: the single source of truth for the two
+  /// views (§"quiet by default, full log on demand"). It drives the imported
+  /// screen's `showToolCalls` / `showTps`, so turning the toggle on or off in
+  /// Settings reflows the transcript live, and it rides each task as
+  /// `debug: true` so the executor echoes the raw model context.
+  ///
+  /// The thinking block is NOT part of verbose: like chuk_chat it follows the
+  /// user's own "show reasoning" setting ([AppThemeService.showReasoningTokens],
+  /// on by default), so a thinking model's reasoning streams into the bubble
+  /// even in the quiet view (bead cowork-0ia).
+  bool _verbose = false;
 
-  /// Mirrors the developer toggle, loaded once at startup. When false the debug
-  /// copy button is hidden and no task rides with `debug: true`.
-  bool _captureContext = false;
+  /// The replay revision this view has painted for [CoworkThreadView.threadKey].
+  /// The imported screen reads its rows once, in `initState`, so a replay that
+  /// rewrites the cache under it has to remount it — the revision is the key.
+  int _revision = 0;
 
-  /// One line per child agent, keyed "threadKey\u0000subagentId", so a child's
-  /// state transitions update its own line instead of appending a new one each
-  /// time (§7.6). Kept beside the log because the log is append-only.
-  final Map<String, _SubagentEntry> _subagents = <String, _SubagentEntry>{};
-  _AssistantEntry? _currentAssistant;
-  _ReasoningEntry? _currentReasoning;
+  /// A here.now publish waiting on the user. The run is BLOCKED on the executor
+  /// until it is answered, so it is a standing card, not a fleeting prompt.
+  CoworkRelayApprovalRequest? _approval;
+  bool? _approvalDecision;
+
+  /// This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
+  /// "Automations"), drawn as a strip above the chat while any is active or
+  /// paused. The source folds live and replayed events; this view only reads.
+  final AutomationsSource _automations = AutomationsSource.instance;
+  bool _automationsCollapsed = false;
+
+  /// A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
+  /// "Secrets"). The run is BLOCKED on the executor until a `secrets` frame
+  /// with this request id goes back, so it is a standing card too. One field
+  /// per name; the values leave this view only through [SecretsService].
+  CoworkRelaySecretRequest? _secretRequest;
+  final Map<String, TextEditingController> _secretFields =
+      <String, TextEditingController>{};
+  bool _secretsBusy = false;
+
+  /// Run ids already acknowledged, so a rebuild cannot ack the same run twice.
+  final Set<String> _ackedRuns = <String>{};
 
   String? _localError;
   bool _busy = false;
-
-  /// One run at a time: the executor serves tasks one after another, so the
-  /// phase is per view, not per thread.
-  _RunPhase _runPhase = _RunPhase.idle;
-
-  /// The thread whose run is in flight. Events carry no session key, so they
-  /// belong to whichever thread started the run — even if the user has since
-  /// switched to another one.
-  String? _activeRunThread;
 
   /// The persisted trust, loaded once at startup. Non-null means "already
   /// paired": auto-reconnect, hide the code form, offer Forget.
@@ -155,151 +201,98 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   Timer? _autoReconnectTimer;
   int _reconnectAttempts = 0;
 
-  /// The active composer mode (Fast / Thinking) and its config — which model,
-  /// which provider, which reasoning level. Loaded from [ChatModeService] on
-  /// startup and persisted per mode as the user retunes it. Each task carries
-  /// these so the host runs it on the chosen model.
-  ChatMode _mode = ChatModeService.fallbackMode;
-  ModeConfig _modeConfig =
-      ChatModeService.defaultConfig(ChatModeService.fallbackMode);
-
-  /// The models offered as quick picks in the mode picker's second menu, in
-  /// display order. Loaded from the cached model list (refreshed from the API
-  /// when a token is available). Empty until loaded — the picker then shows
-  /// only "More models".
-  List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
+  /// A safety net that periodically forces a reconnect when the app is down but
+  /// paired. The event-driven path (`_onStateChanged` on a `closed` transition →
+  /// `_scheduleAutoReconnect`) can be missed after a host process restart: a
+  /// dropped socket that never surfaces as a clean `closed` transition, a rebuild
+  /// that throws, or a stuck in-flight flag all leave the app idle on a dead
+  /// link. This watchdog re-arms the reconnect whenever the controller is in a
+  /// down phase (`closed`/`error`) with a stored pairing and nothing already in
+  /// flight — so recovery never depends on a single fragile transition.
+  Timer? _watchdogTimer;
 
   /// Capped exponential backoff for auto-reconnect after an unexpected drop.
   static const Duration _baseBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
 
-  List<_ThreadEntry> get _entries => _logFor(widget.threadKey);
-
-  List<_ThreadEntry> _logFor(String threadKey) =>
-      _logs.putIfAbsent(threadKey, () => <_ThreadEntry>[]);
-
   @override
   void initState() {
     super.initState();
     _hostController = TextEditingController(text: widget.defaultHostUrl);
+    // The link's fan-out outlives every controller, so this one subscription
+    // survives reconnects. It carries only what this view still owns: the
+    // approval prompt and the live `run_ack`.
+    _inboundSub = _link.inbound.listen(_onInbound);
+    _loader.attach();
+    _ledger.addListener(_onLedgerChanged);
+    _loader.addListener(_onLoaderChanged);
+    _automations.attach();
+    _automations.addListener(_onAutomationsChanged);
+    _revision = _loader.revisionFor(widget.threadKey);
     _bootstrap();
-    _loadModeAndModels();
-    _loadDebugToggle();
-  }
-
-  /// Load the developer "capture model context" toggle. Never throws: a failure
-  /// leaves it off, so a normal send is unchanged.
-  Future<void> _loadDebugToggle() async {
-    final capture = await DebugSettings.captureContext();
-    if (mounted) setState(() => _captureContext = capture);
-  }
-
-  /// Load the stored mode and its config, then the model list for the quick
-  /// picks. Never throws: a failure leaves the baked-in defaults, so the
-  /// composer always has a valid model to send.
-  Future<void> _loadModeAndModels() async {
-    final mode = await ChatModeService.load();
-    final config = await ChatModeService.loadConfig(mode);
-    if (mounted) {
-      setState(() {
-        _mode = mode;
-        _modeConfig = config;
-      });
-    }
-    // A cached list is enough; a token refreshes it but is not required.
-    final token = widget.sessionSource.current()?.accessToken ?? '';
-    final models = await ModelInfoService.loadModels(accessToken: token);
-    if (!mounted) return;
-    setState(() {
-      _pickedModels = <ChatModelChoice>[
-        for (final model in models)
-          if (model['id'] is String && (model['id'] as String).isNotEmpty)
-            ChatModelChoice(
-              id: model['id'] as String,
-              name: (model['name'] is String &&
-                      (model['name'] as String).trim().isNotEmpty)
-                  ? (model['name'] as String).trim()
-                  : prettyModelId(model['id'] as String),
-            ),
-      ];
-    });
-  }
-
-  /// The reasoning levels the active mode's model+provider allow — `none`
-  /// first. A single-entry list hides the reasoning choice in the menu.
-  List<String> get _reasoningLevels => ChatModeService.reasoningLevelsFor(
-        providerSlug: _modeConfig.providerSlug,
-      );
-
-  /// The human label for the active mode's model, shown on the menu opener.
-  String get _modelLabel {
-    for (final choice in _pickedModels) {
-      if (choice.id == _modeConfig.modelId) return choice.name;
-    }
-    return prettyModelId(_modeConfig.modelId);
-  }
-
-  Future<void> _onModeChanged(ChatMode mode) async {
-    await ChatModeService.save(mode);
-    final config = await ChatModeService.loadConfig(mode);
-    if (mounted) {
-      setState(() {
-        _mode = mode;
-        _modeConfig = config;
-      });
-    }
-  }
-
-  Future<void> _onModelSelected(String modelId) async {
-    // Pin the model to its default provider from the catalogue when known, so
-    // the reasoning ladder is clamped to what that provider accepts.
-    String provider = '';
-    for (final model in await ModelCacheService.loadAvailableModels()) {
-      if (model['id'] == modelId) {
-        provider = ModelInfoService.defaultProviderSlug(model);
-        break;
-      }
-    }
-    final config = await ChatModeService.setModelForMode(
-      _mode,
-      modelId: modelId,
-      providerSlug: provider,
-    );
-    if (mounted) setState(() => _modeConfig = config);
-  }
-
-  Future<void> _onReasoningChanged(String level) async {
-    final config = await ChatModeService.setReasoningForMode(_mode, level);
-    if (mounted) setState(() => _modeConfig = config);
+    // The verbose flag is one shared singleton: mirror it now and rebuild on
+    // every change.
+    VerboseService.instance.addListener(_onVerboseChanged);
+    _loadVerbose();
+    // The "show reasoning" setting reflows the transcript live, like chuk.
+    AppThemeService.instance.addListener(_onThemeChanged);
+    // Safety net (see [_watchdogTimer]): re-arm reconnect on a slow cadence.
+    _watchdogTimer =
+        Timer.periodic(const Duration(seconds: 8), (_) => _watchdogTick());
   }
 
   @override
   void didUpdateWidget(CoworkThreadView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.threadKey != widget.threadKey) {
-      // A different conversation: no half-streamed turn carries over.
-      _currentAssistant = null;
-      _currentReasoning = null;
-      _scrollToBottom();
+      // A different conversation. Point the link and the cache at it and ask
+      // the host for whatever this client is missing.
+      _link.sessionKey.value = widget.threadKey;
+      ChatStorageService.selectedChatId = widget.threadKey;
+      _revision = _loader.revisionFor(widget.threadKey);
+      _approval = null;
+      _approvalDecision = null;
+      _clearSecretRequest();
+      _requestReplay();
     }
   }
 
   @override
   void dispose() {
     _autoReconnectTimer?.cancel();
+    _watchdogTimer?.cancel();
+    VerboseService.instance.removeListener(_onVerboseChanged);
+    AppThemeService.instance.removeListener(_onThemeChanged);
+    _ledger.removeListener(_onLedgerChanged);
+    _loader.removeListener(_onLoaderChanged);
+    _automations.removeListener(_onAutomationsChanged);
     _controller?.state.removeListener(_onStateChanged);
     _inboundSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
     _codeController.dispose();
-    _composerController.dispose();
-    _scrollController.dispose();
+    _clearSecretRequest();
     super.dispose();
   }
+
+  // --- lifecycle -------------------------------------------------------------
 
   /// Load any stored pairing first, then build the controller. If a pairing is
   /// stored, auto-reconnect with no code; otherwise show the connect form.
   Future<void> _bootstrap() async {
+    // Warm the instant-paint cache before the chat screen mounts, so a known
+    // thread paints from disk instead of waiting for the host's replay.
+    //
+    // From the cache, not from the cloud: `loadChats` pulls every chat out of
+    // Supabase and decrypts them all, on every mount. `loadFromCache` reads the
+    // local metadata and returns at once, and the thread the reader actually
+    // opened is loaded by the chat screen itself through `loadFullChat`, which
+    // is cache-first anyway.
+    unawaited(ChatStorageService.loadFromCache());
+    unawaited(_loader.load());
+    _link.sessionKey.value = widget.threadKey;
+    ChatStorageService.selectedChatId = widget.threadKey;
+
     final store = widget.pairingStore;
     if (store != null) {
       try {
@@ -326,11 +319,33 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       return;
     }
     controller.state.addListener(_onStateChanged);
-    setState(() {
-      _controller = controller;
-      _inboundSub = controller.inbound.listen(_onInbound);
-    });
+    setState(() => _controller = controller);
+    _link.bind(controller);
     widget.onController?.call(controller);
+  }
+
+  /// Tears down the live controller and spins up a fresh one, without touching
+  /// the stored pairing or the conversation.
+  Future<void> _rebuildController() async {
+    final old = _controller;
+    // Build the replacement FIRST, then swap it in with a single setState. This
+    // never leaves the tree pointing at a controller whose state notifier we are
+    // about to dispose — repointing and disposing in the wrong order tears the
+    // ValueListenableBuilder off a disposed notifier and unmounts the view.
+    final controller = await widget.controllerBuilder();
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    old?.state.removeListener(_onStateChanged);
+    controller.state.addListener(_onStateChanged);
+    setState(() => _controller = controller);
+    // Re-point the link. The open adapter / replay subscriptions ride the
+    // link's own long-lived stream, so a run in flight is never torn off.
+    _link.bind(controller);
+    widget.onController?.call(controller);
+    // Tear the old transport down in the background: it is fully detached now.
+    if (old != null) unawaited(old.dispose());
   }
 
   /// Watches the transport state for an unexpected drop after being paired, and
@@ -344,23 +359,62 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
       _reconnectAttempts = 0;
       final peer = state.peerDeviceId;
       if (peer != null) widget.onPaired?.call(peer);
+      _link.bind(controller);
+      _link.sessionKey.value = widget.threadKey;
+      ChatStorageService.selectedChatId = widget.threadKey;
+      // The server holds the whole thread, always. Asking on every pair is
+      // cheap (the cursor makes it a delta) and it is what makes a reinstall,
+      // a new device and a reconnect all land on the same transcript.
+      _requestReplay();
       return;
     }
     if (phase == CoworkRelayPhase.closed &&
         _storedPairing != null &&
         !_manuallyDisconnected) {
-      // A run cannot still be in flight over a socket that is gone.
-      _setRunPhase(_RunPhase.idle);
-      _activeRunThread = null;
+      // A run belongs to the host process, not to this socket: a dropped
+      // connection does NOT end it, so the run phase is left exactly as it is.
       _scheduleAutoReconnect();
     }
+  }
+
+  /// Asks the host to re-stream this thread from the replay cursor.
+  void _requestReplay() {
+    final controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) return;
+    final sessionKey = widget.threadKey;
+    final afterId = _loader.cursorFor(sessionKey);
+    _loader.expect(sessionKey, afterId: afterId);
+    unawaited(
+      controller
+          .requestReplay(sessionKey: sessionKey, afterId: afterId)
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// Force a reconnect if we are paired-but-down and nothing is already trying.
+  /// Cheap and idempotent: it does nothing while paired, connecting, or when a
+  /// reconnect timer / in-flight attempt already exists.
+  void _watchdogTick() {
+    if (!mounted || widget.pairingStore == null || _storedPairing == null) {
+      return;
+    }
+    if (_manuallyDisconnected || _busy || _autoReconnectTimer != null) return;
+    final phase = _controller?.state.value.phase;
+    final down = phase == null ||
+        phase == CoworkRelayPhase.closed ||
+        phase == CoworkRelayPhase.error;
+    if (!down) return;
+    // A fresh, prompt attempt (reset the backoff so recovery is not delayed by
+    // earlier failures); _scheduleAutoReconnect is the single dial path.
+    _reconnectAttempts = 0;
+    _scheduleAutoReconnect();
   }
 
   void _scheduleAutoReconnect() {
     if (_autoReconnectTimer != null || widget.pairingStore == null) return;
     final exponent = _reconnectAttempts.clamp(0, 5);
-    final delayMs =
-        (_baseBackoff.inMilliseconds * (1 << exponent)).clamp(0, _maxBackoff.inMilliseconds);
+    final delayMs = (_baseBackoff.inMilliseconds * (1 << exponent))
+        .clamp(0, _maxBackoff.inMilliseconds);
     _reconnectAttempts++;
     _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
       _autoReconnectTimer = null;
@@ -376,7 +430,9 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
   Future<void> _reconnect() async {
     final controller = _controller;
     final stored = _storedPairing;
-    if (controller == null || stored == null || _busy) return;
+    // `mounted` too: the auto-reconnect timer awaits `_rebuildController`
+    // first, and the view can be disposed during that await (review F6).
+    if (!mounted || controller == null || stored == null || _busy) return;
     setState(() {
       _localError = null;
       _busy = true;
@@ -393,179 +449,6 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  /// Tears down the live controller and spins up a fresh one, without touching
-  /// the stored pairing or the conversation.
-  Future<void> _rebuildController() async {
-    final old = _controller;
-    final oldSub = _inboundSub;
-    // Build the replacement FIRST, then swap it in with a single setState. This
-    // never leaves the tree pointing at a controller whose state notifier we are
-    // about to dispose — repointing and disposing in the wrong order tears the
-    // ValueListenableBuilder off a disposed notifier and unmounts the view.
-    final controller = await widget.controllerBuilder();
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
-    old?.state.removeListener(_onStateChanged);
-    // Cancel, but never AWAIT the old subscription. `StreamSubscription.cancel()`
-    // on a broadcast stream returns Dart's shared `Future._nullFuture`, which is
-    // owned by the ROOT zone: awaiting it parks the rest of this method on the
-    // root microtask queue, which a `flutter_test` FakeAsync zone never drains.
-    // The reconnect then only ran after the test ended. Cancelling already stops
-    // delivery synchronously, so there is nothing to wait for.
-    unawaited(oldSub?.cancel() ?? Future<void>.value());
-    controller.state.addListener(_onStateChanged);
-    setState(() {
-      _controller = controller;
-      _currentAssistant = null;
-      _currentReasoning = null;
-      _inboundSub = controller.inbound.listen(_onInbound);
-    });
-    widget.onController?.call(controller);
-    // Tear the old transport down in the background: it is fully detached now.
-    if (old != null) unawaited(old.dispose());
-  }
-
-  void _onInbound(CoworkRelayInbound event) {
-    if (!mounted) return;
-    final target = _activeRunThread ?? widget.threadKey;
-    final log = _logFor(target);
-    setState(() {
-      switch (event) {
-        case CoworkRelayDelta(:final text):
-          _currentReasoning = null;
-          final assistant = _currentAssistant ??= _startAssistant(log);
-          assistant.text += text;
-        case CoworkRelayReasoning(:final text):
-          // Reasoning is its own channel: it never lands in the reply text.
-          _currentAssistant = null;
-          final reasoning = _currentReasoning ??= _startReasoning(log);
-          reasoning.text += text;
-        case CoworkRelayTool():
-          _currentAssistant = null;
-          _currentReasoning = null;
-          log.add(_ToolEntry(event));
-        case CoworkRelayFile():
-          _currentAssistant = null;
-          _currentReasoning = null;
-          log.add(_FileEntry(event));
-        case CoworkRelaySubagent():
-          // Asynchronous to the parent's own turn: do not close the parent's
-          // streaming bubble, just add or update the child's line.
-          _handleSubagent(log, target, event);
-        case CoworkRelayRoomTurn():
-        case CoworkRelayRoomDone():
-        case CoworkRelayRoomHistory():
-          // Group-room events belong to the room thread (RoomThreadView), not a
-          // one-agent conversation. Ignored here so the sealed switch stays
-          // exhaustive without pulling room rendering into the agent thread.
-          break;
-        case CoworkRelayBrowserData():
-        case CoworkRelayBrowserView():
-          // Live browser view events (§9.1) belong to BrowserViewPage, which has
-          // its own subscription. Ignored here to keep the sealed switch
-          // exhaustive.
-          break;
-        case CoworkRelayApprovalRequest():
-          // A here.now publish is waiting on the user. The run is blocked on the
-          // executor until we answer, so this is a standing card in the thread,
-          // not a fleeting prompt.
-          _currentAssistant = null;
-          _currentReasoning = null;
-          final entry = _ApprovalEntry(event);
-          entry.onDecide = (approved) => _decideApproval(entry, approved);
-          log.add(entry);
-        case CoworkRelayDone():
-          log.add(_DoneEntry(event));
-          _currentAssistant = null;
-          _currentReasoning = null;
-        case CoworkRelayRunError(:final message):
-          log.add(_ErrorEntry(message));
-          _currentAssistant = null;
-          _currentReasoning = null;
-        case CoworkRelayDebugContext():
-          // A developer aid, not part of the conversation: keep only the latest
-          // one per session so the copy button has it, and render nothing.
-          final key = event.sessionKey.isNotEmpty ? event.sessionKey : target;
-          _debugContexts[key] = event.payload;
-      }
-    });
-    if (event is CoworkRelayDone || event is CoworkRelayRunError) {
-      // The run is over only when the executor closes the stream. Report the
-      // phase change first, while the run still knows which thread it was.
-      _setRunPhase(_RunPhase.idle);
-      _activeRunThread = null;
-    }
-    widget.onActivity?.call(target, DateTime.now());
-    _scrollToBottom();
-  }
-
-  _AssistantEntry _startAssistant(List<_ThreadEntry> log) {
-    final entry = _AssistantEntry();
-    log.add(entry);
-    return entry;
-  }
-
-  void _handleSubagent(
-    List<_ThreadEntry> log,
-    String threadKey,
-    CoworkRelaySubagent event,
-  ) {
-    final key = '$threadKey\u0000${event.subagentId}';
-    final existing = _subagents[key];
-    if (existing != null) {
-      existing.update(event);
-    } else {
-      final entry = _SubagentEntry(event);
-      _subagents[key] = entry;
-      log.add(entry);
-    }
-  }
-
-  _ReasoningEntry _startReasoning(List<_ThreadEntry> log) {
-    final entry = _ReasoningEntry();
-    log.add(entry);
-    return entry;
-  }
-
-  /// Answer a here.now publish approval and record it on the card. Idempotent:
-  /// once a decision is sent the buttons are gone, so a second tap does nothing
-  /// and the executor never gets two answers for one publish.
-  void _decideApproval(_ApprovalEntry entry, bool approved) {
-    if (entry.decision != null) return;
-    _controller?.sendApprovalDecision(
-      approvalId: entry.request.approvalId,
-      approved: approved,
-    );
-    setState(() => entry.decision = approved);
-  }
-
-  void _setRunPhase(_RunPhase phase) {
-    if (_runPhase == phase) return;
-    final wasRunning = _runPhase != _RunPhase.idle;
-    final thread = _activeRunThread ?? widget.threadKey;
-    if (mounted) {
-      setState(() => _runPhase = phase);
-    } else {
-      _runPhase = phase;
-    }
-    final running = phase != _RunPhase.idle;
-    // "Stopping" is still running: only a real change is reported outward.
-    if (running != wasRunning) widget.onRunStateChanged?.call(thread, running);
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
   Future<void> _connect() async {
@@ -628,99 +511,233 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     await _rebuildController();
   }
 
-  void _send() {
-    final controller = _controller;
-    if (controller == null || !controller.state.value.isPaired) return;
-    if (_runPhase != _RunPhase.idle) return;
-    final text = _composerController.text.trim();
-    if (text.isEmpty) return;
-    final thread = widget.threadKey;
-    setState(() {
-      _entries.add(_UserEntry(text));
-      _currentAssistant = null;
-      _currentReasoning = null;
-    });
-    _activeRunThread = thread;
-    _setRunPhase(_RunPhase.running);
-    _composerController.clear();
-    widget.onActivity?.call(thread, DateTime.now());
-    _scrollToBottom();
-    controller
-        .sendTask(
-      text,
-      sessionKey: thread,
-      modelId: _modeConfig.modelId,
-      providerSlug: _modeConfig.providerSlug,
-      // Only a mode that reasons sends a level; Fast (reasoning off) leaves it
-      // off the frame so the host does not force a reasoning pass.
-      reasoningEffort:
-          _modeConfig.reasoningOn ? _modeConfig.reasoningEffort : null,
-      // Ask the executor to echo the raw model context only when the developer
-      // toggle is on; off leaves the frame unchanged.
-      debug: _captureContext,
-    )
-        .catchError((Object error) {
-      if (mounted) {
-        setState(() => _logFor(thread).add(_ErrorEntry('$error')));
-        _setRunPhase(_RunPhase.idle);
-        _activeRunThread = null;
-        _scrollToBottom();
-      }
-    });
+  /// Load the persisted verbose flag once at startup. Never throws: a failure
+  /// leaves the quiet default, so a normal send is unchanged.
+  Future<void> _loadVerbose() async {
+    await VerboseService.instance.load();
+    if (mounted) setState(() => _verbose = VerboseService.instance.enabled);
   }
 
-  /// Asks the executor to abort the run. The run is only over when a `done` or
-  /// an `error` arrives, so the button goes to "Stopping…" and waits.
-  void _stop() {
-    final controller = _controller;
-    if (controller == null || _runPhase != _RunPhase.running) return;
-    _setRunPhase(_RunPhase.stopping);
-    final thread = _activeRunThread ?? widget.threadKey;
-    // The thread key IS the session key the task was sent with, so it is what
-    // names the run on the executor side.
-    controller.requestStop(sessionKey: thread).catchError((Object error) {
-      if (!mounted) return;
-      setState(
-        () => _logFor(thread).add(_ErrorEntry('Could not stop the run: $error')),
-      );
-      // The request never left, so the run is still going: back to Stop.
-      _setRunPhase(_RunPhase.running);
-      _scrollToBottom();
-    });
+  void _onVerboseChanged() {
+    if (mounted) setState(() => _verbose = VerboseService.instance.enabled);
   }
 
-  /// Copies the latest raw model context for this thread to the clipboard as
-  /// pretty JSON. Never dead: if no `debug_context` has arrived yet (a fresh
-  /// thread, or the toggle was only just turned on), it copies the visible
-  /// transcript instead and says so, so the button always does something.
-  Future<void> _copyDebugContext() async {
-    final latest = _debugContexts[widget.threadKey];
-    final String text;
-    final String note;
-    if (latest != null) {
-      text = const JsonEncoder.withIndent('  ').convert(latest);
-      note = 'context copied';
-    } else {
-      text = _visibleTranscript();
-      note = 'no context yet — copied the transcript';
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // --- the inbound this view still owns ---------------------------------------
+
+  void _onInbound(CoworkRelayInbound event) {
+    if (!mounted) return;
+    switch (event) {
+      case CoworkRelayApprovalRequest():
+        // A here.now publish is waiting on the user, and the run is blocked on
+        // the executor until we answer. The imported renderer records it as an
+        // `ask_user` line (through the ledger), but that card only becomes
+        // tappable once the turn is idle — which it will not be while the run
+        // waits. So the decision is offered here, above the chat.
+        //
+        // Another coworker's run asked: its own view prompts, not this one
+        // (review F9). A host that does not say which thread means this one.
+        final forThread = event.sessionKey;
+        if (forThread != null && forThread != widget.threadKey) return;
+        // A replayed request that is already decided, or whose run is over,
+        // is history: never prompt for it (bead cowork-266).
+        if (event.replay &&
+            (event.isDecided || !_ledger.isRunning(widget.threadKey))) {
+          return;
+        }
+        setState(() {
+          _approval = event;
+          _approvalDecision = null;
+        });
+      case CoworkRelaySecretRequest():
+        // The model asked for keys by name and the run waits on the answer.
+        // Another coworker's run asked: its own view prompts, not this one.
+        final forThread = event.sessionKey;
+        if (forThread != null && forThread != widget.threadKey) return;
+        // Names the user has set are shown as "set", never as a value.
+        unawaited(SecretsService.instance.load());
+        setState(() {
+          _clearSecretRequest();
+          _secretRequest = event;
+          for (final name in event.names) {
+            _secretFields[name] = TextEditingController();
+          }
+        });
+      case CoworkRelayDone():
+        if (event.isReplay) return;
+        // Tell the host the live completion was rendered, so a later replay does
+        // not flag the run `while_away`. Best effort: a lost ack only costs a
+        // redundant "Answer ready" badge, so a failure is swallowed.
+        final runId = event.runId;
+        final controller = _controller;
+        if (runId != null && controller != null && _ackedRuns.add(runId)) {
+          unawaited(controller.sendRunAck(runId).catchError((Object _) {}));
+        }
+        // WS-7 anti-duplicate rule, app side: the host saw a controller and
+        // does not push, so if the app is in the background the toast is
+        // ours. The service reads the lifecycle; in the foreground it is a
+        // no-op.
+        unawaited(
+          CoworkNotifications.instance
+              .onLiveDone(widget.threadKey, runId: runId),
+        );
+      case CoworkRelayDelta():
+      case CoworkRelayUser():
+      case CoworkRelayReasoning():
+      case CoworkRelayTool():
+      case CoworkRelayFile():
+      case CoworkRelaySubagent():
+      case CoworkRelayRunError():
+      case CoworkRelayRunState():
+      case CoworkRelayDebugContext():
+      case CoworkRelayRoomTurn():
+      case CoworkRelayRoomDone():
+      case CoworkRelayRoomHistory():
+      case CoworkRelayBrowserData():
+      case CoworkRelayBrowserView():
+      case CoworkRelayAutomation():
+      case CoworkRelayAutomationList():
+        // Transcript events belong to the adapter and the replay loader; room
+        // and browser frames to the shell's own pages; automation frames to
+        // the automations source. Nothing to do here.
+        break;
     }
-    await Clipboard.setData(ClipboardData(text: text));
+  }
+
+  void _clearSecretRequest() {
+    for (final c in _secretFields.values) {
+      c.dispose();
+    }
+    _secretFields.clear();
+    _secretRequest = null;
+    _secretsBusy = false;
+  }
+
+  /// Save what the user typed and answer the host. An empty field for a name
+  /// that is already set keeps the stored value; an empty field for an unset
+  /// name stays missing. The frame carries the request id, so the blocked run
+  /// continues whatever was (not) entered.
+  Future<void> _submitSecretRequest() async {
+    final request = _secretRequest;
+    if (request == null || _secretsBusy) return;
+    setState(() => _secretsBusy = true);
+    final entered = <String, String>{
+      for (final e in _secretFields.entries)
+        if (e.value.text.isNotEmpty) e.key: e.value.text,
+    };
+    try {
+      if (entered.isEmpty) {
+        await SecretsService.instance.answerUnchanged(request.requestId);
+      } else {
+        await SecretsService.instance
+            .setMany(entered, requestId: request.requestId);
+      }
+    } catch (_) {
+      // The host times out on its own; nothing to surface.
+    }
+    if (!mounted) return;
+    setState(_clearSecretRequest);
+  }
+
+  /// The user does not have (or want to give) the keys: tell the host so the
+  /// run continues with `missing` instead of waiting out the timeout.
+  Future<void> _skipSecretRequest() async {
+    final request = _secretRequest;
+    if (request == null || _secretsBusy) return;
+    setState(() => _secretsBusy = true);
+    try {
+      await SecretsService.instance.answerUnchanged(request.requestId);
+    } catch (_) {
+      // See above.
+    }
+    if (!mounted) return;
+    setState(_clearSecretRequest);
+  }
+
+  /// Answer a here.now publish approval. Idempotent: once a decision is sent
+  /// the buttons are gone, so the executor never gets two answers for one
+  /// publish.
+  void _decideApproval(bool approved) {
+    final request = _approval;
+    if (request == null || _approvalDecision != null) return;
+    unawaited(
+      _controller
+          ?.sendApprovalDecision(
+            approvalId: request.approvalId,
+            approved: approved,
+          )
+          .catchError((Object _) {}),
+    );
+    setState(() => _approvalDecision = approved);
+  }
+
+  /// Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
+  /// the full transcript, every tool call and command, every artifact, and the
+  /// collected `debug_context` payloads, as one structured JSON blob.
+  ///
+  /// The export itself lives in [ChatDebugExport] so the shell's top-right
+  /// action and this view run the same code. Public so a caller holding a
+  /// `GlobalKey<CoworkThreadViewState>` can fire it.
+  Future<void> copyFullChat() async {
+    final note = await ChatDebugExport.copyToClipboard(
+      threadKey: widget.threadKey,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(note)));
   }
 
-  /// A plain-text dump of what is on screen for this thread, used as the copy
-  /// fallback before any debug context has arrived.
-  String _visibleTranscript() {
-    final buffer = StringBuffer();
-    for (final entry in _entries) {
-      final line = entry.asPlainText();
-      if (line.isNotEmpty) buffer.writeln(line);
+  /// The ledger is the run's truth: it knows a run is in flight whether this
+  /// client started it or adopted it from a `run_state` header.
+  bool _running = false;
+
+  void _onLedgerChanged() {
+    if (!mounted) return;
+    final running = _ledger.isRunning(widget.threadKey);
+    if (running != _running) {
+      _running = running;
+      widget.onRunStateChanged?.call(widget.threadKey, running);
     }
-    return buffer.toString().trimRight();
+    widget.onActivity?.call(widget.threadKey, DateTime.now());
+    _syncRevision();
   }
+
+  void _onLoaderChanged() {
+    if (!mounted) return;
+    // A delta replay found no local rows to append to: the loader forgot the
+    // cursor, and this view asks for the whole thread again (review F2).
+    if (_loader.takeReplayWanted(widget.threadKey)) _requestReplay();
+    // A run that finished while nobody was attached just replayed into this
+    // thread: the answer is on screen, so the host's notification row is
+    // consumed and any OS toast for the thread is cleared (WS-7). Acted on
+    // ONCE: the flag is cleared first (it notifies, and re-entry sees it
+    // down), so a later loader change does not cancel a fresh toast for the
+    // next run (review F8). The run id lets a second answer be told from a
+    // re-replay of the first (review F7).
+    if (_loader.answerReadyFor(widget.threadKey)) {
+      final String? runId = _loader.answerReadyRunFor(widget.threadKey);
+      _loader.clearAnswerReady(widget.threadKey);
+      unawaited(CoworkNotifications.instance
+          .onAnswerReplayed(widget.threadKey, runId: runId));
+    }
+    _syncRevision();
+  }
+
+  /// Adopt a new replay revision — but never while a run is in flight: the
+  /// remount would throw away the answer streaming into the screen right now.
+  /// The ledger notifies when the run ends, and this runs again.
+  void _syncRevision() {
+    final revision = _loader.revisionFor(widget.threadKey);
+    if (revision == _revision) return;
+    if (_ledger.isRunning(widget.threadKey)) return;
+    setState(() => _revision = revision);
+  }
+
+  // --- build -----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -731,20 +748,114 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     return ValueListenableBuilder<CoworkRelayState>(
       valueListenable: controller.state,
       builder: (context, state, _) {
-        final connected = state.phase == CoworkRelayPhase.paired;
+        if (state.phase != CoworkRelayPhase.paired) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildStatusStrip(context, state),
+              const Spacer(),
+              const Divider(height: 1),
+              _buildConnectBar(context, state),
+            ],
+          );
+        }
+        final chat = _buildChat(context);
+        final approval = _approval;
+        final secretRequest = _secretRequest;
+        final automations = _automations.liveForSession(widget.threadKey);
+        if (approval == null && secretRequest == null && automations.isEmpty) {
+          return chat;
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildStatusStrip(context, state),
-            Expanded(child: _buildConversation(context, connected)),
-            const Divider(height: 1),
-            connected
-                ? _buildComposer(context)
-                : _buildConnectBar(context, state),
+            if (approval != null) _buildApprovalBar(context, approval),
+            if (secretRequest != null)
+              _buildSecretRequestBar(context, secretRequest),
+            if (automations.isNotEmpty)
+              _buildAutomationsBar(context, automations),
+            Expanded(child: chat),
           ],
         );
       },
     );
+  }
+
+  /// The imported chuk_chat renderer. Everything CoWork-specific about it is in
+  /// these arguments:
+  ///
+  ///  * `selectedChatId` is the thread key, so the screen's chat id, the
+  ///    executor's session key and the cache row all name one thing.
+  ///  * `toolCallingEnabled` / `toolDiscoveryMode` are **false**: the host runs
+  ///    every tool, the client must never dispatch one.
+  ///  * the three "show" flags follow the verbose toggle — quiet by default,
+  ///    full log on demand.
+  Widget _buildChat(BuildContext context) {
+    final config = widget.shellConfig;
+    // The screen reads its rows once, on mount. A replay that rewrote the cache
+    // bumps the revision, which changes the key, which remounts it on fresh
+    // rows — the only way to repaint history without editing an imported file.
+    final key = ValueKey<String>('cowork-chat-${widget.threadKey}-$_revision');
+    if (_useDesktopChat(context)) {
+      return ChukChatUIDesktop(
+        key: key,
+        onToggleSidebar: _noopToggleSidebar,
+        selectedChatId: widget.threadKey,
+        onChatIdChanged: _onChatIdChanged,
+        isSidebarExpanded: false,
+        isCompactMode: false,
+        showReasoningTokens: AppThemeService.instance.showReasoningTokens,
+        showModelInfo: config?.showModelInfo ?? _verbose,
+        showTps: _verbose,
+        showToolCalls: _verbose,
+        toolCallingEnabled: false,
+        toolDiscoveryMode: false,
+        autoSendVoiceTranscription:
+            config?.autoSendVoiceTranscription ?? false,
+        onOpenModelSettings: widget.onOpenModelScreen == null
+            ? null
+            : () async => widget.onOpenModelScreen!(),
+      );
+    }
+    return ChukChatUIMobile(
+      key: key,
+      topInset: widget.topInset,
+      onToggleSidebar: _noopToggleSidebar,
+      selectedChatId: widget.threadKey,
+      onChatIdChanged: _onChatIdChanged,
+      isSidebarExpanded: false,
+      showReasoningTokens: AppThemeService.instance.showReasoningTokens,
+      showModelInfo: config?.showModelInfo ?? _verbose,
+      showTps: _verbose,
+      showToolCalls: _verbose,
+      toolCallingEnabled: false,
+      toolDiscoveryMode: false,
+      autoSendVoiceTranscription:
+          config?.autoSendVoiceTranscription ?? false,
+    );
+  }
+
+  /// The sidebar is the shell's (the Agents roster), not the chat screen's.
+  void _noopToggleSidebar() {}
+
+  /// CoWork's chat id is the thread key and never changes under the screen, so
+  /// this only keeps the shared selection pointer honest.
+  void _onChatIdChanged(String? id) {
+    ChatStorageService.selectedChatId = id ?? widget.threadKey;
+  }
+
+  /// Desktop chrome for desktop, web and tablets; the phone layout only for a
+  /// real phone-sized mobile screen. Same rule as chuk's `root_wrapper_io`.
+  bool _useDesktopChat(BuildContext context) {
+    if (widget.phoneLayout) return false;
+    if (kPlatformMobile) return false;
+    if (kPlatformDesktop) return true;
+    if (kIsWeb) return true;
+    final platform = defaultTargetPlatform;
+    final isMobilePlatform = platform == TargetPlatform.android ||
+        platform == TargetPlatform.iOS;
+    if (!isMobilePlatform) return true;
+    return MediaQuery.sizeOf(context).width >= kTabletBreakpoint;
   }
 
   // --- top status strip ------------------------------------------------------
@@ -768,129 +879,262 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
-  // --- conversation ----------------------------------------------------------
+  // --- the standing secret request --------------------------------------------
 
-  Widget _buildConversation(BuildContext context, bool connected) {
+  /// One field per name the model asked for. A name already set shows a
+  /// "set" badge and may be left blank; values are typed obscured and go
+  /// nowhere but [SecretsService]. Skip answers `missing` for the open names.
+  Widget _buildSecretRequestBar(
+    BuildContext context,
+    CoworkRelaySecretRequest request,
+  ) {
     final theme = Theme.of(context);
-    final entries = _entries;
-    if (entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            connected
-                ? 'Send a task to the agent'
-                : 'Connect to a host to start chatting.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: theme.hintColor),
-          ),
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: ValueListenableBuilder<List<String>>(
+          valueListenable: SecretsService.instance.names,
+          builder: (context, setNames, _) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.key_outlined,
+                        size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'The agent needs API keys',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                if (request.purpose.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    request.purpose,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                for (final name in request.names)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      key: ValueKey<String>('secret-field-$name'),
+                      controller: _secretFields[name],
+                      obscureText: true,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      enabled: !_secretsBusy,
+                      decoration: InputDecoration(
+                        labelText: name,
+                        isDense: true,
+                        border: const OutlineInputBorder(),
+                        helperText: setNames.contains(name)
+                            ? 'Already set. Leave blank to keep it.'
+                            : null,
+                        suffixIcon: setNames.contains(name)
+                            ? const Icon(Icons.check, size: 18)
+                            : null,
+                      ),
+                      onSubmitted: (_) => _submitSecretRequest(),
+                    ),
+                  ),
+                Text(
+                  'The agent never sees a value; outputs show '
+                  '[REDACTED:NAME]. Values under 8 characters are not masked.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    FilledButton(
+                      onPressed: _secretsBusy ? null : _submitSecretRequest,
+                      child: const Text('Save keys'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _secretsBusy ? null : _skipSecretRequest,
+                      child: const Text('Skip'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
-      );
-    }
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: entries.length,
-      itemBuilder: (context, index) => entries[index].build(context, widget),
+      ),
     );
   }
 
-  // --- bottom bar: composer or connect affordance ----------------------------
+  // --- this thread's automations -----------------------------------------------
 
-  Widget _buildComposer(BuildContext context) {
-    final busy = _runPhase != _RunPhase.idle;
-    // The executor serves one task at a time, so a run in another thread blocks
-    // this composer too — but Stop belongs to the thread the run came from.
-    final runningHere =
-        busy && (_activeRunThread == null || _activeRunThread == widget.threadKey);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The per-task model picker: Fast / Thinking with a model and a
-            // reasoning level behind it. Its choice rides on the very next
-            // send, so a task can name its model without leaving the composer.
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+  void _onAutomationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The active and paused automations of this thread, with Pause / Resume /
+  /// Cancel. Nothing changes until the host's event lands; the source folds
+  /// it and this view repaints.
+  Widget _buildAutomationsBar(
+    BuildContext context,
+    List<CoworkAutomation> automations,
+  ) {
+    final theme = Theme.of(context);
+    final count = automations.length;
+    return Material(
+      color: theme.colorScheme.surfaceContainerHigh,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(
+              () => _automationsCollapsed = !_automationsCollapsed,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
               child: Row(
                 children: [
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ChatModeSelector(
-                        mode: _mode,
-                        onModeChanged: _onModeChanged,
-                        onModelSelected: _onModelSelected,
-                        onOpenModelScreen: widget.onOpenModelScreen,
-                        selectedModelId: _modeConfig.modelId,
-                        modelLabel: _modelLabel,
-                        pickedModels: _pickedModels,
-                        reasoningEffort: _modeConfig.reasoningEffort,
-                        reasoningLevels: _reasoningLevels,
-                        onReasoningEffortChanged: _onReasoningChanged,
-                        menuAbove: true,
-                      ),
+                  Icon(Icons.schedule, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      count == 1 ? '1 automation' : '$count automations',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  // The debug context copy button rides here only while the
-                  // developer toggle is on, so a normal composer is unchanged.
-                  if (_captureContext)
-                    IconButton(
-                      tooltip: 'Copy raw context',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.data_object, size: 20),
-                      onPressed: _copyDebugContext,
-                    ),
+                  Icon(
+                    _automationsCollapsed
+                        ? Icons.expand_more
+                        : Icons.expand_less,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
+          ),
+          if (!_automationsCollapsed)
+            for (final a in automations)
+              AutomationCard(
+                key: ValueKey<String>('thread-automation-${a.id}'),
+                automation: a,
+                compact: true,
+                onPause: () => _automations.control(a.id, 'pause'),
+                onResume: () => _automations.control(a.id, 'resume'),
+                onCancel: () => _automations.control(a.id, 'cancel'),
+              ),
+          if (!_automationsCollapsed) const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  // --- the standing approval --------------------------------------------------
+
+  /// A here.now publish the user must answer before the blocked run continues.
+  /// It reuses the imported [AskUserCard], so the two option buttons look and
+  /// behave exactly like the ones the renderer draws for an `ask_user` call.
+  Widget _buildApprovalBar(
+    BuildContext context,
+    CoworkRelayApprovalRequest request,
+  ) {
+    final theme = Theme.of(context);
+    final decision = _approvalDecision;
+    final files =
+        request.fileCount == 1 ? '1 file' : '${request.fileCount} files';
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Row(
               children: [
-            Expanded(
-              child: TextField(
-                controller: _composerController,
-                textInputAction: TextInputAction.send,
-                enabled: !busy,
-                decoration: InputDecoration(
-                  hintText: busy && !runningHere
-                      ? 'The agent is busy in another thread…'
-                      : 'Message the agent…',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+                Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Publish to the web?',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
                 ),
-                onSubmitted: (_) => _send(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (!runningHere)
-              IconButton.filled(
-                tooltip: 'Send',
-                icon: const Icon(Icons.send),
-                onPressed: busy ? null : _send,
-              )
-            else
-              FilledButton.tonalIcon(
-                onPressed: _runPhase == _RunPhase.running ? _stop : null,
-                icon: _runPhase == _RunPhase.stopping
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.stop),
-                label: Text(_runPhase == _RunPhase.stopping ? 'Stopping…' : 'Stop'),
-              ),
               ],
             ),
+            const SizedBox(height: 2),
+            Text(
+              '${request.name.isEmpty ? request.path : request.name} · $files · '
+              '${_humanBytes(request.totalBytes)}',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            if (request.public)
+              Text(
+                'This site will be PUBLIC — anyone with the link can view it.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            if (decision == null)
+              AskUserCard(
+                options: const <String>['Publish', 'Deny'],
+                onSelect: (answer) => _decideApproval(answer == 'Publish'),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      decision ? Icons.check_circle_outline : Icons.block,
+                      size: 16,
+                      color: decision
+                          ? theme.colorScheme.primary
+                          : theme.hintColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      decision ? 'Published' : 'Denied',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: decision
+                            ? theme.colorScheme.primary
+                            : theme.hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+
+  /// 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+  static String _humanBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    const units = <String>['KB', 'MB', 'GB'];
+    double value = bytes / 1024;
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return '${value.toStringAsFixed(1)} ${units[unit]}';
+  }
+
+  // --- bottom bar: the connect affordance ------------------------------------
 
   Widget _buildConnectBar(BuildContext context, CoworkRelayState state) {
     final theme = Theme.of(context);
@@ -911,6 +1155,14 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Connect to a host to start chatting.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: theme.hintColor),
+              ),
+            ),
             if (banner != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -1022,369 +1274,5 @@ class _CoworkThreadViewState extends State<CoworkThreadView> {
         ),
       ),
     );
-  }
-}
-
-// --- thread entries ----------------------------------------------------------
-
-sealed class _ThreadEntry {
-  const _ThreadEntry();
-  Widget build(BuildContext context, CoworkThreadView view);
-
-  /// A one-line plain-text form, used only by the debug copy fallback. Empty by
-  /// default; the text-bearing entries override it.
-  String asPlainText() => '';
-}
-
-class _UserEntry extends _ThreadEntry {
-  _UserEntry(this.text);
-  final String text;
-
-  @override
-  String asPlainText() => 'You: $text';
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    final theme = Theme.of(context);
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8, left: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(text),
-      ),
-    );
-  }
-}
-
-class _AssistantEntry extends _ThreadEntry {
-  _AssistantEntry();
-  String text = '';
-
-  @override
-  String asPlainText() => text.isEmpty ? '' : 'Agent: $text';
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8, right: 40),
-        width: double.infinity,
-        // The agent answers in Markdown; a half-streamed reply is still valid
-        // Markdown, so it renders the same on every delta.
-        child: text.isEmpty ? const Text('…') : AgentMarkdown(text),
-      ),
-    );
-  }
-}
-
-class _ReasoningEntry extends _ThreadEntry {
-  _ReasoningEntry();
-  String text = '';
-
-  @override
-  String asPlainText() => text.isEmpty ? '' : 'Reasoning: $text';
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) =>
-      AgentReasoningBlock(text: text);
-}
-
-class _ToolEntry extends _ThreadEntry {
-  _ToolEntry(this.call);
-  final CoworkRelayTool call;
-
-  @override
-  String asPlainText() {
-    final args = call.arguments;
-    return 'Tool: ${call.name}${args != null && args.isNotEmpty ? ' $args' : ''}';
-  }
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) =>
-      AgentToolLine(call: call);
-}
-
-class _FileEntry extends _ThreadEntry {
-  _FileEntry(this.file);
-  final CoworkRelayFile file;
-
-  @override
-  String asPlainText() => 'File: ${file.name}';
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) =>
-      AgentFileCard(file: file, saver: view.fileSaver);
-}
-
-class _DoneEntry extends _ThreadEntry {
-  const _DoneEntry(this.done);
-  final CoworkRelayDone done;
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    final theme = Theme.of(context);
-    // The label comes from the protocol's reason, never from the text.
-    final label = done.wasStopped ? 'stopped' : 'done';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          const Expanded(child: Divider()),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              _summaryOf(done, label),
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          const Expanded(child: Divider()),
-        ],
-      ),
-    );
-  }
-
-  /// "done", "done · 3 rounds", "done · 3 rounds · 1,234 tokens" — each part
-  /// added only when the runtime actually reported it. Tokens are shown even at
-  /// zero only when the field is present, so a real "0 tokens" (no usage frame)
-  /// reads differently from an old host that never sends the field.
-  static String _summaryOf(CoworkRelayDone done, String label) {
-    final parts = <String>[label];
-    final rounds = done.iterations;
-    if (rounds != null) parts.add('$rounds rounds');
-    final tokens = done.tokensSpent;
-    if (tokens != null && tokens > 0) parts.add('${_grouped(tokens)} tokens');
-    return parts.join(' · ');
-  }
-
-  /// 1234 -> "1,234". A plain thousands separator, no locale dependency.
-  static String _grouped(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return buffer.toString();
-  }
-}
-
-class _SubagentEntry extends _ThreadEntry {
-  _SubagentEntry(CoworkRelaySubagent event)
-      : title = event.title,
-        state = event.state,
-        result = event.result,
-        error = event.error,
-        tokensSpent = event.tokensSpent;
-
-  final String title;
-  String state;
-  String? result;
-  String? error;
-  int? tokensSpent;
-
-  void update(CoworkRelaySubagent event) {
-    state = event.state;
-    if (event.result != null) result = event.result;
-    if (event.error != null) error = event.error;
-    if (event.tokensSpent != null) tokensSpent = event.tokensSpent;
-  }
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    final theme = Theme.of(context);
-    final name = title.isEmpty ? 'subagent' : title;
-    final color = switch (state) {
-      'succeeded' => theme.colorScheme.primary,
-      'failed' => theme.colorScheme.error,
-      'cancelled' => theme.hintColor,
-      _ => theme.colorScheme.tertiary,
-    };
-    // Failure shows the child's error text; success stays a one-liner (the
-    // child's result already came back to the parent as a tool result). The
-    // token spend rides along once the child reports it (§7.6).
-    final detail = state == 'failed' && error != null ? ' — $error' : '';
-    final tokens = tokensSpent;
-    final cost = (tokens != null && tokens > 0)
-        ? ' · ${_groupedTokens(tokens)} tokens'
-        : '';
-    return Padding(
-      padding: const EdgeInsets.only(left: 12, bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2, right: 6),
-            child: Icon(Icons.subdirectory_arrow_right, size: 14, color: color),
-          ),
-          Expanded(
-            child: Text(
-              '$name · $state$cost$detail',
-              style: theme.textTheme.bodySmall?.copyWith(color: color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 1234 -> "1,234". Mirrors the done card's grouping; kept local so the two
-  /// entry classes stay independent.
-  static String _groupedTokens(int value) {
-    final digits = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(digits[i]);
-    }
-    return buffer.toString();
-  }
-}
-
-class _ErrorEntry extends _ThreadEntry {
-  _ErrorEntry(this.message);
-  final String message;
-
-  @override
-  String asPlainText() => 'Error: $message';
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        message,
-        style: TextStyle(color: theme.colorScheme.error),
-      ),
-    );
-  }
-}
-
-/// A standing prompt: the agent wants to publish something public to here.now,
-/// and the run is blocked until the user approves or denies it. [decision] is
-/// null while pending, then true (approved) or false (denied); once set the
-/// buttons are replaced by the outcome, so the answer is sent exactly once.
-class _ApprovalEntry extends _ThreadEntry {
-  _ApprovalEntry(this.request);
-
-  final CoworkRelayApprovalRequest request;
-
-  /// Null while waiting; the sent answer once decided.
-  bool? decision;
-
-  /// Wired by the state to [_decideApproval]. Null-guarded so an entry built in
-  /// a test without a handler simply renders inert buttons.
-  void Function(bool approved)? onDecide;
-
-  @override
-  Widget build(BuildContext context, CoworkThreadView view) {
-    final theme = Theme.of(context);
-    final decided = decision != null;
-    final size = _humanBytes(request.totalBytes);
-    final files = request.fileCount == 1 ? '1 file' : '${request.fileCount} files';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Card(
-        margin: EdgeInsets.zero,
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Publish to the web?',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                request.name.isEmpty ? request.path : request.name,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$files · $size',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                request.public
-                    ? 'This site will be PUBLIC — anyone with the link can view '
-                        'it. Anonymous sites expire 24 hours after publishing.'
-                    : 'This publish will go live on ${request.baseUrl}.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              if (!decided)
-                Row(
-                  children: [
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => onDecide?.call(false),
-                      child: const Text('Deny'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: () => onDecide?.call(true),
-                      icon: const Icon(Icons.public, size: 18),
-                      label: const Text('Publish'),
-                    ),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    Icon(
-                      decision! ? Icons.check_circle_outline : Icons.block,
-                      size: 16,
-                      color: decision!
-                          ? theme.colorScheme.primary
-                          : theme.hintColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      decision! ? 'Published' : 'Denied',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: decision!
-                            ? theme.colorScheme.primary
-                            : theme.hintColor,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
-  static String _humanBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    const units = <String>['KB', 'MB', 'GB'];
-    double value = bytes / 1024;
-    var unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit++;
-    }
-    return '${value.toStringAsFixed(1)} ${units[unit]}';
   }
 }

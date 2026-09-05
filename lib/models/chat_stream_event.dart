@@ -15,9 +15,45 @@ sealed class ChatStreamEvent {
   const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
   const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
   const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent;
+  const factory ChatStreamEvent.toolCalls(List<NativeToolCall> calls) =
+      ToolCallsEvent;
   const factory ChatStreamEvent.error(String message, {String? code}) =
       ErrorEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
+}
+
+/// A native OpenAI-format tool call assembled from the provider stream.
+///
+/// The backend accumulates the streamed `delta.tool_calls` fragments (id/name
+/// arrive once, `arguments` in pieces) and relays complete calls in one frame.
+/// [arguments] is the raw JSON string exactly as assembled — parse it
+/// defensively, providers occasionally emit malformed or truncated JSON.
+class NativeToolCall {
+  final String id;
+  final String name;
+  final String arguments;
+
+  const NativeToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  factory NativeToolCall.fromJson(Map<String, dynamic> json) {
+    final fn = json['function'];
+    final fnMap = fn is Map ? fn : const <dynamic, dynamic>{};
+    return NativeToolCall(
+      id: (json['id'] ?? '').toString(),
+      name: (fnMap['name'] ?? '').toString(),
+      arguments: (fnMap['arguments'] ?? '').toString(),
+    );
+  }
+}
+
+/// Event carrying one or more native tool calls the model requested this turn.
+class ToolCallsEvent extends ChatStreamEvent {
+  final List<NativeToolCall> calls;
+  const ToolCallsEvent(this.calls);
 }
 
 /// Event containing message content text.
