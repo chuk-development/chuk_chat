@@ -18,6 +18,9 @@ void main() {
     String? selectedAgentId,
     String? selectedThreadKey,
     VoidCallback? onAddAgent,
+    VoidCallback? onOpenRooms,
+    VoidCallback? onOpenBrowser,
+    VoidCallback? onOpenSettings,
   }) async {
     final picks = <(String, String)>[];
     await tester.pumpWidget(
@@ -28,6 +31,9 @@ void main() {
             selectedAgentId: selectedAgentId,
             selectedThreadKey: selectedThreadKey,
             onAddAgent: onAddAgent,
+            onOpenRooms: onOpenRooms,
+            onOpenBrowser: onOpenBrowser,
+            onOpenSettings: onOpenSettings,
             now: () => now,
             onSelect: (agentId, threadKey) => picks.add((agentId, threadKey)),
           ),
@@ -37,6 +43,41 @@ void main() {
     await tester.pumpAndSettle();
     return picks;
   }
+
+  testWidgets('the rail rows and the footer gear are chuk\'s slots',
+      (tester) async {
+    var rooms = 0, browser = 0, settings = 0;
+    final source = LocalAgentRosterSource()..addAgent(name: 'amber-otter');
+    await pumpRoster(
+      tester,
+      source,
+      onOpenRooms: () => rooms++,
+      onOpenBrowser: () => browser++,
+      onOpenSettings: () => settings++,
+    );
+
+    // Control Rooms and Agent's browser take chuk's Workspaces / Media rail
+    // slots; the settings gear sits in chuk's footer pill.
+    await tester.tap(find.text('Control Rooms'));
+    await tester.tap(find.text("Agent's browser"));
+    await tester.tap(find.byTooltip('Settings'));
+    expect((rooms, browser, settings), (1, 1, 1));
+    // The pill itself opens settings too, like chuk's name pill.
+    await tester.tap(find.text('Account'));
+    expect(settings, 2);
+  });
+
+  testWidgets('without callbacks the rail rows and the footer are absent',
+      (tester) async {
+    await pumpRoster(tester, LocalAgentRosterSource()..addAgent(name: 'jade'));
+
+    expect(find.text('Control Rooms'), findsNothing);
+    expect(find.text("Agent's browser"), findsNothing);
+    expect(find.byTooltip('Settings'), findsNothing);
+    expect(find.text('Account'), findsNothing);
+    // The list still renders its coworker.
+    expect(find.text('jade'), findsOneWidget);
+  });
 
   testWidgets('an empty roster says so and offers onboarding', (tester) async {
     var opened = 0;
@@ -183,48 +224,6 @@ void main() {
     });
   });
 
-  group('SESSIONS | BOTS tabs (§16.1)', () {
-    testWidgets('Bots is the default; Sessions lists threads most-recent first',
-        (tester) async {
-      final source = LocalAgentRosterSource(random: Random(11));
-      final a = source.addAgent(name: 'amber-otter');
-      final b = source.addAgent(name: 'cobalt-lynx');
-      // Give each a distinct thread activity time.
-      source.markActivity(a.id, a.threads.first.key, DateTime(2026, 8, 13, 9));
-      source.markActivity(b.id, b.threads.first.key, DateTime(2026, 8, 13, 11));
-      final picks = await pumpRoster(tester, source);
-
-      // Default tab: Bots. The activity-dot subtitle from a bot row is present.
-      expect(find.text('waiting · 3h ago'), findsWidgets);
-
-      // Switch to Sessions.
-      await tester.tap(find.text('Sessions'));
-      await tester.pumpAndSettle();
-
-      // Both threads listed, each labelled "General · <when>".
-      expect(find.textContaining('General · '), findsNWidgets(2));
-
-      // The two agent names appear; the most recent (cobalt-lynx, 11:00) is
-      // above the older (amber-otter, 09:00).
-      final cobaltY = tester.getTopLeft(find.text('cobalt-lynx')).dy;
-      final amberY = tester.getTopLeft(find.text('amber-otter')).dy;
-      expect(cobaltY, lessThan(amberY));
-
-      // Tapping a session selects that agent's thread.
-      await tester.tap(find.text('amber-otter'));
-      expect(picks.last.$1, a.id);
-      expect(picks.last.$2, a.threads.first.key);
-    });
-
-    testWidgets('an empty Sessions tab says so', (tester) async {
-      final source = LocalAgentRosterSource(random: Random(12));
-      await pumpRoster(tester, source);
-      await tester.tap(find.text('Sessions'));
-      await tester.pumpAndSettle();
-      expect(find.text('No conversations yet.'), findsOneWidget);
-    });
-  });
-
   group('role (§16.1)', () {
     testWidgets('a role shows under the name; no role means no extra line',
         (tester) async {
@@ -244,8 +243,8 @@ void main() {
     testWidgets('a non-host agent offers Delete; the host agent does not',
         (tester) async {
       final source = LocalAgentRosterSource(random: Random(30));
-      source.ensureHostAgent('host-laptop'); // onHost = true
-      source.addAgent(name: 'amber-otter'); // local, onHost = false
+      final host = source.ensureHostAgent('host-laptop'); // onHost = true
+      final local = source.addAgent(name: 'amber-otter'); // onHost = false
       final deleted = <String>[];
 
       await tester.pumpWidget(
@@ -254,7 +253,7 @@ void main() {
             body: AgentRosterView(
               source: source,
               now: () => DateTime(2026, 8, 22, 12),
-              onSelect: (_, __) {},
+              onSelect: (_, _) {},
               onDeleteAgent: deleted.add,
             ),
           ),
@@ -262,9 +261,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // The local agent's menu has Delete.
+      // The local agent's menu has Delete. The row is scoped by its own key:
+      // the tile is no longer a ListTile since the sidebar moved onto chuk's
+      // chrome, but it is still exactly one row per agent.
       final localMenu = find.descendant(
-        of: find.widgetWithText(ListTile, 'amber-otter'),
+        of: find.byKey(ValueKey<String>('agent-tile-${local.id}')),
         matching: find.byIcon(Icons.more_vert),
       );
       await tester.tap(localMenu);
@@ -276,7 +277,7 @@ void main() {
 
       // The host agent's menu has no Delete.
       final hostMenu = find.descendant(
-        of: find.widgetWithText(ListTile, 'host-laptop'),
+        of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
         matching: find.byIcon(Icons.more_vert),
       );
       await tester.tap(hostMenu);
@@ -351,36 +352,39 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(source.hiddenIds, hasLength(1));
-      expect(find.text('Hidden (1)'), findsOneWidget);
+      // Hidden is a labelled bucket now (chuk's section mechanic), so the
+      // label and its count are two Texts and the rows are already visible —
+      // no expand step before Unhide.
+      expect(find.text('Hidden'), findsOneWidget);
 
-      // Expand the hidden section and unhide.
-      await tester.tap(find.text('Hidden (1)'));
-      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Unhide'));
       await tester.pumpAndSettle();
 
       expect(source.hiddenIds, isEmpty);
-      expect(find.text('Hidden (1)'), findsNothing);
+      expect(find.text('Hidden'), findsNothing);
     });
   });
 
-  group('active now strip (§16.1)', () {
-    testWidgets('shows the working agents and nothing when none work',
-        (tester) async {
+  group('working bucket (§16.1)', () {
+    // The old "Active now" avatar strip is gone; running agents are their own
+    // labelled section instead, which is the same answer to "is anything
+    // running" without a second place that shows the same truth.
+    testWidgets('is labelled only while an agent is working', (tester) async {
       final source = LocalAgentRosterSource(random: Random(7));
       final a = source.addAgent(name: 'amber-otter');
       source.addAgent(name: 'cobalt-lynx');
       await pumpRoster(tester, source);
 
-      expect(find.text('Active now'), findsNothing);
+      expect(find.text('Working'), findsNothing);
+      expect(find.text('Waiting'), findsOneWidget);
 
       source.markRunning(a.id, true);
       await tester.pumpAndSettle();
-      expect(find.text('Active now'), findsOneWidget);
+      expect(find.text('Working'), findsOneWidget);
 
       source.markRunning(a.id, false);
       await tester.pumpAndSettle();
-      expect(find.text('Active now'), findsNothing);
+      expect(find.text('Working'), findsNothing);
     });
   });
 

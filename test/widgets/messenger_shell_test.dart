@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/pages/messenger_shell.dart';
+import 'package:cowork/widgets/room_create_sheet.dart';
+import 'package:cowork/widgets/room_list_view.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
@@ -14,7 +16,15 @@ import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
+import 'package:cowork/services/notifications/notification_router.dart';
+import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
+
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
+import 'package:cowork/services/cowork/cowork_run_ledger.dart';
+
+import '../support/test_app.dart';
 
 class _MemoryStore implements CoworkSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
@@ -75,6 +85,7 @@ class _FakeRelayController implements CoworkRelayController {
     String? providerSlug,
     String? reasoningEffort,
     bool debug = false,
+    bool regenerate = false,
   }) async =>
       sessionKeys.add(sessionKey);
 
@@ -122,6 +133,15 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> requestStop({String sessionKey = 'default'}) async {}
 
   @override
+  Future<void> requestReplay({
+    String sessionKey = 'default',
+    int afterId = 0,
+  }) async {}
+
+  @override
+  Future<void> sendRunAck(String runId) async {}
+
+  @override
   Future<void> startBrowserView() async {}
 
   @override
@@ -134,6 +154,13 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+  }) async {}
+
+  @override
+  Future<void> sendSecrets({
+    required Map<String, String> values,
+    required int revision,
+    String? requestId,
   }) async {}
 
   @override
@@ -164,7 +191,36 @@ class _FakeSessionSource implements AccountSessionSource {
   Future<AccountSession?> refresh() async => current();
 }
 
+/// Pump a few frames without waiting for the tree to go quiet.
+///
+/// The imported chat screen keeps an animation running while a run is in
+/// flight (the streaming indicator), so `pumpAndSettle` never returns once a
+/// run is on the ledger. A bounded pump is what a test wants there anyway: it
+/// asserts on a state, not on the end of every animation.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 void main() {
+  // The relay link, the run ledger and the replay loader are process-wide
+  // singletons; a test must not inherit the previous one's run.
+  setUp(() {
+    CoworkRelayLink.instance.reset();
+    CoworkRunLedger.instance.reset();
+  });
+  tearDown(() {
+    CoworkRelayLink.instance.reset();
+    CoworkRunLedger.instance.reset();
+    NotificationRouter.instance.reset();
+  });
+
+  /// How often the shell asked for a transport. The thread view builds its
+  /// controller once per mount, so this is the mount count of the socket owner.
+  int controllerBuilds = 0;
+  setUp(() => controllerBuilds = 0);
+
   Future<(_FakeRelayController, LocalAgentRosterSource)> pumpShell(
     WidgetTester tester, {
     Size size = const Size(1200, 800),
@@ -180,8 +236,13 @@ void main() {
     final roster = LocalAgentRosterSource();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
-          relayControllerBuilder: () async => controller,
+          relayControllerBuilder: () async {
+            controllerBuilds++;
+            return controller;
+          },
           sessionSource: const _FakeSessionSource(),
           pairingStore: store ?? CoworkPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
@@ -194,16 +255,150 @@ void main() {
     return (controller, roster);
   }
 
+  /// The one thread view, wherever the layout put it. `skipOffstage: false`
+  /// because chuk's compact mode and the phone inbox keep it mounted but off
+  /// stage, and that is exactly what these tests assert.
+  final Finder threadView = find.byType(CoworkThreadView, skipOffstage: false);
+
+  /// Whether the one thread view is currently off stage (chuk's compact mode
+  /// hides the chat under the open sidebar; it is never unmounted).
+  bool threadOffstage(WidgetTester tester) {
+    final offstage = find.ancestor(
+      of: threadView,
+      matching: find.byType(Offstage, skipOffstage: false),
+    );
+    return tester.widget<Offstage>(offstage.first).offstage;
+  }
+
+  /// Resizes the window and lets the layout settle.
+  Future<void> resize(WidgetTester tester, Size size) async {
+    tester.view.physicalSize = size;
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('a wide window shows the roster next to the thread', (tester) async {
     await pumpShell(tester);
 
     expect(find.byType(AgentRosterView), findsOneWidget);
     expect(find.byType(CoworkThreadView), findsOneWidget);
+    expect(threadOffstage(tester), isFalse);
     expect(find.text('Coworkers'), findsOneWidget);
     expect(find.text('No coworkers yet.'), findsOneWidget);
+    // chuk's chrome, not an app bar: the hamburger at the top left and the
+    // floating row at the top right.
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
+    expect(find.byTooltip('Copy full chat'), findsOneWidget);
     // Nothing sits on top of the chat: the connection is not the user's job.
     expect(find.textContaining('Connected to'), findsNothing);
     expect(find.byIcon(Icons.link_off), findsNothing);
+  });
+
+  testWidgets('the four top-right actions sit in chuk\'s floating row',
+      (tester) async {
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+
+    // With a coworker selected all four slots are live: Agent controls,
+    // Control Rooms, Agent's browser, and Copy full chat in chuk's own slot.
+    for (final tooltip in <String>[
+      'Agent controls',
+      'Control Rooms',
+      "Agent's browser",
+      'Copy full chat',
+    ]) {
+      expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
+    }
+    expect(find.byType(AppBar), findsNothing);
+    // The composer's "More models" way out is wired.
+    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    expect(view.onOpenModelScreen, isNotNull);
+    expect(roster.agents.single.onHost, isTrue);
+  });
+
+  testWidgets('the hamburger folds the roster to the mini rail and back',
+      (tester) async {
+    final (controller, _) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+
+    // The roster is off screen; chuk's mini rail carries the three slots.
+    expect(find.text('Coworkers').hitTestable(), findsNothing);
+    expect(find.byTooltip('New coworker'), findsOneWidget);
+    expect(find.byTooltip("Agent's browser"), findsNWidgets(2)); // rail + top right
+    expect(threadOffstage(tester), isFalse);
+
+    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('New coworker'), findsNothing);
+  });
+
+  testWidgets('one socket across a wide, tablet and phone resize', (tester) async {
+    final (controller, _) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    expect(controllerBuilds, 1);
+
+    // The thread view moves between chuk\'s desktop stack and the phone layer;
+    // it is never rebuilt, so the transport is built exactly once.
+    await resize(tester, const Size(660, 900));
+    expect(threadView, findsOneWidget);
+    await resize(tester, const Size(420, 900));
+    expect(threadView, findsOneWidget);
+    await resize(tester, const Size(1200, 800));
+    expect(threadView, findsOneWidget);
+    expect(controllerBuilds, 1);
+  });
+
+  testWidgets('a tapped notification selects the thread it names (WS-7)',
+      (tester) async {
+    // Two coworkers; the host's thread is selected on pairing, the other one
+    // is what the toast names.
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    final other = roster.addAgent(name: 'jade-heron');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      roster.agents.first.threads.single.key,
+    );
+
+    NotificationRouter.instance.open(
+      NotificationTarget(sessionKey: other.threads.single.key),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      other.threads.single.key,
+    );
+    // Taken, not left pending: a second shell would not re-open it.
+    expect(NotificationRouter.instance.pending.value, isNull);
+  });
+
+  testWidgets('Control Rooms opens as the right panel and closes again',
+      (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RoomListView), findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
+    // The chat stays mounted next to the panel.
+    expect(find.byType(CoworkThreadView), findsOneWidget);
+    expect(threadOffstage(tester), isFalse);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RoomListView), findsNothing);
   });
 
   testWidgets('pairing lists the agent that really runs on the host',
@@ -245,8 +440,11 @@ void main() {
     expect(roster.agents.single.brief, 'weekly crypto news');
     // An app-created agent is never claimed to be installed on the host.
     expect(roster.agents.single.onHost, isFalse);
-    // Its thread is selected: the app bar carries its name.
-    expect(find.widgetWithText(AppBar, roster.agents.single.name), findsOneWidget);
+    // Its thread is selected: the one thread view points at it, and the
+    // roster lists it by name.
+    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    expect(view.threadKey, roster.agents.single.threads.single.key);
+    expect(find.text(roster.agents.single.name), findsWidgets);
     expect(controller.sessionKeys, isEmpty);
   });
 
@@ -262,22 +460,15 @@ void main() {
     final stableKey = roster.agents.single.id;
     expect(roster.agents.single.threads.single.key, stableKey);
 
-    // Two sends both ride the one stable session key, into the same thread.
-    await tester.enterText(find.byType(TextField).first, 'in the first turn');
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pumpAndSettle();
-    controller.emit(const CoworkRelayDone());
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, 'in the second turn');
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pumpAndSettle();
-
-    expect(controller.sessionKeys, <String>[stableKey, stableKey]);
-    // Both turns live in the same one thread — nothing was cleared.
-    expect(find.text('in the first turn'), findsOneWidget);
-    expect(find.text('in the second turn'), findsOneWidget);
-    // Still exactly one thread after the exchange.
+    // The shell's whole job here is to point one thread view at that one key.
+    // Everything downstream of it — the imported composer, the transport
+    // adapter, the executor session — reads the key from these two places, and
+    // both are asserted end to end in cowork_thread_view_test /
+    // websocket_chat_service_test.
+    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    expect(view.threadKey, stableKey);
+    expect(CoworkRelayLink.instance.sessionKey.value, stableKey);
+    // Still exactly one thread: there is no way to open a second.
     expect(roster.agents.single.threads, hasLength(1));
   });
 
@@ -287,14 +478,17 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'do the thing');
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pumpAndSettle();
+    // Run state is read off CoworkRunLedger now — the one place that knows a
+    // run is in flight whether this client started it or adopted it from the
+    // host's `run_state` header after a reconnect.
+    final threadKey = roster.agents.single.threads.single.key;
+    CoworkRunLedger.instance.begin(threadKey);
+    await tester.pump();
 
     expect(find.textContaining('working'), findsOneWidget);
 
-    controller.emit(const CoworkRelayDone());
-    await tester.pumpAndSettle();
+    CoworkRunLedger.instance.finish(threadKey, reason: 'finished');
+    await tester.pump();
 
     expect(find.textContaining('working'), findsNothing);
     expect(find.textContaining('waiting'), findsOneWidget);
@@ -334,24 +528,57 @@ void main() {
     expect(roster.agents.single.schedule!.source, 'every 6h');
   });
 
-  testWidgets('a narrow window shows the roster first, then the thread',
+  testWidgets('a tablet window shows the roster first, then the thread',
       (tester) async {
-    final (controller, _) = await pumpShell(tester, size: const Size(420, 900));
+    // 660: narrower than the 720 compact breakpoint, wider than the 600 phone
+    // one — chuk's compact mode: the open sidebar covers the chat.
+    final (controller, _) = await pumpShell(tester, size: const Size(660, 900));
     controller.pair();
     await tester.pumpAndSettle();
 
-    // The roster is on screen; the thread is stacked behind it.
-    expect(find.text('Coworkers'), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_back), findsNothing);
+    // The roster is on screen; the thread is mounted but off stage behind it.
+    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(threadView, findsOneWidget);
+    expect(threadOffstage(tester), isTrue);
+    expect(find.byType(AppBar), findsNothing);
 
     await tester.tap(find.text('cowork-host').first);
     await tester.pumpAndSettle();
 
-    // Now the thread is in front, with a way back to the roster.
-    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.arrow_back));
+    // Picking a coworker folds the sidebar: the thread comes forward, and the
+    // hamburger is the way back to the roster.
+    expect(threadOffstage(tester), isFalse);
+    expect(find.text('Coworkers').hitTestable(), findsNothing);
+    await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.arrow_back), findsNothing);
+    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(threadOffstage(tester), isTrue);
+  });
+
+  testWidgets('a phone window shows the inbox, then the chat, and back again',
+      (tester) async {
+    // Under 600 the shell mounts the mobile layer instead: the coworker inbox,
+    // and a chat screen whose chrome floats over the thread with no app bar.
+    final (controller, roster) =
+        await pumpShell(tester, size: const Size(420, 900));
+    controller.pair();
+    await tester.pumpAndSettle();
+
+    final agentId = roster.agents.single.id;
+    expect(find.byType(MobileAgentList), findsOneWidget);
+    expect(find.byType(AppBar), findsNothing);
+
+    await tester.tap(find.byKey(ValueKey<String>('mobile-agent-$agentId')));
+    await tester.pumpAndSettle();
+
+    // The chat is in front, still with no app bar, and the back chip returns
+    // to the inbox — the same flag the tablet path flips.
+    expect(find.byType(MobileChatScreen), findsOneWidget);
+    expect(find.byType(AppBar), findsNothing);
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(MobileAgentList), findsOneWidget);
+    expect(find.byType(MobileChatScreen), findsNothing);
   });
 
   testWidgets('the Rooms button opens the rooms screen and lists rooms',
@@ -369,6 +596,8 @@ void main() {
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
@@ -381,14 +610,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms'));
     await tester.pumpAndSettle();
 
+    // The room list is the right panel (chuk's Workspaces slot); at 800 px
+    // the sidebar folds to make room for it.
+    expect(find.byType(RoomListView), findsOneWidget);
     expect(find.text('Rooms'), findsWidgets);
     expect(find.text('launch'), findsOneWidget);
     expect(find.text('2 members'), findsOneWidget);
 
-    // Opening a room shows its thread. The fake controller is live (the thread
+    // Opening a room shows its thread as its own route, over the shell. The fake controller is live (the thread
     // view handed it up), so the room streams over that same socket. The room
     // renders a running spinner, so advance frames with pump, not pumpAndSettle.
     await tester.tap(find.text('launch'));
@@ -435,6 +667,8 @@ void main() {
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
@@ -447,15 +681,28 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms'));
     await tester.pumpAndSettle();
     // Empty -> the New room button is offered.
     await tester.tap(find.widgetWithText(FilledButton, 'New room'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'planning');
-    await tester.tap(find.text('amber'));
-    await tester.tap(find.text('cobalt'));
+    // Scope to the sheet: the room list is a panel next to the chat now, so
+    // the chat's own field is on stage too.
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(RoomCreateSheet),
+        matching: find.byType(TextField),
+      ),
+      'planning',
+    );
+    // The roster lists the same names; pick the members inside the sheet.
+    Finder inSheet(String name) => find.descendant(
+          of: find.byType(RoomCreateSheet),
+          matching: find.text(name),
+        );
+    await tester.tap(inSheet('amber'));
+    await tester.tap(inSheet('cobalt'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
@@ -485,6 +732,8 @@ void main() {
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
@@ -497,10 +746,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Delete amber via its roster row menu.
+    // Delete amber via its roster row menu. The row is scoped by the agent's
+    // own tile key: since the sidebar moved onto chuk's chrome the row is no
+    // longer a ListTile, but it is still exactly one tile per agent.
     await tester.tap(
       find.descendant(
-        of: find.widgetWithText(ListTile, 'amber'),
+        of: find.byKey(ValueKey<String>('agent-tile-$amberId')),
         matching: find.byIcon(Icons.more_vert),
       ),
     );
@@ -529,6 +780,8 @@ void main() {
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
@@ -541,7 +794,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
@@ -570,6 +823,8 @@ void main() {
     final gate = Completer<CoworkRelayController>();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
           relayControllerBuilder: () => gate.future,
           sessionSource: const _FakeSessionSource(),
@@ -582,13 +837,16 @@ void main() {
     );
     await tester.pump();
 
-    // Delete the room while offline (via the Rooms screen menu).
-    await tester.tap(find.byTooltip('Rooms'));
-    await tester.pumpAndSettle();
+    // Delete the room while offline (via the room panel's menu). Bounded
+    // pumps: the thread view animates while its transport is still pending,
+    // and the panel sits next to it now instead of behind a route that muted
+    // its ticker.
+    await tester.tap(find.byTooltip('Control Rooms'));
+    await settle(tester);
     await tester.tap(find.byIcon(Icons.more_vert));
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.tap(find.text('Delete room'));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(rooms.byId(room.id), isNull);
     expect(controller.deletedRooms, isEmpty); // not sent yet — offline
@@ -597,5 +855,61 @@ void main() {
     gate.complete(controller);
     await tester.pumpAndSettle();
     expect(controller.deletedRooms, [room.id]);
+  });
+
+  testWidgets('the top-right "Copy full chat" button exports the thread',
+      (tester) async {
+    final List<String> exported = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          relayControllerBuilder: () async => _FakeRelayController(),
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: LocalRoomSource(),
+          onSignOut: () {},
+          chatDebugExport: (threadKey) async {
+            exported.add(threadKey);
+            return 'full chat copied';
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('Copy full chat'), findsOneWidget);
+    await tester.tap(find.byTooltip('Copy full chat'));
+    await tester.pumpAndSettle();
+
+    expect(exported, ['default']);
+    expect(find.text('full chat copied'), findsOneWidget);
+  });
+
+  testWidgets('a failed "Copy full chat" says so instead of staying silent',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          relayControllerBuilder: () async => _FakeRelayController(),
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: LocalRoomSource(),
+          onSignOut: () {},
+          chatDebugExport: (threadKey) async => throw StateError('no cache'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Copy full chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('could not copy the chat'), findsOneWidget);
   });
 }
