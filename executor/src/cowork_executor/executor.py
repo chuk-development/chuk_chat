@@ -1334,6 +1334,19 @@ class Executor:
             after_id = max(0, int(payload.get("after_id") or 0))
         except (TypeError, ValueError):
             after_id = 0
+        # Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): ``limit`` asks
+        # for the newest N turn rows of the window only; ``before_id`` caps the
+        # window for the next, older page. Absent = the whole window, as before.
+        try:
+            before_id = max(0, int(payload.get("before_id") or 0))
+        except (TypeError, ValueError):
+            before_id = 0
+        try:
+            limit = max(0, int(payload.get("limit") or 0))
+        except (TypeError, ValueError):
+            limit = 0
+        has_more = False
+        page_after_id = after_id
         try:
             store = StateStore(self._db_path)
         except Exception as exc:  # noqa: BLE001 — a bad db must not wedge serving
@@ -1350,15 +1363,24 @@ class Executor:
                 session_id = store.route(session_key)
                 # First the state header: is a run for this thread in flight?
                 self._event(request_id, self._run_state_for(store, session_key))
-                # A reconnecting app also gets every rotated MCP credential it
-                # has not acknowledged yet (docs/WIRE_CONTRACT.md, mcp_credentials).
-                self._flush_pending_mcp_credentials(session_key, request_id)
-                # ...and every ``secret_request`` a run in this thread is still
-                # waiting on: the frame was never a row, so this is how a
-                # reconnect mid-request shows the dialog again.
-                self._flush_pending_secret_requests(session_key, request_id)
-                events = store.replay_events(session_id, after_id=after_id)
-                terminals = store.run_terminals(session_key, after_id=after_id)
+                if before_id == 0:
+                    # A reconnecting app also gets every rotated MCP credential it
+                    # has not acknowledged yet (docs/WIRE_CONTRACT.md, mcp_credentials).
+                    self._flush_pending_mcp_credentials(session_key, request_id)
+                    # ...and every ``secret_request`` a run in this thread is still
+                    # waiting on: the frame was never a row, so this is how a
+                    # reconnect mid-request shows the dialog again. An OLDER page
+                    # (``before_id``) is not a reconnect: nothing pending to flush.
+                    self._flush_pending_secret_requests(session_key, request_id)
+                page_after_id, has_more = store.replay_page_bounds(
+                    session_id, after_id=after_id, before_id=before_id, limit=limit
+                )
+                events = store.replay_events(
+                    session_id, after_id=page_after_id, before_id=before_id
+                )
+                terminals = store.run_terminals(
+                    session_key, after_id=page_after_id, before_id=before_id
+                )
                 # Merge by message id so a run's terminal comes right after its
                 # last turn. Same id: the turn first, then the terminal.
                 merged = sorted(
@@ -1381,13 +1403,18 @@ class Executor:
             # Close the stream the way a live run does. ``reason: replay`` is the
             # history-end marker: the client renders nothing for it and never
             # mistakes it for a finished or a stopped run.
-            self._terminal(
-                request_id,
-                {
-                    **done_payload(final_answer=None, reason="replay", iterations=0),
-                    "replay": True,
-                },
-            )
+            marker: dict[str, Any] = {
+                **done_payload(final_answer=None, reason="replay", iterations=0),
+                "replay": True,
+            }
+            if limit > 0 or before_id > 0:
+                # Replay paging: where this page starts and whether an older one
+                # exists. ``oldest_mid`` is the row to ask ``before_id`` for.
+                marker["has_more"] = has_more
+                marker["oldest_mid"] = page_after_id + 1
+                if before_id > 0:
+                    marker["before_id"] = before_id
+            self._terminal(request_id, marker)
 
     def _run_state_for(self, store: StateStore, session_key: str) -> dict:
         """The ``run_state`` header of a replay: ``running`` when a run for the
