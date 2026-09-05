@@ -1887,8 +1887,15 @@ class CoworkRelayClient
       });
 
   @override
-  Future<void> requestAgentList() =>
-      _sendFramePayload(<String, dynamic>{'type': 'agent_list'});
+  Future<void> requestAgentList() async {
+    // Auth first, then the names — the same gate as a replay: sent on pair,
+    // this used to reach the host before the account token ("expected
+    // account_authentication, got 'agent_list'") and was dropped, and nothing
+    // asked again until the next pairing.
+    await _awaitProvisionGate();
+    if (_disposed) return;
+    return _sendFramePayload(<String, dynamic>{'type': 'agent_list'});
+  }
 
   @override
   Future<void> addRoomMember(String roomId, String agentId, String handle) =>
@@ -1930,21 +1937,27 @@ class CoworkRelayClient
     if (gate != null && !gate.isCompleted) gate.complete();
   }
 
+  /// Waits for the account provision of this connection, or for
+  /// [_provisionGateTimeout] — see [_provisionGate]. Returns at once when
+  /// there is no gate or it is already open.
+  Future<void> _awaitProvisionGate() async {
+    final gate = _provisionGate;
+    if (gate == null || gate.isCompleted) return;
+    try {
+      await gate.future.timeout(_provisionGateTimeout);
+    } on TimeoutException {
+      // Nobody provisioned. Send anyway; that is the old behaviour.
+    }
+  }
+
   @override
   Future<void> requestReplay({
     String sessionKey = 'default',
     int afterId = 0,
   }) async {
     // Auth first, then replay — see [_provisionGate].
-    final gate = _provisionGate;
-    if (gate != null && !gate.isCompleted) {
-      try {
-        await gate.future.timeout(_provisionGateTimeout);
-      } on TimeoutException {
-        // Nobody provisioned. Replay anyway; that is the old behaviour.
-      }
-      if (_disposed) return;
-    }
+    await _awaitProvisionGate();
+    if (_disposed) return;
     return _sendFramePayload(<String, dynamic>{
         'type': 'replay',
         'session_key': sessionKey,
