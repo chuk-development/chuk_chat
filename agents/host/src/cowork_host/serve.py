@@ -79,6 +79,7 @@ class TaskServer:
         on_automation_frame: Callable[[dict], dict | None] | None = None,
         job_frame_sender: Callable[[dict], Any] | None = None,
         on_agent_frame: Callable[[dict], list | None] | None = None,
+        skills_seed_root: str | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -129,6 +130,9 @@ class TaskServer:
                 # and background commands"): the host's sender for a ``job``
                 # frame when no run of the session is live.
                 job_frame_sender=job_frame_sender,
+                # Skills (docs/WIRE_CONTRACT.md, "Skills"): which of the
+                # workspace's skills are the shipped seeds.
+                skills_seed_root=skills_seed_root,
                 # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names"):
                 # the host's store answers agent_create / agent_rename /
                 # agent_list with the current list.
