@@ -4,7 +4,7 @@
 # Re-sync with: scripts/import_chat_ui.sh   (then review `git diff`)
 # See docs/CHAT_UI_IMPORT.md for the stub inventory and the deliberate exclusions.
 #
-# upstream: chuk_chat d31526a229fdde27c82adf3661d5d3a149db8340 (git -C ~/git/chuk_chat rev-parse HEAD)
+# upstream: chuk_chat 4d2ff4af9110a120ac2dd399d8aae45595019dd8 (git -C ~/git/chuk_chat rev-parse HEAD)
 
 # --- Chat screens, mixins and handlers (platform_specific/chat) ---
 platform_specific/chat/chat_api_service.dart
