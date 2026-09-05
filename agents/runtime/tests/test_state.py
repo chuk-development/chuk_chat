@@ -200,3 +200,60 @@ def test_fail_run_and_orphan_sweep(tmp_path):
     swept = store.get_run("run-2")
     assert swept["state"] == "failed" and swept["reason"] == "host_restarted"
     assert store.sweep_orphan_runs() == 0
+
+
+def test_begin_run_records_the_model_the_task_asked_for(tmp_path):
+    """A run must be provable afterwards: what model / provider / reasoning
+    effort the task named (docs/WIRE_CONTRACT.md), NULL meaning the host default."""
+    store = StateStore(str(tmp_path / "s.db"))
+    sid = store.route("s")
+    store.begin_run(
+        "r1", sid, "s", "do it", model="anthropic/claude-x", provider="anthropic", reasoning_effort="low"
+    )
+    store.begin_run("r2", sid, "s", "again")  # named nothing
+
+    named = store.get_run("r1")
+    assert named["model"] == "anthropic/claude-x"
+    assert named["provider"] == "anthropic"
+    assert named["reasoning_effort"] == "low"
+    default = store.get_run("r2")
+    assert default["model"] is None and default["provider"] is None
+    assert default["reasoning_effort"] is None
+    assert store.latest_run("s")["run_id"] == "r2"
+    store.close()
+
+
+def test_an_existing_database_without_the_model_columns_is_migrated_on_open(tmp_path):
+    """The columns were added after ``runs`` first shipped. CREATE TABLE IF NOT
+    EXISTS leaves an old table alone, so opening an old database must ALTER the
+    missing columns in — additively, and only once."""
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    # Build a current database, then age it: drop the three columns so the file
+    # looks exactly like one written before they existed (legacy row included).
+    fresh = StateStore(str(path))
+    sid = fresh.route("s")
+    fresh.begin_run("legacy", sid, "s", "old prompt")
+    fresh.close()
+    old = sqlite3.connect(path)
+    for column in ("model", "provider", "reasoning_effort"):
+        old.execute(f"ALTER TABLE runs DROP COLUMN {column}")
+    old.commit()
+    assert "model" not in {r[1] for r in old.execute("PRAGMA table_info(runs)")}
+    old.close()
+
+    store = StateStore(str(path))
+    columns = {row[1] for row in store._conn().execute("PRAGMA table_info(runs)").fetchall()}
+    assert {"model", "provider", "reasoning_effort"} <= columns
+    # The legacy row survives with NULLs, and new rows carry the fields.
+    assert store.get_run("legacy")["model"] is None
+    sid = store.route("s")
+    store.begin_run("new", sid, "s", "p", model="m", provider="p", reasoning_effort="none")
+    assert store.get_run("new")["reasoning_effort"] == "none"
+    store.close()
+
+    # Opening again is a no-op (no duplicate-column error).
+    again = StateStore(str(path))
+    assert again.get_run("new")["model"] == "m"
+    again.close()

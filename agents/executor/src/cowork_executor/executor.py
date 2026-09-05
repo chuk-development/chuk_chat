@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import queue
 import secrets
 import subprocess
@@ -110,6 +111,12 @@ from .protocol import (
     subagent_payload,
     tool_payload,
 )
+
+logger = logging.getLogger(__name__)
+
+# What a task's model fields read in the log and the runs row when it named
+# nothing: the host decides.
+HOST_DEFAULT = "host-default"
 
 # A fresh model per task. MockModelClient is single-use (it pops a script), so
 # the factory hands back a new one each time; a real client can be reused.
@@ -937,6 +944,18 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
         )
+        # One line per accepted task naming the model it will run on — never the
+        # prompt. This is what makes a live run provable from the host log.
+        logger.info(
+            "task accepted request=%s session=%s run=%s model=%s provider=%s "
+            "reasoning_effort=%s",
+            request_id,
+            run.session_key,
+            run.run_id,
+            run.model or HOST_DEFAULT,
+            run.provider or HOST_DEFAULT,
+            run.reasoning_effort or HOST_DEFAULT,
+        )
         # Record the run before it is queued (docs/WIRE_CONTRACT.md): from here
         # on it exists on the host whether or not the socket survives. A store
         # failure never refuses the task; the run just has no durable record.
@@ -944,7 +963,14 @@ class Executor:
             store = StateStore(self._db_path)
             try:
                 store.begin_run(
-                    run.run_id, store.route(run.session_key), run.session_key, prompt
+                    run.run_id,
+                    store.route(run.session_key),
+                    run.session_key,
+                    prompt,
+                    # Recorded so the run can prove later which model it ran on.
+                    model=run.model,
+                    provider=run.provider,
+                    reasoning_effort=run.reasoning_effort,
                 )
             finally:
                 store.close()
