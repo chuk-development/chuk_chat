@@ -404,6 +404,90 @@ def resolve_model(
     return ResolvedModel(model_id=chosen["id"], provider_slug=slug)
 
 
+#: Every graded reasoning token the chat API knows, weakest to strongest. Only
+#: the ORDER is fixed here; which tokens a model accepts is the catalogue's
+#: ``supported_efforts`` list, never this ladder.
+REASONING_LADDER: tuple[str, ...] = (
+    "none", "minimal", "low", "medium", "high", "xhigh", "max",
+)
+
+
+def supported_efforts(models: list[dict[str, Any]], model_id: str) -> list[str]:
+    """The catalogue's ``supported_efforts`` for ``model_id`` (empty when the
+    model is unknown or the catalogue does not say)."""
+    for entry in models:
+        if entry.get("id") != model_id:
+            continue
+        raw = entry.get("supported_efforts") or entry.get("reasoning_supported_efforts")
+        if isinstance(raw, list):
+            return [e for e in raw if isinstance(e, str) and e]
+        return []
+    return []
+
+
+def clamp_reasoning_effort(
+    models: list[dict[str, Any]], model_id: str, effort: str | None
+) -> str | None:
+    """Clamp a requested ``reasoning_effort`` to what the catalogue says the
+    model accepts.
+
+    The backend answers a level a model does not support by simply sending no
+    ``reasoning`` frames (proved live 2026-09-05: glm-5.3-flash accepts only
+    low/high/max; ``medium`` gave zero thinking, ``high`` streamed it). So the
+    host never forwards an unsupported level:
+
+    - an exact match, an unknown model, or a catalogue without the list -> as is;
+    - ``none`` on a model whose list has no ``none`` (reasoning mandatory) -> the
+      weakest allowed level, because the server rejects "off" there;
+    - ``on`` -> ``on`` when the model is binary, else the model's default effort
+      when allowed, else ranked like ``medium``;
+    - any other graded level -> the next STRONGER allowed level (``medium`` ->
+      ``high``), else the strongest weaker one (-> ``low``), so the user's
+      intent to think is honoured, never silently dropped.
+    """
+    if effort is None:
+        return None
+    allowed = supported_efforts(models, model_id)
+    if not allowed or effort in allowed:
+        return effort
+    # A binary model (``none`` / ``on``): any intent to think is "on".
+    if "on" in allowed and effort != "none":
+        return "on"
+    ranked = [e for e in allowed if e in REASONING_LADDER]
+    if not ranked:
+        return allowed[0]
+    weakest = min(ranked, key=REASONING_LADDER.index)
+    if effort == "none":
+        return weakest
+    want = effort
+    if effort == "on":
+        if "on" in allowed:
+            return "on"
+        default = _default_effort(models, model_id)
+        if default in allowed:
+            return default
+        want = "medium"
+    if want not in REASONING_LADDER:
+        default = _default_effort(models, model_id)
+        return default if default in allowed else weakest
+    rank = REASONING_LADDER.index(want)
+    stronger = [e for e in ranked if REASONING_LADDER.index(e) > rank]
+    if stronger:
+        return min(stronger, key=REASONING_LADDER.index)
+    weaker = [e for e in ranked if REASONING_LADDER.index(e) < rank and e != "none"]
+    if weaker:
+        return max(weaker, key=REASONING_LADDER.index)
+    return weakest
+
+
+def _default_effort(models: list[dict[str, Any]], model_id: str) -> str | None:
+    for entry in models:
+        if entry.get("id") == model_id:
+            value = entry.get("reasoning_default_effort")
+            return value if isinstance(value, str) and value else None
+    return None
+
+
 # -- the /v2/ws model client --------------------------------------------------
 
 
@@ -539,6 +623,13 @@ class BackendModelClient:
         # StreamingModelClient. ``None`` -> no live streaming (the caller may fall
         # back to one delta at the end).
         self.on_delta: Callable[[str], None] | None = None
+        # Same seam for the model's thinking: fired with each ``reasoning`` delta
+        # as it arrives, so the UI streams the thinking block live instead of
+        # the whole reasoning only landing in ``raw["reasoning"]`` at ``done``.
+        # ``None`` -> reasoning is accumulated only (the caller may emit it once
+        # at the end). Not copied by ``cheap_clone``: housekeeping turns run
+        # with reasoning off and must never narrate into the thread.
+        self.on_reasoning: Callable[[str], None] | None = None
         # The OpenAI-format ``tools`` array for native tool calling, or ``None``.
         # Set once per run by ``build_runtime`` via :meth:`set_tools` after the
         # registry is assembled. When present it is sent on every ``chat``
@@ -547,6 +638,12 @@ class BackendModelClient:
         # frame. Deliberately NOT copied by ``cheap_clone`` — housekeeping turns
         # want no tools.
         self._tools: list[dict] | None = None
+
+    @property
+    def reasoning_effort(self) -> str | None:
+        """The level this client sends on every ``chat`` payload (after any
+        catalogue clamp by the executor's selector); ``None`` = server default."""
+        return self._reasoning_effort
 
     # -- ModelClient -----------------------------------------------------
 
@@ -756,6 +853,12 @@ class BackendModelClient:
                 data = frame.get("data")
                 if isinstance(data, str):
                     reasoning_parts.append(data)
+                    # Live stream the thinking chunk to the UI as it arrives.
+                    if self.on_reasoning is not None and data:
+                        try:
+                            self.on_reasoning(data)
+                        except Exception:  # noqa: BLE001 — a UI sink error must not abort the turn
+                            pass
             elif kind == "usage":
                 data = frame.get("data")
                 if isinstance(data, dict):

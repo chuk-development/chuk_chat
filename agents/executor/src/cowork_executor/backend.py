@@ -12,14 +12,20 @@ Supabase GoTrue; the backend only ever sees the access token.
 
 from __future__ import annotations
 
+import logging
+
 from cowork_agent import (
     DEFAULT_BASE_URL,
     BackendModelClient,
     ModelClient,
     SupabaseSession,
+    clamp_reasoning_effort,
     fetch_models_info,
     resolve_model,
+    supported_efforts,
 )
+
+logger = logging.getLogger(__name__)
 
 from .executor import ModelFactory, ModelSelect
 
@@ -98,7 +104,16 @@ def make_backend_model_select(
     The task's own ``reasoning_effort`` reaches the client — that is what Fast
     Mode is: the same model with thinking turned down. When the task names none,
     the factory-level default passed in here is used instead.
+
+    The level is clamped to the model's catalogue ``supported_efforts``
+    (:func:`cowork_agent.clamp_reasoning_effort`): the backend answers an
+    unsupported level with NO reasoning frames at all, so an app whose
+    capability cache was cold (it sent ``medium`` to a low/high/max model)
+    would otherwise get a silent, thinking-less run. A clamp is logged once per
+    ``(model, level)`` pair; the client's ``reasoning_effort`` property carries
+    the effective level so the executor can record it on the run.
     """
+    warned: set[tuple[str, str]] = set()
 
     def select(
         model: str | None,
@@ -110,6 +125,24 @@ def make_backend_model_select(
             preferred_model_id=model,
             preferred_provider=provider,
         )
+        requested = (
+            task_reasoning_effort
+            if task_reasoning_effort is not None
+            else reasoning_effort
+        )
+        effective = clamp_reasoning_effort(models, resolved.model_id, requested)
+        if effective != requested and requested is not None:
+            key = (resolved.model_id, requested)
+            if key not in warned:
+                warned.add(key)
+                logger.warning(
+                    "reasoning effort %r is not supported by %s (supported: %s); "
+                    "using %r",
+                    requested,
+                    resolved.model_id,
+                    ",".join(supported_efforts(models, resolved.model_id)) or "?",
+                    effective,
+                )
         return BackendModelClient(
             session,
             model_id=resolved.model_id,
@@ -117,11 +150,7 @@ def make_backend_model_select(
             base_url=base_url,
             max_tokens=max_tokens,
             temperature=temperature,
-            reasoning_effort=(
-                task_reasoning_effort
-                if task_reasoning_effort is not None
-                else reasoning_effort
-            ),
+            reasoning_effort=effective,
         )
 
     return select

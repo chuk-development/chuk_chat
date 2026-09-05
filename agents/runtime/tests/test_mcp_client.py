@@ -1322,3 +1322,32 @@ def test_the_manager_hands_the_listener_to_every_connection(monkeypatch):
         manager.close()
 
     assert seen == ["notion"]
+
+
+def test_a_tokenless_oauth_entry_and_an_apikey_entry_are_both_kept():
+    """Bead cowork-jqi, verified against the P5 design (the DEVICE does OAuth
+    and forwards token + refresh material; the host only refreshes): an oauth
+    entry with no token and no refresh material is still a configured server
+    (it fails its own handshake later, per server, never the batch), and an
+    apiKey connector (no ``auth``, the key in the URL query) passes untouched."""
+    configs, errors = configs_from_entries(
+        [
+            {
+                "name": "linear",
+                "url": "https://mcp.linear.example/mcp",
+                "auth": AUTH_OAUTH,
+            },
+            {
+                "name": "brave",
+                "url": "https://mcp.brave.example/mcp?key=SECRET-123",
+            },
+        ]
+    )
+
+    assert errors == []
+    assert [c.name for c in configs] == ["linear", "brave"]
+    linear, brave = configs
+    assert linear.auth_token is None and linear.oauth == {}
+    assert brave.auth_token is None
+    assert brave.url == "https://mcp.brave.example/mcp?key=SECRET-123"
+    assert "Authorization" not in brave.headers

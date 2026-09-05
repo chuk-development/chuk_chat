@@ -39,6 +39,7 @@ from .environment import Environment
 from .files_out import FileSink, register_send_file
 from .media import WorkspaceMount, register_media_tools
 from .registry import ToolRegistry
+from .secrets import SecretsAccess, register_secrets_tools
 from .web_fetch import Resolver, register_web_fetch
 from .web_search import DEFAULT_BASE_URL, TokenSession, register_web_search
 
@@ -59,14 +60,29 @@ RUN_COMMAND_SCHEMA = {
     "description": (
         "Run one shell command in the workspace and return its exit code, "
         "stdout and stderr. Use it to run scripts and tests, to inspect the "
-        "system, and for git."
+        "system, and for git. For a long command (a build, a download, a "
+        "training run) set background=true: it returns a job_id at once, the "
+        "command keeps running, and you are woken with its output when it "
+        "ends. For a program that asks questions use shell_start instead."
     ),
     "properties": {
         "command": {"type": "string", "description": "Shell command to run."},
         "timeout": {
             "type": "integer",
-            "description": "Seconds before the command is killed.",
+            "description": "Seconds before the command is killed (foreground only).",
             "default": 120,
+        },
+        "background": {
+            "type": "boolean",
+            "description": (
+                "Start detached and return {job_id, log_path} immediately. "
+                "No timeout (24 h cap). You are woken when it finishes."
+            ),
+            "default": False,
+        },
+        "cwd": {
+            "type": "string",
+            "description": "Directory to run in (background only).",
         },
     },
     "required": ["command"],
@@ -168,9 +184,43 @@ FINISH_SCHEMA = {
 }
 
 
-def make_run_command_handler(env: Environment):
-    def run_command(command: str, timeout: int = 120) -> dict:
-        result = env.run_bash(command, timeout=timeout)
+def _secret_env(secrets: SecretsAccess | None) -> dict:
+    """The ``env=`` keyword for a child process, or nothing.
+
+    The keyword is passed ONLY when there is a value to pass, so an
+    environment (a test fake, an older sandbox) that does not know ``env``
+    keeps working unchanged. Only ``run_command`` and ``python`` call this:
+    the file tools, the terminal and every probe run without the secrets."""
+    if secrets is None:
+        return {}
+    try:
+        values = secrets.env()
+    except Exception:  # noqa: BLE001 — a vault hiccup runs the command without keys
+        return {}
+    return {"env": values} if values else {}
+
+
+def make_run_command_handler(
+    env: Environment, secrets: SecretsAccess | None = None, jobs=None
+):
+    """``jobs`` is a :class:`cowork_agent.shell_tools.JobManager` (or None).
+    With one, ``background=true`` starts the command detached and returns the
+    job handle; without one the flag is refused with a message."""
+
+    def run_command(
+        command: str,
+        timeout: int = 120,
+        background: bool = False,
+        cwd: str | None = None,
+    ) -> dict:
+        if background:
+            if jobs is None:
+                return {
+                    "ok": False,
+                    "error": "background jobs are not available in this runtime; run it in the foreground",
+                }
+            return jobs.start(command, cwd=cwd or None)
+        result = env.run_bash(command, timeout=timeout, **_secret_env(secrets))
         return {
             "exit_code": result.exit_code,
             "stdout": result.stdout,
@@ -255,7 +305,7 @@ def _cap(text: str, limit: int) -> tuple[str, bool]:
     return raw[:limit].decode("utf-8", "ignore"), True
 
 
-def make_run_python_handler(env: Environment):
+def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = None):
     def run_python(code: str, timeout: int = 120) -> dict:
         # The source travels as base64 inside the command, so nothing in the
         # code (quotes, backticks, ``$``, newlines) can break the shell or be
@@ -267,7 +317,7 @@ def make_run_python_handler(env: Environment):
             f"printf %s {shlex.quote(payload)} | base64 -d > \"$__f\" && "
             f"python3 \"$__f\"; __rc=$?; rm -f \"$__f\"; exit $__rc"
         )
-        result = env.run_bash(cmd, timeout=timeout)
+        result = env.run_bash(cmd, timeout=timeout, **_secret_env(secrets))
         stdout, out_trunc = _cap(result.stdout, PYTHON_OUTPUT_CAP)
         stderr, err_trunc = _cap(result.stderr, PYTHON_OUTPUT_CAP)
         return {
@@ -292,11 +342,16 @@ def make_finish_handler():
     return finish
 
 
-def register_run_command(registry: ToolRegistry, env: Environment) -> None:
+def register_run_command(
+    registry: ToolRegistry,
+    env: Environment,
+    secrets: SecretsAccess | None = None,
+    jobs=None,
+) -> None:
     registry.register(
         "run_command",
         RUN_COMMAND_SCHEMA,
-        make_run_command_handler(env),
+        make_run_command_handler(env, secrets, jobs),
     )
 
 
@@ -306,8 +361,10 @@ def register_file_tools(registry: ToolRegistry, env: Environment) -> None:
     registry.register("list_dir", LIST_DIR_SCHEMA, make_list_dir_handler(env))
 
 
-def register_run_python(registry: ToolRegistry, env: Environment) -> None:
-    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env))
+def register_run_python(
+    registry: ToolRegistry, env: Environment, secrets: SecretsAccess | None = None
+) -> None:
+    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env, secrets))
 
 
 def register_finish(registry: ToolRegistry) -> None:
@@ -327,6 +384,8 @@ def register_builtin_tools(
     media_mount: WorkspaceMount | None = None,
     vision: VisionReader | None = None,
     vision_http_client: httpx.Client | None = None,
+    secrets: SecretsAccess | None = None,
+    jobs=None,
 ) -> None:
     """Register the whole built-in tool set against one environment.
 
@@ -346,14 +405,24 @@ def register_builtin_tools(
       on; without it neither media tool is registered.
     - ``vision`` — an explicit :class:`~cowork_agent.documents.VisionReader`.
       Left out, one is built from ``session`` when there is a session to bill.
+    - ``secrets`` — the user's secret set (docs/WIRE_CONTRACT.md, "Secrets").
+      With it, ``run_command`` and ``python`` get the values as child-process
+      environment, ``request_secrets`` / ``list_secrets`` are registered, and
+      the registry's result filter masks every value on the way back. Without
+      it, none of that exists and the prompt never mentions secrets.
+    - ``jobs`` — a :class:`cowork_agent.shell_tools.JobManager`. With it,
+      ``run_command(background=true)`` starts a detached job (docs/
+      WIRE_CONTRACT.md, "Interactive shell and background commands"); without
+      it the flag is refused and the job tools are not registered.
     """
-    register_run_command(registry, env)
+    register_run_command(registry, env, secrets, jobs)
     register_file_tools(registry, env)
     # Net-new built-ins: CodeAct `python` and the explicit `finish` terminator.
     # Both need only the environment/registry, so the extra channel params above
     # (session, sinks, mounts) do not apply to them.
-    register_run_python(registry, env)
+    register_run_python(registry, env, secrets)
     register_finish(registry)
+    register_secrets_tools(registry, secrets)
     register_web_search(
         registry, session, base_url=base_url, http_client=search_http_client
     )

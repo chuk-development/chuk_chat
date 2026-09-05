@@ -18,6 +18,7 @@ import pytest
 from websockets.sync.server import serve
 
 from cowork_agent.backend import (
+    clamp_reasoning_effort,
     BackendModelClient,
     BackendModelError,
     SupabaseSession,
@@ -736,3 +737,147 @@ def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatc
 
     assert response.text == "ok"
     assert attempts == ["expired", "fresh-from-app"]
+
+
+def test_on_reasoning_streams_each_thinking_chunk_as_it_arrives():
+    """The thinking channel streams live, exactly like ``on_delta`` does for
+    content: every ``reasoning`` frame reaches the sink as it comes off the wire,
+    in order, and never leaks into ``on_delta`` or the answer text. The full
+    reasoning is still accumulated in ``raw`` for persistence."""
+
+    def script(message, payload):
+        return [
+            {"kind": "reasoning", "data": "let me "},
+            {"kind": "reasoning", "data": "think"},
+            {"kind": "content", "data": "answer"},
+            {"kind": "done"},
+        ]
+
+    server = MockWsServer(script, valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        seen: list[tuple[str, str]] = []
+        client.on_delta = lambda text: seen.append(("delta", text))
+        client.on_reasoning = lambda text: seen.append(("reasoning", text))
+        resp = client.complete([{"role": "user", "content": "hi"}])
+        assert seen == [
+            ("reasoning", "let me "),
+            ("reasoning", "think"),
+            ("delta", "answer"),
+        ]
+        assert resp.text == "answer"
+        assert resp.raw["reasoning"] == "let me think"
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_a_failing_reasoning_sink_never_aborts_the_turn():
+    def script(message, payload):
+        return [
+            {"kind": "reasoning", "data": "hmm"},
+            {"kind": "content", "data": "answer"},
+            {"kind": "done"},
+        ]
+
+    def boom(_text: str) -> None:
+        raise RuntimeError("ui went away")
+
+    server = MockWsServer(script, valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        client.on_reasoning = boom
+        resp = client.complete([{"role": "user", "content": "hi"}])
+        assert resp.text == "answer"
+        assert resp.raw["reasoning"] == "hmm"
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_cheap_clone_does_not_inherit_the_reasoning_sink():
+    """Housekeeping turns (compaction, fact extraction) run with reasoning off
+    and must never narrate into the thread's thinking block."""
+    server = MockWsServer(lambda m, p: [{"kind": "done"}], valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session())
+        client.on_reasoning = lambda text: None
+        client.on_delta = lambda text: None
+        clone = client.cheap_clone()
+        assert clone.on_reasoning is None
+        assert clone.on_delta is None
+        client.close()
+    finally:
+        server.stop()
+
+
+# -- reasoning effort clamp (the catalogue decides what a model accepts) ------
+
+_CATALOGUE = [
+    {
+        "id": "z-ai/glm-5.3-flash",
+        "supported_efforts": ["low", "high", "max"],
+        "reasoning_default_effort": "max",
+        "reasoning_mandatory": True,
+        "providers": [{"slug": "fireworks/serverless"}],
+    },
+    {
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "supported_efforts": ["none", "low", "high", "max"],
+        "reasoning_default_effort": "high",
+        "providers": [{"slug": "fireworks/serverless"}],
+    },
+    {
+        "id": "z-ai/glm-5.1",
+        "supported_efforts": ["none", "on"],
+        "providers": [{"slug": "fireworks"}],
+    },
+    {
+        "id": "vendor/no-list",
+        "providers": [{"slug": "x"}],
+    },
+]
+
+
+def test_clamp_keeps_a_supported_level_and_passes_unknown_models_through():
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "high") == "high"
+    assert clamp_reasoning_effort(_CATALOGUE, "vendor/no-list", "medium") == "medium"
+    assert clamp_reasoning_effort(_CATALOGUE, "nobody/knows", "medium") == "medium"
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", None) is None
+
+
+def test_clamp_moves_an_unsupported_graded_level_to_the_next_stronger_one():
+    """The live finding: ``medium`` on a low/high/max model gets NO reasoning
+    from the backend. The user asked to think, so the clamp goes up, not off."""
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "medium") == "high"
+    assert clamp_reasoning_effort(_CATALOGUE, "deepseek/deepseek-v4-pro-0813", "medium") == "high"
+    # Nothing stronger allowed -> the strongest weaker level (never off).
+    assert clamp_reasoning_effort(
+        [{"id": "m", "supported_efforts": ["none", "low"]}], "m", "medium"
+    ) == "low"
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "xhigh") == "max"
+
+
+def test_clamp_never_sends_off_to_a_reasoning_mandatory_model():
+    # glm-5.3-flash has no ``none``: the server rejects "off" there.
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "none") == "low"
+    # A model that allows off keeps off.
+    assert clamp_reasoning_effort(_CATALOGUE, "deepseek/deepseek-v4-pro-0813", "none") == "none"
+
+
+def test_clamp_handles_the_binary_on_token():
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.1", "on") == "on"
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.1", "medium") == "on"
+    # On a graded model ``on`` means the model's advertised default.
+    assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "on") == "max"
+
+
+def test_client_exposes_the_effort_it_sends():
+    server = MockWsServer(lambda m, p: [{"kind": "done"}], valid_tokens={"valid-token"})
+    try:
+        client = _client(server, _session(), reasoning_effort="high")
+        assert client.reasoning_effort == "high"
+        assert client.cheap_clone().reasoning_effort == "none"
+        client.close()
+    finally:
+        server.stop()

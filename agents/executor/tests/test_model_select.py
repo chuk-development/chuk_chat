@@ -310,3 +310,94 @@ def test_a_task_naming_nothing_is_recorded_as_host_default(tmp_path, caplog):
 
     line = next(r.getMessage() for r in caplog.records if "task accepted" in r.getMessage())
     assert "model=host-default" in line and "reasoning_effort=host-default" in line
+
+
+# -- reasoning effort clamp (bead cowork-3hk, host side) -----------------------
+
+_CATALOGUE = [
+    {
+        "id": "z-ai/glm-5.3-flash",
+        "supported_efforts": ["low", "high", "max"],
+        "reasoning_default_effort": "max",
+        "providers": [{"slug": "fireworks/serverless", "pricing": {"completion": "0.1"}}],
+    },
+]
+
+
+def _fake_session():
+    from cowork_agent import SupabaseSession
+
+    return SupabaseSession(
+        access_token="valid-token",
+        refresh_token="r",
+        supabase_url="https://proj.supabase.co",
+        anon_key="anon",
+    )
+
+
+def test_the_selector_clamps_an_unsupported_effort_and_logs_once(caplog):
+    """Live finding 2026-09-05: ``medium`` on glm-5.3-flash yields NO reasoning
+    frames from the backend. The selector clamps to the catalogue's next
+    stronger level and says so once per (model, level)."""
+    import logging
+
+    from cowork_executor.backend import make_backend_model_select
+
+    select = make_backend_model_select(_fake_session(), _CATALOGUE)
+    with caplog.at_level(logging.WARNING, logger="cowork_executor.backend"):
+        first = select("z-ai/glm-5.3-flash", "fireworks/serverless", "medium")
+        second = select("z-ai/glm-5.3-flash", "fireworks/serverless", "medium")
+        fine = select("z-ai/glm-5.3-flash", "fireworks/serverless", "high")
+    assert first.reasoning_effort == "high"
+    assert second.reasoning_effort == "high"
+    assert fine.reasoning_effort == "high"
+    warnings = [r.getMessage() for r in caplog.records if "not supported" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "'medium'" in warnings[0] and "z-ai/glm-5.3-flash" in warnings[0]
+    assert "low,high,max" in warnings[0] and "'high'" in warnings[0]
+    for client in (first, second, fine):
+        client.close()
+
+
+def test_the_runs_row_records_the_effective_effort_after_a_clamp(tmp_path, caplog):
+    """The row proves what the model really ran on, not what the app asked."""
+    import logging
+
+    from cowork_agent import StateStore
+
+    class _Clamped(MockModelClient):
+        reasoning_effort = "high"
+
+    def factory():
+        return _scripted_model("from-factory")
+
+    def select(model, provider, reasoning_effort):
+        client = _Clamped(
+            [
+                tool_call_response(("run_command", {"command": "true"})),
+                "from-select",
+            ]
+        )
+        return client
+
+    executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
+    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+        events = _run(
+            executor,
+            controller,
+            "think",
+            model="z-ai/glm-5.3-flash",
+            provider="fireworks/serverless",
+            reasoning_effort="medium",
+        )
+    assert events[-1]["type"] == "done"
+
+    store = StateStore(str(tmp_path / "s.db"))
+    try:
+        row = store.latest_run("s")
+    finally:
+        store.close()
+    assert row["reasoning_effort"] == "high"
+    notes = [r.getMessage() for r in caplog.records if "not supported by the model" in r.getMessage()]
+    assert len(notes) == 1
+    assert "medium" in notes[0] and "high" in notes[0]

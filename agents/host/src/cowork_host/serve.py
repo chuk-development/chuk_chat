@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import itertools
 import threading
-from typing import Callable
+from typing import Any, Callable
 
 from cowork_crypto import CoworkFrameOpener, CoworkFrameSealer
 from cowork_manager import RosterStore, RuntimeState, decode_frames, encode_frame, make_request
@@ -73,6 +73,11 @@ class TaskServer:
         on_approval_pending: Callable[[dict], None] | None = None,
         on_account_frame: Callable[[dict], None] | None = None,
         on_run_ack: Callable[[dict], None] | None = None,
+        secrets=None,
+        on_secret_request_pending: Callable[[dict], None] | None = None,
+        automations=None,
+        on_automation_frame: Callable[[dict], dict | None] | None = None,
+        job_frame_sender: Callable[[dict], Any] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -111,6 +116,18 @@ class TaskServer:
                 on_approval_pending=on_approval_pending,
                 on_account_frame=on_account_frame,
                 on_run_ack=on_run_ack,
+                # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets") and
+                # the "run blocked on a key, no app attached" nudge.
+                secrets=secrets,
+                on_secret_request_pending=on_secret_request_pending,
+                # Automations (docs/WIRE_CONTRACT.md, "Automations"): the host's
+                # manager for the session-scoped tools, and the frame hook.
+                automations=automations,
+                on_automation_frame=on_automation_frame,
+                # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell
+                # and background commands"): the host's sender for a ``job``
+                # frame when no run of the session is live.
+                job_frame_sender=job_frame_sender,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

@@ -29,14 +29,16 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
 from .context import ContextLadder, total_tokens_from_usage
-from .model import ModelClient, ModelResponse
+from .model import ModelClient, ModelResponse, ToolCall
 from .registry import ToolRegistry
 from .state import StateStore
+from .tool_events import tool_event_fields
 from .tools import FINISH_TOOL
 
 
@@ -184,6 +186,20 @@ class StopReason(str, Enum):
     INTERRUPTED = "interrupted"
 
 
+@dataclass(frozen=True)
+class TurnRecord:
+    """What the turn observer gets once per finished task (§12 memory): the
+    prompt, the outcome and which tools ran. No transcript — the observer reads
+    the store if it needs more."""
+
+    session_key: str
+    session_id: int
+    user_message: str
+    final_answer: str | None
+    reason: StopReason
+    tool_names: tuple[str, ...] = ()
+
+
 @dataclass
 class LoopResult:
     reason: StopReason
@@ -216,6 +232,10 @@ class AgentLoop:
         context_providers: Sequence[Callable[[], list[dict]]] | None = None,
         context_ladder: ContextLadder | None = None,
         debug_observer: Callable[[dict], None] | None = None,
+        tool_event_observer: Callable[[dict], None] | None = None,
+        persist_filter: Callable[[dict], dict] | None = None,
+        recall_provider: Callable[[str], list[dict]] | None = None,
+        turn_observer: Callable[[TurnRecord], None] | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
@@ -235,6 +255,28 @@ class AgentLoop:
         # so the app can show what really went on the wire. ``None`` -> not built,
         # not called: zero overhead on a normal run.
         self._debug_observer = debug_observer
+        # The ONE source of live ``tool`` events (docs/WIRE_CONTRACT.md, "Tool
+        # events and timestamps"): fired once per native tool call, after its
+        # result is known, with the fields of :func:`tool_event_fields`. The
+        # environment's shell hook is NOT a tool event any more — a
+        # ``write_file`` is one card, not the printf/base64 helper commands it
+        # runs. ``None`` -> not called. A raising observer is swallowed.
+        self._tool_event_observer = tool_event_observer
+        # The store-write chokepoint (docs/WIRE_CONTRACT.md, "Secrets"): every
+        # row this loop writes — system, user, assistant, tool, context —
+        # passes through it first, so a value that reached the model's TEXT
+        # (a user who pasted a key, a model that echoes one) is masked before
+        # it is persisted and before the next round re-reads it. ``None`` ->
+        # rows are written as they are.
+        self._persist_filter = persist_filter
+        # Memory (§12), both directions. ``recall_provider(prompt)`` runs once
+        # per task, right after the user's row: whatever it returns (context
+        # messages, ``role_tag`` = row role) is appended so the model sees what
+        # it learned before. ``turn_observer(record)`` runs once per task, after
+        # the loop decided the outcome, so the turn's facts can be extracted
+        # without the model having to remember to call a tool. Both best-effort.
+        self._recall_provider = recall_provider
+        self._turn_observer = turn_observer
 
     @property
     def budget(self) -> IterationBudget:
@@ -264,6 +306,20 @@ class AgentLoop:
     def context_ladder(self) -> ContextLadder | None:
         return self._ladder
 
+    def _append(self, session_id: int, role: str, content: dict) -> int:
+        """The one write path for message rows: ``persist_filter`` first."""
+        if self._persist_filter is not None:
+            try:
+                content = self._persist_filter(content)
+            except Exception:  # noqa: BLE001 — a broken filter must not lose the row...
+                # ...but must not let an unfiltered row through either. Keep the
+                # shape (role, ids) and drop the text.
+                content = {
+                    k: (v if k in ("role", "tool_call_id", "name") else None)
+                    for k, v in content.items()
+                }
+        return self._store.append_message(session_id, role, content)
+
     def _outbound_messages(self, session_id: int) -> list[dict]:
         """The payload for one model call: the full stored history, run through
         the context ladder. Without a ladder this is the history verbatim."""
@@ -272,9 +328,23 @@ class AgentLoop:
             return messages
         return self._ladder.prepare(messages)
 
-    def run(self, session_key: str, user_message: str) -> LoopResult:
+    def run(
+        self, session_key: str, user_message: str, *, regenerate: bool = False
+    ) -> LoopResult:
+        """Run one task to completion.
+
+        ``regenerate`` means "replace the last answer", not "ask again": the
+        app's Retry button sends the same prompt a second time. Without it the
+        conversation keeps every attempt, so the model is handed a history in
+        which the user asked the same question four times, and the client shows
+        the question four times on replay (docs/WIRE_CONTRACT.md, ``task``).
+        """
         store = self._store
         session_id = store.route(session_key)
+        if regenerate:
+            # Drop the turn being retried — the old user row and the answer it
+            # produced — so the prompt appended below takes its place.
+            store.drop_last_user_turn(session_id)
 
         # Seed the system prompt once per fresh session. A callable is resolved
         # HERE and only here: that single read is what freezes the memory
@@ -286,15 +356,15 @@ class AgentLoop:
             prompt = self._system_prompt
             resolved = prompt() if callable(prompt) else prompt
             if resolved:
-                store.append_message(
+                self._append(
                     session_id, "system", {"role": "system", "content": resolved}
                 )
 
-        store.append_message(
-            session_id, "user", {"role": "user", "content": user_message}
-        )
+        self._append(session_id, "user", {"role": "user", "content": user_message})
+        self._inject_recall(session_id, user_message)
 
         iterations = 0
+        tools_used: list[str] = []
         final_answer: str | None = None
         reason = StopReason.FINISHED
 
@@ -382,9 +452,12 @@ class AgentLoop:
                     # out the whole batch. Every call still gets a result row, so
                     # a resumed session has no assistant turn with a dangling
                     # tool call in it.
+                    started_at = time.time()
                     if self._kill.interrupted():
                         result: object = INTERRUPTED_TOOL_RESULT
+                        raised = True
                     else:
+                        raised = False
                         result = self._registry.dispatch(call.name, call.arguments)
                         # Explicit terminal action: a `finish` call ends the run
                         # with its summary as the final answer. Its tool result
@@ -400,7 +473,7 @@ class AgentLoop:
                             finish_summary = str(args.get("summary", "")) or (
                                 response.text or ""
                             )
-                    store.append_message(
+                    self._append(
                         session_id,
                         "tool",
                         {
@@ -410,6 +483,10 @@ class AgentLoop:
                             "content": result,
                         },
                     )
+                    self._emit_tool(
+                        call, result, started_at=started_at, raised=raised
+                    )
+                    tools_used.append(call.name)
                 # The interrupt wins over a `finish` in the same batch: a run the
                 # user stopped reports INTERRUPTED, not FINISHED.
                 if self._kill.interrupted():
@@ -427,13 +504,79 @@ class AgentLoop:
             reason = StopReason.FINISHED
             break
 
-        return LoopResult(
+        outcome = LoopResult(
             reason=reason,
             final_answer=final_answer,
             iterations=iterations,
             session_id=session_id,
             tokens_spent=self._tokens_spent,
         )
+        self._observe_turn(session_key, user_message, outcome, tools_used)
+        return outcome
+
+    def _inject_recall(self, session_id: int, user_message: str) -> None:
+        """Append the memory recall for this task (a context row, never a
+        system message). A failing provider costs the recall, not the run."""
+        if self._recall_provider is None:
+            return
+        try:
+            messages = self._recall_provider(user_message) or []
+        except Exception:  # noqa: BLE001 — recall must never break a run
+            return
+        for message in messages:
+            if not isinstance(message, dict) or not message.get("content"):
+                continue
+            self._append(
+                session_id,
+                str(message.get("role_tag") or "memory"),
+                {k: v for k, v in message.items() if k != "role_tag"},
+            )
+
+    def _observe_turn(
+        self,
+        session_key: str,
+        user_message: str,
+        outcome: LoopResult,
+        tools_used: list[str],
+    ) -> None:
+        if self._turn_observer is None:
+            return
+        try:
+            self._turn_observer(
+                TurnRecord(
+                    session_key=session_key,
+                    session_id=outcome.session_id,
+                    user_message=user_message,
+                    final_answer=outcome.final_answer,
+                    reason=outcome.reason,
+                    tool_names=tuple(tools_used),
+                )
+            )
+        except Exception:  # noqa: BLE001 — a memory sink must never take the run down
+            pass
+
+    def _emit_tool(
+        self, call: ToolCall, result: object, *, started_at: float, raised: bool
+    ) -> None:
+        """Hand the tool observer one finished tool call in the wire shape
+        (``tool_event_fields``). Guarded: a UI sink must never take the run
+        down."""
+        if self._tool_event_observer is None:
+            return
+        try:
+            self._tool_event_observer(
+                tool_event_fields(
+                    name=call.name,
+                    arguments=call.arguments,
+                    result=result,
+                    call_id=call.id,
+                    started_at=started_at,
+                    completed_at=time.time(),
+                    raised=raised,
+                )
+            )
+        except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
+            pass
 
     def _emit_debug(
         self, session_key: str, round_no: int, outbound: list[dict]
@@ -473,7 +616,7 @@ class AgentLoop:
         system message would overwrite the frozen system prompt."""
         for provider in self._context_providers:
             for message in provider():
-                self._store.append_message(
+                self._append(
                     session_id, message.get("role_tag", "context"),
                     {k: v for k, v in message.items() if k != "role_tag"},
                 )
@@ -482,6 +625,13 @@ class AgentLoop:
         content: dict = {"role": "assistant"}
         if response.text is not None:
             content["content"] = response.text
+        # The model's thinking for this turn, kept so a replay can show the
+        # thinking block again (``StateStore.replay_events``). It is a stored
+        # field only: ``_assistant_turn`` never sends it back to the model, and
+        # the context ladder ignores unknown keys.
+        reasoning = response.raw.get("reasoning") if response.raw else None
+        if isinstance(reasoning, str) and reasoning.strip():
+            content["reasoning"] = reasoning
         if response.has_tool_calls:
             content["tool_calls"] = [
                 {
@@ -491,4 +641,4 @@ class AgentLoop:
                 }
                 for c in response.tool_calls
             ]
-        self._store.append_message(session_id, "assistant", content)
+        self._append(session_id, "assistant", content)

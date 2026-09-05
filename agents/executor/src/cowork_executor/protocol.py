@@ -153,6 +153,7 @@ def task_payload(
     model: str | None = None,
     provider: str | None = None,
     reasoning_effort: str | None = None,
+    regenerate: bool = False,
 ) -> dict[str, Any]:
     """Build the ``task`` frame that opens a run.
 
@@ -175,6 +176,12 @@ def task_payload(
     executor wires a debug observer that streams one ``debug_context`` event per
     model round. Absent or false -> no observer, and the frame is unchanged.
 
+    ``regenerate`` (optional, off by default) says this task REPLACES the last
+    answer instead of asking a new question — the app's Retry button. The
+    executor then drops the turn being retried before it appends this prompt, so
+    the conversation holds the question once and the newest answer, not one copy
+    per attempt. Absent or false -> the frame and the behavior are unchanged.
+
     ``model`` / ``provider`` / ``reasoning_effort`` name the model this one task
     runs on, and how hard it thinks. They are what the app's mode selector sends:
     ``model`` is the model id, ``provider`` its provider slug (empty -> the host
@@ -194,6 +201,8 @@ def task_payload(
         payload["herenow"] = dict(herenow)
     if debug:
         payload["debug"] = True
+    if regenerate:
+        payload["regenerate"] = True
     if model:
         payload["model"] = model
     if provider:
@@ -264,6 +273,7 @@ def approval_request_payload(
     total_bytes: int,
     base_url: str,
     public: bool = True,
+    session_key: str | None = None,
 ) -> dict[str, Any]:
     """Executor -> app: ask the user to approve one public here.now publish.
 
@@ -285,6 +295,9 @@ def approval_request_payload(
         "total_bytes": total_bytes,
         "base_url": base_url,
         "public": public,
+        # The thread the run belongs to, so the app shows the prompt over the
+        # right conversation and never over another one (P8 review F9).
+        **({"session_key": session_key} if session_key else {}),
     }
 
 
@@ -329,24 +342,26 @@ def delta_payload(text: str) -> dict[str, Any]:
     return {"type": "delta", "text": text}
 
 
-def tool_payload(
-    *,
-    name: str,
-    command: str,
-    exit_code: int,
-    stdout: str,
-    stderr: str,
-    timed_out: bool,
-) -> dict[str, Any]:
-    return {
-        "type": "tool",
-        "name": name,
-        "command": command,
-        "exit_code": exit_code,
-        "stdout": stdout,
-        "stderr": stderr,
-        "timed_out": timed_out,
-    }
+def reasoning_payload(text: str) -> dict[str, Any]:
+    """One chunk of the model's thinking (docs/WIRE_CONTRACT.md, ``reasoning``).
+
+    A separate channel from ``delta``: the app renders it as the collapsible
+    thinking block above the answer and never folds it into the reply text.
+    Streamed live per chunk as the backend relays ``kind: "reasoning"`` frames;
+    replayed as one event per stored assistant turn (see
+    ``StateStore.replay_events``)."""
+    return {"type": "reasoning", "text": text}
+
+
+def tool_payload(**fields: Any) -> dict[str, Any]:
+    """One native tool call, after its result is known (docs/WIRE_CONTRACT.md,
+    "Tool events and timestamps"). ``fields`` is what
+    :func:`cowork_agent.tool_events.tool_event_fields` built: ``name``,
+    ``arguments``, ``call_id``?, ``command``?, ``result``, the projected
+    ``exit_code`` / ``stdout`` / ``stderr`` / ``timed_out`` when the result had
+    them, ``status``, ``started_at``, ``completed_at``, ``duration_ms``. Live
+    and replay share that shape, so the app draws the same card for both."""
+    return {"type": "tool", **fields}
 
 
 def file_payload(
@@ -494,6 +509,8 @@ def done_payload(
     tokens_spent: int = 0,
     run_id: str | None = None,
     while_away: bool = False,
+    run_stamps: dict[str, Any] | None = None,
+    host_notified: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -510,6 +527,38 @@ def done_payload(
         payload["run_id"] = run_id
     if while_away:
         payload["while_away"] = True
+    # "Run timestamps on done": the run's clock and message rows from its
+    # ``runs`` row (``started_at`` / ``finished_at`` / ``first_mid`` /
+    # ``last_mid``). ``last_mid`` is what moves the app's replay cursor past a
+    # live run, so the next replay does not send that run again.
+    if run_stamps:
+        payload.update(run_stamps)
+    # docs/WIRE_CONTRACT.md, "Automations": the host itself notifies on this
+    # run (a fired automation), so the app skips its own local toast.
+    if host_notified:
+        payload["host_notified"] = True
+    return payload
+
+
+# -- automations (docs/WIRE_CONTRACT.md, "Automations") ----------------------
+
+
+def automation_list_payload(automations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Host -> app: the answer to an ``automation_list`` request. One entry per
+    automation, in the ``automation`` event's field shape minus ``event``."""
+    return {"type": "automation_list", "automations": list(automations)}
+
+
+def automation_control_payload(*, automation_id: str, action: str) -> dict[str, Any]:
+    """App -> host: pause / resume / cancel one automation."""
+    return {"type": "automation_control", "id": automation_id, "action": action}
+
+
+def automation_list_request_payload(session_key: str | None = None) -> dict[str, Any]:
+    """App -> host: list the automations (of one session, or all)."""
+    payload: dict[str, Any] = {"type": "automation_list"}
+    if session_key:
+        payload["session_key"] = session_key
     return payload
 
 
@@ -553,6 +602,50 @@ def mcp_credentials_payload(
 
 def error_payload(message: str) -> dict[str, Any]:
     return {"type": "error", "message": message}
+
+
+# -- secrets (docs/WIRE_CONTRACT.md, "Secrets") -------------------------------
+
+
+def secrets_payload(
+    entries: dict[str, str] | list[dict[str, str]],
+    *,
+    revision: int = 0,
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    """App -> host: the user's WHOLE secret set. The host replaces what it
+    holds; a name missing here is gone on the host too. ``request_id`` ties
+    the frame to the ``secret_request`` it answers (also on cancel, with the
+    set unchanged). Built here so a test and a controller send the exact
+    shape the app sends."""
+    if isinstance(entries, dict):
+        listed = [{"name": k, "value": v} for k, v in entries.items()]
+    else:
+        listed = [dict(e) for e in entries]
+    payload: dict[str, Any] = {
+        "type": "secrets",
+        "entries": listed,
+        "revision": int(revision),
+    }
+    if request_id:
+        payload["request_id"] = request_id
+    return payload
+
+
+def secret_request_payload(
+    *, request_id: str, session_key: str, names: list[str], purpose: str
+) -> dict[str, Any]:
+    """Host -> app: the model asked for these secrets by name. The run BLOCKS
+    until a ``secrets`` frame with this ``request_id`` arrives, a stop fires,
+    or the timeout passes. The app shows one field per name over the thread
+    ``session_key`` names."""
+    return {
+        "type": "secret_request",
+        "request_id": request_id,
+        "session_key": session_key,
+        "names": list(names),
+        "purpose": purpose,
+    }
 
 
 def debug_context_payload(
@@ -675,3 +768,30 @@ def frame_to_b64(sealed_bytes: bytes) -> str:
 def b64_to_frame(value: str) -> bytes:
     """Recover the sealed CoWork frame bytes from an envelope ``frame`` field."""
     return base64.b64decode(value)
+
+
+# -- persisted approval outcome (docs/WIRE_CONTRACT.md, bead cowork-266) ------
+
+APPROVAL_APPROVED = "approved"
+APPROVAL_DENIED = "denied"
+APPROVAL_BY_USER = "user"
+APPROVAL_TIMEOUT = "timeout"
+APPROVAL_STOPPED = "stopped"
+
+
+def approval_outcome_fields(
+    *, approved: bool, reason: str, at: float
+) -> dict[str, Any]:
+    """The fields the host patches into a stored ``approval_request`` row once
+    the outcome is known: ``decision`` (``approved`` / ``denied``),
+    ``decision_reason`` (``user`` / ``timeout`` / ``stopped``) and
+    ``decided_at`` (epoch seconds). A replayed request that carries them is an
+    informational card, never a prompt (docs/WIRE_CONTRACT.md, "Persisted
+    subagent / file / approval events")."""
+    if reason not in (APPROVAL_BY_USER, APPROVAL_TIMEOUT, APPROVAL_STOPPED):
+        raise ValueError(f"unknown approval reason: {reason!r}")
+    return {
+        "decision": APPROVAL_APPROVED if approved else APPROVAL_DENIED,
+        "decision_reason": reason,
+        "decided_at": float(at),
+    }

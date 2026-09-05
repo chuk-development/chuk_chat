@@ -24,6 +24,8 @@ from .controller import ControllerSession
 from .room_sender import make_room_task_sender
 from .environment import SandboxEnvironment
 from .executor import Executor, ModelFactory, ModelSelect, StreamingModelClient
+from .secrets import SecretsVault, clean_entries
+from .shell import JobWakeRouter, job_payload, wake_text
 from .protocol import (
     INBOUND_METHODS,
     MAX_FILE_BYTES,
@@ -40,6 +42,9 @@ from .protocol import (
     decode_payload,
     delta_payload,
     done_payload,
+    automation_list_payload,
+    automation_control_payload,
+    automation_list_request_payload,
     encode_payload,
     error_payload,
     file_payload,
@@ -57,6 +62,8 @@ from .protocol import (
     room_history_payload,
     room_turn_payload,
     room_done_payload,
+    secret_request_payload,
+    secrets_payload,
     task_payload,
     tool_payload,
 )
@@ -65,6 +72,13 @@ from .transport import LoopbackEndpoint, loopback_pair
 
 __all__ = [
     "ControllerSession",
+    "SecretsVault",
+    "JobWakeRouter",
+    "job_payload",
+    "wake_text",
+    "clean_entries",
+    "secret_request_payload",
+    "secrets_payload",
     "make_room_task_sender",
     "INBOUND_METHODS",
     "Executor",
@@ -89,6 +103,9 @@ __all__ = [
     "decode_payload",
     "delta_payload",
     "done_payload",
+    "automation_list_payload",
+    "automation_control_payload",
+    "automation_list_request_payload",
     "encode_payload",
     "error_payload",
     "file_payload",

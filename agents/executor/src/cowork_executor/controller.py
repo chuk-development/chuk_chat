@@ -70,12 +70,17 @@ class ControllerSession:
         model: str | None = None,
         provider: str | None = None,
         reasoning_effort: str | None = None,
+        regenerate: bool = False,
     ) -> str:
         """Seal and dispatch a task. Returns its ``requestId``.
 
         ``model`` / ``provider`` / ``reasoning_effort`` optionally name the model
         the host runs this task on and how hard it thinks; absent, the host uses
         its default model and default effort.
+
+        ``regenerate`` marks a Retry: this task replaces the last answer instead
+        of asking a new question, so the host drops the turn being retried
+        before it stores this prompt (docs/WIRE_CONTRACT.md).
         """
         request_id = f"task-{next(self._ids)}"
         sealed = self._sealer.seal(
@@ -86,6 +91,7 @@ class ControllerSession:
                     model=model,
                     provider=provider,
                     reasoning_effort=reasoning_effort,
+                    regenerate=regenerate,
                 )
             )
         )
