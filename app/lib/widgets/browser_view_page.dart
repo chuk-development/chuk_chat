@@ -32,6 +32,21 @@ class BrowserViewPage extends StatefulWidget {
 
   final CoworkRelayController controller;
 
+  /// The one way into the view (Bead cowork-vzm): a full-screen route on every
+  /// form factor, never a side panel. `fullscreenDialog` gives the close
+  /// affordance and the bottom-up transition of a modal surface.
+  static Future<void> open(
+    BuildContext context,
+    CoworkRelayController controller,
+  ) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (context) => BrowserViewPage(controller: controller),
+      ),
+    );
+  }
+
   @override
   State<BrowserViewPage> createState() => _BrowserViewPageState();
 }
@@ -52,6 +67,11 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   // watch or drive the screen. The RFB widget is only built once it is known.
   String? _password;
   bool _started = false;
+  // Full-screen mode: the app bar and status banner go away and the frame gets
+  // the whole window; a small floating button (and the same toggle) brings the
+  // chrome back. Errors still surface as an overlay so a dead stream is never
+  // a silent black screen.
+  bool _fullscreen = false;
   // End-to-end bandwidth meter (debug builds only): what this view really
   // receives off the sealed channel, after base64 decode. Logged every 2 s so
   // "is it compressed?" is a number in the console, not a feeling.
@@ -189,11 +209,54 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     super.dispose();
   }
 
+  void _toggleFullscreen() => setState(() => _fullscreen = !_fullscreen);
+
   @override
   Widget build(BuildContext context) {
+    final Widget frame = _buildFrame();
+    if (_fullscreen) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            frame,
+            if (_status == 'error')
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: _StatusBanner(status: _status, message: _message),
+              ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  key: const Key('browser_view_exit_fullscreen'),
+                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                  tooltip: 'Exit full screen',
+                  onPressed: _toggleFullscreen,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Agent browser'),
+        actions: [
+          IconButton(
+            key: const Key('browser_view_enter_fullscreen'),
+            icon: const Icon(Icons.fullscreen),
+            tooltip: 'Full screen',
+            onPressed: _toggleFullscreen,
+          ),
+        ],
         bottom: PreferredSize(
           // Tall enough for one line of the banner at any text scale; the banner
           // itself clamps to a single ellipsised line so a long status message
@@ -202,51 +265,58 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
           child: _StatusBanner(status: _status, message: _message),
         ),
       ),
-      // Wait for BOTH the loopback port and the executor's `started` event: the
-      // event carries the per-view VNC secret, and the RFB client needs it at
-      // handshake time. Server bytes that arrive meanwhile are buffered.
-      body: _port == null || !_started
-          ? const Center(child: CircularProgressIndicator())
-          // Scale the framebuffer to fit the viewport (phone or wide window).
-          // FittedBox lays the RFB widget out under unbounded constraints, so
-          // RawImage keeps its native framebuffer size and SizeTrackingWidget
-          // still measures that size — which is what the gesture detector maps
-          // input against. FittedBox only scales at paint time, and Flutter
-          // inverts that transform for hit-testing, so taps land on the right
-          // pixel at any scale.
-          : Center(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: RemoteFrameBufferWidget(
-                  hostName: InternetAddress.loopbackIPv4.address,
-                  port: _port!,
-                  password: _password,
-                  // A bare Center() would ask for infinite size under
-                  // FittedBox's unbounded constraints and throw. Give the
-                  // connecting placeholder a definite footprint so it scales
-                  // like the live frame and the spinner stays a sane size.
-                  connectingWidget: const SizedBox(
-                    width: 1280,
-                    height: 800,
-                    child: Center(
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  ),
-                  onError: (error) {
-                    if (mounted) {
-                      setState(() {
-                        _status = 'error';
-                        _message = '$error';
-                      });
-                    }
-                  },
-                ),
+      body: frame,
+    );
+  }
+
+  /// The framebuffer (or the spinner while it is not ready), independent of
+  /// the chrome around it so full-screen and windowed mode share one widget.
+  Widget _buildFrame() {
+    // Wait for BOTH the loopback port and the executor's `started` event: the
+    // event carries the per-view VNC secret, and the RFB client needs it at
+    // handshake time. Server bytes that arrive meanwhile are buffered.
+    if (_port == null || !_started) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // Scale the framebuffer to fit the viewport (phone or wide window).
+    // FittedBox lays the RFB widget out under unbounded constraints, so
+    // RawImage keeps its native framebuffer size and SizeTrackingWidget
+    // still measures that size — which is what the gesture detector maps
+    // input against. FittedBox only scales at paint time, and Flutter
+    // inverts that transform for hit-testing, so taps land on the right
+    // pixel at any scale.
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: RemoteFrameBufferWidget(
+          hostName: InternetAddress.loopbackIPv4.address,
+          port: _port!,
+          password: _password,
+          // A bare Center() would ask for infinite size under
+          // FittedBox's unbounded constraints and throw. Give the
+          // connecting placeholder a definite footprint so it scales
+          // like the live frame and the spinner stays a sane size.
+          connectingWidget: const SizedBox(
+            width: 1280,
+            height: 800,
+            child: Center(
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(),
               ),
             ),
+          ),
+          onError: (error) {
+            if (mounted) {
+              setState(() {
+                _status = 'error';
+                _message = '$error';
+              });
+            }
+          },
+        ),
+      ),
     );
   }
 }
