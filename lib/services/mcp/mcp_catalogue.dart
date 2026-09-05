@@ -1,0 +1,895 @@
+// lib/services/mcp/mcp_catalogue.dart
+//
+// The connectors offered by name, and the search that finds the rest.
+//
+// Every entry here is a remote MCP server: an HTTPS endpoint that signs the
+// reader in through the browser. Nothing is installed, so the list works
+// the same on a phone as on a laptop. Servers that need a package to be run
+// locally are deliberately absent — they cannot work on a phone.
+//
+// The rest of the world is reachable through [searchMcpRegistry], which queries
+// the official MCP registry, and through "add by URL", which needs no catalogue
+// entry at all.
+//
+// Ported verbatim from chuk_chat so the connector list is identical. The one
+// difference is where the sign-in and the tool discovery run: on CoWork the
+// host (the local Python backend) connects to each server, not the device —
+// see McpService and McpStore. The catalogue data (names, URLs, descriptions,
+// icons, auth kinds) is unchanged.
+
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import 'package:cowork/services/mcp/mcp_connection.dart';
+
+/// One credential a server takes on its URL instead of through a browser
+/// sign-in: an API key, a project id. The reader types the value; it is added
+/// to the endpoint as a query parameter named [key].
+class McpCredentialField {
+  const McpCredentialField({
+    required this.key,
+    required this.label,
+    this.hint,
+    this.secret = true,
+    this.required = true,
+  });
+
+  /// The query-parameter name the server expects, e.g. `browserbaseApiKey`.
+  final String key;
+
+  /// What the reader sees, e.g. "API key".
+  final String label;
+
+  /// Placeholder text, e.g. "bb_live_…".
+  final String? hint;
+
+  /// True for a value that must be obscured on screen and kept in secure
+  /// storage — a key or token. A project id is not secret.
+  final bool secret;
+
+  /// Whether the connect form insists on a value.
+  final bool required;
+}
+
+/// A connector as offered to the reader.
+class McpCatalogueEntry {
+  const McpCatalogueEntry({
+    required this.id,
+    required this.name,
+    required this.url,
+    required this.category,
+    this.description = '',
+    this.iconUrl,
+    this.publisher,
+    this.websiteUrl,
+    this.termsUrl,
+    this.privacyUrl,
+    this.auth = McpAuth.oauth,
+    this.credentials = const <McpCredentialField>[],
+  });
+
+  /// Stable id, used as the tool-name prefix and the storage key.
+  final String id;
+  final String name;
+  final String url;
+  final String category;
+  final String description;
+  final String? iconUrl;
+
+  /// The domain that publishes this server, for entries that come out of the
+  /// registry. Shown to the reader because the name alone does not say who
+  /// is on the other end — `notion.com` does.
+  final String? publisher;
+
+  /// The publisher's own page, where their terms and privacy policy live.
+  /// Connecting sends the reader's data to that company, under their terms
+  /// and not ours, so the page has to be reachable before the sign-in.
+  final String? websiteUrl;
+
+  /// The two documents the reader agrees to by connecting. Filled in by
+  /// hand for the offered connectors, because no server publishes them.
+  final String? termsUrl;
+  final String? privacyUrl;
+
+  /// Where to send a reader who wants the terms before signing in. The
+  /// registry carries `websiteUrl`; for everything else the publishing
+  /// domain is the honest answer. Never a guessed `/terms` path — a link
+  /// that 404s is worse than the home page.
+  String? get legalUrl {
+    final domain = publisher ?? Uri.tryParse(url)?.host;
+    final site = websiteUrl?.trim();
+    if (site != null && site.startsWith('https://')) {
+      // The registry's `websiteUrl` is written by the publisher but checked
+      // by no one, so a row that passed the endpoint filter could still
+      // send the reader to a legal page on someone else's domain. It only
+      // counts when it sits on the domain the namespace proves.
+      final host = Uri.tryParse(site)?.host.toLowerCase();
+      if (host != null &&
+          domain != null &&
+          (host == domain || host.endsWith('.$domain'))) {
+        return site;
+      }
+    }
+    if (domain == null || domain.isEmpty) return null;
+    return 'https://$domain';
+  }
+
+  /// Where the token comes from. Everything in the catalogue signs in
+  /// through the browser except the connectors our own server fronts and the
+  /// ones that take a reader-supplied API key.
+  final McpAuth auth;
+
+  /// The credentials the reader must supply for an [McpAuth.apiKey] server.
+  /// Empty for OAuth and app-session connectors.
+  final List<McpCredentialField> credentials;
+
+  /// The logo. Servers rarely publish one, so the site's own favicon is the
+  /// fallback that works for every host.
+  String get icon => iconUrl ?? faviconFor(url);
+
+  static String faviconFor(String url) => faviconCandidates(url).first;
+
+  /// Places a logo can come from, best first. `mcp.figma.com` has no icon
+  /// of its own — `figma.com` does — so the brand domain is asked first,
+  /// and a second service is kept in reserve for hosts the first misses.
+  static List<String> faviconCandidates(String url) {
+    final host = Uri.tryParse(url)?.host ?? '';
+    if (host.isEmpty) return const <String>[];
+    final brand = brandDomain(host);
+    return <String>[
+      'https://www.google.com/s2/favicons?domain=$brand&sz=128',
+      'https://icons.duckduckgo.com/ip3/$brand.ico',
+      if (brand != host)
+        'https://www.google.com/s2/favicons?domain=$host&sz=128',
+    ];
+  }
+
+  /// `mcp.figma.com` → `figma.com`: the host without the part that only
+  /// says which service of the brand this is.
+  static String brandDomain(String host) {
+    final parts = host.split('.');
+    if (parts.length <= 2) return host;
+    // Service subdomains that only say which service of the brand this is.
+    const strip = {'mcp', 'api', 'www', 'server', 'app', 'ai', 'mail'};
+    if (strip.contains(parts.first)) return parts.sublist(1).join('.');
+    return host;
+  }
+}
+
+/// The bundled logo path for [id]. CoWork ships no brand logos in the binary,
+/// so this is always null and every connector logo resolves at runtime from
+/// the named icon or the site favicon. The parameter is kept so the connectors
+/// UI can stay a verbatim port of chuk_chat's.
+String? bundledIconAsset(String id) => null;
+
+/// Categories, in the order they are shown. Consumer-relevant groups lead;
+/// Developer sits near the end and Registry (search results) is always last.
+const List<String> kMcpCategories = [
+  'Recommended',
+  'Productivity',
+  'Finance',
+  'Creative',
+  'Lifestyle',
+  'Developer',
+  'Registry',
+];
+
+/// Connectors our own API server fronts.
+///
+/// CoWork has no hosted API server of its own — every task runs against the
+/// user's paired local backend — so there are no app-session connectors to
+/// front. chuk_chat listed GitHub here (reached through its `/v1/mcp/github`
+/// broker); on CoWork GitHub is reached like any other server, by URL. The
+/// function is kept, returning an empty list, so the connectors UI stays a
+/// verbatim port.
+List<McpCatalogueEntry> firstPartyConnectors() => const <McpCatalogueEntry>[];
+
+/// The offered connectors. Only servers that speak Streamable HTTP and sign
+/// in through OAuth, because that is what a phone can do.
+///
+/// They must also register clients dynamically (RFC 7591): no client id is
+/// baked into this app, so a server that expects a pre-registered one
+/// cannot be connected and must not be listed.
+const List<McpCatalogueEntry> kMcpCatalogue = [
+  // ─── Recommended ───────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'excalidraw',
+    // Not `excalidraw.com/terms`: that host is the drawing app itself and
+    // answers 200 with the canvas for any path. The documents live on the
+    // Plus site.
+    termsUrl: 'https://plus.excalidraw.com/terms-of-service',
+    privacyUrl: 'https://plus.excalidraw.com/privacy-policy',
+    name: 'Excalidraw',
+    url: 'https://mcp.excalidraw.com/mcp',
+    category: 'Recommended',
+    description: 'Draw diagrams and hand them back as editable scenes.',
+  ),
+  McpCatalogueEntry(
+    id: 'canva',
+    termsUrl: 'https://www.canva.com/policies/terms-of-use/',
+    privacyUrl: 'https://www.canva.com/policies/privacy-policy/',
+    name: 'Canva',
+    url: 'https://mcp.canva.com/mcp',
+    category: 'Recommended',
+    description: 'Create and edit designs, export them, search your folders.',
+  ),
+  McpCatalogueEntry(
+    id: 'notion',
+    // Notion's own terms page is a Notion page — `notion.com/terms`
+    // redirects here. `notion.com/privacy` redirects into the app and
+    // answers 401 to anyone not signed in, so the trust site is used for
+    // the policy instead.
+    termsUrl:
+        'https://notion.notion.site/Terms-and-Privacy-28ffdd083dc3473e9c2da6ec011b58ac',
+    privacyUrl: 'https://www.notion.com/trust/privacy-policy',
+    name: 'Notion',
+    url: 'https://mcp.notion.com/mcp',
+    category: 'Recommended',
+    description: 'Search, read and write pages and databases.',
+  ),
+  McpCatalogueEntry(
+    id: 'stripe',
+    termsUrl: 'https://stripe.com/legal/ssa',
+    privacyUrl: 'https://stripe.com/privacy',
+    name: 'Stripe',
+    url: 'https://mcp.stripe.com',
+    category: 'Recommended',
+    description:
+        'Look up customers, payments, subscriptions and products, and '
+        'create payment links.',
+  ),
+
+  // ─── Productivity ──────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'box',
+    name: 'Box',
+    url: 'https://mcp.box.com/mcp',
+    category: 'Productivity',
+    description: 'Files, folders and content in Box.',
+    publisher: 'box.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=box.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'linear',
+    termsUrl: 'https://linear.app/terms',
+    privacyUrl: 'https://linear.app/privacy',
+    name: 'Linear',
+    url: 'https://mcp.linear.app/mcp',
+    category: 'Productivity',
+    description: 'Issues, projects and cycles.',
+  ),
+  McpCatalogueEntry(
+    id: 'atlassian',
+    termsUrl: 'https://www.atlassian.com/legal/atlassian-customer-agreement',
+    privacyUrl: 'https://www.atlassian.com/legal/privacy-policy',
+    name: 'Atlassian',
+    url: 'https://mcp.atlassian.com/v1/mcp',
+    category: 'Productivity',
+    description: 'Jira issues and Confluence pages.',
+  ),
+  McpCatalogueEntry(
+    id: 'asana',
+    termsUrl: 'https://asana.com/terms',
+    privacyUrl: 'https://asana.com/privacy',
+    name: 'Asana',
+    url: 'https://mcp.asana.com/sse',
+    category: 'Productivity',
+    description: 'Tasks, projects and workspaces.',
+  ),
+
+  McpCatalogueEntry(
+    id: 'monday',
+    termsUrl: 'https://monday.com/l/legal/tos/',
+    privacyUrl: 'https://monday.com/l/privacy/privacy-policy/',
+    name: 'monday.com',
+    url: 'https://mcp.monday.com/sse',
+    category: 'Productivity',
+    description: 'Boards, items and updates.',
+  ),
+  McpCatalogueEntry(
+    id: 'plane',
+    termsUrl: 'https://app.plane.so/legal/terms',
+    privacyUrl: 'https://plane.so/privacy-policy',
+    name: 'Plane',
+    // The `/http/mcp` OAuth endpoint, not the `/http/api-key/mcp` PAT one.
+    url: 'https://mcp.plane.so/http/mcp',
+    category: 'Productivity',
+    description: 'Issues, cycles, modules and projects.',
+  ),
+  McpCatalogueEntry(
+    id: 'todoist',
+    termsUrl: 'https://todoist.com/terms',
+    privacyUrl: 'https://todoist.com/privacy',
+    name: 'Todoist',
+    url: 'https://ai.todoist.net/mcp',
+    category: 'Productivity',
+    description: 'Tasks, projects and due dates.',
+    // The `ai.todoist.net` host resolves the brand only after the subdomain
+    // strip, and the favicon service still misses it — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=todoist.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'buffer',
+    termsUrl: 'https://buffer.com/terms',
+    privacyUrl: 'https://buffer.com/privacy',
+    name: 'Buffer',
+    url: 'https://mcp.buffer.com/mcp',
+    category: 'Productivity',
+    description:
+        'Draft, schedule and publish social posts, and read their metrics.',
+  ),
+  McpCatalogueEntry(
+    id: 'dropbox',
+    termsUrl: 'https://www.dropbox.com/terms',
+    privacyUrl: 'https://www.dropbox.com/privacy',
+    name: 'Dropbox',
+    url: 'https://mcp.dropbox.com/mcp',
+    category: 'Productivity',
+    description: 'Search, read and manage your files and folders.',
+  ),
+  McpCatalogueEntry(
+    id: 'clickup',
+    termsUrl: 'https://clickup.com/terms',
+    privacyUrl: 'https://clickup.com/privacy',
+    name: 'ClickUp',
+    url: 'https://mcp.clickup.com/mcp',
+    category: 'Productivity',
+    description: 'Tasks, lists, docs and spaces.',
+  ),
+  McpCatalogueEntry(
+    id: 'fastmail',
+    termsUrl: 'https://www.fastmail.com/about/tos/',
+    privacyUrl: 'https://www.fastmail.com/about/privacy/',
+    name: 'Fastmail',
+    url: 'https://api.fastmail.com/mcp',
+    category: 'Productivity',
+    description: 'Search and read mail, and manage your calendar and contacts.',
+  ),
+  McpCatalogueEntry(
+    id: 'superhuman',
+    termsUrl: 'https://superhuman.com/terms',
+    privacyUrl: 'https://superhuman.com/privacy',
+    name: 'Superhuman Mail',
+    url: 'https://mcp.mail.superhuman.com/mcp',
+    category: 'Productivity',
+    // `mcp.mail.superhuman.com` keeps a `mail.` label after the first strip,
+    // so the favicon fallback lands on a wrong icon — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=superhuman.com&sz=128',
+    description:
+        'Search mail, draft and send replies, and manage your calendar. '
+        'Needs a Superhuman Business plan.',
+  ),
+  McpCatalogueEntry(
+    id: 'airtable',
+    termsUrl: 'https://www.airtable.com/company/tos',
+    privacyUrl: 'https://www.airtable.com/company/privacy',
+    name: 'Airtable',
+    url: 'https://mcp.airtable.com/mcp',
+    category: 'Productivity',
+    description: 'Bases, tables and records.',
+  ),
+  McpCatalogueEntry(
+    id: 'zapier',
+    termsUrl: 'https://zapier.com/legal/terms-of-service',
+    privacyUrl: 'https://zapier.com/privacy',
+    name: 'Zapier',
+    url: 'https://mcp.zapier.com/api/mcp/mcp',
+    category: 'Productivity',
+    description: 'Whatever you wired up in Zapier, across thousands of apps.',
+  ),
+  McpCatalogueEntry(
+    id: 'calcom',
+    name: 'Cal.com',
+    url: 'https://mcp.cal.com/mcp',
+    category: 'Productivity',
+    description: 'Scheduling, availability and bookings.',
+    publisher: 'cal.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=cal.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'pdfnet',
+    name: 'PDF.net',
+    url: 'https://mcp.pdf.net/mcp',
+    category: 'Productivity',
+    description:
+        'Edit PDFs in place, generate documents, merge, split, compress and '
+        'convert to Word, Excel or PowerPoint.',
+    publisher: 'pdf.net',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=pdf.net&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'wisprflow',
+    name: 'Wispr Flow',
+    url: 'https://api.wisprflow.ai/connect/mcp',
+    category: 'Productivity',
+    description:
+        'Search your meetings, transcripts and notes, and read the right one '
+        'exactly when you need it.',
+    publisher: 'wisprflow.ai',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=wisprflow.ai&sz=128',
+  ),
+
+  // ─── Developer ─────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'sentry',
+    termsUrl: 'https://sentry.io/terms/',
+    privacyUrl: 'https://sentry.io/privacy/',
+    name: 'Sentry',
+    url: 'https://mcp.sentry.dev/mcp',
+    category: 'Developer',
+    description: 'Issues, events and stack traces from your projects.',
+  ),
+  McpCatalogueEntry(
+    id: 'vercel',
+    termsUrl: 'https://vercel.com/legal/terms',
+    privacyUrl: 'https://vercel.com/legal/privacy-notice',
+    name: 'Vercel',
+    url: 'https://mcp.vercel.com',
+    category: 'Developer',
+    description: 'Projects, deployments and logs.',
+  ),
+  McpCatalogueEntry(
+    id: 'gitlab',
+    termsUrl: 'https://about.gitlab.com/terms/',
+    privacyUrl: 'https://about.gitlab.com/privacy/',
+    name: 'GitLab',
+    url: 'https://gitlab.com/api/v4/mcp',
+    category: 'Developer',
+    description: 'Issues, merge requests, pipelines and projects.',
+  ),
+  McpCatalogueEntry(
+    id: 'supabase',
+    termsUrl: 'https://supabase.com/terms',
+    privacyUrl: 'https://supabase.com/privacy',
+    name: 'Supabase',
+    url: 'https://mcp.supabase.com/mcp',
+    category: 'Developer',
+    description: 'Projects, tables, SQL and logs.',
+  ),
+  McpCatalogueEntry(
+    id: 'webflow',
+    termsUrl: 'https://webflow.com/legal/terms',
+    privacyUrl: 'https://webflow.com/legal/privacy',
+    name: 'Webflow',
+    url: 'https://mcp.webflow.com/sse',
+    category: 'Developer',
+    description: 'Sites, collections and CMS items.',
+  ),
+  McpCatalogueEntry(
+    id: 'huggingface',
+    termsUrl: 'https://huggingface.co/terms-of-service',
+    privacyUrl: 'https://huggingface.co/privacy',
+    name: 'Hugging Face',
+    url: 'https://huggingface.co/mcp',
+    category: 'Developer',
+    description: 'Search models, datasets, spaces and papers.',
+  ),
+  McpCatalogueEntry(
+    id: 'posthog',
+    termsUrl: 'https://posthog.com/terms',
+    privacyUrl: 'https://posthog.com/privacy',
+    name: 'PostHog',
+    url: 'https://mcp.posthog.com/mcp',
+    category: 'Developer',
+    description:
+        'Query product analytics, insights, feature flags and error tracking.',
+  ),
+  McpCatalogueEntry(
+    id: 'browserbase',
+    name: 'Browserbase',
+    // No browser sign-in: the endpoint is open, but every tool call needs the
+    // reader's own Browserbase key and project, taken as query parameters on
+    // this URL. connectWithCredentials adds them; the plain URL is all that is
+    // stored, the values stay in secure storage.
+    url: 'https://mcp.browserbase.com/mcp',
+    category: 'Developer',
+    description: 'Headless browser automation and web scraping.',
+    publisher: 'browserbase.com',
+    iconUrl:
+        'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128',
+    auth: McpAuth.apiKey,
+    credentials: [
+      McpCredentialField(
+        key: 'browserbaseApiKey',
+        label: 'API key',
+        hint: 'bb_live_…',
+      ),
+      McpCredentialField(
+        key: 'browserbaseProjectId',
+        label: 'Project ID',
+        secret: false,
+      ),
+    ],
+  ),
+  McpCatalogueEntry(
+    id: 'godaddy',
+    name: 'GoDaddy',
+    url: 'https://api.godaddy.com/v1/domains/mcp',
+    category: 'Developer',
+    description: 'Search domains, check availability and get suggestions.',
+    publisher: 'godaddy.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=godaddy.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'resend',
+    name: 'Resend',
+    url: 'https://mcp.resend.com/',
+    category: 'Developer',
+    description:
+        'Send email, manage contacts, audiences, domains, API keys and '
+        'webhooks.',
+    publisher: 'resend.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=resend.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'floot',
+    name: 'Floot',
+    url: 'https://mcp.floot.com/mcp',
+    category: 'Developer',
+    description:
+        'Build and host full-stack apps: create a project, write code, '
+        'provision a database and deploy.',
+    publisher: 'floot.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=floot.com&sz=128',
+  ),
+
+  // ─── Creative ──────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'figma',
+    termsUrl: 'https://www.figma.com/legal/tos/',
+    privacyUrl: 'https://www.figma.com/legal/privacy/',
+    name: 'Figma',
+    url: 'https://mcp.figma.com/mcp',
+    category: 'Creative',
+    description:
+        'Read design files and design data, and turn frames into code.',
+  ),
+  McpCatalogueEntry(
+    id: 'mobbin',
+    termsUrl: 'https://mobbin.com/terms',
+    privacyUrl: 'https://mobbin.com/privacy',
+    name: 'Mobbin',
+    url: 'https://api.mobbin.com/mcp',
+    category: 'Creative',
+    description:
+        'Search real app screens, flows and UI patterns from thousands of '
+        'apps.',
+  ),
+  McpCatalogueEntry(
+    id: 'higgsfield',
+    termsUrl: 'https://higgsfield.ai/terms-of-use-agreement',
+    privacyUrl: 'https://higgsfield.ai/privacy-policy',
+    name: 'Higgsfield',
+    url: 'https://mcp.higgsfield.ai/mcp',
+    category: 'Creative',
+    description: 'Generate images and video across 30+ models.',
+  ),
+  McpCatalogueEntry(
+    id: 'fal',
+    termsUrl: 'https://fal.ai/legal/terms-of-service',
+    privacyUrl: 'https://fal.ai/legal/privacy-policy',
+    name: 'fal.ai',
+    url: 'https://mcp.fal.ai/mcp',
+    category: 'Creative',
+    description:
+        'Run image, video and audio models, and check what a run cost.',
+    websiteUrl: 'https://fal.ai',
+  ),
+  McpCatalogueEntry(
+    id: 'vidiq',
+    termsUrl: 'https://vidiq.com/terms/',
+    privacyUrl: 'https://vidiq.com/privacy/',
+    name: 'vidIQ',
+    url: 'https://mcp.vidiq.com/mcp',
+    category: 'Creative',
+    description:
+        'YouTube keyword research, channel and video stats, titles and '
+        'thumbnails.',
+    websiteUrl: 'https://vidiq.com',
+  ),
+  McpCatalogueEntry(
+    id: 'heygen-hyperframes',
+    termsUrl: 'https://www.heygen.com/terms',
+    privacyUrl: 'https://www.heygen.com/privacy',
+    name: 'HyperFrames by HeyGen',
+    // Direct endpoint — mcp.heygen.com/mcp/hyperframes/ only 307-redirects here.
+    url: 'https://hyperframes.heygen.com/mcp',
+    category: 'Creative',
+    description: 'Avatar video generation.',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=heygen.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'gamma',
+    name: 'Gamma',
+    url: 'https://mcp.gamma.app/mcp',
+    category: 'Creative',
+    description: 'Generate presentations, decks and documents.',
+    publisher: 'gamma.app',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=gamma.app&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'tldraw',
+    name: 'tldraw',
+    url: 'https://tldraw-mcp-app.tldraw.workers.dev/mcp',
+    category: 'Creative',
+    description:
+        'Draw flowcharts, wireframes and diagrams, and edit them as shapes.',
+    publisher: 'tldraw.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=tldraw.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'slidesgpt',
+    name: 'SlidesGPT',
+    url: 'https://claude.slidesgpt.com/mcp',
+    category: 'Creative',
+    description:
+        'Generate presentations and export them to PowerPoint, Google Slides '
+        'or PDF.',
+    publisher: 'slidesgpt.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=slidesgpt.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'motion',
+    name: 'Motion Creative Analytics',
+    url: 'https://projects.motionapp.com/mcp',
+    category: 'Creative',
+    description:
+        'Analyze Meta ad creative performance and research competitor ad '
+        'libraries for trends.',
+    publisher: 'motionapp.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=motionapp.com&sz=128',
+  ),
+
+  // ─── Finance ───────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'square',
+    termsUrl: 'https://squareup.com/us/en/legal/general/ua',
+    privacyUrl: 'https://squareup.com/us/en/legal/general/privacy-no-account',
+    name: 'Square',
+    url: 'https://mcp.squareup.com/mcp',
+    category: 'Finance',
+    description: 'Payments, orders, customers and catalog.',
+  ),
+  McpCatalogueEntry(
+    id: 'paypal',
+    termsUrl: 'https://www.paypal.com/us/legalhub/useragreement-full',
+    privacyUrl: 'https://www.paypal.com/us/legalhub/paypal/privacy-full',
+    name: 'PayPal',
+    url: 'https://mcp.paypal.com/mcp',
+    category: 'Finance',
+    description: 'Invoices, orders, payments and disputes.',
+  ),
+  McpCatalogueEntry(
+    id: 'coingecko',
+    name: 'CoinGecko',
+    url: 'https://mcp.api.coingecko.com/mcp',
+    category: 'Finance',
+    description: 'Live crypto prices, market data, coins and exchanges.',
+    publisher: 'coingecko.com',
+    // `mcp.api.coingecko.com` strips to `api.coingecko.com`, a service host the
+    // favicon service does not know — pin the real logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=coingecko.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'whop',
+    name: 'Whop',
+    url: 'https://mcp.whop.com/mcp',
+    category: 'Finance',
+    description: 'Digital products, memberships and payments.',
+    publisher: 'whop.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=whop.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'robinhood',
+    name: 'Robinhood',
+    url: 'https://agent.robinhood.com/mcp/trading',
+    category: 'Finance',
+    description: 'Trading, quotes, positions and portfolio.',
+    publisher: 'robinhood.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=robinhood.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'spglobal',
+    name: 'S&P Global',
+    url: 'https://kfinance.kensho.com/integrations/mcp',
+    category: 'Finance',
+    description:
+        'Company financials and market intelligence (Kensho Kfinance).',
+    publisher: 'spglobal.com',
+    // Endpoint lives on kfinance.kensho.com — pin the S&P Global logo.
+    iconUrl: 'https://www.google.com/s2/favicons?domain=spglobal.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'etoro',
+    name: 'eToro',
+    url: 'https://mcp.public-api.etoro.com',
+    category: 'Finance',
+    description: 'Market data, portfolios and trading insights.',
+    publisher: 'etoro.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=etoro.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'webull',
+    name: 'Webull',
+    url: 'https://api.webull.com/mcp',
+    category: 'Finance',
+    description: 'Quotes, market data and account information.',
+    publisher: 'webull.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=webull.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'ibkr',
+    name: 'Interactive Brokers',
+    url: 'https://api.ibkr.com/v1/api/mcp',
+    category: 'Finance',
+    description:
+        'Portfolio positions, balances, P&L, open orders, real-time quotes '
+        'and historical market data.',
+    publisher: 'ibkr.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=ibkr.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'cryptocom',
+    name: 'Crypto.com',
+    url: 'https://mcp.crypto.com/market-data/mcp',
+    category: 'Finance',
+    description:
+        'Live crypto prices, order books, candlestick charts and market data.',
+    publisher: 'crypto.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=crypto.com&sz=128',
+  ),
+
+  // ─── Lifestyle ─────────────────────────────────────────────────────────
+  McpCatalogueEntry(
+    id: 'trivago',
+    name: 'trivago',
+    url: 'https://mcp.trivago.com/mcp',
+    category: 'Lifestyle',
+    description:
+        'Search hotels and compare prices from multiple providers by city or '
+        'coordinates.',
+    publisher: 'trivago.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=trivago.com&sz=128',
+  ),
+  McpCatalogueEntry(
+    id: 'kiwi',
+    name: 'Kiwi.com',
+    url: 'https://mcp.kiwi.com/',
+    category: 'Lifestyle',
+    description:
+        'Search flights: one-way or round-trip, flexible dates, multiple '
+        'passengers and cabin classes.',
+    publisher: 'kiwi.com',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=kiwi.com&sz=128',
+  ),
+];
+
+/// The domain a registry namespace stands for: `com.notion` → `notion.com`.
+///
+/// The registry hands out namespaces only to whoever proves they own the
+/// domain, so the namespace is the one field in a registry entry that a
+/// stranger cannot claim.
+String? namespaceDomain(String serverName) {
+  final namespace = serverName.split('/').first.trim().toLowerCase();
+  if (namespace.isEmpty) return null;
+  final parts = namespace.split('.').where((p) => p.isNotEmpty).toList();
+  if (parts.length < 2) return null;
+  return parts.reversed.join('.');
+}
+
+/// Whether [remoteUrl] is served by the same domain that publishes
+/// [serverName] — the check that separates a company's own server from a
+/// stranger's server that merely mentions the company.
+bool isFirstPartyRemote(String serverName, String remoteUrl) {
+  final namespace = serverName.split('/').first.trim().toLowerCase();
+  if (namespace.startsWith('io.github.')) return false;
+
+  final domain = namespaceDomain(serverName);
+  final host = Uri.tryParse(remoteUrl)?.host.toLowerCase();
+  if (domain == null || host == null || host.isEmpty) return false;
+  return host == domain || host.endsWith('.$domain');
+}
+
+/// Whether the registry still stands behind this entry — `active`, and the
+/// newest version published. Deleted and superseded rows stay queryable.
+bool _isCurrentRegistryEntry(Object? meta) {
+  if (meta is! Map) return true;
+  final official = meta['io.modelcontextprotocol.registry/official'];
+  if (official is! Map) return true;
+  final status = official['status'];
+  if (status != null && status != 'active') return false;
+  return official['isLatest'] != false;
+}
+
+/// Search the official MCP registry for anything not in the catalogue.
+///
+/// Only entries with a remote endpoint come back, and of those only the ones
+/// the publishing domain serves itself survive [isFirstPartyRemote]. Pass
+/// [firstPartyOnly] as false to see the rest.
+Future<List<McpCatalogueEntry>> searchMcpRegistry(
+  String query, {
+  http.Client? httpClient,
+  int limit = 20,
+  bool firstPartyOnly = true,
+}) async {
+  if (query.trim().isEmpty) return const [];
+  final client = httpClient ?? http.Client();
+  try {
+    final response = await client
+        .get(
+          Uri.https('registry.modelcontextprotocol.io', '/v0/servers', {
+            'search': query.trim(),
+            'version': 'latest',
+            'limit': '$limit',
+          }),
+          headers: const {'accept': 'application/json'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) return const [];
+
+    final json = jsonDecode(response.body);
+    final servers = (json is Map ? json['servers'] : null);
+    if (servers is! List) return const [];
+
+    final results = <McpCatalogueEntry>[];
+    // The registry answers with every published version of a server, so the
+    // same connector arrives several times over. Keeping the first is enough.
+    final seen = <String>{};
+    for (final entry in servers) {
+      final server = entry is Map ? entry['server'] : null;
+      if (server is! Map) continue;
+      if (entry is Map && !_isCurrentRegistryEntry(entry['_meta'])) continue;
+
+      final remotes = server['remotes'];
+      if (remotes is! List) continue;
+      final remote = remotes.cast<Object?>().firstWhere(
+        (r) =>
+            r is Map && (r['type'] == 'streamable-http' || r['type'] == 'sse'),
+        orElse: () => null,
+      );
+      if (remote is! Map) continue;
+      final url = remote['url']?.toString();
+      if (url == null || !url.startsWith('https://')) continue;
+
+      final name = server['name']?.toString() ?? url;
+      if (firstPartyOnly && !isFirstPartyRemote(name, url)) continue;
+
+      final id = slugFor(name);
+      if (!seen.add(id)) continue;
+
+      results.add(
+        McpCatalogueEntry(
+          id: id,
+          name: server['title']?.toString().trim().isNotEmpty == true
+              ? server['title'].toString()
+              : name.split('/').last,
+          url: url,
+          category: 'Registry',
+          description: server['description']?.toString() ?? '',
+          publisher: namespaceDomain(name),
+          websiteUrl: server['websiteUrl']?.toString(),
+        ),
+      );
+    }
+    return results;
+  } catch (_) {
+    return const [];
+  } finally {
+    if (httpClient == null) client.close();
+  }
+}
+
+/// A short, stable id for a server: used to prefix its tool names, so two
+/// servers that both offer `search` stay apart.
+String slugFor(String nameOrUrl) {
+  final raw = Uri.tryParse(nameOrUrl)?.host.isNotEmpty == true
+      ? Uri.parse(nameOrUrl).host.replaceAll(RegExp(r'^(www|mcp|api)\.'), '')
+      : nameOrUrl;
+  final slug = raw
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  final trimmed = slug.length > 24 ? slug.substring(0, 24) : slug;
+  return trimmed.isEmpty ? 'server' : trimmed;
+}
