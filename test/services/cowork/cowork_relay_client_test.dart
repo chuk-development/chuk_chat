@@ -628,6 +628,53 @@ void main() {
     await client.dispose();
   });
 
+  test('the agent_list request waits for the account provision too, and the '
+      'coworker frames carry the id and the name', () async {
+    // Sent on pair, the list request used to reach the host before the token
+    // ("expected account_authentication, got 'agent_list'") and was dropped;
+    // nothing asked again until the next pairing, so the roster stayed
+    // without the host's names (bead cowork-817, Host #6 finding).
+    final (client, host, _) = await paired();
+
+    final list = client.requestAgentList();
+    await settle();
+    expect(host.received.where((m) => m['type'] == 'agent_list'), isEmpty);
+
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    await list;
+    await client.createAgent('local:desk:1:7', 'Crypto Desk');
+    await client.renameAgent('host:cowork-host', 'Laptop Bot');
+    await settle();
+
+    final order = host.received
+        .map((m) => m['type'])
+        .where((t) =>
+            t == 'account_authentication' ||
+            t == 'agent_list' ||
+            t == 'agent_create' ||
+            t == 'agent_rename')
+        .toList();
+    expect(order,
+        ['account_authentication', 'agent_list', 'agent_create', 'agent_rename']);
+    final create = host.received.firstWhere((m) => m['type'] == 'agent_create');
+    expect(create, {
+      'type': 'agent_create',
+      'agent_id': 'local:desk:1:7',
+      'name': 'Crypto Desk',
+    });
+    final rename = host.received.firstWhere((m) => m['type'] == 'agent_rename');
+    expect(rename['agent_id'], 'host:cowork-host');
+    expect(rename['name'], 'Laptop Bot');
+
+    await client.dispose();
+  });
+
   test('a retry says so on the frame, a normal send does not', () async {
     // Without the flag the host cannot tell a Retry from the reader asking the
     // same question again, so it stores a second user turn: the transcript
