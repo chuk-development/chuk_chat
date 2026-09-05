@@ -30,8 +30,11 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart' show SimpleKeyPair;
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthChangeEvent, AuthState;
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/automations/cowork_automation.dart';
 import 'package:cowork/services/cowork/cowork_approved_devices.dart';
 import 'package:cowork/services/cowork/cowork_frame.dart';
 import 'package:cowork/services/cowork/cowork_frame_codec.dart';
@@ -40,7 +43,10 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_reconnect.dart';
 import 'package:cowork/services/executor_provisioning.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
+import 'package:cowork/services/mcp/mcp_service.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
+import 'package:cowork/services/session_refresh_scheduler.dart';
+import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/services/websocket_connector.dart' as ws_connector;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -157,19 +163,64 @@ sealed class CoworkRelayInbound {
 
 /// An assistant text delta.
 class CoworkRelayDelta extends CoworkRelayInbound {
-  const CoworkRelayDelta(this.text);
+  const CoworkRelayDelta(this.text, {this.replay = false, this.mid});
   final String text;
+
+  /// True when this delta is part of a transcript replay, not a live run. The
+  /// UI renders it as history: no streaming caret, no running spinner.
+  final bool replay;
+
+  /// The message-store row id of this event, the replay cursor. Every replayed
+  /// event carries one; a live event may. The app keeps the highest [mid] it
+  /// saw per session and sends it back as `after_id` on the next replay, so the
+  /// host only re-streams what the app is missing. Null on a host too old to
+  /// report it, and on live events that carry none.
+  final int? mid;
+}
+
+/// A user turn, only ever produced by a transcript replay (the server is the
+/// truth). A live run never streams the user's own message back, because the
+/// live client wrote it locally; a reconnecting or reinstalled client did not,
+/// so replay must carry both sides of the thread. [replay] is always true here.
+class CoworkRelayUser extends CoworkRelayInbound {
+  const CoworkRelayUser(this.text, {this.replay = true, this.mid});
+  final String text;
+
+  /// Always true: a user event exists only in a replay stream.
+  final bool replay;
+
+  /// The message-store row id of this turn — the replay cursor. See
+  /// [CoworkRelayDelta.mid].
+  final int? mid;
 }
 
 /// A reasoning delta — the model's thinking, which is a separate channel from
 /// the answer and is rendered separately (never folded into the reply text).
 ///
-/// The executor strips `<think>` blocks today and does not forward them, so
-/// nothing emits this yet on the real wire. It is dispatched from a
-/// `{"type":"reasoning"}` payload the moment the runtime starts sending one.
+/// The host emits it live and in a replay (`{"type":"reasoning"}`, docs/
+/// WIRE_CONTRACT.md; landed by session b5, HANDOVER_2026-09-05_REASONING_
+/// TOOLFRAMES.md) whenever the model's reasoning effort is on.
 class CoworkRelayReasoning extends CoworkRelayInbound {
-  const CoworkRelayReasoning(this.text);
+  const CoworkRelayReasoning(this.text, {this.replay = false, this.mid});
   final String text;
+
+  /// True when this is a stored turn re-streamed by a replay, not the model
+  /// thinking right now. Without it the adapter cannot tell the two apart and
+  /// a replayed thought would render as a live one.
+  final bool replay;
+
+  /// The replay cursor of the row this came from, when the host sent one.
+  final int? mid;
+}
+
+/// A host clock value (unix seconds, float) as a local [DateTime]. Null for
+/// anything that is not a number.
+DateTime? epochSecondsToDateTime(Object? value) {
+  if (value is! num) return null;
+  return DateTime.fromMillisecondsSinceEpoch(
+    (value * 1000).round(),
+    isUtc: true,
+  ).toLocal();
 }
 
 /// One tool call that ran, as reported by the executor.
@@ -190,6 +241,12 @@ class CoworkRelayTool extends CoworkRelayInbound {
     this.timedOut = false,
     this.duration,
     this.failed = false,
+    this.replay = false,
+    this.mid,
+    this.argumentMap,
+    this.callId,
+    this.startedAt,
+    this.completedAt,
     this.raw = const {},
   });
 
@@ -201,16 +258,29 @@ class CoworkRelayTool extends CoworkRelayInbound {
     final timedOut = payload['timed_out'] == true;
     final stdout = _asText(payload['stdout']);
     final stderr = _asText(payload['stderr']);
-    final arguments = _asText(payload['command']) ?? _asText(payload['arguments']);
-    // Failure is read from the protocol, never from the text: a non-zero exit
-    // code, a timeout, or an explicit error field.
-    final failed =
-        timedOut || (exitCode != null && exitCode != 0) || payload['error'] != null;
+    // The native arguments (docs/WIRE_CONTRACT.md, "Tool events and
+    // timestamps"): an object on a current host, a string the loop could not
+    // parse, or absent on an old host that only sent `command`.
+    final rawArguments = payload['arguments'];
+    final argumentMap = rawArguments is Map
+        ? Map<String, dynamic>.from(rawArguments)
+        : null;
+    final arguments = _asText(payload['command']) ?? _asText(rawArguments);
+    // Failure is read from the protocol, never from the text: the host's own
+    // verdict when it sent one, else a non-zero exit code, a timeout, or an
+    // explicit error field.
+    final failed = status == 'error' ||
+        timedOut ||
+        (exitCode != null && exitCode != 0) ||
+        payload['error'] != null;
     final detailParts = <String>[
       if (stdout != null && stdout.isNotEmpty) stdout,
       if (stderr != null && stderr.isNotEmpty) stderr,
     ];
-    final result = _asText(payload['error']) ??
+    // `result` is the text the model got; stdout/stderr are its projection on
+    // the shell tools, and the fallback on an old host.
+    final result = _asText(payload['result']) ??
+        _asText(payload['error']) ??
         (stderr != null && stderr.isNotEmpty && failed ? stderr : stdout);
     return CoworkRelayTool(
       name,
@@ -222,6 +292,12 @@ class CoworkRelayTool extends CoworkRelayInbound {
       timedOut: timedOut,
       duration: _asDuration(payload['duration_ms']),
       failed: failed,
+      replay: payload['replay'] == true,
+      mid: _asInt(payload['mid']),
+      argumentMap: argumentMap,
+      callId: _asText(payload['call_id']),
+      startedAt: epochSecondsToDateTime(payload['started_at']),
+      completedAt: epochSecondsToDateTime(payload['completed_at']),
       raw: payload,
     );
   }
@@ -248,6 +324,26 @@ class CoworkRelayTool extends CoworkRelayInbound {
   /// True when the protocol says the call failed (non-zero exit, timeout, or an
   /// explicit error).
   final bool failed;
+
+  /// True when this tool line is part of a transcript replay, not a live run.
+  final bool replay;
+
+  /// The message-store row id of this call — the replay cursor. See
+  /// [CoworkRelayDelta.mid].
+  final int? mid;
+
+  /// The native arguments as the model sent them, when the host forwarded
+  /// them as an object. Null on an old host (only [arguments] then).
+  final Map<String, dynamic>? argumentMap;
+
+  /// The host's id for this call, when it sent one. Live and replay carry the
+  /// same id for the same call, so a card keeps its identity across both.
+  final String? callId;
+
+  /// The host's clock for the call: when it was dispatched and when its result
+  /// came back. Null on an old host; the ledger then uses its own clock.
+  final DateTime? startedAt;
+  final DateTime? completedAt;
 
   final Map<String, dynamic> raw;
 
@@ -283,6 +379,8 @@ class CoworkRelayFile extends CoworkRelayInbound {
     required this.declaredSize,
     this.bytes,
     this.error,
+    this.replay = false,
+    this.mid,
   });
 
   final String name;
@@ -290,6 +388,12 @@ class CoworkRelayFile extends CoworkRelayInbound {
   final int? declaredSize;
   final Uint8List? bytes;
   final String? error;
+
+  /// True when this file came back from the host's transcript, not from a
+  /// live run (docs/WIRE_CONTRACT.md, "Persisted subagent / file / approval
+  /// events"). A replayed file carries its row id in [mid].
+  final bool replay;
+  final int? mid;
 
   bool get isImage => mimeType.startsWith('image/');
   bool get isValid => bytes != null && error == null;
@@ -302,10 +406,36 @@ class CoworkRelayDone extends CoworkRelayInbound {
     this.reason,
     this.iterations,
     this.tokensSpent,
+    this.replay = false,
+    this.runId,
+    this.whileAway = false,
+    this.startedAt,
+    this.finishedAt,
+    this.firstMid,
+    this.lastMid,
   });
 
   /// The loop's own final answer, when it sent one.
   final String? finalAnswer;
+
+  /// The run's clock on the host (docs/WIRE_CONTRACT.md, "Run timestamps on
+  /// done"). Null on an old host.
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+
+  /// The run's length as the host measured it, when both clocks came.
+  Duration? get workedFor {
+    final started = startedAt;
+    final finished = finishedAt;
+    if (started == null || finished == null) return null;
+    final elapsed = finished.difference(started);
+    return elapsed.isNegative ? Duration.zero : elapsed;
+  }
+
+  /// The message rows of this run. [lastMid] on a LIVE `done` is where the
+  /// replay cursor moves to, so the next replay does not send this run again.
+  final int? firstMid;
+  final int? lastMid;
 
   /// The termination reason the runtime reported (`finished`, `estop`,
   /// `interrupted`, …).
@@ -321,6 +451,87 @@ class CoworkRelayDone extends CoworkRelayInbound {
   /// True when the run ended because the kill switch fired, not because the
   /// agent finished. Read from the protocol's reason, never from text.
   bool get wasStopped => reason == 'estop' || reason == 'interrupted';
+
+  /// True when this ``done`` closes a transcript replay, not a live run. The UI
+  /// must NOT render it as a "done" card and must not treat it as a run ending —
+  /// it only marks the end of the replayed history. Also flagged by [replay].
+  final bool replay;
+
+  /// True when the closed stream was a replay, by flag or by reason.
+  bool get isReplay => replay || reason == 'replay';
+
+  /// True only for the history-end marker that closes a replay stream
+  /// (`reason == 'replay'`). It renders nothing and ends replay mode.
+  ///
+  /// This is the distinction [isReplay] cannot make: a *persisted run terminal*
+  /// replayed from the host also arrives with `replay == true`, but it carries a
+  /// real reason (`finished`, …) and must be rendered as a completion card.
+  bool get isHistoryEnd => reason == 'replay';
+
+  /// The host's id for the run this `done` closes, when it reported one. The
+  /// app echoes it back with [CoworkRelayController.sendRunAck] after it
+  /// rendered a live `done`, so the host marks the run seen.
+  final String? runId;
+
+  /// True when a replayed run terminal finished with no app attached (the host
+  /// never got a `run_ack` for it). The UI shows an "Answer ready" affordance.
+  final bool whileAway;
+}
+
+/// The host's answer to a `replay`: is a run for this session in flight right
+/// now (§ run detachment)? Emitted first in every replay response, before the
+/// stored transcript.
+///
+/// A run belongs to the host process, not to a socket, so a run started before
+/// this app connected — or before it was reinstalled — is still going. The app
+/// shows "Working…" with the original [prompt] instead of an idle composer.
+class CoworkRelayRunState extends CoworkRelayInbound {
+  const CoworkRelayRunState({
+    required this.sessionKey,
+    required this.state,
+    this.runId,
+    this.startedAt,
+    this.prompt,
+  });
+
+  /// Builds a run state from a decoded `run_state` payload, or null when the
+  /// session key or state is missing (nothing to route it to). Dropped, never
+  /// thrown, so a malformed frame cannot break the socket read loop.
+  static CoworkRelayRunState? fromPayload(Map<String, dynamic> payload) {
+    final sessionKey = payload['session_key'];
+    final state = payload['state'];
+    if (sessionKey is! String || state is! String) return null;
+    final runId = payload['run_id'];
+    final startedAt = payload['started_at'];
+    final prompt = payload['prompt'];
+    return CoworkRelayRunState(
+      sessionKey: sessionKey,
+      state: state,
+      runId: runId is String && runId.isNotEmpty ? runId : null,
+      startedAt: startedAt is num ? startedAt.toDouble() : null,
+      prompt: prompt is String ? prompt : null,
+    );
+  }
+
+  /// The thread this state is about — the same key the replay named.
+  final String sessionKey;
+
+  /// The raw state string the host reported: `running` or `idle`. Read from the
+  /// protocol, never guessed.
+  final String state;
+
+  /// The in-flight run's id, when one is running.
+  final String? runId;
+
+  /// Unix seconds when the run started, for an elapsed readout.
+  final double? startedAt;
+
+  /// The prompt the in-flight run is working on, so the app can show what it is
+  /// busy with even though it never saw the send.
+  final String? prompt;
+
+  /// True when a run for [sessionKey] is in flight on the host.
+  bool get isRunning => state == 'running';
 }
 
 /// A child agent's lifecycle step (§7.6). Only state transitions surface here —
@@ -336,7 +547,15 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
     this.result,
     this.error,
     this.tokensSpent,
+    this.replay = false,
+    this.mid,
   });
+
+  /// True when this state came back from the host's transcript (one frame per
+  /// stored state row; the app keeps one card per [subagentId], last state
+  /// wins). A replayed state carries its row id in [mid].
+  final bool replay;
+  final int? mid;
 
   /// The child's stable id (`sa_…`).
   final String subagentId;
@@ -361,6 +580,88 @@ class CoworkRelaySubagent extends CoworkRelayInbound {
   /// True once the child has reached a terminal state.
   bool get isTerminal =>
       state == 'succeeded' || state == 'failed' || state == 'cancelled';
+}
+
+/// One state change of an automation (docs/WIRE_CONTRACT.md, "Automations"):
+/// `created` / `fired` / `paused` / `resumed` / `cancelled` / `failed` /
+/// `done`. Live, and replayed from the host's transcript (`replay`, `mid`).
+/// The app keeps ONE card per [CoworkAutomation.id]; the last event wins.
+class CoworkRelayAutomation extends CoworkRelayInbound {
+  const CoworkRelayAutomation({
+    required this.event,
+    required this.automation,
+    this.runId,
+    this.reason,
+    this.at,
+    this.replay = false,
+    this.mid,
+  });
+
+  /// Which change this is.
+  final String event;
+
+  /// The automation's whole state after the change.
+  final CoworkAutomation automation;
+
+  /// On `fired`: the run the automation started.
+  final String? runId;
+
+  /// On `fired` from a watcher: the reason the script gave `trigger()`.
+  final String? reason;
+
+  /// When the host recorded the change.
+  final DateTime? at;
+
+  final bool replay;
+  final int? mid;
+
+  /// Builds one from a decoded `automation` payload, or null when it names
+  /// no automation. Dropped, never thrown.
+  static CoworkRelayAutomation? fromPayload(Map<String, dynamic> payload) {
+    final automation = CoworkAutomation.fromPayload(payload);
+    if (automation == null) return null;
+    final rawEvent = payload['event'];
+    final rawRun = payload['run_id'];
+    final rawReason = payload['reason'];
+    return CoworkRelayAutomation(
+      event: rawEvent is String && rawEvent.isNotEmpty ? rawEvent : 'updated',
+      automation: automation,
+      runId: rawRun is String && rawRun.isNotEmpty ? rawRun : null,
+      reason: rawReason is String && rawReason.isNotEmpty ? rawReason : null,
+      at: epochSecondsToDateTime(payload['at']),
+      replay: payload['replay'] == true,
+      mid: CoworkRelayTool._asInt(payload['mid']),
+    );
+  }
+}
+
+/// The host's answer to an `automation_list` request: every automation of
+/// [sessionKey], or of the whole host when [sessionKey] is null.
+class CoworkRelayAutomationList extends CoworkRelayInbound {
+  const CoworkRelayAutomationList({required this.automations, this.sessionKey});
+
+  final List<CoworkAutomation> automations;
+  final String? sessionKey;
+
+  static CoworkRelayAutomationList fromPayload(Map<String, dynamic> payload) {
+    final raw = payload['automations'];
+    final list = <CoworkAutomation>[];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is Map) {
+          final automation = CoworkAutomation.fromPayload(
+            entry.map((k, v) => MapEntry('$k', v)),
+          );
+          if (automation != null) list.add(automation);
+        }
+      }
+    }
+    final scope = payload['session_key'];
+    return CoworkRelayAutomationList(
+      automations: list,
+      sessionKey: scope is String && scope.isNotEmpty ? scope : null,
+    );
+  }
 }
 
 /// One member's turn in a group room (§16.1). Streamed live as the room talks.
@@ -450,9 +751,11 @@ class CoworkRelayBrowserData extends CoworkRelayInbound {
 
 /// Status of the live browser view: `started`, `stopped`, or `error` (§9.1).
 class CoworkRelayBrowserView extends CoworkRelayInbound {
-  const CoworkRelayBrowserView({required this.status, this.message = ''});
+  const CoworkRelayBrowserView({required this.status, this.message = '', this.password});
   final String status;
   final String message;
+  /// Per-view VNC secret, only on `started` (§9.1 hardening). Never log it.
+  final String? password;
 }
 
 /// The executor is asking the user to approve one here.now publish before it
@@ -470,7 +773,35 @@ class CoworkRelayApprovalRequest extends CoworkRelayInbound {
     required this.totalBytes,
     required this.baseUrl,
     required this.public,
+    this.replay = false,
+    this.mid,
+    this.decision,
+    this.decisionReason,
+    this.sessionKey,
   });
+
+  /// The thread whose run is waiting on this decision, when the host says
+  /// (`session_key`, additive). A view for another thread leaves the prompt
+  /// to the view that owns it; null (an older host) means "the thread on this
+  /// socket", as before (review F9).
+  final String? sessionKey;
+
+  /// True when the request came back from the host's transcript. A replayed
+  /// request with a [decision] is information, never a prompt, and no
+  /// `approval_decision` is sent for it (docs/WIRE_CONTRACT.md, "Persisted
+  /// subagent / file / approval events"). One without a decision is a host
+  /// still waiting — only possible while the run is in flight.
+  final bool replay;
+  final int? mid;
+
+  /// `approved` / `denied` once the host knows the outcome; null while open.
+  final String? decision;
+
+  /// `user` / `timeout` / `stopped`; null while open.
+  final String? decisionReason;
+
+  bool get isDecided => decision != null && decision!.isNotEmpty;
+  bool get isApproved => decision == 'approved';
 
   /// Builds an approval request from a decoded `approval_request` payload, or
   /// null when the id is missing (nothing to correlate a decision to). Dropped,
@@ -491,6 +822,18 @@ class CoworkRelayApprovalRequest extends CoworkRelayInbound {
       totalBytes: CoworkRelayTool._asInt(payload['total_bytes']) ?? 0,
       baseUrl: '${payload['base_url'] ?? 'here.now'}',
       public: payload['public'] != false,
+      replay: payload['replay'] == true,
+      mid: CoworkRelayTool._asInt(payload['mid']),
+      decision: payload['decision'] is String && (payload['decision'] as String).isNotEmpty
+          ? payload['decision'] as String
+          : null,
+      decisionReason: payload['decision_reason'] is String
+          ? payload['decision_reason'] as String
+          : null,
+      sessionKey: payload['session_key'] is String &&
+              (payload['session_key'] as String).isNotEmpty
+          ? payload['session_key'] as String
+          : null,
     );
   }
 
@@ -514,6 +857,56 @@ class CoworkRelayApprovalRequest extends CoworkRelayInbound {
   /// True when the site will be publicly viewable by anyone with the link
   /// (always true on the anonymous free tier).
   final bool public;
+}
+
+/// The model asked for secrets by name (`request_secrets`) and the run is
+/// BLOCKED on the executor until the app answers with a `secrets` frame
+/// (docs/WIRE_CONTRACT.md, "Secrets"). The UI shows one field per name over
+/// the thread [sessionKey] names; the answer goes back through
+/// `SecretsService` (`setMany(..., requestId:)` or `answerUnchanged`), which
+/// sends the WHOLE set with this [requestId].
+class CoworkRelaySecretRequest extends CoworkRelayInbound {
+  const CoworkRelaySecretRequest({
+    required this.requestId,
+    required this.names,
+    this.purpose = '',
+    this.sessionKey,
+  });
+
+  /// Correlates the `secrets` answer back to this request.
+  final String requestId;
+
+  /// Environment-variable style names, in the order the model asked.
+  final List<String> names;
+
+  /// The model's one-line reason, shown in the card.
+  final String purpose;
+
+  /// The thread whose run waits; null on an older host means this socket's.
+  final String? sessionKey;
+
+  /// Builds a request from a decoded `secret_request` payload, or null when
+  /// nothing can be correlated or asked. Dropped, never thrown.
+  static CoworkRelaySecretRequest? fromPayload(Map<String, dynamic> payload) {
+    final id = payload['request_id'];
+    if (id is! String || id.isEmpty) return null;
+    final rawNames = payload['names'];
+    if (rawNames is! List) return null;
+    final names = <String>[
+      for (final n in rawNames)
+        if (n is String && n.isNotEmpty) n,
+    ];
+    if (names.isEmpty) return null;
+    final purpose = payload['purpose'];
+    final sessionKey = payload['session_key'];
+    return CoworkRelaySecretRequest(
+      requestId: id,
+      names: List<String>.unmodifiable(names),
+      purpose: purpose is String ? purpose : '',
+      sessionKey:
+          sessionKey is String && sessionKey.isNotEmpty ? sessionKey : null,
+    );
+  }
 }
 
 /// Read-only surface the UI depends on, so widget tests can drive a fake
@@ -560,6 +953,11 @@ abstract interface class CoworkRelayController {
   /// on. It asks the executor to echo back the raw context it sent to the model
   /// as a `debug_context` event; left false the frame carries no `debug` key, so
   /// an old host and a normal send both behave exactly as before.
+  ///
+  /// [regenerate] says this task REPLACES the last answer instead of asking a
+  /// new question — the Retry button. The host then drops the turn being
+  /// retried before it stores this prompt, so the conversation holds the
+  /// question once and the newest answer rather than one copy per attempt.
   Future<void> sendTask(
     String prompt, {
     String sessionKey,
@@ -567,6 +965,7 @@ abstract interface class CoworkRelayController {
     String? providerSlug,
     String? reasoningEffort,
     bool debug,
+    bool regenerate,
   });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
@@ -611,6 +1010,38 @@ abstract interface class CoworkRelayController {
   /// over when a `done` or `error` event arrives.
   Future<void> requestStop({String sessionKey});
 
+  /// Ask the executor to re-stream [sessionKey]'s whole stored transcript (the
+  /// server is the truth). Use it when the client has no local transcript for the
+  /// thread — a fresh install, or a reconnect after the app was cleared.
+  ///
+  /// The events come back marked as replay: `user` / `delta` / `tool` in stored
+  /// order, then a `done` with reason `replay`. The UI renders them as history —
+  /// it must NOT show a running spinner or a Stop phase, and must not add a
+  /// "done" card for the closing `done`. An unknown thread replays as an empty
+  /// stream (just the `done`), so it is always safe to ask.
+  ///
+  /// The stream opens with a `run_state` ([CoworkRelayRunState]) saying whether
+  /// a run for the thread is in flight on the host right now.
+  ///
+  /// [afterId] is the replay cursor: the highest `mid` the app has already
+  /// stored for this thread. Only messages with `mid > afterId` come back. The
+  /// default `0` replays the whole history (a fresh install). The frame carries
+  /// `after_id` only when it is greater than zero, so a full replay looks
+  /// exactly as it did before to an old host.
+  ///
+  /// Sent automatically on (re)connect for the session keys a replay-sessions
+  /// provider reports (see [CoworkRelayClient]'s constructor); call this directly
+  /// for an on-demand re-hydrate.
+  Future<void> requestReplay({String sessionKey, int afterId});
+
+  /// Tell the host the app rendered the live `done` of [runId] (§ run
+  /// detachment). The host marks the run seen, so a later replay does not flag
+  /// it `while_away` and it can skip a push notification.
+  ///
+  /// Best-effort: a lost ack only costs a redundant "Answer ready" badge, so the
+  /// caller may ignore a failure.
+  Future<void> sendRunAck(String runId);
+
   /// Ask the executor to start streaming the sandbox browser's screen over the
   /// sealed channel (§9.1), so the user can watch and take control (e.g. to log
   /// in). Status comes back as [CoworkRelayBrowserView]; pixels as
@@ -632,6 +1063,16 @@ abstract interface class CoworkRelayController {
     required bool approved,
   });
 
+  /// Hand the host the user's WHOLE secret set (docs/WIRE_CONTRACT.md,
+  /// "Secrets"): after a provision, after every change, and as the answer to
+  /// a [CoworkRelaySecretRequest] (then with its [requestId]). The host
+  /// replaces what it holds; a name missing here is gone on the host too.
+  Future<void> sendSecrets({
+    required Map<String, String> values,
+    required int revision,
+    String? requestId,
+  });
+
   /// Tears the client down.
   Future<void> dispose();
 }
@@ -639,7 +1080,8 @@ abstract interface class CoworkRelayController {
 /// The real transport. Also an [ExecutorTransport]: [provisionAccount] shapes
 /// the payload through [ExecutorProvisioning], which calls back into
 /// [sendAuthentication] to seal and send it over this WebSocket.
-class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
+class CoworkRelayClient
+    implements CoworkRelayController, ExecutorTransport, CoworkAutomationControl {
   CoworkRelayClient({
     required String deviceId,
     required SimpleKeyPair signingKeyPair,
@@ -650,6 +1092,12 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     Duration pairingTimeout = const Duration(seconds: 30),
     McpStore? mcpStore,
     HereNowStore? hereNowStore,
+    Future<void> Function()? secretsForwarder,
+    Iterable<String> Function()? replaySessions,
+    AccountSessionSource? sessionSource,
+    Stream<AuthState>? authChanges,
+    Future<AccountSession?> Function(String refreshToken)? sessionAdopter,
+    SessionRefreshScheduler? scheduler,
   })  : _deviceId = deviceId,
         _signingKeyPair = signingKeyPair,
         _connector = connector,
@@ -658,7 +1106,13 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         _nowMs = nowMs,
         _pairingTimeout = pairingTimeout,
         _mcpStore = mcpStore,
-        _hereNowStore = hereNowStore;
+        _hereNowStore = hereNowStore,
+        _secretsForwarder = secretsForwarder,
+        _replaySessions = replaySessions,
+        _sessionSource = sessionSource,
+        _authChanges = authChanges,
+        _sessionAdopter = sessionAdopter,
+        _scheduler = scheduler ?? SessionRefreshScheduler.instance;
 
   final String _deviceId;
   final SimpleKeyPair _signingKeyPair;
@@ -666,11 +1120,23 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   final CoworkApprovedDevices _approvedDevices;
 
   /// The user's UI-configured MCP servers. When set, each task frame carries the
-  /// non-empty forward payloads (`[{name, url, auth, access_token?}]`) so the
-  /// executor can stand up an authenticated per-session `MCPManager` (WS-D).
-  /// Null (or an empty store) leaves `mcp_servers` off the frame, which keeps an
-  /// old host happy and costs nothing when the user configured no connectors.
+  /// non-empty forward payloads (`[{id, name, url, auth, access_token?, oauth?}]`)
+  /// so the executor can stand up an authenticated per-session `MCPManager`
+  /// (WS-D). Null (or an empty store) leaves `mcp_servers` off the frame, which
+  /// keeps an old host happy and costs nothing when the user configured no
+  /// connectors.
   final McpStore? _mcpStore;
+
+  /// Where an `mcp_credentials` frame is applied. Swappable in tests so the
+  /// frame can be asserted without the app-wide connector store.
+  ///
+  /// The frame is the return half of the forward payload: the host renews the
+  /// OAuth tokens while the app is closed, and a provider that rotates refresh
+  /// tokens kills the device's copy in the act. It is state, not something to
+  /// render, so it never reaches the inbound stream.
+  @visibleForTesting
+  static Future<int> Function(Map<String, dynamic> payload)
+      mcpCredentialsSink = McpService.applyRotatedCredentials;
 
   /// The user's here.now publishing setting. When the connector is enabled, each
   /// task frame carries `{enabled, approval}` under `herenow`, so the executor
@@ -678,9 +1144,149 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   /// disabled store) leaves the key off the frame, so an old host and a user who
   /// never enabled it both keep working, and no publish tool is registered.
   final HereNowStore? _hereNowStore;
+
+  /// Forwards the user's secret set after every provision
+  /// (docs/WIRE_CONTRACT.md, "Secrets"): a host that restarted holds what the
+  /// device holds. Null (tests, a bare client) forwards nothing; the app
+  /// passes `SecretsService.instance.forwardToHost`.
+  final Future<void> Function()? _secretsForwarder;
+
+  /// Supplies the session keys whose transcript must be replayed after a
+  /// (re)connect — the threads the caller has no local transcript for. Called
+  /// once the channel is paired; the client sends one `replay` per key, at most
+  /// once per connection. Null (the default) means the caller drives replay
+  /// itself via [requestReplay] and nothing is sent automatically, so an old
+  /// caller behaves exactly as before.
+  final Iterable<String> Function()? _replaySessions;
+
+  /// Session keys already auto-replayed on the current socket, so a provider that
+  /// still lists a thread does not replay it twice. Cleared on each new connect
+  /// or reconnect, because a fresh socket is a fresh transcript budget.
+  final Set<String> _autoReplayed = <String>{};
+
+  /// Completes once this connection has provisioned the account, or once
+  /// [_provisionGateTimeout] has passed without one.
+  ///
+  /// A replay is the first thing a reattaching view asks for, and it used to
+  /// arrive before the account token did — the host logs "expected
+  /// account_authentication, got 'replay'" and answers a replay it cannot yet
+  /// attribute. Holding the replay for the provision costs nothing (it is the
+  /// same round trip either way) and puts the two frames in the order the host
+  /// documents. The timeout is the escape hatch: a caller that never provisions
+  /// (a test, an unauthenticated flow) still gets its transcript.
+  Completer<void>? _provisionGate;
+
+  /// How long a replay waits for the account provision before going anyway.
+  static const Duration _provisionGateTimeout = Duration(seconds: 10);
   final int _keyVersion;
   final int Function()? _nowMs;
   final Duration _pairingTimeout;
+
+  /// Token freshness (docs/WIRE_CONTRACT.md, bead cowork-c91). The host must
+  /// never run a task on a stale account token, so this client keeps it fresh
+  /// on its own, whatever view is mounted:
+  ///
+  ///  * every Supabase token refresh re-sends `account_authentication` at once
+  ///    (also while a task runs — it is a control frame, the host swaps the
+  ///    tokens in place);
+  ///  * a host `reprovision_request` is answered with a fresh session;
+  ///  * a host `account_session_rotated` is adopted and acked.
+  ///
+  /// [sessionSource] reads/refreshes the account session; null falls back to
+  /// the live Supabase session when Supabase is initialised. [authChanges] is
+  /// the auth event stream; null falls back to Supabase's. Both are injectable
+  /// so a test drives them with no Supabase.
+  final AccountSessionSource? _sessionSource;
+  final Stream<AuthState>? _authChanges;
+  StreamSubscription<AuthState>? _authSub;
+
+  /// Adopts a refresh token the host rotated while no app was attached
+  /// (`account_session_rotated`): exchanges it for a live session and makes it
+  /// the app's own. Null falls back to Supabase `setSession`. Injectable so a
+  /// test can assert the adoption with no Supabase.
+  final Future<AccountSession?> Function(String refreshToken)? _sessionAdopter;
+
+  /// [accessToken] is the rotated pair's access token. Handed it, gotrue
+  /// restores the pair through `/user`: nothing is spent, and a pair the server
+  /// rejects does not cost the app its own session. Without it — or once it has
+  /// expired — gotrue falls back to `/token`, and there is the trap
+  /// (bead cowork-2n1): gotrue-dart 2.27.1 clears the stored session and fires
+  /// `signedOut(sessionExpired)` on ANY non-retryable `/token` failure, even
+  /// when the app's own access token is still perfectly good. Adopting the
+  /// host's rotated pair could therefore sign the user out of an app that was
+  /// working — which is exactly what happened.
+  Future<AccountSession?> Function(String)? _effectiveSessionAdopter({
+    String? accessToken,
+  }) {
+    final adopter = _sessionAdopter;
+    if (adopter != null) return adopter;
+    if (!SupabaseService.isInitialized) return null;
+    return (String refreshToken) async {
+      final response = await SupabaseService.auth.setSession(
+        refreshToken,
+        accessToken:
+            (accessToken == null || accessToken.isEmpty) ? null : accessToken,
+      );
+      final session = response.session;
+      return session == null ? null : AccountSession.fromSupabase(session);
+    };
+  }
+
+  /// The access token the host was last given, so an unchanged token is not
+  /// re-sent and an older one never overwrites a newer one.
+  String? _provisionedAccessToken;
+
+  /// The app's token-refresh scheduler (bead cowork-2n1). This client tells it
+  /// whether the host is attached and lends it [_reattachForScheduler], so a
+  /// refresh while the host is away first lets the relay reattach and adopt a
+  /// pair the host rotated, instead of spending a token that may be dead.
+  final SessionRefreshScheduler _scheduler;
+
+  late final Future<void> Function() _reattachForScheduler = _reattach;
+
+  /// Reconnects with the stored trust (no code) and re-provisions the current
+  /// session. No-op while paired, disposed, or never paired.
+  Future<void> _reattach() async {
+    if (_disposed || _state.value.isPaired) return;
+    // A dial already in progress (connecting / pairing): do not race it.
+    if (_socket != null) return;
+    final trust = _establishedTrust;
+    if (trust == null) return;
+    await reconnect(hostUrl: trust.hostUrl, pairing: trust);
+    final session = _effectiveSessionSource?.current();
+    if (session != null && !_disposed) await provisionAccount(session);
+  }
+
+  void _publishAttachment(CoworkRelayPhase phase) {
+    switch (phase) {
+      case CoworkRelayPhase.paired:
+        _scheduler.hostAttached = true;
+        _scheduler.reconnectHost = _reattachForScheduler;
+      case CoworkRelayPhase.closed:
+      case CoworkRelayPhase.error:
+        // Only a lost host counts as "away"; a first pairing that never
+        // succeeded is no pairing at all.
+        if (_establishedTrust != null) _scheduler.hostAttached = false;
+      case CoworkRelayPhase.idle:
+      case CoworkRelayPhase.connecting:
+      case CoworkRelayPhase.pairing:
+        break;
+    }
+  }
+
+  AccountSessionSource? get _effectiveSessionSource {
+    final source = _sessionSource;
+    if (source != null) return source;
+    return SupabaseService.isInitialized ? const SupabaseAccountSession() : null;
+  }
+
+  Stream<AuthState>? get _effectiveAuthChanges {
+    final stream = _authChanges;
+    if (stream != null) return stream;
+    return SupabaseService.isInitialized
+        ? SupabaseService.auth.onAuthStateChange
+        : null;
+  }
 
   final ValueNotifier<CoworkRelayState> _state =
       ValueNotifier<CoworkRelayState>(
@@ -752,6 +1358,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       rethrow;
     }
     _socket = socket;
+    // A fresh socket is a fresh transcript budget: let auto-replay fire again.
+    _autoReplayed.clear();
+    _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint('[cowork-relay] socket connected to $hostUrl');
     }
@@ -836,6 +1445,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         detail: 'Paired',
       ),
     );
+    // Now paired: re-hydrate any thread the caller has no local transcript for.
+    _maybeAutoReplay();
   }
 
   @override
@@ -856,6 +1467,9 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       rethrow;
     }
     _socket = socket;
+    // A fresh socket is a fresh transcript budget: let auto-replay fire again.
+    _autoReplayed.clear();
+    _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint('[cowork-relay] reconnecting to $hostUrl (no code)');
     }
@@ -924,6 +1538,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         detail: 'Reconnected',
       ),
     );
+    // Now reconnected: re-hydrate any thread with no local transcript.
+    _maybeAutoReplay();
   }
 
   @override
@@ -935,8 +1551,125 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     }
     // Route the token through ExecutorProvisioning, which shapes the payload
     // and calls back into sendAuthentication over this sealed transport.
-    return ExecutorProvisioning(this)
+    _provisionedAccessToken = session.accessToken;
+    // From the first provision on, keep the host's token fresh on our own.
+    _startAuthWatch();
+    final sent = ExecutorProvisioning(this)
         .provision(ExecutorHandle(deviceId: peerDeviceId, label: 'host'), session);
+    // Let a waiting replay through either way: a provision that failed is not
+    // a reason to leave the user without a transcript.
+    unawaited(sent.whenComplete(_openProvisionGate));
+    // The secret set rides right behind the token, every time: the host
+    // replaces its copy with ours. Best-effort; a failure is retried by the
+    // next provision or the next change on the settings page.
+    final forward = _secretsForwarder;
+    if (forward != null) {
+      unawaited(sent.then((_) => forward()).catchError((Object _) {}));
+    }
+    return sent;
+  }
+
+  // --- token freshness (docs/WIRE_CONTRACT.md, cowork-c91) --------------------
+
+  void _startAuthWatch() {
+    if (_authSub != null || _disposed) return;
+    final stream = _effectiveAuthChanges;
+    if (stream == null) return;
+    _authSub = stream.listen(_onAuthChange, onError: (Object _) {});
+  }
+
+  void _onAuthChange(AuthState state) {
+    final event = state.event;
+    if (event != AuthChangeEvent.tokenRefreshed &&
+        event != AuthChangeEvent.signedIn) {
+      return;
+    }
+    final session = state.session;
+    if (session == null || session.accessToken.isEmpty) return;
+    unawaited(_reprovision(AccountSession.fromSupabase(session)));
+  }
+
+  /// Send [session] to the host unless it is the token the host already holds.
+  /// Best-effort: a send that fails (socket gone) is retried by the next
+  /// refresh, the next request, or the next reconnect's provision.
+  Future<void> _reprovision(AccountSession session) async {
+    if (_disposed || !_state.value.isPaired) return;
+    if (session.accessToken == _provisionedAccessToken) return;
+    try {
+      await provisionAccount(session);
+    } catch (_) {
+      // Nothing to surface: the host asks again, or the next refresh lands.
+    }
+  }
+
+  /// The host cannot use its token (expired, or its own refresh failed) and
+  /// asks for a fresh one. Refresh first when the token is known to be expired.
+  Future<void> _answerReprovisionRequest(Map<String, dynamic> payload) async {
+    final source = _effectiveSessionSource;
+    if (source == null) return;
+    final reason = '${payload['reason'] ?? ''}';
+    AccountSession? session;
+    if (reason == 'token_expired' || reason == 'refresh_failed') {
+      try {
+        session = await source.refresh();
+      } catch (_) {
+        session = null;
+      }
+    }
+    session ??= source.current();
+    if (session == null) return;
+    // A request is an explicit ask: answer even with the same token, so the
+    // host gets a definite frame instead of silence.
+    _provisionedAccessToken = null;
+    await _reprovision(session);
+  }
+
+  /// The host refreshed on its own while no app was attached. Supabase rotates
+  /// the refresh token on every refresh, so the app's stored copy is dead: adopt
+  /// the host's pair, then ack with an `account_authentication`. Idempotent —
+  /// when the app already holds a newer session it keeps its own and still acks,
+  /// so the host stops re-sending.
+  Future<void> _adoptRotatedSession(Map<String, dynamic> payload) async {
+    final refresh = payload['refresh_token'];
+    if (refresh is! String || refresh.isEmpty) return;
+    final access = payload['access_token'];
+    final rotatedExpiresAt = CoworkRelayTool._asInt(payload['expires_at']);
+    final current = _effectiveSessionSource?.current();
+    AccountSession? adopted;
+    final appIsNewer = current != null &&
+        current.expiresAt != null &&
+        rotatedExpiresAt != null &&
+        current.expiresAt! > rotatedExpiresAt &&
+        current.refreshToken != refresh;
+    if (appIsNewer) {
+      adopted = current;
+    } else {
+      final adopter = _effectiveSessionAdopter(
+        accessToken: access is String ? access : null,
+      );
+      if (adopter != null) {
+        try {
+          adopted = await adopter(refresh);
+        } catch (_) {
+          adopted = null;
+        }
+      }
+      // No adopter, or the exchange failed: the host's pair is still the only
+      // live one, so ack with it as-is rather than leave the host waiting.
+      adopted ??= AccountSession(
+        accessToken: access is String ? access : (current?.accessToken ?? ''),
+        refreshToken: refresh,
+        userId: current?.userId ?? '',
+        expiresAt: rotatedExpiresAt,
+      );
+    }
+    // No token, or no idea whose token it is (no current session and no
+    // adopter): stay silent rather than ack with an empty `user_id`, which the
+    // host would read as a change of user (docs/WIRE_CONTRACT.md,
+    // "account_session_rotated"; review F5).
+    if (adopted.accessToken.isEmpty || adopted.userId.isEmpty) return;
+    _provisionedAccessToken = null; // the ack must go out even if unchanged
+    await _reprovision(adopted);
   }
 
   @override
@@ -954,6 +1687,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     String? providerSlug,
     String? reasoningEffort,
     bool debug = false,
+    bool regenerate = false,
   }) async {
     // The user's UI-configured MCP servers, resolved with their live bearers at
     // launch. Empty (or no store) leaves the key off the frame, so an old host
@@ -981,6 +1715,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       // Only a debug send carries the flag, so an old host and a normal send
       // both keep the frame exactly as it was.
       if (debug) 'debug': true,
+      // Same rule: a retry says so, everything else leaves the key off.
+      if (regenerate) 'regenerate': true,
     });
   }
 
@@ -1054,6 +1790,60 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
         'session_key': sessionKey,
       });
 
+  /// Let any replay waiting on the account provision proceed. Idempotent.
+  void _openProvisionGate() {
+    final gate = _provisionGate;
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  @override
+  Future<void> requestReplay({
+    String sessionKey = 'default',
+    int afterId = 0,
+  }) async {
+    // Auth first, then replay — see [_provisionGate].
+    final gate = _provisionGate;
+    if (gate != null && !gate.isCompleted) {
+      try {
+        await gate.future.timeout(_provisionGateTimeout);
+      } on TimeoutException {
+        // Nobody provisioned. Replay anyway; that is the old behaviour.
+      }
+      if (_disposed) return;
+    }
+    return _sendFramePayload(<String, dynamic>{
+        'type': 'replay',
+        'session_key': sessionKey,
+        // A cursor of zero means "the whole history", which is what a frame
+        // without the key already means to the executor. Sending it only when
+        // it advances keeps a full replay byte-identical to the old frame.
+        if (afterId > 0) 'after_id': afterId,
+    });
+  }
+
+  @override
+  Future<void> sendRunAck(String runId) =>
+      // A sealed control frame, sent the same way as a stop: no running phase,
+      // nothing to await — the host just marks the run seen.
+      _sendFramePayload(<String, dynamic>{
+        'type': 'run_ack',
+        'run_id': runId,
+      });
+
+  /// Send one `replay` per session key the provider reports, at most once per
+  /// socket. Fire-and-forget: a failed replay must never break the just-paired
+  /// channel, so each send swallows its error. A null provider is a no-op, so a
+  /// caller that drives replay itself sees no automatic frames.
+  void _maybeAutoReplay() {
+    final provider = _replaySessions;
+    if (provider == null) return;
+    for (final key in provider()) {
+      if (key.isEmpty || _autoReplayed.contains(key)) continue;
+      _autoReplayed.add(key);
+      unawaited(requestReplay(sessionKey: key).catchError((Object _) {}));
+    }
+  }
+
   @override
   Future<void> startBrowserView() =>
       _sendFramePayload(<String, dynamic>{'type': 'browser_start'});
@@ -1083,9 +1873,54 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       });
 
   @override
+  Future<void> sendAutomationControl({
+    required String id,
+    required String action,
+  }) =>
+      // A sealed control frame like a stop (docs/WIRE_CONTRACT.md,
+      // "Automations"): no terminal, the host answers with the event.
+      _sendFramePayload(<String, dynamic>{
+        'type': 'automation_control',
+        'id': id,
+        'action': action,
+      });
+
+  @override
+  Future<void> requestAutomationList({String? sessionKey}) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'automation_list',
+        if (sessionKey != null && sessionKey.isNotEmpty) 'session_key': sessionKey,
+      });
+
+  @override
+  Future<void> sendSecrets({
+    required Map<String, String> values,
+    required int revision,
+    String? requestId,
+  }) =>
+      // The whole set, sealed like every other frame; the host replaces its
+      // copy. Never logged: this is the one frame that carries the values.
+      _sendFramePayload(<String, dynamic>{
+        'type': 'secrets',
+        'entries': <Map<String, String>>[
+          for (final name in values.keys.toList()..sort())
+            <String, String>{'name': name, 'value': values[name]!},
+        ],
+        'revision': revision,
+        if (requestId != null && requestId.isNotEmpty) 'request_id': requestId,
+      });
+
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    if (identical(_scheduler.reconnectHost, _reattachForScheduler)) {
+      // Our hooks, not a successor client's: withdraw them.
+      _scheduler.reconnectHost = null;
+      _scheduler.hostAttached = null;
+    }
+    await _authSub?.cancel();
+    _authSub = null;
     await _sub?.cancel();
     await _socket?.close();
     _socket = null;
@@ -1227,14 +2062,25 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
 
   void _dispatch(Map<String, dynamic> payload) {
     if (_inbound.isClosed) return;
+    // A replay stream re-sends stored turns marked ``replay`` so the UI renders
+    // them as history, not as a live run. The flag rides every replayed event.
+    final replay = payload['replay'] == true;
+    // The replay cursor. Every replayed event carries it; a live event may.
+    final mid = CoworkRelayTool._asInt(payload['mid']);
     switch (payload['type']) {
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
-        _inbound.add(CoworkRelayDelta('$text'));
+        _inbound.add(CoworkRelayDelta('$text', replay: replay, mid: mid));
+      case 'user':
+        // Only a replay carries the user's own turn back (the live client wrote
+        // it locally). Surfaced so a reconnected/reinstalled client rebuilds both
+        // sides of the thread.
+        final text = payload['text'] ?? payload['content'] ?? '';
+        _inbound.add(CoworkRelayUser('$text', replay: replay, mid: mid));
       case 'reasoning':
         final text = payload['text'] ?? payload['reasoning'] ?? '';
-        _inbound.add(CoworkRelayReasoning('$text'));
+        _inbound.add(CoworkRelayReasoning('$text', replay: replay, mid: mid));
       case 'tool':
         _inbound.add(CoworkRelayTool.fromPayload(payload));
       case 'file':
@@ -1253,16 +2099,30 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
           CoworkRelayBrowserView(
             status: '${payload['status'] ?? 'error'}',
             message: '${payload['message'] ?? ''}',
+            password: payload['password'] as String?,
           ),
         );
       case 'approval_request':
         final request = CoworkRelayApprovalRequest.fromPayload(payload);
         if (request != null) _inbound.add(request);
+      case 'secret_request':
+        // The model asked for keys by name; the run waits on the answer.
+        final request = CoworkRelaySecretRequest.fromPayload(payload);
+        if (request != null) _inbound.add(request);
+      case 'automation':
+        final automation = CoworkRelayAutomation.fromPayload(payload);
+        if (automation != null) _inbound.add(automation);
+      case 'automation_list':
+        _inbound.add(CoworkRelayAutomationList.fromPayload(payload));
+      case 'run_state':
+        final runState = CoworkRelayRunState.fromPayload(payload);
+        if (runState != null) _inbound.add(runState);
       case 'done':
         final iterations = payload['iterations'];
         final finalAnswer = payload['final_answer'];
         final reason = payload['reason'];
         final tokens = payload['tokens_spent'] ?? payload['tokensSpent'];
+        final runId = payload['run_id'];
         _inbound.add(
           CoworkRelayDone(
             finalAnswer: finalAnswer is String ? finalAnswer : null,
@@ -1273,8 +2133,28 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
             tokensSpent: tokens is int
                 ? tokens
                 : (tokens is num ? tokens.toInt() : null),
+            replay: replay,
+            runId: runId is String && runId.isNotEmpty ? runId : null,
+            whileAway: payload['while_away'] == true,
+            startedAt: epochSecondsToDateTime(payload['started_at']),
+            finishedAt: epochSecondsToDateTime(payload['finished_at']),
+            firstMid: CoworkRelayTool._asInt(payload['first_mid']),
+            lastMid: CoworkRelayTool._asInt(payload['last_mid']),
           ),
         );
+      case 'reprovision_request':
+        // The host wants a fresh account token. Answered here, never surfaced:
+        // there is nothing for the user to see or decide.
+        unawaited(_answerReprovisionRequest(payload));
+      case 'account_session_rotated':
+        // The host rotated the session while the app was away: adopt and ack.
+        unawaited(_adoptRotatedSession(payload));
+      case 'mcp_credentials':
+        // Not rendered and not surfaced: the user did nothing and has nothing
+        // to decide. It only has to land in the keychain and the mirror before
+        // the next task forwards a refresh token the provider has already
+        // killed.
+        unawaited(mcpCredentialsSink(payload));
       case 'error':
         _inbound.add(
           CoworkRelayRunError('${payload['message'] ?? 'Unknown error'}'),
@@ -1339,6 +2219,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       tokensSpent: rawTokens is int
           ? rawTokens
           : (rawTokens is num ? rawTokens.toInt() : null),
+      replay: payload['replay'] == true,
+      mid: CoworkRelayTool._asInt(payload['mid']),
     );
   }
 
@@ -1400,6 +2282,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   /// decode, is empty, or contradicts the declared size comes back as an error
   /// card instead of throwing into the socket read loop.
   static CoworkRelayFile _fileFromPayload(Map<String, dynamic> payload) {
+    final replay = payload['replay'] == true;
+    final mid = CoworkRelayTool._asInt(payload['mid']);
     final rawName = payload['name'];
     final name = rawName is String && rawName.trim().isNotEmpty
         ? rawName.trim()
@@ -1415,6 +2299,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     final data = payload['data'];
     if (data is! String || data.isEmpty) {
       return CoworkRelayFile(
+        replay: replay,
+        mid: mid,
         name: name,
         mimeType: mimeType,
         declaredSize: declaredSize,
@@ -1426,6 +2312,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       bytes = base64.decode(data);
     } on FormatException {
       return CoworkRelayFile(
+        replay: replay,
+        mid: mid,
         name: name,
         mimeType: mimeType,
         declaredSize: declaredSize,
@@ -1434,6 +2322,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     }
     if (bytes.isEmpty) {
       return CoworkRelayFile(
+        replay: replay,
+        mid: mid,
         name: name,
         mimeType: mimeType,
         declaredSize: declaredSize,
@@ -1442,6 +2332,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     }
     if (declaredSize != null && declaredSize != bytes.length) {
       return CoworkRelayFile(
+        replay: replay,
+        mid: mid,
         name: name,
         mimeType: mimeType,
         declaredSize: declaredSize,
@@ -1450,6 +2342,8 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
       );
     }
     return CoworkRelayFile(
+        replay: replay,
+        mid: mid,
       name: name,
       mimeType: mimeType,
       declaredSize: declaredSize,
@@ -1457,11 +2351,35 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     );
   }
 
-  Future<void> _sendFramePayload(Map<String, dynamic> payload) async {
+  // Outbound frames are strictly FIFO. `seal` takes its `seq` synchronously
+  // but the send happens after an await, so two in-flight sends could reach
+  // the wire out of order; the opener enforces strictly increasing seq and
+  // would reject the loser (for browser_data that is a hole in the RFB stream
+  // and the executor tears the view down). Chaining every send through one
+  // future keeps seal+send in call order. A failed send does not poison the
+  // chain; its caller still sees the error.
+  Future<void> _sendChain = Future<void>.value();
+
+  Future<void> _sendFramePayload(Map<String, dynamic> payload) {
+    final next = _sendChain.then((_) => _sendFramePayloadNow(payload));
+    _sendChain = next.catchError((Object _) {});
+    return next;
+  }
+
+  /// Test seam: awaited before each seal so a test can delay or fail one send
+  /// and prove the FIFO chain. Null in production.
+  @visibleForTesting
+  static Future<void> Function(Map<String, dynamic> payload)? debugBeforeSeal;
+
+  Future<void> _sendFramePayloadNow(Map<String, dynamic> payload) async {
     final sealer = _sealer;
     final socket = _socket;
     if (sealer == null || socket == null || !_state.value.isPaired) {
       throw StateError('Not paired');
+    }
+    final hook = debugBeforeSeal;
+    if (hook != null) {
+      await hook(payload);
     }
     final frame = await sealer.seal(utf8.encode(jsonEncode(payload)));
     socket.send(
@@ -1473,6 +2391,12 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
     if (kDebugMode) {
       debugPrint('[cowork-relay] socket closed (paired=${_state.value.isPaired})');
     }
+    // The socket is gone: let go of it, or `reconnect` keeps refusing with
+    // "Already connected" and the scheduler's `reconnectHost` hook (bead
+    // cowork-2n1) can never re-attach after a host drop (review F4).
+    unawaited(_sub?.cancel());
+    _sub = null;
+    _socket = null;
     final done = _pairingDone;
     if (done != null && !done.isCompleted) {
       done.completeError(StateError('Host closed the connection during pairing'));
@@ -1508,6 +2432,7 @@ class CoworkRelayClient implements CoworkRelayController, ExecutorTransport {
   void _set(CoworkRelayState next) {
     if (_disposed) return;
     _state.value = next;
+    _publishAttachment(next.phase);
   }
 
   static String _pairingErrorText(Object error) {

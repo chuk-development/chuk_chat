@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/utils/theme_extensions.dart';
 
 /// One tool call, as a single quiet line that opens on tap.
 ///
@@ -36,7 +37,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
     final theme = Theme.of(context);
     final call = widget.call;
     final failed = call.failed;
-    final accent = failed ? theme.colorScheme.error : theme.hintColor;
+    final accent = failed ? theme.colorScheme.error : theme.m3.onSurfaceVariant;
     final mono = theme.textTheme.bodySmall?.copyWith(
       fontFamily: 'monospace',
       color: accent,
@@ -108,7 +109,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
       margin: const EdgeInsets.only(left: 20, top: 2),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: theme.m3.surfaceContainer,
         borderRadius: BorderRadius.circular(6),
       ),
       child: SelectableText(
@@ -163,8 +164,9 @@ class _AgentReasoningBlockState extends State<AgentReasoningBlock> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final muted = theme.m3.onSurfaceVariant;
     final style = theme.textTheme.bodySmall?.copyWith(
-      color: theme.hintColor,
+      color: muted,
       fontStyle: FontStyle.italic,
     );
     return Padding(
@@ -178,13 +180,13 @@ class _AgentReasoningBlockState extends State<AgentReasoningBlock> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.psychology_outlined, size: 14, color: theme.hintColor),
+                  Icon(Icons.psychology_outlined, size: 14, color: muted),
                   const SizedBox(width: 6),
                   Text('Reasoning', style: style),
                   Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
-                    color: theme.hintColor,
+                    color: muted,
                   ),
                 ],
               ),

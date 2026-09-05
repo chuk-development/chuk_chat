@@ -4,8 +4,11 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthChangeEvent, AuthState, Session, User;
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/session_refresh_scheduler.dart';
 import 'package:cowork/services/cowork/cowork_approved_devices.dart';
 import 'package:cowork/services/cowork/cowork_device_keys.dart';
 import 'package:cowork/services/cowork/cowork_frame.dart';
@@ -186,6 +189,29 @@ class FakeExecutorHost {
   }
 }
 
+/// A session source the test scripts: what `current()` returns and what a
+/// `refresh()` mints, plus how often a refresh was asked for.
+class _SessionSource implements AccountSessionSource {
+  _SessionSource({required AccountSession current, AccountSession? refreshed})
+      : _current = current,
+        _refreshed = refreshed;
+
+  AccountSession _current;
+  final AccountSession? _refreshed;
+  int refreshCalls = 0;
+
+  @override
+  AccountSession? current() => _current;
+
+  @override
+  Future<AccountSession?> refresh() async {
+    refreshCalls++;
+    final next = _refreshed;
+    if (next != null) _current = next;
+    return _current;
+  }
+}
+
 void main() {
   const int ts = 1723478400000;
   int clock() => ts;
@@ -197,6 +223,10 @@ void main() {
     String hostDeviceId = 'host-laptop-1',
     McpStore? mcpStore,
     HereNowStore? hereNowStore,
+    AccountSessionSource? sessionSource,
+    Stream<AuthState>? authChanges,
+    Future<AccountSession?> Function(String)? sessionAdopter,
+    SessionRefreshScheduler? scheduler,
   }) async {
     final socket = FakeRelaySocket();
     final host = FakeExecutorHost(
@@ -216,6 +246,10 @@ void main() {
       nowMs: clock,
       mcpStore: mcpStore,
       hereNowStore: hereNowStore,
+      sessionSource: sessionSource,
+      authChanges: authChanges,
+      sessionAdopter: sessionAdopter,
+      scheduler: scheduler,
     );
 
     await client.connect(
@@ -225,6 +259,257 @@ void main() {
     await host.paired.future;
     return (client, host, socket);
   }
+
+  // --- token freshness (docs/WIRE_CONTRACT.md, cowork-c91) -------------------
+
+  Session supabaseSession(String access, String refresh) => Session(
+        accessToken: access,
+        refreshToken: refresh,
+        tokenType: 'bearer',
+        expiresIn: 3600,
+        user: const User(
+          id: 'user-1',
+          appMetadata: <String, dynamic>{},
+          userMetadata: <String, dynamic>{},
+          aud: 'authenticated',
+          createdAt: '2026-01-01T00:00:00Z',
+        ),
+      );
+
+  List<Map<String, dynamic>> authFrames(FakeExecutorHost host) => host.received
+      .where((p) => p['type'] == 'account_authentication')
+      .toList();
+
+  Future<void> settle() async {
+    for (var i = 0; i < 5; i++) {
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
+  test('a Supabase token refresh re-provisions the host at once, and an '
+      'unchanged token is not re-sent', () async {
+    final auth = StreamController<AuthState>.broadcast();
+    final (client, host, _) = await paired(authChanges: auth.stream);
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    await settle();
+    expect(authFrames(host).map((p) => p['access_token']), ['access-1']);
+
+    // Supabase rotated the tokens: the host gets the new pair straight away.
+    auth.add(AuthState(
+      AuthChangeEvent.tokenRefreshed,
+      supabaseSession('access-2', 'refresh-2'),
+    ));
+    await settle();
+    final frames = authFrames(host);
+    expect(frames.map((p) => p['access_token']), ['access-1', 'access-2']);
+    expect(frames.last['refresh_token'], 'refresh-2');
+    expect(frames.last['user_id'], 'user-1');
+    // `expires_at` comes from the JWT's exp claim; a fake token has none, so
+    // the field is simply absent here (the reprovision test covers it).
+
+    // The same token again is noise, not a new provision.
+    auth.add(AuthState(
+      AuthChangeEvent.tokenRefreshed,
+      supabaseSession('access-2', 'refresh-2'),
+    ));
+    await settle();
+    expect(authFrames(host).length, 2);
+
+    await client.dispose();
+    await auth.close();
+  });
+
+  test('a reprovision_request with an expired token is answered with a '
+      'refreshed account_authentication', () async {
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+      refreshed: const AccountSession(
+        accessToken: 'access-3',
+        refreshToken: 'refresh-3',
+        userId: 'user-1',
+        expiresAt: 1800000000,
+      ),
+    );
+    final (client, host, _) = await paired(sessionSource: source);
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'reprovision_request',
+      'reason': 'token_expired',
+    });
+    await settle();
+
+    final frames = authFrames(host);
+    expect(frames.map((p) => p['access_token']), ['access-1', 'access-3']);
+    expect(frames.last['refresh_token'], 'refresh-3');
+    expect(frames.last['expires_at'], 1800000000);
+    expect(source.refreshCalls, 1);
+    // Never surfaced to the UI: nothing for the user to decide.
+    await client.dispose();
+  });
+
+  test('a reprovision_request without a reason answers with the current '
+      'session even when the token is unchanged', () async {
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    final (client, host, _) = await paired(sessionSource: source);
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{'type': 'reprovision_request'});
+    await settle();
+
+    expect(authFrames(host).map((p) => p['access_token']),
+        ['access-1', 'access-1']);
+    expect(source.refreshCalls, 0);
+    await client.dispose();
+  });
+
+  test('account_session_rotated is adopted through the session adopter and '
+      'acked with the adopted pair', () async {
+    final adoptedWith = <String>[];
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+        expiresAt: 1700000000,
+      ),
+    );
+    final (client, host, _) = await paired(
+      sessionSource: source,
+      sessionAdopter: (refresh) async {
+        adoptedWith.add(refresh);
+        return AccountSession(
+          accessToken: 'access-live',
+          refreshToken: 'refresh-live',
+          userId: 'user-1',
+          expiresAt: 1800003600,
+        );
+      },
+    );
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'account_session_rotated',
+      'access_token': 'access-host',
+      'refresh_token': 'refresh-host',
+      'expires_at': 1800000000,
+      'rotated_at': '2026-09-05T02:00:00Z',
+    });
+    await settle();
+
+    expect(adoptedWith, ['refresh-host']);
+    final frames = authFrames(host);
+    expect(frames.map((p) => p['access_token']), ['access-1', 'access-live']);
+    expect(frames.last['refresh_token'], 'refresh-live');
+    await client.dispose();
+  });
+
+  test('account_session_rotated older than the app session keeps the app '
+      'session and still acks', () async {
+    var adopterCalls = 0;
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-new',
+        refreshToken: 'refresh-new',
+        userId: 'user-1',
+        expiresAt: 1900000000,
+      ),
+    );
+    final (client, host, _) = await paired(
+      sessionSource: source,
+      sessionAdopter: (_) async {
+        adopterCalls++;
+        return null;
+      },
+    );
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'account_session_rotated',
+      'access_token': 'access-old',
+      'refresh_token': 'refresh-old',
+      'expires_at': 1800000000,
+    });
+    await settle();
+
+    expect(adopterCalls, 0);
+    expect(authFrames(host).map((p) => p['access_token']),
+        ['access-new', 'access-new']);
+    await client.dispose();
+  });
+
+  test('account_session_rotated with a failing adopter acks with the host '
+      'pair itself', () async {
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    final (client, host, _) = await paired(
+      sessionSource: source,
+      sessionAdopter: (_) async => throw StateError('no network'),
+    );
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'account_session_rotated',
+      'access_token': 'access-host',
+      'refresh_token': 'refresh-host',
+      'expires_at': 1800000000,
+    });
+    await settle();
+
+    final last = authFrames(host).last;
+    expect(last['access_token'], 'access-host');
+    expect(last['refresh_token'], 'refresh-host');
+    expect(last['expires_at'], 1800000000);
+    await client.dispose();
+  });
+
+  test('account_session_rotated with no session to name the user is not acked '
+      'with an empty user_id (F5)', () async {
+    // No session source at all: the app is between a dropped session and its
+    // recovery. Whatever the host sends, the app cannot say whose token it is.
+    final (client, host, _) = await paired();
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'account_session_rotated',
+      'access_token': 'access-host',
+      'refresh_token': 'refresh-host',
+      'expires_at': 1800000000,
+    });
+    await settle();
+
+    // Silence, not a frame with `user_id: ""` (docs/WIRE_CONTRACT.md: the
+    // user id must not change).
+    expect(authFrames(host), isEmpty);
+    await client.dispose();
+  });
 
   test('channelIdOf takes everything before the last dash', () {
     expect(CoworkRelayClient.channelIdOf('chan1234-428913'), 'chan1234');
@@ -307,6 +592,57 @@ void main() {
 
     final task = host.received.singleWhere((m) => m['type'] == 'task');
     expect(task['prompt'], 'list the files');
+
+    await client.dispose();
+  });
+
+  test('a replay waits for the account provision, so auth goes out first',
+      () async {
+    // The host logs "expected account_authentication, got 'replay'" when the
+    // order is the other way round: the reattaching view asks for its
+    // transcript before the token that says whose transcript it is. Holding the
+    // replay costs nothing — it is the same round trip either way.
+    final (client, host, _) = await paired();
+
+    final replay = client.requestReplay(sessionKey: 'thread-1');
+    await settle();
+    // Nothing yet: the provision has not happened.
+    expect(host.received.where((m) => m['type'] == 'replay'), isEmpty);
+
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    await replay;
+    await settle();
+
+    final order = host.received
+        .map((m) => m['type'])
+        .where((t) => t == 'account_authentication' || t == 'replay')
+        .toList();
+    expect(order, ['account_authentication', 'replay']);
+
+    await client.dispose();
+  });
+
+  test('a retry says so on the frame, a normal send does not', () async {
+    // Without the flag the host cannot tell a Retry from the reader asking the
+    // same question again, so it stores a second user turn: the transcript
+    // replays the question once per attempt and the model is handed a history
+    // full of repeats (bead cowork-bkw).
+    final (client, host, _) = await paired();
+
+    await client.sendTask('why');
+    await client.sendTask('why', regenerate: true);
+    await Future<void>.delayed(Duration.zero);
+
+    final tasks = host.received.where((m) => m['type'] == 'task').toList();
+    expect(tasks, hasLength(2));
+    expect(tasks.first.containsKey('regenerate'), isFalse);
+    expect(tasks.last['regenerate'], isTrue);
 
     await client.dispose();
   });
@@ -414,6 +750,73 @@ void main() {
     expect(ask.fileCount, 2);
     expect(ask.totalBytes, 1024);
     expect(ask.public, isTrue);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('replayed file, subagent and approval frames carry replay, mid and '
+      'the approval outcome (cowork-266)', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'file',
+      'name': 'a.txt',
+      'mime_type': 'text/plain',
+      'size': 2,
+      'data': base64.encode(<int>[104, 105]),
+      'replay': true,
+      'mid': 7,
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'subagent',
+      'event': {'type': 'subagent_state', 'subagent_id': 'sa_1', 'state': 'succeeded'},
+      'replay': true,
+      'mid': 8,
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'approval_request',
+      'approval_id': 'ap-1',
+      'action': 'herenow_publish',
+      'path': 'site',
+      'name': 'My Page',
+      'file_count': 1,
+      'total_bytes': 5,
+      'base_url': 'https://here.now',
+      'public': true,
+      'replay': true,
+      'mid': 9,
+      'decision': 'denied',
+      'decision_reason': 'timeout',
+      'decided_at': 12.5,
+    });
+    // A live frame of each kind stays unmarked.
+    await host.emit(<String, dynamic>{
+      'type': 'subagent',
+      'event': {'type': 'subagent_state', 'subagent_id': 'sa_2', 'state': 'running'},
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final file = events.whereType<CoworkRelayFile>().single;
+    expect(file.replay, isTrue);
+    expect(file.mid, 7);
+    expect(file.isValid, isTrue);
+
+    final subs = events.whereType<CoworkRelaySubagent>().toList();
+    expect(subs[0].replay, isTrue);
+    expect(subs[0].mid, 8);
+    expect(subs[1].replay, isFalse);
+    expect(subs[1].mid, isNull);
+
+    final ask = events.whereType<CoworkRelayApprovalRequest>().single;
+    expect(ask.replay, isTrue);
+    expect(ask.mid, 9);
+    expect(ask.isDecided, isTrue);
+    expect(ask.isApproved, isFalse);
+    expect(ask.decision, 'denied');
+    expect(ask.decisionReason, 'timeout');
 
     await sub.cancel();
     await client.dispose();
@@ -642,6 +1045,125 @@ void main() {
     await client.dispose();
   });
 
+  // --- refresh scheduler hooks (bead cowork-2n1) ------------------------------
+
+  test('tells the refresh scheduler when the host is attached, away and gone',
+      () async {
+    final scheduler = SessionRefreshScheduler(
+      source: _SessionSource(
+        current: const AccountSession(
+          accessToken: 'a1',
+          refreshToken: 'r1',
+          userId: 'user-1',
+        ),
+      ),
+    );
+    expect(scheduler.hostAttached, isNull);
+
+    final (client, _, socket) = await paired(scheduler: scheduler);
+    expect(scheduler.hostAttached, isTrue);
+    expect(scheduler.reconnectHost, isNotNull);
+
+    // Attached: a reattach request is a no-op, the pairing stays.
+    await scheduler.reconnectHost!();
+    expect(client.state.value.phase, CoworkRelayPhase.paired);
+
+    // The host drops: the scheduler must know before it spends a token.
+    await socket.close();
+    await pumpEventQueue();
+    expect(client.state.value.phase, CoworkRelayPhase.closed);
+    expect(scheduler.hostAttached, isFalse);
+    expect(scheduler.reconnectHost, isNotNull);
+
+    // Gone: the hooks are withdrawn, the scheduler refreshes on its own.
+    await client.dispose();
+    expect(scheduler.hostAttached, isNull);
+    expect(scheduler.reconnectHost, isNull);
+  });
+
+  test('after a host drop the scheduler\'s reconnectHost dials again instead of '
+      'refusing with "Already connected" (F4)', () async {
+    final scheduler = SessionRefreshScheduler(
+      source: _SessionSource(
+        current: const AccountSession(
+          accessToken: 'a1',
+          refreshToken: 'r1',
+          userId: 'user-1',
+        ),
+      ),
+    );
+    final first = FakeRelaySocket();
+    final host = FakeExecutorHost(
+      socket: first,
+      deviceId: 'host-laptop-1',
+      channelId: 'chan1234',
+      digits: '428913',
+      signingKeyPair: await CoworkDeviceKeys.generate(),
+      nowMs: clock,
+    );
+    await host.start();
+    var dials = 0;
+    final client = CoworkRelayClient(
+      deviceId: 'app-desktop-1',
+      signingKeyPair: await CoworkDeviceKeys.generate(),
+      // The first dial reaches the host; every later one gets a fresh, silent
+      // socket — enough to prove the client let go of the dead one.
+      connector: (_) async => ++dials == 1 ? first : FakeRelaySocket(),
+      nowMs: clock,
+      scheduler: scheduler,
+    );
+    await client.connect(
+      hostUrl: Uri.parse('ws://127.0.0.1:8787'),
+      pairingCode: 'chan1234-428913',
+    );
+    await host.paired.future;
+    expect(dials, 1);
+
+    // The host drops.
+    await first.close();
+    await pumpEventQueue();
+    expect(client.state.value.phase, CoworkRelayPhase.closed);
+    expect(scheduler.hostAttached, isFalse);
+
+    // The scheduler asks for a re-attach: it must dial, not throw.
+    Object? failure;
+    unawaited(scheduler.reconnectHost!().catchError((Object e) {
+      failure = e;
+    }));
+    await pumpEventQueue();
+    expect(failure, isNull);
+    expect(dials, 2);
+
+    await client.dispose();
+  });
+
+  test('a disposed client does not withdraw a successor client\'s hooks',
+      () async {
+    final scheduler = SessionRefreshScheduler(
+      source: _SessionSource(
+        current: const AccountSession(
+          accessToken: 'a1',
+          refreshToken: 'r1',
+          userId: 'user-1',
+        ),
+      ),
+    );
+    final (first, _, _) = await paired(scheduler: scheduler);
+    final (second, _, _) = await paired(
+      scheduler: scheduler,
+      channelId: 'chan5678',
+      digits: '112233',
+    );
+    expect(scheduler.hostAttached, isTrue);
+
+    await first.dispose();
+    expect(scheduler.hostAttached, isTrue);
+    expect(scheduler.reconnectHost, isNotNull);
+
+    await second.dispose();
+    expect(scheduler.hostAttached, isNull);
+  });
+
   test('the host closing the socket mid-pairing surfaces an error', () async {
     final socket = FakeRelaySocket();
     // A host that only sends commit, then closes — pairing never completes.
@@ -765,6 +1287,61 @@ void main() {
     final data = host.received.singleWhere((m) => m['type'] == 'browser_data');
     expect(base64.decode(data['data'] as String), <int>[9, 8, 7]);
 
+    await client.dispose();
+  });
+
+  test('outbound frames stay in call order even when an earlier seal is slow',
+      () async {
+    // `seal` takes its seq synchronously; the send happens after an await. If
+    // the first send is slower than the second, an unchained client would put
+    // seq n+1 on the wire before seq n and the host would reject n (strictly
+    // increasing seq). The FIFO chain must keep wire order == call order.
+    final (client, host, _) = await paired();
+    CoworkRelayClient.debugBeforeSeal = (payload) async {
+      if (payload['type'] == 'browser_data' &&
+          (payload['data'] as String).startsWith(base64.encode(<int>[1]))) {
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      }
+    };
+    try {
+      final first = client.sendBrowserData(Uint8List.fromList(<int>[1, 1, 1]));
+      final second = client.sendBrowserData(Uint8List.fromList(<int>[2, 2, 2]));
+      await Future.wait(<Future<void>>[first, second]);
+      await Future<void>.delayed(Duration.zero);
+    } finally {
+      CoworkRelayClient.debugBeforeSeal = null;
+    }
+    final datas = host.received
+        .where((m) => m['type'] == 'browser_data')
+        .map((m) => base64.decode(m['data'] as String).first)
+        .toList();
+    expect(datas, <int>[1, 2]); // both arrived (none rejected), in call order
+    await client.dispose();
+  });
+
+  test('a failed send does not poison the send chain', () async {
+    final (client, host, _) = await paired();
+    var calls = 0;
+    CoworkRelayClient.debugBeforeSeal = (payload) async {
+      if (payload['type'] == 'browser_data' && ++calls == 1) {
+        throw StateError('boom');
+      }
+    };
+    try {
+      await expectLater(
+        client.sendBrowserData(Uint8List.fromList(<int>[7])),
+        throwsA(isA<StateError>()),
+      );
+      await client.sendBrowserData(Uint8List.fromList(<int>[8]));
+      await Future<void>.delayed(Duration.zero);
+    } finally {
+      CoworkRelayClient.debugBeforeSeal = null;
+    }
+    final datas = host.received
+        .where((m) => m['type'] == 'browser_data')
+        .map((m) => base64.decode(m['data'] as String).first)
+        .toList();
+    expect(datas, <int>[8]); // the failed one never hit the wire, the next did
     await client.dispose();
   });
 
@@ -895,6 +1472,271 @@ void main() {
     expect(done.wasStopped, isTrue);
 
     await sub.cancel();
+    await client.dispose();
+  });
+
+  test('an mcp_credentials frame goes to the connector store, not to the UI',
+      () async {
+    // The host renews the OAuth tokens while the app is closed, and a provider
+    // that rotates refresh tokens kills the device's copy in the act. The frame
+    // is state to store, not something to render — the user did nothing and has
+    // nothing to decide.
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+    final applied = <Map<String, dynamic>>[];
+    final original = CoworkRelayClient.mcpCredentialsSink;
+    CoworkRelayClient.mcpCredentialsSink = (payload) async {
+      applied.add(payload);
+      return 1;
+    };
+    addTearDown(() => CoworkRelayClient.mcpCredentialsSink = original);
+
+    await host.emit(<String, dynamic>{
+      'type': 'mcp_credentials',
+      'session_key': 'amber-otter-2',
+      'id': 'notion',
+      'name': 'Notion',
+      'url': 'https://mcp.notion.example/mcp',
+      'access_token': 'at-new',
+      'oauth': <String, dynamic>{
+        'refresh_token': 'rt-2',
+        'token_endpoint': 'https://auth.notion.example/token',
+        'client_id': 'cid-notion',
+      },
+      'rotated_at': '2026-09-05T09:00:00.000Z',
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    expect(applied, hasLength(1));
+    expect(applied.single['id'], 'notion');
+    expect((applied.single['oauth'] as Map)['refresh_token'], 'rt-2');
+    expect(events, isEmpty);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('a run_state frame surfaces the host run in flight for the thread',
+      () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'run_state',
+      'session_key': 'amber-otter-2',
+      'state': 'running',
+      'run_id': 'run-77',
+      'started_at': 1723478400,
+      'prompt': 'read the log',
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'run_state',
+      'session_key': 'cobalt-fox-1',
+      'state': 'idle',
+    });
+    // No session key names nothing to route to — dropped, not surfaced.
+    await host.emit(<String, dynamic>{'type': 'run_state', 'state': 'running'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final states = events.whereType<CoworkRelayRunState>().toList();
+    expect(states, hasLength(2));
+    expect(states.first.sessionKey, 'amber-otter-2');
+    expect(states.first.isRunning, isTrue);
+    expect(states.first.runId, 'run-77');
+    expect(states.first.startedAt, 1723478400);
+    expect(states.first.prompt, 'read the log');
+    expect(states.last.sessionKey, 'cobalt-fox-1');
+    expect(states.last.isRunning, isFalse);
+    expect(states.last.runId, isNull);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('done carries run_id and while_away; only reason "replay" is the '
+      'history end', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    // A persisted run terminal replayed from the host: a real completion the
+    // user never saw, NOT the end-of-history marker.
+    await host.emit(<String, dynamic>{
+      'type': 'done',
+      'final_answer': 'the report is written',
+      'reason': 'finished',
+      'iterations': 3,
+      'tokens_spent': 900,
+      'replay': true,
+      'run_id': 'run-42',
+      'while_away': true,
+    });
+    // The marker that closes the replay stream.
+    await host.emit(<String, dynamic>{
+      'type': 'done',
+      'reason': 'replay',
+      'replay': true,
+    });
+    // A live run ending.
+    await host.emit(<String, dynamic>{
+      'type': 'done',
+      'reason': 'finished',
+      'run_id': 'run-43',
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final dones = events.whereType<CoworkRelayDone>().toList();
+    expect(dones, hasLength(3));
+
+    expect(dones[0].runId, 'run-42');
+    expect(dones[0].whileAway, isTrue);
+    expect(dones[0].isReplay, isTrue);
+    // The whole point of the helper: a replayed terminal is not the end marker.
+    expect(dones[0].isHistoryEnd, isFalse);
+
+    expect(dones[1].isHistoryEnd, isTrue);
+    expect(dones[1].isReplay, isTrue);
+    expect(dones[1].runId, isNull);
+    expect(dones[1].whileAway, isFalse);
+
+    expect(dones[2].runId, 'run-43');
+    expect(dones[2].isReplay, isFalse);
+    expect(dones[2].isHistoryEnd, isFalse);
+    expect(dones[2].whileAway, isFalse);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('mid decodes on replayed delta, user and tool events', () async {
+    final (client, host, _) = await paired();
+    final events = <CoworkRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'user',
+      'text': 'read the log',
+      'replay': true,
+      'mid': 11,
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'delta',
+      'text': 'reading…',
+      'replay': true,
+      'mid': 12,
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'tool',
+      'name': 'run_command',
+      'command': 'tail -n 5 log',
+      'exit_code': 0,
+      'replay': true,
+      'mid': 13,
+    });
+    // A live event without a cursor keeps mid null — it is optional.
+    await host.emit(<String, dynamic>{'type': 'delta', 'text': 'live'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    expect(events.whereType<CoworkRelayUser>().single.mid, 11);
+    final deltas = events.whereType<CoworkRelayDelta>().toList();
+    expect(deltas.first.mid, 12);
+    expect(deltas.last.mid, isNull);
+    expect(events.whereType<CoworkRelayTool>().single.mid, 13);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
+  test('requestReplay sends after_id only when the cursor advanced', () async {
+    final (client, host, _) = await paired();
+
+    await client.requestReplay(sessionKey: 'amber-otter-2', afterId: 42);
+    await client.requestReplay(sessionKey: 'cobalt-fox-1');
+    await Future<void>.delayed(Duration.zero);
+
+    final replays =
+        host.received.where((m) => m['type'] == 'replay').toList();
+    expect(replays, hasLength(2));
+    expect(replays[0]['session_key'], 'amber-otter-2');
+    expect(replays[0]['after_id'], 42);
+    // A fresh thread asks for the whole history: no cursor on the frame, so an
+    // old host sees exactly the frame it always saw.
+    expect(replays[1]['session_key'], 'cobalt-fox-1');
+    expect(replays[1].containsKey('after_id'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('sendRunAck seals {type:run_ack,run_id}; the host opens it', () async {
+    final (client, host, _) = await paired();
+
+    await client.sendRunAck('run-42');
+    await Future<void>.delayed(Duration.zero);
+
+    final ack = host.received.singleWhere((m) => m['type'] == 'run_ack');
+    expect(ack['run_id'], 'run-42');
+    expect(ack.keys, containsAll(<String>['type', 'run_id']));
+
+    await client.dispose();
+  });
+
+  // The model the user picked in the composer does not go to a hosted API: it
+  // rides the task frame to the host as `model` / `provider` /
+  // `reasoning_effort` (docs/WIRE_CONTRACT.md). The executor reads exactly
+  // those three keys (executor/tests/test_model_select.py covers that half);
+  // these two cover this half, so the contract is closed on both sides.
+  test('sendTask puts the picked model, provider and reasoning on the frame',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.sendTask(
+      'summarise the log',
+      sessionKey: 'amber-otter-2',
+      modelId: 'glm-5.3-flash',
+      providerSlug: 'zhipu',
+      reasoningEffort: 'low',
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task['prompt'], 'summarise the log');
+    expect(task['session_key'], 'amber-otter-2');
+    // The names are `model` and `provider`, NOT `model_id` / `provider_slug`:
+    // the executor looks those three up by these exact keys.
+    expect(task['model'], 'glm-5.3-flash');
+    expect(task['provider'], 'zhipu');
+    expect(task['reasoning_effort'], 'low');
+    // Fast mode is a model plus a reasoning level, never its own flag.
+    expect(task.containsKey('fast_mode'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('sendTask leaves the model keys off when the composer set none',
+      () async {
+    final (client, host, _) = await paired();
+
+    // Nothing chosen, and the empty string is treated as nothing too — either
+    // way the host keeps its own default instead of being pinned to ''.
+    await client.sendTask('summarise the log');
+    await client.sendTask(
+      'summarise it again',
+      modelId: '',
+      providerSlug: '',
+      reasoningEffort: '',
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final tasks = host.received.where((m) => m['type'] == 'task').toList();
+    expect(tasks, hasLength(2));
+    for (final task in tasks) {
+      expect(task.containsKey('model'), isFalse);
+      expect(task.containsKey('provider'), isFalse);
+      expect(task.containsKey('reasoning_effort'), isFalse);
+    }
+
     await client.dispose();
   });
 }
