@@ -451,7 +451,10 @@ class CoworkRelayDone extends CoworkRelayInbound {
 
   /// True when the run ended because the kill switch fired, not because the
   /// agent finished. Read from the protocol's reason, never from text.
-  bool get wasStopped => reason == 'estop' || reason == 'interrupted';
+  /// Stopped short of an answer: the user's stop, the ESTOP file, or the
+  /// host's wall-clock guard (`timeout`, Bead cowork-qxa). All render alike.
+  bool get wasStopped =>
+      reason == 'estop' || reason == 'interrupted' || reason == 'timeout';
 
   /// True when this ``done`` closes a transcript replay, not a live run. The UI
   /// must NOT render it as a "done" card and must not treat it as a run ending —
