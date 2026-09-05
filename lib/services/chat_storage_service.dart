@@ -4,7 +4,8 @@
 // Verbatim except the recorded divergences (docs/CHAT_UI_IMPORT.md, "Allowed
 // divergences"): `saveChat` and `updateChat` go through `CoworkChatStore`
 // instead of `ChatStorageCrud`; `loadFullChat` answers from memory first; the
-// three list loaders are no-ops while there is no Supabase client at all;
+// three list loaders are no-ops and deleteChat is memory-only while there is
+// no Supabase client at all;
 // the sync's merge and local-remove skip threads still in the cloud outbox. Upstream's write path INSERTs a new chat and
 // UPDATEs a known one, and both refuse to run without a signed-in Supabase
 // session and an unlocked key. A CoWork thread is host-authoritative and may
@@ -94,6 +95,11 @@ class ChatStorageService {
   static Future<StoredChat?> loadFullChat(String chatId) =>
       CoworkChatStore.loadThread(chatId);
 
+  /// COWORK: does this device hold a local copy of [chatId] (memory or the
+  /// SQLite row)? No cloud, no payload decode. Not an upstream member.
+  static Future<bool> hasLocalThread(String chatId) =>
+      CoworkChatStore.hasThread(chatId);
+
   /// Load chats from local cache only (instant, no network).
   /// COWORK: a no-op with no Supabase client (upstream throws).
   static Future<void> loadFromCache() async {
@@ -128,8 +134,17 @@ class ChatStorageService {
   ) => CoworkChatStore.replaceThread(chatId, messagesMaps);
 
   /// Delete a chat and its associated images from storage
-  static Future<void> deleteChat(String chatId) =>
-      ChatStorageCrud.deleteChat(chatId);
+  /// COWORK: with no Supabase client the chat is dropped from memory only
+  /// (upstream throws before it touches anything).
+  static Future<void> deleteChat(String chatId) async {
+    if (!CoworkChatStore.cloudAvailable) {
+      ChatStorageState.markDeleted(chatId);
+      ChatStorageState.chatsById.remove(chatId);
+      ChatStorageState.notifyChanges(chatId);
+      return;
+    }
+    await ChatStorageCrud.deleteChat(chatId);
+  }
 
   // ============================================================================
   // SIDEBAR OPERATIONS (delegated to ChatStorageSidebar)

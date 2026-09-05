@@ -34,7 +34,7 @@ reconcile from the cursor.
 
 ## What was built
 
-Files owned by this session (all UNCOMMITTED, no commit without the user's word):
+Files owned by this session. Committed: dcaa60d (storage), a520aed (pubspec lines); the migration + outbox follow in their own commits. Commit rule since 2026-09-05: every finished step is committed at once (CLAUDE.md "Commit-Regel").
 
 | file | what |
 |---|---|
@@ -44,7 +44,7 @@ Files owned by this session (all UNCOMMITTED, no commit without the user's word)
 | `app/lib/services/storage/cowork_chat_storage_bootstrap.dart` | Auth-stream listener started from `main.dart`: session → `loadSavedChatsForSidebar()` + `ChatSyncService.start()` + cache migration; sign-out → `stop()` + `reset()`. |
 | `app/lib/services/mcp/mcp_sync_service.dart` | 8-line stub (`pullAndReconcile` no-op) the verbatim sync imports. Owner from now: cowork-47. |
 | `app/lib/main.dart` | +2 imports, +2 lines after `SupabaseService.initialize()`: `initChatStorageCache()`, `CoworkChatStorageBootstrap.start()`. |
-| `app/pubspec.yaml` | +4 lines (append-only, chuk versions): `sqflite ^2.4.3`, `sqflite_common_ffi ^2.4.2`, `path ^1.9.1`, `sqlite3_flutter_libs ^0.6.0+eol`. `app/linux/flutter/generated_plugin*` regenerated → commit together. |
+| `app/pubspec.yaml` | +4 lines (append-only, chuk versions): `sqflite ^2.4.3`, `sqflite_common_ffi ^2.4.2`, `path ^1.9.1`, `sqlite3_flutter_libs ^0.6.0+eol`. Committed alone as a520aed; `app/linux/flutter/generated_plugin*` carry no hunk for these packages. |
 | `supabase/migrations/20260905000000_cowork_chats.sql` | DDL + trigger + RLS. **The user must run it once** in the Supabase SQL editor. Until then every cloud upsert fails silently ("relation cowork_chats does not exist") and threads stay local; nothing else breaks. |
 | `docs/SUPABASE_SCHEMA.md` | New section "CoWork threads — cowork_chats". |
 | `docs/CHAT_UI_IMPORT.md` | Stub inventory rows updated, divergences 3/4, new section "Chat storage (bead cowork-sha)". |
@@ -112,6 +112,44 @@ Fix, all in `cowork_chat_store.dart` / the bootstrap / the facade:
   dropped; facade never removes/merges over a dirty thread),
   `cowork_chat_storage_bootstrap_test` 6/6 (flush at sign-in and per tick,
   stops at sign-out), `cowork_replay_loader_test` 21/21.
+
+## "Yesterday's history is gone" (bead cowork-izh, P0) — cause and fix
+
+Found with data, not by running the app:
+
+- Host DB `~/.cowork/executor-state.db`: session 2 = `host:cowork-host`,
+  89 messages from 2026-09-03 23:06 to 2026-09-05 01:23, max mid 106. Intact.
+- P2b JSON cache `~/.local/share/dev.chuk.cowork/chats/host_cowork-host.json`:
+  27 folded rows, written 03:26. Intact.
+- SQLite `chat_cache.db`: only the row `default` (host session 1, 17 old
+  messages). No row for `host:cowork-host`.
+- SharedPreferences: `cowork.replay_cursor.host:cowork-host` = 106.
+
+Chain: open the thread → `loadFullChat`: memory empty, no SQLite row, no
+cloud row → nothing to paint; replay with `after_id` 106 → the host has
+nothing above 106 → the loader commits "nothing new" → the thread stays
+EMPTY. Cause: the SQLite storage replaced the JSON-file cache without reading
+those files, while the persisted cursor still claimed the device held
+everything. Nothing was lost anywhere.
+
+Fix (`services/storage/cowork_chat_cache_migration.dart`, run by the
+bootstrap at the first auth event, i.e. at app start with a restored session,
+before `ChatSyncService.start()`; no encryption key needed, the rows are
+plaintext):
+
+1. `migrateJsonCache(userId)`: every `<support>/chats/*.json` (except
+   `index.json`) without a SQLite row → `CoworkChatStore.replaceThread` with
+   the file's own `createdAt`/`updatedAt`/`isStarred`/`customName`; the file
+   is renamed `.migrated` (a backup, never deleted). A file whose thread
+   SQLite already holds is only renamed (the row is newer).
+2. `dropOrphanCursors(userId)`: a cursor whose thread has no local copy
+   (neither memory nor a SQLite row) is removed, so the next open is a full
+   replay from the host. A full replay is always safe; an empty delta is not.
+
+Tests: `cowork_chat_cache_migration_test` (6): the P2b file becomes the
+thread with its dates, a known thread keeps the newer row, an unreadable file
+stays and does not stop the rest, no directory → no-op, orphan cursor dropped
+and a live one kept, the default probe sees memory.
 
 ## Open
 
