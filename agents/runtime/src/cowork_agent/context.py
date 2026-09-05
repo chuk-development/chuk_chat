@@ -50,6 +50,8 @@ saving.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import hashlib
 import json
 import re
@@ -540,6 +542,10 @@ class ContextLadder:
 
     config: LadderConfig = field(default_factory=LadderConfig)
     summarizer: Summarizer | None = None
+    #: Fired with every NEW tier-2/3 summary text, after it replaced the middle
+    #: of the live context. The memory layer keeps its facts (§12), so what left
+    #: the window is still recallable. Best-effort: a raising hook is swallowed.
+    on_summary: Callable[[str], None] | None = None
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
@@ -749,6 +755,11 @@ class ContextLadder:
                 return None
             self._summary = summary
             self._summarized_upto = tail_start
+            if self.on_summary is not None:
+                try:
+                    self.on_summary(summary)
+                except Exception:  # noqa: BLE001 — memory must never break compaction
+                    pass
         elif not previous:
             return None
 
