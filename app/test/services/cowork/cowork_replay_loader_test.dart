@@ -347,6 +347,57 @@ void main() {
     expect(rows.map((r) => r['text']), <String>['why', 'because']);
   });
 
+  test('a cursor with no local thread is dropped and the thread replayed whole',
+      () async {
+    // The reported loss (bead cowork-izh): the cursor lives in preferences and
+    // the transcript lives in the store, so a store that lost its threads
+    // leaves a cursor pointing at rows nobody has. "Nothing after 106" then
+    // looks like success, the thread stays empty, and the cursor keeps
+    // advancing — so it is never asked for again although the host still has
+    // every word.
+    await replay(const <CoworkRelayInbound>[
+      CoworkRelayUser('yesterday', mid: 100),
+      CoworkRelayDelta('an answer', replay: true, mid: 106),
+      CoworkRelayDone(reason: 'replay', replay: true),
+    ]);
+    expect(loader.cursorFor(sessionKey), 106);
+
+    // The store loses the thread; the cursor survives.
+    await ChatStorageService.deleteChat(sessionKey);
+
+    loader.attach();
+    await replay(
+      const <CoworkRelayInbound>[
+        CoworkRelayDone(reason: 'replay', replay: true),
+      ],
+      afterId: 106,
+    );
+
+    expect(loader.cursorFor(sessionKey), 0);
+    expect(loader.takeReplayWanted(sessionKey), isTrue);
+  });
+
+  test('an empty delta with the thread still cached leaves the cursor alone',
+      () async {
+    await replay(const <CoworkRelayInbound>[
+      CoworkRelayUser('yesterday', mid: 100),
+      CoworkRelayDelta('an answer', replay: true, mid: 106),
+      CoworkRelayDone(reason: 'replay', replay: true),
+    ]);
+
+    loader.attach();
+    await replay(
+      const <CoworkRelayInbound>[
+        CoworkRelayDone(reason: 'replay', replay: true),
+      ],
+      afterId: 106,
+    );
+
+    expect(loader.cursorFor(sessionKey), 106);
+    expect(loader.takeReplayWanted(sessionKey), isFalse);
+    expect(rowsFor(sessionKey), hasLength(2));
+  });
+
   test('invalidating a cursor that was never set changes nothing', () async {
     loader.invalidateCursor('never-seen');
     expect(loader.cursorFor('never-seen'), 0);

@@ -986,6 +986,14 @@ abstract interface class CoworkRelayController {
   /// Renames [roomId] on the host (§16.1).
   Future<void> renameRoom(String roomId, String name);
 
+  /// Registers a coworker the app created on the host's roster, so its name
+  /// outlives this install (bead cowork-817; `agent_create`, WIRE_CONTRACT
+  /// "Coworker names").
+  Future<void> createAgent(String agentId, String name);
+
+  /// Renames a coworker on the host's roster (bead cowork-817; `agent_rename`).
+  Future<void> renameAgent(String agentId, String name);
+
   /// Adds a member to [roomId] on the host (§16.1).
   Future<void> addRoomMember(String roomId, String agentId, String handle);
 
@@ -1753,6 +1761,22 @@ class CoworkRelayClient
       _sendFramePayload(<String, dynamic>{
         'type': 'room_rename',
         'room_id': roomId,
+        'name': name,
+      });
+
+  @override
+  Future<void> createAgent(String agentId, String name) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'agent_create',
+        'agent_id': agentId,
+        'name': name,
+      });
+
+  @override
+  Future<void> renameAgent(String agentId, String name) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'agent_rename',
+        'agent_id': agentId,
         'name': name,
       });
 
