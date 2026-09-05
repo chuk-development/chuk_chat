@@ -16,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/chat_sync_service.dart';
 import 'package:cowork/services/local_chat_cache_service.dart';
+import 'package:cowork/services/storage/cowork_chat_cache_migration.dart';
 import 'package:cowork/services/storage/cowork_chat_store.dart';
 import 'package:cowork/services/supabase_service.dart';
 
@@ -35,6 +36,11 @@ class CoworkChatStorageBootstrap {
   /// Test seam: what a flush does. Defaults to [CoworkChatStore.flushOutbox].
   @visibleForTesting
   static Future<void> Function()? flushHook;
+
+  /// Test seam: the one-time repairs at sign-in. Defaults to
+  /// [CoworkChatCacheMigration.migrateJsonCache] + [dropOrphanCursors].
+  @visibleForTesting
+  static Future<void> Function(String userId)? migrationHook;
 
   /// Test seam: the auth events to follow. Defaults to Supabase's stream.
   @visibleForTesting
@@ -102,6 +108,7 @@ class CoworkChatStorageBootstrap {
     onSignedInHook = null;
     onSignedOutHook = null;
     flushHook = null;
+    migrationHook = null;
     flushInterval = const Duration(seconds: 30);
   }
 
@@ -153,6 +160,10 @@ class CoworkChatStorageBootstrap {
         debugPrint('[cowork-chat-storage] sidebar load failed: $error');
       }
     }
+    // Before the sync and before any thread opens: bring the P2b JSON files
+    // into SQLite and drop cursors that point past a transcript this device
+    // no longer holds (bead cowork-izh). Both never throw.
+    await _repair(userId);
     ChatSyncService.start();
     // Threads written while there was no key or no network: upload now and
     // on every tick from here on.
@@ -162,6 +173,13 @@ class CoworkChatStorageBootstrap {
         if (kDebugMode) debugPrint('[cowork-chat-storage] migrate: $e');
       }),
     );
+  }
+
+  static Future<void> _repair(String userId) async {
+    final hook = migrationHook;
+    if (hook != null) return hook(userId);
+    await CoworkChatCacheMigration.migrateJsonCache(userId);
+    await CoworkChatCacheMigration.dropOrphanCursors(userId);
   }
 
   static Future<void> _signedOut() async {

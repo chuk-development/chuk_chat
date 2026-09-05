@@ -138,27 +138,35 @@ class CoworkChatStore {
   /// at once); the SQLite and cloud writes run in the background, in order,
   /// and never throw. Returns the stored chat, or null when [rows] hold no
   /// readable message.
+  ///
+  /// [createdAt], [updatedAt], [isStarred] and [customName] let a migration
+  /// carry a thread over with its own metadata; a live write leaves them
+  /// unset and keeps what is known (or "now").
   static Future<StoredChat?> replaceThread(
     String sessionKey,
-    List<Map<String, dynamic>> rows,
-  ) async {
+    List<Map<String, dynamic>> rows, {
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isStarred,
+    String? customName,
+  }) async {
     final messages = _decode(rows);
     if (messages.isEmpty) return null;
 
     final existing = ChatStorageState.chatsById[sessionKey];
     final now = DateTime.now();
-    final customName = _normalized(existing?.customName);
+    final resolvedName = _normalized(customName ?? existing?.customName);
     final title =
-        customName ?? ChatStorageCrud.extractTitleFromMessages(messages);
+        resolvedName ?? ChatStorageCrud.extractTitleFromMessages(messages);
 
     final chat = StoredChat(
       id: sessionKey,
       messages: messages,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      isStarred: existing?.isStarred ?? false,
+      createdAt: createdAt ?? existing?.createdAt ?? now,
+      updatedAt: updatedAt ?? now,
+      isStarred: isStarred ?? existing?.isStarred ?? false,
       title: title.isNotEmpty ? title : null,
-      customName: customName,
+      customName: resolvedName,
       assistantId: existing?.assistantId,
     );
 
@@ -174,7 +182,7 @@ class CoworkChatStore {
       return chat;
     }
 
-    final payloadJson = _payloadJson(messages, customName);
+    final payloadJson = _payloadJson(messages, resolvedName);
 
     _enqueue(sessionKey, () async {
       await _writeLocalCache(userId, chat, payloadJson);
@@ -207,6 +215,29 @@ class CoworkChatStore {
     } catch (error) {
       if (kDebugMode) debugPrint('[cowork-chat-store] load failed: $error');
       return existing;
+    }
+  }
+
+  /// True when this device holds a copy of [sessionKey]: fully loaded in
+  /// memory, or a SQLite row with a payload. Cheap — no cloud, no full read
+  /// of the payload into the model. The replay loader uses it to tell "the
+  /// host sent nothing new" from "the host sent nothing new AND I have
+  /// nothing": the second case means the cursor lies and a full replay is
+  /// due. With no signed-in user memory is all there is.
+  static Future<bool> hasThread(String sessionKey) async {
+    final inMemory = ChatStorageState.chatsById[sessionKey];
+    if (inMemory != null && inMemory.isFullyLoaded) return true;
+    final userId = _currentUserId();
+    if (userId == null) return false;
+    try {
+      final read = localCacheReader ?? LocalChatCacheService.loadById;
+      final row = await read(userId, sessionKey);
+      final payload = row?['payload'];
+      return payload is String && payload.isNotEmpty;
+    } catch (_) {
+      // No SQLite on this platform (a widget test): memory was the only
+      // local copy, and it does not hold the thread.
+      return false;
     }
   }
 

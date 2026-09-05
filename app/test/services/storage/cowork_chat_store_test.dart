@@ -322,6 +322,42 @@ void main() {
   );
 
   group('outbox', _outboxTests);
+
+  group('hasThread', () {
+    test('true for a thread in memory, false for an unknown one', () async {
+      await CoworkChatStore.replaceThread(
+        'agent-1',
+        rows([
+          ['user', 'x'],
+        ]),
+      );
+      expect(await CoworkChatStore.hasThread('agent-1'), isTrue);
+      expect(await CoworkChatStore.hasThread('agent-9'), isFalse);
+      expect(await ChatStorageService.hasLocalThread('agent-1'), isTrue);
+    });
+
+    test(
+      'true for a SQLite row with a payload, false for one without',
+      () async {
+        CoworkChatStore.userIdProvider = () => 'user-7';
+        CoworkChatStore.localCacheReader = (_, id) async => switch (id) {
+          'on-disk' => <String, dynamic>{'id': id, 'payload': '{"v":2}'},
+          'empty' => <String, dynamic>{'id': id, 'payload': ''},
+          _ => null,
+        };
+        expect(await CoworkChatStore.hasThread('on-disk'), isTrue);
+        expect(await CoworkChatStore.hasThread('empty'), isFalse);
+        expect(await CoworkChatStore.hasThread('nowhere'), isFalse);
+      },
+    );
+
+    test('a cache that throws counts as no copy', () async {
+      CoworkChatStore.userIdProvider = () => 'user-7';
+      CoworkChatStore.localCacheReader = (_, _) async =>
+          throw StateError('no db');
+      expect(await CoworkChatStore.hasThread('agent-1'), isFalse);
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
