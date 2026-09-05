@@ -55,6 +55,7 @@ from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
+from .coworker_names import CoworkerNameStore, handle_agent_frame
 from .secrets_key import secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
@@ -121,6 +122,9 @@ class LocalHost:
 
         self._roster = RosterStore(self._roster_path)
         self._agent = self._load_or_create_agent(agent_name)
+        # The names the user chose in the app (docs/WIRE_CONTRACT.md, "Coworker
+        # names"): own table in the roster file, own connection (any thread).
+        self._coworker_names = CoworkerNameStore(self._roster_path, device_id=HOST_DEVICE_ID)
 
         # Group rooms (§16.1). The stores are SQLite files (opened per party
         # thread, like the roster); the binding is pure-Python and thread-safe,
@@ -444,6 +448,7 @@ class LocalHost:
             # reuses it (§6). Task-scoped children are removed by their cleanup.
             self._containers.shutdown()
         self._roster.close()
+        self._coworker_names.close()
 
     def _sweep_orphan_runs(self) -> None:
         """A run still ``running`` in the store was cut off by a crash or a
@@ -645,6 +650,8 @@ class LocalHost:
             # A finished background job's ``job`` frame, when no run of its
             # session is live to carry it.
             job_frame_sender=self._send_host_payload,
+            # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names").
+            on_agent_frame=self._on_agent_frame,
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -829,6 +836,11 @@ class LocalHost:
             if not result.get("ok"):
                 self._log(f"automation {action} {automation_id}: {result.get('error')}")
         return None
+
+    def _on_agent_frame(self, payload: dict) -> list[dict]:
+        """The app's ``agent_create`` / ``agent_rename`` / ``agent_list``: keep
+        the name, answer with the current list."""
+        return handle_agent_frame(self._coworker_names, payload, log=self._log)
 
     def _on_secret_request_pending(self, info: dict) -> None:
         """A run is blocked on ``request_secrets`` and no app is attached to

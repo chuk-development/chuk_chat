@@ -116,6 +116,7 @@ from .protocol import (
     debug_context_payload,
     decode_payload,
     automation_list_payload,
+    agent_list_payload,
     delta_payload,
     done_payload,
     encode_payload,
@@ -629,6 +630,7 @@ class Executor:
         on_automation_frame: Callable[[dict], dict | None] | None = None,
         job_frame_sender: Callable[[dict], Any] | None = None,
         skills_seed_root: str | None = None,
+        on_agent_frame: Callable[[dict], list | None] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -712,6 +714,12 @@ class Executor:
         # frames. ``None`` -> no automation tools, those frames are unknown.
         self._automations = automations
         self._on_automation_frame = on_automation_frame
+        # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names"): the host
+        # keeps the names the user chose in the app. The hook takes an
+        # ``agent_create`` / ``agent_rename`` / ``agent_list`` payload and
+        # returns the current list (each answered with one ``agent_list``).
+        # ``None`` -> those frames are unknown.
+        self._on_agent_frame = on_agent_frame
         # Skills (docs/WIRE_CONTRACT.md, "Skills"): the app lists and switches
         # the workspace's skills through ``skills_list`` / ``skill_control``.
         # The executor answers both itself from ``<workspace>/skills`` and the
@@ -1024,6 +1032,12 @@ class Executor:
             # answered with one terminal frame, like a replay.
             self._handle_automation_frame(kind, request_id, payload)
             return
+        if kind in ("agent_create", "agent_rename", "agent_list"):
+            # The coworker names the host keeps (docs/WIRE_CONTRACT.md,
+            # "Coworker names"). Every one of the three is answered with the
+            # current list as one terminal frame, like a replay.
+            self._handle_agent_frame(request_id, payload)
+            return
         if kind in ("skills_list", "skill_control"):
             # The user manages the skills of this host (docs/WIRE_CONTRACT.md,
             # "Skills"). Both are answered with one terminal ``skills_list``
@@ -1210,6 +1224,18 @@ class Executor:
         if kind == "automation_list":
             rows = answer if isinstance(answer, list) else []
             self._terminal(request_id, automation_list_payload(rows))
+
+    def _handle_agent_frame(self, request_id: str, payload: dict) -> None:
+        hook = self._on_agent_frame
+        if hook is None:
+            self._terminal(request_id, error_payload("coworker names not enabled"))
+            return
+        try:
+            rows = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
+            return
+        self._terminal(request_id, agent_list_payload(rows if isinstance(rows, list) else []))
 
     def _handle_skills_frame(self, kind: str, request_id: str, payload: dict) -> None:
         root = (

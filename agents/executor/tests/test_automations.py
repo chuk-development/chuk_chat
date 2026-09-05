@@ -203,6 +203,59 @@ def test_automation_control_and_list_frames_reach_the_host_hook(tmp_path):
     assert events == [{"type": "automation_list", "automations": [{"id": "a1", "kind": "schedule", "state": "active", "session_key": "s1"}]}]
 
 
+def test_agent_frames_reach_the_host_hook_and_answer_with_the_list(tmp_path):
+    """Coworker names (docs/WIRE_CONTRACT.md "Coworker names"): create, rename
+    and the list request all reach the host hook and each is answered with one
+    ``agent_list`` terminal."""
+    from cowork_executor import agent_create_payload, agent_list_request_payload, agent_rename_payload
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    seen: list[dict] = []
+
+    def hook(payload: dict):
+        seen.append(payload)
+        return [{"agent_id": "local:desk:1:7", "name": payload.get("name", "Desk"), "host": False}]
+
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=lambda: MockModelClient(["unused"]),
+        on_agent_frame=hook,
+    )
+    controller = ControllerSession(endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener)
+    executor.start()
+    try:
+        rid1 = controller.send_payload(agent_create_payload(agent_id="local:desk:1:7", name="Crypto Desk"))
+        created = controller.collect(rid1, timeout=10.0)
+        rid2 = controller.send_payload(agent_rename_payload(agent_id="local:desk:1:7", name="Desk 2"))
+        renamed = controller.collect(rid2, timeout=10.0)
+        rid3 = controller.send_payload(agent_list_request_payload())
+        listed = controller.collect(rid3, timeout=10.0)
+    finally:
+        executor.stop()
+    assert [p["type"] for p in seen] == ["agent_create", "agent_rename", "agent_list"]
+    assert seen[0] == {"type": "agent_create", "agent_id": "local:desk:1:7", "name": "Crypto Desk"}
+    assert created == [{"type": "agent_list", "agents": [{"agent_id": "local:desk:1:7", "name": "Crypto Desk", "host": False}]}]
+    assert renamed[0]["agents"][0]["name"] == "Desk 2"
+    assert listed[0]["type"] == "agent_list"
+
+
+def test_agent_frames_without_a_hook_are_refused(tmp_path):
+    from cowork_executor import agent_list_request_payload
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, channel, executor_ep, model_factory=lambda: MockModelClient(["unused"]))
+    controller = ControllerSession(endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener)
+    executor.start()
+    try:
+        rid = controller.send_payload(agent_list_request_payload())
+        events = controller.collect(rid, timeout=10.0)
+    finally:
+        executor.stop()
+    assert events[0]["type"] == "error" and "coworker names" in events[0]["message"]
+
+
 def test_automation_frames_without_a_hook_are_refused(tmp_path):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
