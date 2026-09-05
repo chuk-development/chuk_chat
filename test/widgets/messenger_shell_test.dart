@@ -12,8 +12,8 @@ import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/widgets/agent_onboarding_sheet.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/widgets/browser_view_page.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/services/notifications/notification_router.dart';
@@ -119,6 +119,17 @@ class _FakeRelayController implements CoworkRelayController {
   @override
   Future<void> renameRoom(String roomId, String name) async =>
       renamedRooms.add((roomId, name));
+
+  final List<(String, String)> createdAgents = <(String, String)>[];
+  final List<(String, String)> renamedAgents = <(String, String)>[];
+
+  @override
+  Future<void> createAgent(String agentId, String name) async =>
+      createdAgents.add((agentId, name));
+
+  @override
+  Future<void> renameAgent(String agentId, String name) async =>
+      renamedAgents.add((agentId, name));
 
   final List<(String, String)> removedMembers = <(String, String)>[];
 
@@ -300,16 +311,17 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    // With a coworker selected all four slots are live: Agent controls,
-    // Control Rooms, Agent's browser, and Copy full chat in chuk's own slot.
+    // With a coworker selected three slots are live: Agent controls, Control
+    // Rooms, and Copy full chat in chuk's own slot. Agent's browser waits for
+    // the agent to actually open a browser (cowork-vzm).
     for (final tooltip in <String>[
       'Agent controls',
       'Control Rooms',
-      "Agent's browser",
       'Copy full chat',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
     }
+    expect(find.byTooltip("Agent's browser"), findsNothing);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
     final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
@@ -327,16 +339,60 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
-    // The roster is off screen; chuk's mini rail carries the three slots.
+    // The roster is off screen; chuk's mini rail carries the two slots. The
+    // browser has no rail slot and no button yet: nothing is open.
     expect(find.text('Coworkers').hitTestable(), findsNothing);
     expect(find.byTooltip('New coworker'), findsOneWidget);
-    expect(find.byTooltip("Agent's browser"), findsNWidgets(2)); // rail + top right
+    expect(find.byTooltip('Control Rooms'), findsNWidgets(2)); // rail + top right
+    expect(find.byTooltip("Agent's browser"), findsNothing);
     expect(threadOffstage(tester), isFalse);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Coworkers').hitTestable(), findsOneWidget);
     expect(find.byTooltip('New coworker'), findsNothing);
+  });
+
+  testWidgets("Agent's browser appears top right only once the agent opened one, "
+      'and opens as a full-screen route', (tester) async {
+    final (controller, _) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip("Agent's browser"), findsNothing);
+
+    // The agent navigates somewhere: the Playwright MCP tool frame (live or
+    // replayed) is the signal. One button, top right, nowhere else.
+    controller.emit(
+      const CoworkRelayTool(
+        'mcp__playwright__browser_navigate',
+        status: 'completed',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip("Agent's browser"), findsOneWidget);
+    expect(find.text("Agent's browser"), findsNothing); // no sidebar row
+
+    await tester.tap(find.byTooltip("Agent's browser"));
+    await tester.pumpAndSettle();
+    // A route with its own app bar, not a side panel next to the chat.
+    expect(find.byType(BrowserViewPage), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Agent browser'), findsOneWidget);
+    final route = ModalRoute.of(tester.element(find.byType(BrowserViewPage)));
+    expect((route as MaterialPageRoute).fullscreenDialog, isTrue);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(BrowserViewPage), findsNothing);
+
+    // The agent closes the browser: the button goes away again.
+    controller.emit(
+      const CoworkRelayTool(
+        'mcp__playwright__browser_close',
+        status: 'completed',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip("Agent's browser"), findsNothing);
   });
 
   testWidgets('one socket across a wide, tablet and phone resize', (tester) async {
@@ -416,36 +472,83 @@ void main() {
     expect(roster.agents.single.threads.single.key, roster.agents.single.id);
   });
 
-  testWidgets('onboarding adds a coworker and opens its thread', (tester) async {
+  testWidgets('New coworker is chuk\'s name dialog: it adds the coworker, '
+      'tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
     await tester.tap(find.byIcon(Icons.person_add_alt));
     await tester.pumpAndSettle();
-    expect(find.byType(AgentOnboardingSheet), findsOneWidget);
-
-    // The suggested name is an adjective-noun; keep it and give it a job. Scope
-    // the finder to the sheet: the connect bar behind it has fields too.
-    // Target the Job field by its label, not by index — the form gained a Role
-    // field, so positional indices are brittle.
-    final jobField = find.descendant(
-      of: find.byType(AgentOnboardingSheet),
-      matching: find.widgetWithText(TextField, 'Job'),
+    // chuk's rename-dialog shape: an AlertDialog with one TextField.
+    expect(find.byType(AlertDialog), findsOneWidget);
+    final nameField = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
     );
-    await tester.enterText(jobField, 'weekly crypto news');
-    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    expect(nameField, findsOneWidget);
+    // The field is pre-filled with a suggested adjective-noun name.
+    expect(tester.widget<TextField>(nameField).controller!.text, isNotEmpty);
+
+    await tester.enterText(nameField, '  Crypto Desk ');
+    await tester.tap(find.widgetWithText(TextButton, 'Create'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AgentOnboardingSheet), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(roster.agents, hasLength(1));
-    expect(roster.agents.single.brief, 'weekly crypto news');
+    expect(roster.agents.single.name, 'Crypto Desk');
     // An app-created agent is never claimed to be installed on the host.
     expect(roster.agents.single.onHost, isFalse);
+    // The host was told, so the name outlives this install.
+    expect(controller.createdAgents,
+        [(roster.agents.single.id, 'Crypto Desk')]);
     // Its thread is selected: the one thread view points at it, and the
     // roster lists it by name.
     final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
     expect(view.threadKey, roster.agents.single.threads.single.key);
-    expect(find.text(roster.agents.single.name), findsWidgets);
+    expect(find.text('Crypto Desk'), findsWidgets);
     expect(controller.sessionKeys, isEmpty);
+  });
+
+  testWidgets('Cancel in the New coworker dialog adds nothing', (tester) async {
+    final (controller, roster) = await pumpShell(tester);
+
+    await tester.tap(find.byIcon(Icons.person_add_alt));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(roster.agents, isEmpty);
+    expect(controller.createdAgents, isEmpty);
+  });
+
+  testWidgets('Rename from the row menu renames locally and on the host',
+      (tester) async {
+    final (controller, roster) = await pumpShell(tester);
+    final agent = roster.addAgent(name: 'amber');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+      matching: find.byTooltip('More'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(nameField).controller!.text, 'amber');
+    await tester.enterText(nameField, 'Amber Desk');
+    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    expect(roster.byId(agent.id)!.name, 'Amber Desk');
+    // The id and the thread key are untouched: a name is a label.
+    expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+    expect(controller.renamedAgents, [(agent.id, 'Amber Desk')]);
+    expect(find.text('Amber Desk'), findsWidgets);
   });
 
   testWidgets('an agent has one permanent thread and no way to open a second',
