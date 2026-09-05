@@ -14,8 +14,9 @@ the current state, while a running session keeps the prompt it started with.
 
 from __future__ import annotations
 
+import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,7 +43,9 @@ from .oauth_bridge import (
 )
 from .prompt import build_system_prompt
 from .search import register_search_tool
-from .skills import SkillLibrary, load_skills, register_skill_tool
+from .secrets import SecretsAccess
+from .automations import AutomationBackend, register_automation_tools
+from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
 from .state import StateStore
 from .subagents import (
     ActivityMonitor,
@@ -52,7 +55,8 @@ from .subagents import (
     SubagentSupervisor,
     register_subagent_tools,
 )
-from .terminal import TerminalManager, register_terminal_tools
+from .shell_tools import JobManager, register_job_tools, register_shell_tools
+from .terminal import TerminalManager
 from .tool_search import DEFAULT_THRESHOLD, ToolSearchDecision, apply_tool_search
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
@@ -254,6 +258,11 @@ def build_runtime(
     oauth_link_notifier: LinkNotifier | None = None,
     oauth_http_client: httpx.Client | None = None,
     debug_observer: Callable[[dict], None] | None = None,
+    tool_event_observer: Callable[[dict], None] | None = None,
+    secrets: SecretsAccess | None = None,
+    automations: AutomationBackend | None = None,
+    shell_session_key: str | None = None,
+    context_providers: Sequence[Callable[[], list[dict]]] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`cowork_agent.prompt` and the live
@@ -315,6 +324,19 @@ def build_runtime(
     a callback fired once per model round with the EXACT message list sent to the
     model that round and the context ladder's stats. Off by default — pass no
     observer and nothing is built or called, so a normal run pays nothing for it.
+
+    ``secrets`` (docs/WIRE_CONTRACT.md, "Secrets") is the user's secret set:
+    the values go into the child environment of ``run_command`` / ``python``,
+    ``request_secrets`` / ``list_secrets`` are registered, and the registry's
+    result filter masks every value in every dispatch result. Unset, nothing
+    of it exists.
+
+    ``shell_session_key`` (docs/WIRE_CONTRACT.md, "Interactive shell and
+    background commands") is the conversation a background job's end is
+    routed to; the executor passes the task's session key. ``None`` still runs
+    jobs, but nobody is woken. ``context_providers`` are extra message
+    providers drained after every tool round, next to the skill bodies — the
+    seam the executor uses to hand a finished job's output to a running turn.
     """
     env = environment or LocalEnvironment()
     ladder_config = context_config or LadderConfig()
@@ -330,6 +352,15 @@ def build_runtime(
         else None
     )
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
+    # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and background
+    # commands"): ``run_command(background=true)`` + ``job_*``. Needs no tmux,
+    # only the environment; the wake-up is the host's job.
+    jobs = JobManager(
+        env,
+        session_key=shell_session_key,
+        workspace=workspace,
+        secrets_env=secrets.env if secrets is not None else None,
+    )
     register_builtin_tools(
         registry,
         env,
@@ -337,7 +368,10 @@ def build_runtime(
         base_url=base_url,
         file_sink=file_sink,
         media_mount=media_mount,
+        secrets=secrets,
+        jobs=jobs,
     )
+    register_job_tools(registry, jobs)
     register_workspace_tools(registry, git_workspace)
 
     # here.now publishing (a first-class connector, off unless the user enabled
@@ -347,12 +381,27 @@ def build_runtime(
     # action, kept in the prompt like the other core tools.
     register_herenow_tools(registry, env, herenow_config, herenow_gate)
 
+    # Automations (docs/WIRE_CONTRACT.md, "Automations"): schedule_task /
+    # start_watcher / list / pause / resume / cancel, bound to ONE session by
+    # the executor. ``None`` (no host, no clock) registers nothing.
+    register_automation_tools(registry, automations)
+
     if enable_terminal:
-        # Task-scoped by construction (§7.8): the task id is part of every tmux
-        # session name, so a new task can only ever get a fresh terminal.
-        # Registered even without tmux — `check_fn` keeps it out of the prompt.
-        register_terminal_tools(
-            registry, TerminalManager(env, task_id=terminal_task_id)
+        # The interactive shell (docs/WIRE_CONTRACT.md, "Interactive shell and
+        # background commands"): ``shell_start`` / ``shell_read`` /
+        # ``shell_send`` / ``shell_list`` / ``shell_kill`` over the tmux driver
+        # (§7.8). The task id is part of every tmux session name; a live
+        # session of an earlier task in the same sandbox is attached, not
+        # killed. Registered even without tmux — `check_fn` keeps it out of the
+        # prompt. The secrets ride into the tmux server's environment when it
+        # starts, the same values ``run_command`` gets.
+        register_shell_tools(
+            registry,
+            TerminalManager(
+                env,
+                task_id=terminal_task_id,
+                env_provider=secrets.env if secrets is not None else None,
+            ),
         )
 
     if enable_browser:
@@ -414,13 +463,24 @@ def build_runtime(
             # no client, so memory still injects the persona without a backend.
             memory = MemoryStore(root, llm_client=aux_model or model)
             register_memory_tool(registry, memory)
+            # Nothing a compaction summarized away is lost: every new tier-2/3
+            # summary is handed to memory as facts (§12).
+            if ladder is not None and memory.automatic:
+                ladder.on_summary = memory.remember_summary
 
     library = SkillLibrary()
     if enable_skills:
         root = skills_root or (
             str(Path(workspace) / SKILLS_DIRNAME) if workspace else None
         )
-        library = load_skills(root)
+        # The user's switches (docs/WIRE_CONTRACT.md, "Skills") live in the
+        # same state database; a skill switched off in the app never reaches
+        # the catalogue. An unreadable store means "all on" (see load_skills).
+        try:
+            settings: SkillSettingsStore | None = SkillSettingsStore(db_path)
+        except sqlite3.Error:
+            settings = None
+        library = load_skills(root, settings=settings)
         # Registered even when empty: `check_fn` keeps it out of the prompt
         # until a skill exists, and a skill dropped into the workspace between
         # sessions then needs no re-wiring.
@@ -528,11 +588,39 @@ def build_runtime(
         token_budget=token_budget,
         kill_switch=kill,
         system_prompt=prompt,
-        context_providers=[library.pending_context],
+        context_providers=[library.pending_context, *(context_providers or [])],
         context_ladder=ladder,
         # The debug "copy raw context" tap (off by default): fired each round with
         # the exact outbound payload and the ladder's stats. Unset -> not wired.
         debug_observer=debug_observer,
+        # The one source of live ``tool`` frames (one per native tool call, with
+        # its result and clocks; docs/WIRE_CONTRACT.md). Unset -> not wired.
+        # Distinct from ``tool_observer`` above, the journaling registry's
+        # per-dispatch summary hook a parent uses to watch its subagents.
+        tool_event_observer=tool_event_observer,
+        # Store writes pass the secret scrubber too (docs/WIRE_CONTRACT.md,
+        # "Secrets"): a key the USER typed into the prompt, or one a model
+        # echoes, is masked before it becomes a row. The same filter the
+        # registry installed on its dispatch result.
+        persist_filter=registry.result_filter if secrets is not None else None,
+        # Memory both ways (§12): the top-k memories relevant to the prompt are
+        # injected once per task; the finished turn's facts are extracted in
+        # the background. The model still has memory_search / memory_add for
+        # anything explicit.
+        recall_provider=(
+            memory.recall_messages if memory is not None and memory.automatic else None
+        ),
+        turn_observer=(
+            (
+                lambda record: memory.observe_turn(
+                    record.user_message,
+                    record.final_answer,
+                    tool_names=record.tool_names,
+                )
+            )
+            if memory is not None and memory.automatic
+            else None
+        ),
     )
     # Two handles the caller needs and the loop itself does not: the MCP manager,
     # whose transport threads and subprocesses must be closed when the run ends,

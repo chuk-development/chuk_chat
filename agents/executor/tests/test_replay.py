@@ -114,11 +114,14 @@ def test_replay_restreams_the_whole_thread_marked_replay(tmp_path):
 
     assert user["text"] == "make a file"
     assert tool["name"] == "run_command"
-    # Dict tool arguments come back as compact JSON — the shape ``state.py`` builds
-    # for the ``command`` field; the client renders it as the call's arguments.
-    assert tool["command"] == '{"command":"touch a.txt"}'
-    assert tool["stdout"] == "created a.txt"
-    assert tool["exit_code"] == 0 and tool["timed_out"] is False
+    # One shape, live and replayed (docs/WIRE_CONTRACT.md, "Tool events and
+    # timestamps"): the native arguments as an object, `command` as the plain
+    # command line for run_command, the result as text, a status, the clocks.
+    assert tool["arguments"] == {"command": "touch a.txt"}
+    assert tool["command"] == "touch a.txt"
+    assert tool["result"] == "created a.txt"
+    assert tool["status"] == "completed"
+    assert tool["started_at"] <= tool["completed_at"]
     assert delta["text"] == "done, made a.txt"
 
     # The terminal done marks the replay so the client leaves its loading state

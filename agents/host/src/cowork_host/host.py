@@ -43,6 +43,7 @@ from cowork_sandbox import BaseEnvironment, make_environment
 from cowork_executor import (
     ModelFactory,
     ModelSelect,
+    SecretsVault,
     encode_payload,
     frame_to_b64,
     resolve_backend_model_wiring,
@@ -54,8 +55,10 @@ from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
+from .secrets_key import secrets_at_rest_key
 from .seed_skills import seed_workspace_skills
 from .desktop_notify import DesktopNotifier
+from .automations import AutomationManager
 from .notify import SupabaseNotifier
 from .serve import TaskServer
 
@@ -137,6 +140,20 @@ class LocalHost:
 
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
         self._device_id = HOST_DEVICE_ID
+
+        # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"): one per
+        # user, global for every agent and session on this host. Held in
+        # memory, written at rest under a key derived from the host identity,
+        # loaded here so a restart with no app attached still has the keys.
+        # ``secrets_vault.env`` is the one reader of the values (the sandbox
+        # child processes, and cowork-94's watcher processes).
+        self._secrets_vault = SecretsVault(
+            path=self._workspace / "secrets.enc",
+            key=secrets_at_rest_key(self._identity),
+        )
+        loaded = self._secrets_vault.load()
+        if loaded:
+            self._log(f"[cowork-host] loaded {loaded} secret name(s) at rest")
 
         # Persistent trust: after the first §15 pairing this file holds the stable
         # channel, the channel key and the app's approved device key, so every
@@ -366,6 +383,33 @@ class LocalHost:
             desktop=self._desktop_notifier,
             logger=self._log,
         )
+        # Automations (docs/WIRE_CONTRACT.md, "Automations"): the clock, the
+        # watcher supervisor and the self-wake watchdog. Started before the
+        # party: a persisted watcher must run again whether or not an app
+        # ever connects; a fire before provisioning is retried per tick.
+        vault = getattr(self, "_secrets_vault", None)
+        self._automations = AutomationManager(
+            db_path=self._db_path,
+            workspace=self._agent.workspace_dir or str(self._agents_dir / self._agent.name),
+            fire=self._fire_automation,
+            send=self._send_host_payload,
+            env_provider=getattr(vault, "env", None),
+            # Only a container sandbox needs the environment (for the
+            # ``docker exec`` prefix); a local watcher is a local process.
+            environment_provider=(
+                self._make_environment if self._containers is not None else None
+            ),
+            estop_path=self._estop_path,
+            logger=self._log,
+        )
+        # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
+        # background commands"): the same trigger tail, a second consumer. A
+        # finished job wakes the agent through the executor's job router.
+        self._automations.register_trigger_consumer("job", self._on_job_trigger)
+        try:
+            self._automations.start()
+        except Exception as exc:  # noqa: BLE001 — automations must not block startup
+            self._log(f"could not start automations: {type(exc).__name__}: {exc}")
         self._relay.start()
         self._port = self._relay.port
         self._party = HostParty(
@@ -387,6 +431,9 @@ class LocalHost:
         self._party.start()
 
     def stop(self) -> None:
+        automations = getattr(self, "_automations", None)
+        if automations is not None:
+            automations.stop()
         if self._party is not None:
             self._party.stop()
             self._party = None
@@ -460,6 +507,13 @@ class LocalHost:
     @property
     def party(self) -> HostParty | None:
         return self._party
+
+    @property
+    def secrets_vault(self) -> SecretsVault:
+        """The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"). Callers
+        that start a child process take ``secrets_vault.env()``; nothing else
+        reads the values."""
+        return self._secrets_vault
 
     # -- model factory + task server wiring (called by HostParty) --------
 
@@ -577,6 +631,16 @@ class LocalHost:
             on_run_finished=self._on_run_finished,
             on_approval_pending=self._on_approval_pending,
             on_account_frame=self._on_reprovision,
+            # The secret set every task injects and masks against.
+            secrets=self._secrets_vault,
+            on_secret_request_pending=self._on_secret_request_pending,
+            # Automations: the manager for the session-scoped tools, and the
+            # app's control / list frames.
+            automations=getattr(self, "_automations", None),
+            on_automation_frame=self._on_automation_frame,
+            # A finished background job's ``job`` frame, when no run of its
+            # session is live to carry it.
+            job_frame_sender=self._send_host_payload,
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -681,13 +745,105 @@ class LocalHost:
         """A run ended on this host. With an app attached the user is watching
         the stream; with none, tell them another way. Here: the desktop
         notification. The cloud push is added by the notification phase on the
-        same hook. The notification never carries the answer."""
-        if self._controller_attached():
+        same hook. The notification never carries the answer.
+
+        A fired automation (``origin == "automation"``) is unattended by
+        definition: the desktop toast fires even with a controller attached
+        (its ``done`` says ``host_notified`` so the app draws no second one);
+        the cloud push still only when nobody is attached."""
+        attached = self._controller_attached()
+        # ``automation`` and ``job`` runs are unattended by definition.
+        automation = isinstance(summary, dict) and summary.get("origin") in ("automation", "job")
+        if attached and not automation:
             return
         notifier = getattr(self, "_notifier", None)
-        if notifier is not None:
-            # Desktop toast + cloud push, one per run, on a background thread.
-            notifier.notify_run_finished(summary)
+        if notifier is None:
+            return
+        if attached:
+            # Attached + automation: desktop only, once per run.
+            desktop = getattr(self, "_desktop_notifier", None)
+            if desktop is not None and notifier._mark_notified_once(str(summary.get("run_id") or "")):
+                from .desktop_notify import completion_text
+
+                failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
+                title, body = completion_text(self._agent.name, failed=failed)
+                desktop.notify(title, body)
+            return
+        # Desktop toast + cloud push, one per run, on a background thread.
+        notifier.notify_run_finished(summary)
+
+    # -- automations (docs/WIRE_CONTRACT.md, "Automations") ---------------
+
+    def _fire_automation(self, session_key: str, prompt: str, meta: dict) -> str | None:
+        """Start the task a fired automation asks for. ``None`` when the host
+        has no provisioned task server yet (restarted, no app since): the
+        manager retries at its next tick."""
+        party = self._party
+        server = party.task_server if party is not None else None
+        if server is None:
+            return None
+        executor = server.supervisor.executor(self._agent.id)
+        if executor is None:
+            return None
+        return executor.submit_task(session_key, prompt, meta)
+
+    def _on_job_trigger(self, record: dict) -> None:
+        """A ``kind: job`` line in the trigger file: a background job ended
+        (docs/WIRE_CONTRACT.md, "The wake-up"). Handed to the executor's job
+        router, which wakes the model. With no provisioned task server the
+        line is dropped here; the executor's start-up sweep (``.exit`` without
+        ``.woken``) catches the job once the app has provisioned the host."""
+        party = self._party
+        server = party.task_server if party is not None else None
+        if server is None:
+            self._log(f"[jobs] job {record.get('job_id')} ended but the host is not provisioned; swept at the next task server")
+            return
+        executor = server.supervisor.executor(self._agent.id)
+        if executor is None:
+            return
+        try:
+            outcome = executor.job_finished(record)
+        except Exception as exc:  # noqa: BLE001 — the tail must keep running
+            self._log(f"[jobs] wake for {record.get('job_id')} failed: {type(exc).__name__}: {exc}")
+            return
+        self._log(f"[jobs] job {record.get('job_id')} exit {record.get('exit_code')} -> {outcome}")
+
+    def _on_automation_frame(self, payload: dict) -> list[dict] | None:
+        """The app's ``automation_control`` / ``automation_list``. The app is
+        the user: it may manage every automation of this host, so no session
+        scope is applied here (the tools apply it)."""
+        manager = getattr(self, "_automations", None)
+        if manager is None or not isinstance(payload, dict):
+            return None
+        if payload.get("type") == "automation_list":
+            key = payload.get("session_key")
+            return manager.list(key if isinstance(key, str) and key else None)
+        automation_id = payload.get("id")
+        action = payload.get("action")
+        if isinstance(automation_id, str) and isinstance(action, str):
+            result = manager.control(None, automation_id, action)
+            if not result.get("ok"):
+                self._log(f"automation {action} {automation_id}: {result.get('error')}")
+        return None
+
+    def _on_secret_request_pending(self, info: dict) -> None:
+        """A run is blocked on ``request_secrets`` and no app is attached to
+        show the dialog: nudge the user on the desktop. Names only, never a
+        value (there is none yet)."""
+        if self._controller_attached():
+            return
+        notifier = getattr(self, "_desktop_notifier", None)
+        if notifier is None:
+            return
+        names = info.get("names") if isinstance(info, dict) else None
+        listed = ", ".join(str(n) for n in names) if isinstance(names, list) else ""
+        try:
+            notifier.notify(
+                f"{self._agent.name} needs an API key",
+                f"Open the app to enter: {listed}" if listed else "Open the app to enter it",
+            )
+        except Exception:  # noqa: BLE001 — a toast must never take a run down
+            pass
 
     def _on_approval_pending(self, info: dict) -> None:
         """A run is blocked on a here.now publish approval. With no app attached

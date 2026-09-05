@@ -61,6 +61,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from uuid import uuid4
@@ -75,10 +76,13 @@ from cowork_agent import (
     StateStore,
     SubagentConfig,
     SubagentLimits,
+    TranscriptExporter,
     WorkspaceMount,
     build_runtime,
     close_cached_memories,
     configs_from_entries,
+    redact_secrets,
+    run_stamp_fields,
 )
 from cowork_crypto import (
     CoworkFrameOpener,
@@ -89,16 +93,23 @@ from cowork_manager import decode_frames, encode_frame, make_request, make_respo
 from cowork_sandbox import BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
+from .secrets import SecretsVault
+from .shell import JobWakeRouter
 from .protocol import (
+    APPROVAL_BY_USER,
+    APPROVAL_STOPPED,
+    APPROVAL_TIMEOUT,
     INBOUND_METHODS,
     MAX_BROWSER_CHUNK,
     METHOD_EVENT,
+    approval_outcome_fields,
     approval_request_payload,
     b64_to_frame,
     browser_data_payload,
     browser_view_payload,
     debug_context_payload,
     decode_payload,
+    automation_list_payload,
     delta_payload,
     done_payload,
     encode_payload,
@@ -106,7 +117,9 @@ from .protocol import (
     file_payload,
     frame_to_b64,
     mcp_credentials_payload,
+    reasoning_payload,
     run_state_payload,
+    secret_request_payload,
     stop_ack_payload,
     subagent_payload,
     tool_payload,
@@ -188,24 +201,39 @@ def _entry_meta(mcp_servers: list[dict]) -> dict[str, dict]:
 
 
 class StreamingModelClient:
-    """Wraps a ``ModelClient`` and reports the assistant text as deltas.
+    """Wraps a ``ModelClient`` and reports the assistant text as deltas and the
+    model's thinking as reasoning deltas.
 
-    If the inner client can stream (it exposes a settable ``on_delta``, like the
-    backend client), we hand it the callback so each chunk reaches the UI **as it
-    arrives** — real token-by-token streaming. Otherwise (e.g. the mock client)
-    we fall back to emitting the whole turn's text once, so the UI still updates.
-    Tool-only turns carry no text and emit nothing either way."""
+    If the inner client can stream (it exposes a settable ``on_delta`` /
+    ``on_reasoning``, like the backend client), we hand it the callbacks so each
+    chunk reaches the UI **as it arrives** — real token-by-token streaming.
+    Otherwise (e.g. the mock client) we fall back to emitting the whole turn's
+    text (and reasoning) once, so the UI still updates. Tool-only turns carry no
+    text and emit nothing either way; a turn's reasoning is emitted regardless,
+    since a thinking model reasons about its tool calls too."""
 
     def __init__(
-        self, inner: ModelClient, *, on_delta: Callable[[str], None] | None = None
+        self,
+        inner: ModelClient,
+        *,
+        on_delta: Callable[[str], None] | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
     ) -> None:
         self._inner = inner
         self._on_delta = on_delta
+        self._on_reasoning = on_reasoning
         # Prefer live per-chunk streaming when the inner client supports it.
         self._inner_streams = False
         if on_delta is not None and hasattr(inner, "on_delta"):
             inner.on_delta = on_delta  # type: ignore[attr-defined]
             self._inner_streams = True
+        # The thinking channel has its own seam and its own flag: a client that
+        # streams content may still only accumulate reasoning (an older backend
+        # client), in which case the fallback below emits it once at the end.
+        self._inner_streams_reasoning = False
+        if on_reasoning is not None and hasattr(inner, "on_reasoning"):
+            inner.on_reasoning = on_reasoning  # type: ignore[attr-defined]
+            self._inner_streams_reasoning = True
 
     def set_tools(self, tools: list[dict] | None) -> None:
         """Forward the native tool set to the inner client (§ native tool calls).
@@ -218,7 +246,13 @@ class StreamingModelClient:
     def complete(self, messages: list[dict]) -> ModelResponse:
         response = self._inner.complete(messages)
         # Fallback only: the inner already streamed each chunk, so emitting the
-        # full text again here would duplicate it in the thread.
+        # full text again here would duplicate it in the thread. Reasoning goes
+        # first — that is the order the model produced it in, and the order the
+        # UI shows it (thinking block above the answer).
+        if self._on_reasoning is not None and not self._inner_streams_reasoning:
+            reasoning = response.raw.get("reasoning") if response.raw else None
+            if isinstance(reasoning, str) and reasoning:
+                self._on_reasoning(reasoning)
         if (
             self._on_delta is not None
             and not self._inner_streams
@@ -259,17 +293,50 @@ class _Run:
     model: str | None = None
     provider: str | None = None
     reasoning_effort: str | None = None
+    # "Replace the last answer", not "ask again": the app's Retry button sends
+    # the same prompt a second time, and without this the stored conversation
+    # keeps every attempt (docs/WIRE_CONTRACT.md, ``task``). Absent/false ->
+    # today's behavior, so an older client is unaffected.
+    regenerate: bool = False
     # docs/WIRE_CONTRACT.md: the host-side id of this run and when it was
     # accepted. The relay request id is per socket, so it cannot name a run
     # across a reconnect; this id can.
     run_id: str = ""
     started_at: float = 0.0
+    # Who started this run (docs/WIRE_CONTRACT.md, "Automations"): ``app`` for
+    # a task frame, ``automation`` for a fired schedule / watcher trigger. An
+    # automation run is notified on even with a controller attached.
+    origin: str = "app"
+    automation_id: str | None = None
 
 
 #: How long a here.now publish waits for the user before it gives up and denies.
 #: Long enough to walk to the phone and read the prompt; bounded so a run cannot
 #: hang forever on an approval nobody will ever answer.
-APPROVAL_TIMEOUT = 600.0
+APPROVAL_WAIT_SECONDS = 600.0
+
+
+#: How long ``request_secrets`` waits for the user before it reports every
+#: open name as missing. Same window as an approval: walk to the phone, read
+#: the dialog, paste a key.
+SECRET_REQUEST_TIMEOUT = 600.0
+
+
+@dataclass
+class _PendingSecretRequest:
+    """One in-flight ``secret_request`` (docs/WIRE_CONTRACT.md, "Secrets"):
+    the worker waits on ``event``, the serve thread sets it when a ``secrets``
+    frame answers (by ``request_id``, or by carrying every name asked for).
+    Kept in memory only — never a row — and re-sent on a replay of its
+    session while the run still waits."""
+
+    request_id: str
+    session_key: str
+    names: list[str]
+    purpose: str
+    #: The relay request id of the task whose stream carries the frame.
+    stream_request_id: str
+    event: threading.Event = field(default_factory=threading.Event)
 
 
 @dataclass
@@ -280,6 +347,10 @@ class _PendingApproval:
 
     event: threading.Event = field(default_factory=threading.Event)
     approved: bool = False
+    #: The persisted ``approval_request`` row (docs/WIRE_CONTRACT.md,
+    #: cowork-266), patched with the outcome once; None when nothing was stored.
+    mid: int | None = None
+    closed: bool = False
 
 
 class _RfbClientFramer:
@@ -545,6 +616,11 @@ class Executor:
         on_approval_pending: Callable[[dict], None] | None = None,
         on_account_frame: Callable[[dict], None] | None = None,
         on_run_ack: Callable[[dict], None] | None = None,
+        secrets: SecretsVault | None = None,
+        on_secret_request_pending: Callable[[dict], None] | None = None,
+        automations=None,
+        on_automation_frame: Callable[[dict], dict | None] | None = None,
+        job_frame_sender: Callable[[dict], Any] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -607,6 +683,34 @@ class Executor:
         self._on_approval_pending = on_approval_pending
         self._on_account_frame = on_account_frame
         self._on_run_ack = on_run_ack
+        # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"), owned by
+        # the host and shared by every task: ``run_command`` / ``python`` get
+        # the values as child environment, the model gets ``set`` / ``missing``,
+        # and the vault's scrubber masks every value in every frame sealed
+        # below (``_seal_b64``). ``None`` -> no secrets tools, no masking.
+        self._secrets = secrets
+        self._secret_scrubber = secrets.scrubber() if secrets is not None else None
+        # In-flight ``secret_request``s, by their own request id. The worker
+        # (inside the tool) registers one and blocks; the serve thread resolves
+        # it when the app's ``secrets`` frame lands.
+        self._secret_requests: dict[str, _PendingSecretRequest] = {}
+        self._secret_requests_lock = threading.Lock()
+        # Like ``on_approval_pending``: a run is blocked on the user and no app
+        # may be attached to show the dialog.
+        self._on_secret_request_pending = on_secret_request_pending
+        # Automations (docs/WIRE_CONTRACT.md, "Automations"): the host's manager
+        # (``bound(session_key)`` gives a task its session-scoped tools) and the
+        # hook that answers the app's ``automation_control`` / ``automation_list``
+        # frames. ``None`` -> no automation tools, those frames are unknown.
+        self._automations = automations
+        self._on_automation_frame = on_automation_frame
+        # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
+        # background commands"): the host's trigger tail hands a finished
+        # job to ``job_finished``; the router wakes the model — into the
+        # running turn, or as a new task of the session. ``job_frame_sender``
+        # streams the ``job`` frame when no run of the session is live (the
+        # host's own sender to an attached app); ``None`` -> persisted only.
+        self._jobs = JobWakeRouter(self, workspace=workspace, send_host=job_frame_sender)
         # The frame codec is per app session: a reconnecting app mints a fresh
         # sealer (its seq guard restarts), so the host hands us a fresh opener /
         # sealer pair through ``rebind_codec`` while the run registry, the
@@ -694,6 +798,15 @@ class Executor:
             target=self._serve, name=f"executor-{self._name}", daemon=True
         )
         self._thread.start()
+        # Jobs that ended while no executor was up (a host restart) are woken
+        # now, as new tasks of their sessions. Guarded: a sweep must never keep
+        # the executor from starting.
+        try:
+            swept = self._jobs.sweep()
+            if swept:
+                logger.info("woke %d background job(s) that ended while the host was down", swept)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("job sweep failed: %s", type(exc).__name__)
 
     def stop(self, *, join_timeout: float = 5.0) -> None:
         """Signal both loops, join them, and release the sandbox.
@@ -819,6 +932,13 @@ class Executor:
                 )
             finally:
                 self._forget(run.request_id)
+                # A job wake queued for this run that its turn never consumed
+                # becomes a new task of the session (docs/WIRE_CONTRACT.md,
+                # "The wake-up", 5). Guarded like every hook.
+                try:
+                    self._jobs.flush_after_run(run.session_key)
+                except Exception as exc:  # noqa: BLE001
+                    logger.info("job flush failed: %s", type(exc).__name__)
 
     # -- inbound frames --------------------------------------------------
     def _handle_frame(self, frame: dict) -> None:
@@ -867,6 +987,19 @@ class Executor:
             # like a stop: it resolves a wait, it does not open or close a task,
             # so there is no request-scoped terminal to send.
             self._resolve_approval(payload)
+            return
+        if kind == "secrets":
+            # The user's whole secret set (docs/WIRE_CONTRACT.md, "Secrets"):
+            # replace what the vault holds and wake a tool waiting for it. A
+            # control frame like approval_decision: no terminal.
+            self._handle_secrets(payload)
+            return
+        if kind in ("automation_control", "automation_list"):
+            # The user manages the automations of this host (docs/WIRE_CONTRACT.md,
+            # "Automations"). A control is like a stop (no terminal; the state
+            # change comes back as an ``automation`` event); a list request is
+            # answered with one terminal frame, like a replay.
+            self._handle_automation_frame(kind, request_id, payload)
             return
         if kind == "run_ack":
             # The app saw a live ``done`` for this run. Record it so a later
@@ -941,6 +1074,7 @@ class Executor:
             reasoning_effort=(
                 str(reasoning_effort) if reasoning_effort is not None else None
             ),
+            regenerate=bool(payload.get("regenerate")),
             run_id=uuid4().hex,
             started_at=time.time(),
         )
@@ -956,6 +1090,12 @@ class Executor:
             run.provider or HOST_DEFAULT,
             run.reasoning_effort or HOST_DEFAULT,
         )
+        self._enqueue_run(run)
+
+    def _enqueue_run(self, run: _Run) -> None:
+        """Record the run, then queue it. Shared by a task frame and a fired
+        automation, so both go through the ONE worker queue of this executor
+        and are serialized per sandbox."""
         # Record the run before it is queued (docs/WIRE_CONTRACT.md): from here
         # on it exists on the host whether or not the socket survives. A store
         # failure never refuses the task; the run just has no durable record.
@@ -966,7 +1106,9 @@ class Executor:
                     run.run_id,
                     store.route(run.session_key),
                     run.session_key,
-                    prompt,
+                    # A key the user pasted into the prompt is masked before it
+                    # becomes a row (docs/WIRE_CONTRACT.md, "Secrets").
+                    self._scrub_text(run.prompt),
                     # Recorded so the run can prove later which model it ran on.
                     model=run.model,
                     provider=run.provider,
@@ -977,8 +1119,68 @@ class Executor:
         except Exception:  # noqa: BLE001 — bookkeeping must not block a task
             pass
         with self._runs_lock:
-            self._runs[request_id] = run
+            self._runs[run.request_id] = run
         self._queue.put(run)
+
+    # -- automations (docs/WIRE_CONTRACT.md, "Automations") ---------------
+    def submit_task(self, session_key: str, prompt: str, meta: dict | None = None) -> str:
+        """Start a task that no frame asked for: a fired automation. It is a
+        normal run of ``session_key`` — a ``runs`` row, the worker queue, the
+        loop, a ``done`` — on the model / provider / effort of that session's
+        LAST run (the user's current mode). Returns the ``run_id``."""
+        meta = dict(meta or {})
+        model = provider = effort = None
+        try:
+            store = StateStore(self._db_path)
+            try:
+                last = store.latest_run(session_key)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — no history, host default
+            last = None
+        if last:
+            model = last.get("model") or None
+            provider = last.get("provider") or None
+            effort = last.get("reasoning_effort") or None
+        run = _Run(
+            request_id=f"auto-{uuid4().hex[:12]}",
+            session_key=str(session_key),
+            prompt=prompt,
+            kill=KillSwitch(self._estop_path),
+            model=model,
+            provider=provider,
+            reasoning_effort=effort,
+            run_id=uuid4().hex,
+            started_at=time.time(),
+            # ``automation`` (a fired schedule / watcher trigger) unless the
+            # caller says otherwise (``job``: a background command reporting).
+            origin=str(meta.get("origin") or "automation"),
+            automation_id=str(meta.get("automation_id") or "") or None,
+        )
+        logger.info(
+            "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
+            run.request_id,
+            run.session_key,
+            run.run_id,
+            run.automation_id,
+            run.model or HOST_DEFAULT,
+        )
+        self._enqueue_run(run)
+        return run.run_id
+
+    def _handle_automation_frame(self, kind: str, request_id: str, payload: dict) -> None:
+        hook = self._on_automation_frame
+        if hook is None:
+            self._terminal(request_id, error_payload("automations not enabled"))
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(request_id, error_payload(f"automation frame failed: {type(exc).__name__}"))
+            return
+        if kind == "automation_list":
+            rows = answer if isinstance(answer, list) else []
+            self._terminal(request_id, automation_list_payload(rows))
 
     def _handle_run_ack(self, payload: dict) -> None:
         run_id = payload.get("run_id")
@@ -994,12 +1196,19 @@ class Executor:
             pass
         self._call_hook(self._on_run_ack, {"run_id": run_id})
 
-    @staticmethod
-    def _call_hook(hook: Callable[[dict], None] | None, payload: dict) -> None:
+    def _call_hook(self, hook: Callable[[dict], None] | None, payload: dict) -> None:
         """Call an optional host hook. A raising hook is swallowed: a notifier
-        or a token refresh must never take the serve loop or a run down."""
+        or a token refresh must never take the serve loop or a run down.
+
+        The payload passes the secret scrubber first (docs/WIRE_CONTRACT.md,
+        "Secrets"): a run summary carries the prompt and the answer, and a
+        host-side consumer (a notifier, an automation log) must not be the one
+        place a value slips through."""
         if hook is None:
             return
+        scrubber = self._secret_scrubber
+        if scrubber is not None and isinstance(payload, dict):
+            payload = scrubber.scrub_obj(payload)
         try:
             hook(payload)
         except Exception:  # noqa: BLE001 — hooks are observers, not owners
@@ -1049,6 +1258,10 @@ class Executor:
                 # A reconnecting app also gets every rotated MCP credential it
                 # has not acknowledged yet (docs/WIRE_CONTRACT.md, mcp_credentials).
                 self._flush_pending_mcp_credentials(session_key, request_id)
+                # ...and every ``secret_request`` a run in this thread is still
+                # waiting on: the frame was never a row, so this is how a
+                # reconnect mid-request shows the dialog again.
+                self._flush_pending_secret_requests(session_key, request_id)
                 events = store.replay_events(session_id, after_id=after_id)
                 terminals = store.run_terminals(session_key, after_id=after_id)
                 # Merge by message id so a run's terminal comes right after its
@@ -1407,7 +1620,9 @@ class Executor:
         return []
 
     # -- here.now publish approval (§10-style consent) -------------------
-    def _make_approval_gate(self, request_id: str, kill: KillSwitch):
+    def _make_approval_gate(
+        self, request_id: str, kill: KillSwitch, session_key: str | None = None
+    ):
         """Build the here.now approval gate for one task.
 
         The gate runs on the worker thread inside the publish tool. It emits one
@@ -1422,40 +1637,97 @@ class Executor:
             pending = _PendingApproval()
             with self._approvals_lock:
                 self._approvals[approval_id] = pending
+            payload = approval_request_payload(
+                approval_id=approval_id,
+                path=req.path,
+                name=req.name,
+                file_count=req.file_count,
+                total_bytes=req.total_bytes,
+                base_url=req.base_url,
+                public=req.public,
+                session_key=session_key,
+            )
+            # The row first, the frame second (docs/WIRE_CONTRACT.md,
+            # cowork-266): a replay must show the request whatever the socket
+            # did, and its outcome is patched into this row below.
+            pending.mid = self._persist_event(session_key, payload)
             try:
-                self._event(
-                    request_id,
-                    approval_request_payload(
-                        approval_id=approval_id,
-                        path=req.path,
-                        name=req.name,
-                        file_count=req.file_count,
-                        total_bytes=req.total_bytes,
-                        base_url=req.base_url,
-                        public=req.public,
-                    ),
-                )
+                self._event(request_id, payload)
                 # The host may notify a user who is not looking at the app: the
                 # run is blocked on them until they answer.
                 self._call_hook(
                     self._on_approval_pending,
                     {"approval_id": approval_id, "request_id": request_id},
                 )
-                deadline = time.monotonic() + APPROVAL_TIMEOUT
+                deadline = time.monotonic() + APPROVAL_WAIT_SECONDS
                 # Poll so a Stop reaches the wait: the loop only checks the kill
                 # switch between tool calls, and this call is inside one.
                 while True:
                     if kill.interrupted() or kill.estop_engaged():
+                        self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
                         return False
                     if pending.event.wait(self._poll):
                         return pending.approved
                     if time.monotonic() >= deadline:
+                        self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
                         return False
             finally:
                 with self._approvals_lock:
                     self._approvals.pop(approval_id, None)
 
         return gate
+
+    def _close_approval(
+        self, pending: _PendingApproval, *, approved: bool, reason: str
+    ) -> None:
+        """Patch the outcome into the persisted ``approval_request`` row, once.
+        Best effort: a store failure loses the stamp, never the decision."""
+        if pending.mid is None or pending.closed:
+            return
+        pending.closed = True
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.update_event(
+                    pending.mid,
+                    approval_outcome_fields(
+                        approved=approved, reason=reason, at=time.time()
+                    ),
+                )
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — the run must not die on a stamp
+            pass
+
+    # -- persisted stream events (docs/WIRE_CONTRACT.md, cowork-266) ------
+    def _persist_event(self, session_key: str | None, payload: dict) -> int | None:
+        """Store one live ``subagent`` / ``file`` / ``approval_request`` frame
+        as an ``event`` row of the thread, so a replay carries it. Returns the
+        row id, or None when nothing was stored (no thread, store failure): the
+        live frame still goes out, exactly as before."""
+        if not session_key:
+            return None
+        try:
+            store = StateStore(self._db_path)
+            try:
+                return store.append_event(store.route(session_key), payload)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — best effort, like _record_run
+            return None
+
+    def _emit_persisted(self, request_id: str, session_key: str | None, payload: dict) -> None:
+        """Persist, then stream. The row exists even if the socket is gone."""
+        self._persist_event(session_key, payload)
+        self._event(request_id, payload)
+
+    def _emit_subagent(self, request_id: str, session_key: str, event: dict) -> None:
+        """A supervisor event: state changes are persisted (one row each, the
+        app keeps one card per child); output chunks stream live only."""
+        payload = subagent_payload(event)
+        if isinstance(event, dict) and event.get("type") == "subagent_state":
+            self._persist_event(session_key, payload)
+        self._event(request_id, payload)
 
     def _resolve_approval(self, payload: dict) -> None:
         """Serve-thread half: record the user's decision and wake the worker."""
@@ -1467,11 +1739,153 @@ class Executor:
         if pending is None:
             return  # a decision for a publish that already ended: no-op
         pending.approved = bool(payload.get("approved"))
+        self._close_approval(pending, approved=pending.approved, reason=APPROVAL_BY_USER)
         pending.event.set()
+
+    # -- secrets (docs/WIRE_CONTRACT.md, "Secrets") ------------------------
+    def _handle_secrets(self, payload: dict) -> None:
+        """Serve-thread half of the secrets round-trip: replace the vault's set
+        with the frame's, then wake every waiting ``request_secrets`` this
+        frame answers — by ``request_id``, or because every name it asked for
+        is now set. Names and counts are logged; values never."""
+        vault = self._secrets
+        if vault is None:
+            return
+        try:
+            vault.replace(payload.get("entries"), revision=payload.get("revision"))
+        except Exception as exc:  # noqa: BLE001 — a bad frame must not wedge serving
+            logger.warning("secrets frame rejected: %s", type(exc).__name__)
+            return
+        answered = payload.get("request_id")
+        have = set(vault.names())
+        with self._secret_requests_lock:
+            pending = list(self._secret_requests.values())
+        for req in pending:
+            if req.request_id == answered or all(n in have for n in req.names):
+                req.event.set()
+
+    def _flush_pending_secret_requests(self, session_key: str, request_id: str) -> None:
+        """Re-send the open ``secret_request``s of ``session_key`` on the
+        stream ``request_id`` (a replay), so a reconnecting app sees the
+        dialog the run is still blocked on."""
+        with self._secret_requests_lock:
+            pending = [
+                r for r in self._secret_requests.values() if r.session_key == session_key
+            ]
+        for req in pending:
+            self._event(
+                request_id,
+                secret_request_payload(
+                    request_id=req.request_id,
+                    session_key=req.session_key,
+                    names=req.names,
+                    purpose=req.purpose,
+                ),
+            )
+
+    def _secrets_access(self, request_id: str, kill: KillSwitch, session_key: str):
+        """The :class:`cowork_agent.SecretsAccess` for one task: names and env
+        from the vault; ``request`` is the round-trip to the app. Returns
+        ``None`` when this executor has no vault, so nothing is registered."""
+        vault = self._secrets
+        if vault is None:
+            return None
+        executor = self
+
+        class _Bridge:
+            def names(self) -> list[str]:
+                return vault.names()
+
+            def env(self) -> dict[str, str]:
+                return vault.env()
+
+            def request(self, names: list[str], purpose: str) -> dict[str, str]:
+                return executor._request_secrets(
+                    request_id, kill, session_key, list(names), purpose
+                )
+
+        return _Bridge()
+
+    def _request_secrets(
+        self,
+        stream_request_id: str,
+        kill: KillSwitch,
+        session_key: str,
+        names: list[str],
+        purpose: str,
+    ) -> dict[str, str]:
+        """Worker-thread half: emit one ``secret_request`` and block until the
+        app answers, a stop fires, or the timeout passes. Whatever ends the
+        wait, the model gets the vault's status for exactly these names."""
+        vault = self._secrets
+        assert vault is not None
+        req = _PendingSecretRequest(
+            request_id=uuid4().hex,
+            session_key=session_key,
+            names=list(names),
+            purpose=purpose,
+            stream_request_id=stream_request_id,
+        )
+        with self._secret_requests_lock:
+            self._secret_requests[req.request_id] = req
+        try:
+            self._event(
+                stream_request_id,
+                secret_request_payload(
+                    request_id=req.request_id,
+                    session_key=session_key,
+                    names=req.names,
+                    purpose=purpose,
+                ),
+            )
+            self._call_hook(
+                self._on_secret_request_pending,
+                {
+                    "request_id": req.request_id,
+                    "session_key": session_key,
+                    "names": list(req.names),
+                    "stream_request_id": stream_request_id,
+                },
+            )
+            deadline = time.monotonic() + SECRET_REQUEST_TIMEOUT
+            # Poll so a Stop reaches the wait: the loop only checks the kill
+            # switch between tool calls, and this call is inside one.
+            while True:
+                if kill.interrupted() or kill.estop_engaged():
+                    break
+                if req.event.wait(self._poll):
+                    break
+                if time.monotonic() >= deadline:
+                    break
+        finally:
+            with self._secret_requests_lock:
+                self._secret_requests.pop(req.request_id, None)
+        return vault.status(req.names)
 
     def _live_runs(self) -> list[_Run]:
         with self._runs_lock:
             return list(self._runs.values())
+
+    def has_live_run(self, session_key: str) -> bool:
+        """True while a run of ``session_key`` is queued or in flight."""
+        with self._runs_lock:
+            return any(r.session_key == session_key for r in self._runs.values())
+
+    def live_request_id(self, session_key: str) -> str | None:
+        """The relay request id of the run of ``session_key`` that is in
+        flight right now (its stream), or None."""
+        with self._mcp_lock:
+            return self._mcp_active_request.get(session_key)
+
+    # -- background jobs (docs/WIRE_CONTRACT.md, "Interactive shell ...") --
+    def job_finished(self, record: dict) -> str:
+        """A ``kind: job`` trigger line from the host's tail (or a swept job).
+        Wakes the model; see :class:`cowork_executor.shell.JobWakeRouter`."""
+        return self._jobs.finished(record)
+
+    @property
+    def jobs(self) -> JobWakeRouter:
+        return self._jobs
 
     def _forget(self, request_id: str) -> None:
         with self._runs_lock:
@@ -1483,18 +1897,11 @@ class Executor:
         # A credential rotation that happens mid-task rides this task's stream.
         with self._mcp_lock:
             self._mcp_active_request[session_key] = request_id
-        # Bind the streaming hooks for this task.
-        self._env_shim.on_run = lambda cmd, result: self._event(
-            request_id,
-            tool_payload(
-                name="run_command",
-                command=cmd,
-                exit_code=result.exit_code,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                timed_out=result.timed_out,
-            ),
-        )
+        # The environment's shell hook is NOT the tool stream any more
+        # (docs/WIRE_CONTRACT.md, "Tool events and timestamps"): a ``write_file``
+        # is one tool card, not the printf/base64 helper commands it runs. The
+        # loop's dispatch is the one source — ``tool_event_observer`` below.
+        self._env_shim.on_run = None
         # A task may name the model to run on and how hard it thinks. If it named
         # either and a per-task selector is wired (production), build that model;
         # otherwise fall back to the default factory — which is both the
@@ -1512,6 +1919,24 @@ class Executor:
             inner_model = self._model_select(
                 run.model, run.provider, run.reasoning_effort
             )
+            # The selector may have clamped the level to the model's catalogue
+            # (an unsupported level yields no thinking at all). The run's row
+            # then proves the effective level, not the request.
+            effective = getattr(inner_model, "reasoning_effort", None)
+            if (
+                run.reasoning_effort
+                and isinstance(effective, str)
+                and effective != run.reasoning_effort
+            ):
+                logger.info(
+                    "task %s: reasoning_effort %s not supported by the model; "
+                    "running with %s",
+                    request_id,
+                    run.reasoning_effort,
+                    effective,
+                )
+                self._record_run_effort(run, effective)
+                run.reasoning_effort = effective
         else:
             inner_model = self._model_factory()
         # The browser fallback (§8) gets its own client: the loop's client is
@@ -1523,6 +1948,9 @@ class Executor:
         model = StreamingModelClient(
             inner_model,
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
+            on_reasoning=lambda text: self._event(
+                request_id, reasoning_payload(text)
+            ),
         )
 
         # The "hero"/aux model (§7.3): the SAME model on the SAME session, reasoning
@@ -1563,6 +1991,12 @@ class Executor:
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
+        if mcp_manager is None and run.origin == "automation":
+            # A fired automation carries no forwarded connectors (no frame,
+            # no app). It runs with the connectors the session already has,
+            # exactly as the last task of that session did.
+            with self._mcp_lock:
+                mcp_manager = self._mcp_managers.get(session_key)
         # Anything the device has not acknowledged yet (a rotated refresh token
         # from an earlier task) goes out again on this task's stream.
         self._flush_pending_mcp_credentials(session_key, request_id)
@@ -1572,7 +2006,7 @@ class Executor:
         # public publish blocks on the user; ``auto`` publishes straight through.
         herenow_config = HereNowConfig.from_entry(run.herenow) if run.herenow else None
         herenow_gate = (
-            self._make_approval_gate(request_id, run.kill)
+            self._make_approval_gate(request_id, run.kill, session_key)
             if herenow_config is not None and herenow_config.enabled and herenow_config.asks
             else None
         )
@@ -1594,7 +2028,11 @@ class Executor:
                     ),
                 )
 
-        subagents = self._subagent_config(request_id, session_key)
+        # The user's secrets for this task (docs/WIRE_CONTRACT.md, "Secrets"):
+        # env for the child processes, the two tools, the dispatch scrubber.
+        # Children get the same access through the subagent config below.
+        secrets_access = self._secrets_access(request_id, run.kill, session_key)
+        subagents = self._subagent_config(request_id, session_key, secrets_access)
         loop = build_runtime(
             model,
             db_path=self._db_path,
@@ -1605,12 +2043,32 @@ class Executor:
             subagents=subagents,
             herenow_config=herenow_config,
             herenow_gate=herenow_gate,
+            # This session's automation tools (docs/WIRE_CONTRACT.md,
+            # "Automations"): bound to ``session_key`` here, so the model can
+            # only ever name its own schedules and watchers.
+            automations=(
+                self._automations.bound(session_key)
+                if self._automations is not None
+                else None
+            ),
             # The hero/aux client (§7.3): same model, reasoning off, cheap. Enables
             # tier-2/3 compaction and mem0 extraction by default in production.
             # ``None`` (mock model) keeps tier-1-only behaviour.
             aux_model=hero_model,
             # Off unless the task set ``debug``; ``None`` means zero overhead.
             debug_observer=debug_observer,
+            # One ``tool`` frame per native tool call, after its result, with the
+            # same fields a replay rebuilds (name, arguments, result, status,
+            # started_at / completed_at).
+            tool_event_observer=lambda fields: self._on_tool_event(
+                request_id, session_key, fields
+            ),
+            secrets=secrets_access,
+            # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
+            # background commands"): the session a job's end is routed to, and
+            # the provider that hands a finished job's output to this turn.
+            shell_session_key=session_key,
+            context_providers=[self._jobs.provider(session_key)],
             # A prepared manager the executor owns and closes on stop. When None,
             # build_runtime falls back to reading the workspace mcp.json itself.
             mcp=mcp_manager,
@@ -1622,8 +2080,9 @@ class Executor:
             # turns them into one sealed `file` event on the same stream as the
             # deltas. A file too large to send raises here, the agent tool
             # catches it, and the model is told — the channel is never flooded.
-            file_sink=lambda sent: self._event(
+            file_sink=lambda sent: self._emit_persisted(
                 request_id,
+                session_key,
                 file_payload(
                     name=sent.name, mime_type=sent.mime_type, data=sent.data
                 ),
@@ -1640,7 +2099,7 @@ class Executor:
         )
 
         try:
-            result = loop.run(session_key, prompt)
+            result = loop.run(session_key, prompt, regenerate=run.regenerate)
         except Exception as exc:  # a crashing loop must not kill the serve thread
             message = f"loop failed: {type(exc).__name__}"
             # The durable record closes BEFORE the stream: it must exist even if
@@ -1687,8 +2146,12 @@ class Executor:
                         pass
 
         # The durable record closes BEFORE the stream, so the run's end exists on
-        # the host even when the app is gone and the frame is dropped.
-        self._record_run(run, result=result)
+        # the host even when the app is gone and the frame is dropped. The
+        # closed row also stamps the done (clock + message rows).
+        run_stamps = self._record_run(run, result=result)
+        # The finished turn lands in <workspace>/transcript/ (read-only, the
+        # agent's long-term search) before the app hears ``done``.
+        self._export_transcript(session_key)
         self._terminal(
             request_id,
             done_payload(
@@ -1697,6 +2160,9 @@ class Executor:
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
                 run_id=run.run_id,
+                run_stamps=run_stamps,
+                # A fired automation / job is notified on by the host itself.
+                host_notified=run.origin in ("automation", "job"),
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -1714,12 +2180,69 @@ class Executor:
             ),
         )
 
+    # -- transcript export (the agent's long-term search) ----------------
+    def _on_tool_event(self, request_id: str, session_key: str, fields: dict) -> None:
+        """One finished native tool call: the wire frame to the app, then the
+        transcript file catches up with the store (best-effort)."""
+        self._event(request_id, tool_payload(**fields))
+        self._export_transcript(session_key)
+
+    def _export_transcript(self, session_key: str) -> None:
+        """Append what the store holds since the last export to
+        ``<workspace>/transcript/<thread>.md`` (:mod:`cowork_agent.transcript_export`).
+        No workspace, no export. Never raises: the transcript is a convenience
+        for the agent, the run's result must not depend on it."""
+        if not self._workspace:
+            return
+        try:
+            exporter = self._transcript_exporter
+        except AttributeError:
+            exporter = None
+        if exporter is None:
+            try:
+                # The exporter's own credential-shape redaction, plus the
+                # vault's exact-value masks (docs/WIRE_CONTRACT.md, "Secrets"):
+                # the transcript is a file the agent can read back.
+                exporter = TranscriptExporter(
+                    self._workspace,
+                    scrub=lambda text: self._scrub_text(redact_secrets(text)),
+                )
+            except Exception:  # noqa: BLE001 — an unwritable workspace: no export
+                return
+            self._transcript_exporter = exporter
+        try:
+            store = StateStore(self._db_path)
+            try:
+                exporter.export(store, session_key)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            logger.debug("transcript export failed for %s", session_key, exc_info=True)
+
     # -- run records (docs/WIRE_CONTRACT.md) -----------------------------
-    def _record_run(self, run: _Run, *, result=None, failed: str | None = None) -> None:
-        """Close the run's ``runs`` row. Best-effort: a store failure loses the
-        record, never the result the app is about to receive."""
+    def _record_run_effort(self, run: _Run, effort: str) -> None:
+        """Best-effort: write the clamped ``reasoning_effort`` onto the run's
+        row. A store failure loses the note, never the run."""
         if not run.run_id:
             return
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.update_run_reasoning_effort(run.run_id, effort)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            pass
+
+    def _record_run(
+        self, run: _Run, *, result=None, failed: str | None = None
+    ) -> dict[str, Any]:
+        """Close the run's ``runs`` row. Best-effort: a store failure loses the
+        record, never the result the app is about to receive. Returns the closed
+        row's stamps (``started_at`` / ``finished_at`` / ``first_mid`` /
+        ``last_mid``) for the ``done`` frame — empty when nothing was recorded."""
+        if not run.run_id:
+            return {}
         try:
             store = StateStore(self._db_path)
             try:
@@ -1729,14 +2252,17 @@ class Executor:
                     store.finish_run(
                         run.run_id,
                         reason=result.reason.value,
-                        final_answer=result.final_answer,
+                        # Masked before it is a row; the ``done`` frame is masked
+                        # again by the sealer.
+                        final_answer=self._scrub_text(result.final_answer),
                         iterations=result.iterations,
                         tokens_spent=result.tokens_spent,
                     )
+                return run_stamp_fields(store.get_run(run.run_id))
             finally:
                 store.close()
         except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
-            pass
+            return {}
 
     @staticmethod
     def _run_summary(
@@ -1763,6 +2289,9 @@ class Executor:
             "error": error,
             "started_at": run.started_at,
             "finished_at": time.time(),
+            # docs/WIRE_CONTRACT.md, "Automations": who started the run.
+            "origin": run.origin,
+            "automation_id": run.automation_id,
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
@@ -2013,7 +2542,9 @@ class Executor:
                 pass
 
     # -- subagents (§7.6) ------------------------------------------------
-    def _subagent_config(self, request_id: str, session_key: str) -> SubagentConfig | None:
+    def _subagent_config(
+        self, request_id: str, session_key: str, secrets_access=None
+    ) -> SubagentConfig | None:
         """Build the child wiring for one task, or ``None`` when subagents are off.
 
         The environment factory is the isolation guarantee: it is keyed by the
@@ -2037,14 +2568,35 @@ class Executor:
             env_factory=env_factory,
             task_id=session_key,
             system_prompt=self._system_prompt,
-            on_event=lambda event: self._event(request_id, subagent_payload(event)),
+            on_event=lambda event: self._emit_subagent(request_id, session_key, event),
+            # A child gets the same secrets seam as its parent: env for its
+            # commands, the tools, and the dispatch scrubber — so a child's
+            # output cannot carry a value up to the parent's context.
+            runtime_kwargs=(
+                {"secrets": secrets_access} if secrets_access is not None else {}
+            ),
         )
         if self._subagent_limits is not None:
             config.limits = self._subagent_limits
         return config
 
+    def _scrub_text(self, text):
+        """Mask secret values in one text bound for a store row or a host
+        hook. Non-strings pass through; no vault, no change."""
+        scrubber = self._secret_scrubber
+        if scrubber is None or not isinstance(text, str):
+            return text
+        return scrubber.scrub_text(text)
+
     # -- outbound (all sealed) -------------------------------------------
     def _seal_b64(self, payload: dict) -> str:
+        # The second of the two scrubber chokepoints (docs/WIRE_CONTRACT.md,
+        # "Secrets"): EVERYTHING that goes to the app — events, terminals,
+        # replays — passes here. Raw RFB bytes (browser_data) are not text and
+        # are left alone; every other frame has its strings masked.
+        scrubber = self._secret_scrubber
+        if scrubber is not None and payload.get("type") != "browser_data":
+            payload = scrubber.scrub_obj(payload)
         with self._codec_lock:
             sealer = self._sealer
         return frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())

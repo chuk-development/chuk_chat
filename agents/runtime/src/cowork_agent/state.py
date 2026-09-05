@@ -17,6 +17,8 @@ Hard rules from the plan:
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import random
 import sqlite3
@@ -26,6 +28,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .search import ensure_fts_schema, register_functions, search_messages
+from .tool_events import tool_event_fields
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -50,6 +53,15 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
+
+-- The bytes of a persisted ``file`` event (docs/WIRE_CONTRACT.md, bead
+-- cowork-266). Kept out of the message row's JSON so the row stays small for
+-- every reader of ``messages`` (model context, search index); rejoined on
+-- replay. One blob per event row, addressed by the row id.
+CREATE TABLE IF NOT EXISTS event_blobs (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    data BLOB NOT NULL
+);
 
 -- Subagent handles (§7.6). One row per child, the whole handle as JSON: the app
 -- lists subagents from here, and a relaunch reconstructs every handle with no
@@ -116,6 +128,74 @@ class Message:
     role: str
     content: dict
     created_at: float
+
+
+def run_stamp_fields(row: dict | None) -> dict[str, Any]:
+    """``started_at`` / ``finished_at`` / ``first_mid`` / ``last_mid`` of a
+    ``runs`` row, for a ``done`` frame (live and replayed alike). Only the
+    fields the row has; an empty dict for no row."""
+    if not row:
+        return {}
+    fields: dict[str, Any] = {}
+    for key in ("started_at", "finished_at"):
+        value = row.get(key)
+        if value is not None:
+            fields[key] = float(value)
+    for key in ("first_mid", "last_mid"):
+        value = row.get(key)
+        if value is not None:
+            fields[key] = int(value)
+    return fields
+
+
+def _close_open_approvals(
+    cur: sqlite3.Cursor, session_id: int, reason: str, at: float | None
+) -> int:
+    """See :meth:`StateStore.close_open_approvals`; shares the caller's cursor
+    so a run's close and its approvals' close are one transaction."""
+    rows = cur.execute(
+        "SELECT id, content FROM messages WHERE session_id=? AND role='event'",
+        (session_id,),
+    ).fetchall()
+    count = 0
+    for row in rows:
+        content = json.loads(row["content"])
+        if content.get("type") != "approval_request" or content.get("decision"):
+            continue
+        content["decision"] = "denied"
+        content["decision_reason"] = reason
+        content["decided_at"] = float(at if at is not None else time.time())
+        cur.execute(
+            "UPDATE messages SET content=? WHERE id=?",
+            (json.dumps(content), int(row["id"])),
+        )
+        count += 1
+    return count
+
+
+def _tool_rows_after(conversation: list[Message], index: int) -> list[Message]:
+    """The consecutive ``tool`` rows that directly follow row ``index``: the
+    results of that assistant turn's calls, in call order."""
+    rows: list[Message] = []
+    for message in conversation[index + 1 :]:
+        if message.content.get("role") != "tool":
+            break
+        rows.append(message)
+    return rows
+
+
+def _match_tool_row(
+    answers: list[Message], call_id: str, position: int
+) -> Message | None:
+    """The result row for one call: by ``tool_call_id`` first, else the row at
+    the call's position in the turn."""
+    if call_id:
+        for row in answers:
+            if str(row.content.get("tool_call_id", "")) == call_id:
+                return row
+    if 0 <= position < len(answers):
+        return answers[position]
+    return None
 
 
 def _as_text(content: Any) -> str:
@@ -275,12 +355,127 @@ class StateStore:
 
         return self._write(op)
 
-    def get_conversation(self, session_id: int) -> list[Message]:
+    # -- persisted stream events (docs/WIRE_CONTRACT.md, bead cowork-266) --
+
+    def append_event(self, session_id: int, payload: dict) -> int:
+        """Persist one live ``subagent`` / ``file`` / ``approval_request`` frame
+        as an ``event`` row, at the moment it is streamed, so it replays at its
+        place in the thread. ``payload`` is the wire frame itself (its ``type``
+        included). A ``file`` frame's base64 ``data`` goes to ``event_blobs``
+        as bytes, not into the row's JSON. Returns the row id (the ``mid``)."""
+        content = dict(payload)
+        blob: bytes | None = None
+        data = content.pop("data", None)
+        if isinstance(data, str) and data:
+            try:
+                blob = base64.b64decode(data, validate=True)
+            except (binascii.Error, ValueError):
+                blob = None  # a frame without a usable body replays without one
+
+        def op(cur: sqlite3.Cursor) -> int:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, content, created_at) "
+                "VALUES (?, 'event', ?, ?)",
+                (session_id, json.dumps(content), time.time()),
+            )
+            mid = int(cur.lastrowid)
+            if blob is not None:
+                cur.execute(
+                    "INSERT INTO event_blobs(message_id, data) VALUES (?, ?)",
+                    (mid, blob),
+                )
+            return mid
+
+        return int(self._write(op))
+
+    def update_event(self, message_id: int, patch: dict) -> bool:
+        """Merge ``patch`` into one ``event`` row's frame (the outcome of an
+        ``approval_request``). False when there is no such event row."""
+
+        def op(cur: sqlite3.Cursor) -> bool:
+            row = cur.execute(
+                "SELECT content FROM messages WHERE id=? AND role='event'",
+                (message_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            content = json.loads(row["content"])
+            content.update(patch)
+            cur.execute(
+                "UPDATE messages SET content=? WHERE id=?",
+                (json.dumps(content), message_id),
+            )
+            return True
+
+        return bool(self._write(op))
+
+    def close_open_approvals(
+        self, session_id: int, *, reason: str, at: float | None = None
+    ) -> int:
+        """Patch every ``approval_request`` event row of the session that still
+        has no ``decision`` to ``denied`` / ``reason``. The run that asked is
+        over (or the host restarted), so nobody can answer it any more, and a
+        replay must never prompt for it. Returns the count."""
+
+        def op(cur: sqlite3.Cursor) -> int:
+            return _close_open_approvals(cur, session_id, reason, at)
+
+        return int(self._write(op))
+
+    def event_blob(self, message_id: int) -> bytes | None:
+        """The bytes stored with a ``file`` event row, or None."""
+        row = self._conn().execute(
+            "SELECT data FROM event_blobs WHERE message_id=?", (message_id,)
+        ).fetchone()
+        return bytes(row["data"]) if row is not None else None
+
+    def drop_last_user_turn(self, session_id: int) -> int:
+        """Remove the last user turn and everything the model said after it.
+
+        This is what a "retry the answer" is on the server side. A retry sends
+        the same prompt again, so without this the conversation grows a second
+        identical user row, then a third — the transcript shows the question
+        once per attempt on replay, and, worse, the model is handed a history in
+        which the user asked the same thing four times and it answered four
+        times. The user meant to REPLACE an answer, not to ask again.
+
+        Returns the number of rows removed; ``0`` when the session has no user
+        turn yet (a retry on an empty session is not a thing, but it must not
+        raise). The system prompt is never touched — it is seeded once and sits
+        before any user turn.
+        """
+
+        def op(cur: sqlite3.Cursor) -> int:
+            row = cur.execute(
+                "SELECT id FROM messages WHERE session_id=? AND role='user' "
+                "ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return 0
+            cur.execute(
+                "DELETE FROM messages WHERE session_id=? AND id>=?",
+                (session_id, int(row["id"])),
+            )
+            return int(cur.rowcount)
+
+        return self._write(op)
+
+    def get_conversation(
+        self, session_id: int, *, include_events: bool = False
+    ) -> list[Message]:
         """All messages for a session, ordered by autoincrement id — never by a
-        timestamp."""
+        timestamp.
+
+        ``event`` rows (a persisted ``subagent`` / ``file`` /
+        ``approval_request`` frame, see :meth:`append_event`) are left out
+        unless ``include_events`` is set: they are for the app's replay, never
+        for the model's context."""
         rows = self._conn().execute(
             "SELECT id, session_id, role, content, created_at "
-            "FROM messages WHERE session_id=? ORDER BY id",
+            "FROM messages WHERE session_id=?"
+            + ("" if include_events else " AND role<>'event'")
+            + " ORDER BY id",
             (session_id,),
         ).fetchall()
         return [
@@ -311,6 +506,9 @@ class StateStore:
         - a ``user`` row becomes a ``user`` event. The live stream has no such
           event, because the live client wrote that turn itself; a reconnecting
           client did not, so replay must carry both sides of the thread.
+        - an ``assistant`` row with ``reasoning`` becomes a ``reasoning`` event
+          first — the shape a live thinking chunk uses — so the thinking block
+          is rebuilt above the answer, where it was live.
         - an ``assistant`` row with text becomes a ``delta`` event — the shape a
           live assistant text chunk uses.
         - an ``assistant`` row with tool calls becomes one ``tool`` event per
@@ -319,20 +517,36 @@ class StateStore:
         - a ``tool`` row is folded into its call's event by ``tool_call_id``. It
           is not emitted on its own.
         """
-        conversation = self.get_conversation(session_id)
-        # First pass: index each tool result by the call id it answers, so an
-        # assistant tool call can carry its own output in one event.
-        results: dict[str, str] = {}
-        for message in conversation:
-            content = message.content
-            if content.get("role") == "tool":
-                call_id = str(content.get("tool_call_id", ""))
-                results[call_id] = _as_text(content.get("content"))
+        thread = self.get_conversation(session_id, include_events=True)
+        # The turns the model saw; ``event`` rows are handled on their own below
+        # so a file that landed mid-turn cannot split a call from its result.
+        conversation = [m for m in thread if m.role != "event"]
         events: list[dict] = []
-        for message in conversation:
+        # An ``event`` row (docs/WIRE_CONTRACT.md, "Persisted subagent / file /
+        # approval events") IS the live frame: it replays as itself, marked,
+        # with its row id; a ``file`` gets its bytes back from ``event_blobs``.
+        for message in thread:
+            if message.role != "event" or message.id <= after_id:
+                continue
+            event = dict(message.content)
+            if event.get("type") == "file":
+                blob = self.event_blob(message.id)
+                if blob is not None:
+                    event["data"] = base64.b64encode(blob).decode("ascii")
+            event["replay"] = True
+            event["mid"] = message.id
+            events.append(event)
+        for index, message in enumerate(conversation):
             # The replay cursor (docs/WIRE_CONTRACT.md): a client that already
             # holds the thread up to ``after_id`` gets only what came later.
             if message.id <= after_id:
+                continue
+            # Only what the user typed and what the model said is the thread.
+            # A ``context`` row (a skill body), a ``memory`` row (the task-start
+            # recall) or any other runtime row carries a wire role of ``user``
+            # inside, but it was never the user's message and must not replay
+            # as one. ``event`` rows were emitted above.
+            if message.role not in ("user", "assistant"):
                 continue
             content = message.content
             role = content.get("role")
@@ -351,31 +565,50 @@ class StateStore:
                 )
                 continue
             # assistant
+            # The turn's thinking comes first, as it did live: the app renders
+            # it as the thinking block above the answer text (and above the
+            # tool calls of the same turn).
+            reasoning = content.get("reasoning")
+            if isinstance(reasoning, str) and reasoning.strip():
+                events.append(
+                    {"type": "reasoning", "text": reasoning, "replay": True, "mid": mid}
+                )
             text = content.get("content")
             if isinstance(text, str) and text.strip():
                 events.append({"type": "delta", "text": text, "replay": True, "mid": mid})
-            for call in content.get("tool_calls") or []:
+            # The result rows of this turn are the ``tool`` rows right after it
+            # (the loop writes one per call, in call order). Matched by call id
+            # within that group, else by position — a model (or the mock) that
+            # reuses call ids across turns must not cross-wire results.
+            answers = _tool_rows_after(conversation, index)
+            for position, call in enumerate(content.get("tool_calls") or []):
                 if not isinstance(call, dict):
                     continue
                 fn = call.get("function", {}) or {}
-                args = fn.get("arguments", {})
-                command = (
-                    args if isinstance(args, str)
-                    else json.dumps(args, separators=(",", ":"))
-                )
+                call_id = str(call.get("id", ""))
+                answer = _match_tool_row(answers, call_id, position)
+                # The same shape the loop streams live (``tool_event_fields``):
+                # the native arguments, the result text, the projected shell
+                # fields, the status — and the clocks: the call was made when
+                # the assistant row landed, answered when its tool row did.
                 events.append(
                     {
                         "type": "tool",
-                        "name": str(fn.get("name", "")),
-                        "command": command,
-                        "exit_code": 0,
-                        "stdout": results.get(str(call.get("id", "")), ""),
-                        "stderr": "",
-                        "timed_out": False,
+                        **tool_event_fields(
+                            name=str(fn.get("name", "")),
+                            arguments=fn.get("arguments", {}),
+                            result=answer.content.get("content") if answer else None,
+                            call_id=call_id or None,
+                            started_at=message.created_at,
+                            completed_at=answer.created_at if answer else None,
+                        ),
                         "replay": True,
                         "mid": mid,
                     }
                 )
+        # Thread order is row order. The sort is stable, so a turn's reasoning /
+        # delta / tool events (same ``mid``) keep the order they were built in.
+        events.sort(key=lambda event: int(event.get("mid", 0)))
         return events
 
     # -- runs (docs/WIRE_CONTRACT.md) ------------------------------------
@@ -431,6 +664,18 @@ class StateStore:
 
         self._write(op)
 
+    def update_run_reasoning_effort(self, run_id: str, effort: str | None) -> None:
+        """Record the level a run actually ran on when the executor's selector
+        clamped what the task asked for (an unsupported ``reasoning_effort``),
+        so the row proves the effective level, not the request."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            cur.execute(
+                "UPDATE runs SET reasoning_effort=? WHERE run_id=?", (effort, run_id)
+            )
+
+        self._write(op)
+
     def finish_run(
         self,
         run_id: str,
@@ -467,6 +712,9 @@ class StateStore:
                     run_id,
                 ),
             )
+            # A publish approval nobody answered cannot be answered any more
+            # (docs/WIRE_CONTRACT.md, cowork-266): close it with the run.
+            _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
 
         self._write(op)
 
@@ -488,6 +736,7 @@ class StateStore:
                 "WHERE run_id=?",
                 (RUN_FAILED, reason, int(last["m"]) if last else 0, time.time(), run_id),
             )
+            _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
 
         self._write(op)
 
@@ -530,6 +779,9 @@ class StateStore:
                     # acknowledged this run's live ``done`` (``run_ack``).
                     "while_away": r["seen_at"] is None,
                     "mid": int(r["last_mid"] or 0),
+                    # The run's own clock and rows (docs/WIRE_CONTRACT.md, "Run
+                    # timestamps on done"), the same four a live done carries.
+                    **run_stamp_fields(dict(r)),
                 }
             )
         return events
@@ -566,11 +818,19 @@ class StateStore:
         restart. Close it as failed so it never shows as live. Returns the count."""
 
         def op(cur: sqlite3.Cursor) -> int:
+            orphaned = cur.execute(
+                "SELECT DISTINCT session_id FROM runs WHERE state=?", (RUN_RUNNING,)
+            ).fetchall()
             cur.execute(
                 "UPDATE runs SET state=?, reason=?, finished_at=? WHERE state=?",
                 (RUN_FAILED, reason, time.time(), RUN_RUNNING),
             )
-            return int(cur.rowcount)
+            count = int(cur.rowcount)
+            # Their publish approvals died with them (docs/WIRE_CONTRACT.md,
+            # cowork-266): never replay one as a prompt for a run that is over.
+            for row in orphaned:
+                _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
+            return count
 
         return int(self._write(op))
 

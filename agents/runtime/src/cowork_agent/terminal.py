@@ -59,6 +59,7 @@ from __future__ import annotations
 import re
 import shlex
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -91,6 +92,12 @@ DEFAULT_SETTLE_S = 0.3
 MAX_SETTLE_S = 5.0
 
 MAX_WAIT_S = 120.0
+
+#: ``pane_current_command`` values that mean "the shell waits for input".
+SHELL_NAMES = frozenset({"bash", "sh", "zsh", "fish", "dash", "ash", "ksh"})
+
+#: Separates the status line from the screen in one ``pane_status`` call.
+_STATUS_MARKER = "__CW_STATUS_END__"
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 
@@ -256,8 +263,15 @@ class TerminalManager:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         shell: str = "bash",
+        env_provider: Callable[[], Mapping[str, str]] | None = None,
     ) -> None:
         self.env = env
+        # Extra environment for the tmux SERVER when ``open`` starts it (the
+        # user's secrets, docs/WIRE_CONTRACT.md "Secrets"). tmux copies the
+        # client's environment into the server only when the server starts, so
+        # a value that arrives later reaches new sessions only after the server
+        # is gone. Never put on a command line (no ``tmux -e``).
+        self._env_provider = env_provider
         self.task_id = _sanitize_task_id(task_id)
         self.rows = max(4, min(int(rows), MAX_ROWS))
         self.cols = max(20, min(int(cols), MAX_COLS))
@@ -283,12 +297,34 @@ class TerminalManager:
 
     # -- tmux plumbing -----------------------------------------------------
 
-    def _run(self, argv_list: list[list[str]], *, timeout: int = 30):
-        """Run one or more tmux commands as a single shell command."""
+    def _run(
+        self,
+        argv_list: list[list[str]],
+        *,
+        timeout: int = 30,
+        env: Mapping[str, str] | None = None,
+    ):
+        """Run one or more tmux commands as a single shell command.
+
+        ``env`` is passed to ``run_bash`` ONLY when it has values, so an
+        environment that does not know the keyword (a test fake) keeps working.
+        """
         cmd = " && ".join(
             " ".join(shlex.quote(part) for part in argv) for argv in argv_list
         )
+        if env:
+            return self.env.run_bash(cmd, timeout=timeout, env=env)
         return self.env.run_bash(cmd, timeout=timeout)
+
+    def _secret_env(self) -> dict[str, str]:
+        """The values ``env_provider`` holds now, or nothing. A provider that
+        raises means "no secrets", never a failed terminal."""
+        if self._env_provider is None:
+            return {}
+        try:
+            return dict(self._env_provider())
+        except Exception:  # noqa: BLE001 — a vault hiccup opens the shell without keys
+            return {}
 
     def _tmux_name(self, name: str) -> str:
         return f"cw-{self.task_id}-{name}"
@@ -358,7 +394,7 @@ class TerminalManager:
         if cwd:
             argv += ["-c", cwd]
         argv.append(self.shell)
-        result = self._run([argv])
+        result = self._run([argv], env=self._secret_env())
         if not result.ok:
             raise TerminalError(
                 "could not start the terminal: "
@@ -409,6 +445,165 @@ class TerminalManager:
 
     def list_sessions(self) -> list[str]:
         return list(self._sessions)
+
+    # -- adoption and discovery (shell_* tools) ---------------------------
+
+    def prefix(self) -> str:
+        """The tmux session-name prefix of this manager's terminals."""
+        return f"cw-{self.task_id}-"
+
+    def live_names(self) -> list[str]:
+        """Names of the tmux sessions on the server that carry this manager's
+        prefix — including ones an earlier task of the same sandbox left
+        running. Empty when the server is not up."""
+        result = self._run([["tmux", "list-sessions", "-F", "#{session_name}"]])
+        if not result.ok:
+            return []
+        prefix = self.prefix()
+        names: list[str] = []
+        for raw in result.stdout.splitlines():
+            raw = raw.strip()
+            if raw.startswith(prefix) and len(raw) > len(prefix):
+                names.append(raw[len(prefix):])
+        return names
+
+    def adopt(self, name: str) -> TerminalSession | None:
+        """Register a live tmux session of this manager's prefix that this
+        manager did not open (an earlier task did). Returns the session, or
+        None when no such tmux session is running."""
+        name = _check_name(name)
+        existing = self._sessions.get(name)
+        tmux_name = self._tmux_name(name)
+        if not self._exists(tmux_name):
+            if existing is not None:
+                self._sessions.pop(name, None)
+            return None
+        if existing is not None:
+            existing.last_used = self._clock()
+            return existing
+        now = self._clock()
+        session = TerminalSession(
+            name=name,
+            tmux_name=tmux_name,
+            rows=self.rows,
+            cols=self.cols,
+            opened_at=now,
+            last_used=now,
+        )
+        self._sessions[name] = session
+        return session
+
+    def has(self, name: str) -> bool:
+        return name in self._sessions
+
+    # -- tail and status (shell_* tools) ----------------------------------
+
+    def capture_tail(self, name: str, lines: int) -> list[str]:
+        """The last ``lines`` lines of the pane INCLUDING its scrollback,
+        trailing blank lines dropped. This is the ``shell_read`` view: a
+        finished command's output is above the prompt, not on the screen.
+        """
+        name = _check_name(name)
+        session = self._require(name)
+        count = max(1, int(lines))
+        result = self._run(
+            [
+                [
+                    "tmux",
+                    "capture-pane",
+                    "-p",
+                    "-S",
+                    f"-{count}",
+                    "-t",
+                    self._pane(session.tmux_name),
+                ]
+            ]
+        )
+        if not result.ok:
+            self._sessions.pop(session.name, None)
+            raise TerminalError(
+                f"terminal {session.name!r} is not running any more "
+                "(the program may have exited). Start a new one."
+            )
+        session.last_used = self._clock()
+        raw = result.stdout.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        out = [line.rstrip() for line in raw]
+        while out and not out[-1]:
+            out.pop()
+        return out[-count:]
+
+    def pane_status(self, name: str) -> dict:
+        """What runs in the pane right now.
+
+        ``foreground`` is tmux's ``pane_current_command`` (the process in the
+        foreground of the pane's tty: ``bash`` when the shell waits for input,
+        ``python3`` / ``apt-get`` / ``vim`` while a program runs).
+        ``running`` is True when that is not a shell. ``cursor_line`` is the
+        text of the visible line the cursor is on — the prompt, or the question
+        an interactive program is asking.
+        """
+        name = _check_name(name)
+        session = self._require(name)
+        target = self._pane(session.tmux_name)
+        fmt = "#{pane_current_command}\t#{cursor_y}\t#{pane_dead}\t#{pane_pid}"
+        result = self._run(
+            [
+                ["tmux", "display-message", "-p", "-t", target, fmt],
+                ["printf", "%s\\n", _STATUS_MARKER],
+                ["tmux", "capture-pane", "-p", "-t", target],
+            ]
+        )
+        if not result.ok:
+            self._sessions.pop(session.name, None)
+            raise TerminalError(
+                f"terminal {session.name!r} is not running any more "
+                "(the program may have exited). Start a new one."
+            )
+        head, _, screen = result.stdout.partition(_STATUS_MARKER + "\n")
+        fields = head.strip("\n").split("\t")
+        foreground = fields[0].strip() if fields else ""
+        try:
+            cursor_y = int(fields[1]) if len(fields) > 1 else 0
+        except ValueError:
+            cursor_y = 0
+        dead = len(fields) > 2 and fields[2].strip() == "1"
+        rows = screen.split("\n")
+        cursor_line = rows[cursor_y].rstrip() if 0 <= cursor_y < len(rows) else ""
+        return {
+            "foreground": foreground,
+            "running": bool(foreground) and foreground not in SHELL_NAMES and not dead,
+            "cursor_line": cursor_line,
+            "dead": dead,
+        }
+
+    def send_sequence(
+        self, name: str, items: list[tuple[str, str]], *, settle_s: float = DEFAULT_SETTLE_S
+    ) -> None:
+        """Push a mixed sequence into the pane: ``("text", "...")`` items are
+        typed literally (a newline inside is an Enter press), ``("key", name)``
+        items are pressed as tmux key names (already canonical). Settles
+        afterwards so a following read sees the reaction."""
+        name = _check_name(name)
+        session = self._require(name)
+        argv_list: list[list[str]] = []
+        target = self._pane(session.tmux_name)
+        for kind, value in items:
+            if kind == "key":
+                argv_list.append(["tmux", "send-keys", "-t", target, value])
+                continue
+            for index, line in enumerate(str(value).split("\n")):
+                if index:
+                    argv_list.append(["tmux", "send-keys", "-t", target, "Enter"])
+                argv_list.extend(self._literal_argv(session, line))
+        if argv_list:
+            result = self._run(argv_list)
+            if not result.ok:
+                raise TerminalError(
+                    "could not send keys: "
+                    + ((result.stderr or result.stdout).strip() or "tmux failed")
+                )
+        session.last_used = self._clock()
+        self._sleep(max(0.0, min(float(settle_s), MAX_SETTLE_S)))
 
     # -- keys --------------------------------------------------------------
 
