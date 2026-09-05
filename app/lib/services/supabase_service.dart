@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:cowork/services/network_status_service.dart';
+import 'package:cowork/services/session_refresh_scheduler.dart';
 import 'package:cowork/supabase_config.dart';
 
 class SupabaseService {
@@ -40,10 +41,15 @@ class SupabaseService {
       publishableKey: SupabaseConfig.supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
+        // CoWork-only (bead cowork-2n1): the app's refresh must respect the
+        // paired host, which shares the single-use refresh token. gotrue's
+        // own timer cannot know about the host; SessionRefreshScheduler does.
+        autoRefreshToken: false,
       ),
     );
 
     _initialized = true;
+    SessionRefreshScheduler.instance.start();
   }
 
   static GoTrueClient get auth => client.auth;
