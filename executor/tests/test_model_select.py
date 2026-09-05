@@ -250,3 +250,63 @@ def test_a_non_string_prompt_is_refused_before_anything_is_recorded(tmp_path):
             store.close()
     finally:
         executor.stop()
+
+
+def test_the_runs_row_and_the_log_prove_which_model_a_task_ran_on(tmp_path, caplog):
+    """A live run must be provable afterwards: the runs row carries the task's
+    model / provider / reasoning_effort (NULL = host default), and the executor
+    logs one line per accepted task naming them — never the prompt."""
+    import logging
+
+    from cowork_agent import StateStore
+
+    factory, select, _calls = _recording_pair()
+    executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
+    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+        events = _run(
+            executor,
+            controller,
+            "the secret prompt text",
+            model="anthropic/claude-x",
+            provider="anthropic",
+            reasoning_effort="low",
+        )
+    assert events[-1]["type"] == "done"
+
+    store = StateStore(str(tmp_path / "s.db"))
+    try:
+        row = store.latest_run("s")
+    finally:
+        store.close()
+    assert row["model"] == "anthropic/claude-x"
+    assert row["provider"] == "anthropic"
+    assert row["reasoning_effort"] == "low"
+
+    lines = [r.getMessage() for r in caplog.records if "task accepted" in r.getMessage()]
+    assert len(lines) == 1
+    assert "model=anthropic/claude-x" in lines[0]
+    assert "provider=anthropic" in lines[0]
+    assert "reasoning_effort=low" in lines[0]
+    assert "secret prompt" not in lines[0]
+
+
+def test_a_task_naming_nothing_is_recorded_as_host_default(tmp_path, caplog):
+    import logging
+
+    from cowork_agent import StateStore
+
+    factory, select, _calls = _recording_pair()
+    executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
+    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+        events = _run(executor, controller, "do it")
+    assert events[-1]["type"] == "done"
+
+    store = StateStore(str(tmp_path / "s.db"))
+    try:
+        row = store.latest_run("s")
+    finally:
+        store.close()
+    assert row["model"] is None and row["provider"] is None and row["reasoning_effort"] is None
+
+    line = next(r.getMessage() for r in caplog.records if "task accepted" in r.getMessage())
+    assert "model=host-default" in line and "reasoning_effort=host-default" in line

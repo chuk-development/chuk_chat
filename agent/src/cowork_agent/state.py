@@ -83,11 +83,25 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at   REAL NOT NULL,
     finished_at  REAL,
     notified_at  REAL,
-    seen_at      REAL
+    seen_at      REAL,
+    -- What the task asked for (WIRE_CONTRACT task fields); NULL = host default.
+    -- Added additively; RUNS_MIGRATIONS backfills an existing database.
+    model            TEXT,
+    provider         TEXT,
+    reasoning_effort TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
 """
+
+#: Columns added to ``runs`` after the table first shipped, in order. Each is
+#: ``ALTER TABLE ... ADD COLUMN``ed into an existing database on open when it is
+#: missing (see ``StateStore._init_schema``). Append here; never rename or drop.
+RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("model", "TEXT"),
+    ("provider", "TEXT"),
+    ("reasoning_effort", "TEXT"),
+)
 
 #: Run states (the ``runs.state`` column).
 RUN_RUNNING = "running"
@@ -155,6 +169,16 @@ class StateStore:
     @staticmethod
     def _init_schema(conn: sqlite3.Connection) -> bool:
         conn.executescript(_SCHEMA)
+        # ``CREATE TABLE IF NOT EXISTS`` leaves an existing ``runs`` table as it
+        # was, so columns added later must be backfilled by hand. Additive and
+        # idempotent: nullable columns, added only when missing, never dropped.
+        present = {
+            row[1] for row in conn.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        for column, sql_type in RUNS_MIGRATIONS:
+            if column not in present:
+                conn.execute(f"ALTER TABLE runs ADD COLUMN {column} {sql_type}")
+        conn.commit()
         return ensure_fts_schema(conn)
 
     def close(self) -> None:
@@ -366,18 +390,43 @@ class StateStore:
         return int(row["m"]) if row else 0
 
     def begin_run(
-        self, run_id: str, session_id: int, session_key: str, prompt: str
+        self,
+        run_id: str,
+        session_id: int,
+        session_key: str,
+        prompt: str,
+        *,
+        model: str | None = None,
+        provider: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         """Record an accepted task as ``running``. ``first_mid`` is the message
-        cursor at that moment, so the run's own turns are the rows after it."""
+        cursor at that moment, so the run's own turns are the rows after it.
+
+        ``model`` / ``provider`` / ``reasoning_effort`` are what the task asked
+        for (docs/WIRE_CONTRACT.md task fields), ``None`` meaning the host's
+        default — recorded so a run can prove afterwards which model it ran on.
+        """
         first_mid = self.max_message_id(session_id)
 
         def op(cur: sqlite3.Cursor) -> None:
             cur.execute(
                 "INSERT INTO runs(run_id, session_id, session_key, prompt, state, "
-                "first_mid, started_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "first_mid, started_at, model, provider, reasoning_effort) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(run_id) DO NOTHING",
-                (run_id, session_id, session_key, prompt, RUN_RUNNING, first_mid, time.time()),
+                (
+                    run_id,
+                    session_id,
+                    session_key,
+                    prompt,
+                    RUN_RUNNING,
+                    first_mid,
+                    time.time(),
+                    model,
+                    provider,
+                    reasoning_effort,
+                ),
             )
 
         self._write(op)
