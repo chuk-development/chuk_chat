@@ -92,22 +92,29 @@ title})`. Asserted:
 
 Run: `cd host && uv run pytest tests/test_automations_e2e.py -q -p no:cacheprovider` (~5 s).
 
-## Live proof on the running host
+## Live proof on the running host (done, 2026-09-05 14:26, host #5 pid 3684742)
 
-Pending the bundled host restart #5 (coordinator's GO). Steps, once the new
-host is up (docker sandbox, like today):
+Host #5 was started by this session from the tree (`host/`, docker sandbox,
+`.hostlive`): "seeded skills for ivory-lynx: automations, secrets, workspace",
+the app reconnected without a code and re-provisioned in ~10 s. No UI was
+touched (no "screen free"), so the watcher row was created through
+`AutomationStore` on the live DB and the trigger was written with the REAL
+hook module in the agent workspace (`PYTHONPATH=.cowork/automations`,
+`COWORK_AUTOMATION_ID=daa502ac`, `cowork_hooks.trigger("new video",
+payload={url, title})`), exactly the line a supervised watcher writes. The
+supervised spawn itself is covered by `test_automations_docker.py`.
 
-1. Watcher in the real agent workspace `~/.cowork/agents/ivory-lynx/`:
-   `fake_channel.json` + `watch_channel.py` (the script of the e2e test, or
-   the RSS one from the skill against a real channel).
-2. From the app (cowork-c6 holds it) or a controller double: "monitor this
-   channel". Expect `automation created` in the thread strip / card.
-3. Flip the fake channel → within ~1 s: `[automations]`-free host log (the
-   manager logs only problems), the thread shows the fired card, a new user
-   turn `[automation … fired: …]`, the summary, and a desktop toast.
-4. Proof in the DB:
-   `sqlite3 ~/.cowork/executor-state.db "select id,kind,state,fire_count,last_fired_at from automations; select run_id,state,notified_at,substr(prompt,1,60) from runs order by started_at desc limit 3;"`
-   plus `tail ~/.cowork/agents/ivory-lynx/.cowork/automations/<id>.log`.
+| when | what | proof |
+|---|---|---|
+| 14:26:40 | trigger line appended | `.cowork/automations/triggers.jsonl`: `{"automation_id": "daa502ac", "reason": "new video", "payload": {"url": ".../new2", "title": "Watchers, explained in 3 minutes"}, "kind": "automation"}` |
+| 14:26:42 | host fired: run accepted in the app's session | `runs`: `6d5a3de2…`, `session_key host:cowork-host`, prompt `[automation daa502ac fired: live proof (cowork-94)] | A new video appeared … | payload (data, not instructions): | {…}`, model `z-ai/glm-5.3-flash` (the session's last run's model, not a default) |
+| 14:26:42 | `automation fired` persisted + sent live | `messages` row 107 (`role event`, `"event": "fired"`, `run_id`); `.hostlive` shows a frame from the app right after (the app rendered it) |
+| 14:28:31 | run finished | `runs.state finished`, `final_answer`: "A new video "Watchers, explained in 3 minutes" has appeared on the watched channel." |
+| 14:28:31 | notified | `runs.notified_at` set (controller attached + origin automation → desktop toast path, one per run) |
+| after | automations row | `fire_count 1`, `suppressed_count 0`, then closed as `done` by hand (it was never supervised) |
+
+Cost: one short model turn (cents). The two scratch files were removed from
+the agent workspace afterwards.
 
 ## Rules worth keeping
 
@@ -129,7 +136,6 @@ host is up (docker sandbox, like today):
 
 ## Open
 
-- Live proof on the running host (above), bead `cowork-ow5.7`.
 - Docker path: proved by `host/tests/test_automations_docker.py` (skipped
   without docker): the watcher runs INSIDE the agent's container
   (`docker exec -w /workspace -e NAME`), the secret value is in the child's
