@@ -1,0 +1,86 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:cowork/services/automations/cowork_automation.dart';
+import 'package:cowork/widgets/automation_card.dart';
+
+CoworkAutomation _automation({
+  String state = 'active',
+  String kind = 'schedule',
+  int fireCount = 3,
+  String? error,
+}) =>
+    CoworkAutomation.fromPayload(<String, dynamic>{
+      'id': 'ab12cd34',
+      'session_key': 'thread-1',
+      'kind': kind,
+      'name': 'inbox check',
+      'state': state,
+      'spec': kind == 'watcher' ? {'script_path': 'poll.py'} : {'every': 300},
+      'prompt': 'check the inbox',
+      'fire_count': fireCount,
+      'next_fire_at': DateTime.now().add(const Duration(minutes: 4)).millisecondsSinceEpoch / 1000,
+      'last_fired_at': DateTime.now().subtract(const Duration(minutes: 1)).millisecondsSinceEpoch / 1000,
+      'last_error': ?error,
+    })!;
+
+Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+void main() {
+  testWidgets('an active schedule shows its facts and offers Pause + Cancel',
+      (tester) async {
+    final pressed = <String>[];
+    await tester.pumpWidget(_wrap(AutomationCard(
+      automation: _automation(),
+      onPause: () => pressed.add('pause'),
+      onResume: () => pressed.add('resume'),
+      onCancel: () => pressed.add('cancel'),
+    )));
+    expect(find.text('inbox check'), findsOneWidget);
+    expect(find.text('active'), findsOneWidget);
+    expect(find.textContaining('every 5m'), findsOneWidget);
+    expect(find.textContaining('next in 3m'), findsOneWidget);
+    expect(find.textContaining('fired 3×'), findsOneWidget);
+    expect(find.text('check the inbox'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
+    expect(find.byTooltip('Resume'), findsNothing);
+    expect(find.byTooltip('Cancel'), findsOneWidget);
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.tap(find.byTooltip('Cancel'));
+    expect(pressed, ['pause', 'cancel']);
+  });
+
+  testWidgets('a paused one offers Resume; a finished one offers nothing',
+      (tester) async {
+    await tester.pumpWidget(_wrap(AutomationCard(
+      automation: _automation(state: 'paused'),
+      onPause: () {},
+      onResume: () {},
+      onCancel: () {},
+    )));
+    expect(find.byTooltip('Resume'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsNothing);
+
+    await tester.pumpWidget(_wrap(AutomationCard(
+      automation: _automation(state: 'done'),
+      onPause: () {},
+      onResume: () {},
+      onCancel: () {},
+    )));
+    expect(find.byType(IconButton), findsNothing);
+    expect(find.text('done'), findsOneWidget);
+  });
+
+  testWidgets('a failed watcher shows its error and the watch spec',
+      (tester) async {
+    await tester.pumpWidget(_wrap(AutomationCard(
+      automation: _automation(state: 'failed', kind: 'watcher', error: 'exit code 3'),
+      compact: true,
+    )));
+    expect(find.text('exit code 3'), findsOneWidget);
+    expect(find.textContaining('watch poll.py'), findsOneWidget);
+    expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    // Compact hides the prompt line.
+    expect(find.text('check the inbox'), findsNothing);
+  });
+}
