@@ -58,6 +58,16 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- END BEADS INTEGRATION -->
 
 
+
+## Commit-Regel (User-Anweisung 2026-09-05, gilt für ALLE Agent-Sessions in diesem Repo)
+
+- **Commit ist immer freigegeben.** Jede Session committet **automatisch nach jedem abgeschlossenen Arbeitsschritt** (Feature, Fix, Test grün), ohne nachzufragen.
+- Grund (wörtlich vom User): ohne Commits gibt es Kollisionen über immer mehr Dateien, weniger Commits, und am Ende kann man schlechter zurückgehen.
+- Regeln bleiben: nur eigene Dateien bzw. abgestimmte Hunks, Tests vorher grün, keine Session-Links und keine Co-Authored-By-Trailer, als `chukfinley <77645077+chukfinley@users.noreply.github.com>` über die globale git config (keine `-c`-Overrides), Branch `cowork`, kein Worktree.
+- **Der git-Index ist geteilt (ein Working-Tree, viele Sessions).** Deshalb IMMER in EINEM Befehl und nur mit expliziten Pfaden committen: `git commit -o -m "<msg>" -- <pfad1> <pfad2> ...` (`-o`/`--only` ignoriert den geteilten Index und nimmt genau diese Pfade). Nie `git commit -a`, nie `git add -A`/`git add .`, nie `git reset` (löscht fremdes Staging), nie getrenntes `git add` + `git commit`. Vorher `git log --oneline -1 -- <pfad>` prüfen, ob eine fremde Session die Datei schon mitcommittet hat. Commit-Fenster: der Koordinator vergibt sie nacheinander ("Commit-Fenster?").
+- Vor jedem Commit `git diff --stat -- <pfade>` lesen: passt die Zeilenzahl nicht zur eigenen Arbeit, enthält die Datei fremde Working-Tree-Änderungen → nicht committen oder per `git add -p` (im selben Befehl mit dem Commit) aufteilen. `-o` schützt nur vor dem geteilten Index, nicht vor fremden Hunks in derselben Datei.
+- Dieses Repo überschreibt damit das "Conservative"-Profil oben: Commits brauchen KEINE erneute Freigabe. Push weiterhin nur auf Anweisung.
+
 ## Build & Test
 
 _Add your build and test commands here_

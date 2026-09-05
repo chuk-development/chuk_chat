@@ -598,3 +598,65 @@ pasted into a task. Ciphertext keeps a database leak worthless. The session
 key is plaintext on purpose — it is what the sync compares and what the app
 needs to route a row to a thread, and it carries no content.
 
+---
+
+# CoWork secrets — `cowork_secrets` (docs/WIRE_CONTRACT.md, "Secrets")
+
+The user's API keys, the way the agent uses them without ever seeing them.
+The device keeps the set in secure storage (`SecretsStore`,
+`app/lib/services/secrets/secrets_store.dart`) and mirrors it here so a
+fresh install on another device pulls it back, signs in, and forwards it to
+the host on its first provision. The host holds its own encrypted copy at
+rest (`~/.cowork/secrets.enc`); this table is the cross-device copy.
+
+The DDL is `supabase/migrations/20260905120000_cowork_secrets.sql`; run it
+once in the project's SQL editor.
+
+## What Supabase stores
+
+One row per name. `name` is plaintext on purpose: it is a label in the
+style of an environment variable (`PEXELS_API_KEY`), and the sync needs to
+compare names without decrypting. `ciphertext` is the value as an
+`EncryptionService` envelope — the same per-user password-derived
+AES-256-GCM key as every other CoWork mirror. A leaked anon key, a dump or
+an admin see the names and opaque blobs.
+
+## Table
+
+```sql
+create table if not exists public.cowork_secrets (
+  user_id    uuid        not null references auth.users (id) on delete cascade,
+  name       text        not null,      -- env-style label, plaintext
+  ciphertext text        not null,      -- AES-256-GCM envelope JSON of the value
+  updated_at timestamptz not null default now(),
+  primary key (user_id, name),
+  constraint cowork_secrets_name_shape check (name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$')
+);
+```
+
+## Row-Level Security
+
+RLS on, owner-only, the same four policies as every other CoWork table
+(`cowork_secrets_{select,insert,update,delete}_own` on `auth.uid() =
+user_id`), plus the grant to `authenticated`. See the migration.
+
+## Client access pattern
+
+- Set / change: `upsert({user_id, name, ciphertext, updated_at},
+  onConflict: 'user_id,name')` after the local write. Best-effort.
+- Delete: `delete().eq(user_id).eq(name)`.
+- Load: `select('name, ciphertext')` on start when the local store is
+  empty (a reinstall); decrypt each value, adopt into secure storage.
+- After every local change the app forwards the WHOLE set to the host as
+  one `secrets` frame (docs/WIRE_CONTRACT.md).
+
+## Security note (business risk)
+
+A key here is a live credential for a third-party account the user pays
+for (an image API, an LLM provider, a mail server). Client-side encryption
+keeps a database leak worthless; the host never writes a value to a log, a
+transcript or a workspace file, and the model only ever sees
+`[REDACTED:<NAME>]`. Values shorter than 8 characters are stored and
+injected like any other but are NOT masked in outputs (too short to be a
+real key, too likely to collide with ordinary text) — the settings page
+says so next to the value field.
