@@ -109,11 +109,32 @@ mixin CoworkShellHost on State<MessengerShell> {
     // The toast carries the coworker's name, never the answer.
     CoworkNotifications.instance.threadLabel = _threadLabel;
     WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap());
+    // The host's coworker names (bead cowork-817): the link fans out every
+    // inbound frame of the bound controller, so this sees each `agent_list`
+    // without owning the socket.
+    _hostInboundSub = CoworkRelayLink.instance.inbound.listen(_onHostInbound);
+  }
+
+  StreamSubscription<CoworkRelayInbound>? _hostInboundSub;
+
+  /// Ids deleted in this session. The host still lists them (delete is not on
+  /// the wire yet, see WIRE_CONTRACT "Coworker names"); a list must not bring
+  /// a coworker back the user just removed.
+  final Set<String> _deletedAgentIds = <String>{};
+
+  void _onHostInbound(CoworkRelayInbound event) {
+    if (event is! CoworkRelayAgentList) return;
+    _roster.applyHostNames(
+      event.agents,
+      peerDeviceId: _controller.value?.state.value.peerDeviceId,
+      ignore: _deletedAgentIds,
+    );
   }
 
   /// The `dispose` half of the host. Called by the state before `super`.
   void _hostDispose() {
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
+    _hostInboundSub?.cancel();
     _controller.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     if (_ownsThemeController) _themeController.dispose();
@@ -190,6 +211,10 @@ mixin CoworkShellHost on State<MessengerShell> {
 
   void _onPaired(String peerDeviceId) {
     final agent = _roster.ensureHostAgent(peerDeviceId);
+    // The names the host keeps (bead cowork-817): asked on every pair, so a
+    // reinstall and a second device show the same coworkers. The answer
+    // lands in [_onHostInbound].
+    unawaited(_controller.value?.requestAgentList());
     if (_selectedAgentId == null) {
       setState(() {
         _selectedAgentId = agent.id;
@@ -233,28 +258,32 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// a desktop window, chuk's `ModelSelectorPage` as a route on a phone.
   void _openModelScreen();
 
+  /// New coworker (bead cowork-817): chuk's rename dialog shape — one
+  /// `TextField` in an `AlertDialog` — pre-filled with a suggested name. The
+  /// coworker is created with that name and its thread opens; the host is told
+  /// so the name outlives this install (`agent_create`, WIRE_CONTRACT).
   Future<void> _openOnboarding() async {
     final taken = _roster.agents.map((agent) => agent.name);
     final suggested = const AgentNameGenerator().next(taken: taken);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => AgentOnboardingSheet(
-        suggestedName: suggested,
-        onCancel: () => Navigator.of(sheetContext).pop(),
-        onSubmit: (draft) {
-          final agent = _roster.addAgent(
-            name: draft.name,
-            role: draft.role,
-            brief: draft.brief,
-            schedule: draft.schedule,
-            attachmentNames: draft.attachmentNames,
-          );
-          Navigator.of(sheetContext).pop();
-          _select(agent.id, agent.threads.first.key);
-        },
-      ),
+    final name = await showCoworkerNameDialog(
+      context,
+      title: 'New coworker',
+      initialName: suggested,
+      submitLabel: 'Create',
     );
+    if (!mounted || name == null || name.isEmpty) return;
+    final agent = _roster.addAgent(name: name);
+    unawaited(_controller.value?.createAgent(agent.id, agent.name));
+    _select(agent.id, agent.threads.first.key);
+  }
+
+  /// Rename (bead cowork-817): the roster row's menu → chuk's dialog → here.
+  /// Local first, then the host, like [_renameRoom].
+  void _renameAgent(String agentId, String name) {
+    _roster.renameAgent(agentId, name);
+    final agent = _roster.byId(agentId);
+    if (agent == null) return;
+    unawaited(_controller.value?.renameAgent(agentId, agent.name));
   }
 
   /// The rooms list, for the desktop panel and the phone route alike. A room
@@ -440,6 +469,7 @@ mixin CoworkShellHost on State<MessengerShell> {
     // that falls below two members is deleted), telling the host to forget each
     // deleted room so nothing is orphaned. If the deleted agent was selected,
     // clear the selection so the thread pane does not point at a ghost.
+    _deletedAgentIds.add(agentId);
     _roster.removeAgent(agentId);
     // The rooms the agent was in, captured before the cascade rewrites them.
     final wasIn = <String>[

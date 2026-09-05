@@ -131,6 +131,11 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> renameAgent(String agentId, String name) async =>
       renamedAgents.add((agentId, name));
 
+  int agentListRequests = 0;
+
+  @override
+  Future<void> requestAgentList() async => agentListRequests++;
+
   final List<(String, String)> removedMembers = <(String, String)>[];
 
   @override
@@ -373,15 +378,20 @@ void main() {
     expect(find.text("Agent's browser"), findsNothing); // no sidebar row
 
     await tester.tap(find.byTooltip("Agent's browser"));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle: the page's spinner animates until the executor's
+    // `started` event, which this test never sends.
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     // A route with its own app bar, not a side panel next to the chat.
     expect(find.byType(BrowserViewPage), findsOneWidget);
     expect(find.widgetWithText(AppBar, 'Agent browser'), findsOneWidget);
     final route = ModalRoute.of(tester.element(find.byType(BrowserViewPage)));
     expect((route as MaterialPageRoute).fullscreenDialog, isTrue);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+    // A full-screen dialog closes with an X, not a back arrow.
+    await tester.tap(find.byType(CloseButton));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.byType(BrowserViewPage), findsNothing);
 
     // The agent closes the browser: the button goes away again.
@@ -549,6 +559,42 @@ void main() {
     expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
     expect(controller.renamedAgents, [(agent.id, 'Amber Desk')]);
     expect(find.text('Amber Desk'), findsWidgets);
+  });
+
+  testWidgets('the host\'s agent_list names the host row, adds the coworkers '
+      'it keeps and skips one deleted here', (tester) async {
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    final hostId = roster.agents.single.id;
+    // Pairing asks the host for its names once.
+    expect(controller.agentListRequests, 1);
+    final gone = roster.addAgent(name: 'gone-soon');
+    await tester.pumpAndSettle();
+
+    // Delete through the row menu, so the shell records the id.
+    await tester.tap(find.descendant(
+      of: find.byKey(ValueKey<String>('agent-tile-${gone.id}')),
+      matching: find.byTooltip('More'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(roster.byId(gone.id), isNull);
+
+    controller.emit(CoworkRelayAgentList(agents: [
+      const CoworkHostAgentName(
+          agentId: 'host:ignored', name: 'Laptop Bot', host: true),
+      const CoworkHostAgentName(agentId: 'local:phone:2:7', name: 'From Phone'),
+      CoworkHostAgentName(agentId: gone.id, name: 'gone-soon'),
+    ]));
+    await tester.pumpAndSettle();
+
+    expect(roster.byId(hostId)!.name, 'Laptop Bot');
+    expect(roster.byId('local:phone:2:7')!.name, 'From Phone');
+    expect(roster.byId(gone.id), isNull);
+    expect(find.text('Laptop Bot'), findsWidgets);
+    expect(find.text('From Phone'), findsWidgets);
   });
 
   testWidgets('an agent has one permanent thread and no way to open a second',

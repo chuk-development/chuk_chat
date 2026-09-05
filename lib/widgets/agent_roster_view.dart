@@ -37,8 +37,9 @@
 /// as wide as the widest label — New coworker, Control Rooms, Agent's browser
 /// in chuk's New chat / Workspaces / Media slots; the list; and chuk's footer
 /// pill floating over the list's tail with a fade behind it. The pill's gear is
-/// the Settings entry, as in chuk. chuk's hosted-only pieces — the
-/// `BalanceBadge` and the `UpdateBanner` — are left out.
+/// the Settings entry, as in chuk, and the pill carries chuk's `BalanceBadge`
+/// (the account's credits, bead cowork-4ih) whenever a Supabase session is up.
+/// chuk's `UpdateBanner` is left out.
 library;
 
 import 'package:flutter/material.dart';
@@ -46,7 +47,10 @@ import 'package:flutter/material.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:cowork/services/profile_service.dart';
+import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
+import 'package:cowork/widgets/credit_display.dart';
 import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
 
 class AgentRosterView extends StatefulWidget {
@@ -58,6 +62,7 @@ class AgentRosterView extends StatefulWidget {
     this.selectedThreadKey,
     this.onAddAgent,
     this.onDeleteAgent,
+    this.onRenameAgent,
     this.onOpenRooms,
     this.onOpenBrowser,
     this.onOpenSettings,
@@ -81,6 +86,12 @@ class AgentRosterView extends StatefulWidget {
   /// the paired host (the host agent is the real device, not a bot to delete).
   final void Function(String agentId)? onDeleteAgent;
 
+  /// Renames a coworker (bead cowork-817). When set, a Rename item appears in
+  /// every row's menu and opens chuk's rename dialog (`_renameChatDialog` in
+  /// chuk's `sidebar_desktop.dart`, one `TextField` in an `AlertDialog`); the
+  /// trimmed, non-empty, changed name is reported here. The shell persists it.
+  final void Function(String agentId, String name)? onRenameAgent;
+
   /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
   final VoidCallback? onOpenRooms;
 
@@ -93,7 +104,8 @@ class AgentRosterView extends StatefulWidget {
   final VoidCallback? onOpenSettings;
 
   /// What the footer pill says where chuk shows the account's display name.
-  /// Null falls back to a plain label.
+  /// Null lets the roster load the profile itself, exactly like chuk's sidebar
+  /// (`_loadProfile` → display name → e-mail → 'Account').
   final String? accountLabel;
 
   /// Clock seam so "5m ago" is deterministic in a test.
@@ -104,6 +116,49 @@ class AgentRosterView extends StatefulWidget {
 }
 
 class _AgentRosterViewState extends State<AgentRosterView> {
+  /// chuk's `_profile`: the signed-in account's record, for the footer pill.
+  /// Only fetched when Supabase is up — a widget test has no session and the
+  /// pill then shows [AgentRosterView.accountLabel] or 'Account'.
+  ProfileRecord? _profile;
+
+  /// chuk's hosted pieces (profile name, `BalanceBadge`) need a Supabase
+  /// session. Without one — widget tests — the pill is chuk's minus the badge.
+  bool get _hosted => SupabaseService.isInitialized;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_hosted) _loadProfile();
+  }
+
+  // chuk `sidebar_desktop.dart` `_loadProfile`, verbatim.
+  Future<void> _loadProfile() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final record = await const ProfileService().loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = record;
+      });
+    } catch (_) {
+      // Silently ignore profile load errors; sidebar will show fallback label.
+    }
+  }
+
+  // chuk `sidebar_desktop.dart` `_displayNameFor`, verbatim.
+  String _displayNameFor(ProfileRecord? profile) {
+    if (profile == null) return 'Account';
+    if (profile.displayName.trim().isNotEmpty) {
+      return profile.displayName.trim();
+    }
+    if (profile.email.trim().isNotEmpty) {
+      return profile.email.trim();
+    }
+    return 'Account';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -255,10 +310,11 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
-  /// chuk's `_buildFooterRow`, minus the hosted `BalanceBadge`. The pill is
-  /// opaque on purpose: only the space around it fades into the list, so the
-  /// label stays legible over any row behind it.
+  /// chuk's `_buildFooterRow`, slot for slot: display name, the credit pill
+  /// (`BalanceBadge`, chuk's hosted balance from the same account API), the
+  /// gear. The badge is mounted only with a Supabase session (see [_hosted]).
   Widget _footerRow(BuildContext context, SidebarTokens t) {
+    final String name = widget.accountLabel ?? _displayNameFor(_profile);
     final Color pillColor = Color.alphaBlend(
       t.accent.withValues(alpha: 0.08),
       t.bg,
@@ -277,7 +333,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               children: [
                 Expanded(
                   child: Text(
-                    widget.accountLabel ?? 'Account',
+                    name,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: t.iconFg,
@@ -286,6 +342,32 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                     ),
                   ),
                 ),
+                if (_hosted) ...[
+                  const SizedBox(width: 8),
+                  // Credit pill — bigger, fully rounded, layered tint above
+                  // the footer background so it reads as a discrete badge.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: t.accent.withValues(alpha: 0.20),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: BalanceBadge(
+                      textStyle: TextStyle(
+                        color: t.accent,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      placeholderStyle: TextStyle(
+                        color: t.iconFg.withValues(alpha: 0.55),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 6),
                 Material(
                   color: Colors.transparent,
@@ -344,10 +426,28 @@ class _AgentRosterViewState extends State<AgentRosterView> {
             ? null
             : () => widget.onSelect(agent.id, agent.threads.first.key),
         onHide: () => widget.source.hideAgent(agent.id),
+        onRename: widget.onRenameAgent == null
+            ? null
+            : () => _renameAgentDialog(agent),
         onDelete: widget.onDeleteAgent == null || agent.onHost
             ? null
             : () => widget.onDeleteAgent!(agent.id),
       );
+
+  /// chuk's `_renameChatDialog` (`sidebar_desktop.dart`), for a coworker:
+  /// the same `AlertDialog` with one autofocused `TextField`, Enter or the
+  /// Rename button submits, Cancel or an unchanged / empty name does nothing.
+  Future<void> _renameAgentDialog(CoworkAgent agent) async {
+    final newName = await showCoworkerNameDialog(
+      context,
+      title: 'Rename coworker',
+      initialName: agent.name,
+      submitLabel: 'Rename',
+    );
+    if (!mounted) return;
+    if (newName == null || newName.isEmpty || newName == agent.name) return;
+    widget.onRenameAgent?.call(agent.id, newName);
+  }
 
   Widget _emptyState(BuildContext context, SidebarTokens t) {
     return Center(
@@ -442,6 +542,7 @@ class _AgentTile extends StatefulWidget {
     required this.now,
     this.onTap,
     required this.onHide,
+    this.onRename,
     this.onDelete,
   });
 
@@ -450,6 +551,9 @@ class _AgentTile extends StatefulWidget {
   final DateTime now;
   final VoidCallback? onTap;
   final VoidCallback onHide;
+
+  /// Opens the rename dialog. Null hides the item.
+  final VoidCallback? onRename;
 
   /// Null for the paired host: it is the user's real device, not a bot to
   /// delete, so the menu simply does not offer it.
@@ -568,10 +672,21 @@ class _AgentTileState extends State<_AgentTile> {
                       color: t.iconFg.withValues(alpha: 0.7),
                     ),
                     onSelected: (value) {
+                      if (value == 'rename') widget.onRename?.call();
                       if (value == 'hide') widget.onHide();
                       if (value == 'delete') widget.onDelete?.call();
                     },
                     itemBuilder: (context) => [
+                      if (widget.onRename != null)
+                        const PopupMenuItem<String>(
+                          value: 'rename',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.edit_outlined, size: 18),
+                            title: Text('Rename'),
+                          ),
+                        ),
                       const PopupMenuItem<String>(
                         value: 'hide',
                         child: ListTile(
@@ -656,4 +771,83 @@ String lastActivityLabel(DateTime? when, {required DateTime now}) {
   if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
   if (delta.inHours < 24) return '${delta.inHours}h ago';
   return '${delta.inDays}d ago';
+}
+
+/// chuk's rename dialog (`sidebar_desktop.dart` `_renameChatDialog`), shared
+/// by Rename and New coworker so both inputs are the same chuk component:
+/// an `AlertDialog`, one autofocused `TextField` with label and hint, Cancel
+/// and a submit button. Returns the trimmed text, or null on Cancel.
+///
+/// The controller belongs to the dialog widget, not to the caller: chuk
+/// disposes it right after `showDialog` returns, which trips "used after
+/// dispose" while the route is still animating out under a widget test.
+Future<String?> showCoworkerNameDialog(
+  BuildContext context, {
+  required String title,
+  required String submitLabel,
+  String initialName = '',
+}) =>
+    showDialog<String>(
+      context: context,
+      builder: (_) => _CoworkerNameDialog(
+        title: title,
+        submitLabel: submitLabel,
+        initialName: initialName,
+      ),
+    );
+
+class _CoworkerNameDialog extends StatefulWidget {
+  const _CoworkerNameDialog({
+    required this.title,
+    required this.submitLabel,
+    required this.initialName,
+  });
+
+  final String title;
+  final String submitLabel;
+  final String initialName;
+
+  @override
+  State<_CoworkerNameDialog> createState() => _CoworkerNameDialogState();
+}
+
+class _CoworkerNameDialogState extends State<_CoworkerNameDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialName);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Coworker name',
+          hintText: 'Enter a name',
+        ),
+        onSubmitted: (value) {
+          Navigator.of(context).pop(value.trim());
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(_controller.text.trim());
+          },
+          child: Text(widget.submitLabel),
+        ),
+      ],
+    );
+  }
 }

@@ -120,6 +120,9 @@ class FakeRelayController implements CoworkRelayController {
   Future<void> renameAgent(String agentId, String name) async {}
 
   @override
+  Future<void> requestAgentList() async {}
+
+  @override
   Future<void> addRoomMember(
     String roomId,
     String agentId,

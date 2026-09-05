@@ -35,6 +35,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/automations/cowork_automation.dart';
+import 'package:cowork/services/skills/cowork_skill.dart';
 import 'package:cowork/services/cowork/cowork_approved_devices.dart';
 import 'package:cowork/services/cowork/cowork_frame.dart';
 import 'package:cowork/services/cowork/cowork_frame_codec.dart';
@@ -492,6 +493,7 @@ class CoworkRelayRunState extends CoworkRelayInbound {
     this.runId,
     this.startedAt,
     this.prompt,
+    this.browserOpen,
   });
 
   /// Builds a run state from a decoded `run_state` payload, or null when the
@@ -504,12 +506,14 @@ class CoworkRelayRunState extends CoworkRelayInbound {
     final runId = payload['run_id'];
     final startedAt = payload['started_at'];
     final prompt = payload['prompt'];
+    final browserOpen = payload['browser_open'];
     return CoworkRelayRunState(
       sessionKey: sessionKey,
       state: state,
       runId: runId is String && runId.isNotEmpty ? runId : null,
       startedAt: startedAt is num ? startedAt.toDouble() : null,
       prompt: prompt is String ? prompt : null,
+      browserOpen: browserOpen is bool ? browserOpen : null,
     );
   }
 
@@ -529,6 +533,10 @@ class CoworkRelayRunState extends CoworkRelayInbound {
   /// The prompt the in-flight run is working on, so the app can show what it is
   /// busy with even though it never saw the send.
   final String? prompt;
+
+  /// Whether the agent has a browser open, as the host sees it (Bead
+  /// cowork-vzm, `browser_open`). Null on a host that does not send it.
+  final bool? browserOpen;
 
   /// True when a run for [sessionKey] is in flight on the host.
   bool get isRunning => state == 'running';
@@ -661,6 +669,96 @@ class CoworkRelayAutomationList extends CoworkRelayInbound {
       automations: list,
       sessionKey: scope is String && scope.isNotEmpty ? scope : null,
     );
+  }
+}
+
+/// The host's answer to a `skills_list` request or a `skill_control`
+/// (docs/WIRE_CONTRACT.md, "Skills"): every skill of the host with its switch,
+/// plus what the host could not load or refused.
+class CoworkRelaySkillsList extends CoworkRelayInbound {
+  const CoworkRelaySkillsList({
+    required this.skills,
+    this.errors = const <String>[],
+  });
+
+  final List<CoworkSkill> skills;
+  final List<String> errors;
+
+  static CoworkRelaySkillsList fromPayload(Map<String, dynamic> payload) {
+    final raw = payload['skills'];
+    final list = <CoworkSkill>[];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is Map) {
+          final skill = CoworkSkill.fromPayload(
+            entry.map((k, v) => MapEntry('$k', v)),
+          );
+          if (skill != null) list.add(skill);
+        }
+      }
+    }
+    final rawErrors = payload['errors'];
+    final errors = <String>[
+      if (rawErrors is List)
+        for (final e in rawErrors)
+          if (e is String && e.isNotEmpty) e,
+    ];
+    return CoworkRelaySkillsList(skills: list, errors: errors);
+  }
+}
+
+/// One coworker name the host keeps for this pairing (bead cowork-817,
+/// WIRE_CONTRACT "Coworker names"). [host] marks the coworker that runs on
+/// the host itself; its [agentId] is `host:<device_id>`.
+@immutable
+class CoworkHostAgentName {
+  const CoworkHostAgentName({
+    required this.agentId,
+    required this.name,
+    this.host = false,
+  });
+
+  final String agentId;
+  final String name;
+  final bool host;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CoworkHostAgentName &&
+      other.agentId == agentId &&
+      other.name == name &&
+      other.host == host;
+
+  @override
+  int get hashCode => Object.hash(agentId, name, host);
+}
+
+/// The host's `agent_list`: every coworker name it keeps, sent once per attach
+/// and after each `agent_create` / `agent_rename` it applied.
+class CoworkRelayAgentList extends CoworkRelayInbound {
+  const CoworkRelayAgentList({required this.agents});
+
+  final List<CoworkHostAgentName> agents;
+
+  static CoworkRelayAgentList fromPayload(Map<String, dynamic> payload) {
+    final raw = payload['agents'];
+    final list = <CoworkHostAgentName>[];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is! Map) continue;
+        final id = entry['agent_id'];
+        final name = entry['name'];
+        if (id is! String || id.isEmpty || name is! String) continue;
+        final trimmed = name.trim();
+        if (trimmed.isEmpty) continue;
+        list.add(CoworkHostAgentName(
+          agentId: id,
+          name: trimmed,
+          host: entry['host'] == true,
+        ));
+      }
+    }
+    return CoworkRelayAgentList(agents: list);
   }
 }
 
@@ -994,6 +1092,10 @@ abstract interface class CoworkRelayController {
   /// Renames a coworker on the host's roster (bead cowork-817; `agent_rename`).
   Future<void> renameAgent(String agentId, String name);
 
+  /// Asks the host for every coworker name it keeps (`agent_list` request;
+  /// the answer arrives on [inbound] as [CoworkRelayAgentList]).
+  Future<void> requestAgentList();
+
   /// Adds a member to [roomId] on the host (§16.1).
   Future<void> addRoomMember(String roomId, String agentId, String handle);
 
@@ -1089,7 +1191,11 @@ abstract interface class CoworkRelayController {
 /// the payload through [ExecutorProvisioning], which calls back into
 /// [sendAuthentication] to seal and send it over this WebSocket.
 class CoworkRelayClient
-    implements CoworkRelayController, ExecutorTransport, CoworkAutomationControl {
+    implements
+        CoworkRelayController,
+        ExecutorTransport,
+        CoworkAutomationControl,
+        CoworkSkillsControl {
   CoworkRelayClient({
     required String deviceId,
     required SimpleKeyPair signingKeyPair,
@@ -1781,6 +1887,10 @@ class CoworkRelayClient
       });
 
   @override
+  Future<void> requestAgentList() =>
+      _sendFramePayload(<String, dynamic>{'type': 'agent_list'});
+
+  @override
   Future<void> addRoomMember(String roomId, String agentId, String handle) =>
       _sendFramePayload(<String, dynamic>{
         'type': 'room_add_member',
@@ -1915,6 +2025,23 @@ class CoworkRelayClient
         'type': 'automation_list',
         if (sessionKey != null && sessionKey.isNotEmpty) 'session_key': sessionKey,
       });
+
+  @override
+  Future<void> sendSkillControl({
+    required String name,
+    required String action,
+  }) =>
+      // Answered with a fresh `skills_list` on the same request stream
+      // (docs/WIRE_CONTRACT.md, "Skills").
+      _sendFramePayload(<String, dynamic>{
+        'type': 'skill_control',
+        'name': name,
+        'action': action,
+      });
+
+  @override
+  Future<void> requestSkillsList() =>
+      _sendFramePayload(<String, dynamic>{'type': 'skills_list'});
 
   @override
   Future<void> sendSecrets({
@@ -2138,6 +2265,10 @@ class CoworkRelayClient
         if (automation != null) _inbound.add(automation);
       case 'automation_list':
         _inbound.add(CoworkRelayAutomationList.fromPayload(payload));
+      case 'skills_list':
+        _inbound.add(CoworkRelaySkillsList.fromPayload(payload));
+      case 'agent_list':
+        _inbound.add(CoworkRelayAgentList.fromPayload(payload));
       case 'run_state':
         final runState = CoworkRelayRunState.fromPayload(payload);
         if (runState != null) _inbound.add(runState);

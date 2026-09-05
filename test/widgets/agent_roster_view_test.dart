@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:cowork/services/cowork/cowork_relay_client.dart'
+    show CoworkHostAgentName;
 import 'package:cowork/services/cowork/schedule_spec.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
@@ -284,6 +286,206 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Delete'), findsNothing);
       expect(find.text('Hide'), findsOneWidget);
+    });
+  });
+
+  group('rename (bead cowork-817)', () {
+    testWidgets('Rename in the row menu opens chuk\'s dialog and reports the '
+        'trimmed new name; the host agent can be renamed too', (tester) async {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final host = source.ensureHostAgent('host-laptop');
+      final renamed = <(String, String)>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentRosterView(
+              source: source,
+              now: () => DateTime(2026, 8, 22, 12),
+              onSelect: (_, _) {},
+              onRenameAgent: (id, name) => renamed.add((id, name)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
+        matching: find.byIcon(Icons.more_vert),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rename'));
+      await tester.pumpAndSettle();
+
+      // chuk's `_renameChatDialog` shape: AlertDialog, one TextField
+      // pre-filled with the current name, Cancel + Rename.
+      expect(find.byType(AlertDialog), findsOneWidget);
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      expect(tester.widget<TextField>(field).controller!.text, host.name);
+      await tester.enterText(field, '  Laptop Bot  ');
+      await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(renamed, [(host.id, 'Laptop Bot')]);
+      // The view reports; the shell persists. The source is untouched here.
+      expect(source.byId(host.id)!.name, host.name);
+    });
+
+    testWidgets('an unchanged or empty name and Cancel report nothing',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final agent = source.addAgent(name: 'amber-otter');
+      final renamed = <(String, String)>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentRosterView(
+              source: source,
+              now: () => DateTime(2026, 8, 22, 12),
+              onSelect: (_, _) {},
+              onRenameAgent: (id, name) => renamed.add((id, name)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Future<void> openDialog() async {
+        await tester.tap(find.descendant(
+          of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+          matching: find.byIcon(Icons.more_vert),
+        ));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rename'));
+        await tester.pumpAndSettle();
+      }
+
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+
+      // Unchanged: submit with the same name.
+      await openDialog();
+      await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+      await tester.pumpAndSettle();
+      // Empty.
+      await openDialog();
+      await tester.enterText(field, '   ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      // Cancel.
+      await openDialog();
+      await tester.enterText(field, 'Other');
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(renamed, isEmpty);
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
+    testWidgets('without onRenameAgent the menu has no Rename item',
+        (tester) async {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final agent = source.addAgent(name: 'amber-otter');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentRosterView(
+              source: source,
+              now: () => DateTime(2026, 8, 22, 12),
+              onSelect: (_, _) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+        matching: find.byIcon(Icons.more_vert),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Rename'), findsNothing);
+      expect(find.text('Hide'), findsOneWidget);
+    });
+
+    test('LocalAgentRosterSource.renameAgent trims, keeps id and thread, '
+        'ignores empty and unknown', () {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final agent = source.addAgent(name: 'amber-otter');
+      var notified = 0;
+      source.addListener(() => notified++);
+
+      source.renameAgent(agent.id, '  Amber Desk ');
+      expect(source.byId(agent.id)!.name, 'Amber Desk');
+      expect(source.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+      expect(notified, 1);
+
+      source.renameAgent(agent.id, '   ');
+      source.renameAgent('nope', 'x');
+      source.renameAgent(agent.id, 'Amber Desk');
+      expect(source.byId(agent.id)!.name, 'Amber Desk');
+      expect(notified, 1);
+    });
+  });
+
+  group('host names (bead cowork-817, agent_list)', () {
+    test('applyHostNames renames known ids, adds unknown ones, renames the '
+        'host row by peer id and never deletes', () {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final host = source.ensureHostAgent('laptop-3f2a');
+      final local = source.addAgent(name: 'amber-otter');
+      final untouched = source.addAgent(name: 'keep-me');
+      var notified = 0;
+      source.addListener(() => notified++);
+
+      source.applyHostNames(
+        [
+          const CoworkHostAgentName(agentId: 'host:laptop-3f2a', name: 'Laptop Bot', host: true),
+          const CoworkHostAgentName(agentId: 'local:x:9:1', name: 'From Phone'),
+          CoworkHostAgentName(agentId: local.id, name: 'Amber Desk'),
+        ],
+        peerDeviceId: 'laptop-3f2a',
+      );
+
+      expect(source.byId(host.id)!.name, 'Laptop Bot');
+      expect(source.byId(host.id)!.onHost, isTrue);
+      expect(source.byId(local.id)!.name, 'Amber Desk');
+      expect(source.byId(untouched.id)!.name, 'keep-me');
+      final added = source.byId('local:x:9:1')!;
+      expect(added.name, 'From Phone');
+      expect(added.onHost, isFalse);
+      expect(added.threads.single.key, 'local:x:9:1');
+      expect(source.agents, hasLength(4));
+      expect(notified, 1);
+    });
+
+    test('applyHostNames skips the host entry without a peer, ignored ids and '
+        'unchanged names', () {
+      final source = LocalAgentRosterSource(random: Random(30));
+      final local = source.addAgent(name: 'amber-otter');
+      var notified = 0;
+      source.addListener(() => notified++);
+
+      source.applyHostNames(
+        [
+          const CoworkHostAgentName(agentId: 'host:whatever', name: 'Bot', host: true),
+          const CoworkHostAgentName(agentId: 'local:deleted:1:1', name: 'Ghost'),
+          CoworkHostAgentName(agentId: local.id, name: 'amber-otter'),
+        ],
+        peerDeviceId: null,
+        ignore: const {'local:deleted:1:1'},
+      );
+
+      expect(source.agents.map((a) => a.id), [local.id]);
+      expect(notified, 0);
     });
   });
 
