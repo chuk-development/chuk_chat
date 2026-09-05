@@ -530,3 +530,268 @@ def test_no_debug_observer_means_no_tap(tmp_path):
     # Nothing to assert but a clean finish: the point is it does not raise trying
     # to call a ``None`` observer.
     assert result.reason is StopReason.FINISHED
+
+
+# -- reasoning persistence (the thinking block survives a replay) -----------
+
+
+def test_assistant_turn_persists_its_reasoning_for_replay(tmp_path):
+    """A thinking model's reasoning for a turn is stored on the assistant row
+    (``reasoning``), so ``StateStore.replay_events`` can rebuild the thinking
+    block. A turn without reasoning stores no such key."""
+    thinking = ModelResponse(
+        text="all done", raw={"reasoning": "first I check, then I answer"}
+    )
+    model = MockModelClient([thinking])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+    result = loop.run("k-reason", "hello")
+    assert result.reason is StopReason.FINISHED
+    rows = store.get_conversation(result.session_id)
+    assistant = [m for m in rows if m.role == "assistant"]
+    assert len(assistant) == 1
+    assert assistant[0].content["content"] == "all done"
+    assert assistant[0].content["reasoning"] == "first I check, then I answer"
+
+
+def test_assistant_turn_without_reasoning_stores_no_reasoning_key(tmp_path):
+    model = MockModelClient([ModelResponse(text="plain", raw={"reasoning": "   "})])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+    result = loop.run("k-plain", "hello")
+    assistant = [m for m in store.get_conversation(result.session_id) if m.role == "assistant"]
+    assert "reasoning" not in assistant[0].content
+
+
+def test_tool_call_turn_persists_its_reasoning_too(tmp_path):
+    """A thinking model reasons about its tool calls as well; that reasoning is
+    kept on the tool-call turn, and the stored turn still round-trips to the
+    model as a plain assistant turn (``_assistant_turn`` ignores the key)."""
+    call = _echo_call(v="hi")
+    call.raw["reasoning"] = "I should echo first"
+    model = MockModelClient([call, "finished"])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+    result = loop.run("k-tool-reason", "go")
+    assert result.reason is StopReason.FINISHED
+    assistant = [m for m in store.get_conversation(result.session_id) if m.role == "assistant"]
+    assert assistant[0].content["reasoning"] == "I should echo first"
+    assert assistant[0].content["tool_calls"][0]["function"]["name"] == "echo"
+    assert "reasoning" not in assistant[1].content
+
+
+# -- retry: replace the last answer, do not ask again (bead cowork-bkw) ------
+
+
+def test_a_regenerate_replaces_the_turn_instead_of_repeating_it(tmp_path):
+    """Retry sends the same prompt again. Without ``regenerate`` the model would
+    be handed a history in which the user asked twice and it answered twice."""
+    model = MockModelClient([ModelResponse(text="five"), ModelResponse(text="four")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+
+    first = loop.run("k", "what is 2+2")
+    loop.run("k", "what is 2+2", regenerate=True)
+
+    convo = store.get_conversation(first.session_id)
+    assert [(m.role, m.content.get("content")) for m in convo] == [
+        ("user", "what is 2+2"),
+        ("assistant", "four"),
+    ]
+
+
+def test_four_retries_leave_one_question_and_the_newest_answer(tmp_path):
+    """The reported shape: four Retries used to leave four copies of the
+    question in the transcript and in the model's context."""
+    model = MockModelClient([ModelResponse(text=t) for t in ("a", "b", "c", "d", "e")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+
+    result = loop.run("k", "why")
+    for _ in range(4):
+        loop.run("k", "why", regenerate=True)
+
+    convo = store.get_conversation(result.session_id)
+    assert [m.role for m in convo] == ["user", "assistant"]
+    assert convo[1].content["content"] == "e"
+
+
+def test_a_normal_send_still_appends(tmp_path):
+    """Two different questions must stay two turns — the fix must not fold a
+    conversation just because it is a conversation."""
+    model = MockModelClient([ModelResponse(text="one"), ModelResponse(text="two")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+
+    result = loop.run("k", "first")
+    loop.run("k", "second")
+
+    convo = store.get_conversation(result.session_id)
+    assert [m.role for m in convo] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
+
+
+def test_the_same_question_asked_twice_on_purpose_is_still_two_turns(tmp_path):
+    """The case a text-matching fix would have broken: a reader may legitimately
+    send the identical prompt again. Only an explicit ``regenerate`` folds."""
+    model = MockModelClient([ModelResponse(text="one"), ModelResponse(text="two")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+
+    result = loop.run("k", "again")
+    loop.run("k", "again")
+
+    convo = store.get_conversation(result.session_id)
+    assert len(convo) == 4
+
+
+def test_a_regenerate_on_a_fresh_session_just_runs(tmp_path):
+    model = MockModelClient([ModelResponse(text="hi")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store)
+
+    result = loop.run("fresh", "hello", regenerate=True)
+
+    assert result.reason is StopReason.FINISHED
+    assert [m.role for m in store.get_conversation(result.session_id)] == [
+        "user",
+        "assistant",
+    ]
+
+
+# -- tool events: one per native tool call, after its result -------------------
+
+
+def test_tool_event_observer_gets_one_event_per_native_call(tmp_path):
+    """docs/WIRE_CONTRACT.md "Tool events and timestamps": the loop is the one
+    source of live tool frames — one per native tool call, after the result,
+    in the shared shape (name, arguments, result, status, clocks)."""
+    seen: list[dict] = []
+    model = MockModelClient([_echo_call(v="hi"), "finished"])
+    loop = AgentLoop(
+        model, _reg_with_echo(), _store(tmp_path), tool_event_observer=seen.append
+    )
+    result = loop.run("k-tool-ev", "go")
+    assert result.reason is StopReason.FINISHED
+    assert len(seen) == 1
+    event = seen[0]
+    assert event["name"] == "echo"
+    assert event["arguments"] == {"v": "hi"}
+    assert event["result"] == '{"echo":"hi"}'
+    assert event["status"] == "completed"
+    assert event["call_id"]
+    assert event["started_at"] <= event["completed_at"]
+    assert "command" not in event
+
+
+def test_tool_event_marks_an_unknown_tool_as_error(tmp_path):
+    seen: list[dict] = []
+    model = MockModelClient([tool_call_response(("nope", {"a": 1})), "finished"])
+    loop = AgentLoop(
+        model, _reg_with_echo(), _store(tmp_path), tool_event_observer=seen.append
+    )
+    loop.run("k-tool-err", "go")
+    assert len(seen) == 1
+    assert seen[0]["name"] == "nope"
+    assert seen[0]["status"] == "error"
+    assert "unknown tool" in seen[0]["result"]
+
+
+def test_a_raising_tool_event_observer_never_aborts_the_run(tmp_path):
+    def boom(_event: dict) -> None:
+        raise RuntimeError("sink gone")
+
+    model = MockModelClient([_echo_call(v="hi"), "finished"])
+    loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path), tool_event_observer=boom)
+    result = loop.run("k-tool-boom", "go")
+    assert result.reason is StopReason.FINISHED
+    assert result.final_answer == "finished"
+
+
+def test_live_tool_event_matches_the_replayed_one(tmp_path):
+    """Same frame on both paths (minus replay/mid and the exact clocks): what
+    the loop streamed live is what the store replays."""
+    seen: list[dict] = []
+    model = MockModelClient([_echo_call(v="hi"), "finished"])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store, tool_event_observer=seen.append)
+    result = loop.run("k-tool-same", "go")
+    replayed = [e for e in store.replay_events(result.session_id) if e["type"] == "tool"]
+    assert len(replayed) == 1 and len(seen) == 1
+
+    def stable(event: dict) -> dict:
+        return {
+            k: v
+            for k, v in event.items()
+            if k not in ("type", "replay", "mid", "started_at", "completed_at", "duration_ms")
+        }
+
+    assert stable(replayed[0]) == stable(seen[0])
+    assert replayed[0]["started_at"] <= replayed[0]["completed_at"]
+
+
+# -- memory hooks (bead cowork-2tq.3): recall at task start, turn observer ------
+
+
+def test_recall_provider_rows_land_after_the_prompt_as_memory_rows(tmp_path):
+    seen: list[str] = []
+
+    def recall(prompt: str) -> list[dict]:
+        seen.append(prompt)
+        return [{"role_tag": "memory", "role": "user", "content": "[memory recall]\n- port is 8787"}]
+
+    model = MockModelClient([ModelResponse(text="ok")])
+    store = _store(tmp_path)
+    loop = AgentLoop(model, _reg_with_echo(), store, recall_provider=recall)
+    result = loop.run("k-recall", "start the server")
+    assert seen == ["start the server"]
+    rows = store.get_conversation(result.session_id)
+    assert [m.role for m in rows] == ["user", "memory", "assistant"]
+    assert rows[1].content == {"role": "user", "content": "[memory recall]\n- port is 8787"}
+    # The model saw the recall in its context.
+    sent = model.calls[0] if hasattr(model, "calls") else None
+    if sent is not None:
+        assert any("port is 8787" in str(m.get("content")) for m in sent)
+
+
+def test_memory_rows_never_replay_as_user_turns(tmp_path):
+    def recall(prompt: str) -> list[dict]:
+        return [{"role_tag": "memory", "role": "user", "content": "[memory recall]\n- x"}]
+
+    store = _store(tmp_path)
+    loop = AgentLoop(MockModelClient(["ok"]), _reg_with_echo(), store, recall_provider=recall)
+    result = loop.run("k-recall-replay", "hello")
+    kinds = [(e["type"], e.get("text")) for e in store.replay_events(result.session_id)]
+    assert kinds == [("user", "hello"), ("delta", "ok")]
+
+
+def test_turn_observer_gets_the_prompt_the_answer_and_the_tools(tmp_path):
+    from cowork_agent.loop import TurnRecord
+
+    records: list[TurnRecord] = []
+    model = MockModelClient([_echo_call(v="hi"), "finished"])
+    loop = AgentLoop(model, _reg_with_echo(), _store(tmp_path), turn_observer=records.append)
+    result = loop.run("k-turn", "echo hi")
+    assert len(records) == 1
+    record = records[0]
+    assert record.session_key == "k-turn" and record.session_id == result.session_id
+    assert record.user_message == "echo hi"
+    assert record.final_answer == "finished"
+    assert record.reason is StopReason.FINISHED
+    assert record.tool_names == ("echo",)
+
+
+def test_raising_memory_hooks_never_break_the_run(tmp_path):
+    def boom(*_a, **_k):
+        raise RuntimeError("memory down")
+
+    loop = AgentLoop(
+        MockModelClient(["ok"]), _reg_with_echo(), _store(tmp_path),
+        recall_provider=boom, turn_observer=boom,
+    )
+    result = loop.run("k-boom", "hello")
+    assert result.reason is StopReason.FINISHED and result.final_answer == "ok"
