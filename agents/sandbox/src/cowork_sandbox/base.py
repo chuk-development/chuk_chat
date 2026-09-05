@@ -34,6 +34,7 @@ from __future__ import annotations
 import secrets
 import shlex
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 from .result import ProcessResult
 
@@ -72,8 +73,14 @@ class BaseEnvironment(ABC):
         login: bool = False,
         timeout: int = 120,
         stdin: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
-        """Execute one exact command string; enforce timeout by killing."""
+        """Execute one exact command string; enforce timeout by killing.
+
+        ``env`` is extra environment for THIS process only (the user's secrets,
+        docs/WIRE_CONTRACT.md "Secrets"). A backend passes it to the child
+        process — never on a command line, never into the image, never into a
+        file. ``None`` / empty: run exactly as before."""
         raise NotImplementedError
 
     @abstractmethod
@@ -131,13 +138,21 @@ class BaseEnvironment(ABC):
         login: bool = False,
         timeout: int = 120,
         stdin: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
-        """Run ``cmd`` with session persistence and bounded output."""
+        """Run ``cmd`` with session persistence and bounded output.
+
+        ``env`` rides into the child process only. The wrapper unsets those
+        names before it re-dumps the session, so a secret never lands in the
+        snapshot file and never reaches the next command through it."""
         if not self._session_initialized:
             self.init_session()
 
-        wrapped = self._wrap(cmd)
-        raw = self._run_bash(wrapped, login=login, timeout=timeout, stdin=stdin)
+        extra = {k: v for k, v in (env or {}).items() if _is_env_name(k)}
+        wrapped = self._wrap(cmd, unset=list(extra))
+        raw = self._run_bash(
+            wrapped, login=login, timeout=timeout, stdin=stdin, env=extra or None
+        )
 
         stdout, cwd = self._extract_cwd(raw.stdout)
         if cwd:
@@ -155,15 +170,21 @@ class BaseEnvironment(ABC):
         )
 
     def run_bash(
-        self, cmd: str, *, timeout: int = 120, internal: bool = False
+        self,
+        cmd: str,
+        *,
+        timeout: int = 120,
+        internal: bool = False,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         """Adapter that satisfies the agent runtime's ``Environment`` protocol.
 
         ``internal`` marks plumbing the agent did not ask for (an availability
         probe, a journal commit). The sandbox runs it identically; only
-        observers higher up use the flag to keep it out of the user's thread."""
+        observers higher up use the flag to keep it out of the user's thread.
+        ``env`` is the per-command extra environment (secrets); see :meth:`run`."""
         del internal
-        return self.run(cmd, timeout=timeout)
+        return self.run(cmd, timeout=timeout, env=env)
 
     # Context-manager sugar so callers can ``with make_environment(...) as env``.
     def __enter__(self) -> "BaseEnvironment":
@@ -175,11 +196,18 @@ class BaseEnvironment(ABC):
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
-    def _wrap(self, cmd: str) -> str:
-        """Wrap a user command in the source/cd/redump/marker envelope."""
+    def _wrap(self, cmd: str, *, unset: list[str] | None = None) -> str:
+        """Wrap a user command in the source/cd/redump/marker envelope.
+
+        ``unset`` names the per-command environment (secrets) that must NOT be
+        dumped into the session snapshot: they are unset after the user block
+        and before ``declare -px`` runs, so the values live exactly as long as
+        this one process."""
         snap = shlex.quote(self._snapshot_path)
         cwd = shlex.quote(self._cwd)
         marker = self._cwd_marker
+        # Names only, validated in ``run``: nothing here can carry a value.
+        forget = f"unset -v {' '.join(unset)} 2>/dev/null\n" if unset else ""
         # ``mktemp`` is created next to the snapshot so the final ``mv`` is a
         # same-filesystem atomic rename.
         return (
@@ -190,6 +218,7 @@ class BaseEnvironment(ABC):
             f"{cmd}\n"
             "}\n"
             "__cw_rc=$?\n"
+            f"{forget}"
             f'__cw_tmp="$(mktemp {snap}.XXXXXX)"\n'
             f'{{ declare -px; declare -f; alias; }} > "$__cw_tmp" 2>/dev/null\n'
             f'mv -f "$__cw_tmp" {snap} 2>/dev/null\n'
@@ -223,3 +252,12 @@ class BaseEnvironment(ABC):
         omitted = len(text) - limit
         note = f"\n[... output truncated, {omitted} characters omitted ...]"
         return text[:limit] + note, True
+
+
+def _is_env_name(name: object) -> bool:
+    """True for a valid environment variable name. The only shape ``run``
+    passes through, so an ``unset`` line can never carry anything else."""
+    if not isinstance(name, str) or not name or len(name) > 128:
+        return False
+    head, tail = name[0], name[1:]
+    return (head.isalpha() or head == "_") and all(c.isalnum() or c == "_" for c in tail)

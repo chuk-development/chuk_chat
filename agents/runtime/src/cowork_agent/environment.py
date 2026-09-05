@@ -10,8 +10,10 @@ stays testable and sandbox-agnostic.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -36,7 +38,12 @@ class Environment(Protocol):
     """Where a command runs. The one seam between runtime and sandbox."""
 
     def run_bash(
-        self, cmd: str, *, timeout: int = 120, internal: bool = False
+        self,
+        cmd: str,
+        *,
+        timeout: int = 120,
+        internal: bool = False,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         """Run one shell command and return its result. Never raises for a
         non-zero exit or a timeout — those are reported in the result.
@@ -45,7 +52,14 @@ class Environment(Protocol):
         availability probe, a git commit for the action journal. It is the same
         shell, but it is not agent activity, so observers must not report it to
         the user as a tool call. Without this flag a `command -v tmux` probe
-        shows up in the chat thread as work the agent did."""
+        shows up in the chat thread as work the agent did.
+
+        ``env`` (docs/WIRE_CONTRACT.md, "Secrets") is extra environment for
+        THIS command's child process only — the user's secrets, passed by
+        ``run_command`` / ``python`` and by nothing else. It must never be
+        written to the shell session, a snapshot or a file. Callers pass it
+        only when they have something to pass, so an environment that does not
+        know the keyword keeps working."""
         ...
 
 
@@ -57,7 +71,12 @@ class LocalEnvironment:
     """
 
     def run_bash(
-        self, cmd: str, *, timeout: int = 120, internal: bool = False
+        self,
+        cmd: str,
+        *,
+        timeout: int = 120,
+        internal: bool = False,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         del internal  # nothing observes a local run
         start = time.monotonic()
@@ -67,6 +86,9 @@ class LocalEnvironment:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                # The secrets ride the child's environment only: nothing here
+                # keeps a shell alive, so nothing outlives this call.
+                env={**os.environ, **env} if env else None,
             )
         except subprocess.TimeoutExpired as exc:
             return ProcessResult(
