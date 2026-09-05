@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import threading
 
+from collections.abc import Mapping
+
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
 from .result import ProcessResult
 
@@ -48,6 +50,7 @@ class LocalEnvironment(BaseEnvironment):
         login: bool = False,
         timeout: int = 120,
         stdin: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         argv = ["bash"]
         if login:
@@ -62,6 +65,9 @@ class LocalEnvironment(BaseEnvironment):
             stdin=subprocess.PIPE,
             text=True,
             start_new_session=True,
+            # The per-command extras (secrets) go into THIS child's environment
+            # and nowhere else; ``None`` inherits as before.
+            env={**os.environ, **env} if env else None,
         )
         with self._proc_lock:
             self._proc = proc

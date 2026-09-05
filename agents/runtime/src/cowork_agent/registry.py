@@ -45,6 +45,12 @@ class ToolRegistry:
     #: a dispatch state: a deferred tool stays fully callable through
     #: ``tool_call``, so the bridge needs no second dispatch path.
     _deferred: set[str] = field(default_factory=set)
+    #: The ONE seam every dispatch result passes through before anyone sees it
+    #: — the loop, the store, the journal, a subagent's parent. Installed by
+    #: :func:`cowork_agent.secrets.register_secrets_tools` as the secret
+    #: scrubber; ``None`` means results pass untouched. It sees the error
+    #: envelope too, so an exception text cannot carry a value out.
+    result_filter: Callable[[Any], Any] | None = None
 
     # -- registration -----------------------------------------------------
 
@@ -190,8 +196,20 @@ class ToolRegistry:
             else:
                 result = spec.handler(**coerced)
         except Exception as exc:
-            return self._error(name, f"{type(exc).__name__}: {exc}")
-        return result
+            return self._filtered(self._error(name, f"{type(exc).__name__}: {exc}"))
+        return self._filtered(result)
+
+    def _filtered(self, result: Any) -> Any:
+        """Run the result through :attr:`result_filter`. A filter that raises
+        must not turn a good result into a crash — but it must not let the
+        unfiltered result out either, so the caller gets an error envelope."""
+        fn = self.result_filter
+        if fn is None:
+            return result
+        try:
+            return fn(result)
+        except Exception as exc:  # noqa: BLE001 — never leak the raw result
+            return self._error("result_filter", f"{type(exc).__name__}: {exc}")
 
     # -- error envelope ---------------------------------------------------
 

@@ -24,7 +24,7 @@ anything about frames. Leave ``on_run`` ``None`` and it is a pure adapter.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from cowork_agent import ProcessResult as AgentProcessResult
 from cowork_sandbox import BaseEnvironment
@@ -62,10 +62,21 @@ class SandboxEnvironment:
         self._inner.cancel()
 
     def run_bash(
-        self, cmd: str, *, timeout: int = 120, internal: bool = False
+        self,
+        cmd: str,
+        *,
+        timeout: int = 120,
+        internal: bool = False,
+        env: Mapping[str, str] | None = None,
     ) -> AgentProcessResult:
         start = time.monotonic()
-        raw = self._inner.run_bash(cmd, timeout=timeout)
+        # ``env`` (the user's secrets, docs/WIRE_CONTRACT.md "Secrets") is
+        # forwarded ONLY when there is something to forward, so an inner
+        # environment that predates the keyword keeps working.
+        if env:
+            raw = self._inner.run_bash(cmd, timeout=timeout, env=env)
+        else:
+            raw = self._inner.run_bash(cmd, timeout=timeout)
         result = AgentProcessResult(
             exit_code=raw.exit_code,
             stdout=raw.stdout,

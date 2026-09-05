@@ -37,6 +37,7 @@ import subprocess
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
 from .lifecycle import (
@@ -285,6 +286,12 @@ class DockerEnvironment(BaseEnvironment):
         if self._workspace is not None:
             os.makedirs(self._workspace, exist_ok=True)
             argv += ["-v", f"{self._workspace}:{CONTAINER_WORKSPACE}"]
+            # The transcript folder is the host's record of the thread
+            # (cowork-b5): mounted read-only over the workspace mount, so a
+            # `run_command` inside the container cannot delete or rewrite it.
+            transcript = os.path.join(self._workspace, "transcript")
+            if os.path.isdir(transcript):
+                argv += ["-v", f"{transcript}:{CONTAINER_WORKSPACE}/transcript:ro"]
             uid = getattr(os, "getuid", lambda: None)()
             gid = getattr(os, "getgid", lambda: None)()
             if uid is not None and gid is not None:
@@ -342,11 +349,19 @@ class DockerEnvironment(BaseEnvironment):
         login: bool = False,
         timeout: int = 120,
         stdin: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         container = self._ensure_container()
         argv = [self._cli.binary, "exec", "-i"]
         if self._user:
             argv += ["-u", self._user]
+        # Per-command extras (the user's secrets): ``-e NAME`` with NO value
+        # makes the docker client read the value from ITS OWN environment, so
+        # the value never appears on a command line (`ps`, shell history, a
+        # log of argv) and never touches the image or the container config.
+        # The value rides in ``env=`` on the Popen below.
+        for name in env or ():
+            argv += ["-e", name]
         argv += [container, "bash"]
         if login:
             argv.append("-l")
@@ -358,6 +373,7 @@ class DockerEnvironment(BaseEnvironment):
                 stderr=subprocess.PIPE,
                 stdin=subprocess.PIPE,
                 text=True,
+                env={**os.environ, **env} if env else None,
             )
         except OSError as exc:  # CLI vanished mid-session
             raise DockerUnavailableError(str(exc)) from exc
