@@ -5,6 +5,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase (push notifications) is optional: the plugin is applied only when
+// android/app/google-services.json is present. Without the file the build is
+// unchanged and the app runs with push off (Firebase.initializeApp() fails
+// and services/notifications/push_service.dart treats that as "no push").
+// To turn push on: drop google-services.json from the Firebase console into
+// android/app/ — nothing else changes.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "dev.chuk.cowork"
     compileSdk = flutter.compileSdkVersion
