@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS automations (
     last_error       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_key, created_at);
+CREATE TABLE IF NOT EXISTS automation_trigger_checkpoint (
+    workspace TEXT PRIMARY KEY, offset INTEGER NOT NULL, pending TEXT NOT NULL
+);
 """
 
 
@@ -304,6 +307,7 @@ class AutomationManager:
         db_path: str,
         workspace: str,
         fire: FireFn,
+        busy: Callable[[str], bool] | None = None,
         send: SendFn | None = None,
         env_provider: EnvProvider | None = None,
         environment_provider: EnvironmentProvider | None = None,
@@ -318,6 +322,11 @@ class AutomationManager:
         self._db_path = db_path
         self._workspace = Path(workspace).expanduser().resolve()
         self._fire = fire
+        # True while that thread already has a run queued or in flight. A
+        # watcher that reports every 60 s must not stack a run per report:
+        # a 20-minute round would queue twenty of them and the newest numbers
+        # would land behind a wall of stale ones.
+        self._busy = busy or (lambda _key: False)
         self._send = send or (lambda _p: None)
         self._env_provider = env_provider
         self._environment_provider = environment_provider
@@ -333,6 +342,7 @@ class AutomationManager:
         self._dir = self._workspace / AUTOMATIONS_DIRNAME
         self._triggers_path = self._dir / TRIGGERS_FILENAME
         self._trigger_offset = 0
+        self._checkpoint_cache = None
         self._pending: dict[str, _Pending] = {}
         self._watchers: dict[str, _Watcher] = {}
         # Trigger lines carry ``kind`` (default ``automation``). A second
@@ -356,13 +366,14 @@ class AutomationManager:
             return
         self._ensure_dir()
         self._stop.clear()
-        # Tail from the end: lines written before this host started belong to
-        # watchers that were killed with the previous host. A trigger that old
-        # would start a task nobody asked for now.
-        try:
-            self._trigger_offset = self._triggers_path.stat().st_size
-        except OSError:
-            self._trigger_offset = 0
+        # A durable cursor and pending outbox preserve callbacks across restart.
+        # Only the first upgrade skips legacy lines with no delivery checkpoint.
+        if not self._restore_triggers():
+            try:
+                self._trigger_offset = self._triggers_path.stat().st_size
+            except OSError:
+                self._trigger_offset = 0
+            self._save_triggers()
         restarted = 0
         for row in self.store.list(states=(STATE_ACTIVE,)):
             if row["kind"] == KIND_WATCHER:
@@ -484,6 +495,7 @@ class AutomationManager:
             self._emit(row, EVENT_CANCELLED)
         else:
             return {"ok": False, "error": f"unknown action {action!r}"}
+        self._save_triggers()
         return {"ok": True, **automation_fields(row)}
 
     def register_trigger_consumer(self, kind: str, consumer: Callable[[dict], None]) -> None:
@@ -532,6 +544,38 @@ class AutomationManager:
         """One poll: read new trigger lines, fire what the rate limit allows,
         supervise the children. Returns how many tasks fired. Exposed for tests."""
         fired = 0
+        self._consume_triggers()
+        estop = self._estop_engaged()
+        if not estop:
+            fired += self._flush_pending()
+        self._supervise(estop)
+        return fired
+
+    def _restore_triggers(self) -> bool:
+        with self.store._connect() as conn:
+            row = conn.execute('SELECT offset, pending FROM automation_trigger_checkpoint WHERE workspace=?',
+                               (str(self._workspace),)).fetchone()
+        if row is None:
+            return False
+        with self._lock:
+            self._trigger_offset = row['offset']
+            self._pending = {key: _Pending(**value) for key, value in json.loads(row['pending']).items()}
+        return True
+
+    def _save_triggers(self) -> None:
+        with self._lock:
+            pending = {key: {'reason': value.reason, 'payload': value.payload, 'folded': value.folded}
+                       for key, value in self._pending.items()}
+            snapshot = (self._trigger_offset, json.dumps(pending))
+            if snapshot == self._checkpoint_cache:
+                return
+            with self.store._connect() as conn:
+                conn.execute('INSERT INTO automation_trigger_checkpoint VALUES(?,?,?) '
+                             'ON CONFLICT(workspace) DO UPDATE SET offset=excluded.offset, pending=excluded.pending',
+                             (str(self._workspace), *snapshot))
+            self._checkpoint_cache = snapshot
+
+    def _consume_triggers(self) -> None:
         for record in self._read_new_triggers():
             kind = str(record.get("kind") or "automation")
             with self._lock:
@@ -542,11 +586,7 @@ class AutomationManager:
                 consumer(record)
             except Exception as exc:  # noqa: BLE001 — one consumer must not stall the tail
                 self._log(f"[automations] trigger consumer {kind}: {type(exc).__name__}: {exc}")
-        estop = self._estop_engaged()
-        if not estop:
-            fired += self._flush_pending()
-        self._supervise(estop)
-        return fired
+        self._save_triggers()
 
     def _read_new_triggers(self) -> list[dict]:
         path = self._triggers_path
@@ -616,11 +656,19 @@ class AutomationManager:
             last = float(row.get("last_fired_at") or 0.0)
             if now - last < self._rate_window:
                 continue
+            # The pending entry keeps absorbing newer triggers while the
+            # thread is busy, so what finally fires is the latest state, once.
+            try:
+                if self._busy(row["session_key"]):
+                    continue
+            except Exception as exc:  # noqa: BLE001 — a broken probe must not stop the schedule
+                self._log(f"[automations] busy probe failed: {type(exc).__name__}: {exc}")
             if self._fire_row(row, payload=pending.payload, reason=pending.reason, suppressed=pending.folded):
                 fired += 1
                 with self._lock:
                     if self._pending.get(automation_id) is pending:
                         self._pending.pop(automation_id, None)
+        self._save_triggers()
         return fired
 
     def _fire_row(self, row: dict, *, payload: Any, reason: str | None, suppressed: int = 0) -> bool:
@@ -675,6 +723,17 @@ class AutomationManager:
                 continue
             if proc is not None:
                 code = proc.returncode
+                if code == 0:
+                    # The child may have appended its final trigger after this
+                    # tick's initial read. Once exit is observed, drain those
+                    # lines before deciding it is done. Keep the exited process
+                    # registered until delivery succeeds; it must not restart
+                    # or discard a final report held by throttling/provisioning.
+                    self._consume_triggers()
+                    with self._lock:
+                        if watcher.automation_id in self._pending:
+                            self._close_log(watcher)
+                            continue
                 watcher.proc = None
                 self._close_log(watcher)
                 if code == 0:
@@ -746,6 +805,11 @@ class AutomationManager:
             watcher.log = open(log_file, "ab", buffering=0)  # noqa: SIM115 — closed in _close_log
             stamp = time.strftime("%Y-%m-%d %H:%M:%S")
             watcher.log.write(f"--- [{stamp}] start {script}\n".encode())
+            # PEP 723 monitors declare curl_cffi and other dependencies. uv
+            # resolves its cached environment; bare scripts keep the old runner.
+            with (self._workspace / script).open('rb') as source:
+                has_metadata = b'# /// script' in source.read(8192)
+            runner = ['uv', 'run', '--script'] if has_metadata else [self._python]
             docker = self._docker_target()
             if docker is not None:
                 prefix, cid = docker
@@ -755,14 +819,14 @@ class AutomationManager:
                 argv = [*prefix, "-w", "/workspace"]
                 for name in (*child_env, *env_secrets):
                     argv += ["-e", name]  # the NAME only; the value rides the client env
-                argv += [cid, self._python, script]
+                argv += [cid, *runner, script]
                 popen_env = {**os.environ, **child_env, **env_secrets}
                 cwd = None
             else:
                 host_dir = str(self._dir)
                 existing = os.environ.get("PYTHONPATH", "")
                 child_env["PYTHONPATH"] = host_dir + (os.pathsep + existing if existing else "")
-                argv = [self._python, script]
+                argv = [*runner, script]
                 popen_env = {**os.environ, **child_env, **env_secrets}
                 cwd = str(self._workspace)
             watcher.proc = subprocess.Popen(

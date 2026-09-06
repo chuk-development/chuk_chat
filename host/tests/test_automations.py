@@ -295,6 +295,52 @@ def test_folded_triggers_count_as_suppressed_and_the_last_payload_wins(tmp_path)
     assert after["fire_count"] == 2 and after["suppressed_count"] == 2
 
 
+def test_a_busy_thread_holds_the_trigger_and_fires_once_with_the_latest_state(tmp_path):
+    """A watcher reports faster than a model round. While the thread still has
+    a run, nothing new is started: the pending entry keeps absorbing reports,
+    and the moment the thread is free exactly one run fires — with the newest
+    numbers, not a queue of stale ones."""
+    host, clock = _Host(), _Clock()
+    busy = {"s1": True}
+    manager = _manager(tmp_path, host, clock, rate_window=0, busy=lambda key: busy.get(key, False))
+    row = manager.store.create(session_key="s1", kind="watcher", name="w", spec={"script_path": "w.py"}, prompt="", next_fire_at=None)
+    path = manager.triggers_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("a") as fh:
+        fh.write(json.dumps({"automation_id": row["id"], "reason": "r1", "payload": {"n": 1}}) + "\n")
+    assert manager.run_watchdog_once() == 0
+    assert host.fired == []
+
+    with path.open("a") as fh:
+        fh.write(json.dumps({"automation_id": row["id"], "reason": "r2", "payload": {"n": 2}}) + "\n")
+    assert manager.run_watchdog_once() == 0
+
+    busy["s1"] = False
+    assert manager.run_watchdog_once() == 1
+    assert len(host.fired) == 1
+    _, prompt, meta = host.fired[0]
+    assert meta["reason"] == "r2" and prompt.endswith('{"n": 2}')
+
+
+def test_a_failing_busy_probe_still_fires_the_automation(tmp_path):
+    host, clock = _Host(), _Clock()
+
+    def broken(_key):
+        raise RuntimeError("no executor")
+
+    manager = _manager(tmp_path, host, clock, rate_window=0, busy=broken)
+    row = manager.store.create(session_key="s1", kind="watcher", name="w", spec={"script_path": "w.py"}, prompt="", next_fire_at=None)
+    path = manager.triggers_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"automation_id": row["id"], "reason": "r", "payload": {"n": 1}}) + "\n")
+
+    # A broken probe must not silence a watcher: firing once too often beats
+    # an automation that never reports again.
+    assert manager.run_watchdog_once() == 1
+    assert len(host.fired) == 1
+
+
 def test_trigger_lines_for_unknown_or_inactive_watchers_and_bad_json_are_ignored(tmp_path):
     host, clock = _Host(), _Clock()
     manager = _manager(tmp_path, host, clock)
@@ -368,6 +414,72 @@ def test_a_watcher_without_restart_fails_on_crash(tmp_path):
         manager.stop()
 
 
+@pytest.mark.parametrize("blocked_by", ["rate_limit", "unprovisioned", "estop"])
+def test_clean_exit_waits_for_final_trigger_delivery(tmp_path, blocked_by):
+    host, clock = _Host(provisioned=blocked_by != "unprovisioned"), _Clock()
+    manager = _manager(tmp_path, host, clock, rate_window=30.0)
+    (tmp_path / "ws" / "final.py").write_text(
+        "from cowork_hooks import trigger\n"
+        "trigger('final results', payload={'final': True, 'percentage': 42})\n"
+    )
+    try:
+        out = manager.start_watcher("s1", "final.py", "election", True)
+        proc = manager._watchers[out["id"]].proc
+        assert _wait(lambda: proc.poll() is not None)
+        if blocked_by == "rate_limit":
+            manager.store.record_fire(out["id"], fired_at=clock.now, next_fire_at=None)
+        elif blocked_by == "estop":
+            (tmp_path / "ESTOP").write_text("")
+
+        for _ in range(2):
+            assert manager.run_watchdog_once() == 0
+            assert manager.store.get(out["id"])["state"] == "active"
+            assert manager.running_watchers() == []
+            assert host.fired == []
+            assert not any(p["event"] == EVENT_DONE for p in host.sent)
+
+        clock.now += 30
+        host.provisioned = True
+        (tmp_path / "ESTOP").unlink(missing_ok=True)
+        assert manager.run_watchdog_once() == 1
+        assert json.loads(host.fired[0][1].split("\n")[-1]) == {"final": True, "percentage": 42}
+        assert manager.store.get(out["id"])["state"] == "done"
+        assert [p["event"] for p in host.sent] == [EVENT_CREATED, EVENT_FIRED, EVENT_DONE]
+        assert manager.run_watchdog_once() == 0
+        assert len(host.fired) == 1
+    finally:
+        manager.stop()
+
+
+def test_final_trigger_arriving_after_initial_tail_read_is_not_lost(tmp_path, monkeypatch):
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock)
+    (tmp_path / "ws" / "final.py").write_text(
+        "from cowork_hooks import trigger\ntrigger('final results', payload={'final': True})\n"
+    )
+    try:
+        out = manager.start_watcher("s1", "final.py", "election", True)
+        proc = manager._watchers[out["id"]].proc
+        assert _wait(lambda: proc.poll() is not None)
+        read = manager._read_new_triggers
+        reads = 0
+
+        def initial_read_before_final_write():
+            nonlocal reads
+            reads += 1
+            return [] if reads == 1 else read()
+
+        monkeypatch.setattr(manager, "_read_new_triggers", initial_read_before_final_write)
+        assert manager.run_watchdog_once() == 0
+        assert manager.store.get(out["id"])["state"] == "active"
+        assert manager.run_watchdog_once() == 1
+        assert manager.store.get(out["id"])["state"] == "done"
+        assert host.fired[0][2]["reason"] == "final results"
+        assert manager.run_watchdog_once() == 0
+    finally:
+        manager.stop()
+
+
 def test_start_watcher_refuses_a_missing_or_escaping_script(tmp_path):
     manager = _manager(tmp_path, _Host(), _Clock())
     assert manager.start_watcher("s1", "missing.py", None, True)["ok"] is False
@@ -419,7 +531,7 @@ def test_estop_stops_running_watchers_and_restarts_them_when_lifted(tmp_path):
 # -- persistence across a host restart -----------------------------------------------
 
 
-def test_active_watchers_come_back_after_a_restart_and_old_triggers_are_not_replayed(tmp_path):
+def test_active_watchers_and_unread_triggers_survive_restart(tmp_path):
     host, clock = _Host(), _Clock()
     (tmp_path / "ws").mkdir()
     (tmp_path / "ws" / "watch.py").write_text("import time\ntime.sleep(60)\n")
@@ -449,7 +561,8 @@ def test_active_watchers_come_back_after_a_restart_and_old_triggers_are_not_repl
             paused["id"]: "paused",
             sched["id"]: "active",
         }
-        assert second.run_watchdog_once() == 0 and host.fired == []  # stale line skipped
+        assert second.run_watchdog_once() == 1 and len(host.fired) == 1
+        assert second.run_watchdog_once() == 0  # accepted callback is not replayed
         clock.now += 300
         assert second.run_scheduler_once() == 1  # the schedule survived
     finally:
@@ -495,3 +608,54 @@ def test_stop_kills_the_watcher_process_group(tmp_path):
     child_pid = int([l for l in log.read_text().splitlines() if l.startswith("child")][0].split()[1])
     manager.stop()
     assert _wait(lambda: not Path(f"/proc/{child_pid}").exists() or "zombie" in Path(f"/proc/{child_pid}/status").read_text().lower())
+
+
+def test_pending_callback_survives_offline_host_restart(tmp_path):
+    host, clock = _Host(provisioned=False), _Clock()
+    first = _manager(tmp_path, host, clock)
+    first.start()
+    row = first.store.create(session_key='s1', kind='watcher', name='final',
+                             spec={'script_path': 'watch.py'}, prompt='', next_fire_at=None)
+    (tmp_path / 'ws' / 'watch.py').write_text('import time\ntime.sleep(60)\n')
+    with first.triggers_path().open('a') as stream:
+        stream.write(json.dumps({'automation_id': row['id'], 'reason': 'final',
+                                 'payload': {'event_id': 'final-1', 'final': True}}) + '\n')
+    assert first.run_watchdog_once() == 0
+    first.stop()
+    host.provisioned = True
+    second = _manager(tmp_path, host, clock)
+    second.start()
+    try:
+        assert second.run_watchdog_once() == 1
+        assert 'final-1' in host.fired[0][1]
+    finally:
+        second.stop()
+    third = _manager(tmp_path, host, clock)
+    third.start()
+    try:
+        assert third.run_watchdog_once() == 0
+        assert len(host.fired) == 1
+    finally:
+        third.stop()
+
+
+def test_pep723_watcher_uses_uv_and_receives_repeatable_hook(tmp_path):
+    import shutil
+    if not shutil.which('uv'):
+        pytest.skip('uv is not installed')
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock, rate_window=0)
+    manager.start()
+    script = tmp_path / 'ws' / 'monitor.py'
+    script.write_text('# /// script\n# dependencies = []\n# ///\n'
+                      'from cowork_hooks import trigger\nimport time\n'
+                      'assert trigger("first", payload={"n": 1})\ntime.sleep(0.5)\n'
+                      'assert trigger("final", payload={"n": 2})\n')
+    try:
+        row = manager.start_watcher('s1', 'monitor.py', 'monitor', True)
+        assert row['ok']
+        assert _wait(lambda: (manager.run_watchdog_once(), len(host.fired) >= 2)[1])
+        assert _wait(lambda: (manager.run_watchdog_once(), manager.store.get(row['id'])['state'] == 'done')[1])
+        assert len(host.fired) == 2
+    finally:
+        manager.stop()
