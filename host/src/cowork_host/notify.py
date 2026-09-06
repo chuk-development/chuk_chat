@@ -12,6 +12,9 @@ Rules:
 
 - The notification carries NO answer content. Title and body are generic;
   the answer stays in the store and reaches the app over the sealed channel.
+  The names it does carry are the ones the user knows — the coworker they
+  named, the automation they set up — never the roster's generated codename.
+  :mod:`cowork_host.notification_text` owns that wording and its lookup.
 - One notification per run. ``runs.notified_at`` is set first, once; a second
   caller sees ``False`` and stops. The table's unique key and the function's
   ``pushed_at`` check make a retry harmless.
@@ -37,7 +40,8 @@ import httpx
 
 from cowork_agent import StateStore, SupabaseSession
 
-from .desktop_notify import DesktopNotifier, completion_text
+from .desktop_notify import DesktopNotifier, set_labels_provider
+from .notification_text import RunLabels, approval_text, completion_text, resolve_labels
 
 KIND_COMPLETED = "completed"
 KIND_FAILED = "failed"
@@ -60,6 +64,7 @@ class SupabaseNotifier:
         user_id_provider: Callable[[], str],
         agent_provider: Callable[[], tuple[str, str]],
         db_path: str,
+        roster_path: str | None = None,
         desktop: DesktopNotifier | None = None,
         http_client: httpx.Client | None = None,
         logger: Callable[[str], None] | None = None,
@@ -73,6 +78,8 @@ class SupabaseNotifier:
         self._user_id_provider = user_id_provider
         self._agent_provider = agent_provider
         self._db_path = db_path
+        # The coworker's name lives in ``roster.db``, next to the state file.
+        self._roster_path = roster_path
         self._desktop = desktop
         self._http = http_client
         self._log = logger or (lambda _m: None)
@@ -85,8 +92,32 @@ class SupabaseNotifier:
         # Diagnostics, read by tests and logs.
         self.delivered = 0
         self.dropped_duplicates = 0
+        # The host's own desktop-only path composes its text through
+        # ``desktop_notify.completion_text``, which has no store to read; hand
+        # it this notifier's lookup so it names the coworker, not the codename.
+        set_labels_provider(self.labels)
 
     # -- entry points (called from the executor's hooks, via the host) -------
+
+    def labels(self, summary: dict | None = None, *, session_key: str | None = None) -> RunLabels:
+        """The names this notification should carry: the coworker whose thread
+        the run belongs to and, for a fired automation, the automation's own
+        name. Never the roster codename."""
+        fields = summary if isinstance(summary, dict) else {}
+        automation_id = fields.get("automation_id")
+        return resolve_labels(
+            db_path=self._db_path,
+            roster_path=self._roster_path,
+            automation_id=str(automation_id) if automation_id else None,
+            session_key=str(fields.get("session_key") or session_key or "") or None,
+        )
+
+    def _agent_id(self) -> str:
+        """The row's identity column. Its sibling ``agent_name`` carries the
+        name the user chose, not the roster name that comes with the id: the
+        row is what the push renders, and a codename in a push is noise."""
+        agent_id, _codename = self._agent_provider()
+        return agent_id
 
     def notify_run_finished(self, summary: dict) -> bool:
         """Tell the user a run ended. Returns True when this call owns the
@@ -96,12 +127,12 @@ class SupabaseNotifier:
             self.dropped_duplicates += 1
             return False
         failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
-        agent_id, agent_name = self._agent_provider()
-        title, body = completion_text(agent_name, failed=failed)
+        labels = self.labels(summary)
+        title, body = completion_text(labels, failed=failed)
         record = self._record(
             run_id=run_id,
-            agent_id=agent_id,
-            agent_name=agent_name,
+            agent_id=self._agent_id(),
+            agent_name=labels.coworker or "",
             session_key=str(summary.get("session_key") or "default"),
             kind=KIND_FAILED if failed else KIND_COMPLETED,
             title=title,
@@ -112,13 +143,12 @@ class SupabaseNotifier:
 
     def notify_approval_pending(self, info: dict, *, session_key: str = "default") -> None:
         """A run is blocked on a here.now publish approval nobody can see."""
-        agent_id, agent_name = self._agent_provider()
-        title = f"{agent_name or 'Your coworker'} needs your approval"
-        body = "Open the app to allow or deny the publish"
+        labels = self.labels(session_key=session_key)
+        title, body = approval_text(labels)
         record = self._record(
             run_id=str(info.get("request_id") or info.get("approval_id") or ""),
-            agent_id=agent_id,
-            agent_name=agent_name,
+            agent_id=self._agent_id(),
+            agent_name=labels.coworker or "",
             session_key=session_key,
             kind=KIND_APPROVAL,
             title=title,
@@ -142,6 +172,7 @@ class SupabaseNotifier:
             return len(self._outbox)
 
     def close(self) -> None:
+        set_labels_provider(None)
         if self._pool is not None:
             self._pool.shutdown(wait=False)
 
