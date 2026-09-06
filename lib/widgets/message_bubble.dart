@@ -28,6 +28,7 @@ import 'package:cowork/widgets/agent_activity/agent_activity_model.dart';
 import 'package:cowork/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:cowork/models/artifact.dart';
 import 'package:cowork/services/app_theme_service.dart';
+import 'package:cowork/utils/automation_message.dart';
 import 'package:cowork/utils/chat_font_resolver.dart';
 import 'package:cowork/services/streaming_manager.dart';
 import 'package:cowork/services/artifact_storage_service.dart';

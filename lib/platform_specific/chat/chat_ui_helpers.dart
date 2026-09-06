@@ -935,10 +935,11 @@ class ChatUiHelpers {
     final bool hasReasoning = reasoning.isNotEmpty;
     // The turn's own clock. `startedAt` is stamped on the placeholder and
     // `generationMs` when the answer is saved, so a running turn counts up
-    // from the first and a finished one shows the second unchanged.
-    final DateTime? turnStartedAt = isAiMessage
-        ? DateTime.tryParse(raw['startedAt'] ?? '')
-        : null;
+    // from the first and a finished one shows the second unchanged. A user
+    // message stamps it as it is created, which is what its bubble clock
+    // shows; only the assistant's copy also drives the live counter, and
+    // that reads it only while a turn streams.
+    final DateTime? turnStartedAt = DateTime.tryParse(raw['startedAt'] ?? '');
     final int? workedForMs = isAiMessage
         ? int.tryParse(raw['generationMs'] ?? '')
         : null;

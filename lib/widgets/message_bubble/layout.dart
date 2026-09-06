@@ -79,9 +79,81 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     return _strippedMessageCache!;
   }
 
+  /// The message's own wall clock, or null when the message carries no
+  /// timestamp. Older rows and rows replayed from the host have none, and
+  /// stamping them with "now" would show the reader a time that never
+  /// happened — so those bubbles simply carry no clock.
+  Widget? _buildMessageClock(BuildContext context, {required bool alignRight}) {
+    final DateTime? when = widget.turnStartedAt?.toLocal();
+    if (when == null) return null;
+    final String hh = when.hour.toString().padLeft(2, '0');
+    final String mm = when.minute.toString().padLeft(2, '0');
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 2,
+        left: alignRight ? 0 : 2,
+        right: alignRight ? 2 : 0,
+      ),
+      child: Text(
+        '$hh:$mm',
+        style: TextStyle(
+          fontSize: 11,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  /// The entire on-screen trace of a fired automation: one quiet line.
+  ///
+  /// The wake's prompt text also carries the operator's instructions and the
+  /// payload the watcher observed, and neither belongs in the thread — the
+  /// reader did not write them, and the payload is a raw JSON blob from a
+  /// watched page. Only the fact that the automation fired is shown.
+  Widget _buildAutomationWakeLine(BuildContext context, AutomationWake wake) {
+    final ThemeData theme = Theme.of(context);
+    final Color color = theme.colorScheme.onSurfaceVariant;
+    final TextStyle style =
+        (theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+          color: color,
+        );
+    final DateTime? when = widget.turnStartedAt?.toLocal();
+    return Padding(
+      padding: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 4, bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.bolt_outlined, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              wake.name.isEmpty ? 'Automation' : 'Automation · ${wake.name}',
+              style: style,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (when != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              '${when.hour.toString().padLeft(2, '0')}:'
+              '${when.minute.toString().padLeft(2, '0')}',
+              style: style,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildUserBubble(BuildContext context) {
     const bool isUserMessage = true;
     const bool alignRight = true;
+
+    // A fired automation reaches the thread as a user turn because that is how
+    // the host submits it. It is not a person talking, so it never gets a
+    // bubble.
+    final AutomationWake? wake = parseAutomationWake(widget.message);
+    if (wake != null) return _buildAutomationWakeLine(context, wake);
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
@@ -158,6 +230,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             if (widget.status == ChatMessageStatus.pending ||
                 widget.status == ChatMessageStatus.failed)
               _buildStatusIndicator(context),
+            ?_buildMessageClock(context, alignRight: alignRight),
           ],
         ),
       ),
@@ -242,6 +315,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             bubbleContent,
             if (showContinueButton) _buildContinueButton(context, accentColor),
             _buildBottomBar(iconFgColor, hasActions),
+            ?_buildMessageClock(context, alignRight: alignRight),
           ],
         ),
       ),

@@ -2362,6 +2362,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': _selectedModelId,
         'provider': _selectedProviderSlug ?? '',
+        // The wall time the reader sent it, so the bubble can carry a clock.
+        'startedAt': DateTime.now().toIso8601String(),
       };
 
       // Store images as JSON-encoded string if present
@@ -3626,11 +3628,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     showToolCalls: widget.showToolCalls,
                                     contentBlocks: parsedContentBlocks,
                                     isStreamingMessage: isStreamingMessage,
-                                    turnStartedAt: isAiMessage
-                                        ? DateTime.tryParse(
-                                            raw['startedAt'] ?? '',
-                                          )
-                                        : null,
+                                    // Both senders carry it now: the
+                                    // assistant's drives the live counter,
+                                    // the user's only its bubble clock.
+                                    turnStartedAt: DateTime.tryParse(
+                                      raw['startedAt'] ?? '',
+                                    ),
                                     workedFor: _workedForOf(raw, isAiMessage),
                                     images: images,
                                     imageMetas: imageMetas,
