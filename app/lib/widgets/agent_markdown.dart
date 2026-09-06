@@ -29,6 +29,9 @@ final RegExp _chartBlock = RegExp(
 /// The opening tag of a block whose end has not arrived yet.
 final RegExp _chartStart = RegExp(r'<\s*chart\s*>', caseSensitive: false);
 
+/// Its closing tag.
+final RegExp _chartEnd = RegExp(r'<\s*/\s*chart\s*>', caseSensitive: false);
+
 /// Decode a chart body, tolerating the two things a model gets wrong: a fenced
 /// block around the JSON, and a trailing comma before `}` or `]`. Returns null
 /// when the body is not a JSON object.
@@ -64,10 +67,15 @@ List<AgentSegment> splitAgentSegments(String data) {
     cursor = match.end;
   }
 
+  // The tail may hold an unreadable block that already closed plus a block
+  // that is still arriving. Only the last opening tag decides: if nothing
+  // closes it, the reply is mid-stream and the partial JSON is held back.
   var tail = data.substring(cursor);
-  final open = _chartStart.firstMatch(tail);
-  if (open != null && !_chartBlock.hasMatch(tail)) {
-    tail = tail.substring(0, open.start); // still streaming — hold it back
+  final opens = _chartStart.allMatches(tail).toList();
+  if (opens.isNotEmpty) {
+    final last = opens.last;
+    final closes = _chartEnd.hasMatch(tail.substring(last.end));
+    if (!closes) tail = tail.substring(0, last.start);
   }
   addText(tail);
   return segments;
