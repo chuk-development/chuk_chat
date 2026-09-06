@@ -34,6 +34,7 @@ import 'package:cowork/services/artifact_storage_service.dart';
 import 'package:cowork/services/diagnostics_log_service.dart';
 import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/services/image_storage_service.dart';
+import 'package:cowork/utils/lenient_json.dart';
 import 'package:cowork/widgets/chart_widget.dart';
 import 'package:cowork/widgets/diff_widget.dart';
 import 'package:cowork/widgets/map_block_renderer.dart';
