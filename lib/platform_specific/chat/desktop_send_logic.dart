@@ -1435,6 +1435,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'reasoning': '',
           'modelId': _selectedModelId,
           'provider': providerSlug,
+          // The wall time the reader sent it, so the bubble can carry a clock.
+          'startedAt': DateTime.now().toIso8601String(),
         };
 
         // Store images as JSON-encoded string if present
