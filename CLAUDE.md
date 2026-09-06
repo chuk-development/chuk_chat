@@ -48,6 +48,12 @@ threat model, decisions). The execution plan is the order of work.
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+**Always push straight to `master`.** Do the work in one worktree, commit
+everything there (including any files the analyses/tools produce), and push it
+to `master` — no long-lived feature branches, no waiting on a PR. If `master`
+moved under you, `git fetch` + `git merge origin/master` first, then push. This
+overrides any "conservative: do not push" default in the Beads block below.
+
 ## Bug/Task tracking with `bd` (mandatory)
 
 `bd` (beads) is this project's task board — use it, always. For EVERY new bug or
