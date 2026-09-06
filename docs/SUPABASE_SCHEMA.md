@@ -434,10 +434,10 @@ create table if not exists public.cowork_run_notifications (
   user_id      uuid        not null references auth.users (id) on delete cascade,
   run_id       text        not null,    -- host-generated, unique per run
   agent_id     text        not null,
-  agent_name   text        not null default '',
+  agent_name   text        not null default '',  -- the name the user chose; '' when unnamed
   session_key  text        not null,    -- which thread to open on tap
   kind         text        not null,    -- 'completed' | 'failed' | 'approval_needed'
-  title        text        not null,    -- generic, no answer content
+  title        text        not null,    -- names only (coworker, automation), no answer content
   body         text        not null default '',
   preview_ciphertext text,              -- reserved (channel-key sealed preview)
   created_at   timestamptz not null default now(),
@@ -481,9 +481,12 @@ channel and the "answer ready" state on reconnect do not depend on it.
 
 ## Security note (business risk)
 
-The push carries a generic title and body only. A leaked table, a leaked FCM
-payload or a Google-side log never contains a prompt, an answer or a tool
-result; those stay end-to-end between the host and the paired app. The FCM
+The push carries a generic title and body only. The title names the coworker
+and, when an automation fired the run, that automation — both names the user
+typed themselves, so the reader recognises them and the internal codename
+(`ivory-lynx`, also the workspace directory) never leaves the host. A leaked
+table, a leaked FCM payload or a Google-side log never contains a prompt, an
+answer or a tool result; those stay end-to-end between the host and the paired app. The FCM
 sender identity is bound to the APK, not to the user's Supabase project: a
 self-hoster either uses the shipped Firebase project (the payload has no
 content) or rebuilds the app with their own `google-services.json`.
