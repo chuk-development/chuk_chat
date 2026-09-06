@@ -51,6 +51,17 @@ void main() {
       expect((segments.single as AgentTextSegment).text.trim(), 'Hier:');
     });
 
+    test('holds back the last block even after an unreadable closed one', () {
+      final segments = splitAgentSegments(
+        'A\n<chart>not json</chart>\nB\n<chart>{"type":"bar",',
+      );
+
+      expect(segments.whereType<AgentChartSegment>(), isEmpty);
+      final text = (segments.single as AgentTextSegment).text;
+      expect(text, contains('not json'));
+      expect(text, isNot(contains('"type":"bar"')));
+    });
+
     test('leaves an undecodable block in the prose instead of dropping it', () {
       const raw = 'A\n<chart>not json</chart>\nB';
       final segments = splitAgentSegments(raw);

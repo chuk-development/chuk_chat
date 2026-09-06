@@ -136,7 +136,8 @@ class ChartRenderer extends StatelessWidget {
     final rawType = data['type'];
     final type = rawType is String ? rawType.toLowerCase() : '';
     final title = data['title'] as String?;
-    final height = (data['height'] as num?)?.toDouble() ?? 250;
+    final rawHeight = _numField(data, 'height');
+    final height = rawHeight != null && rawHeight > 0 ? rawHeight : 250.0;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -237,6 +238,14 @@ class ChartRenderer extends StatelessWidget {
     return nice * pow10;
   }
 
+  /// A finite numeric option, or null. Bounds, heights and radii arrive as
+  /// model output too: a string there used to throw before the chart was even
+  /// built.
+  static double? _numField(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value is num && value.isFinite ? value.toDouble() : null;
+  }
+
   /// The axis labels as strings. A model may send numbers as labels, and a
   /// blind `cast<String>()` throws mid-render on exactly that.
   static List<String> _labelsOf(Map<String, dynamic> data) {
@@ -281,15 +290,19 @@ class ChartRenderer extends StatelessWidget {
   /// True when this map holds at least one number to draw. Used to decide
   /// whether a `<chart>` block is a chart at all.
   static bool hasPlottableData(Map<String, dynamic> data) {
+    final rawType = data['type'];
+    final isScatter = rawType is String && rawType.toLowerCase() == 'scatter';
     for (final ds in _datasetsOf(data)) {
-      if (_valuesOf(ds).whereType<num>().isNotEmpty) return true;
+      // A scatter point is a pair, and a bare number is not one: a scalar list
+      // in a scatter draws nothing, so it must not count as data.
       final points = ds['data'];
       if (points is List) {
         for (final point in points) {
-          // A scatter point is a pair; one half of it draws nothing.
           if (point is Map && point['x'] is num && point['y'] is num) return true;
         }
       }
+      if (isScatter) continue;
+      if (_valuesOf(ds).whereType<num>().isNotEmpty) return true;
     }
     for (final item in _pieItemsOf(data)) {
       if (item['value'] is num) return true;
@@ -355,7 +368,7 @@ class ChartRenderer extends StatelessWidget {
   Widget _buildBarChart(BuildContext context) {
     final labels = _labelsOf(data);
     final datasets = _datasetsOf(data);
-    final providedMaxY = (data['max_y'] as num?)?.toDouble();
+    final providedMaxY = _numField(data, 'max_y');
     final double dataMaxY = _maxYFromDatasets(datasets);
     final double yInterval = _niceInterval((providedMaxY ?? dataMaxY).abs());
     // Round up to a multiple of yInterval so fl_chart doesn't add a stray
@@ -502,8 +515,8 @@ class ChartRenderer extends StatelessWidget {
   Widget _buildLineChart(BuildContext context) {
     final labels = _labelsOf(data);
     final datasets = _datasetsOf(data);
-    final maxY = (data['max_y'] as num?)?.toDouble();
-    final minY = (data['min_y'] as num?)?.toDouble();
+    final maxY = _numField(data, 'max_y');
+    final minY = _numField(data, 'min_y');
     final double yInterval = _niceInterval(
       ((maxY ?? _maxYFromDatasets(datasets)) - (minY ?? 0)).abs(),
     );
@@ -767,17 +780,17 @@ class ChartRenderer extends StatelessWidget {
   // ---------------------------------------------------------------------------
   Widget _buildScatterChart(BuildContext context) {
     final datasets = _datasetsOf(data);
-    final maxX = (data['max_x'] as num?)?.toDouble();
-    final maxY = (data['max_y'] as num?)?.toDouble();
-    final minX = (data['min_x'] as num?)?.toDouble();
-    final minY = (data['min_y'] as num?)?.toDouble();
+    final maxX = _numField(data, 'max_x');
+    final maxY = _numField(data, 'max_y');
+    final minX = _numField(data, 'min_x');
+    final minY = _numField(data, 'min_y');
 
     final spots = <ScatterSpot>[];
     for (var ds = 0; ds < datasets.length; ds++) {
       final dsMap = datasets[ds];
       final points = (dsMap['data'] as List?) ?? const [];
       final color = _tryParseColor(dsMap['color']) ?? _colorAt(ds);
-      final radius = (dsMap['radius'] as num?)?.toDouble() ?? 6;
+      final radius = _numField(dsMap, 'radius') ?? 6;
 
       for (final pt in points) {
         if (pt is! Map) continue;
@@ -864,7 +877,7 @@ class ChartRenderer extends StatelessWidget {
   Widget _buildRadarChart(BuildContext context) {
     final labels = _labelsOf(data);
     final datasets = _datasetsOf(data);
-    final maxValue = (data['max_value'] as num?)?.toDouble() ?? 5;
+    final maxValue = _numField(data, 'max_value') ?? 5;
 
     final dataSets = <RadarDataSet>[];
     for (var ds = 0; ds < datasets.length; ds++) {
