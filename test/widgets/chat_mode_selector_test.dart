@@ -3,6 +3,8 @@
 // menu offers (reasoning levels, the picked models, and the way out to the
 // full model screen).
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
+
+import '../support/kv_cache_test_env.dart';
 
 // Fireworks levels, the common case in the composer.
 const _fireworksLevels = <String>['none', 'low', 'medium', 'high'];
@@ -97,7 +101,12 @@ void main() {
   });
 
   group('model display name', () {
-    setUp(() => SharedPreferences.setMockInitialValues({}));
+    late Directory tempDir;
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      tempDir = await useTempKvCache();
+    });
+    tearDown(() async => disposeTempKvCache(tempDir));
 
     test('resolves the human name of a cached model', () async {
       await ModelCacheService.saveAvailableModels([

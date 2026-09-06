@@ -21,6 +21,7 @@ import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_redirect.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// What a connect attempt ended in, for the UI to show.
@@ -147,8 +148,7 @@ class McpService {
     if (_loaded) return;
     _loaded = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
+      final raw = await _readConnectionsRaw();
       if (raw == null || raw.isEmpty) return;
       final decoded = jsonDecode(raw);
       if (decoded is! List) return;
@@ -161,9 +161,24 @@ class McpService {
     }
   }
 
-  static Future<void> _persist() async {
+  // The connections list (~200 KB with many servers) used to live in
+  // SharedPreferences, which the legacy plugin re-parses and rewrites whole on
+  // every access. It now lives in the SQLite kv_cache; read from there, moving
+  // any existing prefs copy over once and deleting the prefs key.
+  static Future<String?> _readConnectionsRaw() async {
+    final kv = await LocalChatCacheService.kvGet(_prefsKey);
+    if (kv != null) return kv;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
+    final old = prefs.getString(_prefsKey);
+    if (old != null) {
+      await LocalChatCacheService.kvSet(_prefsKey, old);
+      await prefs.remove(_prefsKey);
+    }
+    return old;
+  }
+
+  static Future<void> _persist() async {
+    await LocalChatCacheService.kvSet(
       _prefsKey,
       jsonEncode([for (final c in connections.value) c.toJson()]),
     );
