@@ -5,12 +5,15 @@ one per run; refresh on 401; outbox when the cloud is away."""
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import httpx
 
 from cowork_agent import StateStore, SupabaseSession
 
+from cowork_host.coworker_names import CoworkerNameStore, host_agent_id
 from cowork_host.desktop_notify import DesktopNotifier
+from cowork_host.desktop_notify import completion_text as desktop_completion_text
 from cowork_host.notify import SupabaseNotifier
 
 SUPABASE = "https://proj.supabase.co"
@@ -102,7 +105,8 @@ def test_happy_path_inserts_a_row_then_calls_the_function_with_no_answer_text(tm
     row = rows[0]
     assert row["user_id"] == "user-1" and row["run_id"] == "run-1"
     assert row["kind"] == "completed" and row["session_key"] == "thread-1"
-    assert row["agent_name"] == "Ada"
+    # The row carries the name the user chose (none here), never the roster codename.
+    assert row["agent_name"] == ""
     # Privacy: the answer and the prompt never leave the host.
     serialized = json.dumps(rows)
     assert "210" not in serialized and "count to 20" not in serialized
@@ -182,3 +186,76 @@ def test_a_failed_run_notifies_as_failed(tmp_path):
     notifier.notify_run_finished(summary)
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["kind"] == "failed" and "Boom" not in json.dumps(row)
+
+
+def _automation(tmp_path, automation_id: str, name: str) -> None:
+    """The row the automation manager keeps in the same file as the runs."""
+    conn = sqlite3.connect(str(tmp_path / "state.db"))
+    conn.execute("CREATE TABLE IF NOT EXISTS automations (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+    conn.execute("INSERT INTO automations (id, name) VALUES (?, ?)", (automation_id, name))
+    conn.commit()
+    conn.close()
+
+
+def _named_coworker(tmp_path, name: str) -> None:
+    store = CoworkerNameStore(str(tmp_path / "roster.db"))
+    store.upsert(host_agent_id(), name, created_by_app=True)
+    store.close()
+
+
+def test_an_automation_run_names_the_automation_never_the_codename(tmp_path):
+    cloud = _Cloud()
+    _automation(tmp_path, "a1", "Wahlradar LT Sachsen-Anhalt 2026")
+    _named_coworker(tmp_path, "Nova")
+    notifier = SupabaseNotifier(
+        session_provider=lambda: _session(cloud),
+        user_id_provider=lambda: "user-1",
+        # What the roster holds: a generated codename, also the workspace dir.
+        agent_provider=lambda: ("agent-1", "ivory-lynx"),
+        db_path=str(tmp_path / "state.db"),
+        http_client=httpx.Client(transport=httpx.MockTransport(cloud.handler)),
+        background=False, ntfy_topic="", webhook_url="",
+    )
+    summary = _finished_run(tmp_path)
+    summary["origin"], summary["automation_id"] = "automation", "a1"
+    assert notifier.notify_run_finished(summary) is True
+
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    assert row["title"] == "Nova: Wahlradar LT Sachsen-Anhalt 2026"
+    assert row["body"] == "The answer is ready. Open the app to read it."
+    assert "ivory-lynx" not in json.dumps(row)
+
+
+def test_a_run_with_no_names_stays_generic_rather_than_codenamed(tmp_path):
+    cloud = _Cloud()
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    notifier.notify_run_finished(_finished_run(tmp_path))
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    assert row["title"] == "Your coworker"
+    assert "Ada" not in row["title"]
+
+
+def test_the_desktop_path_of_the_host_speaks_the_same_language(tmp_path):
+    """``host._announce_run`` composes its own text through
+    ``desktop_notify.completion_text`` with only the roster name; the notifier
+    installs the lookup so that path names the coworker too."""
+    cloud = _Cloud()
+    _named_coworker(tmp_path, "Nova")
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    try:
+        assert desktop_completion_text("ivory-lynx") == (
+            "Nova", "The answer is ready. Open the app to read it.",
+        )
+    finally:
+        notifier.close()
+    # ``close`` clears the provider again: no global left behind.
+    assert desktop_completion_text("ivory-lynx")[0] == "Your coworker"
+
+
+def test_an_approval_names_the_coworker(tmp_path):
+    cloud = _Cloud()
+    _named_coworker(tmp_path, "Nova")
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    notifier.notify_approval_pending({"request_id": "req-1"})
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    assert row["title"] == "Nova needs your approval" and row["kind"] == "approval_needed"

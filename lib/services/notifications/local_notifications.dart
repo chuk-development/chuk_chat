@@ -35,6 +35,11 @@ const String kCoworkNotificationChannelName = 'Answer ready';
 const String kCoworkNotificationChannelDescription =
     'A coworker finished a task or needs your input';
 
+/// The logo a Linux toast draws. The same image the Android launcher uses,
+/// copied into the Flutter assets because a Linux build ships no icon of its
+/// own and the D-Bus call takes the picture, not an app id.
+const String kCoworkNotificationIconAsset = 'assets/icons/app_icon.png';
+
 /// What the service needs from the platform. The real one wraps
 /// `FlutterLocalNotificationsPlugin`; tests pass a fake.
 abstract class LocalNotificationsBackend {
@@ -206,11 +211,15 @@ class _PluginBackend implements LocalNotificationsBackend {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    const linuxSettings = LinuxInitializationSettings(
+    final linuxSettings = LinuxInitializationSettings(
       defaultActionName: 'Open',
+      // A D-Bus notification shows a logo only when the sender hands one over:
+      // the desktop entry is not consulted, and a Linux build installs no
+      // themed icon, so without this the toast has an empty icon slot.
+      defaultIcon: AssetsLinuxIcon(kCoworkNotificationIconAsset),
     );
     final bool? ok = await _plugin.initialize(
-      settings: const InitializationSettings(
+      settings: InitializationSettings(
         android: androidSettings,
         iOS: darwinSettings,
         macOS: darwinSettings,
@@ -281,8 +290,9 @@ class _PluginBackend implements LocalNotificationsBackend {
           presentBadge: true,
           presentSound: true,
         ),
-        linux: const LinuxNotificationDetails(
+        linux: LinuxNotificationDetails(
           urgency: LinuxNotificationUrgency.normal,
+          icon: AssetsLinuxIcon(kCoworkNotificationIconAsset),
         ),
       ),
     );
