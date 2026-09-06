@@ -1,0 +1,25 @@
+[Unit]
+Description=flutter-hotd — remote control plane for flutter-hot (Tailscale-bound)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.claude/tools/flutter-hotd
+Restart=always
+RestartSec=3
+# Only ever kill the daemon itself. The Flutter apps and their nested X servers
+# are deliberately detached and must survive a daemon restart — with the default
+# control-group kill, restarting the service would tear down the running app.
+KillMode=process
+# The screenshot backends need the live session bus and display server, so the
+# unit inherits the graphical session environment rather than a clean one.
+Environment=PYTHONUNBUFFERED=1
+# Never let the memguard rule that kills CLAUDECODE-marked processes reach the
+# apps this daemon launches; they are the user's own Flutter windows.
+Environment=MEMGUARD_ALLOW_MB=20480
+
+[Install]
+# default.target, not graphical-session.target: under a plain WM (IceWM) nothing
+# pulls graphical-session.target in, and the daemon would never autostart. It
+# resolves DISPLAY lazily, so starting before the session is fine.
+WantedBy=default.target

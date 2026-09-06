@@ -114,16 +114,25 @@ class ChatStorageSidebar {
     await _syncTitlesFromNetwork(user.id);
   }
 
-  /// Load titles from local SharedPreferences cache (instant, no network, no decryption)
+  /// Load titles from the local kv_cache (instant, no network, no decryption).
   static Future<void> _loadTitlesFromCache(String userId) async {
     final stopwatch = Stopwatch()..start();
 
-    // Use pre-cached instance for speed, fallback to getInstance if not ready
-    final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance();
+    final cacheKey = chatTitlesCacheKey(userId);
+    // Titles live in the SQLite kv_cache now. Fall back to the old prefs key
+    // once and migrate it over, so an account written by an older build keeps
+    // its instant sidebar and the prefs file shrinks on this launch.
+    var raw = await LocalChatCacheService.kvGet(cacheKey);
+    if (raw == null) {
+      final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance();
+      final old = prefs.getString(cacheKey);
+      if (old != null) {
+        await LocalChatCacheService.kvSet(cacheKey, old);
+        await prefs.remove(cacheKey);
+        raw = old;
+      }
+    }
     final prefsTime = stopwatch.elapsedMilliseconds;
-
-    final cacheKey = 'chat_titles_v1_$userId';
-    final raw = prefs.getString(cacheKey);
 
     if (raw == null || raw.isEmpty) {
       if (kDebugMode) {

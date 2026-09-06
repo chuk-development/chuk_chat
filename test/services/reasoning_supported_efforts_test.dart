@@ -3,12 +3,16 @@
 // verbatim, a stale selection is clamped to the model's real ladder, and the
 // derived list is used only when the catalog cache has no entry (cold start).
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+
+import '../support/kv_cache_test_env.dart';
 
 /// Seed the on-disk catalog cache with [models] and hydrate the capability
 /// service from it, so the sync accessors read them.
@@ -25,7 +29,12 @@ void main() {
   const mandatory = 'lab/mandatory';
   const toggle = 'lab/toggle';
 
+  late Directory tempDir;
+
+  tearDown(() async => disposeTempKvCache(tempDir));
+
   setUp(() async {
+    tempDir = await useTempKvCache();
     await _seedCatalog(<Map<String, dynamic>>[
       // Irregular graded ladder that omits medium and includes the new `max`.
       <String, dynamic>{

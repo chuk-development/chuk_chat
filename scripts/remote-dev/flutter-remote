@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# flutter-remote — drive `flutter-hot` on the laptop from another host.
+#
+# The laptop runs `flutter-hotd` (a systemd --user service) inside its desktop
+# session and listens on its Tailscale address. This client speaks to it with a
+# bearer token. The verbs are the same as `flutter-hot`, so anything that worked
+# locally works here, plus:
+#
+#   sync [ref]        push-then-pull: refresh the laptop mirror from the remote
+#   shot [out.png]    screenshot the app window, saved on THIS host
+#   projects          list mirrors on the laptop and their app state
+#   health            is the laptop daemon reachable?
+#
+# Config: ~/.config/flutter-remote/config   (HOST, PORT, TOKEN)
+# Project: --project <name>, $FLUTTER_REMOTE_PROJECT, or the current repo name.
+set -euo pipefail
+
+CONF="${FLUTTER_REMOTE_CONFIG:-$HOME/.config/flutter-remote/config}"
+if [ -f "$CONF" ]; then . "$CONF"; fi
+HOST="${FLUTTER_REMOTE_HOST:-${HOST:-}}"
+PORT="${FLUTTER_REMOTE_PORT:-${PORT:-8787}}"
+TOKEN="${FLUTTER_REMOTE_TOKEN:-${TOKEN:-}}"
+# Keep the secret in its own 0600 file rather than inline in the config.
+TOKEN_FILE="${TOKEN_FILE:-$HOME/.config/flutter-remote/token}"
+if [ -z "$TOKEN" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(tr -d '\r\n' < "$TOKEN_FILE")"; fi
+
+if [ -z "$HOST" ] || [ -z "$TOKEN" ]; then
+  echo "flutter-remote: missing HOST or TOKEN. Write $CONF:" >&2
+  echo "  HOST=100.102.91.31" >&2
+  echo "  PORT=8787" >&2
+  echo "  TOKEN=<contents of ~/.config/flutter-hotd/token on the laptop>" >&2
+  exit 1
+fi
+
+BASE="http://$HOST:$PORT"
+AUTH="Authorization: Bearer $TOKEN"
+
+# --- project name -----------------------------------------------------------
+PROJECT="${FLUTTER_REMOTE_PROJECT:-}"
+ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --project) PROJECT="$2"; shift 2;;
+    --project=*) PROJECT="${1#--project=}"; shift;;
+    *) ARGS+=("$1"); shift;;
+  esac
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
+
+find_project() {
+  local d="$PWD"
+  while [ "$d" != "/" ]; do
+    if [ -f "$d/pubspec.yaml" ] || [ -d "$d/.git" ]; then basename "$d"; return 0; fi
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+[ -n "$PROJECT" ] || PROJECT="$(find_project || true)"
+
+req() { # req <method> <path> [json-body]
+  local method="$1" path="$2" body="${3:-}"
+  if [ -n "$body" ]; then
+    curl -sS --max-time "${HTTP_TIMEOUT:-1900}" -X "$method" -H "$AUTH" \
+      -H 'Content-Type: application/json' -d "$body" "$BASE$path"
+  else
+    curl -sS --max-time "${HTTP_TIMEOUT:-1900}" -X "$method" -H "$AUTH" "$BASE$path"
+  fi
+}
+
+json() { python3 -c 'import json,sys; print(json.dumps(json.loads(sys.stdin.read()), indent=1))'; }
+
+# Print a /run response the way flutter-hot would have printed it locally, and
+# forward its exit code so callers keep working unchanged.
+# NOTE: these renderers read the response on stdin, so they must use `python3 -c`.
+# `python3 - <<EOF` would take the heredoc as stdin and drop the piped body.
+render_run() {
+  python3 -c '
+import json, sys
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+except json.JSONDecodeError:
+    sys.stderr.write("flutter-remote: bad response from daemon:\n" + raw[:2000] + "\n"); sys.exit(1)
+if "error" in d:
+    sys.stderr.write("flutter-remote: " + d["error"] + "\n"); sys.exit(1)
+sys.stdout.write(d.get("stdout", ""))
+sys.stderr.write(d.get("stderr", ""))
+sys.exit(d.get("rc", 0))
+'
+}
+
+render_sync() {
+  python3 -c '
+import json, sys
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+except json.JSONDecodeError:
+    sys.stderr.write("flutter-remote: bad response from daemon:\n" + raw[:2000] + "\n"); sys.exit(1)
+if "error" in d:
+    sys.stderr.write("flutter-remote: " + d["error"] + "\n"); sys.exit(1)
+if d.get("ok"):
+    print("flutter-remote: %s synced to %s @ %s" % (d["project"], d.get("target"), d.get("head")))
+    sys.exit(0)
+sys.stderr.write("flutter-remote: sync of %s FAILED\n" % d.get("project"))
+for s in d.get("steps", []):
+    if s.get("rc"):
+        sys.stderr.write("  $ %s\n%s\n" % (s["cmd"], (s.get("stderr") or "").strip()))
+sys.exit(1)
+'
+}
+
+usage() {
+  cat >&2 <<'EOF'
+usage: flutter-remote [--project <name>] <command> [args...]
+
+  remote-only
+    health                     daemon reachable?
+    projects                   mirrors on the laptop + app state
+    sync [ref]                 fetch + hard-reset the laptop mirror (default: origin HEAD)
+    clone <git-url>            create the mirror, then sync it
+    shot [out.png]             screenshot the app window onto THIS host
+
+  same as flutter-hot (run on the laptop)
+    start [device] · wait [secs] · reload [--wait] · restart [--wait]
+    await [secs] · result · status · logs [-n|-f] · send <keys>
+    stop · kill · pids
+    test [args] · test-await [secs] · test-result · test-log
+    analyze [args]
+
+Long-running verbs (await, test-await, wait) block; run them in the background.
+EOF
+  exit 2
+}
+
+pyjson() { python3 -c 'import json,sys; print(json.dumps(dict(a.split("=",1) for a in sys.argv[1:])))' "$@"; }
+
+cmd="${1:-status}"; [ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+  health)
+    curl -sS --max-time 15 "$BASE/health" | json;;
+
+  projects)
+    req GET /projects | json;;
+
+  sync|clone)
+    [ -n "$PROJECT" ] || { echo "flutter-remote: no project (use --project)" >&2; exit 1; }
+    body="$(python3 - "$PROJECT" "$cmd" "${1:-}" <<'PY'
+import json, sys
+project, cmd, arg = sys.argv[1], sys.argv[2], sys.argv[3]
+out = {"project": project}
+if cmd == "clone":
+    if not arg:
+        sys.exit("flutter-remote: clone needs a git url")
+    out["repo"] = arg
+elif arg:
+    out["ref"] = arg
+print(json.dumps(out))
+PY
+)"
+    HTTP_TIMEOUT=1900 req POST /sync "$body" | render_sync
+    ;;
+
+  shot|screenshot)
+    [ -n "$PROJECT" ] || { echo "flutter-remote: no project (use --project)" >&2; exit 1; }
+    out="${1:-}"
+    if [ -z "$out" ]; then
+      mkdir -p "$HOME/.cache/flutter-remote"
+      out="$HOME/.cache/flutter-remote/$PROJECT-$(date +%Y%m%d-%H%M%S).png"
+    fi
+    hdr="$(mktemp)"
+    code="$(curl -sS --max-time 120 -o "$out" -D "$hdr" -w '%{http_code}' \
+      -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+      -d "$(pyjson "project=$PROJECT")" "$BASE/shot")"
+    if [ "$code" != "200" ]; then
+      echo "flutter-remote: shot failed (HTTP $code)" >&2; cat "$out" >&2; rm -f "$hdr"; exit 1
+    fi
+    method="$(grep -i '^X-Shot-Method:' "$hdr" | tr -d '\r' | cut -d' ' -f2-)"
+    rm -f "$hdr"
+    echo "$out"
+    echo "flutter-remote: captured via ${method:-unknown}" >&2
+    ;;
+
+  -h|--help|help) usage;;
+
+  *)
+    [ -n "$PROJECT" ] || { echo "flutter-remote: no project (use --project)" >&2; exit 1; }
+    # await / test-await / wait may legitimately run for minutes.
+    t=300
+    case "$cmd" in await|wait) t=400;; test-await|test) t=1800;; esac
+    body="$(python3 - "$PROJECT" "$t" "$cmd" "$@" <<'PY'
+import json, sys
+project, timeout, *args = sys.argv[1:]
+print(json.dumps({"project": project, "timeout": int(timeout), "args": args}))
+PY
+)"
+    req POST /run "$body" | render_run
+    ;;
+esac

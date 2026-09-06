@@ -244,6 +244,7 @@ test/
 | `docs/COMMON_TASKS.md` | Step-by-step for adding services, pages, features |
 | `docs/DATABASE.md` | Supabase tables and schema |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
+| `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 
 ## API Server
 
