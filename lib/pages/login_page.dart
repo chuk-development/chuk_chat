@@ -12,6 +12,7 @@ import 'package:chuk_chat/widgets/password_strength_meter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -117,22 +118,7 @@ class _LoginPageState extends State<LoginPage> {
           error.code == AuthServiceException.codeEmailAlreadyRegistered;
       if (isEmailAlreadyRegistered && mounted) {
         final messenger = ScaffoldMessenger.of(context);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              error.message,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        NiceSnackBar.showOn(messenger, error.message);
       }
       setState(() {
         if (isEmailAlreadyRegistered) {

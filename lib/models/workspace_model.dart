@@ -179,9 +179,6 @@ class Workspace {
   bool get hasCustomImage =>
       avatarImagePath != null && avatarImagePath!.isNotEmpty;
 
-  /// Check if this is owned by a specific user
-  bool isOwnedBy(String? currentUserId) =>
-      userId != null && userId == currentUserId;
 
   static final Map<String, IconData> _iconMap = {
     'smart_toy': Icons.smart_toy_outlined,
@@ -200,7 +197,6 @@ class Workspace {
     'folder': Icons.folder_outlined,
   };
 
-  static Map<String, IconData> get availableIcons => _iconMap;
 
   /// Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
   String get updatedAgo {

@@ -65,8 +65,6 @@ enum ToolCategory {
   github, // GitHub repos, issues, PRs
   slack, // Slack messaging
   google, // Google Calendar + Gmail
-  email, // IMAP/SMTP email
-  nextcloud, // Nextcloud files, calendar, contacts
   mcp, // Tools from connected remote MCP servers
   sandbox, // Code execution sandbox (Python/shell + files)
 }

@@ -45,7 +45,6 @@ const Map<String, String> stringsDe = {
   'pricingPlans': 'Preise & Abonnements',
   'pricingPlansSubtitle': 'Unsere Abonnements und Preise ansehen',
   'accountSettings': 'Kontoeinstellungen',
-  'accountSettingsSubtitle': 'Profil und Konto verwalten',
   'exportChats': 'Chats exportieren',
   'exportChatsSubtitle': 'Unterhaltungen als JSON herunterladen',
   'about': 'Über',
@@ -62,8 +61,6 @@ const Map<String, String> stringsDe = {
   // ── Customization page ─────────────────────────────────────
   'language': 'Sprache',
   'languageSubtitle': 'Bevorzugte Sprache wählen',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'Sprachtranskription',
   'autoSendVoice': 'Sprachnachrichten automatisch senden',
   'autoSendVoiceSubtitle':
@@ -224,8 +221,6 @@ const Map<String, String> stringsDe = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Kalender / Gmail)',
-  'catEmailImapSmtp': 'E-Mail (IMAP/SMTP)',
-  'catNextcloud': 'Nextcloud',
   'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Web durchsuchen, Seiten abrufen, Bilder generieren und Daten nachschlagen',
@@ -241,9 +236,6 @@ const Map<String, String> stringsDe = {
       'Nachrichten senden, Kanäle durchsuchen und Slack-Daten abrufen',
   'catGoogleCalGmailDesc':
       'Termine und E-Mails über Google Kalender und Gmail verwalten',
-  'catEmailImapSmtpDesc': 'E-Mails über IMAP und SMTP senden und empfangen',
-  'catNextcloudDesc':
-      'Dateien, Kalender und Kontakte auf Nextcloud durchsuchen',
   'catSandboxDesc':
       'Python- oder Shell-Code in einer isolierten Sandbox ausführen und Dateien lesen/schreiben',
   'connect': 'Verbinden',
@@ -252,10 +244,6 @@ const Map<String, String> stringsDe = {
   'removeCredentialsWarning':
       'Ihre gespeicherten Zugangsdaten werden entfernt.',
   'cancel': 'Abbrechen',
-  'categoryConnected': '{label} verbunden',
-  'failedToConnect': 'Verbindung zu {label} fehlgeschlagen',
-  'unableToConnect':
-      '{label} konnte nicht verbunden werden. Bitte versuchen Sie es erneut.',
   'toolWebSearch': 'Websuche',
   'toolWebCrawl': 'Web-Crawl',
   'toolImageGen': 'Bildgenerierung',
@@ -284,17 +272,12 @@ const Map<String, String> stringsDe = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profil',
-  'profileSubtitle':
-      'Passen Sie an, wie Ihr Name und Ihre E-Mail in Chuk Chat erscheinen.',
   'displayName': 'Anzeigename',
   'displayNameHint': 'So sehen andere Sie',
   'emailAddress': 'E-Mail-Adresse',
   'emailAddressHint': 'Wohin wir Benachrichtigungen senden',
   'security': 'Sicherheit',
-  'securitySubtitle': 'Vergewissern Sie sich, dass alles geschützt ist.',
   'changePassword': 'Passwort ändern',
-  'changePasswordSubtitle':
-      'Ihr Supabase-Passwort aktualisieren und gespeicherte Chats neu verschlüsseln.',
   'currentPassword': 'Aktuelles Passwort',
   'newPassword': 'Neues Passwort',
   'minCharsPassword': 'Mindestens 8 Zeichen.',
@@ -309,9 +292,6 @@ const Map<String, String> stringsDe = {
       'Du hast Chats, die mit einem früheren Passwort verschlüsselt sind. Gib dein altes Passwort ein, um sie zu entsperren.',
   'chatsFromPreviousPassword': 'Chats von einem früheren Passwort',
   'recoverChats': 'Chats wiederherstellen',
-  'dangerZone': 'Gefahrenzone',
-  'dangerZoneSubtitle':
-      'Unwiderrufliche Aktionen, die Ihr gesamtes Konto betreffen.',
   'deleteAccountWarning':
       'Das Löschen Ihres Kontos beendet alle Abonnements, entfernt Ihre Daten und kann nicht rückgängig gemacht werden.',
   'deleteAccount': 'Konto löschen',
@@ -377,7 +357,6 @@ const Map<String, String> stringsDe = {
   'openSourceLicenses': 'Open-Source-Lizenzen',
   'openSourceLicensesSubtitle':
       'Lizenzen aller in diesem Build enthaltenen Abhängigkeiten einsehen.',
-  'legalDocuments': 'Rechtliche Dokumente',
   'termsOfService': 'Nutzungsbedingungen',
   'privacyPolicy': 'Datenschutzrichtlinie',
   'versionText': 'Version {version}',
@@ -407,9 +386,6 @@ const Map<String, String> stringsDe = {
   'manageBilling': 'Abrechnung verwalten',
   'manageBillingSubtitle':
       'Verwenden Sie das Abrechnungsportal, um Ihr Abonnement zu kündigen oder Zahlungsmethoden zu aktualisieren.',
-  'subscribeToGetCredits': 'Abonnieren für KI-Guthaben',
-  'subscriptionDesktopOnly':
-      'Abonnement-Verwaltung ist nur auf dem Desktop verfügbar.',
   'paymentsDisabledInBuild':
       'Direkte Zahlungen sind in diesem Build deaktiviert.',
   'active': 'AKTIV',
@@ -436,9 +412,6 @@ const Map<String, String> stringsDe = {
   'createAccountWithEmail': 'Konto mit E-Mail & Passwort erstellen',
   'supabaseNotConfigured':
       'Supabase-Zugangsdaten sind nicht konfiguriert. Aktualisieren Sie sie vor einem Produktions-Build.',
-  'confirmEmailToContinue': 'E-Mail bestätigen, um fortzufahren',
-  'confirmEmailBody':
-      'Wir haben einen Bestätigungslink an Ihre E-Mail-Adresse gesendet. Bitte öffnen Sie ihn und klicken Sie auf den Link, bevor Sie sich anmelden.',
   'howOthersSeeYou': 'So sehen andere Sie',
   'email': 'E-Mail',
   'emailPlaceholder': 'sie@beispiel.de',
@@ -534,7 +507,6 @@ const Map<String, String> stringsDe = {
       'Funktioniert in Release-Builds. Protokolliert App-/Laufzeit-Metadaten zur Fehlerbehebung.',
   'diagnosticsEnabled': 'Diagnose-Protokollierung aktiviert',
   'diagnosticsDisabled': 'Diagnose-Protokollierung deaktiviert',
-  'logFile': 'Protokolldatei',
   'notInitializedYet': 'Noch nicht initialisiert',
   'refresh': 'Aktualisieren',
   'copyRecent': 'Letzte kopieren',
@@ -551,7 +523,6 @@ const Map<String, String> stringsDe = {
   'failedToShareLog': 'Diagnose-Log konnte nicht geteilt werden: {error}',
   'diagnosticsLogCleared': 'Diagnose-Log gelöscht',
   'failedToClearLog': 'Diagnose-Log konnte nicht gelöscht werden: {error}',
-  'recentLogLines': 'Letzte Log-Zeilen',
   'devOptionsDisabledMsg': 'Entwickleroptionen deaktiviert.',
   'noLogsYet':
       'Noch keine Logs. Aktivieren Sie die Diagnose-Protokollierung und verwenden Sie die App, um Daten zu sammeln.',
@@ -582,46 +553,22 @@ const Map<String, String> stringsDe = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Sitzung abgelaufen. Bitte melden Sie sich erneut an.',
-  'offlineMessage':
-      'Sie scheinen offline zu sein. Bitte überprüfen Sie Ihre Internetverbindung.',
-  'cannotReachApi': 'Der API-Server ist nicht erreichbar.',
-  'maintenanceMessage':
-      'Wir führen derzeit Wartungsarbeiten durch und sind gleich wieder da.',
   'free': 'Kostenlos',
-  'perMillion': '/M',
-  'perRequest': '/Anf.',
   'best': 'Beste',
   'autoCheapest': 'Auto (günstigster)',
   'autoCheapestCurrently': 'Auto (günstigster) — aktuell: {provider} ({price})',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'In Mail-App öffnen',
-  'costLabel': 'Kosten: {cost}',
-  'generatedLabel': 'Generiert: {label}',
-  'unableToCopyImage': 'Bild konnte nicht kopiert werden',
   'unableToSaveImage': 'Bild konnte nicht gespeichert werden',
   'image': 'Bild',
-  'openLink': 'Link öffnen',
-  'openLinkConfirm': 'Möchten Sie die App wirklich verlassen und {url} öffnen?',
   'open': 'Öffnen',
 
   // ── Misc / shared ─────────────────────────────────────────
-  'contentCopied': 'Inhalt in Zwischenablage kopiert',
-  'artifactCopied': 'Artefakt in Zwischenablage kopiert',
-  'fileSaved': 'Datei gespeichert',
-  'failedToExportArtifact': 'Artefakt konnte nicht exportiert werden: {error}',
-  'failedToSave': 'Speichern fehlgeschlagen: {error}',
-  'markdownSaved': 'Markdown gespeichert',
   'original': 'Original',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Markdown-Zusammenfassung anzeigen',
-  'addSummary': 'Zusammenfassung hinzufügen',
-  'deletedFile': 'Gelöschte Datei',
   'deleteFile': 'Datei löschen',
-  'deleteFileConfirm': '„{name}" löschen?',
   'deleteFailed': 'Löschen fehlgeschlagen: {error}',
-  'uploadedFile': 'Hochgeladen: {name}',
-  'freeMessagePlaceholder': 'Kostenlos: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Frag mich alles!',
@@ -630,8 +577,6 @@ const Map<String, String> stringsDe = {
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
   'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',
   'transcriptionFailed': 'Transkription fehlgeschlagen',
-  'replyTargetSelected': 'Antwortziel ausgewählt',
-  'clearReply': 'Antwort löschen',
   'nothingToResend': 'Nichts zum erneuten Senden',
   'freeMessagesUsed': 'Kostenlose Nachrichten aufgebraucht',
   'ok': 'OK',
@@ -645,17 +590,10 @@ const Map<String, String> stringsDe = {
   'modelError': 'Fehler: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
-  'copyImage': 'Bild kopieren',
-  'downloadImage': 'Bild herunterladen',
-  'imageDetails': 'Bilddetails',
   'generatingImage': 'Wird generiert…',
-  'imageCopied': 'Bild kopiert',
 
   // ── Free message display ───────────────────────────────────
-  'freeMessages': 'Kostenlose Nachrichten',
-  'freeUsed': 'Verwendet: {count}',
   'freeTotal': 'Gesamt: {count}',
-  'subscribeToContinue': 'Abonnieren, um weiterzuchatten',
   'freeRemaining': 'Kostenlos: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -703,7 +641,6 @@ const Map<String, String> stringsDe = {
   'close': 'Schließen',
 
   // ── Subscription dialogs ───────────────────────────────────
-  'maybeLater': 'Vielleicht später',
 
   // ── Workspace (project) detail ─────────────────────────────
   'projectPrivate': 'Privat',
@@ -714,7 +651,6 @@ const Map<String, String> stringsDe = {
   'projectInstructionsSubtitle':
       'Wird der KI zu Beginn jedes Chats in diesem Projekt gesendet.',
   'projectLatestChats': 'Neueste Chats',
-  'projectNoChats': 'Noch keine Chats',
   'projectNoChatsHint': 'Starte einen neuen Chat mit diesem Projekt.',
   'projectNewChat': 'Neuer Chat',
   'projectFileCountSingular': '{count} Datei',
@@ -726,8 +662,6 @@ const Map<String, String> stringsDe = {
   'projectPickImage': 'Bild auswählen',
   'projectCreateDocument': 'Neues Dokument erstellen',
   'projectNewDocument': 'Neues Dokument',
-  'projectDocumentTitle': 'Titel',
-  'projectDocumentContent': 'Inhalt',
   'projectDocumentTitleHint': 'z. B. Besprechungsnotizen',
   'projectDocumentContentHint': 'Tippe los…',
   'projectEditProject': 'Projekt bearbeiten',
@@ -743,7 +677,6 @@ const Map<String, String> stringsDe = {
   'projectDiscardAction': 'Verwerfen',
   'projectSaveFailed': 'Speichern fehlgeschlagen: {error}',
   'projectLoadFailed': 'Laden fehlgeschlagen: {error}',
-  'projectUploadFailed': 'Upload fehlgeschlagen: {error}',
   'projectDeleteFailed': 'Löschen fehlgeschlagen: {error}',
   'projectUploaded': 'Hochgeladen: {name}',
   'projectCameraFailed': 'Kamera fehlgeschlagen: {error}',
@@ -765,11 +698,6 @@ const Map<String, String> stringsDe = {
   'messageRetry': 'Erneut versuchen',
 
   // ── Onboarding ─────────────────────────────────────────────
-  'onboardingSkip': 'Überspringen',
-  'onboardingNext': 'Weiter',
-  'onboardingBack': 'Zurück',
-  'onboardingDone': 'Fertig',
-  'onboardingNoModelHint': 'Noch kein Modell ausgewählt',
   'onboardingReplayTile': 'Onboarding erneut anzeigen',
   'onboardingReplayTileSubtitle': 'Begrüßungstour erneut abspielen',
 
@@ -785,21 +713,12 @@ const Map<String, String> stringsDe = {
   'tourModelTitle': 'Modell wählen — Pflicht',
   'tourSettingsModelBody':
       'Tippe auf Modellauswahl, um den Picker zu öffnen. Du brauchst in der Regel ein Modell und einen Anbieter, um chatten zu können.',
-  'tourModelBody':
-      'Du musst ein Modell auswählen, bevor du chatten kannst. Tippe hier, um den Picker zu öffnen.',
-  'tourModelPageBody':
-      "Wähle ein Modell und einen Anbieter — Pflicht, sonst kannst du keine Nachrichten senden. Probier 'Auto (günstigster)' für den besten Preis.",
   'tourSettingsTitle': 'Personalisiere die App',
-  'tourSettingsBody':
-      'In den Einstellungen änderst du Theme, Schriftgröße, UI-Skalierung und Konto.',
   'tourSettingsPageBody':
       'Personalisiere die App: Theme, Schrift, UI-Skalierung, Konto.',
   'tourSettingsTapHere': 'Tippe hier auf Einstellungen.',
   'tourMenuTitle': 'Menü öffnen',
   'tourMenuBody': 'Tippe auf das Menü-Icon, um Einstellungen zu finden.',
-  'tourChatTitle': 'Starte einen Chat',
-  'tourChatBody':
-      'Tippe deine Nachricht unten und drücke Enter. Mit der Büroklammer hängst du Dateien an.',
   'tourProviderPillBody':
       'Wähle einen Anbieter für ein Modell — der Anbieter aktiviert es. Auto (günstigster) ist die Voreinstellung.',
   'tourSettingsPricingTitle': 'Abo',
@@ -820,4 +739,7 @@ const Map<String, String> stringsDe = {
       'bei gesperrtem Handy fertig werden.',
   'batteryOptimizationAllow': 'Erlauben',
   'batteryOptimizationLater': 'Später',
+  'bashSandboxFolder': 'Sandbox-Ordner',
+  'bashSandboxFolderUnset': 'Nicht gesetzt — bash-Befehle werden abgelehnt',
+  'bashSandboxChooseDialog': 'Bash-Sandbox-Ordner wählen',
 };

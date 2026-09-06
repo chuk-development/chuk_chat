@@ -11,7 +11,6 @@ Non-subscribed users get **10 free messages** (lifetime, never reset).
 5. On success → decrement count
 
 **Files:**
-- `lib/widgets/free_message_display.dart` - UI widgets
 - `migrations/free_messages.sql` - Database migration
 
 ## Projects
@@ -55,7 +54,6 @@ AI Image Generation via Z-Image Turbo API (fal.ai).
 | portrait_4_3 | 768×1024 | 0.01 |
 
 **Files:**
-- `lib/services/image_generation_service.dart` - API calls, storage
 - `lib/pages/customization_page.dart` - Settings UI
 
 **Flag:** `--dart-define=FEATURE_IMAGE_GEN=true`

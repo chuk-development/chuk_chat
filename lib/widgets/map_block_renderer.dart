@@ -21,37 +21,6 @@ final RegExp mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true);
 /// Returns true if [content] contains at least one <map> block.
 bool hasMapBlocks(String content) => content.contains('<map>');
 
-/// Splits message content into text segments and map widgets.
-///
-/// Use this from [_buildMessageBody] to interleave plain text with
-/// rendered map blocks.
-List<MapContentSegment> parseMapSegments(String content) {
-  if (!hasMapBlocks(content)) {
-    return [MapContentSegment.text(content)];
-  }
-
-  final segments = <MapContentSegment>[];
-  var lastEnd = 0;
-
-  for (final match in mapBlockRegex.allMatches(content)) {
-    final textBefore = content.substring(lastEnd, match.start).trim();
-    if (textBefore.isNotEmpty) {
-      segments.add(MapContentSegment.text(textBefore));
-    }
-
-    final blockJson = match.group(1)!.trim();
-    segments.add(MapContentSegment.map(blockJson));
-    lastEnd = match.end;
-  }
-
-  final textAfter = content.substring(lastEnd).trim();
-  if (textAfter.isNotEmpty) {
-    segments.add(MapContentSegment.text(textAfter));
-  }
-
-  return segments;
-}
-
 /// A segment of message content — either plain text or a map block.
 class MapContentSegment {
   final bool isMap;

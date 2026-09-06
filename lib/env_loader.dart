@@ -146,10 +146,6 @@ class EnvLoader {
   /// Get a value from the .env file, or null if not found.
   static String? get(String key) => _values[key];
 
-  /// Get a value with a fallback default.
-  static String getOrDefault(String key, String defaultValue) {
-    return _values[key] ?? defaultValue;
-  }
 
   /// Check if a key exists in the loaded .env file.
   static bool has(String key) => _values.containsKey(key);

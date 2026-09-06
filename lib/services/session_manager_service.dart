@@ -222,7 +222,6 @@ class SessionManagerService extends ChangeNotifier {
     await PasswordRevisionService.clearCachedRevision();
 
     // Reset theme to local prefs
-    AppThemeService.instance.resetSupabaseThemeFlag();
     await AppThemeService.instance.loadFromPrefs();
   }
 
@@ -239,15 +238,7 @@ class SessionManagerService extends ChangeNotifier {
     await _performLogoutCleanup();
   }
 
-  /// Add callback for password mismatch events
-  void addOnPasswordMismatchCallback(SessionEventCallback callback) {
-    _onPasswordMismatchCallbacks.add(callback);
-  }
 
-  /// Remove password mismatch callback
-  void removeOnPasswordMismatchCallback(SessionEventCallback callback) {
-    _onPasswordMismatchCallbacks.remove(callback);
-  }
 
   @override
   void dispose() {
