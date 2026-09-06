@@ -47,9 +47,10 @@ Color _colorAt(int index) => _defaultColors[index % _defaultColors.length];
 /// `type`, `labels` or `datasets` always wins and passes through untouched.
 Map<String, dynamic> normalizeChartData(Map<String, dynamic> raw) {
   final rows = raw['rows'];
-  final type = (raw['type'] as String?)?.toLowerCase();
+  final rawType = raw['type'];
+  final type = rawType is String ? rawType.toLowerCase() : null;
   if (rows is! List || raw.containsKey('datasets') || raw.containsKey('data')) {
-    if (type == null && raw.containsKey('labels')) {
+    if (rawType is! String && raw.containsKey('labels')) {
       return <String, dynamic>{...raw, 'type': 'bar'};
     }
     return raw;
@@ -132,7 +133,8 @@ class ChartRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final type = (data['type'] as String?)?.toLowerCase() ?? '';
+    final rawType = data['type'];
+    final type = rawType is String ? rawType.toLowerCase() : '';
     final title = data['title'] as String?;
     final height = (data['height'] as num?)?.toDouble() ?? 250;
 
@@ -179,9 +181,14 @@ class ChartRenderer extends StatelessWidget {
   /// not in the prose around it.
   Widget _buildFooter(BuildContext context) {
     final theme = Theme.of(context);
-    final caption = (data['caption'] as String?)?.trim() ?? '';
-    final source = (data['source_url'] as String?)?.trim() ?? '';
-    final retrieved = (data['retrieved_at'] as String?)?.trim() ?? '';
+    String stringField(String key) {
+      final value = data[key];
+      return value is String ? value.trim() : '';
+    }
+
+    final caption = stringField('caption');
+    final source = stringField('source_url');
+    final retrieved = stringField('retrieved_at');
     final provenance = [
       if (retrieved.isNotEmpty) retrieved,
       if (source.isNotEmpty) source,
@@ -360,8 +367,13 @@ class ChartRenderer extends StatelessWidget {
             : dataMaxY);
 
     final groups = <BarChartGroupData>[];
+    // A dataset with no value for this category contributes no rod, so the
+    // rod index is not the dataset index. Keep the source dataset per rod so
+    // the tooltip names the series the bar actually came from.
+    final rodSources = <int, List<int>>{};
     for (var i = 0; i < labels.length; i++) {
       final rods = <BarChartRodData>[];
+      final sources = <int>[];
       for (var ds = 0; ds < datasets.length; ds++) {
         final dsMap = datasets[ds];
         final values = _valuesOf(dsMap);
@@ -375,6 +387,7 @@ class ChartRenderer extends StatelessWidget {
             _colorAt(ds);
         final value = i < values.length ? values[i] : null;
         if (value != null) {
+          sources.add(ds);
           rods.add(
             BarChartRodData(
               toY: value.toDouble(),
@@ -387,6 +400,7 @@ class ChartRenderer extends StatelessWidget {
           );
         }
       }
+      rodSources[i] = sources;
       groups.add(BarChartGroupData(x: i, barRods: rods));
     }
 
@@ -458,8 +472,10 @@ class ChartRenderer extends StatelessWidget {
             fitInsideVertically: true,
             getTooltipItem: (group, gIdx, rod, rIdx) {
               final label = gIdx < labels.length ? labels[gIdx] : '';
-              final dsLabel = rIdx < datasets.length
-                  ? (datasets[rIdx]['label'] as String? ?? '').trim()
+              final sources = rodSources[group.x] ?? const <int>[];
+              final dsIdx = rIdx < sources.length ? sources[rIdx] : -1;
+              final dsLabel = dsIdx >= 0 && dsIdx < datasets.length
+                  ? '${datasets[dsIdx]['label'] ?? ''}'.trim()
                   : '';
               final valueText = _formatAxisValue(rod.toY);
               final body = dsLabel.isEmpty
@@ -733,7 +749,7 @@ class ChartRenderer extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  items[i]['label'] as String? ?? '',
+                  '${items[i]['label'] ?? ''}',
                   style: TextStyle(
                     fontSize: 11,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
