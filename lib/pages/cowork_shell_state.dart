@@ -156,10 +156,12 @@ mixin CoworkShellHost on State<MessengerShell> {
     if (agentId == null) return;
     _select(agentId, target.sessionKey);
     // Close the host's row and clear the OS toast for this thread.
-    unawaited(CoworkNotifications.instance.onOpenedFromNotification(
-      target.sessionKey,
-      runId: target.runId,
-    ));
+    unawaited(
+      CoworkNotifications.instance.onOpenedFromNotification(
+        target.sessionKey,
+        runId: target.runId,
+      ),
+    );
   }
 
   /// Restores this account's pairing from Supabase when the device has none
@@ -187,8 +189,8 @@ mixin CoworkShellHost on State<MessengerShell> {
       if (existing != null) return;
       // Built by the persistence agent. Returns null until the EncryptionService
       // key is unlocked, and null when the account has no stored pairing.
-      final CoworkStoredPairing? restored =
-          await SupabasePairingSync().loadEncryptedPairing();
+      final CoworkStoredPairing? restored = await SupabasePairingSync()
+          .loadEncryptedPairing();
       if (!mounted || restored == null) return;
       // Persist locally so the next launch reconnects straight from the store.
       await _pairingStore.savePairing(restored);
@@ -204,9 +206,11 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// started it, which is not always the one on screen.
   String? _agentIdForThread(String threadKey) {
     for (final agent in _roster.agents) {
-      if (agent.threads.any((thread) => thread.key == threadKey)) return agent.id;
+      if (agent.threads.any((thread) => thread.key == threadKey)) {
+        return agent.id;
+      }
     }
-    return _selectedAgentId;
+    return null;
   }
 
   void _onPaired(String peerDeviceId) {
@@ -227,31 +231,48 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// the [GlobalKey] keeps its state (and its socket) when the layout moves it
   /// between the desktop stack and the phone screens. The phone layout only
   /// adds the floating-bar inset and forces chuk's phone screen.
-  CoworkThreadView _buildThread({double topInset = 0, bool phone = false}) =>
-      CoworkThreadView(
-        key: _threadViewKey,
-        controllerBuilder: widget.relayControllerBuilder ??
-            () => _buildRelayController(_pairingStore),
-        sessionSource: widget.sessionSource,
-        pairingStore: _pairingStore,
-        threadKey: _selectedThreadKey,
-        shellConfig: widget.shellConfig,
-        onPaired: _onPaired,
-        onRunStateChanged: (threadKey, running) {
-          final agentId = _agentIdForThread(threadKey);
-          if (agentId != null) _roster.markRunning(agentId, running);
-        },
-        onActivity: (threadKey, when) {
-          final agentId = _agentIdForThread(threadKey);
-          if (agentId != null) {
-            _roster.markActivity(agentId, threadKey, when);
-          }
-        },
-        onController: _onController,
-        onOpenModelScreen: _openModelScreen,
-        topInset: topInset,
-        phoneLayout: phone,
-      );
+  ///
+  /// [actions] are the shell's own thread actions — they render inside the
+  /// thread's header, not in a row floating over it, so the top of the screen
+  /// is one bar. [leadingInset] is the width the
+  /// hamburger and the mini rail cover on the left.
+  CoworkThreadView _buildThread({
+    double topInset = 0,
+    bool phone = false,
+    List<CoworkThreadAction> actions = const <CoworkThreadAction>[],
+    double leadingInset = 0,
+  }) {
+    final agent = _selectedAgent;
+    return CoworkThreadView(
+      key: _threadViewKey,
+      controllerBuilder:
+          widget.relayControllerBuilder ??
+          () => _buildRelayController(_pairingStore),
+      sessionSource: widget.sessionSource,
+      pairingStore: _pairingStore,
+      threadKey: _selectedThreadKey,
+      shellConfig: widget.shellConfig,
+      onPaired: _onPaired,
+      onRunStateChanged: (threadKey, running) {
+        final agentId = _agentIdForThread(threadKey);
+        if (agentId != null) _roster.markRunning(agentId, running);
+      },
+      onActivity: (threadKey, when) {
+        final agentId = _agentIdForThread(threadKey);
+        if (agentId != null) {
+          _roster.markActivity(agentId, threadKey, when);
+        }
+      },
+      onController: _onController,
+      onOpenModelScreen: _openModelScreen,
+      title: agent?.name,
+      subtitle: agent?.role,
+      actions: actions,
+      leadingInset: leadingInset,
+      topInset: topInset,
+      phoneLayout: phone,
+    );
+  }
 
   /// Opens the full model catalogue from the composer's "More models" way out.
   /// Implemented by the layout: chuk's settings modal on the model section on
@@ -267,7 +288,7 @@ mixin CoworkShellHost on State<MessengerShell> {
     final suggested = const AgentNameGenerator().next(taken: taken);
     final name = await showCoworkerNameDialog(
       context,
-      title: 'New coworker',
+      title: 'New agent',
       initialName: suggested,
       submitLabel: 'Create',
     );
@@ -286,18 +307,29 @@ mixin CoworkShellHost on State<MessengerShell> {
     unawaited(_controller.value?.renameAgent(agentId, agent.name));
   }
 
+  Future<void> _openAgentRename(CoworkAgent agent) async {
+    final name = await showCoworkerNameDialog(
+      context,
+      title: 'Rename agent',
+      initialName: agent.name,
+      submitLabel: 'Rename',
+    );
+    if (!mounted || name == null || name.isEmpty || name == agent.name) return;
+    _renameAgent(agent.id, name);
+  }
+
   /// The rooms list, for the desktop panel and the phone route alike. A room
   /// open still pushes `RoomThreadPage` as its own route, so the agent thread
   /// and its live socket stay mounted underneath — a room never disturbs the
   /// one-to-one connection.
   Widget _buildRoomList() => RoomListView(
-        source: _rooms,
-        onCreate: _openRoomCreate,
-        onSelect: _openRoom,
-        onDelete: _deleteRoom,
-        onRename: _renameRoom,
-        onManageMembers: _manageRoomMembers,
-      );
+    source: _rooms,
+    onCreate: _openRoomCreate,
+    onSelect: _openRoom,
+    onDelete: _deleteRoom,
+    onRename: _renameRoom,
+    onManageMembers: _manageRoomMembers,
+  );
 
   Future<void> _openRoomCreate() async {
     // Only coworkers the app can actually name can join a room.
@@ -376,14 +408,10 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// while the host was offline, so the host has it before any task or history
   /// request lands. Then ask for its stored history.
   void _onRoomOpened(CoworkRelayController controller, CoworkRoom room) {
-    controller.createRoom(
-      room.id,
-      room.name,
-      <Map<String, String>>[
-        for (final m in room.members)
-          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-      ],
-    );
+    controller.createRoom(room.id, room.name, <Map<String, String>>[
+      for (final m in room.members)
+        <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+    ]);
     controller.requestRoomHistory(room.id);
   }
 
@@ -396,7 +424,8 @@ mixin CoworkShellHost on State<MessengerShell> {
       }
       final inRoom = room.members.map((m) => m.agentId).toSet();
       final candidates = <CoworkAgent>[
-        for (final a in _roster.visibleAgents) if (!inRoom.contains(a.id)) a,
+        for (final a in _roster.visibleAgents)
+          if (!inRoom.contains(a.id)) a,
       ];
       showModalBottomSheet<void>(
         context: ctx,
@@ -406,7 +435,11 @@ mixin CoworkShellHost on State<MessengerShell> {
           candidates: candidates,
           onAdd: (member) {
             _rooms.addMemberToRoom(roomId, member);
-            _controller.value?.addRoomMember(roomId, member.agentId, member.handle);
+            _controller.value?.addRoomMember(
+              roomId,
+              member.agentId,
+              member.handle,
+            );
             Navigator.of(sheetContext).pop();
             showSheet(ctx); // reopen with the updated room
           },
@@ -499,20 +532,23 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// hands back the note; a failure says so rather than staying silent.
   Future<void> _copyFullChat() async {
     final messenger = ScaffoldMessenger.of(context);
-    final export = widget.chatDebugExport ?? ChatDebugExport.copyToClipboard;
+    final export = widget.chatDebugExport;
     String note;
     try {
-      note = await export(_selectedThreadKey);
+      note = export != null
+          ? await export(_selectedThreadKey)
+          : await ChatDebugExport.copyToClipboard(
+              threadKey: _selectedThreadKey,
+            );
     } catch (error) {
       note = 'could not copy the chat';
-      if (kDebugMode) debugPrint('[cowork-shell] copy full chat failed: $error');
+      if (kDebugMode) {
+        debugPrint('[cowork-shell] copy full chat failed: $error');
+      }
     }
     if (!mounted) return;
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(note),
-        duration: const Duration(seconds: 2),
-      ),
+      SnackBar(content: Text(note), duration: const Duration(seconds: 2)),
     );
   }
 
