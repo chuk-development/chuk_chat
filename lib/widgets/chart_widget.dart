@@ -18,14 +18,91 @@ const List<Color> _defaultColors = [
   Color(0xFF3F51B5), // indigo
 ];
 
-/// Parse a hex color string like "#FF5722" or "FF5722" into a Color.
-Color _parseColor(String hex) {
-  hex = hex.replaceAll('#', '');
+/// Parse a hex color like "#FF5722", "FF5722" or "#CCFF5722" into a Color.
+///
+/// Returns null for anything else. Colors arrive as model output, so "blue"
+/// or a truncated value is a normal input, not a reason to take the message
+/// down with a FormatException.
+Color? _tryParseColor(Object? raw) {
+  if (raw is! String) return null;
+  var hex = raw.trim().replaceFirst('#', '');
+  if (!RegExp(r'^[0-9a-fA-F]+$').hasMatch(hex)) return null;
   if (hex.length == 6) hex = 'FF$hex';
+  if (hex.length != 8) return null;
   return Color(int.parse(hex, radix: 16));
 }
 
 Color _colorAt(int index) => _defaultColors[index % _defaultColors.length];
+
+/// Normalize the shorthand chart shapes the model may emit into the canonical
+/// `type` + `labels` + `datasets` form.
+///
+/// The short form is one bar per row, each with its own color — the shape a
+/// result table has (a party, its share, its own official color):
+///
+///     {"title": "...", "rows": [{"label": "AfD", "value": 44.8,
+///                                "color": "#80cdec"}, ...]}
+///
+/// `type` defaults to `bar` because a row list is a bar chart; an explicit
+/// `type`, `labels` or `datasets` always wins and passes through untouched.
+Map<String, dynamic> normalizeChartData(Map<String, dynamic> raw) {
+  final rows = raw['rows'];
+  final type = (raw['type'] as String?)?.toLowerCase();
+  if (rows is! List || raw.containsKey('datasets') || raw.containsKey('data')) {
+    if (type == null && raw.containsKey('labels')) {
+      return <String, dynamic>{...raw, 'type': 'bar'};
+    }
+    return raw;
+  }
+  // A row list is a category and a value. That is a bar chart, and it maps
+  // just as well onto a pie; a scatter needs x/y pairs, so it is left alone
+  // and the block stays prose rather than rendering an empty frame.
+  const rowShapes = {null, 'bar', 'line', 'radar', 'pie'};
+  if (!rowShapes.contains(type)) return raw;
+
+  final labels = <String>[];
+  final values = <num>[];
+  final colors = <String?>[];
+  for (final row in rows) {
+    if (row is! Map) continue;
+    final value = row['value'];
+    final numeric = value is num ? value : num.tryParse('$value');
+    if (numeric == null) continue;
+    labels.add((row['label'] ?? row['party'] ?? '').toString());
+    values.add(numeric);
+    final color = row['color'];
+    colors.add(color is String && color.trim().isNotEmpty ? color : null);
+  }
+  if (labels.isEmpty) return raw;
+
+  if (type == 'pie') {
+    return <String, dynamic>{
+      ...raw,
+      'type': 'pie',
+      'data': [
+        for (var i = 0; i < labels.length; i++)
+          <String, dynamic>{
+            'label': labels[i],
+            'value': values[i],
+            if (colors[i] != null) 'color': colors[i],
+          },
+      ],
+    }..remove('rows');
+  }
+
+  final dataset = <String, dynamic>{
+    'label': (raw['series_label'] ?? raw['value_label'] ?? '').toString(),
+    'data': values,
+  };
+  if (colors.any((c) => c != null)) dataset['colors'] = colors;
+
+  return <String, dynamic>{
+    ...raw,
+    'type': type ?? 'bar',
+    'labels': labels,
+    'datasets': [dataset],
+  }..remove('rows');
+}
 
 /// Top-level widget: parses a JSON map and picks the right chart builder.
 ///
@@ -33,13 +110,20 @@ Color _colorAt(int index) => _defaultColors[index % _defaultColors.length];
 class ChartRenderer extends StatelessWidget {
   final Map<String, dynamic> data;
 
-  const ChartRenderer({super.key, required this.data});
+  ChartRenderer({super.key, required Map<String, dynamic> data})
+      : data = normalizeChartData(data);
 
   /// Convenience: try to parse a raw JSON string. Returns null on failure.
+  ///
+  /// A map counts as a chart when it names its `type`, or when it carries the
+  /// data of one (`rows` or `labels`) — the short row form has no `type`.
   static ChartRenderer? tryParse(String jsonString) {
     try {
       final parsed = jsonDecode(jsonString);
-      if (parsed is Map<String, dynamic> && parsed.containsKey('type')) {
+      if (parsed is Map<String, dynamic> &&
+          (parsed.containsKey('type') ||
+              parsed['rows'] is List ||
+              parsed['labels'] is List)) {
         return ChartRenderer(data: parsed);
       }
     } catch (_) {}
@@ -82,6 +166,43 @@ class ChartRenderer extends StatelessWidget {
             _buildPieLegend(context)
           else
             _buildDatasetLegend(context),
+          _buildFooter(context),
+        ],
+      ),
+    );
+  }
+
+  /// Caption and provenance under the chart.
+  ///
+  /// A result chart is only as good as its source: when the data carries a
+  /// `caption`, a `source_url` or a `retrieved_at`, they belong on the chart,
+  /// not in the prose around it.
+  Widget _buildFooter(BuildContext context) {
+    final theme = Theme.of(context);
+    final caption = (data['caption'] as String?)?.trim() ?? '';
+    final source = (data['source_url'] as String?)?.trim() ?? '';
+    final retrieved = (data['retrieved_at'] as String?)?.trim() ?? '';
+    final provenance = [
+      if (retrieved.isNotEmpty) retrieved,
+      if (source.isNotEmpty) source,
+    ].join(' · ');
+    if (caption.isEmpty && provenance.isEmpty) return const SizedBox.shrink();
+
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontSize: 11,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (caption.isNotEmpty) Text(caption, style: style),
+          if (provenance.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: caption.isEmpty ? 0 : 2),
+              child: Text(provenance, style: style),
+            ),
         ],
       ),
     );
@@ -107,6 +228,66 @@ class ChartRenderer extends StatelessWidget {
       nice = 10;
     }
     return nice * pow10;
+  }
+
+  /// The axis labels as strings. A model may send numbers as labels, and a
+  /// blind `cast<String>()` throws mid-render on exactly that.
+  static List<String> _labelsOf(Map<String, dynamic> data) {
+    final raw = data['labels'];
+    if (raw is! List) return const [];
+    return [for (final label in raw) '$label'];
+  }
+
+  /// The pie/scatter-style items that carry a label and a numeric value.
+  static List<Map<String, dynamic>> _pieItemsOf(Map<String, dynamic> data) {
+    final raw = data['data'];
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw)
+        if (item is Map && item['value'] is num) Map<String, dynamic>.from(item),
+    ];
+  }
+
+  /// The datasets that are really maps. A malformed entry is skipped, never
+  /// cast blindly: a chart arrives as model output, and one bad field must not
+  /// take the whole chat message down.
+  static List<Map<String, dynamic>> _datasetsOf(Map<String, dynamic> data) {
+    final raw = data['datasets'];
+    if (raw is! List) return const [];
+    return [
+      for (final ds in raw)
+        if (ds is Map) Map<String, dynamic>.from(ds),
+    ];
+  }
+
+  /// The values of one dataset, position for position: index i still lines up
+  /// with label i. An entry that is not a number becomes null and its bar,
+  /// point or spoke is skipped — a stray string must not shift the series.
+  static List<num?> _valuesOf(Map<String, dynamic> dataset) {
+    final raw = dataset['data'];
+    if (raw is! List) return const [];
+    return [
+      for (final v in raw) v is num ? v : num.tryParse('$v'),
+    ];
+  }
+
+  /// True when this map holds at least one number to draw. Used to decide
+  /// whether a `<chart>` block is a chart at all.
+  static bool hasPlottableData(Map<String, dynamic> data) {
+    for (final ds in _datasetsOf(data)) {
+      if (_valuesOf(ds).whereType<num>().isNotEmpty) return true;
+      final points = ds['data'];
+      if (points is List) {
+        for (final point in points) {
+          // A scatter point is a pair; one half of it draws nothing.
+          if (point is Map && point['x'] is num && point['y'] is num) return true;
+        }
+      }
+    }
+    for (final item in _pieItemsOf(data)) {
+      if (item['value'] is num) return true;
+    }
+    return false;
   }
 
   /// Largest numeric value across every dataset's `data` list.
@@ -165,8 +346,8 @@ class ChartRenderer extends StatelessWidget {
   // BAR CHART
   // ---------------------------------------------------------------------------
   Widget _buildBarChart(BuildContext context) {
-    final labels = (data['labels'] as List?)?.cast<String>() ?? [];
-    final datasets = (data['datasets'] as List?) ?? [];
+    final labels = _labelsOf(data);
+    final datasets = _datasetsOf(data);
     final providedMaxY = (data['max_y'] as num?)?.toDouble();
     final double dataMaxY = _maxYFromDatasets(datasets);
     final double yInterval = _niceInterval((providedMaxY ?? dataMaxY).abs());
@@ -182,15 +363,21 @@ class ChartRenderer extends StatelessWidget {
     for (var i = 0; i < labels.length; i++) {
       final rods = <BarChartRodData>[];
       for (var ds = 0; ds < datasets.length; ds++) {
-        final dsMap = datasets[ds] as Map<String, dynamic>;
-        final values = (dsMap['data'] as List).cast<num>();
-        final color = dsMap['color'] != null
-            ? _parseColor(dsMap['color'] as String)
-            : _colorAt(ds);
-        if (i < values.length) {
+        final dsMap = datasets[ds];
+        final values = _valuesOf(dsMap);
+        // `colors` gives every bar its own color (one row = one party); a
+        // single `color` paints the whole series. Missing entries fall back
+        // to the series color, then to the palette.
+        final perBar = dsMap['colors'];
+        final barColor = (perBar is List && i < perBar.length) ? perBar[i] : null;
+        final color = _tryParseColor(barColor) ??
+            _tryParseColor(dsMap['color']) ??
+            _colorAt(ds);
+        final value = i < values.length ? values[i] : null;
+        if (value != null) {
           rods.add(
             BarChartRodData(
-              toY: values[i].toDouble(),
+              toY: value.toDouble(),
               color: color,
               width: datasets.length > 1 ? 12 : 22,
               borderRadius: const BorderRadius.vertical(
@@ -271,8 +458,8 @@ class ChartRenderer extends StatelessWidget {
             fitInsideVertically: true,
             getTooltipItem: (group, gIdx, rod, rIdx) {
               final label = gIdx < labels.length ? labels[gIdx] : '';
-              final dsLabel = (rIdx < datasets.length && datasets[rIdx] is Map)
-                  ? ((datasets[rIdx] as Map)['label'] as String? ?? '').trim()
+              final dsLabel = rIdx < datasets.length
+                  ? (datasets[rIdx]['label'] as String? ?? '').trim()
                   : '';
               final valueText = _formatAxisValue(rod.toY);
               final body = dsLabel.isEmpty
@@ -297,8 +484,8 @@ class ChartRenderer extends StatelessWidget {
   // LINE CHART
   // ---------------------------------------------------------------------------
   Widget _buildLineChart(BuildContext context) {
-    final labels = (data['labels'] as List?)?.cast<String>() ?? [];
-    final datasets = (data['datasets'] as List?) ?? [];
+    final labels = _labelsOf(data);
+    final datasets = _datasetsOf(data);
     final maxY = (data['max_y'] as num?)?.toDouble();
     final minY = (data['min_y'] as num?)?.toDouble();
     final double yInterval = _niceInterval(
@@ -308,17 +495,20 @@ class ChartRenderer extends StatelessWidget {
     int maxDataLen = 0;
     final lines = <LineChartBarData>[];
     for (var ds = 0; ds < datasets.length; ds++) {
-      final dsMap = datasets[ds] as Map<String, dynamic>;
-      final values = (dsMap['data'] as List).cast<num>();
+      final dsMap = datasets[ds];
+      final values = _valuesOf(dsMap);
       if (values.length > maxDataLen) maxDataLen = values.length;
-      final color = dsMap['color'] != null
-          ? _parseColor(dsMap['color'] as String)
-          : _colorAt(ds);
+      final color = _tryParseColor(dsMap['color']) ?? _colorAt(ds);
       final curved = dsMap['curved'] as bool? ?? true;
 
       final spots = <FlSpot>[];
       for (var i = 0; i < values.length; i++) {
-        spots.add(FlSpot(i.toDouble(), values[i].toDouble()));
+        final value = values[i];
+        // A missing value is a gap, not a shortcut: nullSpot breaks the line
+        // there instead of drawing straight over the hole.
+        spots.add(
+          value == null ? FlSpot.nullSpot : FlSpot(i.toDouble(), value.toDouble()),
+        );
       }
 
       lines.add(
@@ -436,15 +626,13 @@ class ChartRenderer extends StatelessWidget {
   // PIE CHART
   // ---------------------------------------------------------------------------
   Widget _buildPieChart(BuildContext context) {
-    final items = (data['data'] as List?) ?? [];
+    final items = _pieItemsOf(data);
 
     final sections = <PieChartSectionData>[];
     for (var i = 0; i < items.length; i++) {
-      final item = items[i] as Map<String, dynamic>;
+      final item = items[i];
       final value = (item['value'] as num).toDouble();
-      final color = item['color'] != null
-          ? _parseColor(item['color'] as String)
-          : _colorAt(i);
+      final color = _tryParseColor(item['color']) ?? _colorAt(i);
 
       sections.add(
         PieChartSectionData(
@@ -475,19 +663,15 @@ class ChartRenderer extends StatelessWidget {
   /// Generic legend for bar/line/scatter/radar charts with named datasets.
   /// Shown only when at least one dataset has a non-empty `label`.
   Widget _buildDatasetLegend(BuildContext context) {
-    final datasets = (data['datasets'] as List?) ?? [];
+    final datasets = _datasetsOf(data);
     if (datasets.length < 2) return const SizedBox.shrink();
 
     final entries = <(String, Color)>[];
     for (var i = 0; i < datasets.length; i++) {
       final ds = datasets[i];
-      if (ds is! Map) continue;
       final label = (ds['label'] as String?)?.trim() ?? '';
       if (label.isEmpty) continue;
-      final rawColor = ds['color'];
-      final color = rawColor is String
-          ? _parseColor(rawColor)
-          : _colorAt(i);
+      final color = _tryParseColor(ds['color']) ?? _colorAt(i);
       entries.add((label, color));
     }
     if (entries.isEmpty) return const SizedBox.shrink();
@@ -526,7 +710,7 @@ class ChartRenderer extends StatelessWidget {
   }
 
   Widget _buildPieLegend(BuildContext context) {
-    final items = (data['data'] as List?) ?? [];
+    final items = _pieItemsOf(data);
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -543,15 +727,13 @@ class ChartRenderer extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: (items[i] as Map)['color'] != null
-                        ? _parseColor((items[i] as Map)['color'] as String)
-                        : _colorAt(i),
+                    color: _tryParseColor(items[i]['color']) ?? _colorAt(i),
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  (items[i] as Map)['label'] as String? ?? '',
+                  items[i]['label'] as String? ?? '',
                   style: TextStyle(
                     fontSize: 11,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -568,7 +750,7 @@ class ChartRenderer extends StatelessWidget {
   // SCATTER CHART
   // ---------------------------------------------------------------------------
   Widget _buildScatterChart(BuildContext context) {
-    final datasets = (data['datasets'] as List?) ?? [];
+    final datasets = _datasetsOf(data);
     final maxX = (data['max_x'] as num?)?.toDouble();
     final maxY = (data['max_y'] as num?)?.toDouble();
     final minX = (data['min_x'] as num?)?.toDouble();
@@ -576,19 +758,20 @@ class ChartRenderer extends StatelessWidget {
 
     final spots = <ScatterSpot>[];
     for (var ds = 0; ds < datasets.length; ds++) {
-      final dsMap = datasets[ds] as Map<String, dynamic>;
-      final points = (dsMap['data'] as List?) ?? [];
-      final color = dsMap['color'] != null
-          ? _parseColor(dsMap['color'] as String)
-          : _colorAt(ds);
+      final dsMap = datasets[ds];
+      final points = (dsMap['data'] as List?) ?? const [];
+      final color = _tryParseColor(dsMap['color']) ?? _colorAt(ds);
       final radius = (dsMap['radius'] as num?)?.toDouble() ?? 6;
 
       for (final pt in points) {
-        final p = pt as Map<String, dynamic>;
+        if (pt is! Map) continue;
+        final x = pt['x'];
+        final y = pt['y'];
+        if (x is! num || y is! num) continue;
         spots.add(
           ScatterSpot(
-            (p['x'] as num).toDouble(),
-            (p['y'] as num).toDouble(),
+            x.toDouble(),
+            y.toDouble(),
             dotPainter: FlDotCirclePainter(color: color, radius: radius),
           ),
         );
@@ -663,22 +846,23 @@ class ChartRenderer extends StatelessWidget {
   // RADAR CHART
   // ---------------------------------------------------------------------------
   Widget _buildRadarChart(BuildContext context) {
-    final labels = (data['labels'] as List?)?.cast<String>() ?? [];
-    final datasets = (data['datasets'] as List?) ?? [];
+    final labels = _labelsOf(data);
+    final datasets = _datasetsOf(data);
     final maxValue = (data['max_value'] as num?)?.toDouble() ?? 5;
 
     final dataSets = <RadarDataSet>[];
     for (var ds = 0; ds < datasets.length; ds++) {
-      final dsMap = datasets[ds] as Map<String, dynamic>;
-      final values = (dsMap['data'] as List).cast<num>();
-      final color = dsMap['color'] != null
-          ? _parseColor(dsMap['color'] as String)
-          : _colorAt(ds);
+      final dsMap = datasets[ds];
+      final values = _valuesOf(dsMap);
+      // A radar ring is one closed shape: a missing value would either shift
+      // every following spoke or invent a zero. Skip the whole series instead.
+      if (values.isEmpty || values.any((v) => v == null)) continue;
+      final color = _tryParseColor(dsMap['color']) ?? _colorAt(ds);
 
       dataSets.add(
         RadarDataSet(
           dataEntries: values
-              .map((v) => RadarEntry(value: v.toDouble()))
+              .map((v) => RadarEntry(value: v!.toDouble()))
               .toList(),
           fillColor: color.withValues(alpha: 0.15),
           borderColor: color,
@@ -687,6 +871,8 @@ class ChartRenderer extends StatelessWidget {
         ),
       );
     }
+
+    if (dataSets.isEmpty) return const SizedBox.shrink();
 
     return RadarChart(
       RadarChartData(

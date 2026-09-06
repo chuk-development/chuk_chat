@@ -29,10 +29,15 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
       }
     }
 
-    s = raw.trim().replaceAll(RegExp(r',\s*([}\]])'), r'$1');
+    // Trailing-comma repair walks the text and skips strings: replaceAll takes
+    // its replacement literally ($1 stayed in the JSON), and a blind regex
+    // would rewrite a caption like "A,}".
+    final repaired = stripTrailingCommas(raw.trim());
     try {
-      return jsonDecode(s);
-    } catch (_) {}
+      return jsonDecode(repaired);
+    } on FormatException {
+      // Fall through: the caller renders the block as an error card.
+    }
 
     return jsonDecode(raw.trim());
   }
