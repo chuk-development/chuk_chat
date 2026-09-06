@@ -81,6 +81,8 @@ class LocalHost:
         port: int = 8787,
         workspace_dir: str = DEFAULT_WORKSPACE,
         model_id: str = DEFAULT_MODEL_ID,
+        provider_slug: str | None = None,
+        reasoning_effort: str | None = None,
         sandbox_kind: str = "local",
         host_addr: str = "127.0.0.1",
         agent_name: str | None = None,
@@ -100,6 +102,8 @@ class LocalHost:
         self._log = logger or (lambda _msg: None)
         self._host_addr = host_addr
         self._model_id = model_id
+        self._provider_slug = provider_slug
+        self._reasoning_effort = reasoning_effort
         self._sandbox_kind = sandbox_kind
         # The Playwright MCP + watchable browser (§9.1) ship in the browser image
         # only; on the base image the launcher script is absent, so leave it off.
@@ -408,6 +412,7 @@ class LocalHost:
             db_path=self._db_path,
             workspace=self._agent.workspace_dir or str(self._agents_dir / self._agent.name),
             fire=self._fire_automation,
+            busy=self._automation_busy,
             send=self._send_host_payload,
             env_provider=getattr(vault, "env", None),
             # Only a container sandbox needs the environment (for the
@@ -585,7 +590,8 @@ class LocalHost:
         self._user_id = str(token.get("user_id") or "")
         self._log("resolving a model from the account (one /v1/models_info call)...")
         return resolve_backend_model_wiring(
-            session, preferred_model_id=self._model_id
+            session, preferred_model_id=self._model_id,
+            preferred_provider=self._provider_slug, reasoning_effort=self._reasoning_effort
         )
 
     def _build_task_server(
@@ -642,6 +648,7 @@ class LocalHost:
             account_token_provider=(
                 (lambda: self._session.access_token if self._session else None)
             ),
+            account_session_provider=lambda: self._session,
             browser_mcp=self._browser_mcp,
             # Run ownership (docs/WIRE_CONTRACT.md): the run outlives the socket;
             # the host is told when it ends, when it waits on an approval, and
@@ -871,6 +878,20 @@ class LocalHost:
         if executor is None:
             return None
         return executor.submit_task(session_key, prompt, meta)
+
+    def _automation_busy(self, session_key: str) -> bool:
+        """True while that thread still has an automation/user run queued or
+        in flight. A watcher reports on its own cadence, which is faster than
+        a model round: without this gate every report starts another run and
+        the queue grows until the numbers on screen are hours old."""
+        party = self._party
+        server = party.task_server if party is not None else None
+        if server is None:
+            return False
+        executor = server.supervisor.executor(self._agent.id)
+        if executor is None:
+            return False
+        return executor.has_live_run(session_key)
 
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended
