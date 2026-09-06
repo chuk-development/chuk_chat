@@ -155,6 +155,20 @@ void main() {
         isTrue,
       );
     });
+
+    test('a scatter dataset of bare numbers is not plottable', () {
+      expect(
+        ChartRenderer.hasPlottableData({
+          'type': 'scatter',
+          'datasets': [
+            {
+              'data': [1, 2, 3],
+            },
+          ],
+        }),
+        isFalse,
+      );
+    });
   });
 
   testWidgets('renders a row chart with its caption and source', (tester) async {
@@ -360,6 +374,18 @@ void main() {
       'caption': 42,
       'source_url': ['https://example.test'],
       'retrieved_at': null,
+    });
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a string height falls back to the default', (tester) async {
+    await _pumpChart(tester, {
+      'rows': [
+        {'label': 'a', 'value': 1},
+      ],
+      'height': 'tall',
+      'max_y': 'lots',
     });
 
     expect(tester.takeException(), isNull);
