@@ -84,6 +84,18 @@ void main() {
       expect(normalizeChartData(raw), same(raw));
       expect(ChartRenderer.hasPlottableData(normalizeChartData(raw)), isFalse);
     });
+
+    test('a non-string type falls back to bar instead of throwing', () {
+      final normalized = normalizeChartData({
+        'type': 42,
+        'rows': [
+          {'label': 'a', 'value': 1},
+        ],
+      });
+
+      expect(normalized['type'], 'bar');
+      expect(normalized['labels'], ['a']);
+    });
   });
 
   group('hasPlottableData', () {
@@ -289,6 +301,65 @@ void main() {
           'data': [1, null, 3],
         },
       ],
+    });
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a non-string type does not throw', (tester) async {
+    await _pumpChart(tester, {
+      'type': 42,
+      'labels': ['a'],
+      'datasets': [
+        {
+          'data': [1],
+        },
+      ],
+    });
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a pie label that is not a string still renders', (tester) async {
+    await _pumpChart(tester, {
+      'type': 'pie',
+      'data': [
+        {'label': 2024, 'value': 1},
+      ],
+    });
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('2024'), findsOneWidget);
+  });
+
+  testWidgets('a gap in the first series does not shift tooltip labels',
+      (tester) async {
+    await _pumpChart(tester, {
+      'type': 'bar',
+      'labels': ['a', 'b'],
+      'datasets': [
+        {
+          'label': 'first',
+          'data': [null, 2],
+        },
+        {
+          'label': 'second',
+          'data': [3, 4],
+        },
+      ],
+    });
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('non-string caption and source do not throw', (tester) async {
+    await _pumpChart(tester, {
+      'rows': [
+        {'label': 'a', 'value': 1},
+      ],
+      'caption': 42,
+      'source_url': ['https://example.test'],
+      'retrieved_at': null,
     });
 
     expect(tester.takeException(), isNull);
