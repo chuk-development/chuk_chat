@@ -85,16 +85,6 @@ class PasswordRevisionService {
     return _updateRemoteRevision(user);
   }
 
-  /// Updates the cached revision to match the remote value.
-  static Future<void> cacheRemoteRevision(User user) async {
-    final remote = _readRemoteRevision(user);
-    _lastCachedUserId = user.id;
-    if (remote == null || remote.isEmpty) {
-      await _deleteLocalValue(_storageKey(user.id));
-      return;
-    }
-    await _cacheRevision(user.id, remote);
-  }
 
   /// Clears any stored revision for the last known user (or the provided [userId]).
   static Future<void> clearCachedRevision({String? userId}) async {

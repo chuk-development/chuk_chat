@@ -167,10 +167,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 7;
       case ToolCategory.google:
         return 8;
-      case ToolCategory.email:
-        return 9;
-      case ToolCategory.nextcloud:
-        return 11;
       case ToolCategory.sandbox:
         return 12;
       case ToolCategory.mcp:
@@ -197,10 +193,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catSlack;
       case ToolCategory.google:
         return l.catGoogleCalGmail;
-      case ToolCategory.email:
-        return l.catEmailImapSmtp;
-      case ToolCategory.nextcloud:
-        return l.catNextcloud;
       case ToolCategory.sandbox:
         return l.catSandbox;
       case ToolCategory.mcp:
@@ -226,10 +218,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.chat_outlined;
       case ToolCategory.google:
         return Icons.event_outlined;
-      case ToolCategory.email:
-        return Icons.email_outlined;
-      case ToolCategory.nextcloud:
-        return Icons.cloud_outlined;
       case ToolCategory.sandbox:
         return Icons.code_outlined;
       case ToolCategory.mcp:
@@ -256,10 +244,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catSlackDesc;
       case ToolCategory.google:
         return l.catGoogleCalGmailDesc;
-      case ToolCategory.email:
-        return l.catEmailImapSmtpDesc;
-      case ToolCategory.nextcloud:
-        return l.catNextcloudDesc;
       case ToolCategory.sandbox:
         return l.catSandboxDesc;
       case ToolCategory.mcp:
@@ -277,8 +261,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'slack';
       case ToolCategory.google:
         return 'google';
-      case ToolCategory.email:
-        return 'email';
       default:
         return null;
     }

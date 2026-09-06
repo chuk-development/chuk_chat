@@ -619,50 +619,6 @@ class UserPreferencesService {
     _selectedModelFetchedAt = null;
   }
 
-  /// Clear all provider preferences for a user
-  static Future<bool> clearAllProviderPreferences() async {
-    _syncCacheToCurrentUser(_currentUserId());
-    try {
-      final session = SupabaseService.auth.currentSession;
-      if (session == null) {
-        if (kDebugMode) {
-          debugPrint('No authenticated session found');
-        }
-        return false;
-      }
-
-      final userId = session.user.id;
-
-      final List<dynamic> response = await SupabaseService.client
-          .from('user_model_providers')
-          .delete()
-          .eq('user_id', userId)
-          .select();
-
-      final int deletedCount = response.length;
-
-      // Clear in-memory and persistent cache to prevent stale data
-      _cachedProviderPreferences = null;
-      _providerPrefsFetchedAt = null;
-      await ModelCacheService.saveProviderPreferences(userId, {});
-
-      if (deletedCount > 0) {
-        if (kDebugMode) {
-          debugPrint('Cleared $deletedCount provider preference(s) for user');
-        }
-        return true;
-      }
-      if (kDebugMode) {
-        debugPrint('No provider preferences found to clear for user');
-      }
-      return false;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error clearing provider preferences: $e');
-      }
-      return false;
-    }
-  }
 
   /// SharedPreferences key holding [userId]'s cached system-prompt ciphertext.
   ///

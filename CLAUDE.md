@@ -192,13 +192,12 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_MEDIA_MANAGER` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Voice mode button |
-| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
+| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar (need backend OAuth) |
 | `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
 | `FEATURE_MCP` | **`true`** | Remote MCP connectors — OAuth sign-in in the browser, tools join the registry. See `docs/MCP_CONNECTORS.md`. Native only (web has no loopback port) |
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray on desktop. **Also suppresses `window_close_service`** — with it on, closing the window minimises to tray instead of quitting |
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
-| `FEATURE_WHOOP` | `false` | Leave off — integration removed server-side, same failure |
 
 **There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
 `FEATURE_WORKSPACES`, and it already defaults to `true`. `build.sh`,

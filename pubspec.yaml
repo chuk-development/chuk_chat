@@ -72,7 +72,7 @@ dependencies:
   desktop_drop: ^0.8.0
   tray_manager: ^0.5.1
   window_manager: ^0.5.1
-  image: ^4.8.0  # resolves 4.9.2; still works with xml 6 (enough_mail caps xml at ^6)
+  image: ^4.8.0  # 4.9.x needs xml ^7 — worth a try now that enough_mail is gone
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
   pdfrx: ^2.2.24  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
   flutter_foreground_task: ^11.0.1  # Keep streaming alive when app backgrounded
@@ -83,7 +83,6 @@ dependencies:
   fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
   geolocator: ^14.0.3
   add_2_calendar: ^3.1.1        # Native calendar event creation
-  enough_mail: ^2.1.6           # IMAP/SMTP email
   timezone: ^0.11.0             # Timezone data for notifications
   pretty_qr_code: ^3.6.0
   sqflite: ^2.4.3  # local chat cache (native platforms)

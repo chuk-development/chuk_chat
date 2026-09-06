@@ -513,56 +513,6 @@ class DeviceServices {
     }
   }
 
-  /// Restore alarms from SharedPreferences on startup.
-  ///
-  /// Alarms whose fire time has passed are discarded.
-  Future<void> restoreAlarms() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('device_alarms');
-      if (raw == null) return;
-
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      final now = DateTime.now();
-
-      for (final entry in data.entries) {
-        final id = int.tryParse(entry.key);
-        if (id == null) continue;
-
-        final info = entry.value as Map<String, dynamic>;
-        final dateTime = DateTime.tryParse(info['dateTime'] as String? ?? '');
-        if (dateTime == null || dateTime.isBefore(now)) continue;
-
-        if (id >= _nextAlarmId) _nextAlarmId = id + 1;
-
-        final delay = dateTime.difference(now);
-        final timer = Timer(delay, () async {
-          await _fireAlarmNotification(
-            id,
-            info['title'] as String? ?? 'Alarm',
-            info['description'] as String?,
-          );
-          _alarms.remove(id);
-          _persistAlarms();
-        });
-
-        _alarms[id] = {
-          'title': info['title'],
-          'description': info['description'],
-          'dateTime': info['dateTime'],
-          'timer': timer,
-        };
-      }
-
-      if (kDebugMode) {
-        debugPrint('[DeviceServices] Restored ${_alarms.length} alarms');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[DeviceServices] Failed to restore alarms: $e');
-      }
-    }
-  }
 
   /// Format a duration as human-readable text.
   String _formatDuration(Duration d) {
