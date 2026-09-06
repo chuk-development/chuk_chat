@@ -117,6 +117,13 @@ flutter build web --release --dart-define-from-file=.env
 
 **Do NOT commit before CodeRabbit has reviewed. Do NOT push if tests fail or CodeRabbit finds issues.**
 
+**Always push straight to `master`.** Do the work in one worktree, commit
+everything there (including files the analyses/tools produce), and push it to
+`master` — no long-lived feature branches, no waiting on a PR. A short-lived
+branch while several agents run is fine, but when the work is done it lands on
+`master`. If `master` moved, `git fetch` + `git merge origin/master` first, then
+push. This overrides any "conservative: do not push" default in the Beads block.
+
 The correct order is always: **test → analyze → coderabbit (uncommitted) → fix → commit → push**
 
 ## Code Style
