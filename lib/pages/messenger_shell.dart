@@ -34,14 +34,6 @@
 ///   [CoworkShellHost] (`cowork_shell_state.dart`), ABOVE the desktop / phone
 ///   split, and the thread view is built by one method with one [GlobalKey], so
 ///   a resize across any breakpoint moves it and never rebuilds it.
-/// * **The sidebar starts open.** chuk's desktop starts collapsed; a
-///   messenger's roster is its navigation, so a wide window opens with it in
-///   place. The hamburger folds it to chuk's mini rail exactly as upstream.
-/// * **Compact mode ends at 720, not chuk's 600.** chuk's compact band covers
-///   narrow desktop windows; CoWork hands anything under 600 to the phone layer
-///   (cowork-c6), so the band moves up to keep a tablet-width window in it: the
-///   sidebar covers 85 % and the chat is off stage while it is open, and
-///   picking a coworker closes it so the chat comes forward.
 /// * **Opening a panel folds the sidebar when they cannot share the width.**
 ///   chuk drops the panel silently in that case; with a sidebar that is open by
 ///   default that would make Control Rooms look broken at 800 px.
@@ -93,6 +85,7 @@ import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
+import 'package:cowork/widgets/cowork_thread_header.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
 import 'package:cowork/widgets/room_list_view.dart';
@@ -174,9 +167,8 @@ class MessengerShell extends StatefulWidget {
 }
 
 class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
-  /// chuk's compact band, moved up (see the library doc): a window narrower
-  /// than this — and not a phone — gets the 85 % overlay sidebar.
-  static const double _compactBreakpoint = 720;
+  /// Keep the upstream desktop breakpoint; smaller windows use the phone UI.
+  static const double _compactBreakpoint = 600;
 
   /// chuk's desktop sidebar width outside compact mode.
   static const double _sidebarWidth = 320;
@@ -188,8 +180,8 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   static const double _listPanelWidth = 400;
 
   // chuk's root_wrapper_desktop state, same names.
-  bool _isSidebarExpanded = true;
-  bool _hasOpenedSidebar = true;
+  bool _isSidebarExpanded = false;
+  bool _hasOpenedSidebar = false;
 
   /// 'rooms' | null — chuk's `_activePanel` ('projects'). The agent's browser
   /// is not a panel any more (Bead cowork-vzm): it opens as a full-screen
@@ -202,6 +194,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// this reads true.
   BrowserPresence? _browserPresence;
   bool get _browserOpen => _browserPresence?.value ?? false;
+  bool _browserViewVisible = false;
 
   // Read by handlers that run after build (the same trick chuk's settings
   // modal uses for `_compact`): which layout the last frame chose.
@@ -244,6 +237,13 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
 
   @override
   void _select(String agentId, String threadKey) {
+    final agent = _roster.byId(agentId);
+    // A stale notification or callback must never open a second conversation
+    // (or another agent's session) under this agent's identity.
+    if (agent == null ||
+        agent.threads.isEmpty ||
+        agent.threads.first.key != threadKey)
+      return;
     setState(() {
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;
@@ -282,10 +282,16 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// The agent's browser: a full-screen route on every form factor (Bead
   /// cowork-vzm), never a side panel. Nothing to show before the transport is
   /// paired.
-  void _openBrowserView() {
+  Future<void> _openBrowserView() async {
+    if (!_browserOpen || _browserViewVisible) return;
     final controller = _pairedControllerOrExplain();
     if (controller == null) return;
-    BrowserViewPage.open(context, controller);
+    _browserViewVisible = true;
+    try {
+      await BrowserViewPage.open(context, controller);
+    } finally {
+      _browserViewVisible = false;
+    }
   }
 
   /// chuk's `_openWorkspacesPage` / `_openMediaPage`: the same id toggles the
@@ -415,7 +421,19 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
               ? effectiveSidebarWidth
               : 0,
           right: showPanel ? panelWidth : 0,
-          child: Offstage(offstage: !showContent, child: _buildThread()),
+          child: Offstage(
+            offstage: !showContent,
+            child: _buildThread(
+              actions: _threadActions(agent),
+              // The hamburger, and the mini rail under it, are painted over
+              // the chat: the header keeps their column clear so a title never
+              // starts underneath them. With the sidebar open they sit over the
+              // sidebar instead, and the header needs nothing.
+              leadingInset: _isSidebarExpanded
+                  ? 0
+                  : kFixedLeftPadding + kMenuButtonHeight,
+            ),
+          ),
         ),
 
         // Right panel (Control Rooms)
@@ -488,17 +506,6 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
         // sidebar: brand row kMenuButtonHeight (48) tall, then rows of
         // kButtonVisualHeight (40).
         if (!_isSidebarExpanded) ..._buildMiniRail(iconFg, agent),
-
-        // The floating top-right row (chuk's Copy full chat anchor), four slots.
-        if (showContent)
-          Positioned(
-            top: kTopInitialSpacing,
-            right: (showPanel ? panelWidth : 0) + 12,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: _buildTopRightActions(iconFg, agent),
-            ),
-          ),
       ],
     );
   }
@@ -542,7 +549,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     items.add(
       railIcon(
         icon: Icons.person_add_alt,
-        tooltip: 'New coworker',
+        tooltip: 'New agent',
         onPressed: _openOnboarding,
       ),
     );
@@ -556,33 +563,36 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     return items;
   }
 
-  /// The top-right buttons, in chuk's `IconButton` style (icon colour
-  /// `resolvedIconColor`, size 20). Copy full chat is chuk's own slot, verbatim
-  /// (same icon, size and tooltip). "Agent's browser" is there only while the
-  /// agent has a browser open ([_browserOpen]); the button is the only way in.
-  List<Widget> _buildTopRightActions(Color iconFg, CoworkAgent? agent) {
-    return <Widget>[
+  /// The shell's actions on the open thread. They used to float over the chat
+  /// in a row of their own at chuk's top-right anchor; they now go into the
+  /// thread's own header, which owns the glyph size, the hit box and the
+  /// spacing, so they cannot drift apart from the thread's own buttons.
+  /// Copy full chat stays last — chuk's own slot. "Agent's browser" is there
+  /// only while the agent has a browser open ([_browserOpen]); the button is
+  /// the only way in.
+  List<CoworkThreadAction> _threadActions(CoworkAgent? agent) {
+    return <CoworkThreadAction>[
       if (agent != null)
-        IconButton(
-          icon: Icon(Icons.tune, color: iconFg, size: 20),
+        CoworkThreadAction(
+          icon: Icons.tune,
           onPressed: _openControlDrawer,
           tooltip: 'Agent controls',
         ),
-      IconButton(
-        icon: Icon(Icons.groups_outlined, color: iconFg, size: 20),
+      CoworkThreadAction(
+        icon: Icons.groups_outlined,
         onPressed: _openRooms,
         tooltip: 'Control Rooms',
       ),
       if (agent != null && _browserOpen)
-        IconButton(
-          icon: Icon(Icons.desktop_windows_outlined, color: iconFg, size: 20),
+        CoworkThreadAction(
+          icon: Icons.desktop_windows_outlined,
           onPressed: _openBrowserView,
           tooltip: "Agent's browser",
         ),
-      IconButton(
-        icon: Icon(Icons.copy_all_rounded, color: iconFg, size: 20),
+      CoworkThreadAction(
+        icon: Icons.copy_all_rounded,
         onPressed: _copyFullChat,
-        tooltip: 'Copy full chat',
+        tooltip: 'Copy Debug Chat',
       ),
     ];
   }
@@ -657,6 +667,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
           context,
           agent: agent,
           onControls: _openControlDrawer,
+          onRename: () => _openAgentRename(agent),
           onRooms: _openRooms,
           onCopyChat: _copyFullChat,
           onSettings: _openSettings,
@@ -681,6 +692,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
             source: _roster,
             selectedAgentId: _selectedAgentId,
             onSelect: _select,
+            selectedThreadKey: _selectedThreadKey,
             onAddAgent: _openOnboarding,
             onOpenAccount: _openSettings,
             accountLabel: null,

@@ -26,6 +26,8 @@ import 'package:cowork/services/automations/automations_source.dart';
 import 'package:cowork/services/automations/cowork_automation.dart';
 import 'package:cowork/widgets/ask_user_card.dart';
 import 'package:cowork/widgets/automation_card.dart';
+import 'package:cowork/widgets/chat_documents_panel.dart';
+import 'package:cowork/widgets/cowork_thread_header.dart';
 
 /// The CoWork chat surface: the imported chuk_chat chat screen, wired to the
 /// agent running on the user's own host.
@@ -64,6 +66,10 @@ class CoworkThreadView extends StatefulWidget {
     this.onController,
     this.onOpenModelScreen,
     this.shellConfig,
+    this.title,
+    this.subtitle,
+    this.actions = const <CoworkThreadAction>[],
+    this.leadingInset = 0,
     this.topInset = 0,
     this.phoneLayout = false,
   });
@@ -122,10 +128,29 @@ class CoworkThreadView extends StatefulWidget {
   /// test) falls back to the verbose toggle.
   final AppShellConfig? shellConfig;
 
-  /// Extra top padding for the phone chat list, so its first row scrolls
-  /// under a floating top bar (the mobile chrome) instead of starting behind
-  /// it. Handed straight to `ChukChatUIMobile.topInset`; the desktop screen
-  /// has no floating bar and ignores it.
+  /// The coworker this thread belongs to, for the header's title. Null before
+  /// one is selected: the header then shows the state and the actions alone
+  /// rather than inventing a name.
+  final String? title;
+
+  /// The quieter second line under [title] — the coworker's role.
+  final String? subtitle;
+
+  /// Actions the SHELL owns but this thread's header shows: agent controls,
+  /// Control Rooms, the agent's browser, Copy Debug Chat. They used to float
+  /// over this view in a row of their own, which is why the top of the screen
+  /// read as leftovers; the header groups them with the view's own Documents
+  /// button and gives them one size and one spacing.
+  final List<CoworkThreadAction> actions;
+
+  /// Left room the header keeps clear for chrome the shell paints OVER this
+  /// view: the hamburger, and the mini rail under it while the sidebar is
+  /// folded. The view cannot see them, so the shell states the width.
+  final double leadingInset;
+
+  /// The same for the top, on a phone: the height of the floating chrome. The
+  /// header takes it as padding and starts below the chrome — so the chat
+  /// under the header reserves nothing of its own any more.
   final double topInset;
 
   /// Force chuk's phone screen. The mobile shell sets it below the phone
@@ -174,7 +199,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   /// "Automations"), drawn as a strip above the chat while any is active or
   /// paused. The source folds live and replayed events; this view only reads.
   final AutomationsSource _automations = AutomationsSource.instance;
-  bool _automationsCollapsed = false;
+  bool _automationsCollapsed = true;
 
   /// A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
   /// "Secrets"). The run is BLOCKED on the executor until a `secrets` frame
@@ -190,6 +215,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
 
   String? _localError;
   bool _busy = false;
+  final _startupState = ValueNotifier<CoworkRelayState>(
+    const CoworkRelayState(phase: CoworkRelayPhase.connecting),
+  );
 
   /// The persisted trust, loaded once at startup. Non-null means "already
   /// paired": auto-reconnect, hide the code form, offer Forget.
@@ -237,8 +265,10 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     // The "show reasoning" setting reflows the transcript live, like chuk.
     AppThemeService.instance.addListener(_onThemeChanged);
     // Safety net (see [_watchdogTimer]): re-arm reconnect on a slow cadence.
-    _watchdogTimer =
-        Timer.periodic(const Duration(seconds: 8), (_) => _watchdogTick());
+    _watchdogTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _watchdogTick(),
+    );
   }
 
   @override
@@ -267,6 +297,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     _controller?.state.removeListener(_onStateChanged);
+    _startupState.dispose();
     _inboundSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
@@ -400,7 +431,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     }
     if (_manuallyDisconnected || _busy || _autoReconnectTimer != null) return;
     final phase = _controller?.state.value.phase;
-    final down = phase == null ||
+    final down =
+        phase == null ||
         phase == CoworkRelayPhase.closed ||
         phase == CoworkRelayPhase.error;
     if (!down) return;
@@ -413,8 +445,10 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   void _scheduleAutoReconnect() {
     if (_autoReconnectTimer != null || widget.pairingStore == null) return;
     final exponent = _reconnectAttempts.clamp(0, 5);
-    final delayMs = (_baseBackoff.inMilliseconds * (1 << exponent))
-        .clamp(0, _maxBackoff.inMilliseconds);
+    final delayMs = (_baseBackoff.inMilliseconds * (1 << exponent)).clamp(
+      0,
+      _maxBackoff.inMilliseconds,
+    );
     _reconnectAttempts++;
     _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
       _autoReconnectTimer = null;
@@ -568,6 +602,14 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         });
       case CoworkRelayDone():
         if (event.isReplay) return;
+        if (event.sessionKey != null && event.sessionKey != widget.threadKey) {
+          return;
+        }
+        if (event.hostNotified) {
+          // Background runs have no manual chat stream subscription.
+          _requestReplay();
+          return;
+        }
         // Tell the host the live completion was rendered, so a later replay does
         // not flag the run `while_away`. Best effort: a lost ack only costs a
         // redundant "Answer ready" badge, so a failure is swallowed.
@@ -581,8 +623,10 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         // ours. The service reads the lifecycle; in the foreground it is a
         // no-op.
         unawaited(
-          CoworkNotifications.instance
-              .onLiveDone(widget.threadKey, runId: runId),
+          CoworkNotifications.instance.onLiveDone(
+            widget.threadKey,
+            runId: runId,
+          ),
         );
       case CoworkRelayDelta():
       case CoworkRelayUser():
@@ -600,6 +644,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       case CoworkRelayBrowserView():
       case CoworkRelayAutomation():
       case CoworkRelayAutomationList():
+      case CoworkRelayDocuments():
       case CoworkRelaySkillsList():
       case CoworkRelayAgentList():
         // Transcript events belong to the adapter and the replay loader; room
@@ -635,8 +680,10 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       if (entered.isEmpty) {
         await SecretsService.instance.answerUnchanged(request.requestId);
       } else {
-        await SecretsService.instance
-            .setMany(entered, requestId: request.requestId);
+        await SecretsService.instance.setMany(
+          entered,
+          requestId: request.requestId,
+        );
       }
     } catch (_) {
       // The host times out on its own; nothing to surface.
@@ -724,8 +771,12 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     if (_loader.answerReadyFor(widget.threadKey)) {
       final String? runId = _loader.answerReadyRunFor(widget.threadKey);
       _loader.clearAnswerReady(widget.threadKey);
-      unawaited(CoworkNotifications.instance
-          .onAnswerReplayed(widget.threadKey, runId: runId));
+      unawaited(
+        CoworkNotifications.instance.onAnswerReplayed(
+          widget.threadKey,
+          runId: runId,
+        ),
+      );
     }
     _syncRevision();
   }
@@ -745,42 +796,108 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (controller == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
     return ValueListenableBuilder<CoworkRelayState>(
-      valueListenable: controller.state,
+      valueListenable: controller?.state ?? _startupState,
       builder: (context, state, _) {
-        if (state.phase != CoworkRelayPhase.paired) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildStatusStrip(context, state),
-              const Spacer(),
-              const Divider(height: 1),
-              _buildConnectBar(context, state),
-            ],
-          );
-        }
+        final connected = state.phase == CoworkRelayPhase.paired;
         final chat = _buildChat(context);
         final approval = _approval;
         final secretRequest = _secretRequest;
         final automations = _automations.liveForSession(widget.threadKey);
-        if (approval == null && secretRequest == null && automations.isEmpty) {
-          return chat;
-        }
+        final showAutomations = connected && automations.isNotEmpty;
+        // Keep the renderer at the same keyed position across connection
+        // changes: local history, scroll position and drafts remain available.
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (approval != null) _buildApprovalBar(context, approval),
-            if (secretRequest != null)
+            _buildHeader(context, state, showAutomations ? automations : null),
+            if (!connected) _buildStatusStrip(context, state),
+            if (connected && approval != null)
+              _buildApprovalBar(context, approval),
+            if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
-            if (automations.isNotEmpty)
-              _buildAutomationsBar(context, automations),
-            Expanded(child: chat),
+            if (showAutomations && !_automationsCollapsed)
+              _buildAutomationCards(context, automations),
+            Expanded(key: const ValueKey('persistent-chat'), child: chat),
+            if (!connected && controller != null)
+              _buildConnectBar(context, state),
           ],
         );
       },
+    );
+  }
+
+  // --- the header ------------------------------------------------------------
+
+  /// The one bar above the thread. It carries what used to be scattered over
+  /// the same band with nothing to group it: the coworker and the connection,
+  /// the running automation, and every action on the thread — this view's own
+  /// Documents plus whatever the shell hands down ([CoworkThreadView.actions]),
+  /// all through one widget so they share a glyph size, a hit box and a
+  /// tooltip.
+  ///
+  /// [automations] is null when there is nothing running, which is what hides
+  /// the chip.
+  Widget _buildHeader(
+    BuildContext context,
+    CoworkRelayState state,
+    List<CoworkAutomation>? automations,
+  ) {
+    // The phone gets the dense shape: the floating chrome above already shows
+    // the coworker, its face and its presence, and two titles read as two bars.
+    final bool dense = !_useDesktopChat(context);
+    return CoworkThreadHeader(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      connection: switch (state.phase) {
+        CoworkRelayPhase.paired => CoworkThreadConnection.live,
+        CoworkRelayPhase.connecting ||
+        CoworkRelayPhase.pairing ||
+        CoworkRelayPhase.idle => CoworkThreadConnection.connecting,
+        CoworkRelayPhase.error ||
+        CoworkRelayPhase.closed => CoworkThreadConnection.down,
+      },
+      automationLabel: automations == null
+          ? null
+          : _automationLabel(automations),
+      automationPaused:
+          automations != null &&
+          automations.length == 1 &&
+          automations.first.isPaused,
+      automationExpanded: !_automationsCollapsed,
+      onToggleAutomations: automations == null
+          ? null
+          : () =>
+                setState(() => _automationsCollapsed = !_automationsCollapsed),
+      actions: <CoworkThreadAction>[
+        CoworkThreadAction(
+          icon: Icons.folder_open_outlined,
+          tooltip: 'Documents',
+          onPressed: () => _openDocuments(context),
+        ),
+        ...widget.actions,
+      ],
+      leadingInset: dense ? 0 : widget.leadingInset,
+      topInset: dense ? widget.topInset : 0,
+      dense: dense,
+    );
+  }
+
+  /// One automation reads as itself; several read as a count, because the
+  /// chip has room for one name and no more.
+  String _automationLabel(List<CoworkAutomation> automations) {
+    if (automations.length > 1) return '${automations.length} automations';
+    final a = automations.first;
+    return '${a.name} · ${a.isPaused ? 'Paused' : 'Active'}';
+  }
+
+  void _openDocuments(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => ChatDocumentsPanel(
+        sessionKey: widget.threadKey,
+        controller: _controller,
+      ),
     );
   }
 
@@ -813,8 +930,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         showToolCalls: _verbose,
         toolCallingEnabled: false,
         toolDiscoveryMode: false,
-        autoSendVoiceTranscription:
-            config?.autoSendVoiceTranscription ?? false,
+        autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
         onOpenModelSettings: widget.onOpenModelScreen == null
             ? null
             : () async => widget.onOpenModelScreen!(),
@@ -822,7 +938,10 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     }
     return ChukChatUIMobile(
       key: key,
-      topInset: widget.topInset,
+      // Zero, not [CoworkThreadView.topInset]: the header above already sits
+      // below the floating chrome, so the list starts under the header and
+      // must not reserve the chrome's height a second time.
+      topInset: 0,
       onToggleSidebar: _noopToggleSidebar,
       selectedChatId: widget.threadKey,
       onChatIdChanged: _onChatIdChanged,
@@ -833,8 +952,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       showToolCalls: _verbose,
       toolCallingEnabled: false,
       toolDiscoveryMode: false,
-      autoSendVoiceTranscription:
-          config?.autoSendVoiceTranscription ?? false,
+      autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
     );
   }
 
@@ -855,8 +973,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     if (kPlatformDesktop) return true;
     if (kIsWeb) return true;
     final platform = defaultTargetPlatform;
-    final isMobilePlatform = platform == TargetPlatform.android ||
-        platform == TargetPlatform.iOS;
+    final isMobilePlatform =
+        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
     if (!isMobilePlatform) return true;
     return MediaQuery.sizeOf(context).width >= kTabletBreakpoint;
   }
@@ -905,14 +1023,18 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.key_outlined,
-                        size: 18, color: theme.colorScheme.primary),
+                    Icon(
+                      Icons.key_outlined,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'The agent needs API keys',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -921,8 +1043,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                   const SizedBox(height: 2),
                   Text(
                     request.purpose,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -953,8 +1076,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 Text(
                   'The agent never sees a value; outputs show '
                   '[REDACTED:NAME]. Values under 8 characters are not masked.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -985,58 +1109,28 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   }
 
   /// The active and paused automations of this thread, with Pause / Resume /
-  /// Cancel. Nothing changes until the host's event lands; the source folds
-  /// it and this view repaints.
-  Widget _buildAutomationsBar(
+  /// Cancel — the list the header's chip opens. Nothing changes until the
+  /// host's event lands; the source folds it and this view repaints.
+  Widget _buildAutomationCards(
     BuildContext context,
     List<CoworkAutomation> automations,
   ) {
-    final theme = Theme.of(context);
-    final count = automations.length;
     return Material(
-      color: theme.colorScheme.surfaceContainerHigh,
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
-            onTap: () => setState(
-              () => _automationsCollapsed = !_automationsCollapsed,
+          for (final a in automations)
+            AutomationCard(
+              key: ValueKey<String>('thread-automation-${a.id}'),
+              automation: a,
+              compact: true,
+              onPause: () => _automations.control(a.id, 'pause'),
+              onResume: () => _automations.control(a.id, 'resume'),
+              onCancel: () => _automations.control(a.id, 'cancel'),
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-              child: Row(
-                children: [
-                  Icon(Icons.schedule, size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      count == 1 ? '1 automation' : '$count automations',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  Icon(
-                    _automationsCollapsed
-                        ? Icons.expand_more
-                        : Icons.expand_less,
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (!_automationsCollapsed)
-            for (final a in automations)
-              AutomationCard(
-                key: ValueKey<String>('thread-automation-${a.id}'),
-                automation: a,
-                compact: true,
-                onPause: () => _automations.control(a.id, 'pause'),
-                onResume: () => _automations.control(a.id, 'resume'),
-                onCancel: () => _automations.control(a.id, 'cancel'),
-              ),
-          if (!_automationsCollapsed) const SizedBox(height: 4),
+          const SizedBox(height: 4),
         ],
       ),
     );
@@ -1053,8 +1147,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   ) {
     final theme = Theme.of(context);
     final decision = _approvalDecision;
-    final files =
-        request.fileCount == 1 ? '1 file' : '${request.fileCount} files';
+    final files = request.fileCount == 1
+        ? '1 file'
+        : '${request.fileCount} files';
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
@@ -1070,8 +1165,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 Expanded(
                   child: Text(
                     'Publish to the web?',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -1080,14 +1176,16 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
             Text(
               '${request.name.isEmpty ? request.path : request.name} · $files · '
               '${_humanBytes(request.totalBytes)}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             if (request.public)
               Text(
                 'This site will be PUBLIC — anyone with the link can view it.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             if (decision == null)
               AskUserCard(
@@ -1141,7 +1239,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
 
   Widget _buildConnectBar(BuildContext context, CoworkRelayState state) {
     final theme = Theme.of(context);
-    final banner = _localError ??
+    final banner =
+        _localError ??
         (state.phase == CoworkRelayPhase.error ? state.detail : null) ??
         (state.phase == CoworkRelayPhase.closed
             ? (state.detail ?? 'Disconnected')
@@ -1171,8 +1270,11 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline,
-                        size: 16, color: theme.colorScheme.error),
+                    Icon(
+                      Icons.error_outline,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -1238,7 +1340,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   Widget _buildReconnectBar(BuildContext context, String? banner) {
     final theme = Theme.of(context);
     final reconnecting = _busy;
-    final status = banner ??
+    final status =
+        banner ??
         (reconnecting
             ? 'Reconnecting…'
             : 'Paired with ${_storedPairing!.peerDeviceId}. Not connected.');
