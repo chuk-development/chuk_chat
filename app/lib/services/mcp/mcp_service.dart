@@ -123,6 +123,12 @@ class McpService {
     oauthFactory = null;
     probeClientFactory = null;
     _loaded = false;
+    _adopting = null;
+    _adoptedAt = null;
+    _attemptedAt = null;
+    adoptInterval = kDefaultAdoptInterval;
+    adoptRetryInterval = kDefaultAdoptRetryInterval;
+    clock = DateTime.now;
   }
 
   // ─── Storage ───────────────────────────────────────────────────────────
@@ -139,30 +145,114 @@ class McpService {
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [MCP] Could not read connections: $e');
     }
-    unawaited(_pullRemote());
+    unawaited(adoptMirrors());
   }
 
   /// Adopt the encrypted mirror and wait for it, for a test. [load] fires the
   /// same work without awaiting it, which a test cannot observe.
   @visibleForTesting
-  static Future<void> pullRemoteForTest() => _pullRemote();
+  static Future<void> pullRemoteForTest() => adoptMirrors(force: true);
 
   @visibleForTesting
   static Future<void> pushRemoteForTest() => _pushRemote();
 
-  /// Best-effort adopt the encrypted mirror. A no-op when nothing is stored,
-  /// no user is signed in, or the key is locked.
-  static Future<void> _pullRemote() async {
-    await _pullOwnMirror();
-    await _pullChukMirror();
+  // ─── Adopting the mirrors ──────────────────────────────────────────────
+  //
+  // Reading the mirrors used to happen exactly once, fired by [load] the first
+  // time the connectors page was built (bead cowork-7zd). That is too late and
+  // too rare on two counts. A user who never opens that page has an empty local
+  // store, so `McpStore.forwardPayloads` hands the Python host NOTHING and the
+  // agent cannot call a connector the user signed into in chuk_chat. And the
+  // one attempt is made whether or not the mirrors are readable yet — no signed
+  // in user, no encryption key on a cold start — after which the latch made
+  // sure nothing tried again for the life of the process.
+  //
+  // So the pull is its own throttled, single-flight, retrying operation now,
+  // driven from three places: [load] (the page), `McpSyncService` (the chat
+  // sync tick, which already fires only when online, signed in and keyed) and
+  // `McpStore.forwardPayloads` (the task launch, so the very first task of a
+  // cold start still carries what chuk connected).
+  //
+  // Adopting is deliberately additive. A connector chuk knows and this device
+  // does not is added; a secret is taken only when the local record is
+  // unusable, so a poll can never sign the user out by writing an older token
+  // over a live one.
+
+  /// How long a successful adoption is trusted before the next caller pulls
+  /// again. Long enough that a 30-second sync tick is nearly free, short
+  /// enough that a connector signed into in chuk_chat shows up here by itself.
+  static const Duration kDefaultAdoptInterval = Duration(minutes: 5);
+
+  /// How long to wait after an attempt that could NOT read the mirror (no
+  /// user, no key, no network) before trying again.
+  static const Duration kDefaultAdoptRetryInterval = Duration(seconds: 20);
+
+  static Duration adoptInterval = kDefaultAdoptInterval;
+  static Duration adoptRetryInterval = kDefaultAdoptRetryInterval;
+
+  /// Test seam so a test can move time instead of waiting for it.
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
+  static Future<void>? _adopting;
+  static DateTime? _adoptedAt;
+  static DateTime? _attemptedAt;
+
+  /// True when a pull has read the mirrors at least once.
+  static bool get hasAdopted => _adoptedAt != null;
+
+  /// Pull both mirrors and adopt what this device is missing.
+  ///
+  /// Single-flight: a second caller joins the pull already running rather than
+  /// starting its own. Throttled: a successful pull is trusted for
+  /// [adoptInterval] and a failed one is retried after [adoptRetryInterval].
+  /// [force] ignores both, for a test and for an explicit refresh.
+  ///
+  /// Never throws — every failure resolves to "nothing adopted this time".
+  static Future<void> adoptMirrors({bool force = false}) {
+    final running = _adopting;
+    if (running != null) return running;
+    if (!force && !_isAdoptDue()) return Future<void>.value();
+    final future = _adoptOnce();
+    _adopting = future;
+    return future.whenComplete(() {
+      if (identical(_adopting, future)) _adopting = null;
+    });
   }
 
-  static Future<void> _pullOwnMirror() async {
+  static bool _isAdoptDue() {
+    final now = clock();
+    final adopted = _adoptedAt;
+    if (adopted != null && now.difference(adopted) < adoptInterval) return false;
+    final attempted = _attemptedAt;
+    if (attempted != null && now.difference(attempted) < adoptRetryInterval) {
+      return false;
+    }
+    return true;
+  }
+
+  static Future<void> _adoptOnce() async {
+    _attemptedAt = clock();
+    var readable = false;
+    try {
+      readable = await _pullOwnMirror();
+      // Both mirrors always run: the own one holds this user's CoWork set, the
+      // chuk one what the other app connected, and either may be the ahead one.
+      readable = await _pullChukMirror() || readable;
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [MCP] Could not adopt the mirrors: $e');
+    }
+    if (readable) _adoptedAt = clock();
+  }
+
+  /// Adopt the own encrypted mirror. Returns true when it was readable — a
+  /// blob came back, whether or not it held anything new.
+  static Future<bool> _pullOwnMirror() async {
     try {
       final blob = await sync.load();
-      if (blob == null) return;
+      if (blob == null) return false;
       final rawConnections = blob['connections'];
-      if (rawConnections is! List) return;
+      if (rawConnections is! List) return true;
       final rawSecrets = blob['secrets'];
       final secrets = rawSecrets is Map ? rawSecrets : const <Object?, Object?>{};
 
@@ -204,23 +294,26 @@ class McpService {
         }
       }
       connections.value = await store.load();
+      return true;
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [MCP] Could not pull the mirror: $e');
+      return false;
     }
   }
 
-  /// Read the whole connector set and its secrets and push it to the encrypted
-  /// mirror. Best-effort; never throws into the caller.
   /// What chuk_chat connected, adopted where this device has nothing
   /// (bead cowork-hza). A connector chuk knows and CoWork does not is added
   /// with chuk's config; its secrets are taken only when the local record is
   /// unusable (47's rule — never over a live one, a mirror can be older); its
   /// API credentials only when none are stored here. Then the list is the
   /// truth again and the next task forwards the tokens to the host.
-  static Future<void> _pullChukMirror() async {
+  static Future<bool> _pullChukMirror() async {
     try {
       final rows = await chukMirror.load();
-      if (rows == null || rows.isEmpty) return;
+      // Null is "could not read at all" (no Supabase, no user, no key, no
+      // table); an empty map is a mirror that was read and holds nothing.
+      if (rows == null) return false;
+      if (rows.isEmpty) return true;
       final local = {for (final c in await store.load()) c.id: c};
       var changed = false;
       for (final row in rows.values) {
@@ -257,11 +350,15 @@ class McpService {
       }
       // The list is the truth again either way; a pull is rare and cheap.
       if (changed || rows.isNotEmpty) connections.value = await store.load();
+      return true;
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [MCP] Could not read chuk\'s mirror: $e');
+      return false;
     }
   }
 
+  /// Read the whole connector set and its secrets and push it to the encrypted
+  /// mirror. Best-effort; never throws into the caller.
   static Future<void> _pushRemote() async {
     try {
       final list = await store.load();
