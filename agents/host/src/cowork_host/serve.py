@@ -58,6 +58,7 @@ class TaskServer:
         opener: CoworkFrameOpener,
         sealer: CoworkFrameSealer,
         environment: BaseEnvironment,
+        environment_factory: Callable[[str], BaseEnvironment] | None = None,
         model_factory: ModelFactory,
         model_select: ModelSelect | None = None,
         db_path: str,
@@ -94,6 +95,10 @@ class TaskServer:
                 opener=opener,
                 sealer=sealer,
                 environment=environment,
+                # One sandbox per agent (§6, bead cowork-jo2): a session key is
+                # an agent id, and every agent that is not this host's own gets
+                # its own container and its own workspace from here.
+                environment_factory=environment_factory,
                 db_path=db_path,
                 model_factory=model_factory,
                 # Per-task model selection (§ model picker). ``None`` offline, so
