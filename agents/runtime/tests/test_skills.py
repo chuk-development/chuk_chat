@@ -436,8 +436,8 @@ def test_the_inventory_lists_every_skill_with_switch_and_source(tmp_path):
     from cowork_agent import SkillSettingsStore, skills_inventory
 
     seeds = tmp_path / "seed"
-    _write_skill(seeds, "youtube", "Summarizes a YouTube video.")
-    _write_skill(seeds, "deploy", "Deploys the app to production.")
+    _write_skill(seeds / "workspace", "youtube", "Summarizes a YouTube video.")
+    _write_skill(seeds / "builtin", "deploy", "Deploys the app to production.")
     root = tmp_path / "ws" / "skills"
     _write_skill(root, "notes", "Keeps the notes folder tidy.")
     _write_skill(root, "youtube", "Summarizes a YouTube video.")
@@ -448,10 +448,12 @@ def test_the_inventory_lists_every_skill_with_switch_and_source(tmp_path):
 
     body = skills_inventory(root, settings=store, seed_root=seeds)
 
+    # The seed tree's group is the source: `deploy` was seeded under
+    # builtin/, `youtube` under workspace/, `notes` was never seeded at all.
     assert [(r["name"], r["source"], r["enabled"]) for r in body["skills"]] == [
         ("deploy", "builtin", True),
-        ("youtube", "builtin", False),
         ("notes", "workspace", True),
+        ("youtube", "workspace", False),
     ]
     assert body["skills"][0]["description"] == "Deploys the app to production."
     assert body["skills"][0]["path"].endswith("deploy/SKILL.md")
