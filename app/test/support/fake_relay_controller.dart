@@ -22,6 +22,11 @@ class FakeRelayController implements CoworkRelayController {
   int reconnectCalls = 0;
   bool provisioned = false;
 
+  /// When true, [reconnect] reports a failure instead of pairing — the host
+  /// that stays away. That is what a view needs to give up on its own
+  /// reconnects and offer the way out again.
+  bool reconnectFails = false;
+
   final List<String> tasks = <String>[];
   final List<String> taskSessionKeys = <String>[];
   final List<String?> taskModelIds = <String?>[];
@@ -80,6 +85,13 @@ class FakeRelayController implements CoworkRelayController {
     required CoworkStoredPairing pairing,
   }) async {
     reconnectCalls++;
+    if (reconnectFails) {
+      _state.value = const CoworkRelayState(
+        phase: CoworkRelayPhase.error,
+        detail: 'Host unreachable',
+      );
+      return;
+    }
     _state.value = const CoworkRelayState(
       phase: CoworkRelayPhase.paired,
       peerDeviceId: 'host-laptop-1',

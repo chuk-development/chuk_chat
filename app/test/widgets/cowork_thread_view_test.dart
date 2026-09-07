@@ -141,9 +141,14 @@ void main() {
         ),
       ),
     );
+    // Two pumps, not one: the chat area waits for the local chat cache to be
+    // read once before it mounts the screen, or the screen would look its
+    // thread up, miss, and drop the history for good (bead cowork-8yb). What
+    // the test is about is unchanged — that is still well before the
+    // controller is ready.
+    await tester.pump();
     await tester.pump();
     expect(find.byType(ChukChatUIDesktop), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
     final chatState = tester.state(find.byType(ChukChatUIDesktop));
     ready.complete(FakeRelayController());
     await tester.pumpAndSettle();
@@ -162,9 +167,7 @@ void main() {
     expect(find.byType(ChukChatUIDesktop), findsOneWidget);
   });
 
-  testWidgets('connecting phase shows only a hairline progress bar', (
-    tester,
-  ) async {
+  testWidgets('connecting shows nothing but the header dot', (tester) async {
     final controller = await pumpView(tester);
     controller.set(
       const CoworkRelayState(
@@ -174,8 +177,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    // No status text while connecting: the connection is not the user's job.
+    // The app always reconnects on its own, so a connect in flight is not news:
+    // no progress bar, no status line. The whole state is the dot in the
+    // header (bead cowork-y6q).
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Connecting…'), findsNothing);
   });
 
@@ -261,9 +266,12 @@ void main() {
       return store;
     }
 
+    /// [hostAway] makes every reconnect fail, so the view keeps trying and
+    /// keeps missing — the only way the reconnect bar is supposed to come back.
     Future<(List<FakeRelayController>, CoworkPairingStore)> pumpPersistent(
-      WidgetTester tester,
-    ) async {
+      WidgetTester tester, {
+      bool hostAway = false,
+    }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -275,7 +283,7 @@ void main() {
         _app(
           CoworkThreadView(
             controllerBuilder: () async {
-              final c = FakeRelayController();
+              final c = FakeRelayController()..reconnectFails = hostAway;
               controllers.add(c);
               return c;
             },
@@ -286,6 +294,17 @@ void main() {
       );
       await tester.pumpAndSettle();
       return (controllers, store);
+    }
+
+    /// Lets the view's own reconnect loop run against a host that is not
+    /// answering, long enough for it to give up and put the way out back on
+    /// screen. The bar counts failures, not drops: one drop is a hiccup the
+    /// app fixes by itself.
+    Future<void> letTheReconnectsFail(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(seconds: 10));
+      }
+      await tester.pumpAndSettle();
     }
 
     testWidgets('a stored pairing auto-reconnects with no code form', (
@@ -304,7 +323,7 @@ void main() {
     });
 
     testWidgets(
-      'a dropped connection shows the reconnect bar, never a code form',
+      'one dropped connection says nothing and comes back by itself',
       (tester) async {
         final (controllers, _) = await pumpPersistent(tester);
 
@@ -318,10 +337,11 @@ void main() {
         );
         await tester.pump();
 
-        // Still paired (stored), so the code form stays gone; the bottom bar
-        // offers Reconnect and, for the it-is-really-broken case, Forget.
-        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
-        expect(find.widgetWithText(TextButton, 'Forget'), findsOneWidget);
+        // Nothing appears. A bar that shows up for a second on every hiccup
+        // reads as breakage in an app that is already fixing itself
+        // (bead cowork-y6q); the header dot carries the state.
+        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsNothing);
+        expect(find.widgetWithText(TextButton, 'Forget'), findsNothing);
         expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
         expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
         expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
@@ -333,6 +353,30 @@ void main() {
         expect(controllers.length, greaterThan(1));
         expect(controllers.last.reconnectCalls, 1);
         expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
+        expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
+      },
+    );
+
+    testWidgets(
+      'a host that stays away brings the reconnect bar back, never a code form',
+      (tester) async {
+        final (_, _) = await pumpPersistent(tester, hostAway: true);
+        final chatState = tester.state(find.byType(ChukChatUIDesktop));
+
+        // Nothing while it is still trying.
+        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsNothing);
+
+        // It keeps missing: this is no longer a hiccup, so the user gets the
+        // way out again.
+        await letTheReconnectsFail(tester);
+
+        // Still paired (stored), so the code form stays gone; the bottom bar
+        // offers Reconnect and, for the it-is-really-broken case, Forget.
+        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+        expect(find.widgetWithText(TextButton, 'Forget'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
+        expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
+        // The conversation was never disturbed by any of it.
         expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
       },
     );
@@ -404,11 +448,10 @@ void main() {
     testWidgets('Forget deletes the pairing and returns to the code form', (
       tester,
     ) async {
-      final (controllers, store) = await pumpPersistent(tester);
-      controllers.single.set(
-        const CoworkRelayState(phase: CoworkRelayPhase.closed),
-      );
-      await tester.pump();
+      final (_, store) = await pumpPersistent(tester, hostAway: true);
+      // Forget lives on the bar, and the bar only comes back once the app has
+      // tried and failed to reconnect on its own.
+      await letTheReconnectsFail(tester);
 
       await tester.tap(find.widgetWithText(TextButton, 'Forget'));
       await tester.pump();
