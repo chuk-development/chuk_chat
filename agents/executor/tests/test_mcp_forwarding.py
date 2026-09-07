@@ -201,3 +201,137 @@ def test_forwarded_server_tool_is_registered_and_dispatchable(tmp_path):
 
     # stop() closed the per-session managers.
     assert executor._mcp_managers == {}
+
+
+# -- what a chuk_chat connector looks like once CoWork adopted it ---------
+#
+# Bead cowork-7zd. The app reads chuk_chat's encrypted `service_credentials`
+# rows, writes them into its own store and forwards them here like any other
+# connector. These pin what those entries turn into, so a change to the app's
+# `McpStore.forwardPayloads` that the backend cannot read fails on this side
+# too, not only in the Flutter tests.
+
+
+def test_adopted_oauth_connector_carries_its_refresh_material(tmp_path):
+    ex = _executor(tmp_path)
+    manager = ex._session_mcp_manager(
+        "s",
+        [
+            {
+                "id": "notion",
+                "name": "Notion",
+                "url": "https://notion.example/mcp",
+                "auth": "oauth",
+                "access_token": "AT-FROM-CHUK",
+                "oauth": {
+                    "token_endpoint": "https://auth.example/token",
+                    "client_id": "cid-chuk",
+                    "refresh_token": "RT-FROM-CHUK",
+                    "expires_at": "2099-01-01T00:00:00Z",
+                    "resource": "https://notion.example/mcp",
+                    "scope": "read",
+                },
+            }
+        ],
+    )
+    assert manager is not None
+    config = manager.configs[0]
+    assert config.auth_token == "AT-FROM-CHUK"
+    # The host keeps the connector alive on its own once the app is closed.
+    assert config.oauth["refresh_token"] == "RT-FROM-CHUK"
+    assert config.oauth["token_endpoint"] == "https://auth.example/token"
+    assert config.oauth["client_id"] == "cid-chuk"
+    ex._close_mcp_managers()
+
+
+def test_adopted_connector_with_only_refresh_material_is_still_authenticated(
+    tmp_path,
+):
+    # chuk signed in long ago and the bearer lapsed while both apps were shut.
+    # The entry has no `access_token` at all; it is NOT an open server.
+    ex = _executor(tmp_path)
+    manager = ex._session_mcp_manager(
+        "s",
+        [
+            {
+                "id": "notion",
+                "name": "Notion",
+                "url": "https://notion.example/mcp",
+                "auth": "oauth",
+                "oauth": {
+                    "token_endpoint": "https://auth.example/token",
+                    "client_id": "cid-chuk",
+                    "refresh_token": "RT-FROM-CHUK",
+                    "expires_at": "2000-01-01T00:00:00Z",
+                },
+            }
+        ],
+    )
+    assert manager is not None
+    config = manager.configs[0]
+    assert config.auth_token is None
+    assert config.oauth["refresh_token"] == "RT-FROM-CHUK"
+    ex._close_mcp_managers()
+
+
+def test_adopted_api_key_connector_keeps_its_credentialed_url(tmp_path):
+    # An apiKey connector carries no `auth` and no token: the app already put
+    # the user's key on the URL (`McpStore.forwardPayloads`).
+    ex = _executor(tmp_path)
+    manager = ex._session_mcp_manager(
+        "s",
+        [
+            {
+                "id": "browserbase",
+                "name": "Browserbase",
+                "url": "https://mcp.browserbase.com/mcp?browserbaseApiKey=BB-KEY",
+            }
+        ],
+    )
+    assert manager is not None
+    config = manager.configs[0]
+    assert config.auth_token is None
+    assert config.url == "https://mcp.browserbase.com/mcp?browserbaseApiKey=BB-KEY"
+    ex._close_mcp_managers()
+
+
+def test_adopted_connectors_rebuild_the_manager_for_the_session(tmp_path):
+    # The app adopts a chuk connector between two tasks of one session: the
+    # cached manager must be rebuilt so the new server's tools are live.
+    ex = _executor(tmp_path)
+    first = ex._session_mcp_manager(
+        "s", [{"name": "a", "url": "https://a/mcp", "auth": "none"}]
+    )
+    second = ex._session_mcp_manager(
+        "s",
+        [
+            {"name": "a", "url": "https://a/mcp", "auth": "none"},
+            {"name": "notion", "url": "https://notion.example/mcp",
+             "auth": "oauth", "access_token": "AT-FROM-CHUK"},
+        ],
+    )
+    assert second is not first
+    assert {c.name for c in second.configs} == {"a", "notion"}
+    ex._close_mcp_managers()
+
+
+def test_disconnecting_every_connector_drops_the_cached_manager(tmp_path):
+    ex = _executor(tmp_path)
+    manager = ex._session_mcp_manager(
+        "s", [{"name": "a", "url": "https://a/mcp", "auth": "none"}]
+    )
+    assert manager is not None
+    assert ex._mcp_managers.get("s") is manager
+
+    # The user disconnected the last connector: nothing is forwarded any more.
+    assert ex._session_mcp_manager("s", []) is None
+    assert "s" not in ex._mcp_managers
+    assert "s" not in ex._mcp_signatures
+    assert "s" not in ex._mcp_entry_meta
+
+    # And it comes back cleanly when a connector is added again.
+    again = ex._session_mcp_manager(
+        "s", [{"name": "a", "url": "https://a/mcp", "auth": "none"}]
+    )
+    assert again is not None and again is not manager
+    ex._close_mcp_managers()
