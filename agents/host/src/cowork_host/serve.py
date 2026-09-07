@@ -68,6 +68,7 @@ class TaskServer:
         estop_path: str | None = None,
         on_room_frame=None,
         account_token_provider: Callable[[], str | None] | None = None,
+        account_session_provider: Callable[[], Any] | None = None,
         browser_mcp: bool = False,
         on_run_finished: Callable[[dict], None] | None = None,
         on_approval_pending: Callable[[dict], None] | None = None,
@@ -108,6 +109,7 @@ class TaskServer:
                 # carries to the next task. ``None`` -> those connectors simply
                 # fail to authenticate, never crash.
                 account_token_provider=account_token_provider,
+                account_session_provider=account_session_provider,
                 # Give the agent the Playwright MCP + watchable browser when the
                 # sandbox is the browser image (§9.1).
                 browser_mcp=browser_mcp,

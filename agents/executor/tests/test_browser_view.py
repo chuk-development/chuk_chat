@@ -237,6 +237,43 @@ def test_browser_mcp_entry_execs_the_launcher_in_the_container(tmp_path):
     assert env.realized >= 1  # the container was forced live first
 
 
+def test_browser_mcp_entry_rejects_failed_container_probe(tmp_path):
+    from cowork_sandbox import ProcessResult
+
+    env = _FakeDockerEnv()
+    env.run_bash = lambda *a, **kw: ProcessResult("", "No such container", 1)
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    assert ex._browser_mcp_entry() is None
+
+
+def test_browser_mcp_entry_passes_verified_retirement_to_container(tmp_path, monkeypatch):
+    env = _FakeDockerEnv()
+    env.workspace = str(tmp_path)
+    seen = []
+    def attest(binary, cid, workspace):
+        seen.append((binary, cid, workspace))
+        return "retired-container"
+    monkeypatch.setattr("cowork_executor.browser_profile.retired_browser_hostname", attest)
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    entry = ex._browser_mcp_entry()
+    assert seen == [("docker", "cid-abc123", str(tmp_path))]
+    assert entry["args"][-4:] == [
+        "-e", "COWORK_BROWSER_RETIRED_HOSTNAME=retired-container",
+        "cid-abc123", "cowork-browser-mcp",
+    ]
+
+
+def test_browser_manager_rebuilt_when_container_changes(tmp_path):
+    env = _FakeDockerEnv()
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    old = ex._session_mcp_manager("s", [ex._browser_mcp_entry()])
+    env.container_id = "replacement"
+    new = ex._session_mcp_manager("s", [ex._browser_mcp_entry()])
+    assert new is not old
+    assert "replacement" in new.configs[0].args
+    new.close()
+
+
 class _RecordingBridge:
     def __init__(self) -> None:
         self.fed: list[bytes] = []

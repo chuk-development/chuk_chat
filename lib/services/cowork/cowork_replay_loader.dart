@@ -386,6 +386,7 @@ class CoworkReplayLoader extends ChangeNotifier {
         _noteMid(draft, event.mid);
 
       case CoworkRelayAutomationList():
+      case CoworkRelayDocuments():
       case CoworkRelaySkillsList():
       case CoworkRelayAgentList():
         // Owned by the automations source / the shell's roster; never part

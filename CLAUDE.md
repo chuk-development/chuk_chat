@@ -2,6 +2,22 @@
 
 This file provides instructions and context for AI coding agents working on this project.
 
+## App inspection and screenshots (user instruction, 2026-09-05)
+
+- Read this file first. `AGENTS.md` links to this file so all agents use the same instructions.
+- Never capture the user's desktop, monitor, root window, or unrelated windows. Capture only the explicitly identified project app window; verify its PID/executable and window ID first. If no matching window is available, stop the capture rather than falling back to the desktop.
+- Use `xdotool` and native Linux tools. Do not use Orca computer-use.
+- Use the existing `flutter-hot` / Flutter Hot Reload workflow. Window-only capture already exists in `/home/user/.claude/tools/flutter-hotd`; prefer reusing that capability with verified project-window ownership.
+- On Wayland, run the project app with `GDK_BACKEND=x11` when needed for window-specific capture. Record only a short note containing the project, PID/window ID and capture command; never assume IDs survive a restart.
+- Keep this as a short operational note, not a screenshot tutorial.
+- Local workflow: from `app/`, `GDK_BACKEND=x11 FLUTTER_HOT_EXTRA='' flutter-hot start linux`, then `flutter-hot reload`; capture with `bash scripts/capture_app_window.sh /tmp/cowork-window.png` from the repository root. The helper validates executable/PID/window ownership and prints the selected IDs; no desktop fallback.
+- If GNOME reports `org.gnome.ScreenSaver.GetActive = true`, window pixels may be stale: defer visual acceptance until the user unlocks; never unlock the session automatically.
+
+## Shell and task tracking
+
+- Use non-interactive file operations (`cp -f`, `mv -f`, `rm -f`) and narrowly resolved targets.
+- Use the project Beads skill at `.agents/skills/beads/SKILL.md`, then `bd prime` for current workflow context. Use `bd` for task tracking and `bd remember` for persistent project memory; never create ad hoc memory files.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
 

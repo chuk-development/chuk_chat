@@ -27,6 +27,17 @@ import 'package:cowork/utils/certificate_pinning_io.dart' as pinning_io;
 /// own socket, so the shared client is safe to keep open and reuse.
 HttpClient? _sharedPinnedClient;
 
+/// Protocol-level WebSocket ping cadence. Without it a host that dies (killed,
+/// crashed, restarted) leaves the app on a half-open socket forever: no `done`
+/// event fires, so the relay client never reaches the `closed` phase and its
+/// capped-backoff auto-reconnect never starts — the app just sits "connected"
+/// to a host that is gone (observed after a host restart). With a ping interval
+/// dart:io sends pings and closes the socket when a pong does not come back in
+/// time, which surfaces as a normal close and drives the reconnect. Any
+/// compliant WS server (the relay) answers protocol pings with pongs
+/// automatically, so this is transparent to the app-level frames.
+const Duration _kWsPingInterval = Duration(seconds: 20);
+
 /// Create a [WebSocketChannel] with certificate pinning on native platforms.
 ///
 /// In release mode, reuses a pinned [HttpClient] (see [_sharedPinnedClient])
@@ -43,10 +54,12 @@ Future<WebSocketChannel> connectWebSocket(Uri url) async {
       url.toString(),
       customClient: client,
     );
+    // Detect a dead/half-open host so auto-reconnect can fire (see above).
+    socket.pingInterval = _kWsPingInterval;
 
     return IOWebSocketChannel(socket);
   }
 
   // Debug mode — no pinning, use standard IOWebSocketChannel.connect
-  return IOWebSocketChannel.connect(url);
+  return IOWebSocketChannel.connect(url, pingInterval: _kWsPingInterval);
 }

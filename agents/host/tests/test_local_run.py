@@ -511,6 +511,30 @@ def _assert_ran(events: list[dict[str, Any]]) -> None:
     assert len(tools) == 1 and tools[0]["exit_code"] == 0
 
 
+def test_host_and_executor_frames_share_sequence_after_reconnect(tmp_path):
+    def model():
+        assert host._send_host_payload({"type": "delta", "text": "host notice"})
+        return MockModelClient(["done"])
+
+    host = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path),
+        agent_name="sequence-worker",
+        model_factory_override=model,
+    )
+    host.start()
+    try:
+        first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
+        events = first.run("say done", timeout=5.0)
+        assert events[-1]["type"] == "done"
+        second = ControllerDouble(host.url, host.channel_id, reconnect_trust=first.trust())
+        events = second.run("say done again", timeout=5.0)
+        assert events[-1]["type"] == "done"
+        assert any(e.get("text") == "host notice" for e in events)
+    finally:
+        host.stop()
+
+
 def test_stress_first_pair_then_many_reconnects(tmp_path):
     """One long-lived host: the first controller pairs from the code, then the
     same device reconnects nineteen more times back to back with NO code. Each

@@ -39,7 +39,7 @@ class BrowserViewPage extends StatefulWidget {
     BuildContext context,
     CoworkRelayController controller,
   ) {
-    return Navigator.of(context).push(
+    return Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (context) => BrowserViewPage(controller: controller),
@@ -71,7 +71,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   // the whole window; a small floating button (and the same toggle) brings the
   // chrome back. Errors still surface as an overlay so a dead stream is never
   // a silent black screen.
-  bool _fullscreen = false;
+  bool _fullscreen = true;
   // End-to-end bandwidth meter (debug builds only): what this view really
   // receives off the sealed channel, after base64 decode. Logged every 2 s so
   // "is it compressed?" is a number in the console, not a feeling.
@@ -129,7 +129,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     // Drain the write-side result: a broken pipe on this socket lands here, and
     // if we do not catch it Dart reports it as an unhandled exception and the
     // app dies. Same for the client bytes stream's error/done.
-    socket.done.then((_) => _teardownBridge(), onError: (_) => _teardownBridge());
+    socket.done.then(
+      (_) => _teardownBridge(),
+      onError: (_) => _teardownBridge(),
+    );
     for (final chunk in _pending) {
       _safeAdd(chunk);
     }
@@ -170,7 +173,11 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         _meterBytes += bytes.length;
         _meterChunks++;
         _safeAdd(bytes);
-      case CoworkRelayBrowserView(:final status, :final message, :final password):
+      case CoworkRelayBrowserView(
+        :final status,
+        :final message,
+        :final password,
+      ):
         if (mounted) {
           setState(() {
             _status = status;
@@ -228,6 +235,15 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
                 top: 0,
                 child: _StatusBanner(status: _status, message: _message),
               ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: const CircleBorder(),
+                child: CloseButton(color: Colors.white),
+              ),
+            ),
             Positioned(
               top: 8,
               right: 8,
@@ -333,9 +349,10 @@ class _StatusBanner extends StatelessWidget {
       // A started stream with a message means it is live but has nothing to show
       // yet (no browser window on the display) — surface that instead of the
       // usual "you are in control", so a black screen is never a mystery.
-      'started' || 'live' => message.isEmpty
-          ? (Colors.green, 'live — you are in control')
-          : (Colors.orange, message),
+      'started' || 'live' =>
+        message.isEmpty
+            ? (Colors.green, 'live — you are in control')
+            : (Colors.orange, message),
       'stopped' => (Colors.grey, 'stopped'),
       'error' => (Colors.red, message.isEmpty ? 'error' : message),
       _ => (Colors.orange, 'connecting…'),

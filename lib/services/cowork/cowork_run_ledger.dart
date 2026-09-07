@@ -172,6 +172,7 @@ ContentBlock artifactBlockFromFile(String storagePath, CoworkRelayFile file) {
       filename: file.name,
       mime: file.mimeType,
       sizeBytes: file.bytes?.length ?? file.declaredSize ?? 0,
+      document: file.document,
     ),
   );
 }
@@ -252,7 +253,9 @@ class CoworkRunLedger extends ChangeNotifier {
   /// tasks in order, so a `begin` is always a new turn.
   CoworkRun begin(String sessionKey) {
     _subagentCalls.removeWhere((key, _) => key.startsWith('$sessionKey\u0000'));
-    _automationCalls.removeWhere((key, _) => key.startsWith('$sessionKey\u0000'));
+    _automationCalls.removeWhere(
+      (key, _) => key.startsWith('$sessionKey\u0000'),
+    );
     final previous = _runs[sessionKey];
     final run = CoworkRun(sessionKey)..running = true;
     // A debug context outlives the run it came from: the copy button wants the
@@ -507,7 +510,9 @@ class CoworkRunLedger extends ChangeNotifier {
   CoworkRun? take(String sessionKey) {
     final run = _runs.remove(sessionKey);
     _subagentCalls.removeWhere((key, _) => key.startsWith('$sessionKey\u0000'));
-    _automationCalls.removeWhere((key, _) => key.startsWith('$sessionKey\u0000'));
+    _automationCalls.removeWhere(
+      (key, _) => key.startsWith('$sessionKey\u0000'),
+    );
     if (run != null) {
       run.running = false;
       notifyListeners();

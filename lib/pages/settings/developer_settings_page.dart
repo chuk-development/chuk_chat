@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/services/api_config_service.dart';
 import 'package:cowork/services/settings/debug_settings.dart';
+import 'package:cowork/services/settings/verbose_service.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
 /// Developer options: the endpoints the app talks to, and a couple of local
@@ -17,9 +17,6 @@ class DeveloperSettingsPage extends StatefulWidget {
 }
 
 class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
-  static const String _verboseKey = 'dev_verbose_logging';
-
-  bool _verbose = false;
   bool _captureContext = false;
   bool _loading = true;
 
@@ -30,30 +27,15 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
   }
 
   Future<void> _load() async {
-    bool verbose = false;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      verbose = prefs.getBool(_verboseKey) ?? false;
-    } catch (_) {
-      // Default off when the store is unavailable.
-    }
+    // The verbose switch now lives in [VerboseService], the one true store, so
+    // this page and the main Settings switch always agree.
+    await VerboseService.instance.load();
     final capture = await DebugSettings.captureContext();
     if (!mounted) return;
     setState(() {
-      _verbose = verbose;
       _captureContext = capture;
       _loading = false;
     });
-  }
-
-  Future<void> _setVerbose(bool value) async {
-    setState(() => _verbose = value);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_verboseKey, value);
-    } catch (_) {
-      // The live toggle still holds for the session.
-    }
   }
 
   Future<void> _setCaptureContext(bool value) async {
@@ -98,12 +80,21 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
                 const ExpressiveSectionHeader('Debug'),
                 ExpressiveGroup(
                   children: [
-                    ExpressiveSwitchRow(
-                      icon: Icons.bug_report_outlined,
-                      title: 'Verbose logging',
-                      subtitle: 'Extra client-side logs (this device only)',
-                      value: _verbose,
-                      onChanged: _setVerbose,
+                    // The same verbose-view switch as the main Settings page.
+                    // Both drive [VerboseService], so they always agree.
+                    ListenableBuilder(
+                      listenable: VerboseService.instance,
+                      builder: (context, _) {
+                        final verbose = VerboseService.instance;
+                        return ExpressiveSwitchRow(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Verbose view',
+                          subtitle: 'Show every command, tool call, and browser '
+                              'action in the thread',
+                          value: verbose.enabled,
+                          onChanged: verbose.setEnabled,
+                        );
+                      },
                     ),
                     ExpressiveSwitchRow(
                       icon: Icons.data_object,

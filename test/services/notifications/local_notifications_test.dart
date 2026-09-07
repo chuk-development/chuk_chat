@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -149,5 +150,17 @@ void main() {
     );
     expect(NotificationTarget.fromData(<String, Object?>{'session_key': ''}), isNull);
     expect(NotificationTarget.fromData(null), isNull);
+  });
+
+  test('the Linux toast has an icon file to draw', () {
+    // A D-Bus notification draws the app logo only when the sender hands the
+    // picture over; a missing asset is a blank slot in the toast, which is
+    // exactly the bug this guards.
+    expect(kCoworkNotificationIconAsset, 'assets/icons/app_icon.png');
+    expect(File(kCoworkNotificationIconAsset).existsSync(), isTrue);
+    expect(
+      File('pubspec.yaml').readAsStringSync(),
+      contains('- assets/icons/'),
+    );
   });
 }

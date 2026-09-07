@@ -64,7 +64,6 @@ class AgentRosterView extends StatefulWidget {
     this.onDeleteAgent,
     this.onRenameAgent,
     this.onOpenRooms,
-    this.onOpenBrowser,
     this.onOpenSettings,
     this.accountLabel,
     this.now,
@@ -94,10 +93,6 @@ class AgentRosterView extends StatefulWidget {
 
   /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
   final VoidCallback? onOpenRooms;
-
-  /// The agent's browser — chuk's Media rail slot. Hidden when null (the shell
-  /// passes it once a coworker is selected).
-  final VoidCallback? onOpenBrowser;
 
   /// Settings — the gear in chuk's footer pill. The whole footer is hidden
   /// when null (a shell without a shell config has no settings to open).
@@ -194,8 +189,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               const SizedBox(
                 height: kMenuButtonHeight,
                 child: SbBrand(
-                  label: 'Coworkers',
-                  showLogo: true,
+                  label: 'CoWork',
+                  showLogo: false,
                   fontSize: 18,
                   padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
                 ),
@@ -212,7 +207,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                       if (widget.onAddAgent != null)
                         SbRailRow(
                           icon: Icons.person_add_alt,
-                          label: 'New coworker',
+                          label: 'New agent',
                           primary: true,
                           onTap: widget.onAddAgent!,
                         ),
@@ -222,19 +217,11 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                           label: 'Control Rooms',
                           onTap: widget.onOpenRooms!,
                         ),
-                      if (widget.onOpenBrowser != null)
-                        SbRailRow(
-                          icon: Icons.desktop_windows_outlined,
-                          label: "Agent's browser",
-                          onTap: widget.onOpenBrowser!,
-                        ),
                     ],
                   ),
                 ),
               ),
-              SbHairline(
-                margin: const EdgeInsets.fromLTRB(6, 8, 6, 0),
-              ),
+              SbHairline(margin: const EdgeInsets.fromLTRB(6, 8, 6, 0)),
               Expanded(
                 child: Stack(
                   children: [
@@ -251,7 +238,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                               children: [
                                 ..._section(context, 'Working', working),
                                 ..._section(context, 'Scheduled', scheduled),
-                                ..._section(context, 'Waiting', waiting),
+                                ..._section(context, 'Ready', waiting),
                                 if (hidden.isNotEmpty)
                                   ..._hiddenSection(context, t, hidden),
                               ],
@@ -301,10 +288,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         ),
         Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 34),
-            _footerRow(context, t),
-          ],
+          children: [const SizedBox(height: 34), _footerRow(context, t)],
         ),
       ],
     );
@@ -348,7 +332,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                   // the footer background so it reads as a discrete badge.
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: t.accent.withValues(alpha: 0.20),
                       borderRadius: BorderRadius.circular(999),
@@ -418,21 +404,26 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   }
 
   Widget _tile(BuildContext context, CoworkAgent agent) => _AgentTile(
-        key: ValueKey<String>('agent-tile-${agent.id}'),
-        agent: agent,
-        selected: agent.id == widget.selectedAgentId,
-        now: _now(),
-        onTap: agent.threads.isEmpty
-            ? null
-            : () => widget.onSelect(agent.id, agent.threads.first.key),
-        onHide: () => widget.source.hideAgent(agent.id),
-        onRename: widget.onRenameAgent == null
-            ? null
-            : () => _renameAgentDialog(agent),
-        onDelete: widget.onDeleteAgent == null || agent.onHost
-            ? null
-            : () => widget.onDeleteAgent!(agent.id),
-      );
+    key: ValueKey<String>('agent-tile-${agent.id}'),
+    agent: agent,
+    selected:
+        agent.id == widget.selectedAgentId &&
+        (widget.selectedThreadKey == null ||
+            agent.threads.any(
+              (thread) => thread.key == widget.selectedThreadKey,
+            )),
+    now: _now(),
+    onTap: agent.threads.isEmpty
+        ? null
+        : () => widget.onSelect(agent.id, agent.threads.first.key),
+    onHide: () => widget.source.hideAgent(agent.id),
+    onRename: widget.onRenameAgent == null
+        ? null
+        : () => _renameAgentDialog(agent),
+    onDelete: widget.onDeleteAgent == null || agent.onHost
+        ? null
+        : () => widget.onDeleteAgent!(agent.id),
+  );
 
   /// chuk's `_renameChatDialog` (`sidebar_desktop.dart`), for a coworker:
   /// the same `AlertDialog` with one autofocused `TextField`, Enter or the
@@ -440,7 +431,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   Future<void> _renameAgentDialog(CoworkAgent agent) async {
     final newName = await showCoworkerNameDialog(
       context,
-      title: 'Rename coworker',
+      title: 'Rename agent',
       initialName: agent.name,
       submitLabel: 'Rename',
     );
@@ -457,7 +448,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'No coworkers yet.',
+              'No agents yet.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: t.muted),
             ),
@@ -482,11 +473,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     List<CoworkAgent> hidden,
   ) {
     return <Widget>[
-      SbSectionLabel(
-        label: 'Hidden',
-        count: hidden.length,
-        color: t.muted,
-      ),
+      SbSectionLabel(label: 'Hidden', count: hidden.length, color: t.muted),
       for (final agent in hidden)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -612,8 +599,9 @@ class _AgentTileState extends State<_AgentTile> {
                         style: TextStyle(
                           fontSize: 15,
                           height: 1.2,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
                           color: selected ? t.accent : t.iconFg,
                         ),
                       ),
@@ -692,7 +680,10 @@ class _AgentTileState extends State<_AgentTile> {
                         child: ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.visibility_off_outlined, size: 18),
+                          leading: Icon(
+                            Icons.visibility_off_outlined,
+                            size: 18,
+                          ),
                           title: Text('Hide'),
                         ),
                       ),
@@ -757,10 +748,10 @@ class _ActivityDot extends StatelessWidget {
 
 /// The word for a coworker's state, as shown in the roster.
 String activityLabel(AgentActivity activity) => switch (activity) {
-      AgentActivity.working => 'working',
-      AgentActivity.waiting => 'waiting',
-      AgentActivity.scheduled => 'scheduled',
-    };
+  AgentActivity.working => 'working',
+  AgentActivity.waiting => 'ready for a task',
+  AgentActivity.scheduled => 'scheduled',
+};
 
 /// "just now" / "5m ago" / "2h ago" / "3d ago", or a plain statement that
 /// nothing has happened. Never a fabricated time.
@@ -786,15 +777,14 @@ Future<String?> showCoworkerNameDialog(
   required String title,
   required String submitLabel,
   String initialName = '',
-}) =>
-    showDialog<String>(
-      context: context,
-      builder: (_) => _CoworkerNameDialog(
-        title: title,
-        submitLabel: submitLabel,
-        initialName: initialName,
-      ),
-    );
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _CoworkerNameDialog(
+    title: title,
+    submitLabel: submitLabel,
+    initialName: initialName,
+  ),
+);
 
 class _CoworkerNameDialog extends StatefulWidget {
   const _CoworkerNameDialog({
@@ -812,8 +802,9 @@ class _CoworkerNameDialog extends StatefulWidget {
 }
 
 class _CoworkerNameDialogState extends State<_CoworkerNameDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialName);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
 
   @override
   void dispose() {
@@ -829,7 +820,7 @@ class _CoworkerNameDialogState extends State<_CoworkerNameDialog> {
         controller: _controller,
         autofocus: true,
         decoration: const InputDecoration(
-          labelText: 'Coworker name',
+          labelText: 'Agent name',
           hintText: 'Enter a name',
         ),
         onSubmitted: (value) {

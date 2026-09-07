@@ -375,6 +375,7 @@ def file_payload(
     mime_type: str,
     data: bytes,
     max_bytes: int = MAX_FILE_BYTES,
+    document: dict | None = None,
 ) -> dict[str, Any]:
     """Build a ``file`` event: one produced file on its way to the user.
 
@@ -398,6 +399,7 @@ def file_payload(
         "mime_type": mime_type,
         "size": size,
         "data": base64.b64encode(bytes(data)).decode("ascii"),
+        **({"document": document} if document is not None else {}),
     }
 
 
@@ -516,6 +518,7 @@ def done_payload(
     while_away: bool = False,
     run_stamps: dict[str, Any] | None = None,
     host_notified: bool = False,
+    session_key: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -540,6 +543,8 @@ def done_payload(
         payload.update(run_stamps)
     # docs/WIRE_CONTRACT.md, "Automations": the host itself notifies on this
     # run (a fired automation), so the app skips its own local toast.
+    if session_key is not None:
+        payload["session_key"] = session_key
     if host_notified:
         payload["host_notified"] = True
     return payload

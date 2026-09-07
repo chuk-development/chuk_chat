@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/pages/messenger_shell.dart';
+import 'package:cowork/models/stored_chat.dart';
+import 'package:cowork/services/chat_storage_state.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
 import 'package:cowork/widgets/room_list_view.dart';
 import 'package:cowork/services/account_session.dart';
@@ -44,8 +48,8 @@ class _MemoryStore implements CoworkSecureKeyValueStore {
 class _FakeRelayController implements CoworkRelayController {
   final ValueNotifier<CoworkRelayState> _state =
       ValueNotifier<CoworkRelayState>(
-    const CoworkRelayState(phase: CoworkRelayPhase.idle),
-  );
+        const CoworkRelayState(phase: CoworkRelayPhase.idle),
+      );
   final StreamController<CoworkRelayInbound> _inbound =
       StreamController<CoworkRelayInbound>.broadcast();
 
@@ -86,8 +90,7 @@ class _FakeRelayController implements CoworkRelayController {
     String? reasoningEffort,
     bool debug = false,
     bool regenerate = false,
-  }) async =>
-      sessionKeys.add(sessionKey);
+  }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
   final List<String> createdRooms = <String>[];
@@ -97,8 +100,7 @@ class _FakeRelayController implements CoworkRelayController {
     String roomId,
     String name,
     List<Map<String, String>> members,
-  ) async =>
-      createdRooms.add(roomId);
+  ) async => createdRooms.add(roomId);
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async =>
@@ -139,7 +141,11 @@ class _FakeRelayController implements CoworkRelayController {
   final List<(String, String)> removedMembers = <(String, String)>[];
 
   @override
-  Future<void> addRoomMember(String roomId, String agentId, String handle) async {}
+  Future<void> addRoomMember(
+    String roomId,
+    String agentId,
+    String handle,
+  ) async {}
 
   @override
   Future<void> removeRoomMember(String roomId, String agentId) async =>
@@ -188,9 +194,9 @@ class _FakeRelayController implements CoworkRelayController {
   }
 
   void pair() => _state.value = const CoworkRelayState(
-        phase: CoworkRelayPhase.paired,
-        peerDeviceId: 'cowork-host',
-      );
+    phase: CoworkRelayPhase.paired,
+    peerDeviceId: 'cowork-host',
+  );
 
   void emit(CoworkRelayInbound event) => _inbound.add(event);
 }
@@ -200,10 +206,10 @@ class _FakeSessionSource implements AccountSessionSource {
 
   @override
   AccountSession? current() => const AccountSession(
-        accessToken: 'access-1',
-        refreshToken: 'refresh-1',
-        userId: 'user-1',
-      );
+    accessToken: 'access-1',
+    refreshToken: 'refresh-1',
+    userId: 'user-1',
+  );
 
   @override
   Future<AccountSession?> refresh() async => current();
@@ -244,6 +250,7 @@ void main() {
     Size size = const Size(1200, 800),
     CoworkPairingStore? store,
     AgentControlSource? controlSource,
+    bool openSidebar = true,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -270,6 +277,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    if (openSidebar && size.width >= 600) {
+      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.pumpAndSettle();
+    }
     return (controller, roster);
   }
 
@@ -294,37 +305,46 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('a wide window shows the roster next to the thread', (tester) async {
-    await pumpShell(tester);
+  testWidgets(
+    'a wide window starts collapsed like master; menu reveals roster',
+    (tester) async {
+      await pumpShell(tester, openSidebar: false);
+      expect(find.byType(AgentRosterView), findsNothing);
+      expect(find.byTooltip('New agent'), findsOneWidget);
+      expect(find.byType(CoworkThreadView), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(AgentRosterView), findsOneWidget);
-    expect(find.byType(CoworkThreadView), findsOneWidget);
-    expect(threadOffstage(tester), isFalse);
-    expect(find.text('Coworkers'), findsOneWidget);
-    expect(find.text('No coworkers yet.'), findsOneWidget);
-    // chuk's chrome, not an app bar: the hamburger at the top left and the
-    // floating row at the top right.
-    expect(find.byType(AppBar), findsNothing);
-    expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
-    expect(find.byTooltip('Copy full chat'), findsOneWidget);
-    // Nothing sits on top of the chat: the connection is not the user's job.
-    expect(find.textContaining('Connected to'), findsNothing);
-    expect(find.byIcon(Icons.link_off), findsNothing);
-  });
+      expect(find.byType(AgentRosterView), findsOneWidget);
+      expect(find.byType(CoworkThreadView), findsOneWidget);
+      expect(threadOffstage(tester), isFalse);
+      expect(find.text('CoWork'), findsOneWidget);
+      expect(find.text('No agents yet.'), findsOneWidget);
+      // chuk's chrome, not an app bar: the hamburger at the top left and the
+      // floating row at the top right.
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
+      expect(find.byTooltip('Copy Debug Chat'), findsOneWidget);
+      // Nothing sits on top of the chat: the connection is not the user's job.
+      expect(find.textContaining('Connected to'), findsNothing);
+      expect(find.byIcon(Icons.link_off), findsNothing);
+    },
+  );
 
-  testWidgets('the four top-right actions sit in chuk\'s floating row',
-      (tester) async {
+  testWidgets('the four top-right actions sit in chuk\'s floating row', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
 
     // With a coworker selected three slots are live: Agent controls, Control
-    // Rooms, and Copy full chat in chuk's own slot. Agent's browser waits for
+    // Rooms, and Copy Debug Chat in chuk's own slot. Agent's browser waits for
     // the agent to actually open a browser (cowork-vzm).
     for (final tooltip in <String>[
       'Agent controls',
       'Control Rooms',
-      'Copy full chat',
+      'Copy Debug Chat',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
     }
@@ -336,78 +356,94 @@ void main() {
     expect(roster.agents.single.onHost, isTrue);
   });
 
-  testWidgets('the hamburger folds the roster to the mini rail and back',
-      (tester) async {
+  testWidgets('the hamburger folds the roster to the mini rail and back', (
+    tester,
+  ) async {
     final (controller, _) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
-    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(find.text('CoWork').hitTestable(), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // The roster is off screen; chuk's mini rail carries the two slots. The
     // browser has no rail slot and no button yet: nothing is open.
-    expect(find.text('Coworkers').hitTestable(), findsNothing);
-    expect(find.byTooltip('New coworker'), findsOneWidget);
-    expect(find.byTooltip('Control Rooms'), findsNWidgets(2)); // rail + top right
+    expect(find.text('CoWork').hitTestable(), findsNothing);
+    expect(find.byTooltip('New agent'), findsOneWidget);
+    expect(
+      find.byTooltip('Control Rooms'),
+      findsNWidgets(2),
+    ); // rail + top right
     expect(find.byTooltip("Agent's browser"), findsNothing);
     expect(threadOffstage(tester), isFalse);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
-    expect(find.byTooltip('New coworker'), findsNothing);
+    expect(find.text('CoWork').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('New agent'), findsNothing);
   });
 
-  testWidgets("Agent's browser appears top right only once the agent opened one, "
-      'and opens as a full-screen route', (tester) async {
-    final (controller, _) = await pumpShell(tester);
-    controller.pair();
-    await tester.pumpAndSettle();
-    expect(find.byTooltip("Agent's browser"), findsNothing);
+  testWidgets(
+    "Agent's browser appears top right only once the agent opened one, "
+    'and opens as a full-screen route',
+    (tester) async {
+      final (controller, _) = await pumpShell(tester);
+      controller.pair();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip("Agent's browser"), findsNothing);
 
-    // The agent navigates somewhere: the Playwright MCP tool frame (live or
-    // replayed) is the signal. One button, top right, nowhere else.
-    controller.emit(
-      const CoworkRelayTool(
-        'mcp__playwright__browser_navigate',
-        status: 'completed',
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byTooltip("Agent's browser"), findsOneWidget);
-    expect(find.text("Agent's browser"), findsNothing); // no sidebar row
+      // History must not expose a stale browser. A live navigation does.
+      controller.emit(
+        const CoworkRelayTool(
+          'mcp__playwright__browser_navigate',
+          status: 'completed',
+          replay: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip("Agent's browser"), findsNothing);
+      controller.emit(
+        const CoworkRelayTool(
+          'mcp__playwright__browser_navigate',
+          status: 'completed',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip("Agent's browser"), findsOneWidget);
+      expect(find.text("Agent's browser"), findsNothing); // no sidebar row
 
-    await tester.tap(find.byTooltip("Agent's browser"));
-    // Not pumpAndSettle: the page's spinner animates until the executor's
-    // `started` event, which this test never sends.
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    // A route with its own app bar, not a side panel next to the chat.
-    expect(find.byType(BrowserViewPage), findsOneWidget);
-    expect(find.widgetWithText(AppBar, 'Agent browser'), findsOneWidget);
-    final route = ModalRoute.of(tester.element(find.byType(BrowserViewPage)));
-    expect((route as MaterialPageRoute).fullscreenDialog, isTrue);
+      await tester.tap(find.byTooltip("Agent's browser"));
+      // Not pumpAndSettle: the page's spinner animates until the executor's
+      // `started` event, which this test never sends.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      // The frame fills the route immediately, with a direct close control.
+      expect(find.byType(BrowserViewPage), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Agent browser'), findsNothing);
+      expect(
+        find.byKey(const Key('browser_view_exit_fullscreen')),
+        findsOneWidget,
+      );
+      final route = ModalRoute.of(tester.element(find.byType(BrowserViewPage)));
+      expect((route as MaterialPageRoute).fullscreenDialog, isTrue);
 
-    // A full-screen dialog closes with an X, not a back arrow.
-    await tester.tap(find.byType(CloseButton));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(BrowserViewPage), findsNothing);
+      // A full-screen dialog closes with an X, not a back arrow.
+      await tester.tap(find.byType(CloseButton));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(BrowserViewPage), findsNothing);
 
-    // The agent closes the browser: the button goes away again.
-    controller.emit(
-      const CoworkRelayTool(
-        'mcp__playwright__browser_close',
-        status: 'completed',
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byTooltip("Agent's browser"), findsNothing);
-  });
+      // Finishing the run hides the entry even if Chromium stays open.
+      controller.emit(const CoworkRelayDone());
+      await tester.pumpAndSettle();
+      expect(find.byTooltip("Agent's browser"), findsNothing);
+    },
+  );
 
-  testWidgets('one socket across a wide, tablet and phone resize', (tester) async {
+  testWidgets('one socket across a wide, tablet and phone resize', (
+    tester,
+  ) async {
     final (controller, _) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
@@ -424,8 +460,9 @@ void main() {
     expect(controllerBuilds, 1);
   });
 
-  testWidgets('a tapped notification selects the thread it names (WS-7)',
-      (tester) async {
+  testWidgets('a tapped notification selects the thread it names (WS-7)', (
+    tester,
+  ) async {
     // Two coworkers; the host's thread is selected on pairing, the other one
     // is what the toast names.
     final (controller, roster) = await pumpShell(tester);
@@ -449,13 +486,23 @@ void main() {
     );
     // Taken, not left pending: a second shell would not re-open it.
     expect(NotificationRouter.instance.pending.value, isNull);
+
+    // Re-pairing must not create a new chat or switch back to the host agent.
+    controller.pair();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      other.threads.single.key,
+    );
+    expect(roster.byId(other.id)!.threads, hasLength(1));
   });
 
-  testWidgets('Control Rooms opens as the right panel and closes again',
-      (tester) async {
+  testWidgets('Control Rooms opens as the right panel and closes again', (
+    tester,
+  ) async {
     await pumpShell(tester);
 
-    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(RoomListView), findsOneWidget);
@@ -469,8 +516,55 @@ void main() {
     expect(find.byType(RoomListView), findsNothing);
   });
 
-  testWidgets('pairing lists the agent that really runs on the host',
-      (tester) async {
+  testWidgets('legacy cached sessions are preserved without a history picker', (
+    tester,
+  ) async {
+    ChatStorageState.chatsById['default'] = StoredChat.forSidebar(
+      id: 'default',
+      createdAt: DateTime(2026, 8, 12),
+      isStarred: false,
+      title: 'Earlier conversation',
+    );
+    addTearDown(() => ChatStorageState.chatsById.clear());
+    final (controller, _) = await pumpShell(tester);
+    expect(find.text('Earlier conversation'), findsNothing);
+    expect(find.text('Chat history'), findsNothing);
+    controller.pair();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      'host:cowork-host',
+    );
+    expect(ChatStorageState.chatsById.containsKey('default'), isTrue);
+    await resize(tester, const Size(420, 900));
+    expect(find.text('Earlier conversation'), findsNothing);
+    expect(find.text('Chat history'), findsNothing);
+  });
+
+  testWidgets('unknown notification cannot open a subchat under an agent', (
+    tester,
+  ) async {
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    final permanentKey = roster.agents.single.threads.single.key;
+    NotificationRouter.instance.open(
+      const NotificationTarget(sessionKey: 'unowned-legacy-session'),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<CoworkThreadView>(threadView).threadKey, permanentKey);
+
+    // Even a stale callback with a valid agent but different session is refused.
+    tester
+        .widget<AgentRosterView>(find.byType(AgentRosterView))
+        .onSelect(roster.agents.single.id, 'unowned-legacy-session');
+    await tester.pumpAndSettle();
+    expect(tester.widget<CoworkThreadView>(threadView).threadKey, permanentKey);
+  });
+
+  testWidgets('pairing lists the agent that really runs on the host', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
 
     controller.pair();
@@ -484,7 +578,7 @@ void main() {
     expect(roster.agents.single.threads.single.key, roster.agents.single.id);
   });
 
-  testWidgets('New coworker is chuk\'s name dialog: it adds the coworker, '
+  testWidgets('New agent is chuk\'s name dialog: it adds the coworker, '
       'tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
@@ -510,8 +604,9 @@ void main() {
     // An app-created agent is never claimed to be installed on the host.
     expect(roster.agents.single.onHost, isFalse);
     // The host was told, so the name outlives this install.
-    expect(controller.createdAgents,
-        [(roster.agents.single.id, 'Crypto Desk')]);
+    expect(controller.createdAgents, [
+      (roster.agents.single.id, 'Crypto Desk'),
+    ]);
     // Its thread is selected: the one thread view points at it, and the
     // roster lists it by name.
     final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
@@ -520,7 +615,7 @@ void main() {
     expect(controller.sessionKeys, isEmpty);
   });
 
-  testWidgets('Cancel in the New coworker dialog adds nothing', (tester) async {
+  testWidgets('Cancel in the New agent dialog adds nothing', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
     await tester.tap(find.byIcon(Icons.person_add_alt));
@@ -533,16 +628,19 @@ void main() {
     expect(controller.createdAgents, isEmpty);
   });
 
-  testWidgets('Rename from the row menu renames locally and on the host',
-      (tester) async {
+  testWidgets('Rename from the row menu renames locally and on the host', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
     final agent = roster.addAgent(name: 'amber');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.descendant(
-      of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-      matching: find.byTooltip('More'),
-    ));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+        matching: find.byTooltip('More'),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rename'));
     await tester.pumpAndSettle();
@@ -563,6 +661,34 @@ void main() {
     expect(find.text('Amber Desk'), findsWidgets);
   });
 
+  testWidgets('phone chat renames the selected agent locally and on the host', (
+    tester,
+  ) async {
+    final (controller, roster) = await pumpShell(
+      tester,
+      size: const Size(420, 900),
+    );
+    controller.pair();
+    await tester.pumpAndSettle();
+    final agent = roster.agents.single;
+    await tester.tap(find.byKey(ValueKey<String>('mobile-agent-${agent.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename agent'));
+    await tester.pumpAndSettle();
+    final field = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, '  Research Assistant  ');
+    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.pumpAndSettle();
+    expect(roster.byId(agent.id)!.name, 'Research Assistant');
+    expect(controller.renamedAgents, [(agent.id, 'Research Assistant')]);
+    expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+  });
+
   testWidgets('the host\'s agent_list names the host row, adds the coworkers '
       'it keeps and skips one deleted here', (tester) async {
     final (controller, roster) = await pumpShell(tester);
@@ -575,21 +701,33 @@ void main() {
     await tester.pumpAndSettle();
 
     // Delete through the row menu, so the shell records the id.
-    await tester.tap(find.descendant(
-      of: find.byKey(ValueKey<String>('agent-tile-${gone.id}')),
-      matching: find.byTooltip('More'),
-    ));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-${gone.id}')),
+        matching: find.byTooltip('More'),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     expect(roster.byId(gone.id), isNull);
 
-    controller.emit(CoworkRelayAgentList(agents: [
-      const CoworkHostAgentName(
-          agentId: 'host:ignored', name: 'Laptop Bot', host: true),
-      const CoworkHostAgentName(agentId: 'local:phone:2:7', name: 'From Phone'),
-      CoworkHostAgentName(agentId: gone.id, name: 'gone-soon'),
-    ]));
+    controller.emit(
+      CoworkRelayAgentList(
+        agents: [
+          const CoworkHostAgentName(
+            agentId: 'host:ignored',
+            name: 'Laptop Bot',
+            host: true,
+          ),
+          const CoworkHostAgentName(
+            agentId: 'local:phone:2:7',
+            name: 'From Phone',
+          ),
+          CoworkHostAgentName(agentId: gone.id, name: 'gone-soon'),
+        ],
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(roster.byId(hostId)!.name, 'Laptop Bot');
@@ -599,8 +737,9 @@ void main() {
     expect(find.text('From Phone'), findsWidgets);
   });
 
-  testWidgets('an agent has one permanent thread and no way to open a second',
-      (tester) async {
+  testWidgets('an agent has one permanent thread and no way to open a second', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
@@ -623,8 +762,9 @@ void main() {
     expect(roster.agents.single.threads, hasLength(1));
   });
 
-  testWidgets('a run marks the agent as working and back to waiting',
-      (tester) async {
+  testWidgets('a run marks the agent as working and back to waiting', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
@@ -642,27 +782,29 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('working'), findsNothing);
-    expect(find.textContaining('waiting'), findsOneWidget);
+    expect(find.textContaining('ready for a task'), findsOneWidget);
     expect(roster.agents.single.lastActivity, isNotNull);
   });
 
-  testWidgets('the controls button opens the panel, which reports what is missing',
-      (tester) async {
-    final (controller, _) = await pumpShell(tester);
-    controller.pair();
-    await tester.pumpAndSettle();
+  testWidgets(
+    'the controls button opens the panel, which reports what is missing',
+    (tester) async {
+      final (controller, _) = await pumpShell(tester);
+      controller.pair();
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.tune));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pumpAndSettle();
 
-    // The default source reports every block as not connected.
-    expect(find.text('Not connected yet'), findsNWidgets(6));
-    expect(find.text('TOKEN USE'), findsOneWidget);
-    expect(find.text('SESSION RUNTIME'), findsOneWidget);
-    expect(find.text('SCHEDULE'), findsOneWidget);
-    expect(find.text('SKILLS'), findsOneWidget);
-    expect(find.text('INTEGRATIONS'), findsOneWidget);
-  });
+      // The default source reports every block as not connected.
+      expect(find.text('Not connected yet'), findsNWidgets(6));
+      expect(find.text('TOKEN USE'), findsOneWidget);
+      expect(find.text('SESSION RUNTIME'), findsOneWidget);
+      expect(find.text('SCHEDULE'), findsOneWidget);
+      expect(find.text('SKILLS'), findsOneWidget);
+      expect(find.text('INTEGRATIONS'), findsOneWidget);
+    },
+  );
 
   testWidgets('a schedule set in the panel lands on the agent', (tester) async {
     final (controller, roster) = await pumpShell(tester);
@@ -672,46 +814,50 @@ void main() {
     await tester.tap(find.byIcon(Icons.tune));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, 'Schedule'), 'every 6h');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Schedule'),
+      'every 6h',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Set'));
     await tester.pumpAndSettle();
 
     expect(roster.agents.single.schedule!.source, 'every 6h');
   });
 
-  testWidgets('a tablet window shows the roster first, then the thread',
-      (tester) async {
-    // 660: narrower than the 720 compact breakpoint, wider than the 600 phone
-    // one — chuk's compact mode: the open sidebar covers the chat.
-    final (controller, _) = await pumpShell(tester, size: const Size(660, 900));
+  testWidgets('a 660px window keeps the desktop chat visible like master', (
+    tester,
+  ) async {
+    final (controller, _) = await pumpShell(
+      tester,
+      size: const Size(660, 900),
+      openSidebar: false,
+    );
     controller.pair();
     await tester.pumpAndSettle();
 
-    // The roster is on screen; the thread is mounted but off stage behind it.
-    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(find.text('CoWork').hitTestable(), findsNothing);
     expect(threadView, findsOneWidget);
-    expect(threadOffstage(tester), isTrue);
-    expect(find.byType(AppBar), findsNothing);
-
-    await tester.tap(find.text('cowork-host').first);
-    await tester.pumpAndSettle();
-
-    // Picking a coworker folds the sidebar: the thread comes forward, and the
-    // hamburger is the way back to the roster.
     expect(threadOffstage(tester), isFalse);
-    expect(find.text('Coworkers').hitTestable(), findsNothing);
+    expect(find.byType(AppBar), findsNothing);
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
-    expect(threadOffstage(tester), isTrue);
+    expect(find.text('CoWork').hitTestable(), findsOneWidget);
+    expect(threadOffstage(tester), isFalse);
+    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('CoWork').hitTestable(), findsNothing);
+    expect(threadOffstage(tester), isFalse);
   });
 
-  testWidgets('a phone window shows the inbox, then the chat, and back again',
-      (tester) async {
+  testWidgets('a phone window shows the inbox, then the chat, and back again', (
+    tester,
+  ) async {
     // Under 600 the shell mounts the mobile layer instead: the coworker inbox,
     // and a chat screen whose chrome floats over the thread with no app bar.
-    final (controller, roster) =
-        await pumpShell(tester, size: const Size(420, 900));
+    final (controller, roster) = await pumpShell(
+      tester,
+      size: const Size(420, 900),
+    );
     controller.pair();
     await tester.pumpAndSettle();
 
@@ -732,8 +878,9 @@ void main() {
     expect(find.byType(MobileChatScreen), findsNothing);
   });
 
-  testWidgets('the Rooms button opens the rooms screen and lists rooms',
-      (tester) async {
+  testWidgets('the Rooms button opens the rooms screen and lists rooms', (
+    tester,
+  ) async {
     final rooms = LocalRoomSource();
     final room = rooms.addRoom(
       const CoworkRoomDraft(
@@ -761,7 +908,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms').first);
     await tester.pumpAndSettle();
 
     // The room list is the right panel (chuk's Workspaces slot); at 800 px
@@ -776,11 +923,10 @@ void main() {
     // renders a running spinner, so advance frames with pump, not pumpAndSettle.
     await tester.tap(find.text('launch'));
     await tester.pump(); // start the route
-    await tester.pump(const Duration(milliseconds: 400)); // finish the transition
-    expect(
-      find.text('Message the room to start.'),
-      findsOneWidget,
-    );
+    await tester.pump(
+      const Duration(milliseconds: 400),
+    ); // finish the transition
+    expect(find.text('Message the room to start.'), findsOneWidget);
     // Opening the room re-syncs it to the host (idempotent) and asks for its
     // stored history.
     expect(controller.historyRequests, [room.id]);
@@ -809,8 +955,9 @@ void main() {
     expect(controller.roomTasks, [(room.id, 'kick off')]);
   });
 
-  testWidgets('creating a room from the shell adds it to the source',
-      (tester) async {
+  testWidgets('creating a room from the shell adds it to the source', (
+    tester,
+  ) async {
     final rooms = LocalRoomSource();
     final roster = LocalAgentRosterSource()
       ..addAgent(name: 'amber')
@@ -832,7 +979,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms').first);
     await tester.pumpAndSettle();
     // Empty -> the New room button is offered.
     await tester.tap(find.widgetWithText(FilledButton, 'New room'));
@@ -849,9 +996,9 @@ void main() {
     );
     // The roster lists the same names; pick the members inside the sheet.
     Finder inSheet(String name) => find.descendant(
-          of: find.byType(RoomCreateSheet),
-          matching: find.text(name),
-        );
+      of: find.byType(RoomCreateSheet),
+      matching: find.text(name),
+    );
     await tester.tap(inSheet('amber'));
     await tester.tap(inSheet('cobalt'));
     await tester.pumpAndSettle();
@@ -871,15 +1018,25 @@ void main() {
     final amberId = roster.agents.single.id; // local agent -> Delete offered
     final rooms = LocalRoomSource();
     // Room A survives amber's removal (3 -> 2); room B is deleted (2 -> 1).
-    final a = rooms.addRoom(CoworkRoomDraft(name: 'A', members: [
-      CoworkRoomMember(agentId: amberId, handle: 'amber'),
-      const CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
-      const CoworkRoomMember(agentId: 'c', handle: 'jade'),
-    ]));
-    final b = rooms.addRoom(CoworkRoomDraft(name: 'B', members: [
-      CoworkRoomMember(agentId: amberId, handle: 'amber'),
-      const CoworkRoomMember(agentId: 'd', handle: 'onyx'),
-    ]));
+    final a = rooms.addRoom(
+      CoworkRoomDraft(
+        name: 'A',
+        members: [
+          CoworkRoomMember(agentId: amberId, handle: 'amber'),
+          const CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+          const CoworkRoomMember(agentId: 'c', handle: 'jade'),
+        ],
+      ),
+    );
+    final b = rooms.addRoom(
+      CoworkRoomDraft(
+        name: 'B',
+        members: [
+          CoworkRoomMember(agentId: amberId, handle: 'amber'),
+          const CoworkRoomMember(agentId: 'd', handle: 'onyx'),
+        ],
+      ),
+    );
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
@@ -895,6 +1052,9 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // Delete amber via its roster row menu. The row is scoped by the agent's
@@ -918,16 +1078,22 @@ void main() {
     expect(rooms.byId(a.id)!.members.length, 2);
   });
 
-  testWidgets('removing a member from the sheet syncs removeRoomMember',
-      (tester) async {
+  testWidgets('removing a member from the sheet syncs removeRoomMember', (
+    tester,
+  ) async {
     final roster = LocalAgentRosterSource();
     final rooms = LocalRoomSource();
     // Three members, so Remove is enabled (it disables at two).
-    final room = rooms.addRoom(const CoworkRoomDraft(name: 'trio', members: [
-      CoworkRoomMember(agentId: 'a', handle: 'amber'),
-      CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
-      CoworkRoomMember(agentId: 'c', handle: 'jade'),
-    ]));
+    final room = rooms.addRoom(
+      const CoworkRoomDraft(
+        name: 'trio',
+        members: [
+          CoworkRoomMember(agentId: 'a', handle: 'amber'),
+          CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+          CoworkRoomMember(agentId: 'c', handle: 'jade'),
+        ],
+      ),
+    );
     final controller = _FakeRelayController();
     await tester.pumpWidget(
       MaterialApp(
@@ -945,7 +1111,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
@@ -961,55 +1127,63 @@ void main() {
     expect(controller.deletedRooms, isEmpty);
   });
 
-  testWidgets('a room deleted while offline is flushed to the host on connect',
-      (tester) async {
-    final rooms = LocalRoomSource();
-    final room = rooms.addRoom(const CoworkRoomDraft(name: 'gone', members: [
-      CoworkRoomMember(agentId: 'a', handle: 'amber'),
-      CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
-    ]));
-    final controller = _FakeRelayController();
-    // The transport is not ready yet: its builder waits on this completer, so
-    // _controller.value stays null and a delete must be queued.
-    final gate = Completer<CoworkRelayController>();
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: kTestLocalizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: MessengerShell(
-          relayControllerBuilder: () => gate.future,
-          sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
-          rosterSource: LocalAgentRosterSource(),
-          roomSource: rooms,
-          onSignOut: () {},
+  testWidgets(
+    'a room deleted while offline is flushed to the host on connect',
+    (tester) async {
+      final rooms = LocalRoomSource();
+      final room = rooms.addRoom(
+        const CoworkRoomDraft(
+          name: 'gone',
+          members: [
+            CoworkRoomMember(agentId: 'a', handle: 'amber'),
+            CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+          ],
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      final controller = _FakeRelayController();
+      // The transport is not ready yet: its builder waits on this completer, so
+      // _controller.value stays null and a delete must be queued.
+      final gate = Completer<CoworkRelayController>();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MessengerShell(
+            relayControllerBuilder: () => gate.future,
+            sessionSource: const _FakeSessionSource(),
+            pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+            rosterSource: LocalAgentRosterSource(),
+            roomSource: rooms,
+            onSignOut: () {},
+          ),
+        ),
+      );
+      await tester.pump();
 
-    // Delete the room while offline (via the room panel's menu). Bounded
-    // pumps: the thread view animates while its transport is still pending,
-    // and the panel sits next to it now instead of behind a route that muted
-    // its ticker.
-    await tester.tap(find.byTooltip('Control Rooms'));
-    await settle(tester);
-    await tester.tap(find.byIcon(Icons.more_vert));
-    await settle(tester);
-    await tester.tap(find.text('Delete room'));
-    await settle(tester);
+      // Delete the room while offline (via the room panel's menu). Bounded
+      // pumps: the thread view animates while its transport is still pending,
+      // and the panel sits next to it now instead of behind a route that muted
+      // its ticker.
+      await tester.tap(find.byTooltip('Control Rooms').first);
+      await settle(tester);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await settle(tester);
+      await tester.tap(find.text('Delete room'));
+      await settle(tester);
 
-    expect(rooms.byId(room.id), isNull);
-    expect(controller.deletedRooms, isEmpty); // not sent yet — offline
+      expect(rooms.byId(room.id), isNull);
+      expect(controller.deletedRooms, isEmpty); // not sent yet — offline
 
-    // The transport arrives: the queued delete flushes.
-    gate.complete(controller);
-    await tester.pumpAndSettle();
-    expect(controller.deletedRooms, [room.id]);
-  });
+      // The transport arrives: the queued delete flushes.
+      gate.complete(controller);
+      await tester.pumpAndSettle();
+      expect(controller.deletedRooms, [room.id]);
+    },
+  );
 
-  testWidgets('the top-right "Copy full chat" button exports the thread',
-      (tester) async {
+  testWidgets('the top-right "Copy Debug Chat" button exports the thread', (
+    tester,
+  ) async {
     final List<String> exported = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -1024,23 +1198,69 @@ void main() {
           onSignOut: () {},
           chatDebugExport: (threadKey) async {
             exported.add(threadKey);
-            return 'full chat copied';
+            return 'debug chat copied';
           },
         ),
       ),
     );
     await tester.pump();
 
-    expect(find.byTooltip('Copy full chat'), findsOneWidget);
-    await tester.tap(find.byTooltip('Copy full chat'));
+    expect(find.byTooltip('Copy Debug Chat'), findsOneWidget);
+    await tester.tap(find.byTooltip('Copy Debug Chat'));
     await tester.pumpAndSettle();
 
     expect(exported, ['default']);
-    expect(find.text('full chat copied'), findsOneWidget);
+    expect(find.text('debug chat copied'), findsOneWidget);
   });
 
-  testWidgets('a failed "Copy full chat" says so instead of staying silent',
-      (tester) async {
+  testWidgets('Copy Debug Chat uses the real clipboard export by default', (
+    tester,
+  ) async {
+    String? clipboardText;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          relayControllerBuilder: () async => _FakeRelayController(),
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: LocalRoomSource(),
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Copy Debug Chat'));
+    await tester.pumpAndSettle();
+
+    expect(clipboardText, isNotNull);
+    final payload = jsonDecode(clipboardText!) as Map<String, dynamic>;
+    expect(payload['kind'], 'cowork_full_chat_debug');
+    expect(payload['thread_key'], 'default');
+    expect(find.text('debug chat copied'), findsOneWidget);
+    expect(find.text('could not copy the chat'), findsNothing);
+  });
+
+  testWidgets('a failed "Copy Debug Chat" says so instead of staying silent', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: kTestLocalizationsDelegates,
@@ -1058,7 +1278,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Copy full chat'));
+    await tester.tap(find.byTooltip('Copy Debug Chat'));
     await tester.pumpAndSettle();
 
     expect(find.text('could not copy the chat'), findsOneWidget);

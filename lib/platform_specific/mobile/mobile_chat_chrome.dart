@@ -59,7 +59,7 @@ class MobileChatChrome extends StatelessWidget {
                 MobileRoundChip(
                   icon: Icons.arrow_back_ios_new_rounded,
                   onTap: onBack,
-                  tooltip: 'Coworkers',
+                  tooltip: 'Agents',
                   semanticsId: 'mobile_chat_back',
                 ),
                 const SizedBox(width: 8),
@@ -69,11 +69,7 @@ class MobileChatChrome extends StatelessWidget {
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: _BotPill(
-                      agent: agent,
-                      onTap: onOpenProfile,
-                      fg: fg,
-                    ),
+                    child: _BotPill(agent: agent, onTap: onOpenProfile, fg: fg),
                   ),
                 ),
                 if (onOpenBrowser != null) ...[
@@ -121,7 +117,9 @@ class _BotPill extends StatelessWidget {
       button: onTap != null,
       label: agent.name,
       child: Tooltip(
-        message: role == null || role.isEmpty ? agent.name : '${agent.name} · $role',
+        message: role == null || role.isEmpty
+            ? agent.name
+            : '${agent.name} · $role',
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(MobileLayout.chipDiameter / 2),

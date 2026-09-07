@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 
+from cowork_agent.connection_pool import BackendConnectionPool
+
 from cowork_agent import (
     DEFAULT_BASE_URL,
     BackendModelClient,
@@ -39,11 +41,14 @@ def make_backend_model_factory(
     max_tokens: int = 2048,
     temperature: float = 0.7,
     reasoning_effort: str | None = None,
+    connection_pool: BackendConnectionPool | None = None,
 ) -> ModelFactory:
     """A ``model_factory`` that builds a fresh :class:`BackendModelClient` per task
     from the injected session. The session (and its auto-refresh) is shared, so a
     token refreshed on one task carries to the next.
     """
+
+    pool = connection_pool or BackendConnectionPool()
 
     def factory() -> ModelClient:
         return BackendModelClient(
@@ -54,8 +59,10 @@ def make_backend_model_factory(
             max_tokens=max_tokens,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
+            connection_pool=pool,
         )
 
+    factory.close = pool.close
     return factory
 
 
@@ -93,6 +100,7 @@ def make_backend_model_select(
     max_tokens: int = 2048,
     temperature: float = 0.7,
     reasoning_effort: str | None = None,
+    connection_pool: BackendConnectionPool | None = None,
 ) -> ModelSelect:
     """A per-task selector: given the ``(model, provider, reasoning_effort)`` a
     task asked for, resolve it against the account's ``/v1/models_info`` list and
@@ -114,6 +122,7 @@ def make_backend_model_select(
     the effective level so the executor can record it on the run.
     """
     warned: set[tuple[str, str]] = set()
+    pool = connection_pool or BackendConnectionPool()
 
     def select(
         model: str | None,
@@ -151,8 +160,10 @@ def make_backend_model_select(
             max_tokens=max_tokens,
             temperature=temperature,
             reasoning_effort=effective,
+            connection_pool=pool,
         )
 
+    select.close = pool.close
     return select
 
 
@@ -173,6 +184,7 @@ def resolve_backend_model_wiring(
         preferred_model_id=preferred_model_id,
         preferred_provider=preferred_provider,
     )
+    kwargs.setdefault("connection_pool", BackendConnectionPool())
     factory = make_backend_model_factory(
         session,
         model_id=resolved.model_id,

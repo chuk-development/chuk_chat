@@ -26,6 +26,30 @@ def _registry() -> ToolRegistry:
     return registry
 
 
+def test_old_session_gets_research_rules_without_replacing_memory_or_persona(tmp_path):
+    from cowork_agent import StateStore
+    from cowork_agent.prompt import BASE_INSTRUCTIONS
+
+    before, rest = BASE_INSTRUCTIONS.split("# Online research\n", 1)
+    old = before + "# Your workspace\n" + rest.split("# Your workspace\n", 1)[1]
+    old += "\n# Memory\nremember this\n# Operator instructions\nBe terse."
+    path = str(tmp_path / "session.db")
+    store = StateStore(path)
+    sid = store.route("existing")
+    store.append_message(sid, "system", {"role": "system", "content": old})
+    store.close()
+    model = MockModelClient(["done"])
+    loop = build_runtime(model, db_path=path, context_ladder=False)
+    loop.run("existing", "find a current price")
+    system = model.calls[0][0]["content"]
+    assert "# Online research" in system
+    assert "remember this" in system and "Be terse." in system
+    assert system.count("# Online research") == 1
+    store = StateStore(path)
+    assert store.get_conversation(sid)[0].content["content"] == old
+    store.close()
+
+
 def test_tool_docs_list_every_available_tool_with_its_arguments():
     docs = render_tool_docs(_registry())
     for name in ("run_command", "write_file", "read_file", "list_dir"):

@@ -10,9 +10,26 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart'
 import 'package:cowork/services/cowork/schedule_spec.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
 
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
+
+  testWidgets('CoWork brand has no C logo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentRosterView(
+            source: LocalAgentRosterSource(),
+            onSelect: (_, _) {},
+          ),
+        ),
+      ),
+    );
+    final brand = tester.widget<SbBrand>(find.byType(SbBrand));
+    expect(brand.label, 'CoWork');
+    expect(brand.showLogo, isFalse);
+  });
 
   Future<List<(String, String)>> pumpRoster(
     WidgetTester tester,
@@ -21,7 +38,6 @@ void main() {
     String? selectedThreadKey,
     VoidCallback? onAddAgent,
     VoidCallback? onOpenRooms,
-    VoidCallback? onOpenBrowser,
     VoidCallback? onOpenSettings,
   }) async {
     final picks = <(String, String)>[];
@@ -34,7 +50,6 @@ void main() {
             selectedThreadKey: selectedThreadKey,
             onAddAgent: onAddAgent,
             onOpenRooms: onOpenRooms,
-            onOpenBrowser: onOpenBrowser,
             onOpenSettings: onOpenSettings,
             now: () => now,
             onSelect: (agentId, threadKey) => picks.add((agentId, threadKey)),
@@ -46,31 +61,31 @@ void main() {
     return picks;
   }
 
-  testWidgets('the rail rows and the footer gear are chuk\'s slots',
-      (tester) async {
-    var rooms = 0, browser = 0, settings = 0;
+  testWidgets('the rail rows and the footer gear are chuk\'s slots', (
+    tester,
+  ) async {
+    var rooms = 0, settings = 0;
     final source = LocalAgentRosterSource()..addAgent(name: 'amber-otter');
     await pumpRoster(
       tester,
       source,
       onOpenRooms: () => rooms++,
-      onOpenBrowser: () => browser++,
       onOpenSettings: () => settings++,
     );
 
-    // Control Rooms and Agent's browser take chuk's Workspaces / Media rail
-    // slots; the settings gear sits in chuk's footer pill.
+    // Browser is available from the chat only, never duplicated in the rail.
     await tester.tap(find.text('Control Rooms'));
-    await tester.tap(find.text("Agent's browser"));
+    expect(find.text("Agent's browser"), findsNothing);
     await tester.tap(find.byTooltip('Settings'));
-    expect((rooms, browser, settings), (1, 1, 1));
+    expect((rooms, settings), (1, 1));
     // The pill itself opens settings too, like chuk's name pill.
     await tester.tap(find.text('Account'));
     expect(settings, 2);
   });
 
-  testWidgets('without callbacks the rail rows and the footer are absent',
-      (tester) async {
+  testWidgets('without callbacks the rail rows and the footer are absent', (
+    tester,
+  ) async {
     await pumpRoster(tester, LocalAgentRosterSource()..addAgent(name: 'jade'));
 
     expect(find.text('Control Rooms'), findsNothing);
@@ -89,13 +104,14 @@ void main() {
       onAddAgent: () => opened++,
     );
 
-    expect(find.text('No coworkers yet.'), findsOneWidget);
+    expect(find.text('No agents yet.'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Add an agent'));
     expect(opened, 1);
   });
 
-  testWidgets('entries show the name, the state and the last activity',
-      (tester) async {
+  testWidgets('entries show the name, the state and the last activity', (
+    tester,
+  ) async {
     final source = LocalAgentRosterSource(random: Random(1));
     source.ensureHostAgent('cowork-host');
     final scheduled = source.addAgent(
@@ -105,8 +121,11 @@ void main() {
     );
     final busy = source.addAgent(name: 'cobalt-lynx', brief: 'watch the build');
     source.markRunning(busy.id, true);
-    source.markActivity(busy.id, busy.threads.first.key,
-        now.subtract(const Duration(minutes: 5)));
+    source.markActivity(
+      busy.id,
+      busy.threads.first.key,
+      now.subtract(const Duration(minutes: 5)),
+    );
 
     await pumpRoster(tester, source);
 
@@ -114,7 +133,10 @@ void main() {
     expect(find.text('amber-otter'), findsOneWidget);
     expect(find.text('cobalt-lynx'), findsOneWidget);
     // The host agent has seen nothing yet: it says so, it does not show a time.
-    expect(find.textContaining('waiting · no activity yet'), findsOneWidget);
+    expect(
+      find.textContaining('ready for a task · no activity yet'),
+      findsOneWidget,
+    );
     expect(find.textContaining('working · 5m ago'), findsOneWidget);
     expect(find.textContaining('scheduled · no activity yet'), findsOneWidget);
     expect(scheduled.activity, AgentActivity.scheduled);
@@ -176,19 +198,21 @@ void main() {
       expect(agent.activity, AgentActivity.waiting);
     });
 
-    test('an added agent has one permanent thread keyed by its id, notifies once',
-        () {
-      final source = LocalAgentRosterSource(random: Random(5));
-      var notifications = 0;
-      source.addListener(() => notifications++);
+    test(
+      'an added agent has one permanent thread keyed by its id, notifies once',
+      () {
+        final source = LocalAgentRosterSource(random: Random(5));
+        var notifications = 0;
+        source.addListener(() => notifications++);
 
-      final agent = source.addAgent(name: 'amber-otter');
+        final agent = source.addAgent(name: 'amber-otter');
 
-      // Exactly one permanent thread, and its key is the stable agent id.
-      expect(source.byId(agent.id)!.threads, hasLength(1));
-      expect(agent.threads.single.key, agent.id);
-      expect(notifications, 1);
-    });
+        // Exactly one permanent thread, and its key is the stable agent id.
+        expect(source.byId(agent.id)!.threads, hasLength(1));
+        expect(agent.threads.single.key, agent.id);
+        expect(notifications, 1);
+      },
+    );
 
     test('markRunning drives the activity, markActivity the timestamps', () {
       final source = LocalAgentRosterSource(random: Random(6));
@@ -227,8 +251,9 @@ void main() {
   });
 
   group('role (§16.1)', () {
-    testWidgets('a role shows under the name; no role means no extra line',
-        (tester) async {
+    testWidgets('a role shows under the name; no role means no extra line', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(9));
       source.addAgent(name: 'amber-otter', role: 'researcher');
       source.addAgent(name: 'cobalt-lynx');
@@ -242,8 +267,9 @@ void main() {
   });
 
   group('delete an agent (§16.1)', () {
-    testWidgets('a non-host agent offers Delete; the host agent does not',
-        (tester) async {
+    testWidgets('a non-host agent offers Delete; the host agent does not', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(30));
       final host = source.ensureHostAgent('host-laptop'); // onHost = true
       final local = source.addAgent(name: 'amber-otter'); // onHost = false
@@ -310,10 +336,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
-        matching: find.byIcon(Icons.more_vert),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
+          matching: find.byIcon(Icons.more_vert),
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rename'));
       await tester.pumpAndSettle();
@@ -336,8 +364,9 @@ void main() {
       expect(source.byId(host.id)!.name, host.name);
     });
 
-    testWidgets('an unchanged or empty name and Cancel report nothing',
-        (tester) async {
+    testWidgets('an unchanged or empty name and Cancel report nothing', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(30));
       final agent = source.addAgent(name: 'amber-otter');
       final renamed = <(String, String)>[];
@@ -357,10 +386,12 @@ void main() {
       await tester.pumpAndSettle();
 
       Future<void> openDialog() async {
-        await tester.tap(find.descendant(
-          of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-          matching: find.byIcon(Icons.more_vert),
-        ));
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+            matching: find.byIcon(Icons.more_vert),
+          ),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Rename'));
         await tester.pumpAndSettle();
@@ -390,8 +421,9 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     });
 
-    testWidgets('without onRenameAgent the menu has no Rename item',
-        (tester) async {
+    testWidgets('without onRenameAgent the menu has no Rename item', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(30));
       final agent = source.addAgent(name: 'amber-otter');
 
@@ -407,10 +439,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-        matching: find.byIcon(Icons.more_vert),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+          matching: find.byIcon(Icons.more_vert),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Rename'), findsNothing);
       expect(find.text('Hide'), findsOneWidget);
@@ -425,7 +459,10 @@ void main() {
 
       source.renameAgent(agent.id, '  Amber Desk ');
       expect(source.byId(agent.id)!.name, 'Amber Desk');
-      expect(source.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+      expect(
+        source.byId(agent.id)!.threads.single.key,
+        agent.threads.single.key,
+      );
       expect(notified, 1);
 
       source.renameAgent(agent.id, '   ');
@@ -446,14 +483,15 @@ void main() {
       var notified = 0;
       source.addListener(() => notified++);
 
-      source.applyHostNames(
-        [
-          const CoworkHostAgentName(agentId: 'host:laptop-3f2a', name: 'Laptop Bot', host: true),
-          const CoworkHostAgentName(agentId: 'local:x:9:1', name: 'From Phone'),
-          CoworkHostAgentName(agentId: local.id, name: 'Amber Desk'),
-        ],
-        peerDeviceId: 'laptop-3f2a',
-      );
+      source.applyHostNames([
+        const CoworkHostAgentName(
+          agentId: 'host:laptop-3f2a',
+          name: 'Laptop Bot',
+          host: true,
+        ),
+        const CoworkHostAgentName(agentId: 'local:x:9:1', name: 'From Phone'),
+        CoworkHostAgentName(agentId: local.id, name: 'Amber Desk'),
+      ], peerDeviceId: 'laptop-3f2a');
 
       expect(source.byId(host.id)!.name, 'Laptop Bot');
       expect(source.byId(host.id)!.onHost, isTrue);
@@ -476,8 +514,15 @@ void main() {
 
       source.applyHostNames(
         [
-          const CoworkHostAgentName(agentId: 'host:whatever', name: 'Bot', host: true),
-          const CoworkHostAgentName(agentId: 'local:deleted:1:1', name: 'Ghost'),
+          const CoworkHostAgentName(
+            agentId: 'host:whatever',
+            name: 'Bot',
+            host: true,
+          ),
+          const CoworkHostAgentName(
+            agentId: 'local:deleted:1:1',
+            name: 'Ghost',
+          ),
           CoworkHostAgentName(agentId: local.id, name: 'amber-otter'),
         ],
         peerDeviceId: null,
@@ -490,29 +535,31 @@ void main() {
   });
 
   group('hide / unhide (§16.1)', () {
-    test('hiding removes an agent from the visible roster, keeps it in agents',
-        () {
-      final source = LocalAgentRosterSource(random: Random(3));
-      final a = source.addAgent(name: 'amber-otter');
-      source.addAgent(name: 'cobalt-lynx');
+    test(
+      'hiding removes an agent from the visible roster, keeps it in agents',
+      () {
+        final source = LocalAgentRosterSource(random: Random(3));
+        final a = source.addAgent(name: 'amber-otter');
+        source.addAgent(name: 'cobalt-lynx');
 
-      var notified = 0;
-      source.addListener(() => notified++);
+        var notified = 0;
+        source.addListener(() => notified++);
 
-      source.hideAgent(a.id);
-      expect(notified, 1);
-      expect(source.hiddenIds, contains(a.id));
-      expect(source.visibleAgents.map((e) => e.name), ['cobalt-lynx']);
-      expect(source.hiddenAgents.map((e) => e.name), ['amber-otter']);
-      // The agent itself is untouched — hiding is a view preference.
-      expect(source.byId(a.id), isNotNull);
-      expect(source.agents, hasLength(2));
+        source.hideAgent(a.id);
+        expect(notified, 1);
+        expect(source.hiddenIds, contains(a.id));
+        expect(source.visibleAgents.map((e) => e.name), ['cobalt-lynx']);
+        expect(source.hiddenAgents.map((e) => e.name), ['amber-otter']);
+        // The agent itself is untouched — hiding is a view preference.
+        expect(source.byId(a.id), isNotNull);
+        expect(source.agents, hasLength(2));
 
-      source.unhideAgent(a.id);
-      expect(notified, 2);
-      expect(source.hiddenIds, isEmpty);
-      expect(source.visibleAgents, hasLength(2));
-    });
+        source.unhideAgent(a.id);
+        expect(notified, 2);
+        expect(source.hiddenIds, isEmpty);
+        expect(source.visibleAgents, hasLength(2));
+      },
+    );
 
     test('hiding an unknown or already-hidden id does not notify', () {
       final source = LocalAgentRosterSource(random: Random(4));
@@ -538,8 +585,9 @@ void main() {
       expect(source.hiddenIds, isEmpty);
     });
 
-    testWidgets('the roster hides a picked agent and unhides it again',
-        (tester) async {
+    testWidgets('the roster hides a picked agent and unhides it again', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(6));
       source.addAgent(name: 'amber-otter');
       source.addAgent(name: 'cobalt-lynx');
@@ -578,7 +626,7 @@ void main() {
       await pumpRoster(tester, source);
 
       expect(find.text('Working'), findsNothing);
-      expect(find.text('Waiting'), findsOneWidget);
+      expect(find.text('Ready'), findsOneWidget);
 
       source.markRunning(a.id, true);
       await tester.pumpAndSettle();
@@ -592,8 +640,10 @@ void main() {
 
   group('AgentAvatar (§16.1)', () {
     test('the colour is stable for a seed and the monogram is the initial', () {
-      expect(AgentAvatar.hueOf('host:cowork-host'),
-          AgentAvatar.hueOf('host:cowork-host'));
+      expect(
+        AgentAvatar.hueOf('host:cowork-host'),
+        AgentAvatar.hueOf('host:cowork-host'),
+      );
       expect(AgentAvatar.monogramOf('amber-otter'), 'A');
       expect(AgentAvatar.monogramOf('  '), '?');
       expect(AgentAvatar.monogramOf(''), '?');

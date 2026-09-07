@@ -832,11 +832,21 @@ class MCPConnection:
                 "error": f"mcp call timed out after {timeout:.0f}s",
             }
         except Exception as exc:  # noqa: BLE001
+            error = _redact(f"{type(exc).__name__}: {_clip(exc, 500)}")
+            # The SDK can close its reader while our transport thread remains
+            # parked on _stop. Do not keep advertising that session as alive.
+            # The next call/task can reconnect; never replay an arbitrary tool
+            # whose side effects may already have happened before disconnection.
+            if isinstance(exc, (BrokenPipeError, ConnectionError)) or (
+                type(exc).__name__ in ("McpError", "MCPError")
+                and "connection closed" in str(exc).lower()
+            ):
+                self._error = error
             return {
                 "ok": False,
                 "server": self.config.name,
                 "tool": tool,
-                "error": _redact(f"{type(exc).__name__}: {_clip(exc, 500)}"),
+                "error": error,
             }
         return _normalize_result(self.config.name, tool, result)
 

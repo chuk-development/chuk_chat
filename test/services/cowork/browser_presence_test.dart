@@ -28,8 +28,10 @@ void main() {
 
   test('a completed Playwright tool means the browser is open', () {
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_navigate',
-          status: 'completed'),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_navigate',
+        status: 'completed',
+      ),
     );
     expect(presence.value, isTrue);
     expect(changes, <bool>[true]);
@@ -37,12 +39,16 @@ void main() {
 
   test('browser_close means it is gone', () {
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_snapshot',
-          status: 'completed'),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_snapshot',
+        status: 'completed',
+      ),
     );
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_close',
-          status: 'completed'),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_close',
+        status: 'completed',
+      ),
     );
     expect(presence.value, isFalse);
     expect(changes, <bool>[true, false]);
@@ -50,52 +56,69 @@ void main() {
 
   test('a failed browser tool proves nothing', () {
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_navigate',
-          status: 'error', failed: true),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_navigate',
+        status: 'error',
+        failed: true,
+      ),
     );
     expect(presence.value, isFalse);
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_navigate',
-          status: 'completed'),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_navigate',
+        status: 'completed',
+      ),
     );
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_close',
-          status: 'error', failed: true),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_close',
+        status: 'error',
+        failed: true,
+      ),
     );
     expect(presence.value, isTrue, reason: 'a failed close leaves it open');
   });
 
-  test('a deferred tool reached through tool_call counts by its inner name', () {
-    controller.emit(
-      const CoworkRelayTool(
-        'tool_call',
-        status: 'completed',
-        argumentMap: <String, dynamic>{
-          'name': 'mcp__playwright__browser_navigate',
-          'arguments': <String, dynamic>{'url': 'https://example.com'},
-        },
-      ),
-    );
-    expect(presence.value, isTrue);
-    controller.emit(
-      const CoworkRelayTool(
-        'tool_call',
-        status: 'completed',
-        argumentMap: <String, dynamic>{'name': 'mcp__playwright__browser_close'},
-      ),
-    );
-    expect(presence.value, isFalse);
-  });
+  test(
+    'a deferred tool reached through tool_call counts by its inner name',
+    () {
+      controller.emit(
+        const CoworkRelayTool(
+          'tool_call',
+          status: 'completed',
+          argumentMap: <String, dynamic>{
+            'name': 'mcp__playwright__browser_navigate',
+            'arguments': <String, dynamic>{'url': 'https://example.com'},
+          },
+        ),
+      );
+      expect(presence.value, isTrue);
+      controller.emit(
+        const CoworkRelayTool(
+          'tool_call',
+          status: 'completed',
+          argumentMap: <String, dynamic>{
+            'name': 'mcp__playwright__browser_close',
+          },
+        ),
+      );
+      expect(presence.value, isFalse);
+    },
+  );
 
-  test('other tools are ignored, replayed frames count the same', () {
+  test('other tools and historical browser calls cannot open the viewer', () {
     controller.emit(const CoworkRelayTool('run_command', status: 'completed'));
     controller.emit(const CoworkRelayTool('web_fetch', status: 'completed'));
     expect(presence.value, isFalse);
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_click',
-          status: 'completed', replay: true, mid: 7),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_click',
+        status: 'completed',
+        replay: true,
+        mid: 7,
+      ),
     );
-    expect(presence.value, isTrue);
+    expect(presence.value, isFalse);
   });
 
   test('the executor\'s browser_view verdicts refine the state', () {
@@ -125,7 +148,10 @@ void main() {
     // Any other error says nothing about the browser.
     controller.emit(const CoworkRelayBrowserView(status: 'started'));
     controller.emit(
-      const CoworkRelayBrowserView(status: 'error', message: 'vnc bridge failed'),
+      const CoworkRelayBrowserView(
+        status: 'error',
+        message: 'vnc bridge failed',
+      ),
     );
     expect(presence.value, isTrue);
   });
@@ -137,23 +163,64 @@ void main() {
     expect(presence.value, isFalse);
     controller.emit(
       const CoworkRelayRunState(
-        sessionKey: 't', state: 'idle', browserOpen: true),
+        sessionKey: 't',
+        state: 'idle',
+        browserOpen: true,
+      ),
     );
-    expect(presence.value, isTrue);
+    expect(presence.value, isFalse);
     // An old host's run_state (no field) leaves the derived state alone.
     controller.emit(const CoworkRelayRunState(sessionKey: 't', state: 'idle'));
-    expect(presence.value, isTrue);
+    expect(presence.value, isFalse);
     controller.emit(
       const CoworkRelayRunState(
-        sessionKey: 't', state: 'running', browserOpen: false),
+        sessionKey: 't',
+        state: 'running',
+        browserOpen: false,
+      ),
     );
     expect(presence.value, isFalse);
   });
 
+  test('a finished live run hides its browser; replay cannot revive it', () {
+    controller.emit(
+      const CoworkRelayTool('browser_navigate', status: 'completed'),
+    );
+    expect(presence.value, isTrue);
+    controller.emit(const CoworkRelayDone());
+    expect(presence.value, isFalse);
+    controller.emit(const CoworkRelayBrowserView(status: 'opened'));
+    expect(
+      presence.value,
+      isFalse,
+      reason: 'a retained browser is not active use',
+    );
+    controller.emit(
+      const CoworkRelayTool(
+        'browser_navigate',
+        status: 'completed',
+        replay: true,
+      ),
+    );
+    expect(presence.value, isFalse);
+    controller.emit(
+      const CoworkRelayRunState(
+        sessionKey: 't',
+        state: 'running',
+        browserOpen: true,
+      ),
+    );
+    expect(presence.value, isTrue);
+    controller.emit(const CoworkRelayDone(reason: 'replay'));
+    expect(presence.value, isTrue);
+  });
+
   test('reset forgets, dispose stops listening', () {
     controller.emit(
-      const CoworkRelayTool('mcp__playwright__browser_navigate',
-          status: 'completed'),
+      const CoworkRelayTool(
+        'mcp__playwright__browser_navigate',
+        status: 'completed',
+      ),
     );
     presence.reset();
     expect(presence.value, isFalse);
@@ -163,11 +230,15 @@ void main() {
   });
 
   test('name helpers', () {
-    expect(BrowserPresence.toolPart('mcp__playwright__browser_tab_new'),
-        'browser_tab_new');
+    expect(
+      BrowserPresence.toolPart('mcp__playwright__browser_tab_new'),
+      'browser_tab_new',
+    );
     expect(BrowserPresence.toolPart('browser_close'), 'browser_close');
-    expect(BrowserPresence.isBrowserTool('mcp__playwright__browser_navigate'),
-        isTrue);
+    expect(
+      BrowserPresence.isBrowserTool('mcp__playwright__browser_navigate'),
+      isTrue,
+    );
     expect(BrowserPresence.isBrowserTool('mcp__other__browser_open'), isTrue);
     expect(BrowserPresence.isBrowserTool('mcp__other__fetch'), isFalse);
     expect(BrowserPresence.isBrowserTool('run_command'), isFalse);

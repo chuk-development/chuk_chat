@@ -247,7 +247,9 @@ class HostParty:
         self._reconnect_channel_key = None
         self._reconnect_approved = None
         self._opener = None
-        self._sealer = None
+        # The task server and host-originated senders outlive the socket and
+        # share this sealer. Keep their sequence monotonic for the same stored
+        # channel key; a new pairing replaces it in _on_paired.
         # The next token frame re-provisions the long-lived task server
         # (rebinds its codec, refreshes the account session in place).
         self._provisioned = False
@@ -444,8 +446,8 @@ class HostParty:
                 self._log(f"could not persist pairing: {type(exc).__name__}: {exc}")
 
     def _on_reconnected(self, handshake: ReconnectHandshake) -> None:
-        """The reconnect authenticated: rebuild the frame codec from the STORED
-        channel key + approved devices, exactly as after a fresh pairing."""
+        """Reset inbound state, retaining the shared outbound sequence for the
+        stored channel key and all senders that outlived the socket."""
         with self._session_lock:
             if self._reconnect is not handshake:
                 return  # superseded mid-flight
@@ -459,7 +461,7 @@ class HostParty:
             key_version=self._key_version,
             approved_devices=approved,
         )
-        sealer = CoworkFrameSealer(
+        sealer = self._sealer or CoworkFrameSealer(
             channel_key=channel_key,
             key_version=self._key_version,
             device_id=self._device_id,

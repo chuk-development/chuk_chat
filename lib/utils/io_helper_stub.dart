@@ -30,6 +30,7 @@ class Directory {
   Future<bool> exists() async => false;
   bool existsSync() => false;
   Future<Directory> create({bool recursive = false}) async => this;
+  Future<void> delete({bool recursive = false}) async {}
 }
 
 /// Stub Platform class for web

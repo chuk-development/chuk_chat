@@ -34,7 +34,7 @@ class _RecordingExecutor:
         return type(self).last_kwargs.get("name", "rec")
 
 
-def _make_server(provider):
+def _make_server(provider, session_provider=None):
     return TaskServer(
         roster=None,
         agent_id="agent-1",
@@ -45,6 +45,7 @@ def _make_server(provider):
         db_path=":memory:",
         send_frame=lambda _b64: None,
         account_token_provider=provider,
+        account_session_provider=session_provider,
     )
 
 
@@ -67,6 +68,17 @@ def test_task_server_forwards_a_live_account_token_provider(monkeypatch):
     # is a live accessor, not a captured string.
     session.access_token = "tok-refreshed"
     assert provider() == "tok-refreshed"
+
+
+def test_task_server_forwards_live_search_session(monkeypatch):
+    monkeypatch.setattr(serve, "Executor", _RecordingExecutor)
+    current = [SimpleNamespace(access_token="initial")]
+    server = _make_server(None, lambda: current[0])
+    server.supervisor._factory(SimpleNamespace(name="agent-1", workspace_dir=None))
+    provider = _RecordingExecutor.last_kwargs["account_session_provider"]
+    assert provider() is current[0]
+    current[0] = SimpleNamespace(access_token="replacement")
+    assert provider() is current[0]
 
 
 def test_task_server_provider_defaults_to_none(monkeypatch):

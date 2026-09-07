@@ -58,12 +58,28 @@ const bool kFeatureImageGen = true;
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;
 
-/// Server-backed integration tools (Spotify, GitHub, Slack, Google, Email,
+/// Server-backed integration tools (GitHub, Slack, Google, Email,
 /// Nextcloud). OAuth credentials are managed by the API server; tokens are
 /// stored locally on the client.
 const bool kFeatureServerTools = bool.fromEnvironment(
   'FEATURE_SERVER_TOOLS',
   defaultValue: false,
+);
+
+/// Remote MCP connectors: sign in to a server in the browser and its tools
+/// join the tool list. Native only — the sign-in needs a loopback port,
+/// which a web page cannot open.
+const bool kFeatureMcp = bool.fromEnvironment(
+  'FEATURE_MCP',
+  defaultValue: true,
+);
+
+/// Artifact hosting: the `create_artifact` / `update_artifact` tools publish a
+/// self-contained HTML page to the artifacts host and return a public,
+/// unguessable URL. Backed by the artifacts service (see ARTIFACTS_BASE_URL).
+const bool kFeatureArtifactHosting = bool.fromEnvironment(
+  'FEATURE_ARTIFACT_HOSTING',
+  defaultValue: true,
 );
 
 /// Desktop system tray integration (Linux, Windows, macOS).
@@ -72,6 +88,29 @@ const bool kFeatureSystemTray = bool.fromEnvironment(
   'FEATURE_SYSTEM_TRAY',
   defaultValue: false,
 );
+
+/// Linux secure storage backend for encryption keys.
+/// When disabled, Linux falls back to SharedPreferences instead of keyring.
+const bool kFeatureLinuxKeyring = bool.fromEnvironment(
+  'FEATURE_LINUX_KEYRING',
+  defaultValue: false,
+);
+
+/// Direct payment integration via Stripe (web + mobile + desktop).
+/// Defaults to true for direct distribution.
+/// MUST be set false for Google Play Store builds to comply with Google's billing policy.
+const bool kFeaturePaymentsDirect = bool.fromEnvironment(
+  'FEATURE_PAYMENTS_DIRECT',
+  defaultValue: true,
+);
+
+
+// ============================================================================
+// COWORK-ONLY FEATURE FLAGS
+// ============================================================================
+// Appended by scripts/import_chat_ui.sh after the verbatim copy of chuk_chat's
+// platform_config.dart. These flags do not exist upstream; keep them here so a
+// re-sync never drops them.
 
 /// CoWork mode — a phone-driven agent that runs on the user's laptop with real
 /// system/CLI access, sandboxed execution and a persistent tray daemon. Lives in
@@ -112,13 +151,6 @@ const bool kFeatureSkills = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Linux secure storage backend for encryption keys.
-/// When disabled, Linux falls back to SharedPreferences instead of keyring.
-const bool kFeatureLinuxKeyring = bool.fromEnvironment(
-  'FEATURE_LINUX_KEYRING',
-  defaultValue: false,
-);
-
 /// Spotify playback tool. Disabled by default — API server no longer
 /// exposes Spotify OAuth endpoints. Set `--dart-define=FEATURE_SPOTIFY=true`
 /// only when the backend route is re-enabled.
@@ -133,12 +165,3 @@ const bool kFeatureWhoop = bool.fromEnvironment(
   'FEATURE_WHOOP',
   defaultValue: false,
 );
-
-/// Direct payment integration via Stripe (web + mobile + desktop).
-/// Defaults to true for direct distribution.
-/// MUST be set false for Google Play Store builds to comply with Google's billing policy.
-const bool kFeaturePaymentsDirect = bool.fromEnvironment(
-  'FEATURE_PAYMENTS_DIRECT',
-  defaultValue: true,
-);
-

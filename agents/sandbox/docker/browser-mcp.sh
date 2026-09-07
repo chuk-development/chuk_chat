@@ -8,9 +8,9 @@
 # same display x11vnc serves — so "the browser the agent drives" and "the browser
 # the user watches" are one and the same process.
 #
-# Idempotent Xvfb bringup first, then exec the server so it becomes the process
-# whose stdio the host is wired to. Xvfb, once started, is left running for reuse
-# across launches; it is cheap and orphan-safe inside a disposable container.
+# Idempotent Xvfb bringup first, then a profile-owning supervisor relays inherited
+# stdio directly to MCP and reaps its browser descendants on exit. Xvfb remains
+# available across launches inside the disposable container.
 
 set -eu
 
@@ -48,7 +48,9 @@ mkdir -p "${PROFILE}"
 # Chromium via --executable-path (no second download); --no-sandbox because the
 # container is the isolation boundary (IN_DOCKER, no CAP_SYS_ADMIN); a persistent
 # --user-data-dir in the workspace so a login done via the VNC hand-off survives.
-exec npx --yes "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION:-0.0.80}" \
+# The image already installs the pinned server. Do not invoke npx here: a
+# browser reconnect must not depend on npm registry availability/cache state.
+exec python3 /usr/local/lib/cowork/browser-mcp-owner.py playwright-mcp \
     --executable-path "${COWORK_BROWSER_EXECUTABLE:-/usr/local/bin/chromium}" \
     --user-data-dir "${PROFILE}" \
     --no-sandbox \

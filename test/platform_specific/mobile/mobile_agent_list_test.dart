@@ -110,7 +110,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
-    expect(find.text('No coworker matches.'), findsOneWidget);
+    expect(find.text('No agent matches.'), findsOneWidget);
 
     await tester.tap(findId('mobile_home_search'));
     await tester.pumpAndSettle();
@@ -129,8 +129,8 @@ void main() {
         now: () => now,
       ),
     );
-    expect(find.text('No coworkers yet.'), findsOneWidget);
-    await tester.tap(find.text('Add a coworker'));
+    expect(find.text('No agents yet.'), findsOneWidget);
+    await tester.tap(find.text('Add an agent'));
     expect(adds, 1);
   });
 

@@ -76,6 +76,8 @@ class ExecutorProvisioning {
       // without being pre-configured with Supabase credentials.
       'supabase_url': SupabaseConfig.supabaseUrl,
       'anon_key': SupabaseConfig.supabaseAnonKey,
+      // So the host can refresh before the token lapses, not after a 401.
+      if (session.expiresAt != null) 'expires_at': session.expiresAt,
     };
     return _transport.sendAuthentication(target, payload);
   }

@@ -1,0 +1,61 @@
+
+// ============================================================================
+// COWORK-ONLY FEATURE FLAGS
+// ============================================================================
+// Appended by scripts/import_chat_ui.sh after the verbatim copy of chuk_chat's
+// platform_config.dart. These flags do not exist upstream; keep them here so a
+// re-sync never drops them.
+
+/// CoWork mode — a phone-driven agent that runs on the user's laptop with real
+/// system/CLI access, sandboxed execution and a persistent tray daemon. Lives in
+/// the SAME app as Chat; a top-left switcher toggles between Chat and CoWork.
+/// Disabled by default; enable via --dart-define=FEATURE_COWORK=true.
+/// See docs/COWORK_BUILD_PLAN.md.
+const bool kFeatureCoWork = bool.fromEnvironment(
+  'FEATURE_COWORK',
+  defaultValue: false,
+);
+
+/// CoWork Demo — laptop-native agent tools (`run_command`, `read_file`,
+/// `write_file`, `list_directory`) that let the running app's agent loop act
+/// on the local machine. Every path and command cwd is jailed under a
+/// configurable root (default the user's home), reads of obvious secret paths
+/// are denied, and `run_command` is killed after a timeout. These tools touch
+/// the real filesystem, so they stay OFF by default and register only on a
+/// build that opts in.
+///
+/// Disabled by default; enable via --dart-define=FEATURE_COWORK_DEMO=true.
+/// When off, none of the four tools register and a normal build is unchanged.
+const bool kFeatureCoworkDemo = bool.fromEnvironment(
+  'FEATURE_COWORK_DEMO',
+  defaultValue: false,
+);
+
+/// Agent Skills — named procedures the AI loads on demand via the `skill`
+/// tool, following the open spec at https://agentskills.io/specification.
+/// Only `name` + description sit in the prompt; the body is disclosed on
+/// activation. Skills are authored in `assets/skills/` and compiled in — none
+/// are fetched at runtime.
+///
+/// Disabled by default; enable via --dart-define=FEATURE_SKILLS=true.
+/// When off, the `skill` tool is never registered and the prompt is
+/// byte-identical to a build without this feature.
+const bool kFeatureSkills = bool.fromEnvironment(
+  'FEATURE_SKILLS',
+  defaultValue: false,
+);
+
+/// Spotify playback tool. Disabled by default — API server no longer
+/// exposes Spotify OAuth endpoints. Set `--dart-define=FEATURE_SPOTIFY=true`
+/// only when the backend route is re-enabled.
+const bool kFeatureSpotify = bool.fromEnvironment(
+  'FEATURE_SPOTIFY',
+  defaultValue: false,
+);
+
+/// WHOOP health/fitness tool. Disabled by default — integration removed
+/// alongside Spotify. Set `--dart-define=FEATURE_WHOOP=true` to re-enable.
+const bool kFeatureWhoop = bool.fromEnvironment(
+  'FEATURE_WHOOP',
+  defaultValue: false,
+);
