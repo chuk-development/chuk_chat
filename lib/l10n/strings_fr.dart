@@ -203,7 +203,7 @@ const Map<String, String> stringsFr = {
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profil',
   'profileSubtitle':
-      'Modifier l\'affichage de votre nom et de votre e-mail dans CoWork.',
+      'Modifier l\'affichage de votre nom et de votre e-mail dans Chuk Chat.',
   'displayName': 'Nom d\'affichage',
   'displayNameHint': 'Comment les autres vous voient',
   'emailAddress': 'Adresse e-mail',
@@ -298,7 +298,7 @@ const Map<String, String> stringsFr = {
   'saveChanges': 'Enregistrer les modifications',
 
   // ── About page ─────────────────────────────────────────────
-  'chukChat': 'CoWork',
+  'chukChat': 'Chuk Chat',
   'openSourceLicenses': 'Licences open source',
   'openSourceLicensesSubtitle':
       'Consulter les licences de chaque dépendance incluse dans cette version.',
@@ -311,7 +311,7 @@ const Map<String, String> stringsFr = {
   'versionUnavailable':
       'Informations de version indisponibles.',
   'copyrightYear':
-      '\u00a9 {year} CoWork\nTous droits réservés.',
+      '\u00a9 {year} Chuk Chat\nTous droits réservés.',
   'licenses': 'Licences',
   'unableToLoadLicenses':
       'Impossible de charger les licences.',
@@ -353,7 +353,7 @@ const Map<String, String> stringsFr = {
   'creditsExplanation':
       'Vos 16\u00a0\u20ac de crédits IA sont utilisés par token selon le modèle choisi. Les crédits non utilisés expirent à la fin de chaque mois.',
   'immediateAccessAck':
-      'Je souhaite un accès immédiat à CoWork et reconnais perdre mon ',
+      'Je souhaite un accès immédiat à Chuk Chat et reconnais perdre mon ',
   'rightOfWithdrawal': 'droit de rétractation',
   'onceServiceBegins':
       ' dès le début du service. J\'accepte les ',
@@ -365,7 +365,7 @@ const Map<String, String> stringsFr = {
       'Veuillez accepter les conditions et reconnaître la perte du droit de rétractation.',
 
   // ── Login page ─────────────────────────────────────────────
-  'welcomeToChukChat': 'Bienvenue sur CoWork',
+  'welcomeToChukChat': 'Bienvenue sur Chuk Chat',
   'signInWithEmail': 'Connectez-vous avec votre e-mail',
   'createAccountWithEmail':
       'Créez un compte avec un e-mail et un mot de passe',

@@ -163,7 +163,7 @@ class _McpConnectCardState extends State<McpConnectCard> {
               child: FilledButton(
                 style: FilledButton.styleFrom(shape: const StadiumBorder()),
                 onPressed: null,
-                child: const Text('Open the CoWork app to connect this server'),
+                child: const Text('Open the Chuk Chat app to connect this server'),
               ),
             )
           else

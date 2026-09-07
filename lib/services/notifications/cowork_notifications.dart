@@ -34,7 +34,7 @@ class CoworkNotifications {
   static final CoworkNotifications instance = CoworkNotifications._();
 
   /// Set by the shell. Default: a neutral label.
-  ThreadLabelResolver threadLabel = (String sessionKey) => 'CoWork';
+  ThreadLabelResolver threadLabel = (String sessionKey) => 'Chuk Chat';
 
   /// Test seam: overrides the lifecycle the rule reads.
   @visibleForTesting
@@ -97,6 +97,6 @@ class CoworkNotifications {
   void reset() {
     _initialized = false;
     lifecycleOverride = null;
-    threadLabel = (String sessionKey) => 'CoWork';
+    threadLabel = (String sessionKey) => 'Chuk Chat';
   }
 }

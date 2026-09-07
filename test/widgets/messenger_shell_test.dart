@@ -319,7 +319,7 @@ void main() {
       expect(find.byType(AgentRosterView), findsOneWidget);
       expect(find.byType(CoworkThreadView), findsOneWidget);
       expect(threadOffstage(tester), isFalse);
-      expect(find.text('CoWork'), findsOneWidget);
+      expect(find.text('Chuk Chat'), findsOneWidget);
       expect(find.text('No agents yet.'), findsOneWidget);
       // chuk's chrome, not an app bar: the hamburger at the top left and the
       // floating row at the top right.
@@ -363,14 +363,14 @@ void main() {
     final (controller, _) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
-    expect(find.text('CoWork').hitTestable(), findsOneWidget);
+    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // The roster is off screen; chuk's mini rail carries the two slots. The
     // browser has no rail slot and no button yet: nothing is open.
-    expect(find.text('CoWork').hitTestable(), findsNothing);
+    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
     expect(find.byTooltip('New agent'), findsOneWidget);
     expect(
       find.byTooltip('Control Rooms'),
@@ -381,7 +381,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('CoWork').hitTestable(), findsOneWidget);
+    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
     expect(find.byTooltip('New agent'), findsNothing);
   });
 
@@ -836,17 +836,17 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    expect(find.text('CoWork').hitTestable(), findsNothing);
+    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
     expect(threadView, findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     expect(find.byType(AppBar), findsNothing);
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('CoWork').hitTestable(), findsOneWidget);
+    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     await tester.tap(find.byIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('CoWork').hitTestable(), findsNothing);
+    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
     expect(threadOffstage(tester), isFalse);
   });
 

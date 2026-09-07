@@ -162,7 +162,7 @@ class _CoworkAppState extends State<CoworkApp> {
         // reaches the shell like any other rebuild.
         final AppShellConfig shellConfig = _buildShellConfig();
         return MaterialApp(
-          title: 'CoWork',
+          title: 'Chuk Chat',
           debugShowCheckedModeBanner: false,
           theme: _themeService.buildTheme(
             lightDynamic: lightDynamic,

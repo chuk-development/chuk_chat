@@ -15,7 +15,7 @@ import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
 
-  testWidgets('CoWork brand has no C logo', (tester) async {
+  testWidgets('Chuk Chat brand has no C logo', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -27,7 +27,7 @@ void main() {
       ),
     );
     final brand = tester.widget<SbBrand>(find.byType(SbBrand));
-    expect(brand.label, 'CoWork');
+    expect(brand.label, 'Chuk Chat');
     expect(brand.showLogo, isFalse);
   });
 

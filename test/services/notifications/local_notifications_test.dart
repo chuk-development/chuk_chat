@@ -93,7 +93,7 @@ void main() {
       sessionKey: 't',
       threadLabel: '   ',
     );
-    expect(backend.shown.single['title'], 'CoWork');
+    expect(backend.shown.single['title'], 'Chuk Chat');
   });
 
   test('a tap routes the thread and clears the toast', () async {

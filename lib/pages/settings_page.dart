@@ -396,7 +396,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 16),
           Center(
             child: Text(
-              'CoWork',
+              'Chuk Chat',
               style: TextStyle(
                 fontSize: 11,
                 color: m3.onSurfaceVariant.withValues(alpha: 0.7),
