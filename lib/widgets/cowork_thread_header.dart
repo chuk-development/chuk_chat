@@ -47,7 +47,7 @@ class CoworkThreadAction {
 /// Two shapes:
 ///
 ///  * the **bar** (desktop): title, connection, automation chip and actions,
-///    on the surface colour with a hairline under it. [leadingInset] is the
+///    on the surface colour, with no rule under it. [leadingInset] is the
 ///    room the shell's floating hamburger and mini rail need, since they are
 ///    painted over this widget and the widget cannot see them.
 ///  * **[dense]** (phone): no title — the floating chrome above already
@@ -138,15 +138,11 @@ class CoworkThreadHeader extends StatelessWidget {
       child: row,
     );
     if (dense) return padded;
-    return Material(
-      color: scheme.surface,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-        ),
-        child: padded,
-      ),
-    );
+    // No rule under the bar. The header sits on the same surface as the chat,
+    // and the hairline only drew a second horizon right under the window's own
+    // title bar — the reader saw two stacked bands and no content (cowork-y6q).
+    // The bar is told apart by its content, not by a line.
+    return Material(color: scheme.surface, child: padded);
   }
 
   Widget _buildRow(BuildContext context, double maxWidth) {

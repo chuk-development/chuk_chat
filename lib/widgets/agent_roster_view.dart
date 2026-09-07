@@ -189,7 +189,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               const SizedBox(
                 height: kMenuButtonHeight,
                 child: SbBrand(
-                  label: 'CoWork',
+                  label: 'Chuk Chat',
                   showLogo: false,
                   fontSize: 18,
                   padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
@@ -599,9 +599,12 @@ class _AgentTileState extends State<_AgentTile> {
                         style: TextStyle(
                           fontSize: 15,
                           height: 1.2,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
+                          // One weight in both states. A weight that changes on
+                          // selection re-measures the glyphs, so the name
+                          // visibly shifts under the cursor the moment a row is
+                          // picked (bead cowork-84i). Selection is the fill,
+                          // the border and the colour — never the metrics.
+                          fontWeight: FontWeight.w600,
                           color: selected ? t.accent : t.iconFg,
                         ),
                       ),
