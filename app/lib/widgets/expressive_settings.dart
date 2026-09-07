@@ -436,7 +436,13 @@ class ExpressiveSectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(6, 26, 6, 10),
       child: trailing == null
           ? title
-          : Row(children: [title, const Spacer(), trailing!]),
+          : Row(
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: 8),
+                trailing!,
+              ],
+            ),
     );
   }
 }
@@ -471,11 +477,15 @@ class ExpressiveBadge extends StatelessWidget {
             Icon(icon, size: 15, color: foreground),
             const SizedBox(width: 6),
           ],
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: foreground,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
             ),
           ),
         ],

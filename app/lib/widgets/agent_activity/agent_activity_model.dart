@@ -200,7 +200,7 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.search:
       return AgentActivityEntry(
         kind: kind,
-        label: 'Searched',
+        label: hasError ? 'Search failed' : 'Searched',
         detail: subject,
         hasError: hasError,
         toolCall: call,
@@ -209,7 +209,7 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.page:
       return AgentActivityEntry(
         kind: kind,
-        label: 'Opened page',
+        label: hasError ? 'Could not open page' : 'Opened page',
         detail: subject == null ? null : _shortenUrl(subject),
         hasError: hasError,
         toolCall: call,
@@ -219,7 +219,9 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.other:
       return AgentActivityEntry(
         kind: AgentActivityKind.other,
-        label: 'Ran ${_humanizeToolName(call.name)}',
+        label: hasError
+            ? 'Failed: ${_humanizeToolName(call.name)}'
+            : 'Ran ${_humanizeToolName(call.name)}',
         detail: subject,
         hasError: hasError,
         toolCall: call,

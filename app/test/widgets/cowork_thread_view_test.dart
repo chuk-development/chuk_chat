@@ -51,10 +51,10 @@ class _FakeSessionSource implements AccountSessionSource {
 
   @override
   AccountSession? current() => const AccountSession(
-        accessToken: 'access-1',
-        refreshToken: 'refresh-1',
-        userId: 'user-1',
-      );
+    accessToken: 'access-1',
+    refreshToken: 'refresh-1',
+    userId: 'user-1',
+  );
 
   @override
   Future<AccountSession?> refresh() async => current();
@@ -63,15 +63,15 @@ class _FakeSessionSource implements AccountSessionSource {
 /// The app shell the imported chat screen expects around it: localisations and
 /// a desktop-sized window.
 Widget _app(Widget child) => MaterialApp(
-      localizationsDelegates: const <LocalizationsDelegate<Object>>[
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: child),
-    );
+  localizationsDelegates: const <LocalizationsDelegate<Object>>[
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: child),
+);
 
 void main() {
   setUp(() async {
@@ -127,6 +127,29 @@ void main() {
   // Pairing / connect / reconnect — the transport half.
   // ==========================================================================
 
+  testWidgets('chat mounts before controller initialization finishes', (
+    tester,
+  ) async {
+    final ready = Completer<CoworkRelayController>();
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _app(
+        CoworkThreadView(
+          controllerBuilder: () => ready.future,
+          sessionSource: const _FakeSessionSource(),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(ChukChatUIDesktop), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    final chatState = tester.state(find.byType(ChukChatUIDesktop));
+    ready.complete(FakeRelayController());
+    await tester.pumpAndSettle();
+    expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
+  });
+
   testWidgets('shows the connect affordance when disconnected', (tester) async {
     await pumpView(tester);
 
@@ -135,12 +158,13 @@ void main() {
     expect(find.text('ws://127.0.0.1:8787'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
     expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
-    // No chat while disconnected.
-    expect(find.byType(ChukChatUIDesktop), findsNothing);
+    // Local history remains readable before a host is available.
+    expect(find.byType(ChukChatUIDesktop), findsOneWidget);
   });
 
-  testWidgets('connecting phase shows only a hairline progress bar',
-      (tester) async {
+  testWidgets('connecting phase shows only a hairline progress bar', (
+    tester,
+  ) async {
     final controller = await pumpView(tester);
     controller.set(
       const CoworkRelayState(
@@ -155,8 +179,9 @@ void main() {
     expect(find.text('Connecting…'), findsNothing);
   });
 
-  testWidgets('error phase surfaces the failure detail on the connect bar',
-      (tester) async {
+  testWidgets('error phase surfaces the failure detail on the connect bar', (
+    tester,
+  ) async {
     final controller = await pumpView(tester);
     controller.set(
       const CoworkRelayState(
@@ -170,12 +195,15 @@ void main() {
     expect(find.text('Pairing failed (macMismatch)'), findsOneWidget);
   });
 
-  testWidgets('tapping Connect runs connect, provisions, and shows the chat',
-      (tester) async {
+  testWidgets('tapping Connect runs connect, provisions, and shows the chat', (
+    tester,
+  ) async {
     final controller = await pumpView(tester);
 
-    // Fields: host at 0, pairing code at 1.
-    await tester.enterText(find.byType(TextField).at(1), 'chan1234-428913');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Pairing code'),
+      'chan1234-428913',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
     await tester.pumpAndSettle();
 
@@ -188,8 +216,9 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
-  testWidgets('a paired transport reports the host device id once',
-      (tester) async {
+  testWidgets('a paired transport reports the host device id once', (
+    tester,
+  ) async {
     final peers = <String>[];
     final controller = FakeRelayController();
     await tester.pumpWidget(
@@ -218,7 +247,8 @@ void main() {
   group('persistent pairing', () {
     Future<CoworkPairingStore> seededStore() async {
       final store = CoworkPairingStore(backend: _MemoryStore());
-      final hostPub = await (await CoworkDeviceKeys.generate()).extractPublicKey();
+      final hostPub = await (await CoworkDeviceKeys.generate())
+          .extractPublicKey();
       await store.savePairing(
         CoworkStoredPairing(
           hostUrl: Uri.parse('ws://10.0.0.9:8787'),
@@ -258,8 +288,9 @@ void main() {
       return (controllers, store);
     }
 
-    testWidgets('a stored pairing auto-reconnects with no code form',
-        (tester) async {
+    testWidgets('a stored pairing auto-reconnects with no code form', (
+      tester,
+    ) async {
       final (controllers, _) = await pumpPersistent(tester);
 
       // No code form; it reconnected on its own and provisioned the account.
@@ -272,83 +303,91 @@ void main() {
       expect(find.textContaining('Connected to'), findsNothing);
     });
 
-    testWidgets('a dropped connection shows the reconnect bar, never a code form',
-        (tester) async {
-      final (controllers, _) = await pumpPersistent(tester);
+    testWidgets(
+      'a dropped connection shows the reconnect bar, never a code form',
+      (tester) async {
+        final (controllers, _) = await pumpPersistent(tester);
 
-      // The socket drops on its own — no user action, and no button to press.
-      controllers.single.set(
-        const CoworkRelayState(
-          phase: CoworkRelayPhase.closed,
-          detail: 'Host closed the connection',
-        ),
-      );
-      await tester.pump();
+        // The socket drops on its own — no user action, and no button to press.
+        final chatState = tester.state(find.byType(ChukChatUIDesktop));
+        controllers.single.set(
+          const CoworkRelayState(
+            phase: CoworkRelayPhase.closed,
+            detail: 'Host closed the connection',
+          ),
+        );
+        await tester.pump();
 
-      // Still paired (stored), so the code form stays gone; the bottom bar
-      // offers Reconnect and, for the it-is-really-broken case, Forget.
-      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Forget'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
-      expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
+        // Still paired (stored), so the code form stays gone; the bottom bar
+        // offers Reconnect and, for the it-is-really-broken case, Forget.
+        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+        expect(find.widgetWithText(TextButton, 'Forget'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
+        expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
+        expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
 
-      // And it comes back by itself after the backoff — a fresh controller
-      // reconnects with no code and no tap.
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(controllers.length, greaterThan(1));
-      expect(controllers.last.reconnectCalls, 1);
-      expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
-    });
+        // And it comes back by itself after the backoff — a fresh controller
+        // reconnects with no code and no tap.
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(controllers.length, greaterThan(1));
+        expect(controllers.last.reconnectCalls, 1);
+        expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
+        expect(tester.state(find.byType(ChukChatUIDesktop)), same(chatState));
+      },
+    );
 
     testWidgets(
-        'a view disposed while its reconnect rebuilds the transport stays quiet '
-        '(F6)', (tester) async {
-      tester.view.physicalSize = const Size(1400, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+      'a view disposed while its reconnect rebuilds the transport stays quiet '
+      '(F6)',
+      (tester) async {
+        tester.view.physicalSize = const Size(1400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      final store = await seededStore();
-      final first = FakeRelayController();
-      // The rebuilt transport takes a while (a real client generates a key).
-      final gate = Completer<CoworkRelayController>();
-      var builds = 0;
-      await tester.pumpWidget(
-        _app(
-          CoworkThreadView(
-            controllerBuilder: () => ++builds == 1
-                ? Future<CoworkRelayController>.value(first)
-                : gate.future,
-            sessionSource: const _FakeSessionSource(),
-            pairingStore: store,
+        final store = await seededStore();
+        final first = FakeRelayController();
+        // The rebuilt transport takes a while (a real client generates a key).
+        final gate = Completer<CoworkRelayController>();
+        var builds = 0;
+        await tester.pumpWidget(
+          _app(
+            CoworkThreadView(
+              controllerBuilder: () => ++builds == 1
+                  ? Future<CoworkRelayController>.value(first)
+                  : gate.future,
+              sessionSource: const _FakeSessionSource(),
+              pairingStore: store,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(first.reconnectCalls, 1);
+        );
+        await tester.pumpAndSettle();
+        expect(first.reconnectCalls, 1);
 
-      // The socket drops; the backoff timer fires and the rebuild starts.
-      first.set(
-        const CoworkRelayState(
-          phase: CoworkRelayPhase.closed,
-          detail: 'Host closed the connection',
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
-      expect(builds, 2);
+        // The socket drops; the backoff timer fires and the rebuild starts.
+        first.set(
+          const CoworkRelayState(
+            phase: CoworkRelayPhase.closed,
+            detail: 'Host closed the connection',
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        expect(builds, 2);
 
-      // The view goes away mid-await (the user navigated on). When the
-      // transport finally arrives, no setState may land on a disposed state —
-      // that would fail this test with a FlutterError.
-      await tester.pumpWidget(const SizedBox.shrink());
-      gate.complete(FakeRelayController());
-      await tester.pumpAndSettle();
-    });
+        // The view goes away mid-await (the user navigated on). When the
+        // transport finally arrives, no setState may land on a disposed state —
+        // that would fail this test with a FlutterError.
+        await tester.pumpWidget(const SizedBox.shrink());
+        gate.complete(FakeRelayController());
+        await tester.pumpAndSettle();
+      },
+    );
 
-    testWidgets('a dropped connection does NOT end a run on the host',
-        (tester) async {
+    testWidgets('a dropped connection does NOT end a run on the host', (
+      tester,
+    ) async {
       final (controllers, _) = await pumpPersistent(tester);
       // A run is in flight on the host, adopted or started by this client.
       CoworkRunLedger.instance.begin('default');
@@ -362,8 +401,9 @@ void main() {
       expect(CoworkRunLedger.instance.isRunning('default'), isTrue);
     });
 
-    testWidgets('Forget deletes the pairing and returns to the code form',
-        (tester) async {
+    testWidgets('Forget deletes the pairing and returns to the code form', (
+      tester,
+    ) async {
       final (controllers, store) = await pumpPersistent(tester);
       controllers.single.set(
         const CoworkRelayState(phase: CoworkRelayPhase.closed),
@@ -406,8 +446,9 @@ void main() {
       return controller;
     }
 
-    testWidgets('the paired body IS the imported chat screen, on this thread',
-        (tester) async {
+    testWidgets('the paired body IS the imported chat screen, on this thread', (
+      tester,
+    ) async {
       await pumpPaired(tester);
 
       final screen = tester.widget<ChukChatUIDesktop>(
@@ -429,7 +470,9 @@ void main() {
       expect(CoworkRelayLink.instance.controller.value, isNotNull);
     });
 
-    testWidgets('the verbose toggle turns the full log on live', (tester) async {
+    testWidgets('the verbose toggle turns the full log on live', (
+      tester,
+    ) async {
       await pumpPaired(tester);
       await VerboseService.instance.setEnabled(true);
       await tester.pumpAndSettle();
@@ -443,46 +486,47 @@ void main() {
     });
 
     testWidgets(
-        'the thinking block follows the "show reasoning" setting, not verbose',
-        (tester) async {
-      // Bead cowork-0ia: a thinking model's reasoning is visible in the quiet
-      // view (the setting is on by default, like chuk) and hidden only when the
-      // user turns that setting off — verbose does not touch it either way.
-      // The setting is flipped through the persisted preference (what the
-      // Customization page writes), not the setter: the setter debounces a
-      // Supabase sync on a timer the test harness would have to wait out. The
-      // service caches the preferences instance it first sees, so the test
-      // writes through that same instance.
-      final prefs = await SharedPreferences.getInstance();
-      Future<void> setShowReasoning(bool show) async {
-        await prefs.setBool('showReasoningTokens', show);
-        await AppThemeService.instance.loadFromPrefs();
+      'the thinking block follows the "show reasoning" setting, not verbose',
+      (tester) async {
+        // Bead cowork-0ia: a thinking model's reasoning is visible in the quiet
+        // view (the setting is on by default, like chuk) and hidden only when the
+        // user turns that setting off — verbose does not touch it either way.
+        // The setting is flipped through the persisted preference (what the
+        // Customization page writes), not the setter: the setter debounces a
+        // Supabase sync on a timer the test harness would have to wait out. The
+        // service caches the preferences instance it first sees, so the test
+        // writes through that same instance.
+        final prefs = await SharedPreferences.getInstance();
+        Future<void> setShowReasoning(bool show) async {
+          await prefs.setBool('showReasoningTokens', show);
+          await AppThemeService.instance.loadFromPrefs();
+          await tester.pumpAndSettle();
+        }
+
+        addTearDown(() async {
+          await prefs.setBool('showReasoningTokens', true);
+          await AppThemeService.instance.loadFromPrefs();
+        });
+        await pumpPaired(tester);
+
+        ChukChatUIDesktop screen() =>
+            tester.widget<ChukChatUIDesktop>(find.byType(ChukChatUIDesktop));
+
+        expect(screen().showReasoningTokens, isTrue);
+        expect(screen().showToolCalls, isFalse);
+
+        await setShowReasoning(false);
+        expect(screen().showReasoningTokens, isFalse);
+
+        await VerboseService.instance.setEnabled(true);
         await tester.pumpAndSettle();
-      }
+        expect(screen().showToolCalls, isTrue);
+        expect(screen().showReasoningTokens, isFalse);
 
-      addTearDown(() async {
-        await prefs.setBool('showReasoningTokens', true);
-        await AppThemeService.instance.loadFromPrefs();
-      });
-      await pumpPaired(tester);
-
-      ChukChatUIDesktop screen() =>
-          tester.widget<ChukChatUIDesktop>(find.byType(ChukChatUIDesktop));
-
-      expect(screen().showReasoningTokens, isTrue);
-      expect(screen().showToolCalls, isFalse);
-
-      await setShowReasoning(false);
-      expect(screen().showReasoningTokens, isFalse);
-
-      await VerboseService.instance.setEnabled(true);
-      await tester.pumpAndSettle();
-      expect(screen().showToolCalls, isTrue);
-      expect(screen().showReasoningTokens, isFalse);
-
-      await setShowReasoning(true);
-      expect(screen().showReasoningTokens, isTrue);
-    });
+        await setShowReasoning(true);
+        expect(screen().showReasoningTokens, isTrue);
+      },
+    );
 
     testWidgets('"More models" is wired to the shell', (tester) async {
       var opened = 0;
@@ -491,9 +535,7 @@ void main() {
         threadKey: 'thread-1',
         onOpenModelScreen: () => opened++,
       );
-      controller.set(
-        const CoworkRelayState(phase: CoworkRelayPhase.paired),
-      );
+      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
       await tester.pumpAndSettle();
 
       final screen = tester.widget<ChukChatUIDesktop>(
@@ -504,8 +546,9 @@ void main() {
       expect(opened, 1);
     });
 
-    testWidgets('pairing asks the host to replay this thread from the cursor',
-        (tester) async {
+    testWidgets('pairing asks the host to replay this thread from the cursor', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
 
       expect(controller.replayRequests, <(String, int)>[('thread-1', 0)]);
@@ -521,45 +564,48 @@ void main() {
       expect(controller.replayRequests, <(String, int)>[('thread-1', 42)]);
     });
 
-    testWidgets('switching agent repoints the link and replays the new thread',
-        (tester) async {
-      final controller = FakeRelayController();
-      Widget build(String threadKey) => _app(
-            CoworkThreadView(
-              controllerBuilder: () async => controller,
-              sessionSource: const _FakeSessionSource(),
-              threadKey: threadKey,
-              fileSaver: _NoopSaver(),
-            ),
-          );
-      tester.view.physicalSize = const Size(1400, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'switching agent repoints the link and replays the new thread',
+      (tester) async {
+        final controller = FakeRelayController();
+        Widget build(String threadKey) => _app(
+          CoworkThreadView(
+            controllerBuilder: () async => controller,
+            sessionSource: const _FakeSessionSource(),
+            threadKey: threadKey,
+            fileSaver: _NoopSaver(),
+          ),
+        );
+        tester.view.physicalSize = const Size(1400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(build('amber-otter-1'));
-      await tester.pumpAndSettle();
-      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(build('amber-otter-1'));
+        await tester.pumpAndSettle();
+        controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+        await tester.pumpAndSettle();
 
-      await tester.pumpWidget(build('amber-otter-2'));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(build('amber-otter-2'));
+        await tester.pumpAndSettle();
 
-      expect(
-        controller.replaySessionKeys,
-        <String>['amber-otter-1', 'amber-otter-2'],
-      );
-      expect(CoworkRelayLink.instance.sessionKey.value, 'amber-otter-2');
-      final screen = tester.widget<ChukChatUIDesktop>(
-        find.byType(ChukChatUIDesktop),
-      );
-      expect(screen.selectedChatId, 'amber-otter-2');
+        expect(controller.replaySessionKeys, <String>[
+          'amber-otter-1',
+          'amber-otter-2',
+        ]);
+        expect(CoworkRelayLink.instance.sessionKey.value, 'amber-otter-2');
+        final screen = tester.widget<ChukChatUIDesktop>(
+          find.byType(ChukChatUIDesktop),
+        );
+        expect(screen.selectedChatId, 'amber-otter-2');
 
-      await _flushIdleTimers(tester);
-    });
+        await _flushIdleTimers(tester);
+      },
+    );
 
-    testWidgets('the replayed transcript paints in the imported message list',
-        (tester) async {
+    testWidgets('the replayed transcript paints in the imported message list', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
       expect(controller.replayRequests, isNotEmpty);
 
@@ -585,8 +631,9 @@ void main() {
       await _flushIdleTimers(tester);
     });
 
-    testWidgets('a replay that lands mid-run does not tear the screen down',
-        (tester) async {
+    testWidgets('a replay that lands mid-run does not tear the screen down', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
       // A run is in flight for this thread.
       CoworkRunLedger.instance.begin('thread-1');
@@ -611,20 +658,23 @@ void main() {
       await _flushIdleTimers(tester);
     });
 
-    testWidgets('a here.now approval is answered through the AskUserCard',
-        (tester) async {
+    testWidgets('a here.now approval is answered through the AskUserCard', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
 
-      controller.emit(const CoworkRelayApprovalRequest(
-        approvalId: 'ap-1',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'My Page',
-        fileCount: 2,
-        totalBytes: 2048,
-        baseUrl: 'https://here.now',
-        public: true,
-      ));
+      controller.emit(
+        const CoworkRelayApprovalRequest(
+          approvalId: 'ap-1',
+          action: 'herenow_publish',
+          path: 'site',
+          name: 'My Page',
+          fileCount: 2,
+          totalBytes: 2048,
+          baseUrl: 'https://here.now',
+          public: true,
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Publish to the web?'), findsOneWidget);
@@ -641,55 +691,64 @@ void main() {
     });
 
     testWidgets(
-        'an approval that names another thread is left to that thread\'s view '
-        '(F9)', (tester) async {
+      'an approval that names another thread is left to that thread\'s view '
+      '(F9)',
+      (tester) async {
+        final controller = await pumpPaired(tester);
+
+        controller.emit(
+          const CoworkRelayApprovalRequest(
+            approvalId: 'ap-other',
+            action: 'herenow_publish',
+            path: 'site',
+            name: 'Elsewhere',
+            fileCount: 1,
+            totalBytes: 10,
+            baseUrl: 'https://here.now',
+            public: true,
+            sessionKey: 'other-thread',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Publish to the web?'), findsNothing);
+
+        // Named for this thread: prompted as before.
+        controller.emit(
+          const CoworkRelayApprovalRequest(
+            approvalId: 'ap-mine',
+            action: 'herenow_publish',
+            path: 'site',
+            name: 'Mine',
+            fileCount: 1,
+            totalBytes: 10,
+            baseUrl: 'https://here.now',
+            public: true,
+            sessionKey: 'thread-1',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Publish to the web?'), findsOneWidget);
+        expect(find.textContaining('Mine'), findsWidgets);
+      },
+    );
+
+    testWidgets('denying an approval sends deny and marks it denied', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
 
-      controller.emit(const CoworkRelayApprovalRequest(
-        approvalId: 'ap-other',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'Elsewhere',
-        fileCount: 1,
-        totalBytes: 10,
-        baseUrl: 'https://here.now',
-        public: true,
-        sessionKey: 'other-thread',
-      ));
-      await tester.pumpAndSettle();
-      expect(find.text('Publish to the web?'), findsNothing);
-
-      // Named for this thread: prompted as before.
-      controller.emit(const CoworkRelayApprovalRequest(
-        approvalId: 'ap-mine',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'Mine',
-        fileCount: 1,
-        totalBytes: 10,
-        baseUrl: 'https://here.now',
-        public: true,
-        sessionKey: 'thread-1',
-      ));
-      await tester.pumpAndSettle();
-      expect(find.text('Publish to the web?'), findsOneWidget);
-      expect(find.textContaining('Mine'), findsWidgets);
-    });
-
-    testWidgets('denying an approval sends deny and marks it denied',
-        (tester) async {
-      final controller = await pumpPaired(tester);
-
-      controller.emit(const CoworkRelayApprovalRequest(
-        approvalId: 'ap-2',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'Draft',
-        fileCount: 1,
-        totalBytes: 10,
-        baseUrl: 'https://here.now',
-        public: true,
-      ));
+      controller.emit(
+        const CoworkRelayApprovalRequest(
+          approvalId: 'ap-2',
+          action: 'herenow_publish',
+          path: 'site',
+          name: 'Draft',
+          fileCount: 1,
+          totalBytes: 10,
+          baseUrl: 'https://here.now',
+          public: true,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('2. Deny'));
@@ -699,8 +758,9 @@ void main() {
       expect(find.text('Denied'), findsOneWidget);
     });
 
-    testWidgets('a live done is acknowledged to the host, exactly once',
-        (tester) async {
+    testWidgets('a live done is acknowledged to the host, exactly once', (
+      tester,
+    ) async {
       final controller = await pumpPaired(tester);
 
       controller.emit(
@@ -712,6 +772,34 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.ackedRunIds, <String>['run-9']);
+    });
+
+    testWidgets('automatic completion replays only its own thread', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      final before = controller.replayRequests.length;
+      controller.emit(
+        const CoworkRelayDone(
+          reason: 'finished',
+          runId: 'other-auto',
+          sessionKey: 'other-thread',
+          hostNotified: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.replayRequests.length, before);
+      controller.emit(
+        const CoworkRelayDone(
+          reason: 'finished',
+          runId: 'own-auto',
+          sessionKey: 'thread-1',
+          hostNotified: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.replayRequests.length, before + 1);
+      expect(controller.ackedRunIds, isEmpty);
     });
 
     testWidgets('a replayed done is never acknowledged', (tester) async {

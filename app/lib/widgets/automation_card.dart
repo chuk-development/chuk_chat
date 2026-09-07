@@ -40,13 +40,17 @@ class AutomationCard extends StatelessWidget {
     };
     final details = <String>[
       a.specLabel,
-      if (a.isActive && a.nextFireAt != null) 'next ${_relative(a.nextFireAt!)}',
-      if (a.lastFiredAt != null) 'last ${_relative(a.lastFiredAt!)}',
+      if (a.isActive && a.nextFireAt != null)
+        'next ${_relative(a.nextFireAt!)}',
+      if (a.lastFiredAt != null) 'Last update ${_relative(a.lastFiredAt!)}',
       if (a.fireCount > 0)
         a.fireCount == 1 ? 'fired once' : 'fired ${a.fireCount}×',
       if (a.suppressedCount > 0) '${a.suppressedCount} folded',
     ];
     return Card(
+      elevation: 0,
+      color: compact ? scheme.surface : null,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       margin: compact
           ? const EdgeInsets.symmetric(horizontal: 12, vertical: 4)
           : const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
@@ -69,8 +73,9 @@ class AutomationCard extends StatelessWidget {
                           a.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -82,8 +87,9 @@ class AutomationCard extends StatelessWidget {
                     details.join(' · '),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   if (!compact && a.prompt.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -100,8 +106,9 @@ class AutomationCard extends StatelessWidget {
                       a.lastError!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.error),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                      ),
                     ),
                   ],
                 ],
@@ -167,10 +174,10 @@ class _StatePill extends StatelessWidget {
       ),
       child: Text(
         state,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w600),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

@@ -16,6 +16,7 @@
 /// platform channel.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -24,6 +25,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:cowork/services/cowork/cowork_device_keys.dart';
+import 'package:cowork/services/cowork/supabase_pairing_sync.dart';
 
 /// The minimal secure key/value surface the store needs. Backed by
 /// `flutter_secure_storage` in production, an in-memory map in tests.
@@ -135,8 +137,10 @@ class CoworkPairingStore {
   CoworkPairingStore({
     CoworkSecureKeyValueStore? backend,
     Uuid? uuid,
+    SupabasePairingSync? cloudSync,
   })  : _store = backend ?? const FlutterSecureKeyValueStore(),
-        _uuid = uuid ?? const Uuid();
+        _uuid = uuid ?? const Uuid(),
+        _cloudSync = cloudSync ?? const SupabasePairingSync();
 
   static const String _kDeviceId = 'cowork_device_id';
   static const String _kDeviceSeed = 'cowork_device_seed';
@@ -144,6 +148,11 @@ class CoworkPairingStore {
 
   final CoworkSecureKeyValueStore _store;
   final Uuid _uuid;
+
+  /// Encrypted Supabase mirror. Every local [savePairing] is also pushed here
+  /// (best-effort) so a reinstall on a new device can pull the trust record
+  /// back after sign-in. Injectable for tests.
+  final SupabasePairingSync _cloudSync;
 
   /// The backend everything is written to. Exposed so a test can assert that the
   /// production default really is the OS keychain / libsecret — both the device
@@ -176,11 +185,28 @@ class CoworkPairingStore {
     return CoworkStoredPairing.tryParse(raw);
   }
 
-  /// Persists the trust record after a successful pairing.
-  Future<void> savePairing(CoworkStoredPairing pairing) =>
-      _store.write(_kPairing, jsonEncode(pairing.toJson()));
+  /// Persists the trust record after a successful pairing, then mirrors it to
+  /// the encrypted Supabase copy so a reinstall elsewhere can reconnect.
+  ///
+  /// The local write is authoritative and is awaited first; the cloud mirror is
+  /// best-effort and fire-and-forget, so an offline client still pairs and the
+  /// caller never waits on the network.
+  Future<void> savePairing(CoworkStoredPairing pairing) async {
+    await _store.write(_kPairing, jsonEncode(pairing.toJson()));
+    unawaited(_cloudSync.saveEncryptedPairing(pairing));
+  }
+
+  /// Loads the trust record from the encrypted Supabase mirror. Returns null
+  /// when nothing is stored, no user is signed in, or decryption fails. Used on
+  /// a fresh install to recover pairing that no local store has yet.
+  Future<CoworkStoredPairing?> loadPairingFromCloud() =>
+      _cloudSync.loadEncryptedPairing();
 
   /// Deletes the trust record — the "un-pair / forget" action. The stable device
-  /// identity is kept, so a later fresh pairing reuses the same device key.
-  Future<void> clearPairing() => _store.delete(_kPairing);
+  /// identity is kept, so a later fresh pairing reuses the same device key. The
+  /// encrypted Supabase mirror is cleared too (best-effort).
+  Future<void> clearPairing() async {
+    await _store.delete(_kPairing);
+    unawaited(_cloudSync.clearEncryptedPairing());
+  }
 }

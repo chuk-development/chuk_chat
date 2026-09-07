@@ -44,6 +44,57 @@ def _texts(messages: list[dict]) -> str:
 # -- parsing / validation --------------------------------------------------
 
 
+@pytest.mark.parametrize("had_skills", [False, True])
+def test_existing_session_gets_installed_and_disabled_skills_without_rewriting_history(tmp_path, had_skills):
+    from cowork_agent.skills import SkillSettingsStore
+
+    workspace = tmp_path / "workspace"
+    root = workspace / "skills"
+    if had_skills:
+        _write_skill(root, "old-skill", "An old procedure.")
+    db_path = str(tmp_path / "state.db")
+
+    def runtime(model):
+        return build_runtime(
+            model, db_path=db_path, environment=LocalEnvironment(),
+            workspace=str(workspace), system_prompt="Keep this persona exactly.",
+            enable_memory=False, enable_mcp=False,
+        )
+
+    first = MockModelClient(["first answer"])
+    first_loop = runtime(first)
+    first_loop.run("permanent", "hello")
+    saved = first.calls[0][0]["content"]
+    _write_skill(root, "song-id", "Identify the song in a video by acoustic fingerprint.")
+    if had_skills:
+        SkillSettingsStore(db_path).set_enabled("old-skill", False)
+    second = MockModelClient(["second answer"])
+    second_loop = runtime(second)
+    second_loop.run("permanent", "what song is this")
+    system = second.calls[0][0]["content"]
+    assert "`song-id`" in system
+    assert "`old-skill`" not in system
+    assert "Keep this persona exactly." in system
+    assert "first answer" in _texts(second.calls[0])
+    sid = second_loop.store.route("permanent")
+    stored_system = next(m.content["content"] for m in second_loop.store.get_conversation(sid)
+                         if m.content.get("role") == "system")
+    assert stored_system == saved
+
+
+def test_catalog_upgrade_preserves_memory_and_is_idempotent(tmp_path):
+    _write_skill(tmp_path, "song-id", "Identify music.")
+    library = load_skills(tmp_path)
+    prefix = "Frozen behavior.\n\n"
+    suffix = "\n# Memory\n\nFrozen personal notes.\n\n# Operator instructions\n\nStay concise.\n"
+    old = prefix + "# Skills\n\nNamed procedures you can load.\n\n- `old` — Old.\n" + suffix
+    upgraded = library.upgrade_catalog(old)
+    assert upgraded.startswith(prefix)
+    assert upgraded.endswith(suffix)
+    assert "`old`" not in upgraded
+    assert library.upgrade_catalog(upgraded) == upgraded
+
+
 def test_frontmatter_and_body_are_split(tmp_path):
     path = _write_skill(tmp_path, "deploy", "Deploys the app.")
     skill = parse_skill(path.read_text())
@@ -53,21 +104,34 @@ def test_frontmatter_and_body_are_split(tmp_path):
     assert "metadata" not in skill.body  # the nested block stays in frontmatter
 
 
-def test_a_description_over_300_characters_is_rejected(tmp_path):
-    long_description = "x" * 301
+def test_a_description_over_1024_characters_is_rejected(tmp_path):
+    long_description = "x" * 1025
     path = _write_skill(tmp_path, "chatty", long_description)
     with pytest.raises(SkillError) as excinfo:
         parse_skill(path.read_text())
-    assert "301 characters" in str(excinfo.value)
+    assert "1025 characters" in str(excinfo.value)
 
     library = load_skills(tmp_path)
     assert library.names() == []
-    assert "301 characters" in library.errors[0]
+    assert "1025 characters" in library.errors[0]
 
 
 def test_a_description_of_exactly_300_characters_is_accepted(tmp_path):
     path = _write_skill(tmp_path, "edge", "x" * 300)
     assert len(parse_skill(path.read_text()).description) == 300
+
+
+@pytest.mark.parametrize("length", [301, 554, 1024])
+def test_catalog_descriptions_are_bounded_without_rejecting_repo_skills(tmp_path, length):
+    from cowork_agent.skills import skills_inventory
+
+    description = "x" * length
+    _write_skill(tmp_path, "song-id", description)
+    library = load_skills(tmp_path)
+    assert not library.errors
+    assert library.skills["song-id"].description == description
+    assert library.skills["song-id"].catalog_line() == "- `song-id` — " + "x" * 299 + "…"
+    assert skills_inventory(tmp_path)["skills"][0]["description"] == description
 
 
 @pytest.mark.parametrize(
@@ -143,6 +207,8 @@ def test_the_body_enters_the_conversation_only_after_the_skill_tool_runs(tmp_pat
     assert "./deploy.sh" not in _texts(first_round)
     assert "./deploy.sh" in _texts(second_round)
     assert "## ACTIVE SKILL: deploy" in _texts(second_round)
+    assert "skills/deploy/" in _texts(second_round)
+    assert "relative to the skill directory, not the workspace root" in _texts(second_round)
 
     # the tool result itself is an acknowledgement, not the body
     result = next(

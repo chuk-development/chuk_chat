@@ -27,6 +27,7 @@ import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
+import 'package:cowork/widgets/chat_document_view.dart';
 
 /// Maximum number of characters of text content we inline. Anything larger
 /// gets a "Save full file" affordance instead.
@@ -121,9 +122,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     var bytes = _bytes;
     if (bytes == null) {
       try {
-        bytes = await PdfAttachmentService.download(
-          widget.payload.storagePath,
-        );
+        bytes = await PdfAttachmentService.download(widget.payload.storagePath);
       } catch (e) {
         if (mounted) {
           NiceSnackBar.showError(context, 'Download failed: $e');
@@ -220,6 +219,22 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
 
   @override
   Widget build(BuildContext context) {
+    final document = widget.payload.document;
+    if (document != null) {
+      return Card(
+        child: ListTile(
+          leading: Icon(
+            document['kind'] == 'table'
+                ? Icons.table_chart_outlined
+                : Icons.description_outlined,
+          ),
+          title: Text('${document['title']}'),
+          subtitle: Text('Version ${document['version']} · Saved document'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => ChatDocumentView.open(context, document),
+        ),
+      );
+    }
     final mime = widget.payload.mime;
     if (mime.startsWith('image/')) {
       return _buildImage(context);
@@ -489,10 +504,7 @@ class _ArtifactCard extends StatelessWidget {
               ),
             ],
           ),
-          if (child != null) ...[
-            const SizedBox(height: 10),
-            child!,
-          ],
+          if (child != null) ...[const SizedBox(height: 10), child!],
         ],
       ),
     );
@@ -512,10 +524,7 @@ class _ArtifactErrorRow extends StatelessWidget {
         const Icon(Icons.error_outline, size: 18, color: Colors.redAccent),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            message,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          child: Text(message, style: Theme.of(context).textTheme.bodySmall),
         ),
         TextButton(onPressed: onSave, child: const Text('Retry / Save')),
       ],

@@ -270,7 +270,8 @@ class CoworkRelayTool extends CoworkRelayInbound {
     // Failure is read from the protocol, never from the text: the host's own
     // verdict when it sent one, else a non-zero exit code, a timeout, or an
     // explicit error field.
-    final failed = status == 'error' ||
+    final failed =
+        status == 'error' ||
         timedOut ||
         (exitCode != null && exitCode != 0) ||
         payload['error'] != null;
@@ -280,7 +281,8 @@ class CoworkRelayTool extends CoworkRelayInbound {
     ];
     // `result` is the text the model got; stdout/stderr are its projection on
     // the shell tools, and the fallback on an old host.
-    final result = _asText(payload['result']) ??
+    final result =
+        _asText(payload['result']) ??
         _asText(payload['error']) ??
         (stderr != null && stderr.isNotEmpty && failed ? stderr : stdout);
     return CoworkRelayTool(
@@ -382,6 +384,7 @@ class CoworkRelayFile extends CoworkRelayInbound {
     this.error,
     this.replay = false,
     this.mid,
+    this.document,
   });
 
   final String name;
@@ -389,6 +392,7 @@ class CoworkRelayFile extends CoworkRelayInbound {
   final int? declaredSize;
   final Uint8List? bytes;
   final String? error;
+  final Map<String, dynamic>? document;
 
   /// True when this file came back from the host's transcript, not from a
   /// live run (docs/WIRE_CONTRACT.md, "Persisted subagent / file / approval
@@ -404,6 +408,8 @@ class CoworkRelayFile extends CoworkRelayInbound {
 class CoworkRelayDone extends CoworkRelayInbound {
   const CoworkRelayDone({
     this.finalAnswer,
+    this.sessionKey,
+    this.hostNotified = false,
     this.reason,
     this.iterations,
     this.tokensSpent,
@@ -421,6 +427,8 @@ class CoworkRelayDone extends CoworkRelayInbound {
 
   /// The loop's own final answer, when it sent one.
   final String? finalAnswer;
+  final String? sessionKey;
+  final bool hostNotified;
 
   /// The run's clock on the host (docs/WIRE_CONTRACT.md, "Run timestamps on
   /// done"). Null on an old host.
@@ -765,11 +773,13 @@ class CoworkRelayAgentList extends CoworkRelayInbound {
         if (id is! String || id.isEmpty || name is! String) continue;
         final trimmed = name.trim();
         if (trimmed.isEmpty) continue;
-        list.add(CoworkHostAgentName(
-          agentId: id,
-          name: trimmed,
-          host: entry['host'] == true,
-        ));
+        list.add(
+          CoworkHostAgentName(
+            agentId: id,
+            name: trimmed,
+            host: entry['host'] == true,
+          ),
+        );
       }
     }
     return CoworkRelayAgentList(agents: list);
@@ -863,9 +873,14 @@ class CoworkRelayBrowserData extends CoworkRelayInbound {
 
 /// Status of the live browser view: `started`, `stopped`, or `error` (§9.1).
 class CoworkRelayBrowserView extends CoworkRelayInbound {
-  const CoworkRelayBrowserView({required this.status, this.message = '', this.password});
+  const CoworkRelayBrowserView({
+    required this.status,
+    this.message = '',
+    this.password,
+  });
   final String status;
   final String message;
+
   /// Per-view VNC secret, only on `started` (§9.1 hardening). Never log it.
   final String? password;
 }
@@ -936,13 +951,16 @@ class CoworkRelayApprovalRequest extends CoworkRelayInbound {
       public: payload['public'] != false,
       replay: payload['replay'] == true,
       mid: CoworkRelayTool._asInt(payload['mid']),
-      decision: payload['decision'] is String && (payload['decision'] as String).isNotEmpty
+      decision:
+          payload['decision'] is String &&
+              (payload['decision'] as String).isNotEmpty
           ? payload['decision'] as String
           : null,
       decisionReason: payload['decision_reason'] is String
           ? payload['decision_reason'] as String
           : null,
-      sessionKey: payload['session_key'] is String &&
+      sessionKey:
+          payload['session_key'] is String &&
               (payload['session_key'] as String).isNotEmpty
           ? payload['session_key'] as String
           : null,
@@ -1015,8 +1033,9 @@ class CoworkRelaySecretRequest extends CoworkRelayInbound {
       requestId: id,
       names: List<String>.unmodifiable(names),
       purpose: purpose is String ? purpose : '',
-      sessionKey:
-          sessionKey is String && sessionKey.isNotEmpty ? sessionKey : null,
+      sessionKey: sessionKey is String && sessionKey.isNotEmpty
+          ? sessionKey
+          : null,
     );
   }
 }
@@ -1214,11 +1233,21 @@ abstract interface class CoworkRelayController {
 /// The real transport. Also an [ExecutorTransport]: [provisionAccount] shapes
 /// the payload through [ExecutorProvisioning], which calls back into
 /// [sendAuthentication] to seal and send it over this WebSocket.
+class CoworkRelayDocuments extends CoworkRelayInbound {
+  const CoworkRelayDocuments(this.payload);
+  final Map<String, dynamic> payload;
+}
+
+abstract interface class CoworkDocumentsControl {
+  Future<void> requestDocuments(String sessionKey, {String? id});
+}
+
 class CoworkRelayClient
     implements
         CoworkRelayController,
         ExecutorTransport,
         CoworkAutomationControl,
+        CoworkDocumentsControl,
         CoworkSkillsControl {
   CoworkRelayClient({
     required String deviceId,
@@ -1236,21 +1265,21 @@ class CoworkRelayClient
     Stream<AuthState>? authChanges,
     Future<AccountSession?> Function(String refreshToken)? sessionAdopter,
     SessionRefreshScheduler? scheduler,
-  })  : _deviceId = deviceId,
-        _signingKeyPair = signingKeyPair,
-        _connector = connector,
-        _approvedDevices = approvedDevices ?? CoworkApprovedDevices.empty(),
-        _keyVersion = keyVersion,
-        _nowMs = nowMs,
-        _pairingTimeout = pairingTimeout,
-        _mcpStore = mcpStore,
-        _hereNowStore = hereNowStore,
-        _secretsForwarder = secretsForwarder,
-        _replaySessions = replaySessions,
-        _sessionSource = sessionSource,
-        _authChanges = authChanges,
-        _sessionAdopter = sessionAdopter,
-        _scheduler = scheduler ?? SessionRefreshScheduler.instance;
+  }) : _deviceId = deviceId,
+       _signingKeyPair = signingKeyPair,
+       _connector = connector,
+       _approvedDevices = approvedDevices ?? CoworkApprovedDevices.empty(),
+       _keyVersion = keyVersion,
+       _nowMs = nowMs,
+       _pairingTimeout = pairingTimeout,
+       _mcpStore = mcpStore,
+       _hereNowStore = hereNowStore,
+       _secretsForwarder = secretsForwarder,
+       _replaySessions = replaySessions,
+       _sessionSource = sessionSource,
+       _authChanges = authChanges,
+       _sessionAdopter = sessionAdopter,
+       _scheduler = scheduler ?? SessionRefreshScheduler.instance;
 
   final String _deviceId;
   final SimpleKeyPair _signingKeyPair;
@@ -1273,8 +1302,8 @@ class CoworkRelayClient
   /// tokens kills the device's copy in the act. It is state, not something to
   /// render, so it never reaches the inbound stream.
   @visibleForTesting
-  static Future<int> Function(Map<String, dynamic> payload)
-      mcpCredentialsSink = McpService.applyRotatedCredentials;
+  static Future<int> Function(Map<String, dynamic> payload) mcpCredentialsSink =
+      McpService.applyRotatedCredentials;
 
   /// The user's here.now publishing setting. When the connector is enabled, each
   /// task frame carries `{enabled, approval}` under `herenow`, so the executor
@@ -1362,8 +1391,9 @@ class CoworkRelayClient
     return (String refreshToken) async {
       final response = await SupabaseService.auth.setSession(
         refreshToken,
-        accessToken:
-            (accessToken == null || accessToken.isEmpty) ? null : accessToken,
+        accessToken: (accessToken == null || accessToken.isEmpty)
+            ? null
+            : accessToken,
       );
       final session = response.session;
       return session == null ? null : AccountSession.fromSupabase(session);
@@ -1415,7 +1445,9 @@ class CoworkRelayClient
   AccountSessionSource? get _effectiveSessionSource {
     final source = _sessionSource;
     if (source != null) return source;
-    return SupabaseService.isInitialized ? const SupabaseAccountSession() : null;
+    return SupabaseService.isInitialized
+        ? const SupabaseAccountSession()
+        : null;
   }
 
   Stream<AuthState>? get _effectiveAuthChanges {
@@ -1428,8 +1460,8 @@ class CoworkRelayClient
 
   final ValueNotifier<CoworkRelayState> _state =
       ValueNotifier<CoworkRelayState>(
-    const CoworkRelayState(phase: CoworkRelayPhase.idle),
-  );
+        const CoworkRelayState(phase: CoworkRelayPhase.idle),
+      );
   final StreamController<CoworkRelayInbound> _inbound =
       StreamController<CoworkRelayInbound>.broadcast();
 
@@ -1564,8 +1596,9 @@ class CoworkRelayClient
     // no code: the host's device key + the established channel key.
     final peerDeviceId = pairing.peerDeviceId;
     _peerDeviceId = peerDeviceId;
-    final peerPublicKey =
-        peerDeviceId == null ? null : pairing.approvedDevices.lookup(peerDeviceId);
+    final peerPublicKey = peerDeviceId == null
+        ? null
+        : pairing.approvedDevices.lookup(peerDeviceId);
     if (peerDeviceId != null && peerPublicKey != null) {
       _establishedTrust = CoworkStoredPairing(
         hostUrl: hostUrl,
@@ -1692,11 +1725,14 @@ class CoworkRelayClient
     _provisionedAccessToken = session.accessToken;
     // From the first provision on, keep the host's token fresh on our own.
     _startAuthWatch();
-    final sent = ExecutorProvisioning(this)
-        .provision(ExecutorHandle(deviceId: peerDeviceId, label: 'host'), session);
+    final sent = ExecutorProvisioning(
+      this,
+    ).provision(ExecutorHandle(deviceId: peerDeviceId, label: 'host'), session);
     // Let a waiting replay through either way: a provision that failed is not
     // a reason to leave the user without a transcript.
-    unawaited(sent.whenComplete(_openProvisionGate));
+    // The caller receives `sent`'s error. Consume it on this separate cleanup
+    // future too, so a socket closing during login cannot report it unhandled.
+    unawaited(sent.whenComplete(_openProvisionGate).catchError((Object _) {}));
     // The secret set rides right behind the token, every time: the host
     // replaces its copy with ours. Best-effort; a failure is retried by the
     // next provision or the next change on the settings page.
@@ -1774,7 +1810,8 @@ class CoworkRelayClient
     final rotatedExpiresAt = CoworkRelayTool._asInt(payload['expires_at']);
     final current = _effectiveSessionSource?.current();
     AccountSession? adopted;
-    final appIsNewer = current != null &&
+    final appIsNewer =
+        current != null &&
         current.expiresAt != null &&
         rotatedExpiresAt != null &&
         current.expiresAt! > rotatedExpiresAt &&
@@ -1814,8 +1851,7 @@ class CoworkRelayClient
   Future<void> sendAuthentication(
     ExecutorHandle target,
     Map<String, dynamic> payload,
-  ) =>
-      _sendFramePayload(payload);
+  ) => _sendFramePayload(payload);
 
   @override
   Future<void> sendTask(
@@ -1830,12 +1866,14 @@ class CoworkRelayClient
     // The user's UI-configured MCP servers, resolved with their live bearers at
     // launch. Empty (or no store) leaves the key off the frame, so an old host
     // and a user with no connectors both keep working unchanged.
-    final mcpServers =
-        _mcpStore == null ? const <Map<String, dynamic>>[] : await _mcpStore.forwardPayloads();
+    final mcpServers = _mcpStore == null
+        ? const <Map<String, dynamic>>[]
+        : await _mcpStore.forwardPayloads();
     // The here.now connector setting, when the user enabled it. Null leaves the
     // `herenow` key off the frame, so the executor registers no publish tool.
-    final herenow =
-        _hereNowStore == null ? null : await _hereNowStore.forwardPayload();
+    final herenow = _hereNowStore == null
+        ? null
+        : await _hereNowStore.forwardPayload();
     await _sendFramePayload(<String, dynamic>{
       'type': 'task',
       'prompt': prompt,
@@ -1863,13 +1901,12 @@ class CoworkRelayClient
     String roomId,
     String name,
     List<Map<String, String>> members,
-  ) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'room_create',
-        'room_id': roomId,
-        'name': name,
-        'members': members,
-      });
+  ) => _sendFramePayload(<String, dynamic>{
+    'type': 'room_create',
+    'room_id': roomId,
+    'name': name,
+    'members': members,
+  });
 
   @override
   Future<void> sendRoomTask(String roomId, String message) =>
@@ -1880,19 +1917,15 @@ class CoworkRelayClient
       });
 
   @override
-  Future<void> deleteRoom(String roomId) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'room_delete',
-        'room_id': roomId,
-      });
+  Future<void> deleteRoom(String roomId) => _sendFramePayload(<String, dynamic>{
+    'type': 'room_delete',
+    'room_id': roomId,
+  });
 
   @override
-  Future<void> renameRoom(String roomId, String name) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'room_rename',
-        'room_id': roomId,
-        'name': name,
-      });
+  Future<void> renameRoom(String roomId, String name) => _sendFramePayload(
+    <String, dynamic>{'type': 'room_rename', 'room_id': roomId, 'name': name},
+  );
 
   @override
   Future<void> createAgent(String agentId, String name) =>
@@ -1939,11 +1972,9 @@ class CoworkRelayClient
       });
 
   @override
-  Future<void> requestRoomHistory(String roomId) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'room_history_request',
-        'room_id': roomId,
-      });
+  Future<void> requestRoomHistory(String roomId) => _sendFramePayload(
+    <String, dynamic>{'type': 'room_history_request', 'room_id': roomId},
+  );
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) =>
@@ -1988,17 +2019,18 @@ class CoworkRelayClient
     // asks for the newest page only, so a long thread paints at once; the
     // loader then fetches the older pages with `beforeId`. A delta replay
     // (`afterId` > 0) is never paged. An old host ignores both keys.
-    final int effectiveLimit =
-        limit > 0 ? limit : (afterId == 0 ? kReplayPageSize : 0);
+    final int effectiveLimit = limit > 0
+        ? limit
+        : (afterId == 0 ? kReplayPageSize : 0);
     return _sendFramePayload(<String, dynamic>{
-        'type': 'replay',
-        'session_key': sessionKey,
-        // A cursor of zero means "the whole history", which is what a frame
-        // without the key already means to the executor. Sending it only when
-        // it advances keeps a full replay byte-identical to the old frame.
-        if (afterId > 0) 'after_id': afterId,
-        if (beforeId > 0) 'before_id': beforeId,
-        if (effectiveLimit > 0) 'limit': effectiveLimit,
+      'type': 'replay',
+      'session_key': sessionKey,
+      // A cursor of zero means "the whole history", which is what a frame
+      // without the key already means to the executor. Sending it only when
+      // it advances keeps a full replay byte-identical to the old frame.
+      if (afterId > 0) 'after_id': afterId,
+      if (beforeId > 0) 'before_id': beforeId,
+      if (effectiveLimit > 0) 'limit': effectiveLimit,
     });
   }
 
@@ -2006,10 +2038,7 @@ class CoworkRelayClient
   Future<void> sendRunAck(String runId) =>
       // A sealed control frame, sent the same way as a stop: no running phase,
       // nothing to await — the host just marks the run seen.
-      _sendFramePayload(<String, dynamic>{
-        'type': 'run_ack',
-        'run_id': runId,
-      });
+      _sendFramePayload(<String, dynamic>{'type': 'run_ack', 'run_id': runId});
 
   /// Send one `replay` per session key the provider reports, at most once per
   /// socket. Fire-and-forget: a failed replay must never break the just-paired
@@ -2034,11 +2063,9 @@ class CoworkRelayClient
       _sendFramePayload(<String, dynamic>{'type': 'browser_stop'});
 
   @override
-  Future<void> sendBrowserData(Uint8List bytes) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'browser_data',
-        'data': base64.encode(bytes),
-      });
+  Future<void> sendBrowserData(Uint8List bytes) => _sendFramePayload(
+    <String, dynamic>{'type': 'browser_data', 'data': base64.encode(bytes)},
+  );
 
   @override
   Future<void> sendApprovalDecision({
@@ -2070,7 +2097,8 @@ class CoworkRelayClient
   Future<void> requestAutomationList({String? sessionKey}) =>
       _sendFramePayload(<String, dynamic>{
         'type': 'automation_list',
-        if (sessionKey != null && sessionKey.isNotEmpty) 'session_key': sessionKey,
+        if (sessionKey != null && sessionKey.isNotEmpty)
+          'session_key': sessionKey,
       });
 
   @override
@@ -2089,6 +2117,14 @@ class CoworkRelayClient
   @override
   Future<void> requestSkillsList() =>
       _sendFramePayload(<String, dynamic>{'type': 'skills_list'});
+
+  @override
+  Future<void> requestDocuments(String sessionKey, {String? id}) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': id == null ? 'documents_list' : 'document_read',
+        'session_key': sessionKey,
+        'id': ?id,
+      });
 
   @override
   Future<void> sendSecrets({
@@ -2131,7 +2167,9 @@ class CoworkRelayClient
   void _onData(dynamic raw) {
     final Map<String, dynamic> env;
     try {
-      final decoded = jsonDecode(raw is String ? raw : utf8.decode(raw as List<int>));
+      final decoded = jsonDecode(
+        raw is String ? raw : utf8.decode(raw as List<int>),
+      );
       if (decoded is! Map<String, dynamic>) return;
       env = decoded;
     } catch (_) {
@@ -2150,9 +2188,11 @@ class CoworkRelayClient
       // the state to `confirmed`, throwing wrongState. Chain each step after
       // the previous one completes.
       _pairingQueue = _pairingQueue
-          .then((_) => _reconnect != null
-              ? _handleReconnect(env)
-              : _handlePairing(env))
+          .then(
+            (_) => _reconnect != null
+                ? _handleReconnect(env)
+                : _handlePairing(env),
+          )
           .catchError(_failPairing);
     }
   }
@@ -2312,6 +2352,8 @@ class CoworkRelayClient
         if (automation != null) _inbound.add(automation);
       case 'automation_list':
         _inbound.add(CoworkRelayAutomationList.fromPayload(payload));
+      case 'documents':
+        _inbound.add(CoworkRelayDocuments(payload));
       case 'skills_list':
         _inbound.add(CoworkRelaySkillsList.fromPayload(payload));
       case 'agent_list':
@@ -2328,6 +2370,10 @@ class CoworkRelayClient
         _inbound.add(
           CoworkRelayDone(
             finalAnswer: finalAnswer is String ? finalAnswer : null,
+            sessionKey: payload['session_key'] is String
+                ? payload['session_key'] as String
+                : null,
+            hostNotified: payload['host_notified'] == true,
             reason: reason is String ? reason : null,
             iterations: iterations is int
                 ? iterations
@@ -2404,7 +2450,9 @@ class CoworkRelayClient
   /// wrapped event is not a `subagent_state` (a `subagent_output` delta carries
   /// no lifecycle transition to show). Malformed frames are dropped, not thrown,
   /// so a bad child event never breaks the socket read loop.
-  static CoworkRelaySubagent? _subagentFromPayload(Map<String, dynamic> payload) {
+  static CoworkRelaySubagent? _subagentFromPayload(
+    Map<String, dynamic> payload,
+  ) {
     final event = payload['event'];
     if (event is! Map) return null;
     if (event['type'] != 'subagent_state') return null;
@@ -2431,7 +2479,9 @@ class CoworkRelayClient
 
   /// Turns a `room_turn` frame into a [CoworkRelayRoomTurn], or null when a
   /// field is missing or the wrong type. Dropped, never thrown.
-  static CoworkRelayRoomTurn? _roomTurnFromPayload(Map<String, dynamic> payload) {
+  static CoworkRelayRoomTurn? _roomTurnFromPayload(
+    Map<String, dynamic> payload,
+  ) {
     final roomId = payload['room_id'];
     final agentId = payload['agent_id'];
     final handle = payload['handle'];
@@ -2542,17 +2592,21 @@ class CoworkRelayClient
         name: name,
         mimeType: mimeType,
         declaredSize: declaredSize,
-        error: 'The file body does not match the declared size '
+        error:
+            'The file body does not match the declared size '
             '($declaredSize bytes declared, ${bytes.length} received).',
       );
     }
     return CoworkRelayFile(
-        replay: replay,
-        mid: mid,
+      replay: replay,
+      mid: mid,
       name: name,
       mimeType: mimeType,
       declaredSize: declaredSize,
       bytes: bytes,
+      document: payload['document'] is Map
+          ? Map<String, dynamic>.from(payload['document'] as Map)
+          : null,
     );
   }
 
@@ -2588,13 +2642,18 @@ class CoworkRelayClient
     }
     final frame = await sealer.seal(utf8.encode(jsonEncode(payload)));
     socket.send(
-      jsonEncode(<String, dynamic>{'type': 'frame', 'frame': _frameToWire(frame)}),
+      jsonEncode(<String, dynamic>{
+        'type': 'frame',
+        'frame': _frameToWire(frame),
+      }),
     );
   }
 
   void _onSocketDone() {
     if (kDebugMode) {
-      debugPrint('[cowork-relay] socket closed (paired=${_state.value.isPaired})');
+      debugPrint(
+        '[cowork-relay] socket closed (paired=${_state.value.isPaired})',
+      );
     }
     // The socket is gone: let go of it, or `reconnect` keeps refusing with
     // "Already connected" and the scheduler's `reconnectHost` hook (bead
@@ -2604,7 +2663,9 @@ class CoworkRelayClient
     _socket = null;
     final done = _pairingDone;
     if (done != null && !done.isCompleted) {
-      done.completeError(StateError('Host closed the connection during pairing'));
+      done.completeError(
+        StateError('Host closed the connection during pairing'),
+      );
       return;
     }
     if (_state.value.isPaired) {

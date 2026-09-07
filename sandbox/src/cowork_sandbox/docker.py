@@ -210,8 +210,9 @@ class DockerEnvironment(BaseEnvironment):
     # Container lifecycle
     # ------------------------------------------------------------------ #
     def _ensure_container(self) -> str:
-        if self._container is not None:
-            return self._container
+        # A cached ID is not proof of a live container: another host process
+        # or a rebuild may have removed/replaced it since the previous command.
+        # Resolve by ownership labels again before handing an ID to docker exec.
         if not self._cli.available():
             raise DockerUnavailableError(
                 f"{self._cli.binary} CLI or daemon is unavailable"
@@ -230,6 +231,8 @@ class DockerEnvironment(BaseEnvironment):
                 remove_container(existing.id or existing.name, cli=self._cli)
                 existing = None
         if existing is not None:
+            if existing.id == self._container:
+                return self._container
             self._container = existing.id
             self._reused = True
             # Adopt the existing box's session id so the reaper's "live session"

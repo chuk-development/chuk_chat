@@ -242,6 +242,9 @@ void main() {
       // footer pill and opens chuk's desktop settings modal, whose footer
       // carries the sign-out — chuk's homes for both.
       expect(find.byType(AppBar), findsNothing);
+      // The current shell starts with its sidebar collapsed.
+      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       expect(find.byType(DesktopSettingsModal), findsOneWidget);

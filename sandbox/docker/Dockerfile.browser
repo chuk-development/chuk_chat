@@ -125,7 +125,7 @@ ARG PLAYWRIGHT_MCP_VERSION=0.0.80
 RUN set -eux; \
     npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"; \
     npm cache clean --force; \
-    mcp-server-playwright --version || npx @playwright/mcp --version
+    playwright-mcp --version
 
 # Xvfb + x11vnc: the headful Chromium runs on a virtual framebuffer (no real
 # screen, no window on anyone's device), and x11vnc serves that display so the
@@ -149,10 +149,11 @@ RUN set -eux; \
 ENV COWORK_BROWSER_DISPLAY=:99 \
     PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 
-# In-container helpers (§9.1): the launcher brings up Xvfb then execs the headed
-# Playwright MCP server; the vnc-up script starts x11vnc on demand for the live
-# view. Both are invoked by the host over `docker exec`.
+# In-container helpers (§9.1): the launcher brings up Xvfb then supervises the
+# headed Playwright MCP server and its browser descendants; vnc-up starts x11vnc
+# on demand for the live view. Both are invoked by the host over `docker exec`.
 COPY browser-mcp.sh /usr/local/bin/cowork-browser-mcp
+COPY browser-mcp-owner.py /usr/local/lib/cowork/browser-mcp-owner.py
 COPY vnc-up.sh /usr/local/bin/cowork-vnc-up
 RUN chmod 0755 /usr/local/bin/cowork-browser-mcp /usr/local/bin/cowork-vnc-up
 

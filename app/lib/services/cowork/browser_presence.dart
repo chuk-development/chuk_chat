@@ -4,15 +4,15 @@ import 'package:flutter/foundation.dart';
 
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 
-/// Whether the agent has a browser open right now (Bead cowork-vzm).
+/// Whether the current live run is using the agent's browser.
 ///
 /// The agent's browser is the Playwright MCP server inside its sandbox
 /// (`cowork-browser-mcp`): Chromium comes up on the first `browser_*` tool and
 /// goes away on `browser_close`. Every one of those calls reaches the app as a
-/// `tool` frame — live and replayed alike (docs/WIRE_CONTRACT.md, "Tool events
-/// and timestamps") — so the app can know the browser state without asking:
+/// `tool` frame (docs/WIRE_CONTRACT.md, "Tool events and timestamps") — so
+/// the app can follow live browser use without polling:
 ///
-/// * a completed `mcp__playwright__browser_<x>` tool (or a `tool_call` wrapper
+/// * a live `mcp__playwright__browser_<x>` tool (or a `tool_call` wrapper
 ///   naming one) means a page is open;
 /// * a completed `browser_close` means it is gone;
 /// * the executor's own `browser_view` verdicts refine that: `started` with an
@@ -22,9 +22,10 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 ///   pushed on every change, and `browser_open` in every `run_state` (the
 ///   replay header), which wins over anything derived here.
 ///
-/// A replay after a reconnect carries the same tool frames, so the state is
-/// rebuilt from the transcript and the app and the host agree again. The
-/// shell gates the "Agent's browser" button on [value]; nothing else reads it.
+/// Historical tools never make the browser available. A reconnect uses the
+/// current run-state header, and a live run ending hides the entry point even
+/// when Chromium remains open in the sandbox. Opening the viewer stays an
+/// explicit user action, so a tool call cannot interrupt reading the chat.
 class BrowserPresence extends ValueNotifier<bool> {
   BrowserPresence(this.controller) : super(false) {
     _sub = controller.inbound.listen(_onInbound);
@@ -32,6 +33,7 @@ class BrowserPresence extends ValueNotifier<bool> {
 
   final CoworkRelayController controller;
   StreamSubscription<CoworkRelayInbound>? _sub;
+  bool _runEnded = false;
 
   /// The tool-name prefix the agent's MCP client gives the Playwright server
   /// (`mcp__<server>__<tool>`, `cowork_agent.mcp_client.tool_name`).
@@ -74,7 +76,12 @@ class BrowserPresence extends ValueNotifier<bool> {
   static bool? stateFromTool(CoworkRelayTool tool) {
     final String name = effectiveName(tool);
     if (!isBrowserTool(name)) return null;
-    if (tool.failed) return null;
+    if (tool.replay ||
+        tool.failed ||
+        tool.status == 'error' ||
+        tool.status == 'failed') {
+      return null;
+    }
     return toolPart(name) != closeTool;
   }
 
@@ -99,12 +106,21 @@ class BrowserPresence extends ValueNotifier<bool> {
   }
 
   void _onInbound(CoworkRelayInbound event) {
+    if (event is CoworkRelayRunState) {
+      _runEnded = event.state != 'running';
+    } else if (event is CoworkRelayDone && !event.isReplay) {
+      _runEnded = true;
+    } else if (event is CoworkRelayTool && stateFromTool(event) == true) {
+      _runEnded = false;
+    }
     final bool? next = switch (event) {
       CoworkRelayTool() => stateFromTool(event),
-      CoworkRelayBrowserView() => stateFromView(event),
+      CoworkRelayBrowserView() => _runEnded ? false : stateFromView(event),
       // The host's word in the replay header (a current host; null on an old
       // one, which leaves the derived state alone).
-      CoworkRelayRunState() => event.browserOpen,
+      CoworkRelayRunState() =>
+        event.state == 'running' ? event.browserOpen : false,
+      CoworkRelayDone() => event.isReplay ? null : false,
       _ => null,
     };
     if (next != null && next != value) value = next;
@@ -112,6 +128,7 @@ class BrowserPresence extends ValueNotifier<bool> {
 
   /// Forget the state (a new pairing, a different coworker).
   void reset() {
+    _runEnded = false;
     if (value) value = false;
   }
 

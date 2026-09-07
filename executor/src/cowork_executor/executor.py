@@ -633,6 +633,7 @@ class Executor:
         subagent_limits: SubagentLimits | None = None,
         on_room_frame: Callable[[dict], None] | None = None,
         account_token_provider: Callable[[], str | None] | None = None,
+        account_session_provider: Callable[[], Any] | None = None,
         browser_mcp: bool = False,
         on_run_finished: Callable[[dict], None] | None = None,
         on_approval_pending: Callable[[dict], None] | None = None,
@@ -692,6 +693,7 @@ class Executor:
         # simply fail to authenticate (never a crash). ``oauth`` connectors do
         # not need this: their device token is forwarded in the frame.
         self._account_token_provider = account_token_provider
+        self._account_session_provider = account_session_provider
         # Give every task the Playwright MCP (§9.1) when the sandbox is the
         # browser image: the agent drives a headed Chromium the user can watch
         # over VNC. Off on the browser-free base image, where the launcher script
@@ -888,6 +890,15 @@ class Executor:
         # Per-session MCP managers own transport threads (and stdio subprocesses);
         # close them so nothing outlives the executor.
         self._close_mcp_managers()
+        # Drain idle model sockets retained across tasks. Active leases are
+        # closed, rather than recached, when their interrupted tasks unwind.
+        for factory in (self._model_factory, self._model_select):
+            close = getattr(factory, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001 — teardown must not mask stop
+                    pass
         # The per-workspace mem0 handles are cached for the life of the process
         # (memory.py) so a second task can reopen the same embedded Qdrant. Close
         # and forget them here, or the storage lock outlives the executor that
@@ -1021,6 +1032,26 @@ class Executor:
 
         if kind == "stop":
             self._handle_stop(request_id, payload)
+            return
+        if kind in ("documents_list", "document_read"):
+            from cowork_agent.chat_documents import DocumentStore, workspace_documents, read_workspace_document
+            session_key = str(payload.get("session_key") or "default")
+            try:
+                documents = DocumentStore(self._db_path, session_key)
+                if kind == "documents_list":
+                    result = {"documents": [
+                        {k: d[k] for k in ("id", "title", "kind", "version", "updated_at")}
+                        for d in documents.list()
+                    ] + workspace_documents(self._workspace)}
+                else:
+                    document_id = str(payload.get("id") or "")
+                    doc = (read_workspace_document(self._workspace, document_id)
+                           if document_id.startswith("file:") and self._workspace
+                           else documents.read(document_id))
+                    result = {"selected": doc}
+            except Exception as exc:
+                result = {"error": str(exc), "id": payload.get("id")}
+            self._terminal(request_id, {"type": "documents", "session_key": session_key, **result})
             return
         if self._handle_browser_kind(kind, request_id, payload):
             return
@@ -1501,7 +1532,9 @@ class Executor:
         if binary is None or not hasattr(env, "container_id"):
             return None
         try:
-            env.run_bash("true", internal=True)  # realize the container
+            result = env.run_bash("true", internal=True)  # realize the container
+            if result is not None and not result.ok:
+                return None
         except Exception:  # noqa: BLE001 — no container, no view; caller reports
             return None
         cid = getattr(env, "container_id", None)
@@ -1528,6 +1561,13 @@ class Executor:
         if prep is None:
             return None
         prefix, cid = prep  # [binary, "exec", "-i", ("-u", user)?]
+        from .browser_profile import retired_browser_hostname
+
+        retired = retired_browser_hostname(
+            prefix[0], cid, getattr(self._environment, "workspace", None)
+        )
+        if retired:
+            prefix += ["-e", f"COWORK_BROWSER_RETIRED_HOSTNAME={retired}"]
         return {
             "name": "playwright",
             "command": prefix[0],
@@ -2176,6 +2216,8 @@ class Executor:
         subagents = self._subagent_config(request_id, session_key, secrets_access)
         loop = build_runtime(
             model,
+            session=(self._account_session_provider()
+                     if self._account_session_provider is not None else None),
             db_path=self._db_path,
             environment=self._env_shim,
             max_iterations=self._max_iterations,
@@ -2225,7 +2267,8 @@ class Executor:
                 request_id,
                 session_key,
                 file_payload(
-                    name=sent.name, mime_type=sent.mime_type, data=sent.data
+                    name=sent.name, mime_type=sent.mime_type, data=sent.data,
+                    document=sent.document,
                 ),
             ),
             media_mount=self._media_mount,
@@ -2278,11 +2321,9 @@ class Executor:
             with self._mcp_lock:
                 if self._mcp_active_request.get(session_key) == request_id:
                     self._mcp_active_request.pop(session_key, None)
-            # Every per-task client owns its own socket (and, for a backend
-            # client, a reader thread): the main model, the hero/aux clone and
-            # the browser client. Close all three with the task so no connection
-            # outlives the run — one leaked socket per task is a slow bleed on a
-            # host that runs for weeks.
+            # Release every per-task client. Backend clients return only fully
+            # drained sockets to the bounded idle pool; interrupted/error
+            # streams close immediately. Other clients close as before.
             for client in (hero_model, inner_model, browser_client):
                 close = getattr(client, "close", None) if client is not None else None
                 if callable(close):
@@ -2316,6 +2357,7 @@ class Executor:
                 run_stamps=run_stamps,
                 # A fired automation / job is notified on by the host itself.
                 host_notified=run.origin in ("automation", "job"),
+                session_key=session_key,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -2765,7 +2807,11 @@ class Executor:
             # commands, the tools, and the dispatch scrubber — so a child's
             # output cannot carry a value up to the parent's context.
             runtime_kwargs=(
-                {"secrets": secrets_access} if secrets_access is not None else {}
+                {
+                    **({"secrets": secrets_access} if secrets_access is not None else {}),
+                    "session": (self._account_session_provider()
+                                if self._account_session_provider is not None else None),
+                }
             ),
         )
         if self._subagent_limits is not None:

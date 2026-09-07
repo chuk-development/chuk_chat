@@ -584,6 +584,31 @@ void main() {
     await client.dispose();
   });
 
+  test('a failed provision reports one error and releases waiting replay', () async {
+    final (client, host, _) = await paired();
+    addTearDown(() async {
+      CoworkRelayClient.debugBeforeSeal = null;
+      await client.dispose();
+    });
+    CoworkRelayClient.debugBeforeSeal = (payload) async {
+      if (payload['type'] == 'account_authentication') {
+        throw StateError('Socket closed during provisioning');
+      }
+    };
+    final replay = client.requestReplay(sessionKey: 'thread-1');
+    await expectLater(
+      client.provisionAccount(const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      )),
+      throwsStateError,
+    );
+    await replay;
+    await settle();
+    expect(host.received.where((m) => m['type'] == 'replay'), hasLength(1));
+  });
+
   test('sendTask seals {type:task,prompt}; the host opens it', () async {
     final (client, host, _) = await paired();
 

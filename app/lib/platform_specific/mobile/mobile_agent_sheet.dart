@@ -20,6 +20,7 @@ class MobileAgentSheet extends StatelessWidget {
     super.key,
     required this.agent,
     this.onControls,
+    this.onRename,
     this.onRooms,
     this.onCopyChat,
     this.onSettings,
@@ -28,6 +29,7 @@ class MobileAgentSheet extends StatelessWidget {
 
   final CoworkAgent agent;
   final VoidCallback? onControls;
+  final VoidCallback? onRename;
   final VoidCallback? onRooms;
   final VoidCallback? onCopyChat;
   final VoidCallback? onSettings;
@@ -40,6 +42,7 @@ class MobileAgentSheet extends StatelessWidget {
     BuildContext context, {
     required CoworkAgent agent,
     VoidCallback? onControls,
+    VoidCallback? onRename,
     VoidCallback? onRooms,
     VoidCallback? onCopyChat,
     VoidCallback? onSettings,
@@ -61,6 +64,7 @@ class MobileAgentSheet extends StatelessWidget {
         return MobileAgentSheet(
           agent: agent,
           onControls: closeThen(onControls),
+          onRename: closeThen(onRename),
           onRooms: closeThen(onRooms),
           onCopyChat: closeThen(onCopyChat),
           onSettings: closeThen(onSettings),
@@ -88,6 +92,12 @@ class MobileAgentSheet extends StatelessWidget {
             subtitle: role == null || role.isEmpty ? null : Text(role),
           ),
           const Divider(height: 1),
+          if (onRename != null)
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename agent'),
+              onTap: onRename,
+            ),
           if (onControls != null)
             ListTile(
               leading: const Icon(Icons.tune),
@@ -103,7 +113,7 @@ class MobileAgentSheet extends StatelessWidget {
           if (onCopyChat != null)
             ListTile(
               leading: const Icon(Icons.copy_all_rounded),
-              title: const Text('Copy full chat'),
+              title: const Text('Copy Debug Chat'),
               onTap: onCopyChat,
             ),
           if (onSettings != null)

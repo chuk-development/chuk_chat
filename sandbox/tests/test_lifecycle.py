@@ -31,6 +31,24 @@ from cowork_sandbox import (
 from cowork_sandbox.docker import BASE_IMAGE, IMAGE_ENV_VAR
 
 
+def test_cached_container_is_resolved_again_after_external_replacement():
+    cli = FakeCli([container(cid="old", agent="a1", image="img:1")])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "old"
+    cli.containers = [container(cid="replacement", agent="a1", image="img:1")]
+    assert env._ensure_container() == "replacement"
+    assert not cli.created
+
+
+def test_cached_container_is_recreated_after_external_removal():
+    cli = FakeCli([container(cid="old", agent="a1", image="img:1")])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "old"
+    cli.containers.clear()
+    assert env._ensure_container() != "old"
+    assert len(cli.created) == 1
+
+
 class FakeCli:
     """A ``DockerCli`` stand-in backed by a dict of fake containers."""
 
