@@ -213,7 +213,14 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
         Expanded(
           child: SingleChildScrollView(
             child: isChart
-                ? _chart(context, rows)
+                // A chart row without a numeric value has no bar to draw;
+                // casting it would take the whole view down over one row.
+                // Table rows carry no value at all, so this filter belongs
+                // here and not on the shared list.
+                ? _chart(
+                    context,
+                    rows.where((row) => row['value'] is num).toList(),
+                  )
                 : isTable && columns.isNotEmpty
                 ? SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -250,6 +257,19 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
         ),
       ],
     );
+  }
+
+  /// A row's own colour, or the theme's. The value comes from a model, so
+  /// "blue", a truncated hex or nothing at all are ordinary inputs — none of
+  /// them may reach int.parse, which would throw while the panel is building.
+  Color _barColor(BuildContext context, Object? raw) {
+    if (raw is String) {
+      final hex = raw.trim().replaceFirst('#', '');
+      if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
+        return Color(int.parse('ff$hex', radix: 16));
+      }
+    }
+    return Theme.of(context).colorScheme.primary;
   }
 
   Widget _chart(BuildContext context, List<Map> rows) {
@@ -306,12 +326,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
                             (row['value'] as num).clamp(0, 100) /
                             100,
                         decoration: BoxDecoration(
-                          color: Color(
-                            int.parse(
-                              '${row['color']}'.replaceFirst('#', 'ff'),
-                              radix: 16,
-                            ),
-                          ),
+                          color: _barColor(context, row['color']),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: Theme.of(

@@ -233,7 +233,11 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
                 left: 0,
                 right: 0,
                 top: 0,
-                child: _StatusBanner(status: _status, message: _message),
+                child: _StatusBanner(
+                  status: _status,
+                  message: _message,
+                  leadingInset: 48,
+                ),
               ),
             Positioned(
               top: 8,
@@ -338,10 +342,19 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
 }
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.status, required this.message});
+  const _StatusBanner({
+    required this.status,
+    required this.message,
+    this.leadingInset = 0,
+  });
 
   final String status;
   final String message;
+
+  /// Room for whatever floats over the banner's left edge — in fullscreen the
+  /// close button sits there and would otherwise cover the first words of an
+  /// error, which is the one message the reader must not lose.
+  final double leadingInset;
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +373,7 @@ class _StatusBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: color.withValues(alpha: 0.15),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.fromLTRB(12 + leadingInset, 4, 12, 4),
       alignment: Alignment.centerLeft,
       child: Text(
         label,
