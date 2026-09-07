@@ -83,4 +83,35 @@ void main() {
     // Compact hides the prompt line.
     expect(find.text('check the inbox'), findsNothing);
   });
+
+  testWidgets('every row says which kind it is, not only the footnote',
+      (tester) async {
+    await tester.pumpWidget(_wrap(AutomationCard(automation: _automation())));
+    expect(find.textContaining('Schedule · every 5m'), findsOneWidget);
+
+    await tester.pumpWidget(_wrap(AutomationCard(
+      automation: _automation(kind: 'watcher'),
+    )));
+    expect(find.textContaining('Watcher · watch poll.py'), findsOneWidget);
+  });
+
+  testWidgets('a long task is one line until the row is opened', (tester) async {
+    final long = List<String>.filled(60, 'sammle die zahlen').join(' ');
+    final a = CoworkAutomation.fromPayload(<String, dynamic>{
+      'id': 'x1',
+      'session_key': 'thread-1',
+      'kind': 'schedule',
+      'name': 'Wahlradar',
+      'state': 'active',
+      'spec': {'at': '2026-09-06T09:00:00Z'},
+      'prompt': long,
+    })!;
+    await tester.pumpWidget(_wrap(AutomationCard(automation: a)));
+    Text prompt() => tester.widget<Text>(find.text(long));
+    expect(prompt().maxLines, 1);
+    await tester.tap(find.text(long));
+    await tester.pump();
+    expect(prompt().maxLines, greaterThan(1));
+  });
 }
+

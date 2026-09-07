@@ -21,6 +21,9 @@ class AutomationsSource extends ChangeNotifier {
   static final AutomationsSource instance = AutomationsSource._();
 
   final Map<String, CoworkAutomation> _byId = <String, CoworkAutomation>{};
+
+  /// The host's coworker names, by session key (`agent_list`).
+  final Map<String, String> _names = <String, String>{};
   StreamSubscription<CoworkRelayInbound>? _sub;
 
   /// Sessions whose list the host has answered at least once.
@@ -39,9 +42,59 @@ class AutomationsSource extends ChangeNotifier {
     return list;
   }
 
+  /// Every automation, one row per automation, newest first.
+  ///
+  /// The host never deletes a row, so restarting a watcher leaves the old row
+  /// behind: the same name, the same script, one `done` and one `active`. Two
+  /// rows for one thing is not two automations — it is one automation and its
+  /// history. The live row wins; among rows of one state the newest wins.
+  List<CoworkAutomation> get distinct {
+    final best = <String, CoworkAutomation>{};
+    for (final a in all) {
+      final key = identityOf(a);
+      final held = best[key];
+      if (held == null || _better(a, held)) best[key] = a;
+    }
+    final list = best.values.toList();
+    list.sort(_newestFirst);
+    return list;
+  }
+
+  /// What makes two rows the same automation: the same thread, the same kind,
+  /// the same name and the same spec. The host's id is NOT part of it — a new
+  /// id is exactly what a restart produces.
+  static String identityOf(CoworkAutomation a) =>
+      '${a.sessionKey}|${a.kind}|${a.name}|${a.specLabel}';
+
+  static bool _better(CoworkAutomation a, CoworkAutomation b) {
+    if (a.isOver != b.isOver) return b.isOver;
+    return _newestFirst(a, b) < 0;
+  }
+
   /// The automations of one conversation, newest first.
   List<CoworkAutomation> forSession(String sessionKey) =>
       all.where((a) => a.sessionKey == sessionKey).toList();
+
+  /// The name to put over a group of rows: what the rest of the app calls that
+  /// coworker, never the raw session key.
+  ///
+  /// The host sends its roster as `agent_list`; a key it has not named is read
+  /// the way the app itself built it (`local:<name>:<n>:<random>`,
+  /// `host:<device>`), and only a key that is neither shows as it is.
+  String coworkerName(String sessionKey) {
+    final named = _names[sessionKey];
+    if (named != null && named.isNotEmpty) return named;
+    if (sessionKey == 'default') return 'Default coworker';
+    if (sessionKey.startsWith('local:')) {
+      final parts = sessionKey.split(':');
+      if (parts.length >= 2 && parts[1].trim().isNotEmpty) return parts[1].trim();
+    }
+    if (sessionKey.startsWith('host:')) {
+      final device = sessionKey.substring('host:'.length).trim();
+      if (device.isNotEmpty) return device;
+    }
+    return sessionKey;
+  }
 
   /// The active and paused ones of one conversation: what a thread's strip
   /// shows. A done or failed automation is history (its card is in the
@@ -87,6 +140,13 @@ class AutomationsSource extends ChangeNotifier {
       case CoworkRelayAutomation():
         _byId[event.automation.id] = event.automation;
         notifyListeners();
+      case CoworkRelayAgentList():
+        // The same frame the roster reads. Held here so a group header can
+        // name its coworker without the page having to reach the roster.
+        for (final agent in event.agents) {
+          _names[agent.agentId] = agent.name;
+        }
+        notifyListeners();
       case CoworkRelayAutomationList():
         // The reply is the truth for its scope: a row the host no longer
         // lists (it never deletes rows, but a future host may) is dropped.
@@ -121,6 +181,7 @@ class AutomationsSource extends ChangeNotifier {
     _sub?.cancel();
     _sub = null;
     _byId.clear();
+    _names.clear();
     _listed.clear();
     _listedAll = false;
   }

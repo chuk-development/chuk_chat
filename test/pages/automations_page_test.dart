@@ -103,4 +103,50 @@ void main() {
     await tester.pump();
     expect(find.textContaining('No automations'), findsOneWidget);
   });
+
+  testWidgets('names the coworker over each group, never the session key',
+      (tester) async {
+    await pump(tester);
+    controller.emit(CoworkRelayAutomationList(automations: [
+      _automation('a1', session: 'local:brisk-heron:2:116636868'),
+      _automation('a2', session: 'host:cowork-host'),
+    ]));
+    await tester.pump();
+    expect(find.text('brisk-heron'), findsOneWidget);
+    expect(find.text('cowork-host'), findsOneWidget);
+    expect(find.text('local:brisk-heron:2:116636868'), findsNothing);
+  });
+
+  testWidgets('one row per automation, and the fold count matches the list',
+      (tester) async {
+    CoworkAutomation watcher(String id, String state, double created) =>
+        CoworkAutomation.fromPayload(<String, dynamic>{
+          'id': id,
+          'session_key': 'thread-1',
+          'kind': 'watcher',
+          'name': 'Wahlradar LT Sachsen-Anhalt 2026',
+          'state': state,
+          'spec': {'script_path': 'monitor_lt26.py', 'restart': true},
+          'created_at': created,
+        })!;
+    await pump(tester);
+    controller.emit(CoworkRelayAutomationList(automations: [
+      watcher('dead', 'done', 10),
+      watcher('live', 'active', 20),
+    ]));
+    await tester.pump();
+    // The dead twin is the same automation, so it is neither a second row nor
+    // something the reader is invited to unfold.
+    expect(find.byType(AutomationCard), findsOneWidget);
+    expect(find.textContaining('finished'), findsNothing);
+    expect(find.text('active'), findsOneWidget);
+    expect(find.text('done'), findsNothing);
+  });
+
+  testWidgets('the body does not repeat the heading of the pane',
+      (tester) async {
+    await pump(tester);
+    expect(find.text('Automations'), findsOneWidget);
+  });
 }
+

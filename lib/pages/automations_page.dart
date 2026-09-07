@@ -4,13 +4,16 @@ import 'package:cowork/services/automations/automations_source.dart';
 import 'package:cowork/services/automations/cowork_automation.dart';
 import 'package:cowork/widgets/automation_card.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:cowork/widgets/settings_list_view.dart';
 
-/// Every automation of the host, grouped by the coworker (session) that owns
-/// it, with Pause / Resume / Cancel. The user manages all of them here; an
-/// agent only ever sees its own through its tools.
+/// Every automation of the host, grouped by the coworker that owns it, with
+/// Pause / Resume / Cancel. The user manages all of them here; an agent only
+/// ever sees its own through its tools.
 ///
-/// The list comes from the host (`automation_list`) when the page opens and
-/// on pull-to-refresh; every `automation` event updates a row live.
+/// The list comes from the host (`automation_list`) when the page opens and on
+/// pull-to-refresh; every `automation` event updates a row live. The page
+/// carries the same shape as the other settings pages: one heading (the app
+/// bar's), one explanation, then groups of equal rows.
 class AutomationsPage extends StatefulWidget {
   const AutomationsPage({super.key, AutomationsSource? source})
       : _injectedSource = source;
@@ -68,16 +71,21 @@ class _AutomationsPageState extends State<AutomationsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final all = _source.all;
+    // One row per automation. A restarted watcher leaves its old row behind,
+    // and showing both is what made the same automation read as two.
+    final all = _source.distinct;
+    final finished = all.where((a) => a.isOver).toList();
     final shown = _showFinished ? all : all.where((a) => !a.isOver).toList();
     final groups = <String, List<CoworkAutomation>>{};
     for (final a in shown) {
       groups.putIfAbsent(a.sessionKey, () => <CoworkAutomation>[]).add(a);
     }
-    final finished = all.where((a) => a.isOver).length;
     return Scaffold(
+      // The app bar carries the name of the page. Repeating it as a heading in
+      // the body says the same thing twice.
       appBar: AppBar(
         title: const Text('Automations'),
+        centerTitle: false,
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -88,18 +96,28 @@ class _AutomationsPageState extends State<AutomationsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        // The house scroll container for a settings page: it lays every row
+        // out up front, so the scrollbar does not resize while you scroll.
+        child: SettingsListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            const ExpressiveTitle(
-              'Automations',
-              subtitle: 'Schedules and watchers your coworkers set up',
+            const ExpressiveInfoCard(
+              icon: Icons.schedule,
+              text: 'A schedule starts a task in its coworker\'s thread when '
+                  'it is due. A watcher is a script that runs in the sandbox '
+                  'and wakes its coworker only when it sees something change. '
+                  'Every row below says which of the two it is, and every '
+                  'task it starts ends with a notification.',
             ),
-            if (_offline)
+            if (_offline) ...[
+              const SizedBox(height: 12),
               const ExpressiveInfoCard(
+                icon: Icons.cloud_off_outlined,
                 text: 'Not connected to the host. The list shows what this '
                     'app last heard; connect to refresh or change anything.',
               ),
+            ],
             if (shown.isEmpty && !_refreshing)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -114,43 +132,41 @@ class _AutomationsPageState extends State<AutomationsPage> {
                 ),
               ),
             for (final entry in groups.entries) ...[
-              ExpressiveSectionHeader(_sessionLabel(entry.key)),
-              for (final a in entry.value)
-                AutomationCard(
-                  key: ValueKey<String>('automation-${a.id}'),
-                  automation: a,
-                  onPause: () => _control(a, 'pause'),
-                  onResume: () => _control(a, 'resume'),
-                  onCancel: () => _control(a, 'cancel'),
-                ),
+              ExpressiveSectionHeader(_source.coworkerName(entry.key)),
+              ExpressiveGroup(
+                children: [
+                  for (final a in entry.value)
+                    AutomationCard(
+                      key: ValueKey<String>('automation-${a.id}'),
+                      automation: a,
+                      onPause: () => _control(a, 'pause'),
+                      onResume: () => _control(a, 'resume'),
+                      onCancel: () => _control(a, 'cancel'),
+                    ),
+                ],
+              ),
             ],
-            if (finished > 0)
-              TextButton.icon(
-                onPressed: () => setState(() => _showFinished = !_showFinished),
-                icon: Icon(
-                  _showFinished ? Icons.expand_less : Icons.expand_more,
-                ),
-                label: Text(
-                  _showFinished
-                      ? 'Hide finished'
-                      : 'Show $finished finished',
+            if (finished.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 18),
+                child: Center(
+                  child: TextButton.icon(
+                    onPressed: () =>
+                        setState(() => _showFinished = !_showFinished),
+                    icon: Icon(
+                      _showFinished ? Icons.expand_less : Icons.expand_more,
+                    ),
+                    label: Text(
+                      _showFinished
+                          ? 'Hide finished'
+                          : 'Show ${finished.length} finished',
+                    ),
+                  ),
                 ),
               ),
-            const SizedBox(height: 8),
-            const ExpressiveInfoCard(
-              text: 'A schedule starts a task in its coworker\'s thread when it '
-                  'is due. A watcher is a script that runs in the sandbox and '
-                  'wakes the coworker only when something changed. Every fired '
-                  'task ends with a notification.',
-            ),
           ],
         ),
       ),
     );
-  }
-
-  static String _sessionLabel(String sessionKey) {
-    if (sessionKey == 'default') return 'Default coworker';
-    return sessionKey;
   }
 }
