@@ -7,6 +7,16 @@ skills — the top-level ``skills/`` directory — into a new agent workspace th
 first time it is provisioned, so every coworker can, for example, summarize a
 YouTube video out of the box.
 
+The seed tree is **grouped by source**: ``skills/builtin/<name>/SKILL.md`` for
+the skills that document CoWork's own machinery, ``skills/workspace/<name>/
+SKILL.md`` for the ones that merely ship in the box and belong to the coworker.
+That grouping is the single source of truth for the ``source`` field of a
+``skills_list`` row — see :func:`cowork_agent.skills.iter_seed_skills`, which
+this module walks so the copy and the classification can never disagree. The
+copy itself is **flat**: both groups land side by side in
+``<workspace>/skills/<name>``, because a workspace skill is a workspace skill
+wherever it came from.
+
 The copy is **non-destructive**: a seed skill is written only when the agent
 does not already have a directory of that name. That keeps the agent's own
 edits and any user-added skills untouched, and makes seeding safe to run on
@@ -27,8 +37,11 @@ import os
 import shutil
 from pathlib import Path
 
+from cowork_agent.skills import SKILL_FILENAME, iter_seed_skills
+
 SKILLS_DIRNAME = "skills"
-SKILL_FILENAME = "SKILL.md"
+
+__all__ = ["SKILL_FILENAME", "seed_skills_dir", "seed_workspace_skills"]
 
 
 def seed_skills_dir() -> Path | None:
@@ -43,8 +56,13 @@ def seed_skills_dir() -> Path | None:
         return candidate if candidate.is_dir() else None
     for parent in Path(__file__).resolve().parents:
         candidate = parent / SKILLS_DIRNAME
-        if candidate.is_dir() and any(candidate.glob(f"*/{SKILL_FILENAME}")):
-            return candidate
+        if not candidate.is_dir():
+            continue
+        # Either layout counts: the grouped tree the repository ships
+        # (skills/<source>/<name>/SKILL.md) or a flat pre-split one.
+        for pattern in (f"*/*/{SKILL_FILENAME}", f"*/{SKILL_FILENAME}"):
+            if any(candidate.glob(pattern)):
+                return candidate
     return None
 
 
@@ -64,15 +82,13 @@ def seed_workspace_skills(
 
     dest_root = Path(workspace).expanduser() / SKILLS_DIRNAME
     seeded: list[str] = []
-    for entry in sorted(src.iterdir()):
-        if not entry.is_dir() or not (entry / SKILL_FILENAME).is_file():
-            continue
-        target = dest_root / entry.name
+    for _source, name, directory in iter_seed_skills(src):
+        target = dest_root / name
         if target.exists():
             continue  # the agent already has this skill — leave it alone
         try:
-            shutil.copytree(entry, target)
+            shutil.copytree(directory, target)
         except OSError:
             continue
-        seeded.append(entry.name)
+        seeded.append(name)
     return seeded

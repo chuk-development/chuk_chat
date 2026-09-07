@@ -42,7 +42,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -392,27 +392,65 @@ SOURCE_WORKSPACE = "workspace"
 SKILL_ACTIONS = ("enable", "disable")
 
 
-def seed_names(seed_root: str | Path | None) -> set[str]:
-    """The names of the shipped seed skills (the repository's ``skills/``).
-    A workspace skill of that name is "built-in" to the app; anything else the
-    agent or the user put there is a "workspace" skill."""
+SEED_SOURCES = (SOURCE_BUILTIN, SOURCE_WORKSPACE)
+
+
+def iter_seed_skills(
+    seed_root: str | Path | None,
+) -> Iterator[tuple[str, str, Path]]:
+    """Walk the shipped seed tree, yielding ``(source, name, directory)``.
+
+    **The directory layout is the classification.** The repository's
+    ``skills/`` holds one directory per source value of the wire contract:
+
+    .. code-block:: text
+
+        skills/builtin/<name>/SKILL.md     -> source "builtin"
+        skills/workspace/<name>/SKILL.md   -> source "workspace"
+
+    ``builtin`` is for skills that document CoWork's own machinery — the tools
+    the app itself provides (schedules, secrets, the sandbox terminal, the
+    workspace). They belong to the app, so the app vouches for them. Everything
+    under ``workspace`` is an ordinary skill that merely ships in the box: the
+    coworker owns it, may edit it, and the user may delete it. Reclassifying a
+    skill is a ``git mv`` between the two directories and nothing else — there
+    is no list of names anywhere.
+
+    A skill directory sitting *directly* under the seed root is the pre-split
+    layout and counts as ``builtin``, so an older ``COWORK_SEED_SKILLS`` tree
+    keeps working.
+    """
     if seed_root is None:
-        return set()
+        return
     base = Path(seed_root)
     if not base.is_dir():
-        return set()
-    return {
-        entry.name
-        for entry in base.iterdir()
-        if entry.is_dir() and (entry / SKILL_FILENAME).is_file()
-    }
+        return
+    for entry in sorted(base.iterdir()):
+        if not entry.is_dir():
+            continue
+        if (entry / SKILL_FILENAME).is_file():
+            yield SOURCE_BUILTIN, entry.name, entry  # pre-split layout
+            continue
+        if entry.name not in SEED_SOURCES:
+            continue
+        for child in sorted(entry.iterdir()):
+            if child.is_dir() and (child / SKILL_FILENAME).is_file():
+                yield entry.name, child.name, child
 
 
-def skill_row(skill: Skill, *, enabled: bool, seeds: set[str]) -> dict:
+def seed_sources(seed_root: str | Path | None) -> dict[str, str]:
+    """Map each shipped seed skill's name to its source (see
+    :func:`iter_seed_skills`). A workspace skill whose name is absent from the
+    map was put there by the agent or the user, so it is a ``workspace`` skill.
+    """
+    return {name: source for source, name, _ in iter_seed_skills(seed_root)}
+
+
+def skill_row(skill: Skill, *, enabled: bool, seeds: dict[str, str]) -> dict:
     return {
         "name": skill.name,
         "description": skill.description,
-        "source": SOURCE_BUILTIN if skill.name in seeds else SOURCE_WORKSPACE,
+        "source": seeds.get(skill.name, SOURCE_WORKSPACE),
         "enabled": enabled,
         "path": skill.path,
     }
@@ -432,7 +470,7 @@ def skills_inventory(
     SKILL.md) plus whatever the caller adds (an unknown name in a control).
     """
     library = load_skills(root, settings=settings)
-    seeds = seed_names(seed_root)
+    seeds = seed_sources(seed_root)
     rows = [
         skill_row(skill, enabled=True, seeds=seeds) for skill in library.skills.values()
     ] + [
