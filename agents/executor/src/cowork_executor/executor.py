@@ -58,6 +58,7 @@ import logging
 import os
 import queue
 import secrets
+import sqlite3
 import subprocess
 import threading
 import time
@@ -119,6 +120,7 @@ from .protocol import (
     decode_payload,
     automation_list_payload,
     agent_list_payload,
+    agent_status_payload,
     delta_payload,
     done_payload,
     encode_payload,
@@ -619,6 +621,7 @@ class Executor:
         opener: CoworkFrameOpener,
         sealer: CoworkFrameSealer,
         environment: BaseEnvironment,
+        environment_factory: Callable[[str], BaseEnvironment] | None = None,
         db_path: str,
         model_factory: ModelFactory,
         model_select: ModelSelect | None = None,
@@ -654,6 +657,22 @@ class Executor:
         self._sealer = sealer
         self._environment = environment
         self._env_shim = SandboxEnvironment(environment)
+        # One sandbox per agent (§6, bead cowork-jo2). A ``session_key`` IS an
+        # agent id on the app side, so every session that is not this executor's
+        # own agent gets its OWN environment from the factory — its own
+        # container and its own workspace. Without the factory (tests, the
+        # single-agent path) every session shares ``environment``, which is the
+        # old behaviour.
+        self._environment_factory = environment_factory
+        self._session_envs: dict[str, BaseEnvironment] = {}
+        self._session_shims: dict[str, SandboxEnvironment] = {}
+        # What each session's last run really ran on (docs/WIRE_CONTRACT.md,
+        # "Agent status"). Recorded from the client the executor built, so a
+        # status frame never has to build one of its own to have an answer.
+        self._model_identities: dict[str, dict[str, Any]] = {}
+        # Re-entrant: ``_shim_for`` holds it while it asks ``_environment_for``
+        # for the same session's box.
+        self._env_lock = threading.RLock()
         self._db_path = db_path
         self._model_factory = model_factory
         # Per-task model selection (§ model picker). ``None`` in the offline/mock
@@ -907,7 +926,11 @@ class Executor:
             close_cached_memories()
         except Exception:  # noqa: BLE001 — teardown must not mask the stop
             pass
-        self._environment.cleanup()
+        for env in self._session_environments():
+            try:
+                env.cleanup()
+            except Exception:  # noqa: BLE001 — one bad box must not block the rest
+                pass
 
     def serve_forever(self) -> None:
         """Run the serve loop on the calling thread (for a subprocess entry
@@ -978,7 +1001,10 @@ class Executor:
                 # The run never reached _run_task's finally, so unbind the shim
                 # hook it had already pointed at this request (hygiene: the next
                 # task rebinds it anyway, but a stale binding is a stale binding).
-                self._env_shim.on_run = None
+                try:
+                    self._shim_for(run.session_key).on_run = None
+                except Exception:  # noqa: BLE001 — never mask the real failure
+                    pass
                 # The durable record closes first (docs/WIRE_CONTRACT.md): an
                 # app that reconnects later must see this run as failed too.
                 self._record_run(run, failed=message)
@@ -998,6 +1024,62 @@ class Executor:
                     self._jobs.flush_after_run(run.session_key)
                 except Exception as exc:  # noqa: BLE001
                     logger.info("job flush failed: %s", type(exc).__name__)
+
+    # -- one sandbox per agent (§6, bead cowork-jo2) ----------------------
+    def _is_primary_session(self, session_key: str | None) -> bool:
+        """True when the session runs in this executor's own environment.
+
+        ``None`` and the empty key are the executor's own box; so is every key
+        when no factory was wired (the single-agent path and the tests).
+        """
+        return self._environment_factory is None or not session_key
+
+    def _environment_for(self, session_key: str | None) -> BaseEnvironment:
+        """The sandbox of ``session_key`` — one per agent, created on demand.
+
+        The factory decides what "its own" means: the docker backend hands back
+        a container labelled with that agent id, the local backend a directory
+        of its own. Cached, because the box must be the SAME one across the
+        agent's turns — that is the whole point of a per-agent sandbox.
+        """
+        if self._is_primary_session(session_key):
+            return self._environment
+        key = str(session_key)
+        with self._env_lock:
+            env = self._session_envs.get(key)
+            if env is None:
+                env = self._environment_factory(key)  # type: ignore[misc]
+                self._session_envs[key] = env
+            return env
+
+    def _shim_for(self, session_key: str | None) -> SandboxEnvironment:
+        """The agent-runtime adapter around :meth:`_environment_for`."""
+        if self._is_primary_session(session_key):
+            return self._env_shim
+        key = str(session_key)
+        with self._env_lock:
+            shim = self._session_shims.get(key)
+            if shim is None:
+                shim = SandboxEnvironment(self._environment_for(key))
+                self._session_shims[key] = shim
+            return shim
+
+    def _workspace_for(self, session_key: str | None) -> str | None:
+        """The host directory of that agent's sandbox.
+
+        A per-agent container bind-mounts a per-agent workspace, so the runtime
+        must be told about that directory and not about the executor's own.
+        """
+        if self._is_primary_session(session_key):
+            return self._workspace
+        env = self._environment_for(session_key)
+        return getattr(env, "workspace", None) or self._workspace
+
+    def _session_environments(self) -> list[BaseEnvironment]:
+        """Every sandbox this executor owns: its own plus one per served agent."""
+        with self._env_lock:
+            envs = list(self._session_envs.values())
+        return [self._environment, *envs]
 
     # -- inbound frames --------------------------------------------------
     def _handle_frame(self, frame: dict) -> None:
@@ -1042,11 +1124,12 @@ class Executor:
                     result = {"documents": [
                         {k: d[k] for k in ("id", "title", "kind", "version", "updated_at")}
                         for d in documents.list()
-                    ] + workspace_documents(self._workspace)}
+                    ] + workspace_documents(self._workspace_for(session_key))}
                 else:
                     document_id = str(payload.get("id") or "")
-                    doc = (read_workspace_document(self._workspace, document_id)
-                           if document_id.startswith("file:") and self._workspace
+                    session_workspace = self._workspace_for(session_key)
+                    doc = (read_workspace_document(session_workspace, document_id)
+                           if document_id.startswith("file:") and session_workspace
                            else documents.read(document_id))
                     result = {"selected": doc}
             except Exception as exc:
@@ -1085,6 +1168,12 @@ class Executor:
             # "Coworker names"). Every one of the three is answered with the
             # current list as one terminal frame, like a replay.
             self._handle_agent_frame(request_id, payload)
+            return
+        if kind == "agent_status":
+            # What this coworker runs on, what it has spent and how long it has
+            # been at it (docs/WIRE_CONTRACT.md, "Agent status"). Answered with
+            # one terminal frame, like a skills list: every figure measured.
+            self._handle_agent_status(request_id, payload)
             return
         if kind in ("skills_list", "skill_control"):
             # The user manages the skills of this host (docs/WIRE_CONTRACT.md,
@@ -1284,6 +1373,180 @@ class Executor:
             self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
             return
         self._terminal(request_id, agent_list_payload(rows if isinstance(rows, list) else []))
+
+    # -- agent status (docs/WIRE_CONTRACT.md, "Agent status") -------------
+    def _handle_agent_status(self, request_id: str, payload: dict) -> None:
+        """Answer one ``agent_status`` request with measured figures only."""
+        session_key = str(payload.get("session_key") or "default")
+        self._terminal(request_id, self._agent_status(session_key))
+
+    def _push_agent_status(self, request_id: str, session_key: str) -> None:
+        """Send the session's status on a stream that is still open.
+
+        Fired after a run ends, so the panel's figures move with the work
+        instead of only when the user reopens it. Best effort: a status frame
+        must never be able to take a run down.
+        """
+        try:
+            self._event(request_id, self._agent_status(session_key))
+        except Exception:  # noqa: BLE001 — telemetry, not the result
+            pass
+
+    def _agent_status(self, session_key: str) -> dict:
+        """The measured state of one session: model, spend, clock, sandbox.
+
+        Every figure comes from a record of something that happened — the
+        ``runs`` rows of this session and the sandbox this executor really
+        handed that session. A block that cannot be measured is left out of the
+        frame entirely, so the app never has to guess whether a zero is a zero.
+        """
+        rows = self._session_runs(session_key)
+        model = self._status_model(session_key, rows)
+        tokens = self._status_tokens(rows)
+        runtime = self._status_runtime(rows)
+        return agent_status_payload(
+            session_key=session_key,
+            model=model,
+            tokens=tokens,
+            runtime=runtime,
+            sandbox=self._status_sandbox(session_key),
+        )
+
+    def _session_runs(self, session_key: str) -> list[dict]:
+        """Every ``runs`` row of one session, oldest first.
+
+        Read straight off the state file: the aggregate is a read of a table the
+        wire contract already defines, and a failed read means "no figures",
+        never a failed frame.
+        """
+        if not self._db_path or not os.path.exists(self._db_path):
+            return []
+        try:
+            conn = sqlite3.connect(self._db_path)
+        except sqlite3.Error:
+            return []
+        try:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT state, tokens_spent, started_at, finished_at, model, "
+                "provider, reasoning_effort FROM runs WHERE session_key=? "
+                "ORDER BY started_at, rowid",
+                (session_key,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error:
+            return []
+        finally:
+            conn.close()
+
+    def _status_model(self, session_key: str, rows: list[dict]) -> dict | None:
+        """What this session last ran on.
+
+        The run row is the first answer: it is what the task asked for. A task
+        that named nothing has NULL there, and then the answer is the client the
+        executor really built for that session's last run — recorded as it was
+        built, so no model is ever constructed just to fill a status frame.
+        ``None`` when the session has never run: the panel then shows no model
+        rather than a guess.
+        """
+        for row in reversed(rows):
+            model_id = row.get("model")
+            if model_id:
+                body = {"id": str(model_id), "source": "run"}
+                if row.get("provider"):
+                    body["provider"] = str(row["provider"])
+                if row.get("reasoning_effort"):
+                    body["reasoning_effort"] = str(row["reasoning_effort"])
+                return body
+        observed = self._model_identities.get(session_key)
+        return dict(observed) if observed else None
+
+    def _note_model_identity(self, session_key: str, client: Any) -> None:
+        """Remember what a session's run actually ran on.
+
+        Called once per task with the client the executor built, so the status
+        frame can name the host's default model without building a second one.
+        A client that exposes no id (a mock) records nothing.
+        """
+        model_id = getattr(client, "model_id", None)
+        if not model_id:
+            return
+        body: dict[str, Any] = {"id": str(model_id), "source": "run"}
+        provider = getattr(client, "provider_slug", None)
+        if provider:
+            body["provider"] = str(provider)
+        effort = getattr(client, "reasoning_effort", None)
+        if effort:
+            body["reasoning_effort"] = str(effort)
+        self._model_identities[session_key] = body
+
+    @staticmethod
+    def _status_tokens(rows: list[dict]) -> dict | None:
+        """What the session has spent, summed off the runs it really made.
+
+        ``None`` when the session has no run at all: an empty thread has not
+        spent zero tokens, it has spent nothing that was ever measured.
+        """
+        if not rows:
+            return None
+        total = sum(int(row.get("tokens_spent") or 0) for row in rows)
+        last = int(rows[-1].get("tokens_spent") or 0)
+        return {"total": total, "runs": len(rows), "last_run": last}
+
+    @staticmethod
+    def _status_runtime(rows: list[dict]) -> dict | None:
+        """The session's clock: when it first ran, and how long it has worked.
+
+        ``active_seconds`` is time the agent was actually running, summed over
+        its runs — not wall-clock since the thread was opened, which would only
+        measure how long ago the user first said hello.
+        """
+        if not rows:
+            return None
+        now = time.time()
+        started = min(float(row.get("started_at") or now) for row in rows)
+        active = 0.0
+        running = False
+        current = 0.0
+        for row in rows:
+            begin = float(row.get("started_at") or 0.0)
+            end = row.get("finished_at")
+            if end is None:
+                if row.get("state") == "running" and begin:
+                    running = True
+                    current = max(0.0, now - begin)
+                    active += current
+                continue
+            active += max(0.0, float(end) - begin)
+        body = {
+            "started_at": started,
+            "active_seconds": active,
+            "runs": len(rows),
+            "running": running,
+        }
+        if running:
+            body["current_seconds"] = current
+        return body
+
+    def _status_sandbox(self, session_key: str) -> dict | None:
+        """The box this session runs in — the per-agent container, or the local
+        directory (§6, bead cowork-jo2). It is what makes "one container per
+        coworker" visible instead of merely claimed."""
+        try:
+            env = self._environment_for(session_key)
+        except Exception:  # noqa: BLE001 — no box to name
+            return None
+        workspace = getattr(env, "workspace", None)
+        container = getattr(env, "container_name", None)
+        body: dict[str, Any] = {"kind": "docker" if container else "local"}
+        if container:
+            body["container"] = str(container)
+            container_id = getattr(env, "container_id", None)
+            if container_id:
+                body["container_id"] = str(container_id)[:12]
+        if workspace:
+            body["workspace"] = str(workspace)
+        return body
 
     def _handle_skills_frame(self, kind: str, request_id: str, payload: dict) -> None:
         root = (
@@ -1519,14 +1782,19 @@ class Executor:
             return True
         return False
 
-    def _vnc_exec_prefix(self) -> tuple[list[str], str] | None:
-        """`docker exec` prefix + container id for this agent's box, or None.
+    def _vnc_exec_prefix(
+        self, session_key: str | None = None
+    ) -> tuple[list[str], str] | None:
+        """`docker exec` prefix + container id for that agent's box, or None.
 
         None means the sandbox is not the docker backend (nothing to watch) or
         the container could not be realized. Forces the container live first,
         because `container_id` is None until the first command runs.
+
+        ``session_key`` names the agent whose box is meant: every agent has its
+        own container, so a live view must never open a peer's.
         """
-        env = self._environment
+        env = self._environment_for(session_key)
         cli = getattr(env, "_cli", None)
         binary = getattr(cli, "binary", None)
         if binary is None or not hasattr(env, "container_id"):
@@ -1546,8 +1814,8 @@ class Executor:
             prefix += ["-u", str(user)]
         return prefix, str(cid)
 
-    def _browser_mcp_entry(self) -> dict | None:
-        """The Playwright MCP server entry for this agent's container, or None.
+    def _browser_mcp_entry(self, session_key: str | None = None) -> dict | None:
+        """The Playwright MCP server entry for that agent's container, or None.
 
         Runs the server INSIDE the container over `docker exec` stdio, so the
         Chromium it launches renders to the container's Xvfb (the display x11vnc
@@ -1557,14 +1825,14 @@ class Executor:
         """
         if not self._browser_mcp:
             return None
-        prep = self._vnc_exec_prefix()
+        prep = self._vnc_exec_prefix(session_key)
         if prep is None:
             return None
         prefix, cid = prep  # [binary, "exec", "-i", ("-u", user)?]
         from .browser_profile import retired_browser_hostname
 
         retired = retired_browser_hostname(
-            prefix[0], cid, getattr(self._environment, "workspace", None)
+            prefix[0], cid, getattr(self._environment_for(session_key), "workspace", None)
         )
         if retired:
             prefix += ["-e", f"COWORK_BROWSER_RETIRED_HOSTNAME={retired}"]
@@ -1587,7 +1855,7 @@ class Executor:
         # Only ever one live view; replace any prior one silently.
         self._vnc_teardown(reason="stopped", notify=False)
 
-        prep = self._vnc_exec_prefix()
+        prep = self._vnc_exec_prefix(payload.get("session_key"))
         if prep is None:
             self._event(
                 request_id,
@@ -2082,7 +2350,8 @@ class Executor:
         # (docs/WIRE_CONTRACT.md, "Tool events and timestamps"): a ``write_file``
         # is one tool card, not the printf/base64 helper commands it runs. The
         # loop's dispatch is the one source — ``tool_event_observer`` below.
-        self._env_shim.on_run = None
+        env_shim = self._shim_for(session_key)
+        env_shim.on_run = None
         # A task may name the model to run on and how hard it thinks. If it named
         # either and a per-task selector is wired (production), build that model;
         # otherwise fall back to the default factory — which is both the
@@ -2120,6 +2389,10 @@ class Executor:
                 run.reasoning_effort = effective
         else:
             inner_model = self._model_factory()
+        # What this session runs on, for the app's control panel
+        # (docs/WIRE_CONTRACT.md, "Agent status"). Read off the client that was
+        # just built — the effective answer even when the task named nothing.
+        self._note_model_identity(session_key, inner_model)
         # The browser fallback (§8) gets its own client: the loop's client is
         # wrapped to stream deltas into the chat, and a browser step's per-step
         # JSON has no business there. Built here, not inline, so the ``finally``
@@ -2148,7 +2421,7 @@ class Executor:
         # blocked on and the model turn in flight, instead of ending the run only
         # after they return on their own. Registered on this task's switch, so the
         # listeners die with the task.
-        run.kill.on_interrupt(self._env_shim.cancel)
+        run.kill.on_interrupt(env_shim.cancel)
         cancel_model = getattr(inner_model, "cancel", None)
         if callable(cancel_model):
             run.kill.on_interrupt(cancel_model)
@@ -2168,7 +2441,7 @@ class Executor:
         # UI-forwarded connectors. Appended, so a user's own server of another
         # name is untouched; on the base image `_browser_mcp_entry` is None.
         servers = list(run.mcp_servers or [])
-        browser_entry = self._browser_mcp_entry()
+        browser_entry = self._browser_mcp_entry(session_key)
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
@@ -2219,10 +2492,10 @@ class Executor:
             session=(self._account_session_provider()
                      if self._account_session_provider is not None else None),
             db_path=self._db_path,
-            environment=self._env_shim,
+            environment=env_shim,
             max_iterations=self._max_iterations,
             system_prompt=self._system_prompt,
-            workspace=self._workspace,
+            workspace=self._workspace_for(session_key),
             subagents=subagents,
             herenow_config=herenow_config,
             herenow_gate=herenow_gate,
@@ -2304,7 +2577,7 @@ class Executor:
         finally:
             if guard is not None:
                 guard.cancel()
-            self._env_shim.on_run = None
+            env_shim.on_run = None
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
@@ -2346,6 +2619,10 @@ class Executor:
         # The finished turn lands in <workspace>/transcript/ (read-only, the
         # agent's long-term search) before the app hears ``done``.
         self._export_transcript(session_key)
+        # The control panel's figures, on the stream that is still open (a
+        # terminal closes it). The run row is already closed above, so this
+        # status counts the turn the user just watched.
+        self._push_agent_status(request_id, session_key)
         self._terminal(
             request_id,
             done_payload(
@@ -2529,6 +2806,29 @@ class Executor:
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
+    def _forget_session_mcp(self, *, close: bool, session_key: str) -> None:
+        """Drop everything cached for this session's MCP connectors.
+
+        ``close`` also shuts the cached manager down (it joins transport threads
+        and stops any stdio subprocess), which is what an empty ``mcp_servers``
+        list needs: the connectors it spoke for are gone. A caller that already
+        closed the manager itself passes ``close=False``.
+
+        Never raises — shutdown must not take a task down with it.
+        """
+        with self._mcp_lock:
+            manager = self._mcp_managers.pop(session_key, None)
+            self._mcp_signatures.pop(session_key, None)
+            self._mcp_refresh_baseline.pop(session_key, None)
+            self._mcp_refresh_seen.pop(session_key, None)
+            self._mcp_entry_meta.pop(session_key, None)
+            self._mcp_pending_credentials.pop(session_key, None)
+        if close and manager is not None:
+            try:
+                manager.close()
+            except Exception:  # noqa: BLE001 — shutdown must not raise
+                pass
+
     def _session_mcp_manager(
         self, session_key: str, mcp_servers: list[dict] | None
     ) -> MCPManager | None:
@@ -2546,6 +2846,11 @@ class Executor:
         without those tools. Returns ``None`` when nothing was forwarded.
         """
         if not mcp_servers:
+            # The user disconnected the last connector (or a chuk_chat row went
+            # away). A manager cached from an earlier task of this session holds
+            # live transport threads and, for a stdio server, a subprocess: drop
+            # it here rather than let it outlive the connectors it speaks for.
+            self._forget_session_mcp(close=True, session_key=session_key)
             return None
         # Redacted projection: a rotated access/refresh token or a new expiry is
         # NOT a changed connector and must reuse the cached manager.
@@ -2582,13 +2887,8 @@ class Executor:
             if not configs:
                 # Nothing usable was forwarded: record why (bad entries) and run
                 # without MCP rather than caching an empty manager per signature.
-                with self._mcp_lock:
-                    self._mcp_managers.pop(session_key, None)
-                    self._mcp_signatures.pop(session_key, None)
-                    self._mcp_refresh_baseline.pop(session_key, None)
-                    self._mcp_refresh_seen.pop(session_key, None)
-                    self._mcp_entry_meta.pop(session_key, None)
-                    self._mcp_pending_credentials.pop(session_key, None)
+                # The stale manager, if there was one, was already closed above.
+                self._forget_session_mcp(close=False, session_key=session_key)
                 return None
             manager = MCPManager(
                 configs,

@@ -31,6 +31,7 @@ has no business being in it.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shlex
 import subprocess
@@ -96,6 +97,19 @@ def _slug(text: str, limit: int = 24) -> str:
     kept = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
     out = "".join(kept).strip("-.") or "x"
     return out[:limit]
+
+
+def _fingerprint(text: str, length: int = 8) -> str:
+    """A short, stable digest of the FULL text.
+
+    :func:`_slug` is lossy twice over: it folds every unusual character to ``-``
+    and it cuts at ``limit``. Two different agent ids can therefore produce the
+    same slug (``my agent`` and ``my/agent``; two ids that share a long prefix),
+    and two agents that share a container name are exactly the collision this
+    package must not have. The digest is appended to the name so the name is
+    unique per agent id, not per slug.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:length]
 
 
 class DockerEnvironment(BaseEnvironment):
@@ -176,8 +190,12 @@ class DockerEnvironment(BaseEnvironment):
         The *default* task keeps a stable name across sessions (it is the same
         box being reused); task-scoped containers carry the session id because
         several may exist for one agent at once.
+
+        The name always ends in a digest of the whole agent id, so two agents
+        can never land on one name (see :func:`_fingerprint`). Reuse is still
+        decided by the labels, never by the name.
         """
-        base = f"cowork-{_slug(self._agent_id)}"
+        base = f"cowork-{_slug(self._agent_id)}-{_fingerprint(self._agent_id)}"
         if self._task_id == DEFAULT_TASK_ID:
             return base
         return f"{base}-{_slug(self._task_id, 16)}-{self._session_id}"

@@ -32,6 +32,7 @@ class LocalEnvironment(BaseEnvironment):
         self._owns_workdir = workdir is None
         work = workdir if workdir is not None else os.path.join(self._root, "workspace")
         os.makedirs(work, exist_ok=True)
+        self._workspace = work
         snapshot = os.path.join(self._root, "session.snap")
         # The process this environment is blocked on, so ``cancel`` (§7.1) can
         # kill it from the thread that pressed Stop.
@@ -42,6 +43,16 @@ class LocalEnvironment(BaseEnvironment):
             initial_cwd=work,
             max_output_chars=max_output_chars,
         )
+
+    @property
+    def workspace(self) -> str:
+        """The directory this environment works in.
+
+        Named like :attr:`DockerEnvironment.workspace` on purpose: a caller that
+        asks an environment where its files live must not have to know which
+        backend it is holding.
+        """
+        return self._workspace
 
     def _run_bash(
         self,

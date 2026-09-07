@@ -104,6 +104,12 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "approval_id": "ap-1", "action": "herenow_publish",
      "path": "site", "name": "My Page", "file_count": 2,
      "total_bytes": 1024, "base_url": "https://here.now", "public": true}
+    {"type": "agent_status",                              # what this coworker
+     "session_key": "...",                                #   runs on and spent
+     "model": {"id": "...", "provider": "...", "reasoning_effort": "..."},
+     "tokens": {"total": 1234, "runs": 3, "last_run": 456},
+     "runtime": {"started_at": 1.0, "active_seconds": 12.5, "running": false},
+     "sandbox": {"kind": "docker", "container": "cowork-...", "workspace": "..."}}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
@@ -614,6 +620,39 @@ def skill_control_payload(*, name: str, action: str) -> dict[str, Any]:
 def skills_list_request_payload() -> dict[str, Any]:
     """App -> host: list every skill of the host."""
     return {"type": "skills_list"}
+
+
+def agent_status_request_payload(session_key: str = "default") -> dict[str, Any]:
+    """App -> host: what is this coworker running on, what has it spent, how
+    long has it been at it (docs/WIRE_CONTRACT.md, "Agent status")."""
+    return {"type": "agent_status", "session_key": session_key}
+
+
+def agent_status_payload(
+    *,
+    session_key: str,
+    model: dict[str, Any] | None = None,
+    tokens: dict[str, Any] | None = None,
+    runtime: dict[str, Any] | None = None,
+    sandbox: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Host -> app: the answer to an ``agent_status`` request, and the same
+    frame the host pushes after every run of that session.
+
+    Every block is measured, never guessed. A block the host cannot measure is
+    **absent**, so the app can tell "nothing to report" from "zero": the panel
+    shows a figure only for a block that is here.
+    """
+    body: dict[str, Any] = {"type": "agent_status", "session_key": session_key}
+    if model:
+        body["model"] = dict(model)
+    if tokens:
+        body["tokens"] = dict(tokens)
+    if runtime:
+        body["runtime"] = dict(runtime)
+    if sandbox:
+        body["sandbox"] = dict(sandbox)
+    return body
 
 
 def mcp_credentials_payload(

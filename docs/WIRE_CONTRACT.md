@@ -1079,9 +1079,13 @@ client's `skills_list` case.
 ### The idea
 
 A skill is `<workspace>/skills/<name>/SKILL.md` on the host (`cowork_agent.skills`).
-The repository's `skills/` directory is the shipped seed set; the host copies it
-into a fresh workspace once (`cowork_host.seed_skills`). The app compiles nothing
-in and reads no SKILL.md: **the host is the truth for which skills exist**, the
+The repository's `skills/` directory is the shipped seed set, **grouped by
+source**: `skills/builtin/<name>/` and `skills/workspace/<name>/`. That grouping
+is the only place the built-in/workspace split is decided — no list of names
+anywhere, and reclassifying a skill is a `git mv`. The host copies both groups
+flat into a fresh workspace once (`cowork_host.seed_skills`). The app compiles
+nothing in and reads no SKILL.md: **the host is the truth for which skills
+exist**, the
 app shows that list and flips one switch per skill, and the agent gets exactly
 the enabled ones — its catalogue, its `skill` tool, its prompt never see a
 switched-off skill.
@@ -1104,9 +1108,12 @@ App → host, `skills_list` (request) / host → app `skills_list` (reply):
  "errors": [ "<a SKILL.md the host could not load, or a refused control>" ]}
 ```
 
-- `source` is `builtin` when the name is one of the shipped seeds (the
-  repository's `skills/`), `workspace` for anything the agent or the user put
-  into the workspace. Built-ins come first, each group by name.
+- `source` is `builtin` when the name was seeded from `skills/builtin/` — a
+  skill that documents CoWork's own machinery (schedules, secrets, the sandbox
+  terminal, the workspace) and belongs to the app. Everything else is
+  `workspace`: what the agent or the user put there, plus the skills seeded
+  from `skills/workspace/`, which ship in the box but belong to the coworker.
+  Built-ins come first, each group by name.
 - The reply closes the request stream like a replay's `done`. It is the whole
   truth: the app replaces its list with it.
 
@@ -1135,3 +1142,86 @@ database gets the user's switches back.
 Creating or editing a skill from the app (chuk_chat's editor wrote to Supabase
 `user_skills`, which the host never reads). Needs a `skill_put` frame that
 writes `<workspace>/skills/<name>/SKILL.md` and answers with `skills_list`.
+
+## Agent status: model, spend, clock, sandbox (bead cowork-6ag)
+
+Python side IMPLEMENTED 2026-09-07 (`cowork_executor.protocol.agent_status_payload`,
+`Executor._handle_agent_status`). App side: `RelayAgentControlSource` feeding
+`AgentControlPanel`.
+
+### The idea
+
+The app's agent controls used to draw "Not connected yet" under Models, Token
+usage and Session runtime, because nothing carried those figures over the relay.
+The host already knows all three — it chose the model for every run, it recorded
+what each run spent, and it wrote when each run started and ended. This frame
+carries what the host **measured**, and nothing else.
+
+Every block is optional and a block that cannot be measured is **absent from the
+frame**. That is the whole rule: the app never has to tell a zero from a missing
+measurement, because a missing measurement is not sent.
+
+### Frames
+
+App → host, `agent_status` (request):
+
+```json
+{"type": "agent_status", "session_key": "<key>"}
+```
+
+Host → app, `agent_status` (reply, and a push):
+
+```json
+{"type": "agent_status", "session_key": "<key>",
+ "model":   {"id": "<model id>", "provider": "<slug>"?, "reasoning_effort": "<level>"?,
+             "source": "run" | "default"},
+ "tokens":  {"total": <int>, "runs": <int>, "last_run": <int>},
+ "runtime": {"started_at": <unix seconds>, "active_seconds": <float>,
+             "runs": <int>, "running": true | false, "current_seconds": <float>?},
+ "sandbox": {"kind": "docker" | "local", "container": "<name>"?,
+             "container_id": "<12 hex>"?, "workspace": "<host path>"?}}
+```
+
+- `model` is the model of the session's LAST run — the one that produced the
+  words in the thread (`source: "run"`). Only a session that never ran falls
+  back to the executor's default factory (`source: "default"`); when the factory
+  exposes no model id (a mock in a test) the block is absent.
+- `tokens` sums `runs.tokens_spent` over the session. `last_run` is the newest
+  run's own spend. Absent when the session has no run: an empty thread has not
+  spent zero, it has spent nothing that was ever measured. There is no
+  prompt/completion split, because the host stores the total only.
+- `runtime.active_seconds` is time the agent was **running**, summed over its
+  runs — not wall clock since the thread was opened. A live run adds its elapsed
+  time and sets `running` plus `current_seconds`.
+- `sandbox` names the box that session runs in (§6, bead cowork-jo2): the
+  per-agent container with the docker backend, the workspace directory with the
+  local one.
+
+### When the host sends it
+
+1. As the terminal of an `agent_status` request (like a `skills_list` reply).
+2. As an event on a run's own stream, right before that run's `done`, so the
+   panel's figures move with the work instead of only when the panel is opened.
+
+### One sandbox per agent (bead cowork-jo2)
+
+A `session_key` **is** an agent id: `AgentRosterSource` gives every coworker one
+permanent thread whose key is the coworker's id. The executor therefore resolves
+one environment per session key through `environment_factory`, and the host maps
+that to `ContainerSupervisor.environment(agent_id)` (docker) or that agent's own
+workspace directory (local). Two coworkers never share a container, a workspace
+or shell state; one coworker keeps the SAME box across its turns and across a
+host restart, because reuse is keyed on the `cowork.agent` label.
+
+**What counts as a coworker of its own.** The `agent_create` registration, and
+nothing else: the app sends it for every coworker the user makes, with the id
+that is also its `session_key`, and the host keeps it in `coworker_names`. A key
+nobody registered — `default`, the empty key, the host's own `host:<device id>`,
+a thread key from an older client — belongs to this host's own agent and lands
+in the box it has always used. The host must not invent a coworker (and a
+container, and an empty workspace) out of an unknown string.
+
+Sandbox names are collision-free by construction: `DockerEnvironment`'s
+container name ends in a digest of the whole agent id, and a per-coworker
+workspace directory is `<name>-<digest>`. Two coworkers can carry the same name
+and two ids can slug alike; neither can end up in one box.

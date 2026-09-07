@@ -1,11 +1,11 @@
-/// The in-UI control surface (§16): skills, integrations, model, live token use,
-/// session runtime, and the schedule with its next runs — in the app, not a CLI.
+/// The in-UI control surface (§16): the model this coworker runs on, what it
+/// has spent, how long it has worked, the box it works in, and its skills.
 ///
-/// The panel draws only what it is given. Every block that the host does not
-/// report is drawn as **Not connected yet** with the reason, so a reader can
-/// never mistake a missing measurement for a zero. The one exception is a
-/// schedule the user set here in the app: that is real, locally computed, and it
-/// says plainly that the host does not run it yet.
+/// The panel draws only what the host measured. A block the host did not report
+/// says so, with the reason — never a plausible-looking zero. There are no
+/// blocks here that nothing can fill: the schedule field and the integrations
+/// list were removed when it became clear that neither reached the host (the
+/// Automations page and the connector settings own those).
 library;
 
 import 'package:flutter/material.dart';
@@ -25,9 +25,9 @@ class AgentControlPanel extends StatefulWidget {
   final CoworkAgent agent;
   final AgentControlSource source;
 
-  /// Called when the user sets a schedule in the panel. The caller stores it on
-  /// the agent; nothing is sent to the host, because the host has no schedule
-  /// API yet.
+  /// Retired. The panel no longer sets schedules: nothing installed them on the
+  /// host, and the Automations page is where a real schedule lives. Kept only
+  /// because `cowork_shell_state.dart` still passes it; it is never called.
   final void Function(ScheduleSpec spec)? onScheduleSubmitted;
 
   @override
@@ -35,33 +35,52 @@ class AgentControlPanel extends StatefulWidget {
 }
 
 class _AgentControlPanelState extends State<AgentControlPanel> {
-  final TextEditingController _scheduleController = TextEditingController();
-  String? _scheduleError;
   String? _actionError;
+
+  /// The coworker's thread key IS its session key on the host, so the panel
+  /// asks about exactly the coworker it is showing.
+  String get _sessionKey => widget.agent.threads.isEmpty
+      ? widget.agent.id
+      : widget.agent.threads.first.key;
 
   @override
   void initState() {
     super.initState();
-    _scheduleController.text = widget.agent.schedule?.source ?? '';
-    widget.source.refresh();
+    widget.source.refresh(_sessionKey);
   }
 
   @override
-  void dispose() {
-    _scheduleController.dispose();
-    super.dispose();
+  void didUpdateWidget(AgentControlPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agent.id != widget.agent.id) {
+      widget.source.refresh(_sessionKey);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ValueListenableBuilder<AgentControlSnapshot>(
-      valueListenable: widget.source.snapshot,
+      valueListenable: widget.source.snapshotFor(_sessionKey),
       builder: (context, snapshot, _) {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(widget.agent.name, style: theme.textTheme.titleMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(widget.agent.name, style: theme.textTheme.titleMedium),
+                ),
+                IconButton(
+                  tooltip: 'Refresh',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  onPressed: () => _run(
+                    () => widget.source.refresh(_sessionKey),
+                  ),
+                ),
+              ],
+            ),
             if (widget.agent.role != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
@@ -93,36 +112,15 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                 ),
               ),
             const SizedBox(height: 8),
-            _section(
-              context,
-              'Model',
-              _buildModel(context, snapshot.model),
-            ),
-            _section(
-              context,
-              'Token use',
-              _buildTokens(context, snapshot.tokens),
-            ),
+            _section(context, 'Model', _buildModel(context, snapshot.model)),
+            _section(context, 'Token use', _buildTokens(context, snapshot.tokens)),
             _section(
               context,
               'Session runtime',
-              _buildRuntime(context, snapshot.sessionRuntime),
+              _buildRuntime(context, snapshot.runtime),
             ),
-            _section(
-              context,
-              'Schedule',
-              _buildSchedule(context, snapshot.schedule),
-            ),
-            _section(
-              context,
-              'Skills',
-              _buildSkills(context, snapshot.skills),
-            ),
-            _section(
-              context,
-              'Integrations',
-              _buildIntegrations(context, snapshot.integrations),
-            ),
+            _section(context, 'Sandbox', _buildSandbox(context, snapshot.sandbox)),
+            _section(context, 'Skills', _buildSkills(context, snapshot.skills)),
           ],
         );
       },
@@ -132,26 +130,20 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
   // --- blocks ----------------------------------------------------------------
 
   Widget _buildModel(BuildContext context, ControlValue<AgentModelChoice> value) {
+    final theme = Theme.of(context);
     return switch (value) {
-      ControlUnavailable<AgentModelChoice>(:final reason) => _notConnected(context, reason),
+      ControlUnavailable<AgentModelChoice>(:final reason) =>
+        _notReported(context, reason),
       ControlLoading<AgentModelChoice>() => _loading(),
-      ControlAvailable<AgentModelChoice>(value: final choice) => Row(
+      ControlAvailable<AgentModelChoice>(value: final choice) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: choice.available.length <= 1
-                  ? Text(choice.selectedId)
-                  : DropdownButton<String>(
-                      isExpanded: true,
-                      value: choice.selectedId,
-                      items: <DropdownMenuItem<String>>[
-                        for (final id in choice.available)
-                          DropdownMenuItem<String>(value: id, child: Text(id)),
-                      ],
-                      onChanged: (id) {
-                        if (id != null) _run(() => widget.source.selectModel(id));
-                      },
-                    ),
-            ),
+            Text(choice.id),
+            if (choice.detail != null)
+              Text(
+                choice.detail!,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              ),
           ],
         ),
     };
@@ -160,14 +152,16 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
   Widget _buildTokens(BuildContext context, ControlValue<AgentTokenUsage> value) {
     final theme = Theme.of(context);
     return switch (value) {
-      ControlUnavailable<AgentTokenUsage>(:final reason) => _notConnected(context, reason),
+      ControlUnavailable<AgentTokenUsage>(:final reason) =>
+        _notReported(context, reason),
       ControlLoading<AgentTokenUsage>() => _loading(),
       ControlAvailable<AgentTokenUsage>(value: final usage) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${usage.total} tokens'),
+            Text('${formatCount(usage.total)} tokens'),
             Text(
-              '${usage.promptTokens} in · ${usage.completionTokens} out',
+              '${formatCount(usage.lastRun)} in the last run · '
+              '${usage.runs} ${usage.runs == 1 ? 'run' : 'runs'}',
               style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             ),
           ],
@@ -175,102 +169,69 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     };
   }
 
-  Widget _buildRuntime(BuildContext context, ControlValue<Duration> value) {
+  Widget _buildRuntime(
+    BuildContext context,
+    ControlValue<AgentSessionRuntime> value,
+  ) {
+    final theme = Theme.of(context);
     return switch (value) {
-      ControlUnavailable<Duration>(:final reason) => _notConnected(context, reason),
-      ControlLoading<Duration>() => _loading(),
-      ControlAvailable<Duration>(value: final runtime) => Text(formatRuntime(runtime)),
+      ControlUnavailable<AgentSessionRuntime>(:final reason) =>
+        _notReported(context, reason),
+      ControlLoading<AgentSessionRuntime>() => _loading(),
+      ControlAvailable<AgentSessionRuntime>(value: final runtime) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${formatRuntime(runtime.active)} working'),
+            if (runtime.running && runtime.current != null)
+              Text(
+                'Running now, ${formatRuntime(runtime.current!)} into this run.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+            if (runtime.startedAt != null)
+              Text(
+                'First run ${formatTimestamp(runtime.startedAt!)}',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              ),
+          ],
+        ),
     };
   }
 
-  Widget _buildSchedule(BuildContext context, ControlValue<AgentSchedule> value) {
+  Widget _buildSandbox(BuildContext context, ControlValue<AgentSandbox> value) {
     final theme = Theme.of(context);
-    final local = widget.agent.schedule;
-    final children = <Widget>[];
-
-    switch (value) {
-      case ControlAvailable<AgentSchedule>(value: final schedule):
-        children.add(Text(schedule.description));
-        if (!schedule.installedOnHost) {
-          children.add(Text(
-            'Not installed on the host yet.',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ));
-        }
-        children.addAll(_nextRunLines(context, schedule.nextRuns));
-      case ControlLoading<AgentSchedule>():
-        children.add(_loading());
-      case ControlUnavailable<AgentSchedule>(:final reason):
-        if (local == null) {
-          children.add(_notConnected(context, reason));
-        } else {
-          // The user set this here, so it is real — but it runs nowhere yet.
-          children.add(Text(local.describe()));
-          children.add(Text(
-            'Set in the app. The host does not run it yet.',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ));
-          children.addAll(_nextRunLines(context, local.nextRuns(DateTime.now())));
-        }
-    }
-
-    children.add(const SizedBox(height: 8));
-    children.add(
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _scheduleController,
-              decoration: InputDecoration(
-                labelText: 'Schedule',
-                hintText: 'every 30m · 0 9 * * * · 2026-02-03T14:00',
-                border: const OutlineInputBorder(),
-                isDense: true,
-                errorText: _scheduleError,
+    return switch (value) {
+      ControlUnavailable<AgentSandbox>(:final reason) => _notReported(context, reason),
+      ControlLoading<AgentSandbox>() => _loading(),
+      ControlAvailable<AgentSandbox>(value: final sandbox) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              sandbox.isContainer
+                  ? 'Its own container'
+                  : 'On the host, no container',
+            ),
+            if (sandbox.container != null)
+              Text(
+                sandbox.containerId == null
+                    ? sandbox.container!
+                    : '${sandbox.container!} · ${sandbox.containerId!}',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
               ),
-              onSubmitted: (_) => _submitSchedule(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: FilledButton(
-              onPressed: _submitSchedule,
-              child: const Text('Set'),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
-  }
-
-  List<Widget> _nextRunLines(BuildContext context, List<DateTime> runs) {
-    final theme = Theme.of(context);
-    if (runs.isEmpty) {
-      return <Widget>[
-        Text(
-          'No run in the next year.',
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            if (sandbox.workspace != null)
+              Text(
+                sandbox.workspace!,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              ),
+          ],
         ),
-      ];
-    }
-    return <Widget>[
-      const SizedBox(height: 4),
-      Text('Next runs', style: theme.textTheme.bodySmall),
-      for (final run in runs)
-        Text(
-          formatTimestamp(run),
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-        ),
-    ];
+    };
   }
 
   Widget _buildSkills(BuildContext context, ControlValue<List<AgentSkill>> value) {
     return switch (value) {
-      ControlUnavailable<List<AgentSkill>>(:final reason) => _notConnected(context, reason),
+      ControlUnavailable<List<AgentSkill>>(:final reason) =>
+        _notReported(context, reason),
       ControlLoading<List<AgentSkill>>() => _loading(),
       ControlAvailable<List<AgentSkill>>(value: final skills) => skills.isEmpty
           ? Text('No skills.', style: Theme.of(context).textTheme.bodySmall)
@@ -298,68 +259,14 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     };
   }
 
-  Widget _buildIntegrations(
-    BuildContext context,
-    ControlValue<List<AgentIntegration>> value,
-  ) {
-    return switch (value) {
-      ControlUnavailable<List<AgentIntegration>>(:final reason) =>
-        _notConnected(context, reason),
-      ControlLoading<List<AgentIntegration>>() => _loading(),
-      ControlAvailable<List<AgentIntegration>>(value: final integrations) =>
-        integrations.isEmpty
-            ? Text('No integrations.', style: Theme.of(context).textTheme.bodySmall)
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  for (final integration in integrations)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(integration.name),
-                      subtitle: integration.account == null
-                          ? null
-                          : Text(integration.account!),
-                      trailing: TextButton(
-                        onPressed: () => _run(
-                          () => widget.source.setIntegrationConnected(
-                            integration.name,
-                            connected: !integration.connected,
-                          ),
-                        ),
-                        child: Text(integration.connected ? 'Disconnect' : 'Connect'),
-                      ),
-                    ),
-                ],
-              ),
-    };
-  }
-
   // --- helpers ---------------------------------------------------------------
 
-  void _submitSchedule() {
-    final text = _scheduleController.text.trim();
-    if (text.isEmpty) {
-      setState(() => _scheduleError = 'Enter a schedule.');
-      return;
-    }
-    final spec = ScheduleSpec.tryParse(text);
-    if (spec == null) {
-      setState(() => _scheduleError = 'Not a schedule this app understands.');
-      return;
-    }
-    setState(() => _scheduleError = null);
-    widget.onScheduleSubmitted?.call(spec);
-    // The host may not accept it; that failure is reported, never hidden.
-    _run(() => widget.source.setSchedule(spec.source), silent: true);
-  }
-
-  Future<void> _run(Future<void> Function() action, {bool silent = false}) async {
+  Future<void> _run(Future<void> Function() action) async {
     try {
       await action();
       if (mounted) setState(() => _actionError = null);
     } catch (error) {
-      if (!mounted || silent) return;
+      if (!mounted) return;
       setState(() => _actionError = '$error');
     }
   }
@@ -382,23 +289,19 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     );
   }
 
-  Widget _notConnected(BuildContext context, String reason) {
+  /// The host measured nothing here — said plainly, with the reason, so a
+  /// reader can never take a missing measurement for a zero.
+  Widget _notReported(BuildContext context, String reason) {
     final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.cloud_off_outlined, size: 14, color: theme.hintColor),
+        Icon(Icons.remove_circle_outline, size: 14, color: theme.hintColor),
         const SizedBox(width: 6),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Not connected yet'),
-              Text(
-                reason,
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-              ),
-            ],
+          child: Text(
+            reason,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           ),
         ),
       ],
@@ -424,6 +327,17 @@ String formatRuntime(Duration d) {
     return '${d.inMinutes}m ${(d.inSeconds % 60).toString().padLeft(2, '0')}s';
   }
   return '${d.inSeconds}s';
+}
+
+/// `1 234 567` — grouped, so a six-figure token count is readable at a glance.
+String formatCount(int value) {
+  final digits = value.abs().toString();
+  final buffer = StringBuffer(value < 0 ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(' ');
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
 }
 
 /// `2026-02-03 14:00` — stable and unambiguous, no locale guessing.

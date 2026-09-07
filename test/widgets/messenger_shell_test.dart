@@ -788,7 +788,7 @@ void main() {
   });
 
   testWidgets(
-    'the controls button opens the panel, which reports what is missing',
+    'the controls button opens the panel, which asks the host about this agent',
     (tester) async {
       final (controller, _) = await pumpShell(tester);
       controller.pair();
@@ -797,33 +797,20 @@ void main() {
       await tester.tap(find.byIcon(Icons.tune));
       await tester.pumpAndSettle();
 
-      // The default source reports every block as not connected.
-      expect(find.text('Not connected yet'), findsNWidgets(6));
+      // Every block the host can fill has a heading; the schedule field and the
+      // integrations list are gone, because nothing ever filled them.
+      expect(find.text('MODEL'), findsOneWidget);
       expect(find.text('TOKEN USE'), findsOneWidget);
       expect(find.text('SESSION RUNTIME'), findsOneWidget);
-      expect(find.text('SCHEDULE'), findsOneWidget);
+      expect(find.text('SANDBOX'), findsOneWidget);
       expect(find.text('SKILLS'), findsOneWidget);
-      expect(find.text('INTEGRATIONS'), findsOneWidget);
+      expect(find.text('SCHEDULE'), findsNothing);
+      expect(find.text('INTEGRATIONS'), findsNothing);
+      // Nothing is paired in this test, so the panel says so instead of
+      // showing a figure it does not have.
+      expect(find.text('Not paired with a host.'), findsNWidgets(5));
     },
   );
-
-  testWidgets('a schedule set in the panel lands on the agent', (tester) async {
-    final (controller, roster) = await pumpShell(tester);
-    controller.pair();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(Icons.tune));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Schedule'),
-      'every 6h',
-    );
-    await tester.tap(find.widgetWithText(FilledButton, 'Set'));
-    await tester.pumpAndSettle();
-
-    expect(roster.agents.single.schedule!.source, 'every 6h');
-  });
 
   testWidgets('a 660px window keeps the desktop chat visible like master', (
     tester,

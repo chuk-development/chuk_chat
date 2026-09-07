@@ -323,9 +323,13 @@ def test_remove_finds_a_container_this_process_never_started():
 
 def test_container_names_are_stable_for_default_and_unique_for_tasks():
     default = DockerEnvironment(agent_id="agent-1", cli=FakeCli())
-    assert default.container_name == "cowork-agent-1"
+    # Readable slug + a digest of the whole agent id, so two agents can never
+    # land on one name (see test_agent_isolation.py).
+    assert default.container_name.startswith("cowork-agent-1-")
+    again = DockerEnvironment(agent_id="agent-1", cli=FakeCli())
+    assert again.container_name == default.container_name
     task = DockerEnvironment(agent_id="agent-1", task_id="sub", cli=FakeCli())
-    assert task.container_name.startswith("cowork-agent-1-sub-")
+    assert task.container_name.startswith(f"{default.container_name}-sub-")
     other = DockerEnvironment(agent_id="agent-1", task_id="sub", cli=FakeCli())
     assert task.container_name != other.container_name
 

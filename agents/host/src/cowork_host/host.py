@@ -17,6 +17,7 @@ nothing hits prod even when a task names a model.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 from pathlib import Path
@@ -55,7 +56,7 @@ from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .room_service import RoomService, dispatch_room_frame
-from .coworker_names import CoworkerNameStore, handle_agent_frame
+from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
 from .secrets_key import secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
@@ -70,6 +71,19 @@ RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("COWORK_RUN_ACK_TIMEOUT_SECONDS",
 DEFAULT_WORKSPACE = "~/.cowork"
 KEY_VERSION = 1
 DEFAULT_SYSTEM_PROMPT = "You are a CoWork coworker running on the user's own machine."
+
+
+def _agent_dirname(agent_id: str, limit: int = 32) -> str:
+    """A filesystem-safe, collision-free directory name for one agent id.
+
+    The readable part is for the person who opens the folder; the digest is what
+    makes it unique, because two coworkers can carry the same name and an id can
+    hold characters a path must not.
+    """
+    kept = [c if (c.isalnum() or c in "-_.") else "-" for c in agent_id]
+    slug = "".join(kept).strip("-.")[:limit] or "agent"
+    digest = hashlib.sha256(agent_id.encode("utf-8")).hexdigest()[:8]
+    return f"{slug}-{digest}"
 
 
 class LocalHost:
@@ -154,9 +168,17 @@ class LocalHost:
         # turns. The local backend has no lifecycle to supervise.
         self._containers: ContainerSupervisor | None = None
         if sandbox_kind == "docker":
+            # The resolver is keyed by agent id on purpose (bead cowork-jo2):
+            # a lambda that ignored it would bind-mount the host agent's
+            # workspace into EVERY coworker's container, so two coworkers would
+            # read and write each other's files even with two containers.
             self._containers = ContainerSupervisor(
-                workspace_resolver=lambda _aid: self._agent.workspace_dir or None,
+                workspace_resolver=self._workspace_for_agent,
             )
+        # The environments handed out per agent, so one agent keeps ONE box
+        # across its turns. The host agent's own environment is built when the
+        # task server is, and registered here under every name it answers to.
+        self._environments: dict[str, BaseEnvironment] = {}
 
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
         self._device_id = HOST_DEVICE_ID
@@ -541,15 +563,91 @@ class LocalHost:
     # -- model factory + task server wiring (called by HostParty) --------
 
     def _make_environment(self) -> BaseEnvironment:
-        """The agent's execution environment for one served session.
+        """This host agent's own execution environment.
 
         ``docker`` goes through the supervisor, so the agent gets **its** labelled
         container with the workspace bind-mounted and reused across turns.
         ``local`` runs on the host itself in the same workspace directory.
         """
+        return self._environment_for(self._agent.id)
+
+    # -- one sandbox per agent (§6, bead cowork-jo2) ---------------------
+
+    def _primary_agent_ids(self) -> tuple[str, ...]:
+        """The keys that mean "this host's own coworker".
+
+        The app calls it ``host:<device id>`` (the id it got at pairing), the
+        roster calls it by its row id, and a client that names no session at all
+        gets it too. All three are ONE agent and therefore one box.
+        """
+        return ("", "default", self._agent.id, host_agent_id(self._device_id))
+
+    def _is_own_coworker(self, agent_id: str) -> bool:
+        """True when the app registered this id as a coworker of its own.
+
+        The app sends ``agent_create`` for every coworker the user makes, with
+        the id that is also its ``session_key``. That registration is what makes
+        a key a coworker; a key nobody registered — an old client's ``default``,
+        a thread key from a test double — stays on this host's own agent, which
+        is what it has always been. Guessing the other way round would hand a
+        typo its own container and its own empty workspace.
+        """
+        if not agent_id or agent_id in self._primary_agent_ids():
+            return False
+        try:
+            return any(
+                row.get("agent_id") == agent_id and not row.get("host")
+                for row in self._coworker_names.list()
+            )
+        except Exception:  # noqa: BLE001 — an unreadable roster is not a new agent
+            return False
+
+    def _agent_key(self, session_key: str) -> str:
+        """The coworker a session key belongs to: itself, or this host's agent."""
+        return session_key if self._is_own_coworker(session_key) else self._agent.id
+
+    def _workspace_for_agent(self, agent_id: str) -> str:
+        """The host directory an agent works in — one per agent, never shared.
+
+        The host's own coworker keeps the directory it always had. Every other
+        coworker gets ``<agents dir>/<name>-<digest of its id>``: the digest is
+        what makes it collision-free, because a coworker name is whatever the
+        user typed and two of them can read alike.
+        """
+        if self._agent_key(agent_id) == self._agent.id:
+            return self._agent.workspace_dir or str(self._agents_dir / self._agent.name)
+        workspace = self._agents_dir / _agent_dirname(agent_id)
+        if not workspace.exists():
+            workspace.mkdir(parents=True, exist_ok=True)
+            # Only on the first look: the shipped seed skills go in once, so a
+            # new coworker can act out of the box. Re-seeding on every call
+            # would put a disk walk behind a status request.
+            seeded = seed_workspace_skills(workspace)
+            if seeded:
+                self._log(
+                    f"[cowork-host] seeded skills for {agent_id}: {', '.join(seeded)}"
+                )
+        return str(workspace)
+
+    def _environment_for(self, session_key: str) -> BaseEnvironment:
+        """That coworker's sandbox: its own container, its own workspace.
+
+        Cached per coworker, so one coworker talks to the SAME box across its
+        turns. With the docker backend the box is a container labelled with that
+        agent id (``cowork.agent``); with the local backend it is that agent's
+        own directory. Either way two coworkers never share one.
+        """
+        key = self._agent_key(session_key)
+        existing = self._environments.get(key)
+        if existing is not None:
+            return existing
+        workdir = self._workspace_for_agent(key)
         if self._containers is not None:
-            return self._containers.environment(self._agent.id)
-        return make_environment("local", workdir=self._agent.workspace_dir)
+            environment = self._containers.environment(key)
+        else:
+            environment = make_environment("local", workdir=workdir)
+        self._environments[key] = environment
+        return environment
 
     def _make_model_wiring(
         self, token: dict
@@ -634,6 +732,9 @@ class LocalHost:
             opener=opener,
             sealer=sealer,
             environment=environment,
+            # One sandbox per agent (bead cowork-jo2): every session key that is
+            # not this host's own coworker gets its own container/workspace.
+            environment_factory=self._environment_for,
             model_factory=model_factory,
             model_select=model_select,
             db_path=self._db_path,
