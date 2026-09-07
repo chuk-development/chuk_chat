@@ -20,6 +20,22 @@ class DebugChatFormatter {
   static const int _maxToolResultChars = 250;
   static const int _maxAttachmentsChars = 420;
 
+  // The same caps, readable from outside. CoWork's structured export
+  // ([ChatDebugExport]) copies the *same* conversation, so it has to cut the
+  // same fields at the same lengths — otherwise one app's debug copy is a
+  // handful of kilobytes and the other's is megabytes of the same chat.
+  static const int maxContextValueChars = _maxContextValueChars;
+  static const int maxReasoningChars = _maxReasoningChars;
+  static const int maxMessageTextChars = _maxMessageTextChars;
+  static const int maxToolArgsChars = _maxToolArgsChars;
+  static const int maxToolResultChars = _maxToolResultChars;
+  static const int maxAttachmentsChars = _maxAttachmentsChars;
+
+  /// [_truncateForExport] for other exporters: trim, cut at [maxChars], and say
+  /// how long the value really was.
+  static String truncateForExport(String value, {required int maxChars}) =>
+      _truncateForExport(value, maxChars: maxChars);
+
   // Explicitly drop a value without linter warnings.
   static void _noop(Object? _) {}
 

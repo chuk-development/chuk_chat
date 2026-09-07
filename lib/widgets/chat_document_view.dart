@@ -5,7 +5,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cowork/constants.dart';
 import 'package:cowork/services/file_save_service.dart';
+import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 
 /// The agent stamps `updated_at` in epoch seconds — a float for chat documents,
@@ -60,6 +62,10 @@ class ChatDocumentView extends StatefulWidget {
       return Dialog(
         clipBehavior: Clip.antiAlias,
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusDialog),
+          side: BorderSide(color: theme.m3.outlineVariant),
+        ),
         child: SizedBox(
           width: math.min(1000, math.max(280, media.width - 32)),
           height: math.min(720, math.max(320, media.height - 48)),
@@ -67,7 +73,7 @@ class ChatDocumentView extends StatefulWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 8, 14),
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
                 child: Row(
                   children: [
                     Expanded(
@@ -88,10 +94,10 @@ class ChatDocumentView extends StatefulWidget {
                   ],
                 ),
               ),
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              Divider(height: 1, color: theme.m3.outlineVariant),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   child: ChatDocumentView(document: document),
                 ),
               ),
@@ -173,7 +179,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
                   child: Text(
                     freshness == null ? shape : '$shape · $freshness',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: theme.m3.onSurfaceVariant,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -193,6 +199,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
               ],
             ),
             TextButton.icon(
+              style: TextButton.styleFrom(shape: const StadiumBorder()),
               icon: const Icon(Icons.download, size: 18),
               label: const Text('Save'),
               onPressed: () async {
@@ -298,10 +305,9 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
                     ),
                     Text(
                       '${(row['value'] as num).toStringAsFixed(1)} %',
-                      style: const TextStyle(
-                        fontSize: 22,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -341,15 +347,16 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
               ],
             ),
           ),
-        const Padding(
-          padding: EdgeInsets.only(top: 8, bottom: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('0 %', style: TextStyle(fontSize: 12)),
-              Text('50 %', style: TextStyle(fontSize: 12)),
-              Text('100 %', style: TextStyle(fontSize: 12)),
-            ],
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 24),
+          child: DefaultTextStyle.merge(
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(
+              color: Theme.of(context).m3.onSurfaceVariant,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [Text('0 %'), Text('50 %'), Text('100 %')],
+            ),
           ),
         ),
         const Divider(),

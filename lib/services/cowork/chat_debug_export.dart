@@ -29,11 +29,87 @@ import 'package:cowork/models/tool_call.dart';
 import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/cowork/cowork_run_ledger.dart';
 import 'package:cowork/services/settings/verbose_service.dart';
+import 'package:cowork/utils/debug_chat_formatter.dart';
 
 /// Builds and copies the structured debug export for one thread.
 abstract final class ChatDebugExport {
   /// The `kind` marker every export carries, so a pasted blob is recognisable.
   static const String kind = 'cowork_full_chat_debug';
+
+  /// Every long field is cut to the length chuk_chat's own debug copy uses
+  /// ([DebugChatFormatter]), so the same conversation produces a copy of the
+  /// same size in both apps. The caps live upstream, not here: one number per
+  /// field, one place to change it.
+  ///
+  /// A cut value keeps upstream's wording — `… (N chars total)` — so a reader
+  /// of the blob can always tell a truncation from a short field.
+  static String? _cap(Object? value, int maxChars) {
+    if (value == null) return null;
+    final text = value is String ? value : jsonEncode(value);
+    return DebugChatFormatter.truncateForExport(text, maxChars: maxChars);
+  }
+
+  /// One tool call, with its arguments and its result cut to the upstream
+  /// lengths. A tool that returns a whole file would otherwise carry that file
+  /// into the clipboard, once per call.
+  static Map<String, dynamic> _toolCallJson(ToolCall call) {
+    final json = call.toJson();
+    final arguments = json['arguments'];
+    // Small arguments stay an object, so a blob is still machine-readable; only
+    // an oversized one collapses to the truncated string.
+    if (arguments != null &&
+        jsonEncode(arguments).length > DebugChatFormatter.maxToolArgsChars) {
+      json['arguments'] = _cap(arguments, DebugChatFormatter.maxToolArgsChars);
+    }
+    if (json['result'] != null) {
+      json['result'] = _cap(
+        json['result'],
+        DebugChatFormatter.maxToolResultChars,
+      );
+    }
+    if (json['roundThinking'] != null) {
+      json['roundThinking'] = _cap(
+        json['roundThinking'],
+        DebugChatFormatter.maxReasoningChars,
+      );
+    }
+    return json;
+  }
+
+  /// One content block. The bytes of an attached file never belong on the
+  /// clipboard: a single PDF as base64 is larger than the whole transcript, and
+  /// nothing in a bug report is read out of it. The block keeps its name, its
+  /// type and its size, and says the payload was left out.
+  static Map<String, dynamic> _blockJson(ContentBlock block) {
+    final json = block.toJson();
+    final text = json['text'];
+    if (text != null) {
+      json['text'] = _cap(text, DebugChatFormatter.maxMessageTextChars);
+    }
+    final calls = json['toolCalls'];
+    if (calls is List) {
+      json['toolCalls'] = [
+        for (final call in block.toolCalls ?? const <ToolCall>[])
+          _toolCallJson(call),
+      ];
+    }
+    final artifact = json['sandboxArtifact'];
+    if (artifact is Map<String, dynamic>) {
+      final document = artifact['document'];
+      if (document is Map) {
+        final stripped = Map<String, dynamic>.from(document);
+        if (stripped.remove('data') != null) stripped['data'] = '(omitted)';
+        if (stripped['text'] != null) {
+          stripped['text'] = _cap(
+            stripped['text'],
+            DebugChatFormatter.maxMessageTextChars,
+          );
+        }
+        artifact['document'] = stripped;
+      }
+    }
+    return json;
+  }
 
   /// The whole export for [threadKey] as a map: header, stats, transcript and
   /// every collected `debug_context`.
@@ -73,13 +149,16 @@ abstract final class ChatDebugExport {
 
       transcript.add(<String, dynamic>{
         'role': role,
-        'text': row['text'] ?? '',
+        'text': _cap(row['text'] ?? '', DebugChatFormatter.maxMessageTextChars),
         if ((row['reasoning'] as String? ?? '').isNotEmpty)
-          'reasoning': row['reasoning'],
+          'reasoning': _cap(
+            row['reasoning'],
+            DebugChatFormatter.maxReasoningChars,
+          ),
         if (calls.isNotEmpty)
-          'tool_calls': [for (final call in calls) call.toJson()],
+          'tool_calls': [for (final call in calls) _toolCallJson(call)],
         if (blocks.isNotEmpty)
-          'content_blocks': [for (final block in blocks) block.toJson()],
+          'content_blocks': [for (final block in blocks) _blockJson(block)],
         if (row['modelId'] != null) 'model_id': row['modelId'],
         if (row['provider'] != null) 'provider': row['provider'],
       });
@@ -99,10 +178,18 @@ abstract final class ChatDebugExport {
       if (run.toolCalls.isNotEmpty || run.blocks.isNotEmpty) {
         transcript.add(<String, dynamic>{
           'role': 'run_in_flight',
-          if (run.modelReasoning.isNotEmpty) 'reasoning': run.modelReasoning,
-          if (run.finalAnswer != null) 'final_answer': run.finalAnswer,
-          'tool_calls': [for (final call in run.toolCalls) call.toJson()],
-          'content_blocks': [for (final block in run.blocks) block.toJson()],
+          if (run.modelReasoning.isNotEmpty)
+            'reasoning': _cap(
+              run.modelReasoning,
+              DebugChatFormatter.maxReasoningChars,
+            ),
+          if (run.finalAnswer != null)
+            'final_answer': _cap(
+              run.finalAnswer,
+              DebugChatFormatter.maxMessageTextChars,
+            ),
+          'tool_calls': [for (final call in run.toolCalls) _toolCallJson(call)],
+          'content_blocks': [for (final block in run.blocks) _blockJson(block)],
         });
       }
       tokensSpent = run.tokensSpent ?? tokensSpent;

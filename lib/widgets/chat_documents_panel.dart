@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:cowork/constants.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/storage/cowork_chat_store.dart';
+import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 import 'package:cowork/widgets/sandbox_artifact_block.dart';
 
@@ -14,14 +16,26 @@ import 'package:cowork/widgets/sandbox_artifact_block.dart';
 /// to read, so the panel shows one at a time instead — the phone layout.
 const double _kTwoPaneWidth = 720;
 
+/// The list column on the two-pane layout. Wide enough for a file name plus
+/// its folder without the name truncating on the first segment.
+const double _kListWidth = 320;
+
 class ChatDocumentsPanel extends StatefulWidget {
   const ChatDocumentsPanel({
     super.key,
     required this.sessionKey,
     this.controller,
+    this.coworkerName,
   });
   final String sessionKey;
   final CoworkRelayController? controller;
+
+  /// The coworker whose container these documents live in, when the caller
+  /// already knows it. Null lets the panel ask the host for the roster and fill
+  /// the name in itself; until an answer arrives the panel says "this coworker"
+  /// rather than inventing a name.
+  final String? coworkerName;
+
   @override
   State<ChatDocumentsPanel> createState() => _ChatDocumentsPanelState();
 }
@@ -31,12 +45,14 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   Map<String, dynamic>? _selected;
   SandboxArtifactPayload? _file;
   String? _error;
+  String? _coworker;
   bool _loading = true;
   StreamSubscription<CoworkRelayInbound>? _subscription;
 
   @override
   void initState() {
     super.initState();
+    _coworker = _clean(widget.coworkerName);
     _subscription = widget.controller?.inbound.listen(_receive);
     widget.controller?.state.addListener(_connectionChanged);
     unawaited(_load());
@@ -47,10 +63,21 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   int _selectionEpoch = 0;
   CoworkRelayPhase? _phase;
 
+  static String? _clean(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// The coworker's name, or the honest stand-in. Never a guess: the roster is
+  /// the only source, and until it answers the panel says what it does know —
+  /// that one coworker owns this chat.
+  String get _owner => _coworker ?? 'this coworker';
+
   void _connectionChanged() {
     final phase = widget.controller?.state.value.phase;
     if (phase == CoworkRelayPhase.paired && _phase != phase) {
       unawaited(_request());
+      unawaited(_requestCoworkerName());
       if (_selectedId != null) unawaited(_request(id: _selectedId));
     }
     _phase = phase;
@@ -136,8 +163,37 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     }
   }
 
+  /// Asks the host who this thread belongs to. The thread key *is* the agent
+  /// id, so the roster answer names the coworker whose container holds these
+  /// documents. A host that cannot answer costs nothing: the panel keeps the
+  /// stand-in wording.
+  Future<void> _requestCoworkerName() async {
+    if (_coworker != null) return;
+    final control = widget.controller;
+    if (control == null ||
+        control.state.value.phase != CoworkRelayPhase.paired) {
+      return;
+    }
+    try {
+      await control.requestAgentList();
+    } catch (_) {
+      /* No roster: the panel says "this coworker" and moves on. */
+    }
+  }
+
   void _receive(CoworkRelayInbound event) {
     if (!mounted) return;
+    if (event is CoworkRelayAgentList) {
+      for (final agent in event.agents) {
+        if (agent.agentId != widget.sessionKey) continue;
+        final name = _clean(agent.name);
+        if (name != null && name != _coworker) {
+          setState(() => _coworker = name);
+        }
+        break;
+      }
+      return;
+    }
     if (event is CoworkRelayFile &&
         event.document?['session_key'] == widget.sessionKey) {
       setState(() {
@@ -275,8 +331,10 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       clipBehavior: Clip.antiAlias,
       insetPadding: EdgeInsets.all(margin),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(width < _kTwoPaneWidth ? 20 : 28),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(
+          width < _kTwoPaneWidth ? kRadiusCard : kRadiusDialog,
+        ),
+        side: BorderSide(color: theme.m3.outlineVariant),
       ),
       child: SizedBox(
         width: width,
@@ -285,7 +343,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(context, rows),
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            Divider(height: 1, color: theme.m3.outlineVariant),
             if (_error != null) _buildErrorBanner(context, _error!),
             Expanded(
               child: _loading
@@ -297,50 +355,76 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
                           : _buildOnePane(context, rows),
                     ),
             ),
+            _buildScopeFooter(context),
           ],
         ),
       ),
     );
   }
 
-  /// One title, one status line. The status is what the panel actually knows —
-  /// how much it holds and whether the copy on this device has reached the
-  /// cloud — never a description of what the feature is for.
+  /// The house header: an accent rule on top, the owning coworker in an avatar
+  /// tile, and one status line. The status is what the panel actually knows —
+  /// whose chat this is, how much it holds and whether the copy on this device
+  /// has reached the cloud — never a description of what the feature is for.
   Widget _buildHeader(BuildContext context, List<Map<String, dynamic>> rows) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final m3 = theme.m3;
+    final isDark = theme.brightness == Brightness.dark;
     final saved = rows.where((d) => d['kind'] != 'file').length;
     final files = rows.length - saved;
     final parts = <String>[
+      'This chat only',
       if (_loading)
         'Loading…'
       else if (rows.isEmpty)
         'Nothing saved yet'
       else ...[
-        '$saved in this chat',
-        if (files > 0) '$files workspace ${files == 1 ? 'file' : 'files'}',
+        '$saved saved',
+        if (files > 0) '$files ${files == 1 ? 'file' : 'files'}',
       ],
       if (CoworkChatStore.isDirty(widget.sessionKey)) 'Sync pending',
     ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 8, 14),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: scheme.primary, width: 3)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       child: Row(
         children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: isDark ? 0.2 : 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.folder_shared_outlined,
+              size: 20,
+              color: scheme.primary,
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Chat documents',
-                  style: theme.textTheme.titleLarge?.copyWith(
+                  '$_owner · Documents',
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   parts.join(' · '),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: m3.onSurfaceVariant,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -363,12 +447,42 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     );
   }
 
+  /// The one sentence that answers "whose files am I looking at". It is a
+  /// footer, in the same shape as the house's encryption line, because it is a
+  /// standing fact about the panel and not a message about the current state.
+  Widget _buildScopeFooter(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.m3.onSurfaceVariant;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: theme.m3.outlineVariant)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 12, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '$_owner runs in its own container. '
+              'These documents belong to this chat alone.',
+              style: TextStyle(fontSize: 11, color: color),
+              maxLines: 2,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorBanner(BuildContext context, String message) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       color: scheme.errorContainer,
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
           Icon(Icons.error_outline, size: 18, color: scheme.onErrorContainer),
@@ -390,14 +504,11 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(width: 300, child: _buildList(context, rows)),
-          VerticalDivider(
-            width: 1,
-            color: Theme.of(context).colorScheme.outlineVariant,
-          ),
+          SizedBox(width: _kListWidth, child: _buildList(context, rows)),
+          VerticalDivider(width: 1, color: Theme.of(context).m3.outlineVariant),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               child: _buildReader(context, rows),
             ),
           ),
@@ -414,7 +525,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+          padding: const EdgeInsets.fromLTRB(4, 6, 16, 6),
           child: Row(
             children: [
               IconButton(
@@ -425,7 +536,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               Expanded(
                 child: Text(
                   '${title ?? 'Document'}',
-                  style: theme.textTheme.titleSmall,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -433,7 +546,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
             ],
           ),
         ),
-        Divider(height: 1, color: theme.colorScheme.outlineVariant),
+        Divider(height: 1, color: theme.m3.outlineVariant),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -444,18 +557,23 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     );
   }
 
+  /// One scrolling list, two named groups. The group headings carry the counts,
+  /// so the reader never has to work out which rows came from the chat and
+  /// which came off the coworker's own disk.
   Widget _buildList(BuildContext context, List<Map<String, dynamic>> rows) {
     if (rows.isEmpty) {
       return _EmptyBlock(
         icon: Icons.folder_open_outlined,
         title: 'No documents yet',
         detail:
-            'Ask the agent for a table, a chart or a note and it is kept here '
-            'across restarts.',
+            'Ask $_owner for a table, a chart or a note. It is kept in this '
+            'chat across restarts, and files it writes in its container show '
+            'up here too.',
       );
     }
+    final saved = rows.where((d) => d['kind'] != 'file').length;
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final doc = rows[i];
@@ -465,21 +583,18 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (startsGroup)
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, i == 0 ? 14 : 22, 12, 6),
-                child: Text(
-                  isFile ? 'WORKSPACE FILES' : 'SAVED IN THIS CHAT',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
+              _GroupHeading(
+                title: isFile ? '$_owner’s container' : 'Saved in this chat',
+                count: isFile ? rows.length - saved : saved,
+                topInset: i == 0 ? 4 : 20,
               ),
-            _DocumentRow(
-              document: doc,
-              selected: _selectedId == doc['id'],
-              onTap: () => _select(doc),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _DocumentRow(
+                document: doc,
+                selected: _selectedId == doc['id'],
+                onTap: () => _select(doc),
+              ),
             ),
           ],
         );
@@ -496,8 +611,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
         icon: Icons.cloud_off_outlined,
         title: 'This document is not on the device yet',
         detail:
-            'It is saved on the agent. Reading it needs the laptop to be '
-            'connected.',
+            'It is in $_owner’s container. Reading it needs the laptop to '
+            'be connected.',
         action: FilledButton.tonalIcon(
           style: _pillButton,
           onPressed: () => _request(id: _selectedId),
@@ -517,9 +632,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
             ? 'No documents yet'
             : 'Select a document to read it',
         detail: rows.isEmpty
-            ? 'Ask the agent for a table, a chart or a note and it is kept '
-                  'here across restarts.'
-            : 'The agent rewrites these while it works. The version and time '
+            ? 'Ask $_owner for a table, a chart or a note. It is kept in this '
+                  'chat across restarts.'
+            : '$_owner rewrites these while it works. The version and time '
                   'beside each name say how current it is.',
         action: recent == null
             ? null
@@ -541,9 +656,60 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   }
 }
 
-/// One list row. The kind is carried by the icon, which frees the second line
-/// for the only thing a reader cannot get anywhere else: how current this
-/// document is.
+/// A group heading with its count, in the shape the house uses for the sections
+/// of the workspace panel: a plain title and a tinted count pill.
+class _GroupHeading extends StatelessWidget {
+  const _GroupHeading({
+    required this.title,
+    required this.count,
+    required this.topInset,
+  });
+
+  final String title;
+  final int count;
+  final double topInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(4, topInset, 4, 10),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One list row, in the house file-tile shape: a tinted type icon, the name on
+/// the first line, and the facts a reader cannot get anywhere else on the
+/// second — where the file sits, how big it is, and how current it is.
 class _DocumentRow extends StatelessWidget {
   const _DocumentRow({
     required this.document,
@@ -559,95 +725,82 @@ class _DocumentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final m3 = theme.m3;
+    final isDark = theme.brightness == Brightness.dark;
     final isFile = document['kind'] == 'file';
     final path = '${document['path'] ?? ''}';
-    final title = isFile && path.isNotEmpty
-        ? _folderLabel(path)
-        : '${document['title']}';
-    final freshness = documentFreshness(document);
-    final detail = isFile
-        ? ['${document['title']}', ?freshness].join(' · ')
-        : freshness ?? _kindLabel(document);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: .18)
-              : scheme.surfaceContainer,
-          // The border is reserved whether or not the row is selected:
-          // selecting must change colour only. A border that appears on
-          // selection resizes the row and nudges the whole list.
-          border: Border.all(
-            color: selected
-                ? scheme.primary.withValues(alpha: .55)
-                : Colors.transparent,
-            width: 1.5,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Semantics(
-              selected: selected,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 9, 12, 9),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        _documentIcon(document),
-                        size: 18,
-                        color: scheme.onPrimaryContainer,
-                      ),
+    final title = '${document['title']}';
+    final detail = <String>[
+      if (isFile) ...[?_folderLabel(path), ?_sizeLabel(document)] else
+        _kindLabel(document),
+      ?documentFreshness(document),
+    ].join(' · ');
+    return Material(
+      color: selected
+          ? scheme.primary.withValues(alpha: isDark ? 0.22 : 0.14)
+          : m3.surfaceContainer,
+      borderRadius: kBorderRadiusCard,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: kBorderRadiusCard,
+        onTap: onTap,
+        child: Semantics(
+          selected: selected,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(
+                      alpha: isDark ? 0.18 : 0.12,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Tooltip(
-                            message: isFile && path.isNotEmpty ? path : title,
-                            child: Text(
-                              title,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: selected ? scheme.primary : null,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            detail,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    _documentIcon(document),
+                    size: 22,
+                    color: scheme.primary,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: isFile && path.isNotEmpty ? path : title,
+                        child: Text(
+                          title,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: selected ? scheme.primary : null,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (detail.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          detail,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: m3.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -662,14 +815,31 @@ final ButtonStyle _pillButton = FilledButton.styleFrom(
   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
 );
 
-/// Workspace files repeat their names — twenty skills all carry a `SKILL.md` —
-/// so the folder is the identity and it is what the row leads with. The last
-/// segments are the specific ones, so truncation eats the head, never the tail.
-String _folderLabel(String path) {
+/// Where a workspace file sits, short enough for one line. Twenty skills all
+/// carry a `SKILL.md`, so the folder is what tells the rows apart — and the
+/// last segments are the specific ones, so truncation eats the head, never the
+/// tail. Null for a file at the root of the container's workspace.
+String? _folderLabel(String path) {
+  if (path.isEmpty) return null;
   final parts = path.split('/')..removeLast();
-  if (parts.isEmpty) return path;
+  if (parts.isEmpty) return null;
   if (parts.length <= 2) return parts.join('/');
   return '…/${parts.sublist(parts.length - 2).join('/')}';
+}
+
+/// The house file-size wording, byte for byte the one the workspace file tiles
+/// use. Null when the catalog carries no size, because a made-up `0 B` reads as
+/// an empty file.
+String? _sizeLabel(Map<String, dynamic> document) {
+  final raw = document['size'];
+  if (raw is! num || raw < 0 || !raw.isFinite) return null;
+  final bytes = raw.toInt();
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }
 
 String _kindLabel(Map<String, dynamic> document) => switch (document['kind']) {
@@ -690,13 +860,13 @@ IconData _documentIcon(Map<String, dynamic> document) {
     'pptx' => Icons.slideshow_outlined,
     'docx' => Icons.article_outlined,
     'html' || 'svg' => Icons.code_outlined,
-    _ => Icons.description_outlined,
+    'md' || 'markdown' || 'txt' => Icons.description_outlined,
+    _ => Icons.insert_drive_file_outlined,
   };
 }
 
-/// The panel's one empty state. Compact and top-aligned on purpose: a pane
-/// that answers 800x600 of emptiness with a centred icon reads as broken, not
-/// as calm. It is a card that says what the list holds and offers a way in.
+/// The panel's one empty state, in the house shape: a large quiet icon, the
+/// headline under it, then the sentence that says what would fill the list.
 class _EmptyBlock extends StatelessWidget {
   const _EmptyBlock({
     required this.icon,
@@ -713,61 +883,43 @@ class _EmptyBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              detail,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                height: 1.45,
+    final m3 = theme.m3;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 64,
+                color: m3.onSurfaceVariant.withValues(alpha: 0.4),
               ),
-            ),
-            if (action != null) ...[
-              const SizedBox(height: 18),
-              Align(alignment: Alignment.centerLeft, child: action!),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                detail,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+              if (action != null) ...[
+                const SizedBox(height: 20),
+                action!,
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
