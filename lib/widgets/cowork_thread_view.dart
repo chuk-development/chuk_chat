@@ -424,6 +424,9 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     final phase = state.phase;
     if (phase == CoworkRelayPhase.paired) {
       _reconnectAttempts = 0;
+      // The link is up, so the failures behind us are history: a single drop
+      // months later must not walk straight into the "it is really broken" bar.
+      _failedReconnects = 0;
       final peer = state.peerDeviceId;
       if (peer != null) widget.onPaired?.call(peer);
       _link.bind(controller);
@@ -568,6 +571,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     _autoReconnectTimer = null;
     _manuallyDisconnected = false;
     _reconnectAttempts = 0;
+    _failedReconnects = 0;
     await widget.pairingStore?.clearPairing();
     _codeController.clear();
     // Drop the trust from the UI in the same frame the store loses it, so the
