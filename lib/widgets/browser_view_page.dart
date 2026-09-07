@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
+
+import 'package:cowork/widgets/vnc_trackpad_overlay.dart';
 
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 
@@ -72,6 +74,12 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   // chrome back. Errors still surface as an overlay so a dead stream is never
   // a silent black screen.
   bool _fullscreen = true;
+  // CoWork: on touch platforms the built-in absolute tap mapping is switched
+  // off and a relative trackpad overlay drives this controller instead. On
+  // desktop the controller stays null and the normal mouse/keyboard path runs.
+  final bool _touchInput = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  final RemoteFrameBufferController _rfbController =
+      RemoteFrameBufferController();
   // End-to-end bandwidth meter (debug builds only): what this view really
   // receives off the sealed channel, after base64 decode. Logged every 2 s so
   // "is it compressed?" is a number in the console, not a feeling.
@@ -208,6 +216,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   @override
   void dispose() {
     _meter?.cancel();
+    _rfbController.dispose();
     _sub?.cancel();
     _teardownBridge();
     _server?.close().then((_) {}, onError: (_) {});
@@ -305,13 +314,18 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     // input against. FittedBox only scales at paint time, and Flutter
     // inverts that transform for hit-testing, so taps land on the right
     // pixel at any scale.
-    return Center(
+    final Widget frame = Center(
       child: FittedBox(
         fit: BoxFit.contain,
         child: RemoteFrameBufferWidget(
           hostName: InternetAddress.loopbackIPv4.address,
           port: _port!,
           password: _password,
+          // On touch platforms the trackpad overlay owns pointer input, so the
+          // built-in absolute tap/wheel mapping is switched off and the overlay
+          // drives this controller instead. Desktop keeps the normal mouse.
+          controller: _touchInput ? _rfbController : null,
+          enableBuiltInPointerInput: !_touchInput,
           // A bare Center() would ask for infinite size under
           // FittedBox's unbounded constraints and throw. Give the
           // connecting placeholder a definite footprint so it scales
@@ -338,6 +352,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         ),
       ),
     );
+    if (!_touchInput) return frame;
+    // The overlay fills the same box the framebuffer is contain-fit into, so
+    // its virtual cursor maps back onto the exact remote pixel at any scale.
+    return VncTrackpadOverlay(controller: _rfbController, child: frame);
   }
 }
 
