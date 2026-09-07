@@ -22,7 +22,12 @@ class BuildInfo {
     if (raw.isEmpty) return null;
     final parsed = DateTime.tryParse(raw);
     if (parsed == null) return null;
-    return parsed.toUtc();
+    // Dart reads a stamp without a designator as local time, so toUtc() would
+    // shift it by whatever zone the reader's device is in and the line would
+    // claim a build hour that never happened. Only an explicit UTC stamp is
+    // shown; anything else keeps the line hidden.
+    if (!parsed.isUtc) return null;
+    return parsed;
   }
 
   /// Formatted display string `yyyy-MM-dd HH:mm UTC`, or null when
