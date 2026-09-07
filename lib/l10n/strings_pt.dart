@@ -186,7 +186,7 @@ const Map<String, String> stringsPt = {
   // ── Account settings page ──────────────────────────────────
   'profile': 'Perfil',
   'profileSubtitle':
-      'Atualize como seu nome e email aparecem no CoWork.',
+      'Atualize como seu nome e email aparecem no Chuk Chat.',
   'displayName': 'Nome de exibição',
   'displayNameHint': 'Como outras pessoas veem você',
   'emailAddress': 'Endereço de email',
@@ -272,7 +272,7 @@ const Map<String, String> stringsPt = {
   'saveChanges': 'Salvar alterações',
 
   // ── About page ─────────────────────────────────────────────
-  'chukChat': 'CoWork',
+  'chukChat': 'Chuk Chat',
   'openSourceLicenses': 'Licenças de Código Aberto',
   'openSourceLicensesSubtitle':
       'Revise as licenças de todas as dependências incluídas nesta compilação.',
@@ -284,7 +284,7 @@ const Map<String, String> stringsPt = {
       'Atualização disponível: v{version} \u2014 toque para baixar',
   'versionUnavailable': 'Informações da versão indisponíveis.',
   'copyrightYear':
-      '\u00a9 {year} CoWork\nTodos os direitos reservados.',
+      '\u00a9 {year} Chuk Chat\nTodos os direitos reservados.',
   'licenses': 'Licenças',
   'unableToLoadLicenses': 'Não foi possível carregar as licenças.',
   'tapToViewLicense': 'Toque para ver o texto completo da licença',
@@ -319,7 +319,7 @@ const Map<String, String> stringsPt = {
   'creditsExplanation':
       'Seus \u20ac16 em créditos de IA são consumidos por token com base no modelo escolhido. Créditos não utilizados expiram no final de cada mês.',
   'immediateAccessAck':
-      'Quero acesso imediato ao CoWork e reconheço que perco meu ',
+      'Quero acesso imediato ao Chuk Chat e reconheço que perco meu ',
   'rightOfWithdrawal': 'direito de desistência',
   'onceServiceBegins':
       ' assim que o serviço começar. Concordo com os ',
@@ -330,7 +330,7 @@ const Map<String, String> stringsPt = {
       'Por favor, concorde com os termos e reconheça a perda do direito de desistência.',
 
   // ── Login page ─────────────────────────────────────────────
-  'welcomeToChukChat': 'Bem-vindo ao CoWork',
+  'welcomeToChukChat': 'Bem-vindo ao Chuk Chat',
   'signInWithEmail': 'Entre com seu email',
   'createAccountWithEmail': 'Crie uma conta com email e senha',
   'supabaseNotConfigured':

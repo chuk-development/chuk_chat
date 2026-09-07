@@ -182,7 +182,7 @@ const Map<String, String> stringsEs = {
   // ── Account settings page ──────────────────────────────────
   'profile': 'Perfil',
   'profileSubtitle':
-      'Actualiza cómo aparecen tu nombre y correo electrónico en CoWork.',
+      'Actualiza cómo aparecen tu nombre y correo electrónico en Chuk Chat.',
   'displayName': 'Nombre para mostrar',
   'displayNameHint': 'Cómo te ven los demás',
   'emailAddress': 'Correo electrónico',
@@ -265,7 +265,7 @@ const Map<String, String> stringsEs = {
   'saveChanges': 'Guardar cambios',
 
   // ── About page ─────────────────────────────────────────────
-  'chukChat': 'CoWork',
+  'chukChat': 'Chuk Chat',
   'openSourceLicenses': 'Licencias de código abierto',
   'openSourceLicensesSubtitle':
       'Revisa las licencias de cada dependencia incluida en esta compilación.',
@@ -276,7 +276,7 @@ const Map<String, String> stringsEs = {
   'updateAvailable': 'Actualización disponible: v{version} \u2014 toca para descargar',
   'versionUnavailable': 'Información de versión no disponible.',
   'copyrightYear':
-      '\u00a9 {year} CoWork\nTodos los derechos reservados.',
+      '\u00a9 {year} Chuk Chat\nTodos los derechos reservados.',
   'licenses': 'Licencias',
   'unableToLoadLicenses': 'No se pueden cargar las licencias.',
   'tapToViewLicense': 'Toca para ver el texto completo de la licencia',
@@ -311,7 +311,7 @@ const Map<String, String> stringsEs = {
   'creditsExplanation':
       'Tus \u20ac16 en créditos de IA se utilizan por token según el modelo que elijas. Los créditos no utilizados expiran al final de cada mes.',
   'immediateAccessAck':
-      'Quiero acceso inmediato a CoWork y reconozco que pierdo mi ',
+      'Quiero acceso inmediato a Chuk Chat y reconozco que pierdo mi ',
   'rightOfWithdrawal': 'derecho de desistimiento',
   'onceServiceBegins': ' una vez que el servicio comience. Acepto los ',
   'subscribeNow': 'Suscribirse ahora',
@@ -321,7 +321,7 @@ const Map<String, String> stringsEs = {
       'Por favor, acepta los términos y reconoce la pérdida de los derechos de desistimiento.',
 
   // ── Login page ─────────────────────────────────────────────
-  'welcomeToChukChat': 'Bienvenido a CoWork',
+  'welcomeToChukChat': 'Bienvenido a Chuk Chat',
   'signInWithEmail': 'Inicia sesión con tu correo electrónico',
   'createAccountWithEmail': 'Crea una cuenta con correo electrónico y contraseña',
   'supabaseNotConfigured':

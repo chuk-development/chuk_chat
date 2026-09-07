@@ -119,7 +119,7 @@ class LocalNotifications {
     try {
       await b.show(
         id: idFor(sessionKey),
-        title: label.isEmpty ? 'CoWork' : label,
+        title: label.isEmpty ? 'Chuk Chat' : label,
         body: body,
         payload: payloadFor(sessionKey, runId: runId),
         tag: sessionKey,

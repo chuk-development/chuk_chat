@@ -283,7 +283,7 @@ const Map<String, String> stringsEn = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profile',
-  'profileSubtitle': 'Update how your name and email appear inside CoWork.',
+  'profileSubtitle': 'Update how your name and email appear inside Chuk Chat.',
   'displayName': 'Display name',
   'displayNameHint': 'How other people see you',
   'emailAddress': 'Email address',
@@ -368,7 +368,7 @@ const Map<String, String> stringsEn = {
   'saveChanges': 'Save changes',
 
   // ── About page ─────────────────────────────────────────────
-  'chukChat': 'CoWork',
+  'chukChat': 'Chuk Chat',
   'openSourceLicenses': 'Open Source Licenses',
   'openSourceLicensesSubtitle':
       'Review the licenses for every dependency included in this build.',
@@ -379,7 +379,7 @@ const Map<String, String> stringsEn = {
   'builtOn': 'Built {date}',
   'updateAvailable': 'Update available: v{version} \u2014 tap to download',
   'versionUnavailable': 'Version information unavailable.',
-  'copyrightYear': '\u00a9 {year} CoWork\nAll rights reserved.',
+  'copyrightYear': '\u00a9 {year} Chuk Chat\nAll rights reserved.',
   'licenses': 'Licenses',
   'unableToLoadLicenses': 'Unable to load licenses.',
   'tapToViewLicense': 'Tap to view full license text',
@@ -414,7 +414,7 @@ const Map<String, String> stringsEn = {
   'creditsExplanation':
       'Your \u20ac16 in AI credits are used per token based on the model you choose. Unused credits expire at the end of each month.',
   'immediateAccessAck':
-      'I want immediate access to CoWork and acknowledge that I lose my ',
+      'I want immediate access to Chuk Chat and acknowledge that I lose my ',
   'rightOfWithdrawal': 'right of withdrawal',
   'onceServiceBegins': ' once the service begins. I agree to the ',
   'subscribeNow': 'Subscribe Now',
@@ -424,7 +424,7 @@ const Map<String, String> stringsEn = {
       'Please agree to the terms and acknowledge loss of withdrawal rights.',
 
   // ── Login page ─────────────────────────────────────────────
-  'welcomeToChukChat': 'Welcome to CoWork',
+  'welcomeToChukChat': 'Welcome to Chuk Chat',
   'signInWithEmail': 'Sign in with your email',
   'createAccountWithEmail': 'Create an account with email & password',
   'supabaseNotConfigured':
@@ -766,7 +766,7 @@ const Map<String, String> stringsEn = {
   'tourContinue': 'Continue',
   'tourGetStarted': 'Get started',
   'tourFinish': 'Finish',
-  'tourWelcomeTitle': 'Welcome to CoWork',
+  'tourWelcomeTitle': 'Welcome to Chuk Chat',
   'tourWelcomeBody':
       "End-to-end encrypted AI chat. First, you'll need to pick a model — let me show you where.",
   'tourModelTitle': 'Pick a model — required',
@@ -799,7 +799,7 @@ const Map<String, String> stringsEn = {
   // ── Battery optimization prompt ──────────────────────────────
   'batteryOptimizationTitle': 'Keep responses running',
   'batteryOptimizationBody':
-      'Android may pause CoWork when the screen is locked, cutting off long '
+      'Android may pause Chuk Chat when the screen is locked, cutting off long '
       'AI responses and tool steps mid-way. Allow unrestricted background '
       'activity so replies finish even when your phone is locked.',
   'batteryOptimizationAllow': 'Allow',
