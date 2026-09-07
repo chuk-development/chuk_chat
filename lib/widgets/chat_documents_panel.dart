@@ -92,8 +92,13 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     final id = doc['id'];
     if (id is! String || id.isEmpty) return false;
     final previous = _documents[id];
-    final before = previous?['version'] as num? ?? 0;
-    final after = doc['version'] as num? ?? 0;
+    // A version that arrives as a string would throw inside setState and stop
+    // the panel adopting anything further; an unreadable one simply counts as
+    // no version.
+    final previousVersion = previous?['version'];
+    final nextVersion = doc['version'];
+    final before = previousVersion is num ? previousVersion : 0;
+    final after = nextVersion is num ? nextVersion : 0;
     if (after < before) return false;
     // A newer catalog entry must never relabel old rows with its version.
     _documents[id] = after > before ? {...doc} : {...?previous, ...doc};

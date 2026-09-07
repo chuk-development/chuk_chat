@@ -673,7 +673,7 @@ class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate {
     required this.label,
     required this.background,
     this.color,
-    this.height = 32,
+    this.height = 40,
   });
 
   @override

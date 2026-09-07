@@ -228,8 +228,16 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
                 ? Icons.table_chart_outlined
                 : Icons.description_outlined,
           ),
-          title: Text('${document['title']}'),
-          subtitle: Text('Version ${document['version']} · Saved document'),
+          title: Text(
+            (document['title'] as String?)?.trim().isNotEmpty == true
+                ? document['title'] as String
+                : widget.payload.filename,
+          ),
+          subtitle: Text(
+            document['version'] == null
+                ? 'Saved document'
+                : 'Version ${document['version']} · Saved document',
+          ),
           trailing: const Icon(Icons.open_in_new),
           onTap: () => ChatDocumentView.open(context, document),
         ),
