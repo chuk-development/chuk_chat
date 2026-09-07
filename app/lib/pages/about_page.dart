@@ -6,9 +6,9 @@
 //    vector asset (see widgets/brand_wordmark.dart); the hero shows an icon.
 //  - dropped `services/update_check_service.dart` and the update badge — it
 //    polls the chuk_chat release feed, which CoWork does not have.
-//  - branding: 'Chuk Chat' -> 'CoWork' in the licences page, the hero name and
-//    the link rows; terms/privacy rows removed (no such pages yet), GitHub row
-//    points at the CoWork repository.
+//  - branding: the product name stays 'Chuk Chat' (CoWork is a mode inside it,
+//    never the product); terms/privacy rows removed (no such pages yet), the
+//    GitHub row points at the repository this build comes from.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
@@ -24,8 +24,9 @@ import 'package:cowork/widgets/nice_snackbar.dart';
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
-  /// COWORK ADAPTATION: replaces `PackageInfo.appName`.
-  static const String appName = 'CoWork';
+  /// COWORK ADAPTATION: replaces `PackageInfo.appName`. The product is
+  /// chuk_chat; CoWork is only a mode inside it, so it is never the name.
+  static const String appName = 'Chuk Chat';
 
   /// COWORK ADAPTATION: replaces `PackageInfo.version`. Empty when the build
   /// did not pass `--dart-define=APP_VERSION=…`; the UI then hides the line.
@@ -204,11 +205,25 @@ class _AboutPageState extends State<AboutPage> {
                     const SizedBox(height: 14),
                     // COWORK ADAPTATION: upstream shows an update badge fed by
                     // UpdateCheckService. CoWork has no release feed, so the
-                    // badge states what this build really is.
+                    // badge states what this build really is. Only the agent
+                    // host is self-hosted, so the badge must not claim more.
                     ExpressiveBadge(
-                      'Self-hosted build',
+                      'Self-hosted agent host',
                       tone: m3.successContainer,
                       icon: Icons.dns_outlined,
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'In CoWork mode the agent host runs on your own '
+                        'machine. The app, your account and the model APIs '
+                        'are not self-hosted.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: m3.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ],
                 ),

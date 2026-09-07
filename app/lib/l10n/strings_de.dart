@@ -285,7 +285,7 @@ const Map<String, String> stringsDe = {
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profil',
   'profileSubtitle':
-      'Passen Sie an, wie Ihr Name und Ihre E-Mail in CoWork erscheinen.',
+      'Passen Sie an, wie Ihr Name und Ihre E-Mail in Chuk Chat erscheinen.',
   'displayName': 'Anzeigename',
   'displayNameHint': 'So sehen andere Sie',
   'emailAddress': 'E-Mail-Adresse',
@@ -373,7 +373,7 @@ const Map<String, String> stringsDe = {
   'saveChanges': 'Änderungen speichern',
 
   // ── About page ─────────────────────────────────────────────
-  'chukChat': 'CoWork',
+  'chukChat': 'Chuk Chat',
   'openSourceLicenses': 'Open-Source-Lizenzen',
   'openSourceLicensesSubtitle':
       'Lizenzen aller in diesem Build enthaltenen Abhängigkeiten einsehen.',
@@ -385,7 +385,7 @@ const Map<String, String> stringsDe = {
   'updateAvailable':
       'Update verfügbar: v{version} \u2014 zum Herunterladen tippen',
   'versionUnavailable': 'Versionsinformationen nicht verfügbar.',
-  'copyrightYear': '\u00a9 {year} CoWork\nAlle Rechte vorbehalten.',
+  'copyrightYear': '\u00a9 {year} Chuk Chat\nAlle Rechte vorbehalten.',
   'licenses': 'Lizenzen',
   'unableToLoadLicenses': 'Lizenzen konnten nicht geladen werden.',
   'tapToViewLicense': 'Tippen, um den vollständigen Lizenztext anzuzeigen',
@@ -421,7 +421,7 @@ const Map<String, String> stringsDe = {
   'creditsExplanation':
       'Ihre 16\u00a0\u20ac KI-Guthaben werden pro Token basierend auf dem gewählten Modell verbraucht. Ungenutztes Guthaben verfällt am Ende jedes Monats.',
   'immediateAccessAck':
-      'Ich möchte sofortigen Zugang zu CoWork und erkenne an, dass ich mein ',
+      'Ich möchte sofortigen Zugang zu Chuk Chat und erkenne an, dass ich mein ',
   'rightOfWithdrawal': 'Widerrufsrecht',
   'onceServiceBegins': ' verliere, sobald der Dienst beginnt. Ich stimme den ',
   'subscribeNow': 'Jetzt abonnieren',
@@ -431,7 +431,7 @@ const Map<String, String> stringsDe = {
       'Bitte stimmen Sie den Bedingungen zu und bestätigen Sie den Verlust des Widerrufsrechts.',
 
   // ── Login page ─────────────────────────────────────────────
-  'welcomeToChukChat': 'Willkommen bei CoWork',
+  'welcomeToChukChat': 'Willkommen bei Chuk Chat',
   'signInWithEmail': 'Mit E-Mail anmelden',
   'createAccountWithEmail': 'Konto mit E-Mail & Passwort erstellen',
   'supabaseNotConfigured':
@@ -779,7 +779,7 @@ const Map<String, String> stringsDe = {
   'tourContinue': 'Weiter',
   'tourGetStarted': "Los geht's",
   'tourFinish': 'Fertig',
-  'tourWelcomeTitle': 'Willkommen bei CoWork',
+  'tourWelcomeTitle': 'Willkommen bei Chuk Chat',
   'tourWelcomeBody':
       'Ende-zu-Ende verschlüsselter AI-Chat. Zuerst musst du ein Modell auswählen — ich zeige dir wo.',
   'tourModelTitle': 'Modell wählen — Pflicht',
@@ -814,7 +814,7 @@ const Map<String, String> stringsDe = {
   // ── Akku-Optimierung ─────────────────────────────────────────
   'batteryOptimizationTitle': 'Antworten am Laufen halten',
   'batteryOptimizationBody':
-      'Android kann CoWork pausieren, sobald der Bildschirm gesperrt ist, '
+      'Android kann Chuk Chat pausieren, sobald der Bildschirm gesperrt ist, '
       'und bricht so lange AI-Antworten und Tool-Schritte mittendrin ab. '
       'Erlaube uneingeschränkte Hintergrundaktivität, damit Antworten auch '
       'bei gesperrtem Handy fertig werden.',
