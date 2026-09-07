@@ -52,8 +52,8 @@ void main() {
     await pump(tester);
     controller.emit(CoworkRelaySkillsList(
       skills: [
-        _skill('youtube-transcript', source: 'builtin'),
         _skill('automations', source: 'builtin', enabled: false),
+        _skill('youtube-transcript'),
         _skill('deploy'),
       ],
       errors: const ['ws/skills/broken/SKILL.md: no YAML frontmatter'],
@@ -72,6 +72,50 @@ void main() {
       matching: find.byType(Switch),
     ));
     expect(off.value, isFalse);
+  });
+
+  testWidgets('each section says what it is, and every row carries its mark',
+      (tester) async {
+    await pump(tester);
+    controller.emit(CoworkRelaySkillsList(skills: [
+      _skill('automations', source: 'builtin'),
+      _skill('youtube-transcript'),
+    ]));
+    await tester.pump();
+
+    // Why a section is what it is, not only its label.
+    // Anchored on what the caption has to say, not on how the app is named.
+    expect(find.textContaining('the sandbox terminal'), findsOneWidget);
+    expect(find.textContaining('under skills/'), findsOneWidget);
+
+    // The mark on the row repeats the section, so a scrolled row still reads.
+    Finder markOf(String name) => find.descendant(
+          of: find.byKey(ValueKey<String>('skill-$name')),
+          matching: find.byIcon(Icons.verified_outlined),
+        );
+    expect(markOf('automations'), findsOneWidget);
+    expect(markOf('youtube-transcript'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('skill-youtube-transcript')),
+        matching: find.byIcon(Icons.folder_outlined),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the section follows the host source, never the skill name',
+      (tester) async {
+    // youtube-transcript is seeded from the repository, but it is a workspace
+    // skill: the host says so, and the page must not second-guess a name.
+    await pump(tester);
+    controller.emit(CoworkRelaySkillsList(skills: [
+      _skill('youtube-transcript'),
+    ]));
+    await tester.pump();
+
+    expect(find.text('Workspace'), findsOneWidget);
+    expect(find.text('Built in'), findsNothing);
   });
 
   testWidgets('a switch sends skill_control and the reply settles the row',

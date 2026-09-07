@@ -4,6 +4,7 @@ import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/services/skills/cowork_skill.dart';
 import 'package:cowork/services/skills/skills_source.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:cowork/widgets/settings_list_view.dart';
 
 /// The host's skills, one switch each (docs/WIRE_CONTRACT.md, "Skills").
 ///
@@ -13,6 +14,12 @@ import 'package:cowork/widgets/expressive_settings.dart';
 /// `skill_control`, and the host's reply redraws the row. A skill switched
 /// off stays on the host but the coworker does not get it from its next task
 /// on.
+///
+/// The two sections are the host's `source` field, never a name this page
+/// knows: `builtin` is a skill that documents CoWork's own machinery and ships
+/// with the app (the repository's `skills/builtin/`), `workspace` is any other
+/// file under the coworker's `skills/` — including the ones seeded from
+/// `skills/workspace/`, which belong to the coworker from the first minute.
 class SkillsSettingsPage extends StatefulWidget {
   const SkillsSettingsPage({super.key, SkillsSource? source})
       : _injectedSource = source;
@@ -89,8 +96,12 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: ListView(
+        // The house scroll container for a settings page: it lays every row
+        // out up front, so the scrollbar does not resize while you scroll —
+        // and the second section exists even before you reach it.
+        child: SettingsListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             ExpressiveTitle(
               title,
@@ -133,6 +144,14 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
               ),
             if (builtin.isNotEmpty) ...[
               ExpressiveSectionHeader(l?.skillsBuiltin ?? 'Built in'),
+              const ExpressiveInfoCard(
+                icon: Icons.verified_outlined,
+                text: 'The CoWork host\'s own. Each one explains a part of '
+                    'the app the coworker works with — schedules, the secrets '
+                    'vault, the sandbox terminal, the workspace itself. They '
+                    'ship with the host and come back with every update.',
+              ),
+              const SizedBox(height: 10),
               ExpressiveGroup(
                 children: [
                   for (final skill in builtin) _row(skill),
@@ -141,6 +160,14 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
             ],
             if (workspace.isNotEmpty) ...[
               const ExpressiveSectionHeader('Workspace'),
+              const ExpressiveInfoCard(
+                icon: Icons.folder_outlined,
+                text: 'Files in the coworker\'s workspace, under skills/. Your '
+                    'coworker or you put them there, and either of you can '
+                    'edit or delete them. A few come with a new workspace to '
+                    'start you off — those are yours too.',
+              ),
+              const SizedBox(height: 10),
               ExpressiveGroup(
                 children: [
                   for (final skill in workspace) _row(skill),
@@ -149,10 +176,8 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
             ],
             const SizedBox(height: 8),
             const ExpressiveInfoCard(
-              text: 'Switching a skill off keeps it on the host; the coworker '
-                  'stops getting it from its next task on. Built-in skills '
-                  'ship with CoWork, workspace skills are the ones your '
-                  'coworker or you put into the workspace.',
+              text: 'Switching a skill off keeps the file where it is; the '
+                  'coworker stops getting it from its next task on.',
             ),
           ],
         ),
