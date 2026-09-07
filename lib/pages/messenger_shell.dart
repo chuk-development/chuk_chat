@@ -58,6 +58,7 @@ import 'package:cowork/model_selector_page.dart';
 import 'package:cowork/models/app_shell_config.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/cowork_room.dart';
+import 'package:cowork/pages/about_page.dart';
 import 'package:cowork/pages/desktop_settings_modal.dart';
 import 'package:cowork/pages/settings_page.dart';
 import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';

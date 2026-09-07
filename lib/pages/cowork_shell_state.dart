@@ -249,8 +249,10 @@ mixin CoworkShellHost on State<MessengerShell> {
 
   String _threadLabel(String threadKey) {
     final String? agentId = _agentIdForThread(threadKey);
-    if (agentId == null) return 'CoWork';
-    return _roster.byId(agentId)?.name ?? 'CoWork';
+    // The product name, not the mode's: this is what a notification says when
+    // no coworker can be resolved for the thread.
+    if (agentId == null) return AboutPage.appName;
+    return _roster.byId(agentId)?.name ?? AboutPage.appName;
   }
 
   /// Opens the thread a notification named. Selecting it is enough: the
