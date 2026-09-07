@@ -218,7 +218,12 @@ def test_an_automation_run_names_the_automation_never_the_codename(tmp_path):
     )
     summary = _finished_run(tmp_path)
     summary["origin"], summary["automation_id"] = "automation", "a1"
-    assert notifier.notify_run_finished(summary) is True
+    try:
+        assert notifier.notify_run_finished(summary) is True
+    finally:
+        # close() clears the process-wide coworker-name provider; leaving it
+        # installed would let this test name the coworker in the next one.
+        notifier.close()
 
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["title"] == "Nova: Wahlradar LT Sachsen-Anhalt 2026"
@@ -229,7 +234,10 @@ def test_an_automation_run_names_the_automation_never_the_codename(tmp_path):
 def test_a_run_with_no_names_stays_generic_rather_than_codenamed(tmp_path):
     cloud = _Cloud()
     notifier = _notifier(tmp_path, cloud, _session(cloud))
-    notifier.notify_run_finished(_finished_run(tmp_path))
+    try:
+        notifier.notify_run_finished(_finished_run(tmp_path))
+    finally:
+        notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["title"] == "Your coworker"
     assert "Ada" not in row["title"]
@@ -256,6 +264,9 @@ def test_an_approval_names_the_coworker(tmp_path):
     cloud = _Cloud()
     _named_coworker(tmp_path, "Nova")
     notifier = _notifier(tmp_path, cloud, _session(cloud))
-    notifier.notify_approval_pending({"request_id": "req-1"})
+    try:
+        notifier.notify_approval_pending({"request_id": "req-1"})
+    finally:
+        notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["title"] == "Nova needs your approval" and row["kind"] == "approval_needed"

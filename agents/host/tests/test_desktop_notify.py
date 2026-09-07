@@ -113,7 +113,10 @@ def test_gdbus_passes_the_icon_in_the_notify_signature():
     assert argv[argv.index("t") - 1] == "/opt/cowork/logo.png"
 
 
-def test_the_packaged_icon_ships_with_the_host():
+def test_the_packaged_icon_ships_with_the_host(monkeypatch):
+    # The override wins over the packaged file, so a value left in the shell
+    # or the CI image would fail this test for the wrong reason.
+    monkeypatch.delenv("COWORK_NOTIFY_ICON", raising=False)
     assert PACKAGED_ICON.is_file()
     assert icon_path() == str(PACKAGED_ICON)
 
