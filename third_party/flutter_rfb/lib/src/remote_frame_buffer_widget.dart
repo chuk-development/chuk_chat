@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_rfb/src/child_size_notifier_widget.dart';
 import 'package:flutter_rfb/src/extensions/logical_keyboard_key_extensions.dart';
 import 'package:flutter_rfb/src/remote_frame_buffer_client_isolate.dart';
+import 'package:flutter_rfb/src/remote_frame_buffer_controller.dart';
 import 'package:flutter_rfb/src/remote_frame_buffer_gesture_detector.dart';
 import 'package:flutter_rfb/src/remote_frame_buffer_isolate_messages.dart';
 import 'package:fpdart/fpdart.dart' hide State;
@@ -28,6 +29,15 @@ class RemoteFrameBufferWidget extends StatefulWidget {
   final Option<String> _password;
   final int _port;
 
+  /// CoWork fork: an optional handle onto the RFB isolate so app-side UI (the
+  /// mobile trackpad overlay) can drive the pointer in remote coordinates.
+  final RemoteFrameBufferController? _controller;
+
+  /// CoWork fork: when false, the widget stops mapping local taps and wheel to
+  /// remote input itself. The mobile overlay sets this so touch is owned solely
+  /// by its virtual cursor; on desktop it stays true (normal mouse behaviour).
+  final bool _enableBuiltInPointerInput;
+
   /// Immediately tries to establish a connection to a remote server at
   /// [hostName]:[port], optionally using [password].
   RemoteFrameBufferWidget({
@@ -37,11 +47,15 @@ class RemoteFrameBufferWidget extends StatefulWidget {
     final void Function(Object error)? onError,
     final String? password,
     final int port = 5900,
+    final RemoteFrameBufferController? controller,
+    final bool enableBuiltInPointerInput = true,
   })  : _connectingWidget = optionOf(connectingWidget),
         _hostName = hostName,
         _onError = optionOf(onError),
         _password = optionOf(password),
-        _port = port;
+        _port = port,
+        _controller = controller,
+        _enableBuiltInPointerInput = enableBuiltInPointerInput;
 
   @override
   State<RemoteFrameBufferWidget> createState() =>
@@ -117,11 +131,21 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
   SizeTrackingWidget _buildImage({required final Image image}) =>
       SizeTrackingWidget(
         sizeValueNotifier: _sizeValueNotifier,
+        // CoWork fork: on mobile the trackpad overlay owns all touch input, so
+        // the built-in local-tap and wheel mapping is switched off to avoid a
+        // finger firing an absolute tap AND a cursor move. The framebuffer is
+        // still measured for the overlay's own coordinate maths.
+        child: widget._enableBuiltInPointerInput
+            ? _buildInteractiveImage(image: image)
+            : RawImage(image: image),
+      );
+
+  Widget _buildInteractiveImage({required final Image image}) =>
         // CoWork fork: mouse-wheel / trackpad scroll. Upstream only forwards
         // taps, so a page in the agent's browser could not be scrolled from
         // the app. RFB carries wheel as pointer buttons 4/5 (vertical) and
         // 6/7 (horizontal), pressed and released at the pointer position.
-        child: Listener(
+        Listener(
           onPointerSignal: (final PointerSignalEvent event) {
             if (event is! PointerScrollEvent) {
               return;
@@ -180,8 +204,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
             sendPort: _isolateSendPort,
             child: RawImage(image: image),
           ),
-        ),
-      );
+        );
 
   /// The size input coordinates are relative to: the measured child size, or
   /// the image's own size while the measurement has not landed yet.
@@ -233,6 +256,16 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
           'Received new update message with ${update.update.rectangles.length} rectangles',
         );
         _isolateSendPort = some(update.sendPort);
+        // CoWork fork: hand the isolate port and the current framebuffer size
+        // to the app-side controller so the mobile trackpad overlay can drive
+        // the pointer. Cheap and idempotent; only notifies on a real change.
+        widget._controller?.attach(
+          sendPort: update.sendPort,
+          size: Size(
+            update.frameBufferWidth.toDouble(),
+            update.frameBufferHeight.toDouble(),
+          ),
+        );
         if (_frameBuffer.isNone()) {
           _frameBuffer = some(
             ByteData(
