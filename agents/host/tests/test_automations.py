@@ -659,3 +659,64 @@ def test_pep723_watcher_uses_uv_and_receives_repeatable_hook(tmp_path):
         assert len(host.fired) == 2
     finally:
         manager.stop()
+
+
+def test_an_exited_runner_never_leaves_the_monitor_running(tmp_path):
+    """The tracked process is not always the monitor: a PEP 723 script runs
+    under ``uv run --script``, so ``proc`` is uv and the script is its child.
+    When the handle dies first, the script must die with it. An orphan keeps
+    appending triggers under a row the host has closed, every report is then
+    dropped, and from outside it looks exactly like "the automation does not
+    fire any more"."""
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock)
+    (tmp_path / "ws" / "runner.py").write_text(
+        "import subprocess, sys\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+        "print('monitor', p.pid, flush=True)\n"
+        "sys.exit(0)\n"
+    )
+    out = manager.start_watcher("s1", "runner.py", None, True)
+    log = tmp_path / "ws" / out["log_path"]
+    assert _wait(lambda: log.exists() and "monitor" in log.read_text())
+    pid = int([l for l in log.read_text().splitlines() if l.startswith("monitor")][0].split()[1])
+    try:
+        assert _wait(lambda: (manager.run_watchdog_once(), manager.store.get(out["id"])["state"] == "done")[1])
+        assert _wait(lambda: not Path(f"/proc/{pid}").exists())
+    finally:
+        manager.stop()
+
+
+def test_a_report_for_a_closed_row_is_recorded_not_swallowed(tmp_path):
+    """A trigger line that the host will not act on says so on the row. A
+    silently dropped report is unreadable from the app: the script works, the
+    line is written, and nothing happens."""
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock)
+    row = manager.store.create(
+        session_key="s1", kind="watcher", name="w",
+        spec={"script_path": "w.py"}, prompt="", next_fire_at=None,
+    )
+    manager.store.update(row["id"], state="paused")
+    path = manager.triggers_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"automation_id": row["id"], "reason": "seen"}) + "\n")
+    assert manager.run_watchdog_once() == 0
+    assert host.fired == []
+    assert "paused" in (manager.store.get(row["id"])["last_error"] or "")
+
+
+def test_a_pep723_script_falls_back_to_the_interpreter_without_uv(tmp_path, monkeypatch):
+    """No uv on the host means the watcher runs on python, not a crash loop
+    into ``failed``."""
+    import cowork_host.automations as automations_module
+
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock)
+    monkeypatch.setattr(automations_module.shutil, "which", lambda _name: None)
+    assert manager._runner(True, None) == [manager._python]
+    monkeypatch.setattr(automations_module.shutil, "which", lambda _name: "/usr/bin/uv")
+    manager._uv_available.clear()
+    assert manager._runner(True, None) == ["uv", "run", "--script"]
+    manager._uv_available.clear()
+    assert manager._runner(False, None) == [manager._python]

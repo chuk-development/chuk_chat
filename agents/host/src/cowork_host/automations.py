@@ -282,6 +282,12 @@ class _Watcher:
     proc: subprocess.Popen | None = None
     log: Any = None
     script_path: str = ""
+    # The process GROUP of the last child. The tracked process is not always
+    # the monitor: a PEP 723 script runs under ``uv run --script``, so ``proc``
+    # is uv and the script is its child. Reaping uv would leave the monitor
+    # running, orphaned, still appending triggers for a row the host has
+    # closed - and every one of those reports is then dropped.
+    pgid: int | None = None
     crashes: deque = field(default_factory=lambda: deque(maxlen=CRASH_LIMIT + 1))
     restarts: int = 0
     restart_at: float | None = None
@@ -351,6 +357,8 @@ class AutomationManager:
         # watchdog thread. Unknown kinds are dropped.
         self._consumers: dict[str, Callable[[dict], None]] = {"automation": self._accept_trigger}
         self._unprovisioned_logged: set[str] = set()
+        # Whether uv exists here (key: container id, "" for a local sandbox).
+        self._uv_available: dict[str, bool] = {}
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -629,7 +637,21 @@ class AutomationManager:
         if not isinstance(automation_id, str):
             return
         row = self.store.get(automation_id)
-        if row is None or row["kind"] != KIND_WATCHER or row["state"] != STATE_ACTIVE:
+        if row is None:
+            self._log(f"[automations] report for unknown automation {automation_id}; dropped")
+            return
+        if row["kind"] != KIND_WATCHER or row["state"] != STATE_ACTIVE:
+            # Never drop a report in silence. A watcher that keeps reporting
+            # under a closed or paused row is exactly what "the automation does
+            # not fire any more" looks like from outside: the script works, the
+            # line is written, and nothing happens. Say so on the row.
+            self._log(
+                f"[automations] report from {automation_id} ignored: the row is "
+                f"{row['state']}"
+            )
+            self.store.update(
+                automation_id, last_error=f"a report arrived while this automation was {row['state']}"
+            )
             return
         reason = str(record.get("reason") or "")[:500]
         payload = cap_payload(record.get("payload"))
@@ -723,6 +745,8 @@ class AutomationManager:
                 continue
             if proc is not None:
                 code = proc.returncode
+                # The handle is dead; nothing it started may outlive it.
+                self._reap(watcher)
                 if code == 0:
                     # The child may have appended its final trigger after this
                     # tick's initial read. Once exit is observed, drain those
@@ -778,6 +802,10 @@ class AutomationManager:
             if watcher is None:
                 watcher = _Watcher(automation_id=row["id"])
                 self._watchers[row["id"]] = watcher
+        # A dead handle can still own a live tree (uv exits, the script does
+        # not). Two children of one watcher fight over the same state, and the
+        # one the host does not know about reports under a row nobody reads.
+        self._reap(watcher)
         if self._estop_engaged():
             self._log(f"[automations] ESTOP engaged: watcher {row['id']} waits")
             return True
@@ -809,8 +837,8 @@ class AutomationManager:
             # resolves its cached environment; bare scripts keep the old runner.
             with (self._workspace / script).open('rb') as source:
                 has_metadata = b'# /// script' in source.read(8192)
-            runner = ['uv', 'run', '--script'] if has_metadata else [self._python]
             docker = self._docker_target()
+            runner = self._runner(has_metadata, docker)
             if docker is not None:
                 prefix, cid = docker
                 watcher.docker_prefix, watcher.docker_cid = prefix, cid
@@ -838,6 +866,12 @@ class AutomationManager:
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+            # ``start_new_session=True`` makes the child its own group leader,
+            # so its pid IS the group. Read it from the handle, not from
+            # ``os.getpgid``: a script that exits at once is already gone by
+            # the time the call is made, and the group would be forgotten with
+            # its children still running.
+            watcher.pgid = watcher.proc.pid
         except Exception as exc:  # noqa: BLE001 — a bad script must not take the host down
             self._close_log(watcher)
             self.store.update(row["id"], state=STATE_FAILED, last_error=f"cannot start: {type(exc).__name__}: {exc}")
@@ -871,6 +905,92 @@ class AutomationManager:
         if user:
             prefix += ["-u", str(user)]
         return prefix, str(cid)
+
+    def _runner(self, has_metadata: bool, docker: tuple[list[str], str] | None) -> list[str]:
+        """The argv prefix that starts a watcher script. ``uv run --script``
+        resolves a PEP 723 header's dependencies, but only where uv exists: on
+        a host (or in an image) without it every launch would exit non-zero and
+        the watcher would crash-loop into ``failed`` instead of reporting. No
+        uv, plain interpreter."""
+        if not has_metadata:
+            return [self._python]
+        if self._have_uv(docker):
+            return ["uv", "run", "--script"]
+        self._log(f"[automations] uv is not available; running the script on {self._python}")
+        return [self._python]
+
+    def _have_uv(self, docker: tuple[list[str], str] | None) -> bool:
+        """Whether uv can be run here. Probed once per sandbox."""
+        key = docker[1] if docker is not None else ""
+        with self._lock:
+            known = self._uv_available.get(key)
+        if known is not None:
+            return known
+        if docker is None:
+            found = shutil.which("uv") is not None
+        else:
+            prefix, cid = docker
+            try:
+                found = (
+                    subprocess.run(
+                        [*prefix, cid, "sh", "-c", "command -v uv"],
+                        check=False,
+                        timeout=10,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    ).returncode
+                    == 0
+                )
+            except Exception:  # noqa: BLE001 — no probe, no uv
+                found = False
+        with self._lock:
+            self._uv_available[key] = found
+        return found
+
+    def _reap(self, watcher: _Watcher) -> None:
+        """The tracked child has exited. Make sure nothing of that watcher is
+        still running before the handle is dropped.
+
+        ``proc`` is not always the monitor: a PEP 723 script runs under ``uv
+        run --script``, so the tracked process is uv and the script is its
+        child. When uv goes away first the monitor keeps running with no
+        supervisor — it goes on appending trigger lines under an id whose row
+        the host may already have closed, and every one of those reports is
+        then dropped without a trace. One orphan is one silently dead
+        automation."""
+        pgid = watcher.pgid
+        watcher.pgid = None
+        if pgid is not None and pgid != os.getpgid(0):
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pgid = None
+            if pgid is not None:
+                deadline = time.monotonic() + KILL_GRACE_SECONDS
+                while time.monotonic() < deadline:
+                    try:
+                        os.killpg(pgid, 0)
+                    except OSError:
+                        break
+                    time.sleep(0.05)
+                else:
+                    try:
+                        os.killpg(pgid, signal.SIGKILL)
+                    except OSError:
+                        pass
+        if watcher.docker_prefix and watcher.docker_cid and watcher.script_path:
+            # The same story inside a container: the exec client is gone, the
+            # tree it started is not.
+            try:
+                subprocess.run(
+                    [*watcher.docker_prefix, watcher.docker_cid, "pkill", "-f", watcher.script_path],
+                    check=False,
+                    timeout=10,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     def _stop_watcher(self, automation_id: str) -> None:
         with self._lock:
@@ -912,6 +1032,7 @@ class AutomationManager:
                     )
                 except Exception:  # noqa: BLE001
                     pass
+        watcher.pgid = None
         self._close_log(watcher)
 
     @staticmethod
