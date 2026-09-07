@@ -729,6 +729,53 @@ class CoworkRelaySkillsList extends CoworkRelayInbound {
   }
 }
 
+/// What one coworker runs on, has spent and how long it has worked
+/// (docs/WIRE_CONTRACT.md, "Agent status"; bead cowork-6ag).
+///
+/// Every block is nullable on purpose: the host sends a block only for a figure
+/// it **measured**. A missing block is "nothing measured yet", which is not the
+/// same as zero, and the panel must be able to tell them apart.
+@immutable
+class CoworkRelayAgentStatus {
+  const CoworkRelayAgentStatus({
+    required this.sessionKey,
+    this.model,
+    this.tokens,
+    this.runtime,
+    this.sandbox,
+  });
+
+  final String sessionKey;
+
+  /// `{id, provider?, reasoning_effort?, source}`.
+  final Map<String, dynamic>? model;
+
+  /// `{total, runs, last_run}`.
+  final Map<String, dynamic>? tokens;
+
+  /// `{started_at, active_seconds, runs, running, current_seconds?}`.
+  final Map<String, dynamic>? runtime;
+
+  /// `{kind, container?, container_id?, workspace?}`.
+  final Map<String, dynamic>? sandbox;
+
+  static Map<String, dynamic>? _block(Object? value) {
+    if (value is! Map) return null;
+    return value.map((k, v) => MapEntry('$k', v));
+  }
+
+  static CoworkRelayAgentStatus fromPayload(Map<String, dynamic> payload) {
+    final key = payload['session_key'];
+    return CoworkRelayAgentStatus(
+      sessionKey: key is String ? key : 'default',
+      model: _block(payload['model']),
+      tokens: _block(payload['tokens']),
+      runtime: _block(payload['runtime']),
+      sandbox: _block(payload['sandbox']),
+    );
+  }
+}
+
 /// One coworker name the host keeps for this pairing (bead cowork-817,
 /// WIRE_CONTRACT "Coworker names"). [host] marks the coworker that runs on
 /// the host itself; its [agentId] is `host:<device_id>`.
@@ -1242,12 +1289,26 @@ abstract interface class CoworkDocumentsControl {
   Future<void> requestDocuments(String sessionKey, {String? id});
 }
 
+/// Asks the host what a coworker runs on and what it has spent
+/// (docs/WIRE_CONTRACT.md, "Agent status"). Answered with one
+/// [CoworkRelayAgentStatus] on `inbound`.
+abstract interface class CoworkAgentStatusControl {
+  Future<void> requestAgentStatus(String sessionKey);
+
+  /// The host's answers, and the push it sends when a run of that coworker
+  /// ends. Its own stream, not `inbound`: [CoworkRelayInbound] is sealed and
+  /// every exhaustive switch over it would have to grow a case for a frame
+  /// that only the control panel reads.
+  Stream<CoworkRelayAgentStatus> get agentStatus;
+}
+
 class CoworkRelayClient
     implements
         CoworkRelayController,
         ExecutorTransport,
         CoworkAutomationControl,
         CoworkDocumentsControl,
+        CoworkAgentStatusControl,
         CoworkSkillsControl {
   CoworkRelayClient({
     required String deviceId,
@@ -1489,6 +1550,12 @@ class CoworkRelayClient
 
   @override
   Stream<CoworkRelayInbound> get inbound => _inbound.stream;
+
+  final StreamController<CoworkRelayAgentStatus> _agentStatus =
+      StreamController<CoworkRelayAgentStatus>.broadcast();
+
+  @override
+  Stream<CoworkRelayAgentStatus> get agentStatus => _agentStatus.stream;
 
   @override
   CoworkStoredPairing? get establishedTrust => _establishedTrust;
@@ -2119,6 +2186,15 @@ class CoworkRelayClient
       _sendFramePayload(<String, dynamic>{'type': 'skills_list'});
 
   @override
+  Future<void> requestAgentStatus(String sessionKey) =>
+      // Answered with one terminal `agent_status` frame, like a skills list
+      // (docs/WIRE_CONTRACT.md, "Agent status").
+      _sendFramePayload(<String, dynamic>{
+        'type': 'agent_status',
+        'session_key': sessionKey,
+      });
+
+  @override
   Future<void> requestDocuments(String sessionKey, {String? id}) =>
       _sendFramePayload(<String, dynamic>{
         'type': id == null ? 'documents_list' : 'document_read',
@@ -2159,6 +2235,7 @@ class CoworkRelayClient
     await _socket?.close();
     _socket = null;
     if (!_inbound.isClosed) await _inbound.close();
+    if (!_agentStatus.isClosed) await _agentStatus.close();
     _state.dispose();
   }
 
@@ -2356,6 +2433,10 @@ class CoworkRelayClient
         _inbound.add(CoworkRelayDocuments(payload));
       case 'skills_list':
         _inbound.add(CoworkRelaySkillsList.fromPayload(payload));
+      case 'agent_status':
+        if (!_agentStatus.isClosed) {
+          _agentStatus.add(CoworkRelayAgentStatus.fromPayload(payload));
+        }
       case 'agent_list':
         _inbound.add(CoworkRelayAgentList.fromPayload(payload));
       case 'run_state':

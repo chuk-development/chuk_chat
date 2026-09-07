@@ -4,17 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/services/cowork/schedule_spec.dart';
 import 'package:cowork/widgets/agent_control_panel.dart';
 
-CoworkAgent _agent({ScheduleSpec? schedule, bool onHost = true}) => CoworkAgent(
+CoworkAgent _agent({bool onHost = true}) => CoworkAgent(
       id: 'host:cowork-host',
       name: 'cowork-host',
       onHost: onHost,
       brief: onHost ? null : 'weekly crypto news',
-      schedule: schedule,
       threads: const <CoworkThreadInfo>[
-        CoworkThreadInfo(key: 'default', title: 'General'),
+        CoworkThreadInfo(key: 'host:cowork-host', title: 'General'),
       ],
     );
 
@@ -22,73 +20,112 @@ Future<void> _pump(
   WidgetTester tester,
   AgentControlSource source, {
   CoworkAgent? agent,
-  void Function(ScheduleSpec spec)? onScheduleSubmitted,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: AgentControlPanel(
-          agent: agent ?? _agent(),
-          source: source,
-          onScheduleSubmitted: onScheduleSubmitted,
-        ),
+        body: AgentControlPanel(agent: agent ?? _agent(), source: source),
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
+const _fullSnapshot = AgentControlSnapshot(
+  model: ControlAvailable<AgentModelChoice>(
+    AgentModelChoice(
+      id: 'anthropic/claude-sonnet',
+      provider: 'anthropic',
+      reasoningEffort: 'low',
+    ),
+  ),
+  tokens: ControlAvailable<AgentTokenUsage>(
+    AgentTokenUsage(total: 1234567, runs: 3, lastRun: 4321),
+  ),
+  runtime: ControlAvailable<AgentSessionRuntime>(
+    AgentSessionRuntime(
+      active: Duration(minutes: 4, seconds: 2),
+      runs: 3,
+      running: false,
+    ),
+  ),
+  sandbox: ControlAvailable<AgentSandbox>(
+    AgentSandbox(
+      kind: 'docker',
+      container: 'cowork-amber-0a1b2c3d',
+      containerId: 'deadbeef0011',
+      workspace: '/home/u/.cowork/agents/amber',
+    ),
+  ),
+  skills: ControlAvailable<List<AgentSkill>>(<AgentSkill>[
+    AgentSkill(name: 'deep-research', description: 'reads the web', enabled: true),
+  ]),
+);
+
 void main() {
-  testWidgets('what the host does not report reads as not connected, never a zero',
+  testWidgets('what the host does not report says so, never a zero',
       (tester) async {
-    final source = HostUnavailableControlSource();
+    final source = FakeAgentControlSource(
+      initial: const AgentControlSnapshot(
+        model: ControlUnavailable<AgentModelChoice>('It has not run yet.'),
+        tokens: ControlUnavailable<AgentTokenUsage>('It has not run yet.'),
+        runtime: ControlUnavailable<AgentSessionRuntime>('It has not run yet.'),
+        sandbox: ControlUnavailable<AgentSandbox>('It has not run yet.'),
+        skills: ControlUnavailable<List<AgentSkill>>('It has not run yet.'),
+      ),
+    );
     addTearDown(source.dispose);
     await _pump(tester, source);
 
-    // Every block: model, tokens, runtime, schedule, skills, integrations.
-    expect(find.text('Not connected yet'), findsNWidgets(6));
-    expect(
-      find.text('The host does not report this yet.'),
-      findsNWidgets(6),
-    );
+    expect(find.text('It has not run yet.'), findsNWidgets(5));
     // Crucially: no invented numbers anywhere.
     expect(find.textContaining('0 tokens'), findsNothing);
     expect(find.textContaining('0s'), findsNothing);
     expect(find.text('No skills.'), findsNothing);
   });
 
-  testWidgets('real values are shown when the source has them', (tester) async {
+  testWidgets('the panel asks the host about the coworker it shows',
+      (tester) async {
+    final source = FakeAgentControlSource();
+    addTearDown(source.dispose);
+    await _pump(tester, source);
+
+    expect(source.refreshed, <String>['host:cowork-host']);
+  });
+
+  testWidgets('measured figures are shown as measured', (tester) async {
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
+    addTearDown(source.dispose);
+    await _pump(tester, source);
+
+    expect(find.text('anthropic/claude-sonnet'), findsOneWidget);
+    expect(find.text('anthropic · low'), findsOneWidget);
+    expect(find.text('1 234 567 tokens'), findsOneWidget);
+    expect(find.text('4 321 in the last run · 3 runs'), findsOneWidget);
+    expect(find.text('4m 02s working'), findsOneWidget);
+    expect(find.text('deep-research'), findsOneWidget);
+  });
+
+  testWidgets('the sandbox block names the coworker s own container',
+      (tester) async {
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
+    addTearDown(source.dispose);
+    await _pump(tester, source);
+
+    expect(find.text('Its own container'), findsOneWidget);
+    expect(find.text('cowork-amber-0a1b2c3d · deadbeef0011'), findsOneWidget);
+    expect(find.text('/home/u/.cowork/agents/amber'), findsOneWidget);
+  });
+
+  testWidgets('a live run is called out while it runs', (tester) async {
     final source = FakeAgentControlSource(
-      initial: AgentControlSnapshot(
-        skills: const ControlAvailable<List<AgentSkill>>(<AgentSkill>[
-          AgentSkill(
-            name: 'deep-research',
-            description: 'multi-source research',
-            enabled: false,
-          ),
-        ]),
-        integrations: const ControlAvailable<List<AgentIntegration>>(
-          <AgentIntegration>[
-            AgentIntegration(name: 'GitHub', connected: true, account: 'chuk'),
-          ],
-        ),
-        model: const ControlAvailable<AgentModelChoice>(
-          AgentModelChoice(
-            selectedId: 'qwen/qwen3.6-35b-a3b',
-            available: <String>['qwen/qwen3.6-35b-a3b', 'qwen/qwen3.5-397b-a17b'],
-          ),
-        ),
-        tokens: const ControlAvailable<AgentTokenUsage>(
-          AgentTokenUsage(promptTokens: 1200, completionTokens: 300),
-        ),
-        sessionRuntime: const ControlAvailable<Duration>(
-          Duration(minutes: 4, seconds: 12),
-        ),
-        schedule: ControlAvailable<AgentSchedule>(
-          AgentSchedule(
-            source: '0 9 * * *',
-            description: 'cron: 0 9 * * *',
-            nextRuns: <DateTime>[DateTime(2026, 8, 14, 9)],
+      initial: const AgentControlSnapshot(
+        runtime: ControlAvailable<AgentSessionRuntime>(
+          AgentSessionRuntime(
+            active: Duration(seconds: 30),
+            runs: 2,
+            running: true,
+            current: Duration(seconds: 9),
           ),
         ),
       ),
@@ -96,118 +133,22 @@ void main() {
     addTearDown(source.dispose);
     await _pump(tester, source);
 
-    expect(find.text('1500 tokens'), findsOneWidget);
-    expect(find.text('1200 in · 300 out'), findsOneWidget);
-    expect(find.text('4m 12s'), findsOneWidget);
-    expect(find.text('cron: 0 9 * * *'), findsOneWidget);
-    expect(find.text('2026-08-14 09:00'), findsOneWidget);
-    expect(find.text('deep-research'), findsOneWidget);
-    expect(find.text('GitHub'), findsOneWidget);
-    expect(find.text('Disconnect'), findsOneWidget);
-    expect(find.text('Not connected yet'), findsNothing);
-    expect(source.refreshCalls, 1);
+    expect(find.text('Running now, 9s into this run.'), findsOneWidget);
   });
 
-  testWidgets('a skill toggle and an integration button reach the source',
-      (tester) async {
-    final source = FakeAgentControlSource(
-      initial: const AgentControlSnapshot(
-        skills: ControlAvailable<List<AgentSkill>>(<AgentSkill>[
-          AgentSkill(name: 'deep-research', description: 'x', enabled: false),
-        ]),
-        integrations: ControlAvailable<List<AgentIntegration>>(
-          <AgentIntegration>[AgentIntegration(name: 'GitHub', connected: false)],
-        ),
-      ),
-    );
+  testWidgets('a skill switch reaches the host', (tester) async {
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
     addTearDown(source.dispose);
     await _pump(tester, source);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    expect(source.snapshot.value.skills.valueOrNull!.single.enabled, isTrue);
 
-    await tester.tap(find.text('Connect'));
-    await tester.pumpAndSettle();
-    expect(source.snapshot.value.integrations.valueOrNull!.single.connected, isTrue);
-    expect(find.text('Disconnect'), findsOneWidget);
-  });
-
-  testWidgets('picking another model reaches the source', (tester) async {
-    final source = FakeAgentControlSource(
-      initial: const AgentControlSnapshot(
-        model: ControlAvailable<AgentModelChoice>(
-          AgentModelChoice(
-            selectedId: 'a',
-            available: <String>['a', 'b'],
-          ),
-        ),
-      ),
-    );
-    addTearDown(source.dispose);
-    await _pump(tester, source);
-
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('b').last);
-    await tester.pumpAndSettle();
-
-    expect(source.selectedModels, <String>['b']);
-  });
-
-  testWidgets('a schedule the user set in the app is shown as not installed',
-      (tester) async {
-    final source = HostUnavailableControlSource();
-    addTearDown(source.dispose);
-    await _pump(
-      tester,
-      source,
-      agent: _agent(onHost: false, schedule: ScheduleSpec.parse('every 30m')),
-    );
-
-    expect(find.textContaining('every 30 minutes'), findsOneWidget);
-    expect(find.text('Set in the app. The host does not run it yet.'),
-        findsOneWidget);
-    expect(find.text('Next runs'), findsOneWidget);
-    // The agent itself is flagged as not installed either.
-    expect(
-      find.text('Created in the app. It is not installed on the host yet.'),
-      findsOneWidget,
-    );
-    // One block fewer says "not connected": the schedule speaks for itself.
-    expect(find.text('Not connected yet'), findsNWidgets(5));
-  });
-
-  testWidgets('junk in the schedule field is refused with a message',
-      (tester) async {
-    final source = HostUnavailableControlSource();
-    addTearDown(source.dispose);
-    final submitted = <ScheduleSpec>[];
-    await _pump(tester, source, onScheduleSubmitted: submitted.add);
-
-    await tester.enterText(find.byType(TextField), 'banana');
-    await tester.tap(find.widgetWithText(FilledButton, 'Set'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Not a schedule this app understands.'), findsOneWidget);
-    expect(submitted, isEmpty);
-
-    await tester.enterText(find.byType(TextField), 'every 15m');
-    await tester.tap(find.widgetWithText(FilledButton, 'Set'));
-    await tester.pumpAndSettle();
-
-    expect(submitted.single.source, 'every 15m');
-    expect(find.text('Not a schedule this app understands.'), findsNothing);
+    expect(source.skillSwitches, <String>['deep-research=false']);
   });
 
   testWidgets('a refused mutation is reported, not swallowed', (tester) async {
-    final source = FakeAgentControlSource(
-      initial: const AgentControlSnapshot(
-        skills: ControlAvailable<List<AgentSkill>>(<AgentSkill>[
-          AgentSkill(name: 'deep-research', description: 'x', enabled: false),
-        ]),
-      ),
-    );
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
     addTearDown(source.dispose);
     final failing = _ThrowingControlSource(source);
     await _pump(tester, failing);
@@ -218,6 +159,33 @@ void main() {
     expect(find.textContaining('the host said no'), findsOneWidget);
   });
 
+  testWidgets('an agent the host does not know says so', (tester) async {
+    final source = FakeAgentControlSource();
+    addTearDown(source.dispose);
+    await _pump(tester, source, agent: _agent(onHost: false));
+
+    expect(
+      find.text('Created in the app. It is not installed on the host yet.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the panel shows the agent role', (tester) async {
+    final source = FakeAgentControlSource();
+    addTearDown(source.dispose);
+    final agent = CoworkAgent(
+      id: 'local:amber',
+      name: 'amber-otter',
+      role: 'researcher',
+      threads: const <CoworkThreadInfo>[
+        CoworkThreadInfo(key: 'local:amber', title: 'General'),
+      ],
+    );
+    await _pump(tester, source, agent: agent);
+    expect(find.text('researcher'), findsOneWidget);
+    expect(source.refreshed, <String>['local:amber']);
+  });
+
   group('formatRuntime', () {
     test('reads plainly at every scale', () {
       expect(formatRuntime(const Duration(seconds: 9)), '9s');
@@ -226,22 +194,14 @@ void main() {
     });
   });
 
-  testWidgets('the panel shows the agent role',
-      (tester) async {
-    final source = HostUnavailableControlSource();
-    final agent = CoworkAgent(
-      id: 'local:amber',
-      name: 'amber-otter',
-      role: 'researcher',
-      threads: const <CoworkThreadInfo>[
-        CoworkThreadInfo(key: 'a', title: 'General'),
-        CoworkThreadInfo(key: 'b', title: 'Side'),
-      ],
-    );
-    await _pump(tester, source, agent: agent);
-    expect(find.text('researcher'), findsOneWidget);
+  group('formatCount', () {
+    test('groups so a six-figure count is readable', () {
+      expect(formatCount(0), '0');
+      expect(formatCount(999), '999');
+      expect(formatCount(1234), '1 234');
+      expect(formatCount(1234567), '1 234 567');
+    });
   });
-
 }
 
 /// Wraps a source and refuses the skill toggle, to prove the failure surfaces.
@@ -250,10 +210,11 @@ class _ThrowingControlSource implements AgentControlSource {
   final AgentControlSource _inner;
 
   @override
-  ValueListenable<AgentControlSnapshot> get snapshot => _inner.snapshot;
+  ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey) =>
+      _inner.snapshotFor(sessionKey);
 
   @override
-  Future<void> refresh() => _inner.refresh();
+  Future<void> refresh(String sessionKey) => _inner.refresh(sessionKey);
 
   @override
   Future<void> setSkillEnabled(String skillName, {required bool enabled}) async {
@@ -261,15 +222,5 @@ class _ThrowingControlSource implements AgentControlSource {
   }
 
   @override
-  Future<void> setIntegrationConnected(String name, {required bool connected}) =>
-      _inner.setIntegrationConnected(name, connected: connected);
-
-  @override
-  Future<void> selectModel(String modelId) => _inner.selectModel(modelId);
-
-  @override
-  Future<void> setSchedule(String source) => _inner.setSchedule(source);
-
-  @override
-  void dispose() {}
+  void dispose() => _inner.dispose();
 }
