@@ -113,4 +113,54 @@ void main() {
     CoworkRelayLink.instance.bind(FakeRelayController());
     expect(await source.refresh(), isFalse);
   });
+
+  test('one row per automation: a restarted watcher folds into its live row', () {
+    CoworkAutomation watcher(String id, String state, double created) =>
+        CoworkAutomation.fromPayload(<String, dynamic>{
+          'id': id,
+          'session_key': 'thread-1',
+          'kind': 'watcher',
+          'name': 'Wahlradar',
+          'state': state,
+          'spec': {'script_path': 'monitor.py', 'restart': true},
+          'created_at': created,
+        })!;
+    controller.emit(CoworkRelayAutomationList(automations: [
+      watcher('old', 'done', 10),
+      watcher('live', 'active', 20),
+      automation('s1', created: 30),
+    ]));
+    expect(source.all.length, 3);
+    expect(source.distinct.map((a) => a.id), ['s1', 'live']);
+  });
+
+  test('two rows of one state keep the newest', () {
+    CoworkAutomation twin(String id, double created) =>
+        CoworkAutomation.fromPayload(<String, dynamic>{
+          'id': id,
+          'session_key': 'thread-1',
+          'kind': 'schedule',
+          'name': 'daily report',
+          'state': 'done',
+          'spec': {'every': 300},
+          'created_at': created,
+        })!;
+    controller.emit(CoworkRelayAutomationList(automations: [
+      twin('older', 10),
+      twin('newer', 20),
+    ]));
+    expect(source.distinct.map((a) => a.id), ['newer']);
+  });
+
+  test('a group is named the way the rest of the app names the coworker', () {
+    expect(source.coworkerName('local:brisk-heron:2:116636868'), 'brisk-heron');
+    expect(source.coworkerName('host:cowork-host'), 'cowork-host');
+    expect(source.coworkerName('default'), 'Default coworker');
+    expect(source.coworkerName('thread-1'), 'thread-1');
+    controller.emit(const CoworkRelayAgentList(agents: [
+      CoworkHostAgentName(agentId: 'host:cowork-host', name: 'Ivory Lynx', host: true),
+    ]));
+    expect(source.coworkerName('host:cowork-host'), 'Ivory Lynx');
+  });
 }
+
