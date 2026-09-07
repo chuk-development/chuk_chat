@@ -98,8 +98,10 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
     if (!_active) return;
     _active = false;
     _cycleToken++; // invalidate any in-flight scroll loop
-    _controller.stop();
+    // The post-frame callback still runs after dispose, and stopping a
+    // disposed controller throws — the guard belongs before the first touch.
     if (!mounted) return;
+    _controller.stop();
     _controller.animateBack(
       0,
       duration: const Duration(milliseconds: 220),
