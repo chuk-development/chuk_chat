@@ -84,6 +84,25 @@ mixin CoworkShellHost on State<MessengerShell> {
   String? _selectedAgentId;
   String _selectedThreadKey = 'default';
 
+  /// Where the last session left off. Written on every pick, read once at
+  /// startup. Two keys, not one: a thread is only meaningful with its coworker.
+  static const String _kLastAgentKey = 'cowork.last_agent_id';
+  static const String _kLastThreadKey = 'cowork.last_thread_key';
+
+  String? _restoredAgentId;
+  String? _restoredThreadKey;
+
+  /// Whether the remembered pick has been read off disk yet. Nothing is
+  /// auto-selected before it has: picking the first coworker and then jumping
+  /// to the remembered one a moment later is worse than opening a beat late.
+  bool _restoreLoaded = false;
+
+  /// Whether the current selection is the app's own choice rather than the
+  /// user's. Only an automatic selection may be replaced when the remembered
+  /// coworker finally arrives in the roster (the host sends its names after the
+  /// pairing, so it is not there on the first frame).
+  bool _selectionIsAuto = false;
+
   /// On a phone: the chat is in front of the inbox. Flipped by [_select], by
   /// the back chip, and cleared when the selected agent is deleted.
   bool _showThreadOnNarrow = false;
@@ -97,6 +116,12 @@ mixin CoworkShellHost on State<MessengerShell> {
 
   /// The `initState` half of the host. Called by the state after `super`.
   void _hostInit() {
+    // Open where the user left off. The roster fills in stages — nothing at
+    // first, the host coworker on pairing, the rest when the host sends its
+    // names — so the restore is not one shot at startup: it watches the roster
+    // and lands as soon as its target exists (bead cowork-8yb).
+    _roster.addListener(_onRosterChanged);
+    unawaited(_loadLastSelection());
     // Auto-reconnect at startup. Deferred to after the first frame so the app's
     // sign-in / key-unlock flow (which gates showing this shell) has completed —
     // the cloud pairing cannot be decrypted before the EncryptionService key is
@@ -131,8 +156,90 @@ mixin CoworkShellHost on State<MessengerShell> {
     );
   }
 
+  /// Reads the remembered pick, then tries to land on it.
+  Future<void> _loadLastSelection() async {
+    String? agentId;
+    String? threadKey;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      agentId = prefs.getString(_kLastAgentKey);
+      threadKey = prefs.getString(_kLastThreadKey);
+    } catch (_) {
+      // No preferences (a test, a locked store): fall back to the first
+      // coworker, which is still better than an empty chat.
+    }
+    if (!mounted) return;
+    _restoredAgentId = agentId;
+    _restoredThreadKey = threadKey;
+    _restoreLoaded = true;
+    _autoSelect();
+  }
+
+  /// Writes the pick for the next launch and marks the selection as the
+  /// user's, so [_autoSelect] leaves it alone from here on.
+  void _rememberSelection(String agentId, String threadKey) {
+    _selectionIsAuto = false;
+    _restoredAgentId = agentId;
+    _restoredThreadKey = threadKey;
+    unawaited(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_kLastAgentKey, agentId);
+        await prefs.setString(_kLastThreadKey, threadKey);
+      } catch (_) {
+        // Losing the pointer costs the next launch its position, nothing more.
+      }
+    }());
+  }
+
+  void _onRosterChanged() {
+    if (!mounted) return;
+    _autoSelect();
+  }
+
+  /// Lands on a thread without waiting for the user.
+  ///
+  /// The rule the user asked for, and the one every desktop messenger follows:
+  /// you come back to where you were; failing that, to the top of the list.
+  /// Never to an empty chat.
+  ///
+  /// It runs again on every roster change, because the remembered coworker may
+  /// only show up once the host has sent its names. A selection this method
+  /// made may be replaced by the remembered one when it arrives; a selection
+  /// the user made never is.
+  void _autoSelect() {
+    if (!_restoreLoaded) return;
+    final String? restoredId = _restoredAgentId;
+    final CoworkAgent? restored = restoredId == null
+        ? null
+        : _roster.byId(restoredId);
+    final CoworkAgent? current = _selectedAgentId == null
+        ? null
+        : _roster.byId(_selectedAgentId!);
+    if (current != null) {
+      final bool upgradeToRemembered =
+          _selectionIsAuto && restored != null && restored.id != current.id;
+      if (!upgradeToRemembered) return;
+    }
+    final List<CoworkAgent> visible = _roster.visibleAgents;
+    final CoworkAgent? target =
+        restored ?? (visible.isEmpty ? null : visible.first);
+    if (target == null || target.threads.isEmpty) return;
+    final String threadKey = target.threads.any(
+      (thread) => thread.key == _restoredThreadKey,
+    )
+        ? _restoredThreadKey!
+        : target.threads.first.key;
+    setState(() {
+      _selectedAgentId = target.id;
+      _selectedThreadKey = threadKey;
+      _selectionIsAuto = true;
+    });
+  }
+
   /// The `dispose` half of the host. Called by the state before `super`.
   void _hostDispose() {
+    _roster.removeListener(_onRosterChanged);
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
     _controller.dispose();
@@ -219,10 +326,17 @@ mixin CoworkShellHost on State<MessengerShell> {
     // reinstall and a second device show the same coworkers. The answer
     // lands in [_onHostInbound].
     unawaited(_controller.value?.requestAgentList());
-    if (_selectedAgentId == null) {
+    // `ensureHostAgent` notifies the roster, which lands the restore; this only
+    // covers the case where the agent was already listed, so nothing notified.
+    if (_selectedAgentId == null) _autoSelect();
+    // A roster that is still empty of the remembered coworker leaves the host
+    // one selected; the agent list that follows brings the remembered one and
+    // [_autoSelect] moves to it.
+    if (_selectedAgentId == null && agent.threads.isNotEmpty) {
       setState(() {
         _selectedAgentId = agent.id;
         _selectedThreadKey = agent.threads.first.key;
+        _selectionIsAuto = true;
       });
     }
   }
@@ -523,7 +637,14 @@ mixin CoworkShellHost on State<MessengerShell> {
       setState(() {
         _selectedAgentId = null;
         _showThreadOnNarrow = false;
+        _selectionIsAuto = true;
       });
+      if (_restoredAgentId == agentId) {
+        _restoredAgentId = null;
+        _restoredThreadKey = null;
+      }
+      // Do not leave the user in an empty chat: fall to the top of the list.
+      _autoSelect();
     }
   }
 
