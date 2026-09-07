@@ -25,6 +25,7 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart'
     show CoworkSecureKeyValueStore, FlutterSecureKeyValueStore;
 import 'package:cowork/services/mcp/mcp_connection.dart';
 import 'package:cowork/services/mcp/mcp_oauth.dart';
+import 'package:cowork/services/mcp/mcp_service.dart';
 
 /// Everything secret about one connection: the client this device registered
 /// with the authorization server, the tokens it issued, and where they came
@@ -325,6 +326,15 @@ class McpStore {
   /// [McpAuth.appSession] connection carries no device token — the host
   /// resolves the account credential.
   Future<List<Map<String, dynamic>>> forwardPayloads() async {
+    // Make sure the encrypted mirrors have been read at least once before the
+    // set is assembled (bead cowork-7zd). Without this the very first task of
+    // a cold start forwards only what this device signed into itself, and a
+    // connector the user connected in chuk_chat reaches the agent no earlier
+    // than the next chat-sync tick — or never, if the user never opens the
+    // connectors page. Throttled and single-flight inside the service, and a
+    // no-op the moment the mirrors are unreachable, so the launch path pays
+    // nothing when there is nothing to pay for.
+    await McpService.adoptMirrors();
     final connections = await load();
     final payloads = <Map<String, dynamic>>[];
     for (final c in connections) {
