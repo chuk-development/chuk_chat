@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/pages/messenger_shell.dart';
 import 'package:cowork/models/stored_chat.dart';
@@ -1282,5 +1283,132 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('could not copy the chat'), findsOneWidget);
+  });
+
+  // --- where the app opens (bead cowork-8yb) ---------------------------------
+
+  /// Pumps a shell over a roster the test built, so the remembered ids are
+  /// known before the first frame.
+  Future<_FakeRelayController> pumpShellOver(
+    WidgetTester tester,
+    LocalAgentRosterSource roster,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          roomSource: LocalRoomSource(),
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return controller;
+  }
+
+  testWidgets('the app opens on the thread the last session left off in', (
+    tester,
+  ) async {
+    final roster = LocalAgentRosterSource()
+      ..addAgent(name: 'amber')
+      ..addAgent(name: 'cobalt');
+    final remembered = roster.agents.last;
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'cowork.last_agent_id': remembered.id,
+      'cowork.last_thread_key': remembered.threads.single.key,
+    });
+
+    await pumpShellOver(tester, roster);
+
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      remembered.threads.single.key,
+    );
+  });
+
+  testWidgets('with nothing remembered the app opens the top coworker', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final roster = LocalAgentRosterSource()
+      ..addAgent(name: 'amber')
+      ..addAgent(name: 'cobalt');
+
+    await pumpShellOver(tester, roster);
+
+    // Never the empty 'default' thread: the reader lands in a real
+    // conversation, the way every other messenger opens.
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      roster.visibleAgents.first.threads.single.key,
+    );
+  });
+
+  testWidgets('a remembered coworker that the host lists late is opened', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'cowork.last_agent_id': 'remote:jade',
+      'cowork.last_thread_key': 'remote:jade',
+    });
+    // On the first frame the roster does not have it yet — the host sends its
+    // names only after the pairing.
+    final roster = LocalAgentRosterSource()..addAgent(name: 'amber');
+    await pumpShellOver(tester, roster);
+    final String fallback = roster.visibleAgents.first.threads.single.key;
+    expect(tester.widget<CoworkThreadView>(threadView).threadKey, fallback);
+
+    roster.applyHostNames(
+      const <CoworkHostAgentName>[
+        CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+      ],
+      peerDeviceId: null,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<CoworkThreadView>(threadView).threadKey,
+      'remote:jade',
+    );
+  });
+
+  testWidgets('a coworker the user picked survives the late host list', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'cowork.last_agent_id': 'remote:jade',
+      'cowork.last_thread_key': 'remote:jade',
+    });
+    final roster = LocalAgentRosterSource()
+      ..addAgent(name: 'amber')
+      ..addAgent(name: 'cobalt');
+    await pumpShellOver(tester, roster);
+    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('cobalt'));
+    await tester.pumpAndSettle();
+    final picked = roster.agents.last.threads.single.key;
+    expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
+
+    roster.applyHostNames(
+      const <CoworkHostAgentName>[
+        CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+      ],
+      peerDeviceId: null,
+    );
+    await tester.pumpAndSettle();
+
+    // The user's own pick is never moved out from under them.
+    expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
   });
 }

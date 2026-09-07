@@ -51,6 +51,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:cowork/constants.dart';
 import 'package:cowork/model_selector_page.dart';
 import 'package:cowork/models/app_shell_config.dart';
@@ -242,8 +244,12 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     // (or another agent's session) under this agent's identity.
     if (agent == null ||
         agent.threads.isEmpty ||
-        agent.threads.first.key != threadKey)
+        agent.threads.first.key != threadKey) {
       return;
+    }
+    // The user picked this one: remember it for the next launch, and stop the
+    // restore from moving the selection out from under them.
+    _rememberSelection(agentId, threadKey);
     setState(() {
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;

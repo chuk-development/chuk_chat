@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'package:cowork/constants.dart';
@@ -215,6 +215,19 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
 
   String? _localError;
   bool _busy = false;
+
+  /// Whether the local chat cache has been read once.
+  ///
+  /// The imported chat screen looks its thread up in [ChatStorageService]'s
+  /// in-memory map the moment it mounts. When the map has not been filled yet
+  /// the lookup misses, and the screen does not wait — it treats the miss as
+  /// "new chat", clears its messages and drops the id (`_activeChatId = null`),
+  /// so nothing ever loads it again. That is the history that flashes up and
+  /// then stays gone (bead cowork-8yb): the mount raced `loadFromCache`.
+  ///
+  /// So the chat area waits for this one read before it mounts the screen. It
+  /// is metadata only and it is local, so the wait is a frame or two.
+  bool _cacheReady = false;
   final _startupState = ValueNotifier<CoworkRelayState>(
     const CoworkRelayState(phase: CoworkRelayPhase.connecting),
   );
@@ -228,6 +241,15 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
 
   Timer? _autoReconnectTimer;
   int _reconnectAttempts = 0;
+
+  /// How many reconnects have been tried since the link was last up.
+  ///
+  /// Not [_reconnectAttempts]: that one is the backoff dial, and the watchdog
+  /// resets it every few seconds so recovery stays prompt. This one only ever
+  /// resets on a real pairing, so it is what tells a hiccup (the socket is
+  /// already on its way back) from a host that is genuinely not there —
+  /// which is when the bottom bar earns its place again.
+  int _failedReconnects = 0;
 
   /// A safety net that periodically forces a reconnect when the app is down but
   /// paired. The event-driven path (`_onStateChanged` on a `closed` transition →
@@ -319,7 +341,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     // local metadata and returns at once, and the thread the reader actually
     // opened is loaded by the chat screen itself through `loadFullChat`, which
     // is cache-first anyway.
-    unawaited(ChatStorageService.loadFromCache());
+    unawaited(_warmCache());
     unawaited(_loader.load());
     _link.sessionKey.value = widget.threadKey;
     ChatStorageService.selectedChatId = widget.threadKey;
@@ -341,6 +363,20 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     if (_storedPairing != null) {
       await _reconnect();
     }
+  }
+
+  /// Reads the local chat cache once and then lets the chat area mount. A
+  /// cache that cannot be read is not a reason to withhold the chat — the
+  /// host's replay still fills it — so a failure opens the gate too.
+  Future<void> _warmCache() async {
+    try {
+      await ChatStorageService.loadFromCache();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[cowork-thread] chat cache warm failed: $error');
+      }
+    }
+    if (mounted) setState(() => _cacheReady = true);
   }
 
   Future<void> _buildController() async {
@@ -450,6 +486,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       _maxBackoff.inMilliseconds,
     );
     _reconnectAttempts++;
+    _failedReconnects++;
     _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
       _autoReconnectTimer = null;
       if (!mounted || _storedPairing == null || _manuallyDisconnected) return;
@@ -811,7 +848,6 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(context, state, showAutomations ? automations : null),
-            if (!connected) _buildStatusStrip(context, state),
             if (connected && approval != null)
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
@@ -819,7 +855,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
             if (showAutomations && !_automationsCollapsed)
               _buildAutomationCards(context, automations),
             Expanded(key: const ValueKey('persistent-chat'), child: chat),
-            if (!connected && controller != null)
+            if (!connected && controller != null && _showConnectBar)
               _buildConnectBar(context, state),
           ],
         );
@@ -911,6 +947,12 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   ///  * the three "show" flags follow the verbose toggle — quiet by default,
   ///    full log on demand.
   Widget _buildChat(BuildContext context) {
+    // Do not mount the screen before the cache is readable: it would look its
+    // thread up, miss, and throw the history away for the rest of the session
+    // (see [_cacheReady]). Deliberately blank rather than a spinner — the wait
+    // is a frame or two, and a spinner that flashes on every launch reads as
+    // trouble.
+    if (!_cacheReady) return const SizedBox.expand();
     final config = widget.shellConfig;
     // The screen reads its rows once, on mount. A replay that rewrote the cache
     // bumps the revision, which changes the key, which remounts it on fresh
@@ -979,25 +1021,25 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     return MediaQuery.sizeOf(context).width >= kTabletBreakpoint;
   }
 
-  // --- top status strip ------------------------------------------------------
+  // --- how the connection shows -----------------------------------------------
 
   /// The connection is not something the user manages. Once paired the socket
-  /// is simply up, and it comes back on its own after a drop — so nothing sits
-  /// on top of the chat: no "connected to" line, no host URL, no SAS digits, no
-  /// disconnect button. An in-flight connect gets a hairline progress bar, and
-  /// it carries no text either. Re-pairing lives in the bottom bar, and only
-  /// when the connection is actually down.
-  Widget _buildStatusStrip(BuildContext context, CoworkRelayState state) {
-    switch (state.phase) {
-      case CoworkRelayPhase.connecting:
-      case CoworkRelayPhase.pairing:
-        return const LinearProgressIndicator(minHeight: 2);
-      case CoworkRelayPhase.paired:
-      case CoworkRelayPhase.idle:
-      case CoworkRelayPhase.error:
-      case CoworkRelayPhase.closed:
-        return const SizedBox.shrink();
-    }
+  /// is simply up, it comes back on its own after a drop, and the app never
+  /// waits to be told to reconnect — so the whole state is the small dot in the
+  /// header: nothing sits on top of the chat, and a connect in flight no longer
+  /// draws a progress bar either. A bar that appears for a second on every
+  /// launch reads as breakage; the dot does not (bead cowork-y6q).
+
+  /// Whether the bottom bar has anything worth saying.
+  ///
+  /// A device with no pairing needs the code form — that is the one case where
+  /// the user must act. A paired device reconnects by itself, so the bar earns
+  /// its place only once that has visibly failed, or once the user disconnected
+  /// on purpose. Anything in between is chatter about a socket that is already
+  /// on its way back.
+  bool get _showConnectBar {
+    if (_storedPairing == null) return true;
+    return _manuallyDisconnected || _failedReconnects >= 3;
   }
 
   // --- the standing secret request --------------------------------------------
