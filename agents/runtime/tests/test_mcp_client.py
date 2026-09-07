@@ -1059,6 +1059,30 @@ def _live(connection: MCPConnection) -> None:
     connection._ready.set()  # noqa: SLF001
 
 
+def test_closed_reader_invalidates_connection_without_replaying_tool(monkeypatch):
+    from concurrent.futures import Future
+    from unittest.mock import Mock
+
+    connection = MCPConnection(stdio_config())
+    _live(connection)
+    connection._loop = object()
+    connection._session = Mock()
+    future = Future()
+    # Both released MCP SDK spellings are supported by the connection layer.
+    error_type = type("MCPError", (Exception,), {})
+    future.set_exception(error_type("Connection closed"))
+    monkeypatch.setattr(
+        "cowork_agent.mcp_client.asyncio.run_coroutine_threadsafe",
+        lambda *args: future,
+    )
+    assert connection.alive()
+    result = connection.call("browser_navigate", {"url": "https://example.com"})
+    assert result["ok"] is False
+    assert not connection.alive()
+    assert "Connection closed" in connection.error
+    connection._session.call_tool.assert_called_once()
+
+
 def test_a_401_from_a_live_session_is_renewed_and_the_call_retried(monkeypatch):
     """The case the whole feature exists for, and the one connect-time refresh
     does not cover: the run outlives its token.

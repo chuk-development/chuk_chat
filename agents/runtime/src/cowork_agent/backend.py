@@ -53,6 +53,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+
+from .connection_pool import BackendConnectionPool
 from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect as _ws_connect
 
@@ -602,6 +604,7 @@ class BackendModelClient:
         connect: Callable[..., Any] | None = None,
         auth_timeout: float = 15.0,
         recv_timeout: float = 180.0,
+        connection_pool: BackendConnectionPool | None = None,
     ) -> None:
         self._session = session
         self._model_id = model_id
@@ -614,6 +617,9 @@ class BackendModelClient:
         self._auth_timeout = auth_timeout
         self._recv_timeout = recv_timeout
         self._ws: Any | None = None
+        self._connection_pool = connection_pool
+        self._connection_key: tuple[str, str] | None = None
+        self._reusable = False
         # Set by ``cancel`` so a socket we closed ourselves is not mistaken for a
         # dropped idle connection and retried.
         self._cancelled = False
@@ -648,13 +654,15 @@ class BackendModelClient:
     # -- ModelClient -----------------------------------------------------
 
     def complete(self, messages: list[dict]) -> ModelResponse:
+        started = time.monotonic()
         payload = self._messages_to_payload(messages)
+        prepared = time.monotonic()
         # A cancel only applies to the call it interrupted. Clearing it here is
         # what lets one client serve the next task after a stopped one.
         self._cancelled = False
         seen_token = self._session.access_token
         try:
-            return self._chat_once(payload)
+            response = self._chat_once(payload)
         except _AuthRejected:
             # Token expired or the socket was rejected: get a fresh pair (from
             # the app while it is attached, from GoTrue otherwise — see
@@ -662,7 +670,7 @@ class BackendModelClient:
             # folds the case where the pair was already replaced meanwhile.
             self._close()
             self._session.refresh(seen_token=seen_token)
-            return self._chat_once(payload)
+            response = self._chat_once(payload)
         except ConnectionClosed:
             if self._cancelled:
                 # We closed this socket on purpose (§7.1 Stop). Retrying would
@@ -670,7 +678,11 @@ class BackendModelClient:
                 raise BackendModelError("cancelled", code="cancelled") from None
             # Idle socket dropped by an LB: reconnect and retry once.
             self._close()
-            return self._chat_once(payload)
+            response = self._chat_once(payload)
+        timing = response.raw.setdefault("timing", {})
+        timing["prepare_ms"] = (prepared - started) * 1000
+        timing["total_ms"] = (time.monotonic() - started) * 1000
+        return response
 
     def cheap_clone(self, *, max_tokens: int = 512) -> "BackendModelClient":
         """A "hero"/aux twin of this client: the SAME model, on the SAME account
@@ -700,6 +712,7 @@ class BackendModelClient:
             connect=self._connect,
             auth_timeout=self._auth_timeout,
             recv_timeout=self._recv_timeout,
+            connection_pool=self._connection_pool,
         )
         # The base_url is not stored, only the derived ws url; copy it so a clone
         # of a non-default backend still points at that backend.
@@ -720,7 +733,13 @@ class BackendModelClient:
         self._close()
 
     def close(self) -> None:
-        self._close()
+        if self._connection_pool is not None and self._reusable and self._ws is not None:
+            ws, self._ws = self._ws, None
+            assert self._connection_key is not None
+            self._connection_pool.put(self._connection_key, ws)
+            self._reusable = False
+        else:
+            self._close()
 
     def set_tools(self, tools: list[dict] | None) -> None:
         """Declare the native tool set for this client (OpenAI ``tools`` JSON).
@@ -799,7 +818,15 @@ class BackendModelClient:
             return
         if self._session.is_expired():
             self._session.refresh()
-        ws = self._connect(self._ws_url, open_timeout=self._auth_timeout)
+        self._connection_key = (self._ws_url, self._session.access_token)
+        if self._connection_pool is not None:
+            self._ws = self._connection_pool.take(self._connection_key)
+            if self._ws is not None:
+                return
+        # Protocol pings maintain liveness during long-running tools without
+        # spending model tokens. Make the library defaults explicit.
+        ws = self._connect(self._ws_url, open_timeout=self._auth_timeout,
+                           ping_interval=20, ping_timeout=20)
         try:
             ws.send(json.dumps({"type": "auth", "token": self._session.access_token}))
             raw = ws.recv(timeout=self._auth_timeout)
@@ -817,16 +844,22 @@ class BackendModelClient:
         raise BackendModelError(f"unexpected handshake frame: {kind!r}")
 
     def _chat_once(self, payload: dict[str, Any]) -> ModelResponse:
+        started = time.monotonic()
         self._ensure_connected()
         ws = self._ws
         assert ws is not None
         req_id = uuid.uuid4().hex
+        sent = time.monotonic()
+        timing: dict[str, Any] = {"connection_ms": (sent - started) * 1000}
+        self._reusable = False
         ws.send(json.dumps({"req_id": req_id, "type": "chat", "payload": payload}))
 
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
         native_calls: list[ToolCall] = []
         usage: dict | None = None
+        meta: dict | None = None
+        tps: float | None = None
         deadline = time.monotonic() + self._recv_timeout
         while True:
             remaining = deadline - time.monotonic()
@@ -839,6 +872,7 @@ class BackendModelClient:
             if frame.get("req_id") != req_id:
                 continue
             kind = frame.get("kind")
+            timing.setdefault(f"first_{kind}_ms", (time.monotonic() - sent) * 1000)
             if kind == "content":
                 data = frame.get("data")
                 if isinstance(data, str):
@@ -872,8 +906,12 @@ class BackendModelClient:
                 data = frame.get("data")
                 if isinstance(data, list):
                     native_calls.extend(_native_calls_from_frame(data, len(native_calls)))
-            elif kind in ("meta", "tps"):
-                continue
+            elif kind == "meta" and isinstance(frame.get("data"), dict):
+                meta = frame["data"]
+            elif kind == "tps" and isinstance(frame.get("data"), (int, float)):
+                tps = frame["data"]
+            elif kind == "timing" and isinstance(frame.get("data"), dict):
+                timing["server"] = frame["data"]
             elif kind == "error":
                 detail = str(frame.get("detail", "unknown error"))
                 code = frame.get("code")
@@ -882,6 +920,7 @@ class BackendModelClient:
                     raise _AuthRejected(detail)
                 raise BackendModelError(detail, code=code)
             elif kind == "done":
+                self._reusable = True
                 break
 
         content = "".join(content_parts)
@@ -898,10 +937,14 @@ class BackendModelClient:
                 "reasoning": "".join(reasoning_parts),
                 "usage": usage,
                 "native": bool(native_calls),
+                "timing": timing,
+                "meta": meta,
+                "tps": tps,
             },
         )
 
     def _close(self) -> None:
+        self._reusable = False
         if self._ws is not None:
             _safe_close(self._ws)
             self._ws = None

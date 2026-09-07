@@ -26,6 +26,7 @@ import httpx
 from .browser import BrowserRunner, register_browser_task
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
+from .chat_documents import DocumentStore, register_document_tool
 from .files_out import FileSink
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
@@ -41,7 +42,7 @@ from .oauth_bridge import (
     config_token_exchange,
     register_oauth_tool,
 )
-from .prompt import build_system_prompt
+from .prompt import build_system_prompt, upgrade_research_instructions
 from .search import register_search_tool
 from .secrets import SecretsAccess
 from .automations import AutomationBackend, register_automation_tools
@@ -425,6 +426,8 @@ def build_runtime(
         )
 
     store = StateStore(db_path)
+    if file_sink is not None and shell_session_key:
+        register_document_tool(registry, DocumentStore(db_path, shell_session_key), file_sink)
     if enable_chat_search:
         register_search_tool(registry, store)
 
@@ -588,6 +591,9 @@ def build_runtime(
         token_budget=token_budget,
         kill_switch=kill,
         system_prompt=prompt,
+        system_prompt_upgrade=(
+            lambda saved: library.upgrade_catalog(upgrade_research_instructions(saved))
+        ) if include_tool_docs else None,
         context_providers=[library.pending_context, *(context_providers or [])],
         context_ladder=ladder,
         # The debug "copy raw context" tap (off by default): fired each round with

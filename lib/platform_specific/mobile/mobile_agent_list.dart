@@ -25,6 +25,7 @@ class MobileAgentList extends StatefulWidget {
     required this.source,
     required this.onSelect,
     this.selectedAgentId,
+    this.selectedThreadKey,
     this.onAddAgent,
     this.onOpenAccount,
     this.accountLabel,
@@ -37,6 +38,7 @@ class MobileAgentList extends StatefulWidget {
   final void Function(String agentId, String threadKey) onSelect;
 
   final String? selectedAgentId;
+  final String? selectedThreadKey;
 
   /// The accent "+" chip. Null hides it.
   final VoidCallback? onAddAgent;
@@ -78,15 +80,18 @@ class _MobileAgentListState extends State<MobileAgentList> {
     final String q = _query.text.trim().toLowerCase();
     if (q.isEmpty) return agents;
     return agents
-        .where((agent) =>
-            agent.name.toLowerCase().contains(q) ||
-            (agent.role?.toLowerCase().contains(q) ?? false))
+        .where(
+          (agent) =>
+              agent.name.toLowerCase().contains(q) ||
+              (agent.role?.toLowerCase().contains(q) ?? false),
+        )
         .toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final double topInset = MobileLayout.chromeInset(context) +
+    final double topInset =
+        MobileLayout.chromeInset(context) +
         (_searching ? _SearchField.height : 0);
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[widget.source, _query]),
@@ -113,9 +118,9 @@ class _MobileAgentListState extends State<MobileAgentList> {
                           onTap: agent.threads.isEmpty
                               ? null
                               : () => widget.onSelect(
-                                    agent.id,
-                                    agent.threads.first.key,
-                                  ),
+                                  agent.id,
+                                  agent.threads.first.key,
+                                ),
                         );
                       },
                     ),
@@ -151,7 +156,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              filtering ? 'No coworker matches.' : 'No coworkers yet.',
+              filtering ? 'No agent matches.' : 'No agents yet.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
@@ -162,7 +167,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: widget.onAddAgent,
-                child: const Text('Add a coworker'),
+                child: const Text('Add an agent'),
               ),
             ],
           ],
@@ -224,10 +229,7 @@ class MobileHomeBar extends StatelessWidget {
                 child: Row(
                   children: [
                     if (onOpenAccount != null)
-                      _AccountChip(
-                        monogram: monogram,
-                        onTap: onOpenAccount!,
-                      ),
+                      _AccountChip(monogram: monogram, onTap: onOpenAccount!),
                     const Spacer(),
                     if (onSearch != null) ...[
                       MobileRoundChip(
@@ -242,7 +244,7 @@ class MobileHomeBar extends StatelessWidget {
                       MobileAccentChip(
                         icon: Icons.add,
                         onTap: onAddAgent,
-                        tooltip: 'Add a coworker',
+                        tooltip: 'Add an agent',
                         semanticsId: 'mobile_home_add',
                       ),
                   ],
@@ -331,12 +333,13 @@ class _SearchField extends StatelessWidget {
         autofocus: true,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Search coworkers',
+          hintText: 'Search agents',
           prefixIcon: const Icon(Icons.search, size: 20),
           isDense: true,
           filled: true,
-          fillColor: theme.colorScheme.surfaceContainerHighest
-              .withValues(alpha: 0.6),
+          fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.6,
+          ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(21),
@@ -443,10 +446,7 @@ class MobileAgentRow extends StatelessWidget {
                   ),
                   if (time.isNotEmpty) ...[
                     const SizedBox(width: 10),
-                    Text(
-                      time,
-                      style: TextStyle(color: muted, fontSize: 12),
-                    ),
+                    Text(time, style: TextStyle(color: muted, fontSize: 12)),
                   ],
                 ],
               ),
@@ -508,7 +508,13 @@ String mobileTimeLabel(DateTime? when, {required DateTime now}) {
   if (days == 1) return 'Yesterday';
   if (days < 7) {
     const List<String> names = <String>[
-      'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
     ];
     return names[when.weekday - 1];
   }

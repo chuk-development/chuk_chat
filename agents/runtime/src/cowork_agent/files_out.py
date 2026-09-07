@@ -82,6 +82,7 @@ class SentFile:
     mime_type: str
     size: int
     data: bytes
+    document: dict | None = None
 
 
 # What the executor binds. Raising is allowed and is reported to the model.

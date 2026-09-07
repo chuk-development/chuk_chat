@@ -93,6 +93,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_MODEL_ID,
         help=f"preferred model id (default {DEFAULT_MODEL_ID})",
     )
+    parser.add_argument("--provider", default=None,
+                        help="default provider slug for new autonomous sessions")
+    parser.add_argument("--reasoning-effort", default=None,
+                        help="default reasoning effort for new autonomous sessions")
     parser.add_argument(
         "--sandbox",
         choices=("local", "docker"),
@@ -216,6 +220,8 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         port=args.port,
         workspace_dir=args.workspace,
         model_id=args.model,
+        provider_slug=getattr(args, "provider", None),
+        reasoning_effort=getattr(args, "reasoning_effort", None),
         sandbox_kind=args.sandbox,
         agent_name=args.agent_name,
         supabase_url=args.supabase_url,

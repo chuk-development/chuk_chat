@@ -7,7 +7,8 @@ written for one runs on the other.
 
 **Progressive disclosure is the whole point.** Only ``name`` + ``description``
 sit in the always-on prompt; that is level-1 weight, charged on every single
-round, which is why ``description`` is capped at 300 characters. The body loads
+round, which is why the catalog description is capped at 300 characters.
+Source descriptions may contain up to 1024 characters. The body loads
 only when the model calls the ``skill`` tool, and then stays for the rest of the
 conversation.
 
@@ -47,7 +48,8 @@ from pathlib import Path
 
 from .registry import ToolRegistry
 
-MAX_DESCRIPTION_CHARS = 300
+MAX_DESCRIPTION_CHARS = 1024
+MAX_CATALOG_DESCRIPTION_CHARS = 300
 MAX_BODY_CHARS = 40_000
 MAX_SKILLS = 100
 
@@ -73,7 +75,10 @@ class Skill:
     path: str | None = None
 
     def catalog_line(self) -> str:
-        return f"- `{self.name}` — {self.description}"
+        description = self.description
+        if len(description) > MAX_CATALOG_DESCRIPTION_CHARS:
+            description = description[: MAX_CATALOG_DESCRIPTION_CHARS - 1] + "…"
+        return f"- `{self.name}` — {description}"
 
 
 # -- frontmatter -----------------------------------------------------------
@@ -133,7 +138,7 @@ def parse_skill(text: str, *, path: str | None = None) -> Skill:
     if len(description) > MAX_DESCRIPTION_CHARS:
         raise SkillError(
             f"skill {name!r}: description is {len(description)} characters, the "
-            f"limit is {MAX_DESCRIPTION_CHARS} — it is charged to every prompt"
+            f"limit is {MAX_DESCRIPTION_CHARS}"
         )
     if not body:
         raise SkillError(f"skill {name!r} has an empty body")
@@ -179,6 +184,24 @@ class SkillLibrary:
         ]
         lines.extend(self.skills[name].catalog_line() for name in self.names())
         return "\n".join(lines)
+
+    def upgrade_catalog(self, prompt: str) -> str:
+        """Refresh only the generated catalog in a persisted session prompt.
+
+        A coworker has one permanent session, so its original catalog cannot
+        remain authoritative after skills are installed or disabled. Memory
+        and operator instructions stay intact; no stored rows are rewritten.
+        """
+        marker = "# Skills\n\nNamed procedures you can load."
+        start = prompt.find(marker)
+        catalog = self.catalog()
+        if start < 0:
+            return prompt if not catalog else prompt.rstrip() + "\n\n" + catalog + "\n"
+        end = prompt.find("\n# ", start + len(marker))
+        if end < 0:
+            end = len(prompt)
+        replacement = catalog + "\n" if catalog else ""
+        return prompt[:start] + replacement + prompt[end:]
 
     def reload(self) -> "SkillLibrary":
         """Re-read the skill directory in place. Called when a session is
@@ -240,7 +263,10 @@ class SkillLibrary:
                         "Loaded because you called the `skill` tool. These are "
                         "instructions for you, not a message from the user. "
                         "They stay in force for the rest of this "
-                        f"conversation.\n\n{_TAG_OPEN.sub('&lt;', skill.body)}"
+                        "conversation. Relative script and reference paths "
+                        "are relative to the skill directory, not the workspace "
+                        f"root. Workspace skills live under `skills/{skill.name}/`."
+                        f"\n\n{_TAG_OPEN.sub('&lt;', skill.body)}"
                     ),
                 }
             )

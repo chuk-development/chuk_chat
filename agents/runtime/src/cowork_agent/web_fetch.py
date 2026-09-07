@@ -108,8 +108,9 @@ WEB_FETCH_SCHEMA = {
     "type": "object",
     "description": (
         "Fetch one web page or API response and return it as Markdown or plain "
-        "text. Use it after `web_search` to read a result, or directly when you "
-        "already know the URL. Only http and https, only text-like content "
+        "text. Use for known static pages or API URLs. Use web_search for "
+        "discovery, not search-engine HTML. Use the browser for dynamic pages, "
+        "local prices, cookies or interaction. Only http and https, only text-like content "
         "(HTML, text, Markdown, JSON, XML). The result is truncated at 40000 "
         "characters."
     ),

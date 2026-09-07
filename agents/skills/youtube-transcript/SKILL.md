@@ -27,7 +27,9 @@ import glob, os, re, shutil, subprocess, sys, tempfile
 from urllib.parse import urlparse, parse_qs
 
 URL = "PASTE_THE_YOUTUBE_URL_HERE"   # full watch URL, youtu.be link, or 11-char id
-LANGS = ["en", "en-US", "en-GB", "de", "de-DE"]  # preferred caption languages, in order
+# Preferred caption languages, in order. Overridable without editing the script:
+# set YT_LANGS (comma list) to retry, e.g. YT_LANGS="all" or YT_LANGS="orig,en,de".
+LANGS = [s for s in (os.environ.get("YT_LANGS") or "en,en-US,en-GB,de,de-DE").split(",") if s]
 
 def sh(args, **kw):
     return subprocess.run(args, capture_output=True, text=True, **kw)
@@ -149,9 +151,10 @@ print(text[:1500])
   about, then the main points as a tight list, in the user's language. If the
   user asked something specific (a quote, one section, an answer), give that
   instead of a generic summary.
-- On `NO_SUBTITLES`: the video has no captions in the tried languages. Retry
-  once with `LANGS = ["orig", "en", "de"]` (and drop the `--sub-langs` filter to
-  a broad `"all"` if needed) to accept any language. If still none, tell the user
+- On `NO_SUBTITLES`: the video has no captions in the tried languages. Retry the
+  SAME script with a wider language set via the env var — no code edit needed:
+  `YT_LANGS="all" python <script>` accepts any language, or
+  `YT_LANGS="orig,en,de"` to prefer the original. If still none, tell the user
   the video has no captions. A heavier fallback is to download the audio
   (`yt-dlp -f bestaudio -x`) and run speech-to-text, but that is slow — only do
   it if the user wants it.
@@ -167,3 +170,9 @@ print(text[:1500])
   is overwritten; only `transcript.txt` is written to the workspace.
 - Age-restricted or private videos may fail the download. The `yt-dlp` stderr
   (printed on `NO_SUBTITLES`) says why; pass that reason to the user.
+- Recent `yt-dlp` needs a JavaScript runtime for YouTube. Without one it warns
+  ("extraction without a JS runtime has been deprecated ... some formats may be
+  missing") and can silently return `NO_SUBTITLES` on videos that DO have
+  captions. If that happens, install `deno` (preferred: `sudo apt-get install -y
+  deno`, or `curl -fsSL https://deno.land/install.sh | sh`) or `nodejs`, then
+  retry — the script needs no change.

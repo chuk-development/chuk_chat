@@ -69,8 +69,9 @@ WEB_SEARCH_SCHEMA = {
     "description": (
         "Search the web and get ranked results with title, URL and a short "
         "description. Use it for facts that can change, for anything after your "
-        "training data, and to find the page you then read with `web_fetch`. "
-        "The descriptions are short on purpose: pick a URL and fetch it."
+        "training data, and to discover source URLs through our API server. "
+        "Verify dynamic pages, local prices and availability in the browser. "
+        "Use web_fetch only for static text or API responses."
     ),
     "properties": {
         "query": {

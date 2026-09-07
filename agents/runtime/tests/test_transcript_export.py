@@ -10,6 +10,60 @@ from cowork_agent import StateStore, TranscriptExporter
 from cowork_agent.transcript_export import render_row, thread_filename
 
 
+def test_compaction_preserves_exact_history_after_restart(tmp_path):
+    """One permanent agent session keeps raw evidence beyond its active window."""
+    from cowork_agent.context import AuxSummarizer, ContextLadder, LadderConfig
+    from cowork_agent.loop import AgentLoop
+    from cowork_agent.model import MockModelClient
+    from cowork_agent.registry import ToolRegistry
+
+    db = str(tmp_path / "persistent.db")
+    key = "agent:permanent-bot"
+    store = StateStore(db)
+    sid = store.route(key)
+    messages = [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "original job"},
+        {"role": "assistant", "content": "ARCHIVEFALCON exact decision " * 500},
+        {"role": "user", "content": "most recent request"},
+    ]
+    for message in messages:
+        store.append_message(sid, message["role"], message)
+    exporter = TranscriptExporter(tmp_path / "workspace")
+    exporter.export(store, key)
+    before = exporter.path_for(key).read_bytes()
+    ladder = ContextLadder(
+        config=LadderConfig(
+            context_length=4000, reserved_output=1000,
+            tier1_threshold=0.1, tier2_threshold=0.2,
+            tail_token_budget=100,
+        ),
+        summarizer=AuxSummarizer(MockModelClient(["GOAL: original job"])),
+    )
+    loop = AgentLoop(MockModelClient([]), ToolRegistry(), store, context_ladder=ladder)
+    outbound = loop._outbound_messages(sid)
+    assert ladder.last_stats.tier == 2
+    assert messages[2] not in outbound
+    assert [row.content for row in store.get_conversation(sid)] == messages
+    assert exporter.export(store, key) == 0
+    assert exporter.path_for(key).read_bytes() == before
+    store.close()
+
+    reopened = StateStore(db)
+    try:
+        assert reopened.route(key) == sid
+        assert [row.content for row in reopened.get_conversation(sid)] == messages
+        found = reopened.search_messages("ARCHIVEFALCON", session_id=sid)
+        assert found["ok"] and found["hits"]
+        assert any(
+            "ARCHIVEFALCON exact decision" in row["text"]
+            for hit in found["hits"] for row in hit["window"]
+        )
+        assert TranscriptExporter(tmp_path / "workspace").path_for(key).read_bytes() == before
+    finally:
+        reopened.close()
+
+
 def _seed(store: StateStore, key: str = "thread-a") -> int:
     sid = store.route(key)
     store.append_message(sid, "system", {"role": "system", "content": "the frozen prompt"})

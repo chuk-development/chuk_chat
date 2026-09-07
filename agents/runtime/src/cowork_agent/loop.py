@@ -229,6 +229,7 @@ class AgentLoop:
         token_budget: int | None = None,
         kill_switch: KillSwitch | None = None,
         system_prompt: str | Callable[[], str] | None = None,
+        system_prompt_upgrade: Callable[[str], str] | None = None,
         context_providers: Sequence[Callable[[], list[dict]]] | None = None,
         context_ladder: ContextLadder | None = None,
         debug_observer: Callable[[dict], None] | None = None,
@@ -248,6 +249,7 @@ class AgentLoop:
         self._tokens_spent = 0
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
+        self._system_prompt_upgrade = system_prompt_upgrade
         self._context_providers = list(context_providers or [])
         self._ladder = context_ladder
         # Optional debug tap (a UI "copy raw context" feature). Fired once per
@@ -324,6 +326,14 @@ class AgentLoop:
         """The payload for one model call: the full stored history, run through
         the context ladder. Without a ladder this is the history verbatim."""
         messages = _to_model_messages(self._store, session_id)
+        if self._system_prompt_upgrade is not None:
+            messages = [
+                {**message, "content": self._system_prompt_upgrade(message["content"])}
+                if message.get("role") == "system"
+                and isinstance(message.get("content"), str)
+                else message
+                for message in messages
+            ]
         if self._ladder is None:
             return messages
         return self._ladder.prepare(messages)
@@ -399,7 +409,9 @@ class AgentLoop:
 
             # Built once here so the debug tap can report the EXACT list sent, and
             # so the ladder's ``last_stats`` (set inside ``prepare``) matches it.
+            prepare_started = time.monotonic()
             outbound = self._outbound_messages(session_id)
+            model_started = time.monotonic()
             try:
                 response: ModelResponse = self._model.complete(outbound)
             except Exception:
@@ -416,7 +428,13 @@ class AgentLoop:
             # ladder's stats for this round. Guarded so a broken sink cannot abort
             # a real run.
             if self._debug_observer is not None:
-                self._emit_debug(session_key, iterations, outbound)
+                self._emit_debug(session_key, iterations, outbound, {
+                    "context_prepare_ms": (model_started - prepare_started) * 1000,
+                    "model_complete_ms": (time.monotonic() - model_started) * 1000,
+                    "model": response.raw.get("timing"),
+                    "usage": response.raw.get("usage"),
+                    "tps": response.raw.get("tps"),
+                })
 
             # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
             # prompt tokens are read — reasoning tokens must not move pressure.
@@ -579,7 +597,7 @@ class AgentLoop:
             pass
 
     def _emit_debug(
-        self, session_key: str, round_no: int, outbound: list[dict]
+        self, session_key: str, round_no: int, outbound: list[dict], timing: dict
     ) -> None:
         """Hand the debug observer one round's raw context, in the fixed contract
         shape. Stats come from the ladder's ``last_stats``; with no ladder they
@@ -596,6 +614,7 @@ class AgentLoop:
             }
         else:
             stats = {"tier": 0, "pressure": 0.0, "tokens_before": 0, "tokens_after": 0}
+        stats["timing"] = timing
         try:
             self._debug_observer(  # type: ignore[misc]
                 {

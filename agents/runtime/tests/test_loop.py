@@ -512,7 +512,9 @@ def test_debug_observer_gets_each_round_in_the_contract_shape(tmp_path):
         assert event["messages"] == model.calls[i]
         # Stats carry the four ladder fields.
         stats = event["stats"]
-        assert set(stats) == {"tier", "pressure", "tokens_before", "tokens_after"}
+        assert set(stats) == {"tier", "pressure", "tokens_before", "tokens_after", "timing"}
+        assert stats["timing"]["context_prepare_ms"] >= 0
+        assert stats["timing"]["model_complete_ms"] >= 0
         assert isinstance(stats["tier"], int)
         assert isinstance(stats["pressure"], float)
 

@@ -80,7 +80,10 @@ def trigger(reason: str, payload=None, *, kind: str = "automation") -> bool:
         # O_APPEND + one write: lines from several processes never interleave.
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
-            os.write(fd, line.encode("utf-8"))
+            data = line.encode("utf-8")
+            if os.write(fd, data) != len(data):
+                raise OSError("incomplete trigger write")
+            os.fsync(fd)
         finally:
             os.close(fd)
     except OSError as exc:

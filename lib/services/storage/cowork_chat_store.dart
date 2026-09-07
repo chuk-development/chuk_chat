@@ -51,6 +51,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/models/chat_message.dart';
+import 'package:cowork/models/content_block.dart';
 import 'package:cowork/models/stored_chat.dart';
 import 'package:cowork/services/chat_storage_crud.dart' show ChatStorageCrud;
 import 'package:cowork/services/chat_storage_mutations.dart'
@@ -151,6 +152,19 @@ class CoworkChatStore {
     String? customName,
   }) async {
     final messages = _decode(rows);
+    // Documents have their own host lifetime. A transcript delta/compaction may
+    // omit their original file event, but must not erase an already saved copy.
+    final retained = _documentSnapshots(
+      ChatStorageState.chatsById[sessionKey]?.messages ?? [],
+    );
+    final incoming = _documentSnapshots(messages);
+    for (final entry in retained.entries) {
+      final current = incoming[entry.key];
+      if (current == null ||
+          _documentVersion(current) < _documentVersion(entry.value)) {
+        messages.add(ChatMessage.fromJson(_documentRow(entry.value)));
+      }
+    }
     if (messages.isEmpty) return null;
 
     final existing = ChatStorageState.chatsById[sessionKey];
@@ -200,6 +214,76 @@ class CoworkChatStore {
     });
     return chat;
   }
+
+  /// Store a full host read without depending on a separate file-event replay.
+  /// After the await, use the current transcript so concurrent live turns survive.
+  static Future<void> saveDocumentSnapshot(
+    String sessionKey,
+    Map<String, dynamic> document,
+  ) async {
+    if (document['session_key'] != sessionKey ||
+        (!document.containsKey('rows') && !document.containsKey('text'))) {
+      return;
+    }
+    await loadThread(sessionKey);
+    final current = ChatStorageState.chatsById[sessionKey];
+    final known = _documentSnapshots(
+      current?.messages ?? [],
+    )['${document['id']}'];
+    if (known != null &&
+        _documentVersion(known) >= _documentVersion(document)) {
+      return;
+    }
+    await replaceThread(sessionKey, [
+      for (final message in current?.messages ?? <ChatMessage>[])
+        message.toJson(),
+      _documentRow(document),
+    ]);
+  }
+
+  static num _documentVersion(Map<String, dynamic> document) =>
+      document['version'] as num? ?? 0;
+
+  static Map<String, Map<String, dynamic>> _documentSnapshots(
+    List<ChatMessage> messages,
+  ) {
+    final documents = <String, Map<String, dynamic>>{};
+    for (final message in messages) {
+      try {
+        final blocks = jsonDecode(message.contentBlocks ?? '[]');
+        for (final block in (blocks as List).whereType<Map>()) {
+          final raw = block['sandboxArtifact']?['document'];
+          if (raw is! Map) continue;
+          final doc = Map<String, dynamic>.from(raw);
+          final id = '${doc['id']}';
+          if (!documents.containsKey(id) ||
+              _documentVersion(doc) > _documentVersion(documents[id]!)) {
+            documents[id] = doc;
+          }
+        }
+      } catch (_) {
+        /* Legacy message without structured content. */
+      }
+    }
+    return documents;
+  }
+
+  static Map<String, dynamic> _documentRow(Map<String, dynamic> doc) => {
+    'sender': 'ai',
+    'text': '',
+    'contentBlocks': jsonEncode([
+      ContentBlock.sandboxArtifact(
+        SandboxArtifactPayload(
+          storagePath:
+              'cowork://document/${Uri.encodeComponent('${doc['id']}')}',
+          filename: '${doc['id']}.json',
+          mime: 'application/vnd.cowork.document+json',
+          sizeBytes: utf8.encode(jsonEncode(doc)).length,
+          document: doc,
+        ),
+      ).toJson(),
+    ]),
+  };
 
   /// Reads a thread: memory when it is fully loaded there, else chuk_chat's
   /// cache-first `loadFullChat` (SQLite, then the cloud) when a user is
