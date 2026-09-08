@@ -59,7 +59,7 @@ void main() {
     expect(find.text('ops'), findsOneWidget, reason: 'role tag');
   });
 
-  testWidgets('rows are at least 48 dp and the first row starts under the bar',
+  testWidgets('rows are a real touch target and start under the bar and filters',
       (tester) async {
     await pumpPhone(
       tester,
@@ -71,7 +71,11 @@ void main() {
     );
     final Rect first = tester.getRect(findId('mobile-agent-row-chief'));
     expect(first.height, greaterThanOrEqualTo(MobileLayout.minTouchTarget));
-    expect(first.top, kPhonePadding.top + MobileLayout.barHeight);
+    // Title bar (58) plus the connected All / Unread group: the first row can
+    // only start below both, and never under the status bar.
+    expect(first.top, greaterThan(kPhonePadding.top + 58));
+    expect(find.text('Coworkers'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
   });
 
   testWidgets('tap opens the first thread; a coworker without threads is inert',
@@ -112,7 +116,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No agent matches.'), findsOneWidget);
 
-    await tester.tap(findId('mobile_home_search'));
+    // While searching, the leading target closes the search again.
+    await tester.tap(findId('mobile_home_search_close'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
     expect(find.text('Design'), findsOneWidget);
@@ -154,11 +159,11 @@ void main() {
     expect(mobileTimeLabel(DateTime(2026, 8, 20), now: now), '20.8.');
   });
 
-  test('MobileHomeBar.monogramOf', () {
-    expect(MobileHomeBar.monogramOf(null), '');
-    expect(MobileHomeBar.monogramOf('Sam Lee'), 'SL');
-    expect(MobileHomeBar.monogramOf('sam.lee@example.com'), 'S');
-    expect(MobileHomeBar.monogramOf('  '), '');
+  test('accountMonogram', () {
+    expect(accountMonogram(null), '');
+    expect(accountMonogram('Sam Lee'), 'SL');
+    expect(accountMonogram('sam.lee@example.com'), 'S');
+    expect(accountMonogram('  '), '');
   });
 
   test('MobileAgentRow.previewOf', () {

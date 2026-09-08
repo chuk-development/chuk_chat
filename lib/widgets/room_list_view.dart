@@ -9,9 +9,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
 
 class RoomListView extends StatelessWidget {
   const RoomListView({
@@ -199,10 +199,10 @@ class RoomListView extends StatelessWidget {
           for (var i = 0; i < visible.length; i++)
             Positioned(
               left: i * step,
-              child: AgentAvatar(
-                seed: visible[i].agentId,
+              child: ExpressiveFace(
+                id: visible[i].agentId,
                 label: visible[i].handle,
-                radius: 14,
+                size: 28,
               ),
             ),
           if (overflow > 0)

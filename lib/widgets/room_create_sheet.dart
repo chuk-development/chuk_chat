@@ -7,9 +7,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
 
 class RoomCreateSheet extends StatefulWidget {
   const RoomCreateSheet({
@@ -152,7 +152,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
       value: selected,
       onChanged: enabled ? (on) => _toggle(agent.id, on) : null,
       controlAffinity: ListTileControlAffinity.leading,
-      secondary: AgentAvatar(seed: agent.id, label: agent.name, radius: 16),
+      secondary: ExpressiveFace(id: agent.id, label: agent.name, size: 32),
       title: Text(agent.name, overflow: TextOverflow.ellipsis),
       subtitle: agent.role == null
           ? null

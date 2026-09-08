@@ -581,7 +581,10 @@ class MobileAgentRow extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            Flexible(
+                            // Expanded, not Flexible: the name takes the room
+                            // the tag and the time leave, instead of shrinking
+                            // to its own width and ellipsising early.
+                            Expanded(
                               child: Text(
                                 agent.name,
                                 maxLines: 1,
@@ -597,8 +600,8 @@ class MobileAgentRow extends StatelessWidget {
                               const SizedBox(width: 8),
                               _RoleTag(role: role!),
                             ],
-                            const Spacer(),
-                            if (time.isNotEmpty)
+                            if (time.isNotEmpty) ...<Widget>[
+                              const SizedBox(width: 8),
                               Text(
                                 time,
                                 style: text.labelMedium?.copyWith(
@@ -610,6 +613,7 @@ class MobileAgentRow extends StatelessWidget {
                                       : FontWeight.w500,
                                 ),
                               ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 4),

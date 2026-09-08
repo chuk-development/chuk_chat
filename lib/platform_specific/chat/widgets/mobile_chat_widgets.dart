@@ -1,9 +1,9 @@
 // lib/platform_specific/chat/widgets/mobile_chat_widgets.dart
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cowork/ui/expressive/waveform.dart';
 import 'package:cowork/utils/shift_key_tracker.dart';
 
 /// Build a tiny icon button widget
@@ -206,67 +206,16 @@ Widget buildKeyboardListener({
   );
 }
 
-/// Build audio visualizer widget with live amplitude response
+/// The live microphone level, in the expressive waveform shape.
+///
+/// The bars are the same rounded, round-capped bars a voice message is drawn
+/// with in the reference messenger (see [LiveWaveform]), so dictating and
+/// listening look like one feature.
 Widget buildAudioVisualizer({
   required List<double> audioLevels,
   required Color accentColor,
 }) {
-  const int barCount = 24;
-  final int startIndex = audioLevels.length > barCount
-      ? audioLevels.length - barCount
-      : 0;
-
-  return SizedBox(
-    height: 24,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: List.generate(barCount, (index) {
-        final int levelIndex = startIndex + index;
-        final double rawLevel = levelIndex < audioLevels.length
-            ? audioLevels[levelIndex]
-            : 0.0;
-
-        // Boost low amplitudes so speech registers clearly.
-        // sqrt gives a strong lift to quiet sounds (0.1 → 0.32).
-        final double boosted = rawLevel < 0.01 ? 0.0 : math.sqrt(rawLevel);
-
-        // Bar height — full range from 2px idle to 22px loud.
-        final double barHeight = (boosted * 20 + 2).clamp(2.0, 22.0);
-
-        // Opacity ramps with level for depth.
-        final double opacity = (0.5 + boosted * 0.5).clamp(0.5, 1.0);
-
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 0.8),
-            child: Container(
-              height: barHeight,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    accentColor.withValues(alpha: opacity),
-                    accentColor.withValues(alpha: opacity * 0.6),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(2),
-                boxShadow: boosted > 0.4
-                    ? [
-                        BoxShadow(
-                          color: accentColor.withValues(alpha: 0.3),
-                          blurRadius: 3,
-                          spreadRadius: 0.5,
-                        ),
-                      ]
-                    : null,
-              ),
-            ),
-          ),
-        );
-      }),
-    ),
-  );
+  return LiveWaveform(levels: audioLevels, color: accentColor, height: 26);
 }
 
 /// Build recording indicator (pulsating red dot)

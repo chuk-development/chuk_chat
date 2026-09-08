@@ -10,9 +10,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
 
 class RoomMembersSheet extends StatelessWidget {
   const RoomMembersSheet({
@@ -62,7 +62,7 @@ class RoomMembersSheet extends StatelessWidget {
             for (final m in room.members)
               ListTile(
                 dense: true,
-                leading: AgentAvatar(seed: m.agentId, label: m.handle, radius: 14),
+                leading: ExpressiveFace(id: m.agentId, label: m.handle, size: 28),
                 title: Text('@${m.handle}', overflow: TextOverflow.ellipsis),
                 trailing: IconButton(
                   tooltip: _atMinimum
@@ -90,10 +90,10 @@ class RoomMembersSheet extends StatelessWidget {
                     for (final agent in candidates)
                       ListTile(
                         dense: true,
-                        leading: AgentAvatar(
-                          seed: agent.id,
+                        leading: ExpressiveFace(
+                          id: agent.id,
                           label: agent.name,
-                          radius: 14,
+                          size: 28,
                         ),
                         title: Text(agent.name, overflow: TextOverflow.ellipsis),
                         trailing: IconButton(
