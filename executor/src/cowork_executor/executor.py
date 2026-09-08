@@ -110,11 +110,13 @@ from .protocol import (
     INBOUND_METHODS,
     MAX_BROWSER_CHUNK,
     METHOD_EVENT,
+    USER_BROWSER,
     approval_outcome_fields,
     approval_request_payload,
     b64_to_frame,
     browser_data_payload,
     browser_state_from_tool,
+    browser_target,
     browser_view_payload,
     debug_context_payload,
     decode_payload,
@@ -125,6 +127,7 @@ from .protocol import (
     done_payload,
     encode_payload,
     error_payload,
+    extension_mcp_entry,
     file_payload,
     frame_to_b64,
     mcp_credentials_payload,
@@ -1815,14 +1818,26 @@ class Executor:
         return prefix, str(cid)
 
     def _browser_mcp_entry(self, session_key: str | None = None) -> dict | None:
-        """The Playwright MCP server entry for that agent's container, or None.
+        """The browser MCP server entry for that agent, or None.
 
-        Runs the server INSIDE the container over `docker exec` stdio, so the
-        Chromium it launches renders to the container's Xvfb (the display x11vnc
-        serves) — the agent's browser and the watched browser are one process.
-        None when the browser MCP is off or the sandbox is not docker. Reuses the
-        same exec prefix (and container realization) as the VNC bridge.
+        Two targets, one entry, because the tool names are the same either way
+        (``mcp__playwright__browser_*``) and everything downstream — presence,
+        replay, the app's button — reads that one transcript:
+
+        ``sandbox`` (the default)
+            The Playwright MCP server INSIDE the container over ``docker exec``
+            stdio, so the Chromium it launches renders to the container's Xvfb,
+            the display x11vnc serves. The agent's browser and the watched
+            browser are one process. None on the browser-free base image or when
+            the sandbox is not docker.
+
+        ``user_browser``
+            ``cowork-extension-mcp`` on this machine, talking to the add-on in
+            the browser the user already has open. No container is involved, so
+            this one also works on the base image and with the local sandbox.
         """
+        if browser_target() == USER_BROWSER:
+            return extension_mcp_entry()
         if not self._browser_mcp:
             return None
         prep = self._vnc_exec_prefix(session_key)
