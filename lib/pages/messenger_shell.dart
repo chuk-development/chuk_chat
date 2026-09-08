@@ -48,6 +48,7 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -67,7 +68,10 @@ import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
+import 'package:cowork/pages/agent_profile_page.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
+import 'package:cowork/services/cowork/agent_profile_store.dart';
+import 'package:cowork/services/cowork/agent_read_marks.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/browser_presence.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
@@ -115,6 +119,8 @@ class MessengerShell extends StatefulWidget {
     this.themeController,
     this.shellConfig,
     this.chatDebugExport,
+    this.readMarks,
+    this.agentProfiles,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -164,6 +170,13 @@ class MessengerShell extends StatefulWidget {
   /// cache and the run ledger. Injectable so a widget test can drive the
   /// button without those.
   final Future<String> Function(String threadKey)? chatDebugExport;
+
+  /// What the reader has already seen, per thread — the inbox's unread answer.
+  /// Injectable so a widget test drives it without touching the app-wide store.
+  final AgentReadMarks? readMarks;
+
+  /// The coworkers' display profiles (picture, colour, role, brief).
+  final AgentProfileStore? agentProfiles;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
@@ -251,6 +264,9 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
     // The user picked this one: remember it for the next launch, and stop the
     // restore from moving the selection out from under them.
     _rememberSelection(agentId, threadKey);
+    // Opening a thread is reading it: the unread dot clears here, not when the
+    // next frame happens to arrive.
+    unawaited(_readMarks.markRead(threadKey));
     setState(() {
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;
@@ -260,6 +276,11 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
       if (_isCompact && _isSidebarExpanded) _isSidebarExpanded = false;
     });
   }
+
+  /// On a phone the inbox can cover the thread; a desktop window always shows
+  /// it. Read by the read marks in [CoworkShellHost].
+  @override
+  bool get _threadIsOnScreen => !_isPhone || _showThreadOnNarrow;
 
   void _toggleSidebar() {
     setState(() {
@@ -320,6 +341,24 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   }
 
   void _closePanel() => setState(() => _activePanel = null);
+
+  /// A coworker's profile page: the face, the state, the brief, and everything
+  /// the user can set or manage about it. Reached from the chat header pill, the
+  /// inbox row menu and the desktop roster row.
+  void _openAgentProfile(CoworkAgent agent) {
+    unawaited(
+      AgentProfilePage.open(
+        context,
+        agentId: agent.id,
+        source: _roster,
+        profiles: _agentProfiles,
+        onRename: (CoworkAgent target) => _openAgentRename(target),
+        onDelete: (CoworkAgent target) => _deleteAgent(target.id),
+        onOpenControls: _openControlDrawer,
+        onOpenBrowser: _browserOpen ? _openBrowserView : null,
+      ),
+    );
+  }
 
   /// chuk's settings entry: the modal over the chat on a desktop window
   /// (`showDesktopSettingsModal`), the hub as a route on a phone
@@ -662,50 +701,96 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the
   /// coworker list as an inbox, the chat with the floating chrome on top.
   /// Back (chip, system back, edge swipe) flips the same flag [_select] sets.
+  ///
+  /// Both layers stay in the tree the whole time. The chat area owns the socket
+  /// (see the library doc), so it may never be unmounted; and the inbox keeps
+  /// its search and filter while a chat is open. Opening a chat therefore does
+  /// not swap one widget for another — it drives ONE progress value, and the two
+  /// layers slide and fade past each other on it, which is the shared-axis
+  /// motion of the reference messenger without a second thread view.
   Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
-    if (_showThreadOnNarrow && agent != null) {
-      return MobileChatScreen(
-        agent: agent,
-        onBack: () => setState(() => _showThreadOnNarrow = false),
-        onOpenProfile: _openControlDrawer,
-        // Same gate as the desktop row: no chip until the agent has a browser.
-        onOpenBrowser: _browserOpen ? _openBrowserView : null,
-        onMore: () => MobileAgentSheet.show(
-          context,
-          agent: agent,
-          onControls: _openControlDrawer,
-          onRename: () => _openAgentRename(agent),
-          onRooms: _openRooms,
-          onCopyChat: _copyFullChat,
-          onSettings: _openSettings,
-          onSignOut: widget.onSignOut ?? () => const AuthService().signOut(),
-        ),
-        bodyBuilder: (context, topInset) =>
-            _buildThread(topInset: topInset, phone: true),
-      );
-    }
-    // The inbox, with the live thread kept mounted behind it (chuk's own
-    // `Positioned.fill(Offstage(chatArea))` pattern, plan WS-1). Without this
-    // the phone would build its transport only once a chat is opened: the
-    // thread view is what creates the relay controller and reports pairing, so
-    // an unmounted one means no socket, no reconnect, and a roster that never
-    // learns about the paired host. Offstage keeps it in the tree — and out of
-    // the layout — so the list is what the reader sees.
-    return Stack(
-      children: [
-        Positioned.fill(child: Offstage(child: _buildThread(phone: true))),
-        Positioned.fill(
-          child: MobileAgentList(
-            source: _roster,
-            selectedAgentId: _selectedAgentId,
-            onSelect: _select,
-            selectedThreadKey: _selectedThreadKey,
-            onAddAgent: _openOnboarding,
-            onOpenAccount: _openSettings,
-            accountLabel: null,
-          ),
-        ),
-      ],
+    final bool showChat = _showThreadOnNarrow && agent != null;
+    final double width = MediaQuery.sizeOf(context).width;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: showChat ? 1 : 0),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (BuildContext context, double t, Widget? _) {
+        final Widget chatLayer = agent == null
+            // No coworker selected: the thread view still has to exist, because
+            // it is what builds the transport.
+            ? Offstage(child: _buildThread(phone: true))
+            : Offstage(
+                offstage: t == 0,
+                child: Opacity(
+                  opacity: t.clamp(0.0, 1.0),
+                  child: Transform.translate(
+                    offset: Offset((1 - t) * width * 0.16, 0),
+                    child: MobileChatScreen(
+                      agent: agent,
+                      onBack: () => setState(() => _showThreadOnNarrow = false),
+                      // The pill opens the coworker's profile, like a messenger
+                      // contact header. The controls moved into the profile and
+                      // the "more" sheet.
+                      onOpenProfile: () => _openAgentProfile(agent),
+                      // Same gate as the desktop row: no chip until the agent
+                      // has a browser.
+                      onOpenBrowser: _browserOpen ? _openBrowserView : null,
+                      onMore: () => MobileAgentSheet.show(
+                        context,
+                        agent: agent,
+                        onControls: _openControlDrawer,
+                        onProfile: () => _openAgentProfile(agent),
+                        onRename: () => _openAgentRename(agent),
+                        onRooms: _openRooms,
+                        onCopyChat: _copyFullChat,
+                        onSettings: _openSettings,
+                        onSignOut:
+                            widget.onSignOut ??
+                            () => const AuthService().signOut(),
+                      ),
+                      bodyBuilder: (BuildContext context, double topInset) =>
+                          _buildThread(topInset: topInset, phone: true),
+                    ),
+                  ),
+                ),
+              );
+
+        return Stack(
+          children: [
+            Positioned.fill(child: chatLayer),
+            Positioned.fill(
+              child: Offstage(
+                offstage: t == 1,
+                child: IgnorePointer(
+                  ignoring: t > 0.5,
+                  child: Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset(-t * width * 0.16, 0),
+                      child: MobileAgentList(
+                        source: _roster,
+                        selectedAgentId: _selectedAgentId,
+                        onSelect: _select,
+                        selectedThreadKey: _selectedThreadKey,
+                        onAddAgent: _openOnboarding,
+                        onOpenAccount: _openSettings,
+                        onOpenProfile: _openAgentProfile,
+                        onRenameAgent: _openAgentRename,
+                        onDeleteAgent: (CoworkAgent target) =>
+                            _deleteAgent(target.id),
+                        readMarks: _readMarks,
+                        profiles: _agentProfiles,
+                        accountLabel: null,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
