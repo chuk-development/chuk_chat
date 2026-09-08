@@ -111,11 +111,27 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// decides what the selection does to the sidebar on a narrow window.
   void _select(String agentId, String threadKey);
 
+  /// Whether the selected thread is really in front of the reader. On a desktop
+  /// window it always is; on a phone the inbox can cover it. Implemented by the
+  /// layout, and read by the read marks: only what the reader can see is read.
+  bool get _threadIsOnScreen;
+
   CoworkAgent? get _selectedAgent =>
       _selectedAgentId == null ? null : _roster.byId(_selectedAgentId!);
 
+  /// What the user has already seen, per thread — the inbox's unread answer.
+  AgentReadMarks get _readMarks => widget.readMarks ?? AgentReadMarks.instance;
+
+  /// The coworkers' display profiles (picture, colour, role, brief).
+  AgentProfileStore get _agentProfiles =>
+      widget.agentProfiles ?? AgentProfileStore.instance;
+
   /// The `initState` half of the host. Called by the state after `super`.
   void _hostInit() {
+    // Both stores read one preferences key each and then notify; the inbox and
+    // every face listen to them, so a late load lands on its own.
+    unawaited(_readMarks.load());
+    unawaited(_agentProfiles.load());
     // Open where the user left off. The roster fills in stages — nothing at
     // first, the host coworker on pairing, the rest when the host sends its
     // names — so the restore is not one shot at startup: it watches the roster
@@ -378,6 +394,11 @@ mixin CoworkShellHost on State<MessengerShell> {
         if (agentId != null) {
           _roster.markActivity(agentId, threadKey, when);
         }
+        // The reader has this thread in front of them, so what just arrived is
+        // read. A thread that is only selected behind the phone inbox is not.
+        if (threadKey == _selectedThreadKey && _threadIsOnScreen) {
+          unawaited(_readMarks.markRead(threadKey, when: when));
+        }
       },
       onController: _onController,
       onOpenModelScreen: _openModelScreen,
@@ -619,7 +640,14 @@ mixin CoworkShellHost on State<MessengerShell> {
     // deleted room so nothing is orphaned. If the deleted agent was selected,
     // clear the selection so the thread pane does not point at a ghost.
     _deletedAgentIds.add(agentId);
+    final removed = _roster.byId(agentId);
     _roster.removeAgent(agentId);
+    // Nothing of a deleted coworker may survive to be inherited by a later one
+    // with the same id: drop its face and its read marks.
+    unawaited(_agentProfiles.forget(agentId));
+    for (final thread in removed?.threads ?? const <CoworkThreadInfo>[]) {
+      unawaited(_readMarks.forget(thread.key));
+    }
     // The rooms the agent was in, captured before the cascade rewrites them.
     final wasIn = <String>[
       for (final room in _rooms.rooms)
