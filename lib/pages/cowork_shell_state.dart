@@ -107,6 +107,10 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// the back chip, and cleared when the selected agent is deleted.
   bool _showThreadOnNarrow = false;
 
+  /// Opens a coworker's profile page. Implemented by the layout, which owns the
+  /// navigator and the callbacks the page needs.
+  void _openAgentProfile(CoworkAgent agent);
+
   /// Selects a coworker's thread. Implemented by the layout, which also
   /// decides what the selection does to the sidebar on a narrow window.
   void _select(String agentId, String threadKey);
@@ -404,6 +408,8 @@ mixin CoworkShellHost on State<MessengerShell> {
       onOpenModelScreen: _openModelScreen,
       title: agent?.name,
       subtitle: agent?.role,
+      headerAgent: agent,
+      onOpenAgentProfile: _openAgentProfile,
       actions: actions,
       leadingInset: leadingInset,
       topInset: topInset,

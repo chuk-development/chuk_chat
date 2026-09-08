@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
+import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/app_shell_config.dart';
 import 'package:cowork/platform_config.dart';
@@ -68,6 +69,8 @@ class CoworkThreadView extends StatefulWidget {
     this.shellConfig,
     this.title,
     this.subtitle,
+    this.headerAgent,
+    this.onOpenAgentProfile,
     this.actions = const <CoworkThreadAction>[],
     this.leadingInset = 0,
     this.topInset = 0,
@@ -135,6 +138,14 @@ class CoworkThreadView extends StatefulWidget {
 
   /// The quieter second line under [title] — the coworker's role.
   final String? subtitle;
+
+  /// The coworker whose thread this is. With it the header shows the messenger's
+  /// contact pill (face, name, live state) instead of a plain title; a room
+  /// thread and a widget test without a roster pass null and keep the text.
+  final CoworkAgent? headerAgent;
+
+  /// Tap on the header pill — the coworker's profile page.
+  final void Function(CoworkAgent agent)? onOpenAgentProfile;
 
   /// Actions the SHELL owns but this thread's header shows: agent controls,
   /// Control Rooms, the agent's browser, Copy Debug Chat. They used to float
@@ -889,6 +900,11 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     return CoworkThreadHeader(
       title: widget.title,
       subtitle: widget.subtitle,
+      // The phone has its own floating chrome with the coworker on it, so the
+      // dense header keeps no subject block and no parked call.
+      agent: dense ? null : widget.headerAgent,
+      onOpenProfile: widget.onOpenAgentProfile,
+      showParkedCall: !dense,
       connection: switch (state.phase) {
         CoworkRelayPhase.paired => CoworkThreadConnection.live,
         CoworkRelayPhase.connecting ||

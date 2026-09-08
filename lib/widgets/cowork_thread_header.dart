@@ -2,6 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/services/cowork/agent_profile_store.dart';
+import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/feedback.dart';
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/working_dots.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/anchored_menu.dart';
 
@@ -72,6 +78,9 @@ class CoworkThreadHeader extends StatelessWidget {
     this.leadingInset = 0,
     this.topInset = 0,
     this.dense = false,
+    this.agent,
+    this.onOpenProfile,
+    this.showParkedCall = true,
   });
 
   /// The coworker this thread belongs to. Null before one is selected: the row
@@ -108,6 +117,20 @@ class CoworkThreadHeader extends StatelessWidget {
   final double topInset;
 
   final bool dense;
+
+  /// The coworker this thread belongs to. When it is given, the subject block is
+  /// the messenger's contact pill — the blob face, the name and the live state —
+  /// and it opens the profile. Without it the header falls back to [title] and
+  /// [subtitle] as plain text, which is what a room thread and a widget test
+  /// with no roster get.
+  final CoworkAgent? agent;
+
+  /// Tap on the subject pill. Null renders it flat.
+  final void Function(CoworkAgent agent)? onOpenProfile;
+
+  /// Whether the parked voice-call target is shown. CoWork has no voice channel
+  /// to a coworker; the target holds the place and says so.
+  final bool showParkedCall;
 
   /// One action's footprint: Material's 40 px hit box, the size chuk's own
   /// icon rows use.
@@ -183,6 +206,7 @@ class CoworkThreadHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (showParkedCall && agent != null) _buildParkedCall(context),
         for (final action in actions.take(inline))
           _buildAction(context, action),
         if (overflows) _buildOverflow(context, actions.skip(inline).toList()),
@@ -207,6 +231,59 @@ class CoworkThreadHeader extends StatelessWidget {
       CoworkThreadConnection.connecting => scheme.tertiary,
       CoworkThreadConnection.down => scheme.error,
     };
+    final CoworkAgent? who = agent;
+    if (who != null) {
+      // The messenger's contact header: face, name, live state — and the
+      // connection dot on the face's side, because that is the one thing about
+      // the transport the reader can see at a glance.
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: state,
+            child: Icon(Icons.circle, size: 8, color: dot),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: MorphTap(
+              onTap: onOpenProfile == null ? null : () => onOpenProfile!(who),
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+              shape: const StadiumBorder(),
+              pressedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              pressedScale: 0.98,
+              padding: const EdgeInsets.fromLTRB(4, 3, 12, 3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AgentFace(agent: who, size: 30),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          who.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        _AgentStateLine(agent: who, scheme: scheme),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -245,6 +322,23 @@ class CoworkThreadHeader extends StatelessWidget {
       ],
     );
   }
+
+  /// The parked voice call. It is not a [CoworkThreadAction] because it must
+  /// never look like something that works, and it must never fold into the
+  /// overflow menu as if it were an action.
+  Widget _buildParkedCall(BuildContext context) => ExpressiveIconButton(
+    icon: Icons.call_rounded,
+    size: _slot,
+    parked: true,
+    color: Colors.transparent,
+    tooltip: 'Voice call is not available yet',
+    semanticsId: 'thread_header_call',
+    onTap: () => pillToast(
+      context,
+      'Voice calls with a coworker are not available yet',
+      icon: Icons.call_end_rounded,
+    ),
+  );
 
   /// Every action is the same button, so a button that moved in from the
   /// shell cannot arrive with its own sizing.
@@ -313,22 +407,63 @@ class _HeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color iconFg = Theme.of(context).resolvedIconColor;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: CoworkThreadHeader._slot,
-            height: CoworkThreadHeader._slot,
-            child: Icon(icon, size: 20, color: iconFg),
-          ),
-        ),
-      ),
+    // The expressive target: it springs and morphs like every other button in
+    // the redesigned UI, and it keeps the header's 40 px slot.
+    return ExpressiveIconButton(
+      icon: icon,
+      size: CoworkThreadHeader._slot,
+      color: Colors.transparent,
+      onColor: iconFg,
+      tooltip: tooltip,
+      onTap: onTap,
     );
+  }
+}
+
+/// The line under the coworker's name in the desktop header: what it is doing,
+/// read from its own activity.
+class _AgentStateLine extends StatelessWidget {
+  const _AgentStateLine({required this.agent, required this.scheme});
+
+  final CoworkAgent agent;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? role = _roleOf(agent);
+    switch (agent.activity) {
+      case AgentActivity.working:
+        return WorkingDots(color: scheme.primary);
+      case AgentActivity.scheduled:
+        return Text(
+          role == null ? 'Scheduled' : '$role · scheduled',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: scheme.tertiary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      case AgentActivity.waiting:
+        return Text(
+          role ?? 'Waiting',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: scheme.onSurfaceVariant,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+    }
+  }
+
+  static String? _roleOf(CoworkAgent agent) {
+    final stored = AgentProfileStore.instance.profileOf(agent.id).role?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    final own = agent.role?.trim();
+    return (own == null || own.isEmpty) ? null : own;
   }
 }
 

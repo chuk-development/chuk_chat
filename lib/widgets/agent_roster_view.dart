@@ -46,7 +46,10 @@ import 'package:flutter/material.dart';
 
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/services/cowork/agent_profile_store.dart';
+import 'package:cowork/services/cowork/agent_read_marks.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/services/profile_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
@@ -65,8 +68,11 @@ class AgentRosterView extends StatefulWidget {
     this.onRenameAgent,
     this.onOpenRooms,
     this.onOpenSettings,
+    this.onOpenProfile,
     this.accountLabel,
     this.now,
+    this.readMarks,
+    this.profiles,
   });
 
   final AgentRosterSource source;
@@ -91,6 +97,10 @@ class AgentRosterView extends StatefulWidget {
   /// trimmed, non-empty, changed name is reported here. The shell persists it.
   final void Function(String agentId, String name)? onRenameAgent;
 
+  /// Opens a coworker's profile page (its row menu → Profile). Hidden when
+  /// null.
+  final void Function(CoworkAgent agent)? onOpenProfile;
+
   /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
   final VoidCallback? onOpenRooms;
 
@@ -105,6 +115,14 @@ class AgentRosterView extends StatefulWidget {
 
   /// Clock seam so "5m ago" is deterministic in a test.
   final DateTime Function()? now;
+
+  /// What the reader has already seen, per thread — the unread dot on a row.
+  /// Injectable for tests; defaults to the app-wide store.
+  final AgentReadMarks? readMarks;
+
+  /// The coworkers' display profiles (picture, colour, role). Injectable for
+  /// tests; defaults to the app-wide store.
+  final AgentProfileStore? profiles;
 
   @override
   State<AgentRosterView> createState() => _AgentRosterViewState();
@@ -156,8 +174,15 @@ class _AgentRosterViewState extends State<AgentRosterView> {
 
   @override
   Widget build(BuildContext context) {
+    // The rail follows three sources: the roster, what is unread, and the
+    // display profiles — a new face or a cleared unread dot must land without a
+    // reselect.
     return AnimatedBuilder(
-      animation: widget.source,
+      animation: Listenable.merge(<Listenable>[
+        widget.source,
+        widget.readMarks ?? AgentReadMarks.instance,
+        widget.profiles ?? AgentProfileStore.instance,
+      ]),
       builder: (context, _) {
         final t = SidebarTokens.of(context);
         final agents = widget.source.visibleAgents;
@@ -416,6 +441,11 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     onTap: agent.threads.isEmpty
         ? null
         : () => widget.onSelect(agent.id, agent.threads.first.key),
+    unread: (widget.readMarks ?? AgentReadMarks.instance).isUnread(agent),
+    profiles: widget.profiles ?? AgentProfileStore.instance,
+    onOpenProfile: widget.onOpenProfile == null
+        ? null
+        : () => widget.onOpenProfile!(agent),
     onHide: () => widget.source.hideAgent(agent.id),
     onRename: widget.onRenameAgent == null
         ? null
@@ -531,6 +561,9 @@ class _AgentTile extends StatefulWidget {
     required this.onHide,
     this.onRename,
     this.onDelete,
+    this.onOpenProfile,
+    this.unread = false,
+    this.profiles,
   });
 
   final CoworkAgent agent;
@@ -538,6 +571,14 @@ class _AgentTile extends StatefulWidget {
   final DateTime now;
   final VoidCallback? onTap;
   final VoidCallback onHide;
+
+  /// Opens the coworker's profile page. Null hides the menu item.
+  final VoidCallback? onOpenProfile;
+
+  /// Something happened in its thread since the reader last had it open.
+  final bool unread;
+
+  final AgentProfileStore? profiles;
 
   /// Opens the rename dialog. Null hides the item.
   final VoidCallback? onRename;
@@ -552,6 +593,16 @@ class _AgentTile extends StatefulWidget {
 
 class _AgentTileState extends State<_AgentTile> {
   bool _hovered = false;
+
+  /// The role line: the one the user set in the profile wins over the one the
+  /// coworker was created with.
+  String? get _role {
+    final store = widget.profiles ?? AgentProfileStore.instance;
+    final stored = store.profileOf(widget.agent.id).role?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    final own = widget.agent.role?.trim();
+    return (own == null || own.isEmpty) ? null : own;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +637,7 @@ class _AgentTileState extends State<_AgentTile> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                AgentAvatar(seed: agent.id, label: agent.name, radius: 15),
+                AgentFace(agent: agent, size: 34, store: widget.profiles),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -608,11 +659,11 @@ class _AgentTileState extends State<_AgentTile> {
                           color: selected ? t.accent : t.iconFg,
                         ),
                       ),
-                      if (agent.role != null)
+                      if (_role != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 1),
                           child: Text(
-                            agent.role!,
+                            _role!,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
@@ -647,6 +698,20 @@ class _AgentTileState extends State<_AgentTile> {
                     ],
                   ),
                 ),
+                // Unread: one dot in the accent. No count — the app cannot know
+                // how many messages arrived while the reader was away.
+                if (widget.unread)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: t.accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
                 // The row menu stays in the tree at all times — a hover-only
                 // control is invisible on a touch screen — but it sits back at
                 // low contrast until the pointer is on the row.
@@ -663,11 +728,22 @@ class _AgentTileState extends State<_AgentTile> {
                       color: t.iconFg.withValues(alpha: 0.7),
                     ),
                     onSelected: (value) {
+                      if (value == 'profile') widget.onOpenProfile?.call();
                       if (value == 'rename') widget.onRename?.call();
                       if (value == 'hide') widget.onHide();
                       if (value == 'delete') widget.onDelete?.call();
                     },
                     itemBuilder: (context) => [
+                      if (widget.onOpenProfile != null)
+                        const PopupMenuItem<String>(
+                          value: 'profile',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.person_outline, size: 18),
+                            title: Text('Profile'),
+                          ),
+                        ),
                       if (widget.onRename != null)
                         const PopupMenuItem<String>(
                           value: 'rename',
