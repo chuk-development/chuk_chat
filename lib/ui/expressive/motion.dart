@@ -176,7 +176,9 @@ class ExpressiveButton extends StatelessWidget {
 /// square while held. Used for every round chip in the floating chrome.
 ///
 /// [onTap] null renders the target disabled — dimmed glyph, no ink, no spring.
-/// That is how the parked voice-call button is shown.
+/// [parked] renders the same dimmed look but keeps the tap, so a feature that
+/// does not exist yet can hold its place and say so when it is pressed. That is
+/// how the voice-call button in the chat header is shown.
 class ExpressiveIconButton extends StatelessWidget {
   const ExpressiveIconButton({
     super.key,
@@ -187,6 +189,7 @@ class ExpressiveIconButton extends StatelessWidget {
     this.size = 48,
     this.tooltip,
     this.semanticsId,
+    this.parked = false,
   });
 
   final IconData icon;
@@ -199,14 +202,19 @@ class ExpressiveIconButton extends StatelessWidget {
   final String? tooltip;
   final String? semanticsId;
 
+  /// A target for a feature that is not available yet: it looks disabled and it
+  /// still calls [onTap], which is expected to explain why.
+  final bool parked;
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final bool enabled = onTap != null;
+    final bool enabled = onTap != null && !parked;
     final Color fill = color ?? scheme.surfaceContainerHighest;
     final Color glyph = onColor ?? scheme.onSurfaceVariant;
     Widget button = MorphTap(
       onTap: onTap,
+      pressedScale: parked ? 0.98 : 0.93,
       color: enabled ? fill : fill.withValues(alpha: 0.5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(size * 0.34),

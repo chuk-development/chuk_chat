@@ -1,15 +1,21 @@
-/// The floating top bar of a phone chat, after Grok Bot.
+/// The floating top bar of a phone chat, in the expressive design language.
 ///
-/// Grok Bot's chat has no app bar. Three things float over the messages on a
-/// soft fade: a round back chip, a pill with the bot's face, presence dot and
-/// name (tap: the bot's profile), and a round "computer" chip that opens the
-/// bot's screen. CoWork has the same three things — the coworker, its
-/// browser (`browser_view_page`) and its controls — plus the shell actions
-/// that used to sit in the app bar, which fold into one "more" chip.
+/// Nothing sits in an app bar. Over the messages, on a soft fade, float
 ///
-/// The bar draws nothing behind the status bar and reads only `paddingOf`, so
-/// it never rebuilds on a keyboard frame. The chat body under it must reserve
-/// [MobileLayout.chromeInset] at the top; [MobileChatScreen] does that.
+///  * a back target that springs and morphs on press;
+///  * an outlined pill with the coworker's blob face, its name and its live
+///    state — "working" with pulsing dots while a run is open, "Scheduled" when
+///    a schedule is armed, "Waiting" otherwise. Tapping the pill opens the
+///    coworker's profile;
+///  * a PARKED voice-call target. The reference messenger has calls; CoWork has
+///    no voice channel to an agent, so the button is there and disabled, and it
+///    says why when it is tapped. It is never wired to a fake call;
+///  * the coworker's browser, only while it really has one open;
+///  * the "more" target with the shell's secondary actions.
+///
+/// The bar reads only `paddingOf`, so it never rebuilds on a keyboard frame. The
+/// body under it reserves [MobileLayout.chromeInset]; [MobileChatScreen] does
+/// that.
 library;
 
 import 'package:flutter/material.dart';
@@ -17,7 +23,11 @@ import 'package:flutter/material.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/platform_specific/mobile/mobile_chips.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/platform_specific/mobile/mobile_presence_avatar.dart';
+import 'package:cowork/services/cowork/agent_profile_store.dart';
+import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/feedback.dart';
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/working_dots.dart';
 
 class MobileChatChrome extends StatelessWidget {
   const MobileChatChrome({
@@ -27,6 +37,8 @@ class MobileChatChrome extends StatelessWidget {
     this.onOpenProfile,
     this.onOpenBrowser,
     this.onMore,
+    this.showCallButton = true,
+    this.profiles,
   });
 
   final CoworkAgent agent;
@@ -34,19 +46,23 @@ class MobileChatChrome extends StatelessWidget {
   /// Back to the coworker list.
   final VoidCallback onBack;
 
-  /// Tap on the bot pill. Null renders the pill flat (no ripple).
+  /// Tap on the coworker pill — its profile page. Null renders the pill flat.
   final VoidCallback? onOpenProfile;
 
-  /// The "computer" chip: the coworker's browser. Null hides the chip.
+  /// The "computer" target: the coworker's browser. Null hides it.
   final VoidCallback? onOpenBrowser;
 
-  /// The "more" chip: the shell's secondary actions. Null hides the chip.
+  /// The "more" target: the shell's secondary actions. Null hides it.
   final VoidCallback? onMore;
+
+  /// Whether the parked voice-call target is shown at all.
+  final bool showCallButton;
+
+  final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color fg = theme.colorScheme.onSurface;
+    final ColorScheme scheme = Theme.of(context).colorScheme;
     return MobileBarFade(
       child: SafeArea(
         bottom: false,
@@ -55,37 +71,62 @@ class MobileChatChrome extends StatelessWidget {
           child: SizedBox(
             height: MobileLayout.chipDiameter,
             child: Row(
-              children: [
-                MobileRoundChip(
-                  icon: Icons.arrow_back_ios_new_rounded,
+              children: <Widget>[
+                ExpressiveIconButton(
+                  icon: Icons.arrow_back_rounded,
                   onTap: onBack,
-                  tooltip: 'Agents',
+                  color: scheme.surface,
+                  tooltip: 'Coworkers',
                   semanticsId: 'mobile_chat_back',
                 ),
                 const SizedBox(width: 8),
                 // Expanded + left alignment: a long name ellipsises inside the
-                // pill instead of pushing the chips off the right edge, and a
-                // short name hugs the back chip like Grok Bot's pill does.
+                // pill instead of pushing the targets off the right edge.
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: _BotPill(agent: agent, onTap: onOpenProfile, fg: fg),
+                    child: _AgentPill(
+                      agent: agent,
+                      onTap: onOpenProfile,
+                      profiles: profiles,
+                    ),
                   ),
                 ),
-                if (onOpenBrowser != null) ...[
+                if (showCallButton) ...<Widget>[
                   const SizedBox(width: 8),
-                  MobileRoundChip(
-                    icon: Icons.desktop_windows_outlined,
+                  // Parked: CoWork has no voice channel to a coworker. The
+                  // target holds the place, it looks disabled, and it says why
+                  // when it is pressed. It is never wired to a fake call.
+                  ExpressiveIconButton(
+                    icon: Icons.call_rounded,
+                    parked: true,
+                    color: scheme.surface,
+                    tooltip: 'Voice call is not available yet',
+                    semanticsId: 'mobile_chat_call',
+                    onTap: () => pillToast(
+                      context,
+                      'Voice calls with a coworker are not available yet',
+                      icon: Icons.call_end_rounded,
+                    ),
+                  ),
+                ],
+                if (onOpenBrowser != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  ExpressiveIconButton(
+                    icon: Icons.desktop_windows_rounded,
                     onTap: onOpenBrowser,
+                    color: scheme.tertiaryContainer,
+                    onColor: scheme.onTertiaryContainer,
                     tooltip: "Agent's browser",
                     semanticsId: 'mobile_chat_browser',
                   ),
                 ],
-                if (onMore != null) ...[
+                if (onMore != null) ...<Widget>[
                   const SizedBox(width: 8),
-                  MobileRoundChip(
+                  ExpressiveIconButton(
                     icon: Icons.more_horiz_rounded,
                     onTap: onMore,
+                    color: scheme.surface,
                     tooltip: 'More',
                     semanticsId: 'mobile_chat_more',
                   ),
@@ -99,64 +140,110 @@ class MobileChatChrome extends StatelessWidget {
   }
 }
 
-/// The bot pill: face, presence dot, name. As tall as a chip so it is one
-/// touch target.
-class _BotPill extends StatelessWidget {
-  const _BotPill({required this.agent, required this.onTap, required this.fg});
+/// The coworker pill: face, name, live state. As tall as a chip, so the whole
+/// row is one line of touch targets.
+class _AgentPill extends StatelessWidget {
+  const _AgentPill({required this.agent, required this.onTap, this.profiles});
 
   final CoworkAgent agent;
   final VoidCallback? onTap;
-  final Color fg;
+  final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final String? role = agent.role?.trim();
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AgentProfileStore store = profiles ?? AgentProfileStore.instance;
+    final String? role = _roleOf(store);
     return Semantics(
       identifier: 'mobile_chat_bot_pill',
       button: onTap != null,
       label: agent.name,
       child: Tooltip(
-        message: role == null || role.isEmpty
-            ? agent.name
-            : '${agent.name} · $role',
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(MobileLayout.chipDiameter / 2),
-            boxShadow: mobileChipShadow(theme),
+        message: role == null ? agent.name : '${agent.name} · $role',
+        child: MorphTap(
+          onTap: onTap,
+          color: scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              MobileLayout.chipDiameter / 2,
+            ),
+            side: BorderSide(color: scheme.outlineVariant, width: 1.2),
           ),
-          child: Material(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(MobileLayout.chipDiameter / 2),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
-                child: Row(
+          pressedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: scheme.outlineVariant, width: 1.2),
+          ),
+          pressedScale: 0.97,
+          padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              AgentFace(agent: agent, size: 36, store: store),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MobilePresenceAvatar(agent: agent, radius: 18),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        agent.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: fg.withValues(alpha: 0.92),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  children: <Widget>[
+                    Text(
+                      agent.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
+                    const SizedBox(height: 1),
+                    _StateLine(agent: agent, scheme: scheme),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  String? _roleOf(AgentProfileStore store) {
+    final String? stored = store.profileOf(agent.id).role?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    final String? own = agent.role?.trim();
+    return (own == null || own.isEmpty) ? null : own;
+  }
+}
+
+/// The line under the name: the coworker's own activity, nothing invented.
+class _StateLine extends StatelessWidget {
+  const _StateLine({required this.agent, required this.scheme});
+
+  final CoworkAgent agent;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (agent.activity) {
+      case AgentActivity.working:
+        return WorkingDots(color: scheme.primary);
+      case AgentActivity.scheduled:
+        return Text(
+          'Scheduled',
+          style: TextStyle(
+            color: scheme.tertiary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      case AgentActivity.waiting:
+        return Text(
+          'Waiting',
+          style: TextStyle(
+            color: scheme.onSurfaceVariant,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+    }
   }
 }
