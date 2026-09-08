@@ -10,8 +10,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/bubble_shape.dart';
+import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
 
 class RoomThreadView extends StatelessWidget {
   const RoomThreadView({
@@ -111,7 +112,7 @@ class RoomThreadView extends StatelessWidget {
           final m = members[i];
           return Row(
             children: [
-              AgentAvatar(seed: m.agentId, label: m.handle, radius: 9),
+              ExpressiveFace(id: m.agentId, label: m.handle, size: 18),
               const SizedBox(width: 4),
               Text('@${m.handle}', style: theme.textTheme.bodySmall),
             ],
@@ -148,21 +149,32 @@ class RoomThreadView extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AgentAvatar(seed: turn.agentId, label: turn.handle, radius: 14),
+          ExpressiveFace(id: turn.agentId, label: turn.handle, size: 28),
           const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '@${turn.handle}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
+          // One member's turn is one bubble, in the same shape a coworker's
+          // message has in a one-to-one thread.
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHigh,
+                borderRadius: bubbleRadius(false, BubblePosition.single),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '@${turn.handle}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(turn.text),
-              ],
+                  const SizedBox(height: 2),
+                  Text(turn.text),
+                ],
+              ),
             ),
           ),
         ],

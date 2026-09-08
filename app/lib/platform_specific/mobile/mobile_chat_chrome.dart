@@ -175,7 +175,8 @@ class _AgentPill extends StatelessWidget {
             side: BorderSide(color: scheme.outlineVariant, width: 1.2),
           ),
           pressedScale: 0.97,
-          padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
+          // 36 face + 2 x 6 = the 48 dp touch target the chips have.
+          padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -190,11 +191,13 @@ class _AgentPill extends StatelessWidget {
                       agent.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      // Tight line height: the name and the state line share
+                      // the pill's 36 px of inner height.
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
+                        height: 1.15,
                       ),
                     ),
-                    const SizedBox(height: 1),
                     _StateLine(agent: agent, scheme: scheme),
                   ],
                 ),
@@ -232,6 +235,7 @@ class _StateLine extends StatelessWidget {
           style: TextStyle(
             color: scheme.tertiary,
             fontSize: 11,
+            height: 1.2,
             fontWeight: FontWeight.w700,
           ),
         );
@@ -241,6 +245,7 @@ class _StateLine extends StatelessWidget {
           style: TextStyle(
             color: scheme.onSurfaceVariant,
             fontSize: 11,
+            height: 1.2,
             fontWeight: FontWeight.w700,
           ),
         );

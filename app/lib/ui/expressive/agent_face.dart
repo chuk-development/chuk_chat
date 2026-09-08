@@ -55,6 +55,68 @@ const List<Color> kAgentAccents = <Color>[
   Color(0xFF607D8B),
 ];
 
+/// A face for an identity the caller only knows as an id and a label — a room
+/// member, a room turn, a picker row. Same blob, same colour rule, same stored
+/// picture as [AgentFace]; there is simply no activity to show a dot for.
+class ExpressiveFace extends StatelessWidget {
+  const ExpressiveFace({
+    super.key,
+    required this.id,
+    required this.label,
+    this.size = 32,
+    this.store,
+    this.dimmed = false,
+  });
+
+  final String id;
+  final String label;
+  final double size;
+  final AgentProfileStore? store;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AgentProfileStore profiles = store ?? AgentProfileStore.instance;
+    return AnimatedBuilder(
+      animation: profiles,
+      builder: (BuildContext context, Widget? _) {
+        final ShapeBorder shape = expressiveShapeFor(id);
+        final Color color = agentAccent(context, id, store: profiles);
+        final ImageProvider<Object>? photo = faceImageProvider(
+          profiles.profileOf(id).photoPath,
+        );
+        return Opacity(
+          opacity: dimmed ? 0.4 : 1.0,
+          child: Container(
+            width: size,
+            height: size,
+            decoration: ShapeDecoration(
+              color: photo == null ? color : null,
+              shape: shape,
+              image: photo == null
+                  ? null
+                  : DecorationImage(image: photo, fit: BoxFit.cover),
+            ),
+            child: photo != null
+                ? null
+                : Center(
+                    child: Text(
+                      AgentAvatar.monogramOf(label),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: size * 0.38,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class AgentFace extends StatelessWidget {
   const AgentFace({
     super.key,

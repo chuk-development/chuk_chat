@@ -76,7 +76,11 @@ void main() {
     // the test ends: the binding asserts that no painting flag leaks.
     debugDisableShadows = false;
     try {
-      await tester.pumpAndSettle();
+      // A fixed pump, not pumpAndSettle: the redesigned chrome carries a
+      // repeating indicator while a coworker is working, so the tree never
+      // settles. The fake clock makes a fixed advance deterministic — long
+      // enough for the list's staggered entrance to finish.
+      await tester.pump(const Duration(milliseconds: 1400));
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('$_out/$name.png'),
