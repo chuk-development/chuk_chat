@@ -345,6 +345,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// A coworker's profile page: the face, the state, the brief, and everything
   /// the user can set or manage about it. Reached from the chat header pill, the
   /// inbox row menu and the desktop roster row.
+  @override
   void _openAgentProfile(CoworkAgent agent) {
     unawaited(
       AgentProfilePage.open(
@@ -507,9 +508,12 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
                 ignoring: !_isSidebarExpanded,
                 child: AgentRosterView(
                   source: _roster,
+                  readMarks: _readMarks,
+                  profiles: _agentProfiles,
                   selectedAgentId: _selectedAgentId,
                   selectedThreadKey: _selectedThreadKey,
                   onSelect: _select,
+                  onOpenProfile: _openAgentProfile,
                   onAddAgent: _openOnboarding,
                   onDeleteAgent: _deleteAgent,
                   onRenameAgent: _renameAgent,
