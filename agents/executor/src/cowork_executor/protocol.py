@@ -134,6 +134,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
 # Hard ceiling for one ``file`` event, in raw bytes. Base64 inside the sealed
@@ -931,3 +934,54 @@ def approval_outcome_fields(
         "decision_reason": reason,
         "decided_at": float(at),
     }
+
+
+# -- browser target: the sandbox, or the browser the user already has open ----
+
+#: Which browser a task drives. ``sandbox`` is the default and the old behaviour.
+SANDBOX_BROWSER = "sandbox"
+USER_BROWSER = "user_browser"
+BROWSER_TARGETS = (SANDBOX_BROWSER, USER_BROWSER)
+
+#: Env var a host sets to point every task at the add-on instead of the sandbox.
+BROWSER_TARGET_ENV = "COWORK_BROWSER_TARGET"
+
+#: Where ``cowork-extension-mcp`` lives, overridable for a packaged install.
+EXTENSION_MCP_ENV = "COWORK_EXTENSION_MCP"
+
+
+def browser_target(value: str | None = None) -> str:
+    """``user_browser`` only when asked for it; anything else means the sandbox.
+
+    An unknown value is not an error: a task from a newer app naming a target
+    this executor does not have must still run, on the target it does have.
+    """
+    raw = value if value is not None else os.environ.get(BROWSER_TARGET_ENV)
+    return USER_BROWSER if (raw or "").strip() == USER_BROWSER else SANDBOX_BROWSER
+
+
+def extension_mcp_script() -> Path | None:
+    """The add-on's MCP server on this machine, or None when it is not there."""
+    override = os.environ.get(EXTENSION_MCP_ENV)
+    if override:
+        path = Path(override).expanduser()
+        return path if path.exists() else None
+    # executor/src/cowork_executor/protocol.py -> repository root
+    root = Path(__file__).resolve().parents[3]
+    path = root / "tools" / "cowork-extension-mcp" / "cowork_extension_mcp.py"
+    return path if path.exists() else None
+
+
+def extension_mcp_entry() -> dict | None:
+    """The MCP server entry for the user's own browser.
+
+    Named ``playwright`` on purpose: the agent builds its tool names as
+    ``mcp__<server>__<tool>``, and every other part of CoWork matches on
+    ``mcp__playwright__browser_*``. The name is the compatibility seam, not a
+    claim about what drives the page — behind it is the add-on, over a unix
+    socket, with no Playwright anywhere.
+    """
+    script = extension_mcp_script()
+    if script is None:
+        return None
+    return {"name": "playwright", "command": sys.executable, "args": [str(script)]}

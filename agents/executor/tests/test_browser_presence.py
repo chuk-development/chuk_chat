@@ -14,6 +14,7 @@ from cowork_agent import MockModelClient, StateStore
 from cowork_sandbox import LocalEnvironment
 
 from cowork_executor import ControllerSession, Executor, loopback_pair
+from cowork_executor import protocol
 from cowork_executor.protocol import browser_state_from_tool, run_state_payload
 
 from wiring import paired_channel
@@ -149,3 +150,45 @@ def test_replay_header_carries_browser_open_over_the_wire(tmp_path):
     state = events[0]
     assert state["type"] == "run_state"
     assert state["browser_open"] is True
+
+
+# -- which browser: the sandbox, or the one the user already has open ---------
+#
+# Bead cowork-fa8. The add-on is a second target behind the same tool names, so
+# nothing above this line has to change: the presence logic still matches on
+# ``mcp__playwright__browser_*`` either way.
+
+
+def test_browser_target_defaults_to_the_sandbox(monkeypatch):
+    monkeypatch.delenv(protocol.BROWSER_TARGET_ENV, raising=False)
+    assert protocol.browser_target() == protocol.SANDBOX_BROWSER
+
+
+def test_browser_target_reads_the_environment(monkeypatch):
+    monkeypatch.setenv(protocol.BROWSER_TARGET_ENV, "user_browser")
+    assert protocol.browser_target() == protocol.USER_BROWSER
+
+
+def test_an_unknown_target_still_runs_on_the_sandbox(monkeypatch):
+    # A task from a newer app naming a target this executor never heard of must
+    # still run, on the target it does have.
+    monkeypatch.delenv(protocol.BROWSER_TARGET_ENV, raising=False)
+    assert protocol.browser_target("holodeck") == protocol.SANDBOX_BROWSER
+    assert protocol.browser_target("") == protocol.SANDBOX_BROWSER
+
+
+def test_the_extension_entry_is_named_playwright():
+    entry = protocol.extension_mcp_entry()
+    assert entry is not None, "tools/cowork-extension-mcp ships with the repository"
+    # The name is the whole compatibility seam: the agent builds tool names as
+    # mcp__<server>__<tool>, and everything downstream matches on
+    # mcp__playwright__browser_*.
+    assert entry["name"] == "playwright"
+    assert entry["args"][0].endswith("cowork_extension_mcp.py")
+    assert browser_state_from_tool("mcp__playwright__browser_navigate", {}, "completed") is True
+
+
+def test_a_missing_extension_server_is_reported_as_none(monkeypatch, tmp_path):
+    monkeypatch.setenv(protocol.EXTENSION_MCP_ENV, str(tmp_path / "nope.py"))
+    assert protocol.extension_mcp_script() is None
+    assert protocol.extension_mcp_entry() is None
