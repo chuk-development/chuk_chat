@@ -1,6 +1,9 @@
 # Plan: der Browser des Nutzers als zweites Browser-Target (Firefox/Chrome-Add-on)
 
-Session cowork-3c, 2026-09-08. Status: Entwurf zur Freigabe.
+Session cowork-3c, 2026-09-08. Status: Entwurf. **Abschnitte 2, 4, 5 und 6 sind durch
+`docs/RESEARCH_2026-09-08_BROWSER_CONTROL_APIS.md` (gleicher Tag) ueberholt** —
+dort steht, was Chrome und Firefox wirklich anbieten und was Claude for Chrome
+tatsaechlich benutzt. Gueltig bleiben Abschnitt 1 (die Naht) und 3 (Panel).
 
 Heute fährt der Agent einen Browser **in der Sandbox** (Docker + Xvfb + VNC,
 `cowork-browser-mcp`, Tools `mcp__playwright__browser_*`). Das bleibt der
