@@ -52,7 +52,7 @@ import 'package:cowork/utils/color_extensions.dart';
 import 'package:cowork/utils/tool_parser.dart';
 import 'package:cowork/ui/expressive/bubble_kind.dart';
 import 'package:cowork/ui/expressive/bubble_shape.dart';
-import 'package:cowork/ui/expressive/receipt.dart';
+import 'package:cowork/ui/expressive/message_stamp.dart';
 import 'package:cowork/widgets/ask_user_card.dart';
 import 'package:cowork/widgets/mcp_connect_card.dart';
 import 'package:cowork/services/mcp/mcp_availability.dart';
@@ -183,8 +183,6 @@ class MessageBubble extends StatefulWidget {
     this.variantCount = 0,
     this.onPrevVariant,
     this.onNextVariant,
-    this.pickedUp = false,
-    this.answered = false,
   });
 
   final String message;
@@ -282,13 +280,6 @@ class MessageBubble extends StatefulWidget {
   /// respective end) disables that arrow.
   final VoidCallback? onPrevVariant;
   final VoidCallback? onNextVariant;
-
-  /// Only for a USER bubble, and only facts the thread knows: [pickedUp] is
-  /// true once the coworker started this turn, [answered] once a coworker
-  /// message follows it. Together with [status] they drive the receipt ticks
-  /// (see [receiptStateFor]). A coworker's own bubble never shows ticks.
-  final bool pickedUp;
-  final bool answered;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();

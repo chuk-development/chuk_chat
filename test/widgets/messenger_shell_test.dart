@@ -23,6 +23,7 @@ import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/services/notifications/notification_router.dart';
 import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:cowork/widgets/cowork_thread_view.dart';
 
@@ -349,7 +350,11 @@ void main() {
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
     }
-    expect(find.byTooltip("Agent's browser"), findsNothing);
+    // The screen target sits in the header's video-call slot now and is parked
+    // until the coworker really has a screen open (cowork-vzm).
+    expect(find.byTooltip("Agent's screen"), findsNothing);
+    expect(find.byTooltip('No screen open right now'), findsOneWidget);
+    expect(find.byTooltip('Voice call is not available yet'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
     final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
@@ -376,7 +381,7 @@ void main() {
       find.byTooltip('Control Rooms'),
       findsNWidgets(2),
     ); // rail + top right
-    expect(find.byTooltip("Agent's browser"), findsNothing);
+    expect(find.byTooltip("Agent's screen"), findsNothing);
     expect(threadOffstage(tester), isFalse);
 
     await tester.tap(find.byIcon(Icons.menu_rounded));
@@ -386,13 +391,13 @@ void main() {
   });
 
   testWidgets(
-    "Agent's browser appears top right only once the agent opened one, "
+    "the coworker's screen unlocks in the header only once it opened one, "
     'and opens as a full-screen route',
     (tester) async {
       final (controller, _) = await pumpShell(tester);
       controller.pair();
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's browser"), findsNothing);
+      expect(find.byTooltip("Agent's screen"), findsNothing);
 
       // History must not expose a stale browser. A live navigation does.
       controller.emit(
@@ -403,7 +408,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's browser"), findsNothing);
+      expect(find.byTooltip("Agent's screen"), findsNothing);
       controller.emit(
         const CoworkRelayTool(
           'mcp__playwright__browser_navigate',
@@ -411,10 +416,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's browser"), findsOneWidget);
-      expect(find.text("Agent's browser"), findsNothing); // no sidebar row
+      expect(find.byTooltip("Agent's screen"), findsOneWidget);
+      expect(find.text("Agent's screen"), findsNothing); // no sidebar row
 
-      await tester.tap(find.byTooltip("Agent's browser"));
+      await tester.tap(find.byTooltip("Agent's screen"));
       // Not pumpAndSettle: the page's spinner animates until the executor's
       // `started` event, which this test never sends.
       await tester.pump();
@@ -438,7 +443,8 @@ void main() {
       // Finishing the run hides the entry even if Chromium stays open.
       controller.emit(const CoworkRelayDone());
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's browser"), findsNothing);
+      expect(find.byTooltip("Agent's screen"), findsNothing);
+      expect(find.byTooltip('No screen open right now'), findsOneWidget);
     },
   );
 
@@ -777,13 +783,18 @@ void main() {
     CoworkRunLedger.instance.begin(threadKey);
     await tester.pump();
 
-    expect(find.textContaining('working'), findsOneWidget);
+    // Twice: the roster row's bucket label, and the header's status line under
+    // the coworker's name.
+    expect(find.textContaining('working'), findsNWidgets(2));
 
     CoworkRunLedger.instance.finish(threadKey, reason: 'finished');
     await tester.pump();
 
     expect(find.textContaining('working'), findsNothing);
     expect(find.textContaining('ready for a task'), findsOneWidget);
+    // Idle is still reachable: the header says so where a messenger would say
+    // "Active now".
+    expect(find.text('Active now'), findsOneWidget);
     expect(roster.agents.single.lastActivity, isNotNull);
   });
 
@@ -851,19 +862,24 @@ void main() {
 
     final agentId = roster.agents.single.id;
     expect(find.byType(MobileAgentList), findsOneWidget);
-    expect(find.byType(AppBar), findsNothing);
+    // The inbox is a messenger home: its own title bar, and the All / Unread
+    // filter under it.
+    expect(find.text('Coworkers'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey<String>('mobile-agent-$agentId')));
     await tester.pumpAndSettle();
 
-    // The chat is in front, still with no app bar, and the back chip returns
-    // to the inbox — the same flag the tablet path flips.
+    // The chat is in front with its floating chrome — no app bar of its own —
+    // and the back target returns to the inbox, the same flag the tablet path
+    // flips. Both layers stay mounted (the chat owns the socket), so the check
+    // is which one the reader can touch.
     expect(find.byType(MobileChatScreen), findsOneWidget);
-    expect(find.byType(AppBar), findsNothing);
-    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+    expect(find.byType(MobileChatChrome), findsOneWidget);
+    expect(find.text('Coworkers').hitTestable(), findsNothing);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded).first);
     await tester.pumpAndSettle();
-    expect(find.byType(MobileAgentList), findsOneWidget);
-    expect(find.byType(MobileChatScreen), findsNothing);
+    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
   });
 
   testWidgets('the Rooms button opens the rooms screen and lists rooms', (

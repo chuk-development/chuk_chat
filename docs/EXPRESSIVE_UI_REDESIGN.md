@@ -18,10 +18,11 @@ relay, the roster or a chat; every screen builds on it.
 | `connected_group.dart` | The connected filter group (All / Unread) with the pill/square morph. |
 | `feedback.dart` | `pillToast`, `expressiveSheet`, `SheetAction`. |
 | `bubble_shape.dart` | `BubblePosition`, `bubbleRadius` — one connected group per run of same-sender messages. |
-| `receipt.dart` | `ReceiptState`, `receiptStateFor`, `MessageReceipt`, the tick styles. |
+| `message_stamp.dart` | `MessageStamp`, `queueMarkFor` — the time in a bubble's corner plus the queue mark. No delivery ticks: see below. |
 | `bubble_kind.dart` | The coworker bubble's colour by what the turn IS: answer / work / delivery / problem. |
 | `agent_face.dart` | `AgentFace` — the blob face with the picture, the accent and the presence dot; `agentAccent`, `kAgentAccents`. |
 | `working_dots.dart` | The "working ●●●" indicator (the messenger's typing indicator, said honestly). |
+| `agent_status.dart` | `AgentStatusLine` — the messenger's "Active now" line, as the green dot plus what the coworker is working on right now (the running tool, or the task the host says it picked up). |
 | `waveform.dart` | `WaveformPainter` + `LiveWaveform` — rounded voice bars, used for the live microphone level. |
 
 Two stores carry the facts the redesign needed:
@@ -41,17 +42,24 @@ Two stores carry the facts the redesign needed:
   the real unread count, expressive rows (face, name, role tag, time, preview,
   unread dot), staggered entrance, long-press row menu.
 * **Phone chat chrome** (`.../mobile_chat_chrome.dart`): back target, coworker
-  pill with the live state, PARKED voice call, browser target (only while a
-  browser is really open), more.
+  pill with the status line, and the messenger's two call targets with CoWork's
+  meaning — the voice call is parked, and the VIDEO call's slot is the
+  coworker's screen (the sandbox VNC view, `BrowserViewPage`), parked while it
+  has none open. Then "more".
 * **Coworker profile** (`pages/agent_profile_page.dart` + `_edit_page.dart`):
   face, state, brief, schedule, session, manage block; the editor sets picture,
   colour, name (→ host), role and brief.
 * **Bubbles** (`widgets/message_bubble/layout.dart`): connected corner
-  geometry, the user's receipt inside the bubble corner, a coworker bubble with
-  a colour per kind and the time but no ticks.
+  geometry, the time in the bubble's own corner, and a coworker bubble with a
+  colour per kind. No delivery ticks anywhere: a coworker reads every task it
+  is given, so "delivered" and "read" answer nothing. The only mark left is the
+  local queue — a clock while a message waits offline, an error glyph when the
+  send gave up.
 * **Desktop** (`widgets/agent_roster_view.dart`, `widgets/cowork_thread_header.dart`):
   the same faces and unread dots in the rail, and the same contact header —
-  face, name, live state, parked call — above the thread.
+  face, name, status line, parked call and the screen target — above the
+  thread. The screen button left the shell's action row; the header's
+  video-call slot is its one place now.
 * **Theme** (`constants.dart`): the expressive emphasis (heavier display /
   headline / title / label weights) and the expressive FAB corner, layered on
   top of the existing colour and component themes.
@@ -66,8 +74,11 @@ and archived buckets, polls, wallpapers, message-body search across chats, and
 
 ## Rules that fell out of it
 
-* A tick is only shown where the app knows the answer: the user's own messages.
-  A coworker's bubble carries the time and nothing else.
+* No delivery ticks. The user's call: whether a message "arrived" at an agent
+  is not a question worth a glyph. What is left is the queue mark, which is
+  about this device, not about the coworker.
+* "Active now" is a statement about the coworker's own state: the dot plus the
+  work in progress, both read from the roster and the run ledger.
 * A parked feature keeps its place, looks disabled, and explains itself on tap.
   It is never wired to something fake.
 * Profile fields that cannot reach the host are stored locally and labelled as

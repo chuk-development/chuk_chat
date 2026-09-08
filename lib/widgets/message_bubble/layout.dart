@@ -97,9 +97,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     return '$hh:$mm';
   }
 
-  /// The footer that rides in the bottom-right corner INSIDE the bubble: the
-  /// time, and for a user message the receipt ticks. A coworker's bubble gets no
-  /// ticks (see receipt.dart), so with no timestamp it gets no footer at all.
+  /// The stamp in the bubble's bottom-right corner: the time, plus the queue
+  /// mark on a user message that has not gone out yet. No delivery ticks — see
+  /// message_stamp.dart for why a coworker makes them meaningless.
   Widget? _buildBubbleFooter({
     required BuildContext context,
     required bool isUser,
@@ -107,22 +107,17 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     required Color onFill,
   }) {
     final String? label = _clockLabel;
-    if (!isUser && label == null) return null;
+    final QueueMark mark = isUser
+        ? queueMarkFor(widget.status)
+        : QueueMark.none;
+    if (label == null && mark == QueueMark.none) return null;
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(top: 3),
-      child: MessageReceipt(
-        state: receiptStateFor(
-          status: widget.status,
-          pickedUp: widget.pickedUp,
-          answered: widget.answered,
-        ),
-        age: label ?? '',
-        showCheck: isUser,
+      child: MessageStamp(
+        time: label ?? '',
+        mark: mark,
         fg: onFill.withValues(alpha: 0.75),
-        accent: isUser ? onFill : scheme.primary,
-        onAccent: fill,
-        bg: fill,
         errorColor: isUser ? onFill : scheme.error,
       ),
     );
@@ -277,9 +272,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             if (!hideEmptyUserBubble) userBubble,
             if (hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
-            // The queue state is in the receipt now (a clock while it waits, an
-            // error glyph when it gave up). Only the failed row stays, because
-            // it carries the Retry action and the error text.
+            // The stamp in the bubble already marks a queued or failed send.
+            // The row below stays only for a failure, because it carries the
+            // Retry action and the error text.
             if (widget.status == ChatMessageStatus.failed)
               _buildStatusIndicator(context),
           ],
