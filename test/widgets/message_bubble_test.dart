@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
-import 'package:cowork/ui/expressive/receipt.dart';
+import 'package:cowork/ui/expressive/message_stamp.dart';
 import 'package:cowork/utils/automation_message.dart';
 import 'package:cowork/widgets/message_bubble.dart';
 
@@ -186,50 +186,20 @@ void main() {
     });
   });
 
-  group('receipts', () {
-    // What the ticks mean is decided in one place; this pins the mapping so a
-    // later change cannot quietly promote "sent" to "read".
-    test('receiptStateFor maps the queue and the thread facts', () {
-      expect(
-        receiptStateFor(
-          status: ChatMessageStatus.pending,
-          pickedUp: false,
-          answered: false,
-        ),
-        ReceiptState.sending,
-      );
-      expect(
-        receiptStateFor(
-          status: ChatMessageStatus.failed,
-          pickedUp: true,
-          answered: true,
-        ),
-        ReceiptState.failed,
-      );
-      expect(
-        receiptStateFor(status: null, pickedUp: false, answered: false),
-        ReceiptState.sent,
-      );
-      expect(
-        receiptStateFor(
-          status: ChatMessageStatus.sent,
-          pickedUp: true,
-          answered: false,
-        ),
-        ReceiptState.delivered,
-      );
-      expect(
-        receiptStateFor(
-          status: ChatMessageStatus.sent,
-          pickedUp: false,
-          answered: true,
-        ),
-        ReceiptState.read,
-      );
+  group('stamp', () {
+    // The queue mark is the only thing next to the time: whether the message
+    // is still waiting on this device. There are no delivery ticks.
+    test('queueMarkFor marks only what is still on this device', () {
+      expect(queueMarkFor(ChatMessageStatus.pending), QueueMark.waiting);
+      expect(queueMarkFor(ChatMessageStatus.failed), QueueMark.failed);
+      expect(queueMarkFor(ChatMessageStatus.sent), QueueMark.none);
+      expect(queueMarkFor(ChatMessageStatus.interrupted), QueueMark.none);
+      expect(queueMarkFor(null), QueueMark.none);
     });
 
-    testWidgets('a user bubble carries the receipt, a coworker bubble does not',
-        (tester) async {
+    testWidgets('both bubbles show the time and neither shows a tick', (
+      tester,
+    ) async {
       final DateTime when = DateTime(2026, 9, 9, 14, 3);
       await tester.pumpWidget(
         _wrap(
@@ -240,7 +210,6 @@ void main() {
                 isUser: true,
                 maxWidth: 400,
                 turnStartedAt: when,
-                answered: true,
               ),
               MessageBubble(
                 message: 'shipped',
@@ -254,17 +223,34 @@ void main() {
       );
       await tester.pump();
 
-      // Both bubbles show the time…
       expect(find.text('14:03'), findsNWidgets(2));
-      // …and exactly one of them shows ticks.
-      expect(find.byType(MessageReceipt), findsNWidgets(2));
-      final Iterable<MessageReceipt> receipts = tester
-          .widgetList<MessageReceipt>(find.byType(MessageReceipt));
-      expect(
-        receipts.map((MessageReceipt r) => r.showCheck).toList(),
-        <bool>[true, false],
+      expect(find.byType(MessageStamp), findsNWidgets(2));
+      for (final MessageStamp stamp
+          in tester.widgetList<MessageStamp>(find.byType(MessageStamp))) {
+        expect(stamp.mark, QueueMark.none);
+      }
+      expect(find.byIcon(Icons.done_all_rounded), findsNothing);
+      expect(find.byIcon(Icons.check_rounded), findsNothing);
+    });
+
+    testWidgets('a queued user message shows the clock mark', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          MessageBubble(
+            message: 'later',
+            isUser: true,
+            maxWidth: 400,
+            turnStartedAt: DateTime(2026, 9, 9, 14, 3),
+            status: ChatMessageStatus.pending,
+          ),
+        ),
       );
-      expect(receipts.first.state, ReceiptState.read);
+      await tester.pump();
+
+      final MessageStamp stamp = tester.widget<MessageStamp>(
+        find.byType(MessageStamp),
+      );
+      expect(stamp.mark, QueueMark.waiting);
     });
   });
 }

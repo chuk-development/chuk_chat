@@ -71,6 +71,7 @@ class CoworkThreadView extends StatefulWidget {
     this.subtitle,
     this.headerAgent,
     this.onOpenAgentProfile,
+    this.onOpenAgentScreen,
     this.actions = const <CoworkThreadAction>[],
     this.leadingInset = 0,
     this.topInset = 0,
@@ -146,6 +147,9 @@ class CoworkThreadView extends StatefulWidget {
 
   /// Tap on the header pill — the coworker's profile page.
   final void Function(CoworkAgent agent)? onOpenAgentProfile;
+
+  /// Opens the live view of the coworker's screen. Null parks the target.
+  final VoidCallback? onOpenAgentScreen;
 
   /// Actions the SHELL owns but this thread's header shows: agent controls,
   /// Control Rooms, the agent's browser, Copy Debug Chat. They used to float
@@ -904,7 +908,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       // dense header keeps no subject block and no parked call.
       agent: dense ? null : widget.headerAgent,
       onOpenProfile: widget.onOpenAgentProfile,
-      showParkedCall: !dense,
+      showCallTargets: !dense,
+      onOpenScreen: widget.onOpenAgentScreen,
       connection: switch (state.phase) {
         CoworkRelayPhase.paired => CoworkThreadConnection.live,
         CoworkRelayPhase.connecting ||

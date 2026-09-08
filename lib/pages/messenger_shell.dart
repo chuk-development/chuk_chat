@@ -282,6 +282,12 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   @override
   bool get _threadIsOnScreen => !_isPhone || _showThreadOnNarrow;
 
+  /// The screen target's action, or null while the coworker has no screen open.
+  /// It sits in the header's video-call slot now, not in the action row.
+  @override
+  VoidCallback? get _openAgentScreenOrNull =>
+      _browserOpen ? _openBrowserView : null;
+
   void _toggleSidebar() {
     setState(() {
       if (!_isSidebarExpanded) _hasOpenedSidebar = true;
@@ -633,12 +639,6 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
         onPressed: _openRooms,
         tooltip: 'Control Rooms',
       ),
-      if (agent != null && _browserOpen)
-        CoworkThreadAction(
-          icon: Icons.desktop_windows_outlined,
-          onPressed: _openBrowserView,
-          tooltip: "Agent's browser",
-        ),
       CoworkThreadAction(
         icon: Icons.copy_all_rounded,
         onPressed: _copyFullChat,

@@ -85,7 +85,10 @@ void main() {
         onBack: () {},
       ),
     );
-    expect(findId('mobile_chat_browser'), findsNothing);
+    // The screen target keeps its place (it is the video-call slot) but is
+    // parked while the coworker has none open; "more" is genuinely optional.
+    expect(findId('mobile_chat_browser'), findsOneWidget);
+    expect(find.byTooltip('No screen open right now'), findsOneWidget);
     expect(findId('mobile_chat_more'), findsNothing);
     expect(find.text('Chief of Staff'), findsOneWidget);
   });
