@@ -2206,6 +2206,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                     data.variantIndex + 1,
                                                   )
                                               : null,
+                                          // The receipt on a user bubble, from
+                                          // facts only: the coworker answered
+                                          // (a coworker message follows), or it
+                                          // picked the turn up (a stream is
+                                          // open on the last row).
+                                          answered: data.isUser &&
+                                              _messages.skip(i + 1).any(
+                                                    (Map<String, String>
+                                                            later) =>
+                                                        (later['sender'] ??
+                                                            'ai') !=
+                                                        'user',
+                                                  ),
+                                          pickedUp: data.isUser &&
+                                              i == _messages.length - 1 &&
+                                              (_isStreaming || _isSending),
                                           status: data.status,
                                           lastError: data.lastError,
                                           onRetryPending: data.isUser &&

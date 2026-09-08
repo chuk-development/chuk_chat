@@ -79,28 +79,71 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     return _strippedMessageCache!;
   }
 
-  /// The message's own wall clock, or null when the message carries no
+  /// Where this bubble sits in a run of messages from the same sender. Drives
+  /// which corners are rounded, so a run reads as one connected group.
+  BubblePosition get _bubblePosition => bubblePositionFromFlags(
+    startsNewGroup: widget.startsNewGroup,
+    endsGroup: widget.endsGroup,
+  );
+
+  /// The wall clock of the turn as `HH:mm`, or null when the row carries no
   /// timestamp. Older rows and rows replayed from the host have none, and
-  /// stamping them with "now" would show the reader a time that never
-  /// happened — so those bubbles simply carry no clock.
-  Widget? _buildMessageClock(BuildContext context, {required bool alignRight}) {
+  /// stamping them with "now" would show a time that never happened.
+  String? get _clockLabel {
     final DateTime? when = widget.turnStartedAt?.toLocal();
     if (when == null) return null;
     final String hh = when.hour.toString().padLeft(2, '0');
     final String mm = when.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  /// The footer that rides in the bottom-right corner INSIDE the bubble: the
+  /// time, and for a user message the receipt ticks. A coworker's bubble gets no
+  /// ticks (see receipt.dart), so with no timestamp it gets no footer at all.
+  Widget? _buildBubbleFooter({
+    required BuildContext context,
+    required bool isUser,
+    required Color fill,
+    required Color onFill,
+  }) {
+    final String? label = _clockLabel;
+    if (!isUser && label == null) return null;
+    final ColorScheme scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.only(
-        top: 2,
-        left: alignRight ? 0 : 2,
-        right: alignRight ? 2 : 0,
-      ),
-      child: Text(
-        '$hh:$mm',
-        style: TextStyle(
-          fontSize: 11,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.only(top: 3),
+      child: MessageReceipt(
+        state: receiptStateFor(
+          status: widget.status,
+          pickedUp: widget.pickedUp,
+          answered: widget.answered,
         ),
+        age: label ?? '',
+        showCheck: isUser,
+        fg: onFill.withValues(alpha: 0.75),
+        accent: isUser ? onFill : scheme.primary,
+        onAccent: fill,
+        bg: fill,
+        errorColor: isUser ? onFill : scheme.error,
       ),
+    );
+  }
+
+  /// The kind of a coworker's message, which decides the bubble colour.
+  AgentBubbleKind get _agentBubbleKind {
+    final bool hasMedia =
+        (widget.images?.isNotEmpty ?? false) ||
+        (widget.attachments?.isNotEmpty ?? false);
+    final bool hasToolRuns =
+        (widget.toolCalls?.isNotEmpty ?? false) ||
+        (widget.contentBlocks?.any(
+              (ContentBlock block) => block.toolCalls?.isNotEmpty ?? false,
+            ) ??
+            false);
+    return agentBubbleKindFor(
+      hasProblem: widget.status == ChatMessageStatus.interrupted,
+      hasMedia: hasMedia,
+      hasToolRuns: hasToolRuns,
+      textLength: _strippedMessage.trim().length,
     );
   }
 
@@ -167,15 +210,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       vertical: 10,
     );
 
+    // Expressive geometry: big rounding everywhere, a small radius only where
+    // the next bubble of the same sender is stacked against it.
+    final Color fill = accentColor;
+    final Color onFill = Theme.of(context).colorScheme.onPrimary;
     final BoxDecoration decoration = BoxDecoration(
-      color: accentColor.withValues(alpha: .8),
-      borderRadius: BorderRadius.only(
-        topLeft: const Radius.circular(16),
-        topRight: const Radius.circular(16),
-        bottomLeft: const Radius.circular(16),
-        bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
-      ),
-      border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+      color: fill,
+      borderRadius: bubbleRadius(true, _bubblePosition),
     );
 
     final Widget bubbleContent = Container(
@@ -186,15 +227,24 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: _buildClassicLayout(
-          iconFgColor: iconFgColor,
-          accentColor: accentColor,
-          bgColor: bgColor,
-          isUserMessage: isUserMessage,
-          alignRight: alignRight,
-          hasInfoStatusBar: false,
-          hasVisibleToolCalls: false,
-        ),
+        children: <Widget>[
+          ..._buildClassicLayout(
+            iconFgColor: iconFgColor,
+            accentColor: accentColor,
+            bgColor: bgColor,
+            isUserMessage: isUserMessage,
+            alignRight: alignRight,
+            hasInfoStatusBar: false,
+            hasVisibleToolCalls: false,
+          ),
+          // Time + ticks, in the corner of the bubble itself.
+          ?_buildBubbleFooter(
+            context: context,
+            isUser: true,
+            fill: fill,
+            onFill: onFill,
+          ),
+        ],
       ),
     );
 
@@ -227,10 +277,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             if (!hideEmptyUserBubble) userBubble,
             if (hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
-            if (widget.status == ChatMessageStatus.pending ||
-                widget.status == ChatMessageStatus.failed)
+            // The queue state is in the receipt now (a clock while it waits, an
+            // error glyph when it gave up). Only the failed row stays, because
+            // it carries the Retry action and the error text.
+            if (widget.status == ChatMessageStatus.failed)
               _buildStatusIndicator(context),
-            ?_buildMessageClock(context, alignRight: alignRight),
           ],
         ),
       ),
@@ -267,35 +318,49 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
         !hasVisibleToolCalls;
 
-    final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
-      horizontal: 0,
-      vertical: 2,
+    // A coworker's turn gets a real bubble now, and its colour says what the
+    // turn IS: prose, work, a delivery, or a break-off (see bubble_kind.dart).
+    final AgentBubbleColors colors = agentBubbleColors(
+      Theme.of(context).colorScheme,
+      _agentBubbleKind,
     );
 
     final Widget bubbleContent = Container(
       margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
-      padding: containerPadding,
-      decoration: null,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: colors.fill,
+        borderRadius: bubbleRadius(false, _bubblePosition),
+      ),
       clipBehavior: Clip.none,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: useContentBlocks
-            ? _buildContentBlocksLayout(
-                iconFgColor: iconFgColor,
-                accentColor: accentColor,
-                bgColor: bgColor,
-                alignRight: alignRight,
-              )
-            : _buildClassicLayout(
-                iconFgColor: iconFgColor,
-                accentColor: accentColor,
-                bgColor: bgColor,
-                isUserMessage: isUserMessage,
-                alignRight: alignRight,
-                hasInfoStatusBar: hasInfoStatusBar,
-                hasVisibleToolCalls: hasVisibleToolCalls,
-              ),
+        children: <Widget>[
+          ...useContentBlocks
+              ? _buildContentBlocksLayout(
+                  iconFgColor: iconFgColor,
+                  accentColor: accentColor,
+                  bgColor: bgColor,
+                  alignRight: alignRight,
+                )
+              : _buildClassicLayout(
+                  iconFgColor: iconFgColor,
+                  accentColor: accentColor,
+                  bgColor: bgColor,
+                  isUserMessage: isUserMessage,
+                  alignRight: alignRight,
+                  hasInfoStatusBar: hasInfoStatusBar,
+                  hasVisibleToolCalls: hasVisibleToolCalls,
+                ),
+          // The time only: a coworker's bubble carries no ticks.
+          ?_buildBubbleFooter(
+            context: context,
+            isUser: false,
+            fill: colors.fill,
+            onFill: colors.onFill,
+          ),
+        ],
       ),
     );
 
@@ -315,7 +380,6 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             bubbleContent,
             if (showContinueButton) _buildContinueButton(context, accentColor),
             _buildBottomBar(iconFgColor, hasActions),
-            ?_buildMessageClock(context, alignRight: alignRight),
           ],
         ),
       ),
