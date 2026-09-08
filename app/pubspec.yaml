@@ -35,6 +35,11 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Material motion: the container transform that grows a chat out of its
+  # inbox row, and the shared-axis transition between filters. Used by the
+  # expressive UI layer (lib/ui/expressive/**).
+  animations: ^2.0.11
+
   # Security stack (ported from chuk_chat — see Appendix A of the plan).
   supabase_flutter: ^2.10.3
   cryptography: ^2.7.0
