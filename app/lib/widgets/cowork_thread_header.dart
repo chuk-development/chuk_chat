@@ -3,11 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/agent_status.dart';
 import 'package:cowork/ui/expressive/feedback.dart';
 import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/anchored_menu.dart';
 
@@ -80,7 +79,8 @@ class CoworkThreadHeader extends StatelessWidget {
     this.dense = false,
     this.agent,
     this.onOpenProfile,
-    this.showParkedCall = true,
+    this.showCallTargets = true,
+    this.onOpenScreen,
   });
 
   /// The coworker this thread belongs to. Null before one is selected: the row
@@ -128,9 +128,13 @@ class CoworkThreadHeader extends StatelessWidget {
   /// Tap on the subject pill. Null renders it flat.
   final void Function(CoworkAgent agent)? onOpenProfile;
 
-  /// Whether the parked voice-call target is shown. CoWork has no voice channel
-  /// to a coworker; the target holds the place and says so.
-  final bool showParkedCall;
+  /// Whether the messenger's two call targets are shown: the parked voice call
+  /// and, in the video call's slot, the coworker's screen.
+  final bool showCallTargets;
+
+  /// Opens the live view of the coworker's screen (its sandbox VNC). Null keeps
+  /// the target in place but parked — there is no screen open.
+  final VoidCallback? onOpenScreen;
 
   /// One action's footprint: Material's 40 px hit box, the size chuk's own
   /// icon rows use.
@@ -206,7 +210,10 @@ class CoworkThreadHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (showParkedCall && agent != null) _buildParkedCall(context),
+        if (showCallTargets && agent != null) ...<Widget>[
+          _buildParkedCall(context),
+          _buildScreenTarget(context),
+        ],
         for (final action in actions.take(inline))
           _buildAction(context, action),
         if (overflows) _buildOverflow(context, actions.skip(inline).toList()),
@@ -269,11 +276,15 @@ class CoworkThreadHeader extends StatelessWidget {
                           who.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
+                          // Tight metrics: the name and the status line share
+                          // the header's 34 px of inner height.
+                          style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            height: 1.1,
                           ),
                         ),
-                        _AgentStateLine(agent: who, scheme: scheme),
+                        AgentStatusLine(agent: who, fontSize: 10.5),
                       ],
                     ),
                   ),
@@ -339,6 +350,30 @@ class CoworkThreadHeader extends StatelessWidget {
       icon: Icons.call_end_rounded,
     ),
   );
+
+  /// The video call's slot, with what this app really has behind it: the live
+  /// view of the coworker's screen. Parked while it has none open.
+  Widget _buildScreenTarget(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return ExpressiveIconButton(
+      icon: Icons.desktop_windows_rounded,
+      size: _slot,
+      parked: onOpenScreen == null,
+      color: Colors.transparent,
+      onColor: onOpenScreen == null ? null : scheme.tertiary,
+      tooltip: onOpenScreen == null
+          ? 'No screen open right now'
+          : "Agent's screen",
+      semanticsId: 'thread_header_screen',
+      onTap:
+          onOpenScreen ??
+          () => pillToast(
+            context,
+            'The coworker has no screen open right now',
+            icon: Icons.desktop_access_disabled_rounded,
+          ),
+    );
+  }
 
   /// Every action is the same button, so a button that moved in from the
   /// shell cannot arrive with its own sizing.
@@ -417,53 +452,6 @@ class _HeaderButton extends StatelessWidget {
       tooltip: tooltip,
       onTap: onTap,
     );
-  }
-}
-
-/// The line under the coworker's name in the desktop header: what it is doing,
-/// read from its own activity.
-class _AgentStateLine extends StatelessWidget {
-  const _AgentStateLine({required this.agent, required this.scheme});
-
-  final CoworkAgent agent;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? role = _roleOf(agent);
-    switch (agent.activity) {
-      case AgentActivity.working:
-        return WorkingDots(color: scheme.primary);
-      case AgentActivity.scheduled:
-        return Text(
-          role == null ? 'Scheduled' : '$role · scheduled',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.tertiary,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-      case AgentActivity.waiting:
-        return Text(
-          role ?? 'Waiting',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-    }
-  }
-
-  static String? _roleOf(CoworkAgent agent) {
-    final stored = AgentProfileStore.instance.profileOf(agent.id).role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final own = agent.role?.trim();
-    return (own == null || own.isEmpty) ? null : own;
   }
 }
 

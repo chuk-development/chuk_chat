@@ -3,14 +3,16 @@
 /// Nothing sits in an app bar. Over the messages, on a soft fade, float
 ///
 ///  * a back target that springs and morphs on press;
-///  * an outlined pill with the coworker's blob face, its name and its live
-///    state — "working" with pulsing dots while a run is open, "Scheduled" when
-///    a schedule is armed, "Waiting" otherwise. Tapping the pill opens the
+///  * an outlined pill with the coworker's blob face, its name and its status
+///    line — the green dot plus what it is working on right now, or "Active
+///    now" when it is idle (see [AgentStatusLine]). Tapping the pill opens the
 ///    coworker's profile;
-///  * a PARKED voice-call target. The reference messenger has calls; CoWork has
-///    no voice channel to an agent, so the button is there and disabled, and it
-///    says why when it is tapped. It is never wired to a fake call;
-///  * the coworker's browser, only while it really has one open;
+///  * the messenger's two call targets, with CoWork's own meaning. The voice
+///    call is PARKED — there is no voice channel to an agent, so the button
+///    holds its place, looks disabled and says why. The video call's slot is
+///    the coworker's SCREEN: it opens the live VNC view of its sandbox
+///    ([BrowserViewPage]), which is the thing worth watching here. It is
+///    parked in the same way while the coworker has no screen open;
 ///  * the "more" target with the shell's secondary actions.
 ///
 /// The bar reads only `paddingOf`, so it never rebuilds on a keyboard frame. The
@@ -25,9 +27,9 @@ import 'package:cowork/platform_specific/mobile/mobile_chips.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/agent_status.dart';
 import 'package:cowork/ui/expressive/feedback.dart';
 import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
 
 class MobileChatChrome extends StatelessWidget {
   const MobileChatChrome({
@@ -110,17 +112,30 @@ class MobileChatChrome extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (onOpenBrowser != null) ...<Widget>[
-                  const SizedBox(width: 8),
-                  ExpressiveIconButton(
-                    icon: Icons.desktop_windows_rounded,
-                    onTap: onOpenBrowser,
-                    color: scheme.tertiaryContainer,
-                    onColor: scheme.onTertiaryContainer,
-                    tooltip: "Agent's browser",
-                    semanticsId: 'mobile_chat_browser',
-                  ),
-                ],
+                const SizedBox(width: 8),
+                // The video-call slot, with the thing this app actually has to
+                // show: the coworker's screen. Parked while none is open.
+                ExpressiveIconButton(
+                  icon: Icons.desktop_windows_rounded,
+                  parked: onOpenBrowser == null,
+                  color: onOpenBrowser == null
+                      ? scheme.surface
+                      : scheme.tertiaryContainer,
+                  onColor: onOpenBrowser == null
+                      ? null
+                      : scheme.onTertiaryContainer,
+                  tooltip: onOpenBrowser == null
+                      ? 'No screen open right now'
+                      : "Agent's screen",
+                  semanticsId: 'mobile_chat_browser',
+                  onTap:
+                      onOpenBrowser ??
+                      () => pillToast(
+                        context,
+                        'The coworker has no screen open right now',
+                        icon: Icons.desktop_access_disabled_rounded,
+                      ),
+                ),
                 if (onMore != null) ...<Widget>[
                   const SizedBox(width: 8),
                   ExpressiveIconButton(
@@ -198,7 +213,7 @@ class _AgentPill extends StatelessWidget {
                         height: 1.15,
                       ),
                     ),
-                    _StateLine(agent: agent, scheme: scheme),
+                    AgentStatusLine(agent: agent),
                   ],
                 ),
               ),
@@ -214,41 +229,5 @@ class _AgentPill extends StatelessWidget {
     if (stored != null && stored.isNotEmpty) return stored;
     final String? own = agent.role?.trim();
     return (own == null || own.isEmpty) ? null : own;
-  }
-}
-
-/// The line under the name: the coworker's own activity, nothing invented.
-class _StateLine extends StatelessWidget {
-  const _StateLine({required this.agent, required this.scheme});
-
-  final CoworkAgent agent;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    switch (agent.activity) {
-      case AgentActivity.working:
-        return WorkingDots(color: scheme.primary);
-      case AgentActivity.scheduled:
-        return Text(
-          'Scheduled',
-          style: TextStyle(
-            color: scheme.tertiary,
-            fontSize: 11,
-            height: 1.2,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-      case AgentActivity.waiting:
-        return Text(
-          'Waiting',
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 11,
-            height: 1.2,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-    }
   }
 }

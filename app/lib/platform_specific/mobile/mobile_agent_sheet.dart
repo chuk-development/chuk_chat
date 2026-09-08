@@ -99,89 +99,93 @@ class MobileAgentSheet extends StatelessWidget {
         : agent.role?.trim();
     return SafeArea(
       top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: AgentFace(agent: agent, size: 44),
-            title: Text(
-              agent.name,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            subtitle: role == null || role.isEmpty ? null : Text(role),
-            trailing: onProfile == null
-                ? null
-                : const Icon(Icons.chevron_right_rounded),
-            onTap: onProfile,
-          ),
-          const Divider(height: 1),
-          if (onProfile != null)
+      // The sheet scrolls: with the profile row and the parked call the list is
+      // taller than a small phone leaves for a bottom sheet.
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.person_outline_rounded),
-              title: const Text('Profile'),
+              leading: AgentFace(agent: agent, size: 44),
+              title: Text(
+                agent.name,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: role == null || role.isEmpty ? null : Text(role),
+              trailing: onProfile == null
+                  ? null
+                  : const Icon(Icons.chevron_right_rounded),
               onTap: onProfile,
             ),
-          if (onRename != null)
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Rename agent'),
-              onTap: onRename,
-            ),
-          if (onControls != null)
-            ListTile(
-              leading: const Icon(Icons.tune),
-              title: const Text('Agent controls'),
-              onTap: onControls,
-            ),
-          if (onRooms != null)
-            ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: const Text('Rooms'),
-              onTap: onRooms,
-            ),
-          if (onCopyChat != null)
-            ListTile(
-              leading: const Icon(Icons.copy_all_rounded),
-              title: const Text('Copy Debug Chat'),
-              onTap: onCopyChat,
-            ),
-          // Parked, like the header target: there is no voice channel to a
-          // coworker, and the row says so instead of hiding the idea.
-          ListTile(
-            leading: Icon(
-              Icons.call_rounded,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
-            ),
-            title: Text(
-              'Voice call',
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            const Divider(height: 1),
+            if (onProfile != null)
+              ListTile(
+                leading: const Icon(Icons.person_outline_rounded),
+                title: const Text('Profile'),
+                onTap: onProfile,
               ),
-            ),
-            subtitle: const Text('Not available yet'),
-            onTap: () => pillToast(
-              context,
-              'Voice calls with a coworker are not available yet',
-              icon: Icons.call_end_rounded,
-            ),
-          ),
-          if (onSettings != null)
+            if (onRename != null)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Rename agent'),
+                onTap: onRename,
+              ),
+            if (onControls != null)
+              ListTile(
+                leading: const Icon(Icons.tune),
+                title: const Text('Agent controls'),
+                onTap: onControls,
+              ),
+            if (onRooms != null)
+              ListTile(
+                leading: const Icon(Icons.groups_outlined),
+                title: const Text('Rooms'),
+                onTap: onRooms,
+              ),
+            if (onCopyChat != null)
+              ListTile(
+                leading: const Icon(Icons.copy_all_rounded),
+                title: const Text('Copy Debug Chat'),
+                onTap: onCopyChat,
+              ),
+            // Parked, like the header target: there is no voice channel to a
+            // coworker, and the row says so instead of hiding the idea.
             ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Settings'),
-              onTap: onSettings,
-            ),
-          if (onSignOut != null)
-            ListTile(
-              leading: Icon(Icons.logout, color: theme.colorScheme.error),
+              leading: Icon(
+                Icons.call_rounded,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
               title: Text(
-                'Sign out',
-                style: TextStyle(color: theme.colorScheme.error),
+                'Voice call',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
-              onTap: onSignOut,
+              subtitle: const Text('Not available yet'),
+              onTap: () => pillToast(
+                context,
+                'Voice calls with a coworker are not available yet',
+                icon: Icons.call_end_rounded,
+              ),
             ),
-          const SizedBox(height: 8),
-        ],
+            if (onSettings != null)
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Settings'),
+                onTap: onSettings,
+              ),
+            if (onSignOut != null)
+              ListTile(
+                leading: Icon(Icons.logout, color: theme.colorScheme.error),
+                title: Text(
+                  'Sign out',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+                onTap: onSignOut,
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

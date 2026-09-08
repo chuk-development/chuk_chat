@@ -111,6 +111,11 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// navigator and the callbacks the page needs.
   void _openAgentProfile(CoworkAgent agent);
 
+  /// Opens the coworker's screen, or null while it has none open — the header
+  /// then parks its target. Implemented by the layout, which follows the live
+  /// browser presence.
+  VoidCallback? get _openAgentScreenOrNull;
+
   /// Selects a coworker's thread. Implemented by the layout, which also
   /// decides what the selection does to the sidebar on a narrow window.
   void _select(String agentId, String threadKey);
@@ -410,6 +415,7 @@ mixin CoworkShellHost on State<MessengerShell> {
       subtitle: agent?.role,
       headerAgent: agent,
       onOpenAgentProfile: _openAgentProfile,
+      onOpenAgentScreen: _openAgentScreenOrNull,
       actions: actions,
       leadingInset: leadingInset,
       topInset: topInset,
