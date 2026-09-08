@@ -50,15 +50,40 @@ Two transports, one command vocabulary:
 `browser_navigate`, `browser_navigate_back`, `browser_snapshot`,
 `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`,
 `browser_take_screenshot`, `browser_tabs` (`list` / `select` / `new` / `close`),
-`browser_close`.
+`browser_close`, `browser_handoff`, `browser_request_credentials`,
+`browser_report_wall`, and `browser_cdp`.
 
 The names are the ones the agent's browser tools already carry, so the host, the
 wire contract and the app keep reading one transcript whether the coworker is
 driving a sandbox browser or this one.
 
-The list is closed and nothing in the add-on evaluates a string it was sent.
-That is deliberate: both stores reject an extension that runs remotely supplied
-code, and commands from a fixed vocabulary are not code.
+`browser_cdp` is the escape hatch, and it is how OpenAI's extension is built
+almost end to end: the DevTools method travels in the command, so a new ability
+is a change in our Python host rather than a new add-on version waiting in a
+store queue. The methods that would amount to shipping JavaScript through the
+add-on — `Runtime.evaluate` and its neighbours — are refused in `protocol.js`,
+because that one thing both stores really do forbid.
+
+Addressing follows the same extension: a node is named by the `ref` a snapshot
+gave it, by a CSS `selector`, by a viewport `point`, or not at all when the
+command works on whatever has focus.
+
+## Tabs the coworker holds
+
+Every tab it touches carries a lease: `origin` says whether the coworker opened
+the tab itself or the user handed it over, `state` is `active`, `deliverable`
+or `handoff`. Nothing is injected into a tab without a lease — the manifests
+declare no content scripts at all — so a tab it was never given carries no
+CoWork code.
+
+`browser_handoff` gives the wheel back instead of pushing through a wall, and
+`browser_report_wall` reports one as a result rather than retrying.
+`browser_request_credentials` describes a form so the host or the user can fill
+it; the values never enter the model's context.
+
+Snapshots diff against the last one for the same page, so a second look at a
+page that barely moved costs tokens only where it moved. `full: true` asks for
+everything.
 
 ## Layout
 

@@ -38,4 +38,48 @@ check("results carry the command id both ways", () => {
   });
 });
 
+
+// -- what the OpenAI extension taught us -------------------------------------
+
+const { cdpRefusal, addressing } = await import("../src/protocol.js");
+const { Leases, ORIGIN, STATE } = await import("../src/leases.js");
+
+check("the generic CDP pipe accepts a method name as data", () => {
+  assert.equal(validate("browser_cdp", { method: "Input.dispatchMouseEvent" }), null);
+  assert.equal(validate("browser_cdp", {}), 'browser_cdp needs "method"');
+  assert.equal(cdpRefusal("Page"), 'browser_cdp needs a "Domain.method" name');
+});
+
+check("the pipe refuses the methods that would run supplied code", () => {
+  assert.match(validate("browser_cdp", { method: "Runtime.evaluate" }), /would run supplied code/);
+  assert.match(cdpRefusal("Page.addScriptToEvaluateOnNewDocument"), /supplied code/);
+  assert.equal(cdpRefusal("DOM.getDocument"), null);
+});
+
+check("a node is addressable four ways", () => {
+  assert.deepEqual(addressing({ ref: "e7" }), { kind: "ref", ref: "e7" });
+  assert.deepEqual(addressing({ selector: "#go" }), { kind: "selector", selector: "#go" });
+  assert.deepEqual(addressing({ point: [10, 20] }), { kind: "point", point: [10, 20] });
+  assert.deepEqual(addressing({}), { kind: "focus" });
+});
+
+check("a click must say what it clicks, typing may use focus", () => {
+  assert.match(validate("browser_click", {}), /needs "ref", "selector" or "point"/);
+  assert.equal(validate("browser_click", { point: [4, 5] }), null);
+  assert.equal(validate("browser_type", { text: "hi" }), null);
+});
+
+check("a lease records where a tab came from and what it is doing", () => {
+  const leases = new Leases();
+  assert.equal(leases.held(7), false);
+  leases.grant(7, ORIGIN.USER);
+  assert.equal(leases.get(7).origin, "user");
+  assert.equal(leases.get(7).state, STATE.ACTIVE);
+  leases.handoff(7);
+  assert.equal(leases.get(7).state, "handoff");
+  assert.deepEqual(leases.list().map((l) => l.tabId), [7]);
+  leases.release(7);
+  assert.equal(leases.held(7), false);
+});
+
 console.log(`\n${passed} passed`);

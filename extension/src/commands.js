@@ -3,7 +3,8 @@
 // stores' rules about remotely supplied code.
 
 import { api } from "./api.js";
-import { validate, ok, fail } from "./protocol.js";
+import { validate, addressing, ok, fail } from "./protocol.js";
+import { STATE } from "./leases.js";
 
 export async function run(driver, cmdId, op, args = {}) {
   const problem = validate(op, args);
@@ -33,24 +34,62 @@ async function dispatch(driver, op, args) {
 
     case "browser_snapshot":
       await driver.ownTab();
-      return await driver.ask("snapshot");
+      return await driver.ask("snapshot", { full: Boolean(args.full) });
 
     case "browser_click": {
-      const at = await driver.ask("locate", { ref: String(args.ref) });
-      if (!at) throw new Error(`no element for ref "${args.ref}"`);
+      const address = addressing(args);
+      const at = await driver.ask("locate", { address });
+      if (!at) throw new Error(`nothing found for ${describe(address)}`);
       await driver.clickAt(at.x, at.y);
       await driver.settle(5000);
-      return { clicked: args.ref, at: [Math.round(at.x), Math.round(at.y)] };
+      return { clicked: describe(address), at: [Math.round(at.x), Math.round(at.y)] };
     }
 
     case "browser_type": {
-      const at = await driver.ask("locate", { ref: String(args.ref) });
-      if (!at) throw new Error(`no element for ref "${args.ref}"`);
-      await driver.clickAt(at.x, at.y);
+      const address = addressing(args);
+      if (address.kind !== "focus") {
+        const at = await driver.ask("locate", { address });
+        if (!at) throw new Error(`nothing found for ${describe(address)}`);
+        await driver.clickAt(at.x, at.y);
+      }
       await driver.typeText(String(args.text));
       if (args.submit) await driver.pressKey("Enter");
-      return { typed: args.ref, submitted: Boolean(args.submit) };
+      return { typed: describe(address), submitted: Boolean(args.submit) };
     }
+
+    case "browser_cdp":
+      // The generic pipe. `protocol.validate` already refused the methods that
+      // would amount to running supplied code.
+      return { method: args.method, result: await driver.cdp(args.method, args.params) };
+
+    case "browser_handoff": {
+      // The coworker cannot get past something — a sign-in, a wall — and gives
+      // the tab back rather than hammering at it.
+      const lease = await driver.handoff();
+      return { handed_off: Boolean(lease), tabId: driver.tabId, reason: args.reason ?? "" };
+    }
+
+    case "browser_request_credentials": {
+      // The model describes the form; it never sees what goes into it. Values
+      // are filled by the host's secret store or by the user, on this side.
+      const fields = Array.isArray(args.fields) ? args.fields : [];
+      await driver.mark(STATE.HANDOFF);
+      return {
+        awaiting_credentials: true,
+        url: (await driver.ask("snapshot", { full: false })).url,
+        fields: fields.map((f) => ({
+          label: String(f.label ?? ""),
+          type: String(f.type ?? "text"),
+          selector: f.selector ? String(f.selector) : null,
+          autocomplete: f.autocomplete ? String(f.autocomplete) : null,
+        })),
+      };
+    }
+
+    case "browser_report_wall":
+      // A bot wall is a result, not a failure to retry around.
+      await driver.mark(STATE.HANDOFF);
+      return { wall: String(args.kind), url: (await driver.ask("snapshot", { full: false })).url };
 
     case "browser_press_key":
       await driver.ownTab();
@@ -104,4 +143,11 @@ async function dispatch(driver, op, args) {
     default:
       throw new Error(`unhandled command "${op}"`);
   }
+}
+
+function describe(address) {
+  if (address.kind === "ref") return `ref ${address.ref}`;
+  if (address.kind === "selector") return `selector ${address.selector}`;
+  if (address.kind === "point") return `point ${address.point.join(",")}`;
+  return "the focused element";
 }

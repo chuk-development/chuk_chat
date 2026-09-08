@@ -62,6 +62,8 @@ api.runtime.onStartup?.addListener(link);
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "cowork-page" || !tab) return;
   await openPanel(tab);
+  // A right-click is the user handing this tab over.
+  driver.leases.grant(tab.id, "user");
   const context = await pageContext(tab.id, info.selectionText);
   api.runtime.sendMessage({ channel: "cowork", op: "page_context", context }).catch(() => {});
 });
@@ -77,6 +79,7 @@ api.commands?.onCommand.addListener(async (name) => {
 /** What the user's own chat about a page gets: text, not markup. */
 async function pageContext(tabId, selection) {
   try {
+    await driver.ensureInjected(tabId);
     const page = await api.tabs.sendMessage(tabId, { channel: "cowork", op: "readable" });
     const data = page && page.ok ? page.data : { url: "", title: "", text: "" };
     return { ...data, selection: selection || "", tabId };
@@ -115,6 +118,16 @@ api.runtime.onMessage.addListener((msg, _sender, reply) => {
 });
 
 // The service worker sleeps; a periodic wake keeps the link honest.
+// A tab that reloads or goes away loses whatever we put in it.
+api.tabs.onUpdated.addListener((tabId, change) => {
+  if (change.status === "loading") driver.forget(tabId);
+});
+api.tabs.onRemoved.addListener((tabId) => {
+  driver.forget(tabId);
+  driver.leases.release(tabId);
+  if (driver.tabId === tabId) driver.tabId = null;
+});
+
 api.alarms.create("cowork-link", { periodInMinutes: 1 });
 api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "cowork-link") link();
