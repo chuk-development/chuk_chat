@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "CoWork",
+  "version": "0.1.0",
+  "description": "CoWork in your browser: talk about the page, or let your coworker drive its own tab.",
+  "icons": { "128": "icons/icon-128.png" },
+  "browser_specific_settings": {
+    "gecko": { "id": "cowork@chuk.dev", "strict_min_version": "128.0" }
+  },
+  "background": { "scripts": ["src/background.js"], "type": "module" },
+  "action": { "default_title": "Open CoWork" },
+  "options_ui": { "page": "src/options.html", "open_in_tab": true },
+  "sidebar_action": {
+    "default_panel": "src/panel.html",
+    "default_title": "CoWork",
+    "default_icon": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "contextMenus",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "js": ["src/snapshot.js"],
+      "matches": ["<all_urls>"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "js": ["src/indicator.js"],
+      "matches": ["<all_urls>"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
