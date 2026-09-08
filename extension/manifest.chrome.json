@@ -4,11 +4,20 @@
   "version": "0.1.0",
   "description": "CoWork in your browser: talk about the page, or let your coworker drive its own tab.",
   "minimum_chrome_version": "116",
-  "icons": { "128": "icons/icon-128.png" },
-  "background": { "service_worker": "src/background.js", "type": "module" },
-  "action": { "default_title": "Open CoWork" },
+  "icons": {
+    "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open CoWork"
+  },
   "options_page": "src/options.html",
-  "side_panel": { "default_path": "src/panel.html" },
+  "side_panel": {
+    "default_path": "src/panel.html"
+  },
   "permissions": [
     "sidePanel",
     "storage",
@@ -20,28 +29,30 @@
     "nativeMessaging",
     "alarms"
   ],
-  "host_permissions": ["<all_urls>"],
-  "content_scripts": [
-    {
-      "js": ["src/snapshot.js"],
-      "matches": ["<all_urls>"],
-      "run_at": "document_start",
-      "all_frames": true
-    },
-    {
-      "js": ["src/indicator.js"],
-      "matches": ["<all_urls>"],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
+  "host_permissions": [
+    "<all_urls>"
   ],
   "commands": {
     "toggle-panel": {
-      "suggested_key": { "default": "Ctrl+Shift+K", "mac": "Command+Shift+K" },
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
       "description": "Toggle the CoWork panel"
     }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' wss://* https://*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "src/snapshot.js",
+        "src/indicator.js"
+      ]
+    }
+  ]
 }

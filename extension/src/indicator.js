@@ -5,7 +5,13 @@
   const ID = "cowork-agent-indicator";
   const runtime = (globalThis.browser ?? globalThis.chrome).runtime;
 
-  function show(on, label) {
+  const LOOK = {
+    active: { bar: "linear-gradient(90deg,#7c5cff,#00c2a8)", chip: "#7c5cff", text: "CoWork is driving" },
+    deliverable: { bar: "linear-gradient(90deg,#00c2a8,#7c5cff)", chip: "#00a48f", text: "CoWork has something for you" },
+    handoff: { bar: "linear-gradient(90deg,#ff9f43,#ff6b6b)", chip: "#e8722c", text: "CoWork needs you here" },
+  };
+
+  function show(on, state, label) {
     let bar = document.getElementById(ID);
     if (!on) {
       bar?.remove();
@@ -28,10 +34,13 @@
       bar.appendChild(chip);
       (document.body || document.documentElement).appendChild(bar);
     }
-    bar.firstChild.textContent = label || "CoWork is driving";
+    const look = LOOK[state] ?? LOOK.active;
+    bar.style.background = look.bar;
+    bar.firstChild.style.background = look.chip;
+    bar.firstChild.textContent = label || look.text;
   }
 
   runtime.onMessage.addListener((msg) => {
-    if (msg && msg.channel === "cowork" && msg.op === "driving") show(msg.on, msg.label);
+    if (msg && msg.channel === "cowork" && msg.op === "driving") show(msg.on, msg.state, msg.label);
   });
 })();
