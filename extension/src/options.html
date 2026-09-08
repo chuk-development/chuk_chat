@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>CoWork settings</title>
+<link rel="stylesheet" href="panel.css" />
+<main style="max-width:34rem;margin:2rem auto;padding:0 1rem">
+  <h1 style="font-size:1.1rem">CoWork</h1>
+  <p style="color:var(--muted)">
+    CoWork reaches this browser through a small local process. If your CoWork
+    host runs on another machine, give the relay address here instead.
+  </p>
+  <p><label>Relay address<br /><input id="relay" type="url" placeholder="wss://…" style="width:100%;padding:6px 8px" /></label></p>
+  <p><button id="save" type="button">Save</button> <span id="saved" style="color:var(--muted)"></span></p>
+  <h2 style="font-size:.95rem">This browser</h2>
+  <pre id="caps" style="white-space:pre-wrap;color:var(--muted)"></pre>
+</main>
+<script type="module" src="options.js"></script>
