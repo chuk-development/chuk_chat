@@ -11,6 +11,7 @@
 
   let counter = 0;
   const byRef = new Map(); // ref -> Element
+  let previous = new Map(); // ref -> serialised node, for diffing
 
   const INTERACTIVE = new Set([
     "a", "button", "input", "select", "textarea", "summary", "option", "label",
@@ -55,7 +56,7 @@
     return r === "button" || r === "link" || r === "menuitem" || r === "tab" || r === "checkbox";
   }
 
-  function build() {
+  function build(full) {
     counter = 0;
     byRef.clear();
     const nodes = [];
@@ -78,19 +79,45 @@
       node.box = [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)];
       nodes.push(node);
     }
-    return {
+    const frame = {
       url: location.href,
       title: document.title,
       viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
       scroll: { x: Math.round(scrollX), y: Math.round(scrollY) },
-      nodes,
       truncated: nodes.length >= MAX_NODES,
     };
+
+    // Diffing, the way OpenAI's extension does it: a second look at a page that
+    // barely moved should not cost a second full page of tokens. `full` asks
+    // for everything anyway, and a navigation resets the baseline by itself.
+    const current = new Map(nodes.map((n) => [n.ref, JSON.stringify(n)]));
+    if (!full && previous.size && previous.get("__url__") === location.href) {
+      const changed = [];
+      for (const [ref, json] of current) {
+        if (previous.get(ref) !== json) changed.push(JSON.parse(json));
+      }
+      const gone = [...previous.keys()].filter((ref) => ref !== "__url__" && !current.has(ref));
+      previous = current;
+      previous.set("__url__", location.href);
+      return { ...frame, diff: true, nodes: changed, removed: gone, total: current.size - 1 };
+    }
+    previous = current;
+    previous.set("__url__", location.href);
+    return { ...frame, diff: false, nodes };
   }
 
-  function locate(ref) {
-    let el = byRef.get(ref);
-    if (!el || !el.isConnected) el = document.querySelector(`[${REF_ATTR}="${CSS.escape(ref)}"]`);
+  function resolve(address) {
+    if (!address || address.kind === "focus") return document.activeElement;
+    if (address.kind === "selector") return document.querySelector(address.selector);
+    if (address.kind === "point") return document.elementFromPoint(address.point[0], address.point[1]);
+    const ref = address.ref;
+    const el = byRef.get(ref);
+    if (el && el.isConnected) return el;
+    return document.querySelector(`[${REF_ATTR}="${CSS.escape(ref)}"]`);
+  }
+
+  function locate(address) {
+    const el = resolve(address);
     if (!el) return null;
     el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
     const box = el.getBoundingClientRect();
@@ -114,8 +141,8 @@
   runtime.onMessage.addListener((msg, _sender, reply) => {
     if (!msg || msg.channel !== "cowork") return;
     try {
-      if (msg.op === "snapshot") reply({ ok: true, data: build() });
-      else if (msg.op === "locate") reply({ ok: true, data: locate(msg.ref) });
+      if (msg.op === "snapshot") reply({ ok: true, data: build(Boolean(msg.full)) });
+      else if (msg.op === "locate") reply({ ok: true, data: locate(msg.address) });
       else if (msg.op === "readable") reply({ ok: true, data: readable() });
       else if (msg.op === "selection") reply({ ok: true, data: { text: String(getSelection() || "") } });
       else if (msg.op === "scroll") {

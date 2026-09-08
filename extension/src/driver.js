@@ -12,16 +12,19 @@
 // element by ref, so a transcript reads the same whichever engine ran it.
 
 import { api, hasDebugger, hasTabGroups } from "./api.js";
+import { Leases, ORIGIN, STATE } from "./leases.js";
 
 const PROTOCOL_VERSION = "1.3";
 const GROUP_TITLE = "CoWork";
 
 export class Driver {
   constructor() {
-    /** The tab this coworker drives. Never a tab the user opened. */
+    /** The tab this coworker drives right now. */
     this.tabId = null;
     this.attached = false;
     this.engine = hasDebugger ? "cdp" : "synthetic";
+    this.leases = new Leases();
+    this.injected = new Set(); // tabIds that already carry the snapshot script
   }
 
   get engineName() {
@@ -42,6 +45,7 @@ export class Driver {
     }
     const tab = await api.tabs.create({ url: "about:blank", active: false });
     this.tabId = tab.id;
+    this.leases.grant(tab.id, ORIGIN.AGENT);
     if (hasTabGroups) {
       try {
         const groupId = await api.tabs.group({ tabIds: [tab.id] });
@@ -59,7 +63,64 @@ export class Driver {
     await this.detach();
     const tab = await api.tabs.get(tabId);
     this.tabId = tab.id;
+    this.leases.grant(tab.id, ORIGIN.USER);
     return this.tabId;
+  }
+
+  /**
+   * Put the page scripts into a tab, once, and only into a tab under lease.
+   * Nothing is declared in the manifest any more, so a tab the coworker was
+   * never given carries no CoWork code at all.
+   */
+  async ensureInjected(tabId) {
+    if (!this.leases.held(tabId)) throw new Error(`no lease on tab ${tabId}`);
+    if (this.injected.has(tabId)) return;
+    await api.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      files: ["src/snapshot.js"],
+    });
+    await api.scripting.executeScript({
+      target: { tabId },
+      files: ["src/indicator.js"],
+    });
+    this.injected.add(tabId);
+  }
+
+  /** Tell the page which badge to wear, and remember it on the lease. */
+  async mark(state) {
+    if (this.tabId === null) return;
+    this.leases.setState(this.tabId, state);
+    try {
+      await api.tabs.sendMessage(this.tabId, {
+        channel: "cowork",
+        op: "driving",
+        on: state !== null,
+        state,
+      });
+    } catch {
+      // The page may be mid-navigation; the badge is not worth failing a command.
+    }
+  }
+
+  /** The user takes the wheel back. */
+  async handoff() {
+    if (this.tabId === null) return null;
+    await this.detach();
+    const lease = this.leases.handoff(this.tabId);
+    await this.mark(STATE.HANDOFF);
+    if (lease) await api.tabs.update(this.tabId, { active: true });
+    return lease;
+  }
+
+  /**
+   * The generic DevTools pipe. `method` travels in the command, so a new
+   * ability is a change in the Python host, not a new add-on version in a
+   * store queue. `protocol.cdpRefusal` keeps the code-running methods out.
+   */
+  async cdp(method, params) {
+    if (this.engine !== "cdp") throw new Error("this browser has no DevTools access for add-ons");
+    await this.attach();
+    return await this.send(method, params ?? {});
   }
 
   async attach() {
@@ -69,6 +130,11 @@ export class Driver {
     this.attached = true;
     await this.send("Page.enable");
     await this.send("Runtime.enable");
+  }
+
+  /** A tab that reloads loses the injected scripts. */
+  forget(tabId) {
+    this.injected.delete(tabId);
   }
 
   async detach() {
@@ -89,6 +155,7 @@ export class Driver {
 
   async ask(op, extra = {}) {
     const tabId = await this.ownTab();
+    await this.ensureInjected(tabId);
     const reply = await api.tabs.sendMessage(tabId, { channel: "cowork", op, ...extra });
     if (!reply) throw new Error(`no answer from the page for "${op}"`);
     if (!reply.ok) throw new Error(reply.error);
