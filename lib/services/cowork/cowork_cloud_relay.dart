@@ -30,7 +30,11 @@
 ///               | {"type": "auth_error", "detail": ...} + close(1008)
 ///
 ///     2. app -> {"type": "cowork_pair_claim",
-///                "pairing_channel": "<c from the QR>"}     # first pairing only
+///                "pairing_channel": "<c from the QR>",
+///                "req_id": "<uuid4 hex>"}                  # first pairing only
+///        relay -> {"type": "executor_status", "device_id", "online": true}
+///                 {"type": "cowork_pair_claimed", "device_id", "req_id"}
+///               | {"type": "cowork_pair_error", "code", "req_id"}
 ///
 ///     3. app -> {"req_id": "<uuid4 hex>", "type": "cowork_relay",
 ///                "target_device_id": "<host device>",
@@ -264,6 +268,14 @@ class CoworkCloudRelaySocket implements RelaySocket {
   @visibleForTesting
   static void resetClaimCache() => _claimedTargets.clear();
 
+  /// The host device id a claim on [pairingChannel] returned, or null when this
+  /// process has not claimed it. The claim is the only source of that id, so
+  /// this is what a caller persists in the trust record after a first pairing.
+  static String? learnedTarget({
+    required Uri base,
+    required String pairingChannel,
+  }) => _claimedTargets['$base|$pairingChannel'];
+
   static const Uuid _uuid = Uuid();
 
   final RelaySocket _transport;
@@ -387,38 +399,46 @@ class CoworkCloudRelaySocket implements RelaySocket {
   }
 
   // --- THE CLAIM ------------------------------------------------------------
-  // Everything the app assumes about binding a pairing channel to the account
-  // lives in this one method, on purpose: the backend half is being built in
-  // parallel, so this is the single place to adjust if a field name or a reply
-  // type turns out different.
+  // Binding the scanned pairing channel to the signed-in account, and the only
+  // place the claim's shape lives.
   //
-  // We send:
-  //     {"type": "cowork_pair_claim", "pairing_channel": "<c from the QR>"}
+  //     app   -> {"type": "cowork_pair_claim",
+  //               "pairing_channel": "<c from the QR>", "req_id": "<hex>"}
+  //     relay -> {"type": "executor_status", "device_id", "online": true}
+  //              {"type": "cowork_pair_claimed", "device_id", "req_id"}
+  //            | {"type": "cowork_pair_error", "code", "req_id"}
   //
-  // We accept as success any reply whose type starts with `cowork_pair_claim`
-  // and is not an error, and we read the host's device id out of it under any
-  // of `device_id` / `executor_device_id` / `target_device_id`, at the top
-  // level or one level down under `executor`. Failing that, an
-  // `executor_status` naming an online device answers the same question, which
-  // is what the relay already broadcasts when an executor appears.
+  // `cowork_pair_claimed` carries the host's `device_id`, and that is the ONLY
+  // place this app ever learns it. Every later frame is addressed to it, and it
+  // is what the trust record remembers, so a reconnect needs no claim at all.
   //
-  // We treat as failure: `cowork_error`, `error`, and any `…_error` /
-  // `…_denied` claim reply. The user sees one plain sentence, never a code.
+  // The `executor_status` that arrives first is not the answer — it is a
+  // presence delta that happens to name the same device. Waiting for the
+  // claimed/error pair keeps "the relay agreed" and "an executor showed up"
+  // distinct, which matters when the claim is refused after all.
+  //
+  // An unclaimed channel expires after five minutes, and the refusal for an
+  // expired one, an unknown one and one another account holds is deliberately
+  // the same code. So the user gets one plain sentence and one instruction:
+  // ask the computer for a fresh code. Re-claiming from the same account is
+  // idempotent, so a retry after a dropped socket is safe.
   Future<String?> _claimPairingChannel(
     String channel, {
     required Duration timeout,
   }) async {
+    final reqId = _uuid.v4().replaceAll('-', '');
     final answer = _expect((frame) {
       final type = '${frame['type']}';
-      if (type.startsWith('cowork_pair_claim')) return true;
-      if (type == 'cowork_error' || type == 'error') return true;
-      if (type == 'executor_status' && frame['online'] == true) return true;
-      return false;
+      return type == 'cowork_pair_claimed' ||
+          type == 'cowork_pair_error' ||
+          type == 'cowork_error' ||
+          type == 'error';
     }, timeout);
     _transport.send(
       jsonEncode(<String, dynamic>{
         'type': 'cowork_pair_claim',
         'pairing_channel': channel,
+        'req_id': reqId,
       }),
     );
 
@@ -427,24 +447,25 @@ class CoworkCloudRelaySocket implements RelaySocket {
       frame = await answer;
     } on TimeoutException {
       throw const CoworkCloudRelayException(
-        'That code did not work. Ask your computer for a new one and scan '
-        'again.',
+        _staleCodeText,
         code: 'claim_timeout',
       );
     }
-    final type = '${frame['type']}';
-    if (type == 'cowork_error' ||
-        type == 'error' ||
-        type.endsWith('_error') ||
-        type.endsWith('_denied')) {
+    if ('${frame['type']}' != 'cowork_pair_claimed') {
       throw CoworkCloudRelayException(
-        'That code did not work. Ask your computer for a new one and scan '
-        'again.',
-        code: '${frame['code'] ?? type}',
+        _staleCodeText,
+        code: '${frame['code'] ?? frame['type']}',
       );
     }
     return _deviceIdFrom(frame);
   }
+
+  /// The one sentence every claim refusal gets. The server refuses an expired
+  /// channel, an unknown one and one another account holds with the same code
+  /// on purpose, so there is nothing more specific to say — and the recovery is
+  /// the same in all three cases.
+  static const String _staleCodeText =
+      'That code is not valid any more. Ask your computer for a new one.';
 
   static String? _deviceIdFrom(Map<String, dynamic> frame) {
     for (final key in const <String>[
