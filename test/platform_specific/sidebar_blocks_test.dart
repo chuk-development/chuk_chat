@@ -12,31 +12,50 @@ import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
+/// Midnight at the start of the current local day — the anchor every seeded
+/// chat is offset from. Anchoring on the same boundary the grouping uses is
+/// what keeps the buckets the same at 23:59 as at 00:01; offsets from
+/// `DateTime.now()` would drift across it.
+DateTime _localMidnight() {
+  final DateTime now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
+
 /// Seeds the store the sidebars read from. Returns nothing — the sidebars
 /// pull straight off `ChatStorageState`.
 void _seedChats() {
   ChatStorageState.chatsById.clear();
-  final DateTime now = DateTime.now();
-  ChatStorageState.chatsById['a'] = StoredChat.forSidebar(
+  final DateTime midnight = _localMidnight();
+  ChatStorageState.chatsById['a'] = _seedChat(
     id: 'a',
-    createdAt: now,
-    updatedAt: now,
-    isStarred: false,
+    at: midnight,
     title: 'Alpha chat',
   );
-  ChatStorageState.chatsById['b'] = StoredChat.forSidebar(
+  ChatStorageState.chatsById['b'] = _seedChat(
     id: 'b',
-    createdAt: now.subtract(const Duration(days: 3)),
-    updatedAt: now.subtract(const Duration(days: 3)),
-    isStarred: false,
+    at: midnight.subtract(const Duration(days: 3)),
     title: 'Beta chat',
   );
-  ChatStorageState.chatsById['c'] = StoredChat.forSidebar(
+  ChatStorageState.chatsById['c'] = _seedChat(
     id: 'c',
-    createdAt: now.subtract(const Duration(days: 400)),
-    updatedAt: now.subtract(const Duration(days: 400)),
-    isStarred: true,
+    at: midnight.subtract(const Duration(days: 400)),
     title: 'Gamma chat',
+    starred: true,
+  );
+}
+
+StoredChat _seedChat({
+  required String id,
+  required DateTime at,
+  required String title,
+  bool starred = false,
+}) {
+  return StoredChat.forSidebar(
+    id: id,
+    createdAt: at,
+    updatedAt: at,
+    isStarred: starred,
+    title: title,
   );
 }
 
@@ -167,6 +186,14 @@ void main() {
       expect(find.text('Alpha chat'), findsNothing);
       expect(find.text('Beta chat'), findsOneWidget);
 
+      // The field watches its own controller, so the clear button follows
+      // the text rather than the host's rebuilds.
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump();
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
+      expect(find.text('Alpha chat'), findsOneWidget);
+
       await _settleStartupWork(tester);
     });
 
@@ -239,6 +266,46 @@ void main() {
 
       await _settleStartupWork(tester);
     });
+
+    testWidgets('a folded group stays folded when the list rebuilds',
+        (tester) async {
+      _tallWindow(tester);
+      Widget sidebar({String? selected}) => _host(
+            SidebarDesktop(
+              onChatSelected: (_) {},
+              onSettingsTapped: () {},
+              onWorkspacesTapped: () {},
+              onMediaTapped: () {},
+              onNewChatTapped: () {},
+              selectedChatId: selected,
+              isCompactMode: false,
+              showWorkspacesButton: true,
+            ),
+          );
+
+      await tester.pumpWidget(sidebar());
+      await tester.pump();
+      await tester.tap(find.widgetWithText(SbGroupHeader, 'Today'));
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha chat'), findsNothing);
+
+      // The fold is remembered by label rather than by index, so a chat
+      // arriving in the same bucket joins a group that is still shut.
+      ChatStorageState.chatsById['d'] = _seedChat(
+        id: 'd',
+        at: _localMidnight(),
+        title: 'Delta chat',
+      );
+      await tester.pumpWidget(sidebar(selected: 'b'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(SbGroupHeader, 'Today'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsNothing);
+      expect(find.text('Delta chat'), findsNothing);
+      expect(find.text('Beta chat'), findsOneWidget);
+
+      await _settleStartupWork(tester);
+    });
   });
 
   group('SidebarMobile', () {
@@ -300,6 +367,13 @@ void main() {
       );
       await tester.pump();
       await tester.pump();
+
+      // The options button carries Material's minimum touch target, so a
+      // near miss cannot land on the tile underneath it.
+      expect(
+        tester.getSize(find.byTooltip('Chat options').first),
+        const Size(48, 48),
+      );
 
       expect(find.text('Gamma chat'), findsOneWidget);
       await tester.tap(find.widgetWithText(SbGroupHeader, 'Pinned'));
