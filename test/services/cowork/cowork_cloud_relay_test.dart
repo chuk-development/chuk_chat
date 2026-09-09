@@ -26,8 +26,8 @@ class _FakeRelayServer implements RelaySocket {
 
   final bool authOk;
 
-  /// What the relay answers a `cowork_pair_claim` with. Null means the default
-  /// success reply naming the host device.
+  /// What the relay answers a `cowork_pair_claim` with. Null means the real
+  /// success pair: an `executor_status` delta, then `cowork_pair_claimed`.
   final Map<String, dynamic>? claimReply;
 
   /// Every frame the app sent, decoded.
@@ -62,13 +62,22 @@ class _FakeRelayServer implements RelaySocket {
                 },
         );
       case 'cowork_pair_claim':
-        _deliver(
-          claimReply ??
-              <String, dynamic>{
-                'type': 'cowork_pair_claim_ok',
-                'device_id': hostDeviceId,
-              },
-        );
+        final reply = claimReply;
+        if (reply != null) {
+          _deliver(<String, dynamic>{...reply, 'req_id': frame['req_id']});
+          return;
+        }
+        // The real order: the presence delta first, then the answer.
+        _deliver(<String, dynamic>{
+          'type': 'executor_status',
+          'device_id': hostDeviceId,
+          'online': true,
+        });
+        _deliver(<String, dynamic>{
+          'type': 'cowork_pair_claimed',
+          'device_id': hostDeviceId,
+          'req_id': frame['req_id'],
+        });
       case 'cowork_relay':
         // The host receives a JSON string and decodes it, exactly as it does
         // for a frame off the loopback relay.
@@ -288,11 +297,18 @@ void main() {
           'role': 'controller',
           'device_id': appDeviceId,
         });
-        expect(server.sent[1], <String, dynamic>{
-          'type': 'cowork_pair_claim',
-          'pairing_channel': channel,
-        });
+        expect(server.sent[1]['type'], 'cowork_pair_claim');
+        expect(server.sent[1]['pairing_channel'], channel);
+        expect(server.sent[1]['req_id'], isA<String>());
+        // The claim's answer is the only place the host's device id comes from.
         expect(socket.targetDeviceId, _FakeRelayServer.hostDeviceId);
+        expect(
+          CoworkCloudRelaySocket.learnedTarget(
+            base: Uri.parse('wss://api.chuk.chat'),
+            pairingChannel: channel,
+          ),
+          _FakeRelayServer.hostDeviceId,
+        );
         await socket.close();
       },
     );
@@ -311,10 +327,8 @@ void main() {
         inner: (_) async => server,
       );
 
-      expect(server.sent[1], <String, dynamic>{
-        'type': 'cowork_pair_claim',
-        'pairing_channel': channel,
-      });
+      expect(server.sent[1]['type'], 'cowork_pair_claim');
+      expect(server.sent[1]['pairing_channel'], channel);
       await socket.close();
     });
 
@@ -356,10 +370,12 @@ void main() {
     });
 
     test('a refused claim is one plain sentence, not a code', () async {
+      // The server refuses an expired channel, an unknown one and one another
+      // account holds with the same code, on purpose.
       final server = _FakeRelayServer(
         claimReply: const <String, dynamic>{
-          'type': 'cowork_error',
-          'code': 'unknown_pairing_channel',
+          'type': 'cowork_pair_error',
+          'code': 'pairing_channel_unknown',
         },
       );
       await expectLater(
@@ -373,7 +389,7 @@ void main() {
           isA<CoworkCloudRelayException>().having(
             (e) => e.message,
             'message',
-            allOf(contains('did not work'), isNot(contains(channel))),
+            allOf(contains('not valid any more'), isNot(contains(channel))),
           ),
         ),
       );
@@ -463,9 +479,13 @@ void main() {
       for (final frame in relayed) {
         expect(frame['target_device_id'], _FakeRelayServer.hostDeviceId);
         expect(frame['req_id'], isA<String>());
-        expect(frame['payload'], isA<Map<String, dynamic>>());
+        // A JSON string, not a nested object: the host's contract.
+        expect(frame['payload'], isA<String>());
       }
-      expect(relayed.first['payload'], <String, dynamic>{
+      // The join goes FIRST. The relay tells the executor nothing about
+      // presence, so this payload is the host's only signal that a controller
+      // attached — anything ahead of it and the ceremony never starts.
+      expect(jsonDecode(relayed.first['payload'] as String), <String, dynamic>{
         'type': 'join',
         'channel': channel,
         'role': 'controller',
