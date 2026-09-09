@@ -112,6 +112,7 @@ class FakeHost:
         self.url = "ws://127.0.0.1:8787"
         self.device_id = "cowork-host"
         self.pairing_code = "chan1-123456"
+        self.pairing_uri = "cowork://pair?c=CHAN&k=chan1-123456&r=wss%3A%2F%2Fapi.chuk.chat"
         self.agent = argparse.Namespace(name="ada", workspace_dir="/tmp/ada")
         self.estop_path = "/tmp/ada/ESTOP"
 
