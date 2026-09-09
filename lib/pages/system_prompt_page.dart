@@ -17,6 +17,7 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/utils/app_snack_bar.dart';
 
 class SystemPromptPage extends StatefulWidget {
   const SystemPromptPage({super.key});
@@ -508,20 +509,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   void _showSnackBar(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          text,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 1),
-        dismissDirection: DismissDirection.horizontal,
-      ),
+    showAppSnackBar(
+      context,
+      text,
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      duration: const Duration(seconds: 1),
     );
   }
 

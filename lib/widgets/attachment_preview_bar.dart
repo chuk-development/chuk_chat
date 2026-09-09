@@ -15,6 +15,7 @@ import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/utils/format_bytes.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -191,7 +192,7 @@ class _ImageAttachmentCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          _formatBytes(file.fileSizeBytes!),
+                          formatBytes(file.fileSizeBytes!),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 8,
@@ -441,7 +442,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            _formatBytes(file.fileSizeBytes!),
+                            formatBytes(file.fileSizeBytes!),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 8,
@@ -699,7 +700,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                         ),
                         if (widget.file.fileSizeBytes != null)
                           Text(
-                            _formatBytes(widget.file.fileSizeBytes!),
+                            formatBytes(widget.file.fileSizeBytes!),
                             style: TextStyle(
                               color: textColor.withValues(alpha: 0.5),
                               fontSize: 11,
@@ -1003,18 +1004,3 @@ String _extractExtension(String fileName) {
   return fileName.substring(dotIndex + 1).toLowerCase();
 }
 
-String _formatBytes(int bytes) {
-  if (bytes <= 0) return '0 B';
-  const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  double size = bytes.toDouble();
-  int suffixIndex = 0;
-  while (size >= 1024 && suffixIndex < suffixes.length - 1) {
-    size /= 1024;
-    suffixIndex++;
-  }
-  final bool displayDecimal = size < 10 && suffixIndex > 0;
-  final String formatted = displayDecimal
-      ? size.toStringAsFixed(1)
-      : size.toStringAsFixed(0);
-  return '$formatted ${suffixes[suffixIndex]}';
-}

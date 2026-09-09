@@ -4,11 +4,7 @@
 // Enables search and export by ensuring all chats are fully decrypted.
 
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:chuk_chat/models/chat_message.dart';
-import 'package:chuk_chat/services/chat_storage_mutations.dart'
-    show kChatPayloadVersion;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -315,12 +311,12 @@ class ChatPreloadService {
         // made a large history cost hundreds of megabytes. The chat is
         // hydrated from this cache row when the user opens it.
         final title =
-            existing?.title ?? _extractTitle(chatPayload.messages);
+            existing?.title ?? chatTitleFromMessages(chatPayload.messages);
         await LocalChatCacheService.upsert(
           userId,
           LocalChatCacheService.buildPlaintextRow(
             id: chatId,
-            payload: _buildPlaintextPayloadJson(chatPayload),
+            payload: plaintextPayloadJson(chatPayload),
             createdAt: row['created_at'] as String,
             isStarred: (row['is_starred'] as bool?) ?? false,
             updatedAt: row['updated_at'] as String?,
@@ -391,25 +387,3 @@ class ChatPreloadService {
   }
 }
 
-/// Extract title from messages (first user message, truncated).
-String _extractTitle(List<ChatMessage> messages) {
-  if (messages.isEmpty) return '';
-  for (final msg in messages) {
-    if (msg.role == 'user' && msg.text.isNotEmpty) {
-      return msg.text.length > 100
-          ? '${msg.text.substring(0, 100)}...'
-          : msg.text;
-    }
-  }
-  final first = messages.first.text;
-  return first.length > 100 ? '${first.substring(0, 100)}...' : first;
-}
-
-/// Build a plaintext payload JSON string from a ChatPayload.
-String _buildPlaintextPayloadJson(ChatPayload chatPayload) {
-  return jsonEncode({
-    'v': kChatPayloadVersion,
-    if (chatPayload.customName != null) 'customName': chatPayload.customName,
-    'messages': chatPayload.messages.map((m) => m.toJson()).toList(),
-  });
-}

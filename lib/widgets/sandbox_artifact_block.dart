@@ -27,6 +27,7 @@ import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/utils/format_bytes.dart';
 
 /// Maximum number of characters of text content we inline. Anything larger
 /// gets a "Save full file" affordance instead.
@@ -433,7 +434,7 @@ class _ArtifactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final human = _humanReadableBytes(payload.sizeBytes);
+    final human = formatBytes(payload.sizeBytes);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.all(10),
@@ -523,17 +524,3 @@ class _ArtifactErrorRow extends StatelessWidget {
   }
 }
 
-String _humanReadableBytes(int n) {
-  if (n < 1024) return '$n B';
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  var value = n / 1024.0;
-  var unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  final formatted = value < 10
-      ? value.toStringAsFixed(1)
-      : value.round().toString();
-  return '$formatted ${units[unitIndex]}';
-}

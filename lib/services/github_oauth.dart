@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/services/oauth_loopback_callback.dart';
 
 /// GitHub OAuth Service - Supports both OAuth App and Personal Access Token
 class GitHubOAuth {
@@ -96,62 +97,13 @@ class GitHubOAuth {
   }
 
   Future<void> _startCallbackServer() async {
-    _callbackServer = await io.HttpServer.bind('127.0.0.1', callbackPort);
-
-    _callbackServer!.listen((io.HttpRequest request) async {
-      if (request.uri.path == '/callback') {
-        final code = request.uri.queryParameters['code'];
-        final state = request.uri.queryParameters['state'];
-        final error = request.uri.queryParameters['error'];
-
-        if (error != null) {
-          _authCodeCompleter?.completeError(Exception('OAuth error: $error'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html')
-            ..write(_buildHtml('Authorization Failed', false));
-          await request.response.close();
-          return;
-        }
-
-        if (state != _state) {
-          _authCodeCompleter?.completeError(Exception('State mismatch'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html')
-            ..write(_buildHtml('Security Error', false));
-          await request.response.close();
-          return;
-        }
-
-        if (code != null) {
-          _authCodeCompleter?.complete(code);
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html')
-            ..write(_buildHtml('GitHub Connected!', true));
-          await request.response.close();
-        } else {
-          request.response
-            ..statusCode = 400
-            ..write('Missing authorization code');
-          await request.response.close();
-        }
-      }
-    });
-  }
-
-  String _buildHtml(String title, bool success) {
-    final color = success ? '#28a745' : '#dc3545';
-    return '<!DOCTYPE html><html><head><title>$title</title>'
-        '<style>body{font-family:sans-serif;display:flex;'
-        'justify-content:center;align-items:center;'
-        'height:100vh;margin:0;background:#0d1117;color:#c9d1d9;}'
-        '.c{text-align:center;padding:40px;background:#161b22;'
-        'border-radius:12px;border:1px solid #30363d;}'
-        'h1{color:$color;}</style></head><body>'
-        '<div class="c"><h1>$title</h1>'
-        '<p>You can close this window.</p></div></body></html>';
+    _callbackServer = await startOAuthLoopbackServer(
+      port: callbackPort,
+      expectedState: _state!,
+      codeCompleter: _authCodeCompleter!,
+      connectedTitle: 'GitHub Connected!',
+      theme: OAuthCallbackTheme.github,
+    );
   }
 
   Future<bool> completeAuth({String? clientSecret}) async {

@@ -6,6 +6,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
+import 'package:chuk_chat/utils/format_bytes.dart';
 
 // Session cache + ensure logic lives in `SandboxSessionCache` so that
 // sign-out hooks and other services don't have to import a tool handler
@@ -475,22 +476,6 @@ String _inferMimeFromFilename(String filename) {
   return _extensionMimeMap[ext] ?? 'application/octet-stream';
 }
 
-String _humanReadableBytes(int n) {
-  if (n < 1024) return '$n B';
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  var value = n / 1024.0;
-  var unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  // Show one decimal for values under 10, none above.
-  final formatted = value < 10
-      ? value.toStringAsFixed(1)
-      : value.round().toString();
-  return '$formatted ${units[unitIndex]}';
-}
-
 String _lastSegment(String path) {
   final normalized = path.replaceAll('\\', '/');
   final idx = normalized.lastIndexOf('/');
@@ -570,7 +555,7 @@ Future<ToolExecutionResult> executeSandboxSendFileToUser({
     );
     final block = ContentBlock.sandboxArtifact(payload);
 
-    final humanSize = _humanReadableBytes(result.bytes.length);
+    final humanSize = formatBytes(result.bytes.length);
     return ToolExecutionResult(
       output:
           'Sent "$filename" ($humanSize, $mime) to the user. '

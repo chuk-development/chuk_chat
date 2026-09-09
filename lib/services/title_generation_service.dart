@@ -1,6 +1,5 @@
 // lib/services/title_generation_service.dart
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +12,8 @@ import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/services/current_user.dart';
 
 /// Service for automatically generating chat titles using AI.
 /// Uses openai/gpt-oss-20b on Groq for title generation over WebSocket.
@@ -106,34 +107,6 @@ Rules:
     _remoteSyncInFlight = null;
   }
 
-  /// The active user id, or null when signed out or before Supabase is up.
-  static String? _currentUserId() {
-    // Gated on kDebugMode so the override is tree-shaken out of release
-    // builds: it is a mutable static that decides ownership, and
-    // @visibleForTesting is a lint, not a runtime guard. Tests run in debug.
-    if (kDebugMode) {
-      final override = debugCurrentUserIdOverride;
-      if (override != null) return override();
-    }
-    try {
-      return SupabaseService.auth.currentUser?.id;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// True while [userId] is *still the live signed-in user*.
-  ///
-  /// Consults live auth, not just [_cacheOwnerUserId]: the latter only advances
-  /// when a public entry point runs [_syncCacheToCurrentUser], so between a
-  /// sign-out and the next entry point it still names the previous user.
-  /// Gating the remote upserts below on this is what stops one user's setting
-  /// from being written into the next user's Supabase row.
-  static bool _stillOwns(String? userId) =>
-      userId != null &&
-      _cacheOwnerUserId == userId &&
-      _currentUserId() == userId;
-
   static Future<void> _dropLegacyKeys(SharedPreferences prefs) async {
     if (prefs.containsKey(_legacySettingsKey)) {
       await prefs.remove(_legacySettingsKey);
@@ -157,13 +130,13 @@ Rules:
 
   /// Check if auto title generation is enabled
   static Future<bool> isEnabled() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       await _dropLegacyKeys(prefs);
-      if (!_stillOwns(userId)) return false;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return false;
       _autoGenerateTitlesEnabled ??=
           prefs.getBool(_settingsKey(userId)) ?? false;
 
@@ -181,20 +154,20 @@ Rules:
 
   /// Enable or disable auto title generation
   static Future<void> setEnabled(bool enabled) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
     await _dropLegacyKeys(prefs);
     await prefs.setBool(_settingsKey(userId), enabled);
-    if (_stillOwns(userId)) _autoGenerateTitlesEnabled = enabled;
+    if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _autoGenerateTitlesEnabled = enabled;
 
     try {
       // Gate on the user who started this call, and address the row by their
       // id. Reading the live session's user id here instead would upsert this
       // user's setting into whoever is signed in by the time the local write
       // above finished — a write into another account, not just a stale read.
-      if (!_stillOwns(userId)) return;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         await SupabaseService.client.from('customization_preferences').upsert({
@@ -218,13 +191,13 @@ Rules:
 
   /// Get the current system prompt (custom or default)
   static Future<String> getSystemPrompt() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return defaultSystemPrompt;
     try {
       final prefs = await SharedPreferences.getInstance();
       await _dropLegacyKeys(prefs);
-      if (!_stillOwns(userId)) return defaultSystemPrompt;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return defaultSystemPrompt;
       _customSystemPrompt ??= prefs.getString(_systemPromptKey(userId));
 
       // Keep local settings synced from Supabase in the background.
@@ -241,7 +214,7 @@ Rules:
 
   /// Set a custom system prompt
   static Future<void> setSystemPrompt(String prompt) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -251,15 +224,15 @@ Rules:
 
     if (useDefault) {
       await prefs.remove(_systemPromptKey(userId));
-      if (_stillOwns(userId)) _customSystemPrompt = null;
+      if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _customSystemPrompt = null;
     } else {
       await prefs.setString(_systemPromptKey(userId), prompt);
-      if (_stillOwns(userId)) _customSystemPrompt = prompt;
+      if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _customSystemPrompt = prompt;
     }
 
     try {
       // See setEnabled: gate on the originating user, address their row.
-      if (!_stillOwns(userId)) return;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         String? encryptedPrompt;
@@ -268,7 +241,7 @@ Rules:
         }
         // Re-check: `encrypt` uses the live user's key, so a switch during it
         // would seal this prompt with the next user's key.
-        if (!_stillOwns(userId)) return;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
         await SupabaseService.client.from('customization_preferences').upsert({
           'user_id': userId,
           _remotePromptColumn: encryptedPrompt,
@@ -295,17 +268,17 @@ Rules:
 
   /// Reset system prompt to default
   static Future<void> resetSystemPrompt() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return;
     final prefs = await SharedPreferences.getInstance();
     await _dropLegacyKeys(prefs);
     await prefs.remove(_systemPromptKey(userId));
-    if (_stillOwns(userId)) _customSystemPrompt = null;
+    if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _customSystemPrompt = null;
 
     try {
       // See setEnabled: gate on the originating user, address their row.
-      if (!_stillOwns(userId)) return;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
       final session = SupabaseService.auth.currentSession;
       if (session != null) {
         await SupabaseService.client.from('customization_preferences').upsert({
@@ -330,7 +303,7 @@ Rules:
 
   /// Refresh title settings from Supabase and cache them locally.
   static Future<void> syncSettingsFromSupabase({bool forceRefresh = false}) {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     if (!forceRefresh &&
         _lastRemoteSyncAt != null &&
         DateTime.now().difference(_lastRemoteSyncAt!) < _remoteSyncTtl) {
@@ -344,7 +317,7 @@ Rules:
     Future<void> run() async {
       try {
         // Safe lookup: this runs unawaited from isEnabled()/getSystemPrompt().
-        final userId = _currentUserId();
+        final userId = CurrentUser.id;
         if (userId == null) return;
 
         final row = await SupabaseService.client
@@ -354,7 +327,7 @@ Rules:
             .maybeSingle();
 
         if (row == null) {
-          if (_stillOwns(userId)) _lastRemoteSyncAt = DateTime.now();
+          if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _lastRemoteSyncAt = DateTime.now();
           return;
         }
 
@@ -363,7 +336,7 @@ Rules:
 
         // The user may have signed out (or swapped) during the request; a late
         // response must not land in the next user's cache or prefs namespace.
-        if (!_stillOwns(userId)) return;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
 
         final remoteEnabled = row[_remoteEnabledColumn] as bool?;
         if (remoteEnabled != null) {
@@ -381,7 +354,7 @@ Rules:
             final remotePrompt = await _decryptRemotePrompt(
               remotePromptRaw.toString(),
             );
-            if (!_stillOwns(userId)) return;
+            if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
             if (remotePrompt == _decryptFailedSentinel) {
               // Keep local prompt when remote decryption fails.
             } else if (remotePrompt != null && remotePrompt.isNotEmpty) {
@@ -394,7 +367,7 @@ Rules:
         // Guarded like every other post-await write: A's late sync must not
         // refresh the throttle timestamp for B, which would suppress B's own
         // first sync.
-        if (_stillOwns(userId)) _lastRemoteSyncAt = DateTime.now();
+        if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _lastRemoteSyncAt = DateTime.now();
       } on PostgrestException catch (e) {
         if (kDebugMode && !_isMissingTitleColumnsError(e)) {
           debugPrint('Failed to sync title settings from Supabase: $e');
@@ -426,23 +399,8 @@ Rules:
         message.contains(_remotePromptColumn);
   }
 
-  static bool _looksLikeEncryptedPayload(String raw) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return false;
-      }
-      return decoded['v'] != null &&
-          decoded['nonce'] != null &&
-          decoded['ciphertext'] != null &&
-          decoded['mac'] != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
   static Future<String?> _decryptRemotePrompt(String raw) async {
-    if (!_looksLikeEncryptedPayload(raw)) {
+    if (!looksLikeEncryptedPayload(raw)) {
       return raw;
     }
 
@@ -857,13 +815,8 @@ Rules:
   // The real entry points read the user id from `SupabaseService.auth`, which
   // needs a live backend; these drive the user-change path directly.
 
-  /// Replaces the live auth lookup used by [_currentUserId] and [_stillOwns],
-  /// so a test can flip the signed-in user while an async call is suspended.
   @visibleForTesting
-  static String? Function()? debugCurrentUserIdOverride;
-
-  @visibleForTesting
-  static bool debugStillOwns(String? userId) => _stillOwns(userId);
+  static bool debugStillOwns(String? userId) => CurrentUser.stillOwns(userId, _cacheOwnerUserId);
 
   @visibleForTesting
   static void debugPrimeCachesForUser(

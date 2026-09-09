@@ -1,15 +1,11 @@
 // lib/widgets/workspace_panel.dart
-import 'dart:async';
-
-import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:chuk_chat/constants.dart';
@@ -25,36 +21,31 @@ class WorkspacePanel extends StatefulWidget {
   State<WorkspacePanel> createState() => _WorkspacePanelState();
 }
 
-class _WorkspacePanelState extends State<WorkspacePanel> {
+class _WorkspacePanelState extends State<WorkspacePanel>
+    with WorkspaceActionsMixin<WorkspacePanel> {
   Workspace? _project;
-  StreamSubscription<void>? _projectSub;
   bool _isInstructionsExpanded = false;
   bool _isFilesExpanded = true;
   bool _isEditingInstructions = false;
   final TextEditingController _instructionsController = TextEditingController();
-
-  // Upload state
-  bool _isUploadingFile = false;
-  String? _uploadFileName;
-  String _uploadStatus = ''; // 'uploading', 'converting', ''
-  double _uploadProgress = 0.0;
 
   // Avatar image state
   Future<Uint8List>? _avatarImageFuture;
   bool _isUploadingAvatar = false;
 
   @override
+  String get workspaceId => widget.workspaceId;
+
+  @override
   void initState() {
     super.initState();
     _loadProject();
-    _projectSub = WorkspaceStorageService.changes.listen((_) {
-      if (mounted) _loadProject();
-    });
+    listenToWorkspaceChanges(_loadProject);
   }
 
   @override
   void dispose() {
-    _projectSub?.cancel();
+    cancelWorkspaceChangesSubscription();
     _instructionsController.dispose();
     super.dispose();
   }
@@ -103,132 +94,8 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   Future<void> _saveInstructions() async {
     if (_project == null) return;
-
-    try {
-      await WorkspaceStorageService.updateProject(
-        widget.workspaceId,
-        customSystemPrompt: _instructionsController.text.trim(),
-      );
-      if (mounted) {
-        setState(() => _isEditingInstructions = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
-      }
-    }
-  }
-
-  Future<void> _pickAndUploadFile() async {
-    try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: FileConstants.allowedExtensions,
-      );
-
-      if (file == null || file.path == null) return;
-
-      final filePath = file.path!;
-      final fileName = file.name;
-      final fileType = fileName.split('.').last;
-
-      // Start upload with progress tracking
-      setState(() {
-        _isUploadingFile = true;
-        _uploadFileName = fileName;
-        _uploadStatus = 'uploading';
-        _uploadProgress = 0.0;
-      });
-
-      final fileBytes = await File(filePath).readAsBytes();
-
-      // Upload with progress callback
-      await WorkspaceStorageService.uploadFile(
-        widget.workspaceId,
-        fileName,
-        fileBytes,
-        fileType,
-        filePath: filePath,
-        generateMarkdown: true,
-        onUploadProgress: (progress) {
-          if (mounted) {
-            setState(() => _uploadProgress = progress);
-          }
-        },
-        onConversionStart: () {
-          if (mounted) {
-            setState(() => _uploadStatus = 'converting');
-          }
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
-      }
-    } catch (e) {
-      if (mounted) {
-        // Extract clean error message from StateError
-        String errorMessage;
-        if (e is StateError) {
-          errorMessage = e.message;
-        } else {
-          errorMessage = e.toString();
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red[700],
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploadingFile = false;
-          _uploadFileName = null;
-          _uploadStatus = '';
-          _uploadProgress = 0.0;
-        });
-      }
-    }
-  }
-
-  Future<void> _deleteFile(WorkspaceFile file) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
-        content: Text('Delete "${file.fileName}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
-        }
-      }
-    }
+    final saved = await saveWorkspaceInstructions(_instructionsController.text);
+    if (saved) setState(() => _isEditingInstructions = false);
   }
 
   @override
@@ -408,7 +275,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                     isExpanded: _isFilesExpanded,
                     onToggle: () =>
                         setState(() => _isFilesExpanded = !_isFilesExpanded),
-                    onAdd: _isUploadingFile ? null : _pickAndUploadFile,
+                    onAdd: isUploadingFile ? null : pickAndUploadWorkspaceFile,
                     hasContent: _project!.files.isNotEmpty,
                     child: _buildFilesContent(),
                     accentColor: displayColor,
@@ -633,7 +500,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     final accentColor = _project!.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_isUploadingFile) {
+    if (isUploadingFile) {
       return Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -646,7 +513,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _uploadFileName ?? 'File',
+                    uploadFileName ?? 'File',
                     style: TextStyle(fontSize: 12, color: iconFg),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -658,9 +525,9 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
             // Status text
             Text(
-              _uploadStatus == 'uploading'
+              uploadStatus == 'uploading'
                   ? 'Encrypting and uploading...'
-                  : _uploadStatus == 'converting'
+                  : uploadStatus == 'converting'
                   ? 'Converting to markdown...'
                   : 'Processing...',
               style: TextStyle(fontSize: 11, color: iconFg.withAlpha(150)),
@@ -668,13 +535,13 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             const SizedBox(height: 8),
 
             // Progress indicator
-            if (_uploadStatus == 'uploading')
+            if (uploadStatus == 'uploading')
               Column(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: _uploadProgress,
+                      value: uploadProgress,
                       backgroundColor: iconFg.withAlpha(30),
                       valueColor: AlwaysStoppedAnimation<Color>(accentColor),
                       minHeight: 6,
@@ -682,7 +549,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                    '${(uploadProgress * 100).toStringAsFixed(0)}%',
                     style: TextStyle(
                       fontSize: 10,
                       color: iconFg.withAlpha(150),
@@ -720,7 +587,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     if (_project!.files.isEmpty) {
       return InkWell(
         borderRadius: kBorderRadiusRow,
-        onTap: _pickAndUploadFile,
+        onTap: pickAndUploadWorkspaceFile,
         child: Column(
           children: [
             Icon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
@@ -740,7 +607,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
         ..._project!.files.map((file) => _buildFileItem(file, isDark)),
         const SizedBox(height: 8),
         InkWell(
-          onTap: _pickAndUploadFile,
+          onTap: pickAndUploadWorkspaceFile,
           borderRadius: BorderRadius.circular(4),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -823,7 +690,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             ),
             IconButton(
               icon: Icon(Icons.close, size: 16, color: iconFg.withAlpha(150)),
-              onPressed: () => _deleteFile(file),
+              onPressed: () => deleteWorkspaceFile(file),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
               tooltip: 'Remove file',

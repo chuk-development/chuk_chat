@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/artifact_diff_engine.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 const String _notesPrefsKey = 'tool_notes'; // legacy key-value store
 const String _memoryPrefsKey = 'identity_memory'; // new free-text store
@@ -291,7 +292,7 @@ Future<String?> _decryptIdentityValue(
     return '';
   }
 
-  if (!_looksLikeEncryptedPayload(raw)) {
+  if (!looksLikeEncryptedPayload(raw)) {
     return raw;
   }
 
@@ -376,22 +377,6 @@ Future<String> _loadIdentityText({
   await prefs.setBool(syncedMarkerKey, true);
 
   return decryptedRemote;
-}
-
-bool _looksLikeEncryptedPayload(String raw) {
-  try {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      return false;
-    }
-
-    return decoded['v'] != null &&
-        decoded['nonce'] != null &&
-        decoded['ciphertext'] != null &&
-        decoded['mac'] != null;
-  } catch (_) {
-    return false;
-  }
 }
 
 bool _isMissingIdentityColumnsError(PostgrestException error) {

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/supabase_schema_errors.dart';
 
 /// Cross-device developer options toggle.
 ///
@@ -102,7 +103,7 @@ class DeveloperOptionsService {
         }
         _lastSyncAt = DateTime.now();
       } on PostgrestException catch (error) {
-        if (_isMissingPreferencesColumn(error)) {
+        if (isMissingPreferencesColumn(error)) {
           // Remote schema missing old preferences column; local still works.
           _lastSyncAt = DateTime.now();
           return;
@@ -157,7 +158,7 @@ class DeveloperOptionsService {
         _remotePreferencesColumn: preferences,
       }, onConflict: 'user_id');
     } on PostgrestException catch (error) {
-      if (_isMissingPreferencesColumn(error)) {
+      if (isMissingPreferencesColumn(error)) {
         // Some deployments may not have the legacy preferences JSONB column.
         // In that case we keep local behavior only.
         return;
@@ -201,10 +202,4 @@ class DeveloperOptionsService {
     return null;
   }
 
-  static bool _isMissingPreferencesColumn(PostgrestException error) {
-    final code = error.code?.toLowerCase() ?? '';
-    final message = error.message.toLowerCase();
-    return (code == '42703' || message.contains('does not exist')) &&
-        message.contains(_remotePreferencesColumn);
-  }
 }

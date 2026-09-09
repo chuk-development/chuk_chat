@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/current_user.dart';
+import 'package:chuk_chat/services/supabase_schema_errors.dart';
 
 /// How a per-model system prompt combines with the base (global + workspace)
 /// system prompt at request time.
@@ -158,33 +160,6 @@ class PerModelSystemPromptService {
     _loadInFlight = null;
   }
 
-  /// The active user id, or null when signed out or before Supabase is up.
-  static String? _currentUserId() {
-    // Gated on kDebugMode so the override is tree-shaken out of release
-    // builds: it is a mutable static that decides ownership, and
-    // @visibleForTesting is a lint, not a runtime guard. Tests run in debug.
-    if (kDebugMode) {
-      final override = debugCurrentUserIdOverride;
-      if (override != null) return override();
-    }
-    try {
-      return SupabaseService.auth.currentUser?.id;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// True while [userId] is *still the live signed-in user*.
-  ///
-  /// Consults live auth, not just [_cacheOwnerUserId]: the latter only advances
-  /// when a public entry point runs [_syncCacheToCurrentUser], so between a
-  /// sign-out and the next entry point it still names the previous user and
-  /// would wave their data through.
-  static bool _stillOwns(String? userId) =>
-      userId != null &&
-      _cacheOwnerUserId == userId &&
-      _currentUserId() == userId;
-
   static Future<void> _dropLegacyLocalCache(SharedPreferences prefs) async {
     if (prefs.containsKey(_legacyLocalKey)) {
       await prefs.remove(_legacyLocalKey);
@@ -197,7 +172,7 @@ class PerModelSystemPromptService {
   /// pull remote and update. Returns an empty map when the key is not yet
   /// available or no entries exist.
   static Future<Map<String, ModelPromptConfig>> loadAll() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return <String, ModelPromptConfig>{};
 
@@ -216,7 +191,7 @@ class PerModelSystemPromptService {
       // map, never `local`: these are decrypted per-model prompts, and handing
       // them back leaks them to the new user through the return value even
       // with the cache left untouched.
-      if (!_stillOwns(userId)) return <String, ModelPromptConfig>{};
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return <String, ModelPromptConfig>{};
       _decryptedCache = local;
       // Trigger remote sync in background — don't block first paint.
       unawaited(_syncFromRemote());
@@ -234,7 +209,7 @@ class PerModelSystemPromptService {
   /// Get a config for [modelId] (or `null` if none exists). Backed by the
   /// in-memory cache; calls [loadAll] on first access.
   static Future<ModelPromptConfig?> get(String modelId) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     if (_decryptedCache == null) {
       await loadAll();
     }
@@ -244,7 +219,7 @@ class PerModelSystemPromptService {
   /// Save (upsert) a per-model config. Re-encrypts before persisting.
   /// Returns true on a successful local write (remote is best-effort).
   static Future<bool> save(String modelId, ModelPromptConfig config) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     final trimmedId = modelId.trim();
     if (trimmedId.isEmpty) return false;
@@ -287,7 +262,7 @@ class PerModelSystemPromptService {
 
   /// Remove the per-model config for [modelId].
   static Future<bool> delete(String modelId) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     final trimmedId = modelId.trim();
     if (trimmedId.isEmpty) return false;
@@ -390,7 +365,7 @@ class PerModelSystemPromptService {
   static Future<void> _syncFromRemote() async {
     // Safe lookup: this runs unawaited, so a raw `SupabaseService.auth` read
     // would surface as an unhandled async error before Supabase is up.
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     if (userId == null) return;
     _syncCacheToCurrentUser(userId);
 
@@ -421,7 +396,7 @@ class PerModelSystemPromptService {
       // key already present locally (last-writer-wins per key).
       // A background sync must never resurrect the previous user's entries
       // after a sign-out.
-      if (!_stillOwns(userId)) return;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
       final merged = <String, ModelPromptConfig>{...decrypted};
       final existing = _decryptedCache;
       if (existing != null) {
@@ -435,7 +410,7 @@ class PerModelSystemPromptService {
         );
       }
     } on PostgrestException catch (error) {
-      if (_isMissingPreferencesColumn(error)) {
+      if (isMissingPreferencesColumn(error)) {
         // Remote schema does not expose `preferences`. Local-only mode is
         // an acceptable fallback — the global system prompt syncs through a
         // dedicated column, while per-model prompts are an additive feature.
@@ -460,7 +435,7 @@ class PerModelSystemPromptService {
   /// previous user's decrypted prompts into whichever row is active by the time
   /// it resumes — writing A's data into B's account.
   static Future<void> _saveRemote(String ownerUserId) async {
-    if (!_stillOwns(ownerUserId)) return;
+    if (!CurrentUser.stillOwns(ownerUserId, _cacheOwnerUserId)) return;
     final userId = ownerUserId;
     final cache = _decryptedCache;
     if (cache == null) return;
@@ -519,7 +494,7 @@ class PerModelSystemPromptService {
       // uses the *live* user's key, so a switch mid-flight would have sealed
       // this user's prompts with the next user's key. Dropping the write costs
       // one best-effort sync; landing it would corrupt the row.
-      if (!_stillOwns(ownerUserId)) return;
+      if (!CurrentUser.stillOwns(ownerUserId, _cacheOwnerUserId)) return;
 
       await SupabaseService.client
           .from('user_preferences')
@@ -530,7 +505,7 @@ class PerModelSystemPromptService {
         );
       }
     } on PostgrestException catch (error) {
-      if (_isMissingPreferencesColumn(error)) {
+      if (isMissingPreferencesColumn(error)) {
         return;
       }
       if (kDebugMode) {
@@ -543,12 +518,6 @@ class PerModelSystemPromptService {
     }
   }
 
-  static bool _isMissingPreferencesColumn(PostgrestException error) {
-    final code = error.code?.toLowerCase() ?? '';
-    final message = error.message.toLowerCase();
-    return (code == '42703' || message.contains('does not exist')) &&
-        message.contains(_remotePreferencesColumn);
-  }
 
   /// Test hook: reset internal state. Visible only to tests.
   @visibleForTesting
@@ -561,13 +530,8 @@ class PerModelSystemPromptService {
   // The real entry points read the user id from `SupabaseService.auth`, which
   // needs a live backend; these seams drive the user-change path directly.
 
-  /// Replaces the live auth lookup used by [_currentUserId] and [_stillOwns],
-  /// so a test can flip the signed-in user while an async load is suspended.
   @visibleForTesting
-  static String? Function()? debugCurrentUserIdOverride;
-
-  @visibleForTesting
-  static bool debugStillOwns(String? userId) => _stillOwns(userId);
+  static bool debugStillOwns(String? userId) => CurrentUser.stillOwns(userId, _cacheOwnerUserId);
 
   @visibleForTesting
   static void debugPrimeCacheForUser(

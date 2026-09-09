@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 // Two crawled pages was too thin — portals disagree, and the operator's
 // own site fell outside the window. The fetches run together, so reading
@@ -18,21 +19,6 @@ const int _maxExcerptCharsPerPage = 2200;
 
 Map<String, String> _buildJsonHeaders(Map<String, String> serverHeaders) {
   return <String, String>{'Content-Type': 'application/json', ...serverHeaders};
-}
-
-Map<String, dynamic>? _tryDecodeJsonObject(String body) {
-  try {
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) {
-      return decoded;
-    }
-    if (decoded is Map) {
-      return Map<String, dynamic>.from(decoded);
-    }
-  } catch (_) {
-    // Ignore decode failures and return null for non-JSON payloads.
-  }
-  return null;
 }
 
 int _coerceInt(
@@ -128,7 +114,7 @@ Future<_CrawlContext> _crawlForContext({
           .timeout(const Duration(seconds: 45));
 
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return _CrawlContext(
           url: url,
@@ -138,7 +124,7 @@ Future<_CrawlContext> _crawlForContext({
         );
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return _CrawlContext(
@@ -293,12 +279,12 @@ Future<String> executeWebSearch({
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return 'Web search error: ${error ?? 'HTTP ${response.statusCode}'}';
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return 'Web search error: Invalid server response';
@@ -460,12 +446,12 @@ Future<String> executeImageSearch({
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return 'Image search error: ${error ?? 'HTTP ${response.statusCode}'}';
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return 'Image search error: Invalid server response';
@@ -592,12 +578,12 @@ Future<String> executeNewsSearch({
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return 'News search error: ${error ?? 'HTTP ${response.statusCode}'}';
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return 'News search error: Invalid server response';
@@ -691,12 +677,12 @@ Future<String> executeWebCrawl({
           .timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return 'Crawl error: ${error ?? 'HTTP ${response.statusCode}'}';
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return 'Crawl error: Invalid server response';
