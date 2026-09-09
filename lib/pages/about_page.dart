@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
@@ -12,6 +13,7 @@ import 'package:chuk_chat/utils/build_info.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/utils/url_launcher_helper.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -43,14 +45,6 @@ class AboutPage extends StatefulWidget {
     return '$version (build $trimmedBuild)';
   }
 
-  static Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (kDebugMode) {
-        debugPrint('Could not launch $url');
-      }
-    }
-  }
 }
 
 class _AboutPageState extends State<AboutPage> {
@@ -254,7 +248,9 @@ class _AboutPageState extends State<AboutPage> {
                       color: m3.onSurfaceVariant,
                     ),
                     onTap: () =>
-                        AboutPage._launchUrl('https://chuk.chat/en/terms/'),
+                        unawaited(
+                          launchExternalUrl('https://chuk.chat/en/terms/'),
+                        ),
                   ),
                   ExpressiveRow(
                     icon: Icons.lock_outline,
@@ -265,7 +261,9 @@ class _AboutPageState extends State<AboutPage> {
                       color: m3.onSurfaceVariant,
                     ),
                     onTap: () =>
-                        AboutPage._launchUrl('https://chuk.chat/en/privacy/'),
+                        unawaited(
+                          launchExternalUrl('https://chuk.chat/en/privacy/'),
+                        ),
                   ),
                   ExpressiveRow(
                     icon: Icons.code,
@@ -276,8 +274,10 @@ class _AboutPageState extends State<AboutPage> {
                       size: 18,
                       color: m3.onSurfaceVariant,
                     ),
-                    onTap: () => AboutPage._launchUrl(
-                      'https://github.com/chuk-development/chuk_chat',
+                    onTap: () => unawaited(
+                      launchExternalUrl(
+                        'https://github.com/chuk-development/chuk_chat',
+                      ),
                     ),
                   ),
                 ],

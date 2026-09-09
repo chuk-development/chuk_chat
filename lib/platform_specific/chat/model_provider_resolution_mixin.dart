@@ -7,9 +7,9 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 /// Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 ///
-/// The host State keeps its own `_selectedModelId` / `_selectedProviderSlug`
-/// fields and wires them up through [selectedModelId] / [selectedProviderSlug];
-/// this mixin owns the (previously duplicated) lookup/fallback logic.
+/// The storage for [selectedModelId] / [selectedProviderSlug] lives in
+/// `ChatModelSelectionMixin`, which both chat States mix in alongside this one;
+/// this mixin owns the lookup and fallback logic.
 mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// The currently selected model id (host-provided).
   String get selectedModelId;

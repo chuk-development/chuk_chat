@@ -13,7 +13,6 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
-import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
@@ -26,6 +25,8 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug;
+import 'package:chuk_chat/utils/app_snack_bar.dart';
+import 'package:chuk_chat/widgets/api_availability_polling.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -155,7 +156,19 @@ class ModelSelectorPage extends StatefulWidget {
   State<ModelSelectorPage> createState() => _ModelSelectorPageState();
 }
 
-class _ModelSelectorPageState extends State<ModelSelectorPage> {
+class _ModelSelectorPageState extends State<ModelSelectorPage>
+    with ApiAvailabilityPolling<ModelSelectorPage> {
+  @override
+  String get apiPollBaseUrl => _baseUrl;
+
+  @override
+  Future<void> onApiReachable() async {
+    // Go through the same error ladder as a cold start: a bare _fetchModels()
+    // would leave _isLoading true and the polling stopped if the recovery
+    // fetch itself fails.
+    await _initializeModelSelections();
+  }
+
   final String _baseUrl = ApiConfigService.apiBaseUrl;
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
@@ -166,7 +179,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   bool _isLoading = true;
   String? _error;
   Map<String, String> _lastSavedPreferences = {};
-  Timer? _apiAvailabilityTimer;
   StreamSubscription<void>? _refreshSubscription;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -180,7 +192,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   ModeConfig? _fastConfig;
   ModeConfig? _thinkingConfig;
 
-  static const Duration _apiPollInterval = Duration(seconds: 8);
 
   @override
   void initState() {
@@ -457,7 +468,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       );
 
       if (response.statusCode == 200) {
-        _stopApiAvailabilityPolling();
+        stopApiAvailabilityPolling();
         final List<dynamic> modelsJson = json.decode(response.body);
         final List<CustomModelInfo> fetchedModels = modelsJson
             .map((json) => CustomModelInfo.fromJson(json))
@@ -569,7 +580,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       _isLoading = false;
     });
     _showSnackBar(message);
-    _startApiAvailabilityPolling();
+    startApiAvailabilityPolling();
   }
 
   String _buildApiUnavailableMessage({required bool hasConnectivity}) {
@@ -594,41 +605,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
-  }
-
-  void _startApiAvailabilityPolling() {
-    _apiAvailabilityTimer ??= Timer.periodic(_apiPollInterval, (_) async {
-      final bool reachable = await ApiStatusService.isApiReachable(
-        baseUrl: _baseUrl,
-      );
-      if (!reachable) return;
-      if (!mounted) return;
-      _stopApiAvailabilityPolling();
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-      await _fetchModels();
-    });
-  }
-
-  void _stopApiAvailabilityPolling() {
-    _apiAvailabilityTimer?.cancel();
-    _apiAvailabilityTimer = null;
+    showAppSnackBar(context, message);
   }
 
   Future<void> _onEditModelPrompt(
@@ -943,7 +920,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   @override
   void dispose() {
-    _stopApiAvailabilityPolling();
+    stopApiAvailabilityPolling();
     _refreshSubscription?.cancel();
     _refreshSubscription = null;
     _searchController.dispose();

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 /// These endpoints are called straight from the device, so a stalled
 /// request would otherwise wedge the whole tool loop — which is exactly
@@ -433,11 +434,11 @@ Future<List<Map<String, dynamic>>> _fetchBravePlaces({
         .timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {
-      final err = _tryDecodeJsonObject(response.body)?['error']?.toString();
+      final err = tryDecodeJsonObject(response.body)?['error']?.toString();
       throw StateError(err ?? 'HTTP ${response.statusCode}');
     }
 
-    data = _tryDecodeJsonObject(response.body);
+    data = tryDecodeJsonObject(response.body);
   }
   if (data == null) {
     throw StateError('Invalid server response');
@@ -566,17 +567,6 @@ String _extractLang(Map<String, dynamic> args) {
       .trim();
   if (v.isNotEmpty) return v.toLowerCase();
   return 'de';
-}
-
-Map<String, dynamic>? _tryDecodeJsonObject(String body) {
-  try {
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return Map<String, dynamic>.from(decoded);
-  } catch (_) {
-    // ignore
-  }
-  return null;
 }
 
 String _buildInstruction({

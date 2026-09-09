@@ -77,6 +77,15 @@ Complete map of all Dart files in the codebase.
 | `model_cache_service.dart` | Cache models |
 | `model_capabilities_service.dart` | Model features |
 
+### Shared service helpers
+| File | Purpose |
+|------|---------|
+| `current_user.dart` | `CurrentUser.id` / `CurrentUser.stillOwns` — the ownership check every user-scoped static cache needs |
+| `oauth_loopback_callback.dart` | The desktop OAuth redirect server + its callback page (GitHub, Google) |
+| `local_chat_cache_rows.dart` | Row shapes shared by the SQLite and the SharedPreferences cache |
+| `streaming_manager_base.dart` | Platform-independent stream registry; the io build layers notifications and throttling on top |
+| `supabase_schema_errors.dart` | `isMissingPreferencesColumn` |
+
 ### Config
 | File | Purpose |
 |------|---------|
@@ -128,6 +137,7 @@ Complete map of all Dart files in the codebase.
 |------|---------|
 | `sidebar_desktop.dart` | Desktop nav |
 | `sidebar_mobile.dart` | Mobile drawer |
+| `widgets/sidebar/sidebar_common.dart` | Everything the two share: `SidebarStateCommon` mixin (search, time buckets, profile, star, rename, delete + undo), `SidebarFooterRow`, `SidebarPinnedSection`, `SidebarPalette`. Both sidebars render the same design — change it here, not in one of them |
 
 ### Chat (`lib/platform_specific/chat/`)
 | File | Purpose |
@@ -135,6 +145,9 @@ Complete map of all Dart files in the codebase.
 | `chat_ui_desktop.dart` | Desktop chat |
 | `chat_ui_mobile.dart` | Mobile chat |
 | `chat_api_service.dart` | API layer |
+| `chat_model_selection_mixin.dart` | Model / mode / reasoning-effort state, shared by both chat States |
+| `chat_message_edit_mixin.dart` | Edit, resend, branch, variant switch, composer attachments — shared by both chat States |
+| `chat_debug_snapshot.dart` | What "copy debug chat" reads out of a chat screen, and the context block it writes |
 
 ### Chat Widgets (`lib/platform_specific/chat/widgets/`)
 | File | Purpose |
@@ -147,7 +160,9 @@ Complete map of all Dart files in the codebase.
 |------|---------|
 | `streaming_message_handler.dart` | Message streaming |
 | `chat_persistence_handler.dart` | Chat save/load |
-| `file_attachment_handler.dart` | File attachments |
+| `file_attachment_handler.dart` | File attachments (mobile) |
+| `desktop_file_handler.dart` | File attachments (desktop) |
+| `scanned_pdf_pages.dart` | Replaces a text-layer-less PDF with its rendered pages — used by both handlers |
 | `audio_recording_handler.dart` | Audio recording |
 | `message_actions_handler.dart` | Copy/edit/delete |
 
@@ -169,6 +184,11 @@ Complete map of all Dart files in the codebase.
 | `service_logger.dart` | Logging |
 | `service_error_handler.dart` | Error handling |
 | `highlight_registry.dart` | Syntax highlighting |
+| `json_helpers.dart` | `tryDecodeJsonObject` (HTTP error bodies), `tryParseLenientJson` (model output), `looksLikeEncryptedPayload` |
+| `format_bytes.dart` | `formatBytes` — the one byte formatter |
+| `app_snack_bar.dart` | `showAppSnackBar` — the app's one snack bar shape |
+| `url_launcher_helper.dart` | `launchExternalUrl` for footer links |
+| `map_geometry.dart` | `hasPointSpread` — do these points cover more than one place |
 
 ## Constants (`lib/constants/`)
 | File | Purpose |

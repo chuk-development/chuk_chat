@@ -14,11 +14,11 @@ import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
-import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/api_availability_polling.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -339,7 +339,20 @@ class ModelSelectionDropdown extends StatefulWidget {
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
 
-class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
+class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
+    with ApiAvailabilityPolling<ModelSelectionDropdown> {
+  @override
+  String get apiPollBaseUrl => _apiBaseUrl;
+
+  @override
+  Future<void> onApiReachable() async {
+    setState(() {
+      _isLoadingModels = true;
+      _errorMessage = '';
+    });
+    await _fetchModels();
+  }
+
   String _selectedModelId = '';
   String _selectedModelName = 'Loading Models...';
   List<ModelItem> _allModels = [];
@@ -350,7 +363,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       <String, List<ModelProviderSummary>>{};
   bool _isLoadingModels = true;
   String _errorMessage = '';
-  Timer? _apiAvailabilityTimer;
   Map<String, String> _lastSavedPreferences = {};
   late final VoidCallback _selectedModelListener;
   final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false);
@@ -360,7 +372,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
 
-  static const Duration _apiPollInterval = Duration(seconds: 8);
   static const Duration _backgroundFetchDelay = Duration(seconds: 5);
   static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8);
   String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
@@ -800,7 +811,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       }
 
       if (response.statusCode == 200) {
-        _stopApiAvailabilityPolling();
+        stopApiAvailabilityPolling();
         final dynamic decoded = response.body.isNotEmpty
             ? json.decode(response.body)
             : const <dynamic>[];
@@ -956,7 +967,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         dismissDirection: DismissDirection.horizontal,
       ),
     );
-    _startApiAvailabilityPolling();
+    startApiAvailabilityPolling();
   }
 
   String _buildApiUnavailableMessage({required bool hasConnectivity}) {
@@ -977,27 +988,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     }
 
     return 'We are currently doing maintenance and will be right back.';
-  }
-
-  void _startApiAvailabilityPolling() {
-    _apiAvailabilityTimer ??= Timer.periodic(_apiPollInterval, (_) async {
-      final bool reachable = await ApiStatusService.isApiReachable(
-        baseUrl: _apiBaseUrl,
-      );
-      if (!reachable) return;
-      if (!mounted) return;
-      _stopApiAvailabilityPolling();
-      setState(() {
-        _isLoadingModels = true;
-        _errorMessage = '';
-      });
-      await _fetchModels();
-    });
-  }
-
-  void _stopApiAvailabilityPolling() {
-    _apiAvailabilityTimer?.cancel();
-    _apiAvailabilityTimer = null;
   }
 
   /// Update name + widths synchronously (no setState — for use in initState).
@@ -1454,7 +1444,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _selectedModelListener,
     );
     ModelSelectionDropdown._unregisterState(this);
-    _stopApiAvailabilityPolling();
+    stopApiAvailabilityPolling();
     super.dispose();
   }
 

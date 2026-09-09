@@ -1,16 +1,12 @@
 // lib/pages/workspace_management_page.dart
-import 'dart:async';
-
-import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
 import 'package:chuk_chat/constants.dart';
 
 /// Mobile-friendly workspace management page
@@ -30,251 +26,74 @@ class WorkspaceManagementPage extends StatefulWidget {
 }
 
 class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        WorkspaceActionsMixin<WorkspaceManagementPage> {
   late TabController _tabController;
   Workspace? _project;
   List<StoredChat> _projectChats = [];
-  StreamSubscription<void>? _projectSub;
   bool _isLoading = true;
-
-  // Upload state
-  bool _isUploadingFile = false;
-  String? _uploadFileName;
-  String _uploadStatus = '';
-  double _uploadProgress = 0.0;
 
   // Instructions editing
   bool _isEditingInstructions = false;
   final TextEditingController _instructionsController = TextEditingController();
 
   @override
+  String get workspaceId => widget.workspaceId;
+
+  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadProject();
-    _projectSub = WorkspaceStorageService.changes.listen((_) {
-      if (mounted) _loadProject();
-    });
+    listenToWorkspaceChanges(_loadProject);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _projectSub?.cancel();
+    cancelWorkspaceChangesSubscription();
     _instructionsController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadProject() async {
-    try {
-      final workspace = WorkspaceStorageService.getWorkspace(widget.workspaceId);
-      if (workspace == null) {
-        throw StateError('Workspace not found');
-      }
-      final chats = await WorkspaceStorageService.getProjectChats(
-        widget.workspaceId,
-      );
-      if (mounted) {
-        setState(() {
-          _project = workspace;
-          _projectChats = chats;
+  Future<void> _loadProject() {
+    return loadWorkspaceAndChats(
+      onLoaded: (workspace, chats) {
+        _project = workspace;
+        _projectChats = chats;
+        // A workspace change event re-runs this load. Do not overwrite what
+        // the user is typing right now.
+        if (!_isEditingInstructions) {
           _instructionsController.text = workspace.customSystemPrompt ?? '';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load workspace: $e')));
-        Navigator.pop(context);
-      }
-    }
+        }
+        _isLoading = false;
+      },
+      onFailed: () => _isLoading = false,
+    );
   }
 
   Future<void> _saveInstructions() async {
     if (_project == null) return;
-    try {
-      await WorkspaceStorageService.updateProject(
-        widget.workspaceId,
-        customSystemPrompt: _instructionsController.text.trim(),
-      );
-      if (mounted) {
-        setState(() => _isEditingInstructions = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Instructions saved')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
-      }
-    }
+    final saved = await saveWorkspaceInstructions(
+      _instructionsController.text,
+      successMessage: 'Instructions saved',
+    );
+    if (saved) setState(() => _isEditingInstructions = false);
   }
 
-  Future<void> _pickAndUploadFile() async {
-    try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: FileConstants.allowedExtensions,
-      );
-
-      if (file == null || file.path == null) return;
-
-      final filePath = file.path!;
-      final fileName = file.name;
-      final fileType = fileName.split('.').last;
-
-      setState(() {
-        _isUploadingFile = true;
-        _uploadFileName = fileName;
-        _uploadStatus = 'uploading';
-        _uploadProgress = 0.0;
-      });
-
-      final fileBytes = await File(filePath).readAsBytes();
-
-      await WorkspaceStorageService.uploadFile(
-        widget.workspaceId,
-        fileName,
-        fileBytes,
-        fileType,
-        filePath: filePath,
-        generateMarkdown: true,
-        onUploadProgress: (progress) {
-          if (mounted) setState(() => _uploadProgress = progress);
-        },
-        onConversionStart: () {
-          if (mounted) setState(() => _uploadStatus = 'converting');
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
-      }
-    } catch (e) {
-      if (mounted) {
-        String errorMessage;
-        if (e is StateError) {
-          errorMessage = e.message;
-        } else {
-          errorMessage = e.toString();
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red[700],
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploadingFile = false;
-          _uploadFileName = null;
-          _uploadStatus = '';
-          _uploadProgress = 0.0;
-        });
-      }
-    }
-  }
-
-  Future<void> _deleteFile(WorkspaceFile file) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
-        content: Text('Delete "${file.fileName}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+  Future<void> _addChat() {
+    return addChatToWorkspace(
+      existingChatIds: _project?.chatIds ?? const <String>[],
+      pickChat: (availableChats) => showModalBottomSheet<StoredChat>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => _ChatSelectorSheet(chats: availableChats),
       ),
     );
-
-    if (confirmed == true) {
-      try {
-        await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
-        }
-      }
-    }
-  }
-
-  Future<void> _addChat() async {
-    final allChats = ChatStorageService.savedChats;
-    final availableChats = allChats
-        .where((chat) => !(_project?.chatIds.contains(chat.id) ?? false))
-        .toList();
-
-    if (availableChats.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No chats available to add')),
-      );
-      return;
-    }
-
-    final selected = await showModalBottomSheet<StoredChat>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _ChatSelectorSheet(chats: availableChats),
-    );
-
-    if (selected != null && mounted) {
-      try {
-        await WorkspaceStorageService.addChatToProject(
-          widget.workspaceId,
-          selected.id,
-        );
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Chat added to workspace')));
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add chat: $e')));
-      }
-    }
-  }
-
-  Future<void> _removeChat(String chatId) async {
-    try {
-      await WorkspaceStorageService.removeChatFromProject(
-        widget.workspaceId,
-        chatId,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat removed from workspace')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to remove chat: $e')));
-    }
   }
 
   void _startNewChatWithProject() {
@@ -359,7 +178,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                   if (_project!.fileCount > 0)
                     Padding(
                       padding: const EdgeInsets.only(left: 6),
-                      child: _CountBadge(
+                      child: WorkspaceCountBadge(
                         count: _project!.fileCount,
                         color: displayColor,
                       ),
@@ -377,7 +196,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                   if (_project!.chatCount > 0)
                     Padding(
                       padding: const EdgeInsets.only(left: 6),
-                      child: _CountBadge(
+                      child: WorkspaceCountBadge(
                         count: _project!.chatCount,
                         color: displayColor,
                       ),
@@ -427,7 +246,9 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _isUploadingFile ? null : _pickAndUploadFile,
+              onPressed: isUploadingFile
+                  ? null
+                  : pickAndUploadWorkspaceFile,
               icon: const Icon(Icons.upload_file),
               label: const Text('Upload File'),
               style: OutlinedButton.styleFrom(
@@ -442,94 +263,22 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
         ),
 
         // Upload progress
-        if (_isUploadingFile)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.insert_drive_file, color: displayColor),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _uploadFileName ?? 'File',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _uploadStatus == 'uploading'
-                          ? 'Encrypting and uploading...'
-                          : 'Converting to markdown...',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: iconFg.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: _uploadStatus == 'uploading'
-                          ? LinearProgressIndicator(
-                              value: _uploadProgress,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                displayColor,
-                              ),
-                            )
-                          : LinearProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                displayColor,
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        if (isUploadingFile)
+          WorkspaceUploadProgressCard(
+            fileName: uploadFileName,
+            status: uploadStatus,
+            progress: uploadProgress,
+            displayColor: displayColor,
           ),
 
         // File list
         Expanded(
           child: _project!.files.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.folder_open,
-                        size: 56,
-                        color: iconFg.withValues(alpha: 0.2),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No files in this workspace',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: iconFg.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Upload PDFs, documents, or code files\nto reference in your chats',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: iconFg.withValues(alpha: 0.4),
-                        ),
-                      ),
-                    ],
-                  ),
+              ? const WorkspaceEmptyState(
+                  icon: Icons.folder_open,
+                  title: 'No files in this workspace',
+                  subtitle:
+                      'Upload PDFs, documents, or code files\nto reference in your chats',
                 )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -571,175 +320,36 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
   }
 
   Widget _buildFileCard(WorkspaceFile file, Color displayColor, bool isDark) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: displayColor.withValues(alpha: isDark ? 0.15 : 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(file.fileIcon, color: displayColor, size: 20),
-        ),
-        title: Text(
-          file.fileName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14),
-        ),
-        subtitle: Row(
-          children: [
-            Text(file.fileSizeFormatted, style: const TextStyle(fontSize: 12)),
-            if (file.hasMarkdownSummary) ...[
-              const SizedBox(width: 8),
-              Icon(Icons.check_circle, size: 14, color: Colors.green[600]),
-              const SizedBox(width: 3),
-              Text(
-                'Processed',
-                style: TextStyle(fontSize: 11, color: Colors.green[600]),
-              ),
-            ],
-          ],
-        ),
-        trailing: PopupMenuButton(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              child: const Row(
-                children: [
-                  Icon(Icons.visibility, size: 18),
-                  SizedBox(width: 10),
-                  Text('View'),
-                ],
-              ),
-              onTap: () {
-                final currentContext = context;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) return;
-                  WorkspaceFileViewer.show(
-                    currentContext,
-                    file,
-                    widget.workspaceId,
-                  );
-                });
-              },
-            ),
-            PopupMenuItem(
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                  const SizedBox(width: 10),
-                  const Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-              onTap: () =>
-                  Future.delayed(Duration.zero, () => _deleteFile(file)),
+    return WorkspaceFileTile(
+      file: file,
+      workspaceId: widget.workspaceId,
+      displayColor: displayColor,
+      isDark: isDark,
+      onView: (menuContext) => viewWorkspaceFile(menuContext, file),
+      onDelete: () => deleteWorkspaceFile(file),
+      subtitle: Row(
+        children: [
+          Text(file.fileSizeFormatted, style: const TextStyle(fontSize: 12)),
+          if (file.hasMarkdownSummary) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.check_circle, size: 14, color: Colors.green[600]),
+            const SizedBox(width: 3),
+            Text(
+              'Processed',
+              style: TextStyle(fontSize: 11, color: Colors.green[600]),
             ),
           ],
-        ),
-        onTap: () => WorkspaceFileViewer.show(context, file, widget.workspaceId),
+        ],
       ),
     );
   }
 
   Widget _buildChatsTab() {
-    final iconFg = Theme.of(context).resolvedIconColor;
-    final displayColor = _project!.displayColor;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _addChat,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Existing Chat'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: kBorderRadiusPill,
-                ),
-                side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: _projectChats.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline,
-                        size: 56,
-                        color: iconFg.withValues(alpha: 0.2),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No chats in this workspace',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: iconFg.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Add existing chats or start a new one\nwith the button below',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: iconFg.withValues(alpha: 0.4),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _projectChats.length,
-                  itemBuilder: (context, index) {
-                    final chat = _projectChats[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        leading: Icon(Icons.chat, color: iconFg),
-                        title: Text(
-                          chat.customName ?? chat.previewText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          '${chat.messages.length} messages',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          color: Colors.red.withValues(alpha: 0.7),
-                          onPressed: () => _removeChat(chat.id),
-                          tooltip: 'Remove from workspace',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+    return WorkspaceChatsTab(
+      chats: _projectChats,
+      displayColor: _project!.displayColor,
+      onAddChat: _addChat,
+      onRemoveChat: removeChatFromWorkspace,
     );
   }
 
@@ -1061,38 +671,11 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
     );
 
     if (confirmed == true && mounted) {
-      _projectSub?.cancel(); // Stop listener before delete to prevent race
+      // Stop listener before delete to prevent race
+      cancelWorkspaceChangesSubscription();
       await WorkspaceStorageService.deleteProject(widget.workspaceId);
       if (mounted) Navigator.pop(context);
     }
-  }
-}
-
-// ---------- Count Badge ----------
-
-class _CountBadge extends StatelessWidget {
-  final int count;
-  final Color color;
-
-  const _CountBadge({required this.count, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        '$count',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
   }
 }
 

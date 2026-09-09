@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 /// Weather via server-side Brave Rich Callback proxy.
 ///
@@ -73,12 +74,12 @@ Future<String> executeWeather({
             'location or a different action.';
       }
       if (response.statusCode != 200) {
-        final errorData = _tryDecodeJsonObject(response.body);
+        final errorData = tryDecodeJsonObject(response.body);
         final error = errorData?['error']?.toString();
         return 'Weather error: ${error ?? 'HTTP ${response.statusCode}'}';
       }
 
-      data = _tryDecodeJsonObject(response.body);
+      data = tryDecodeJsonObject(response.body);
     }
     if (data == null) {
       return 'Weather error: Invalid server response';
@@ -132,17 +133,6 @@ String _buildQuery({
     default:
       return 'weather $locationPart'.trim();
   }
-}
-
-Map<String, dynamic>? _tryDecodeJsonObject(String body) {
-  try {
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return Map<String, dynamic>.from(decoded);
-  } catch (_) {
-    // ignore
-  }
-  return null;
 }
 
 String _formatWeather({

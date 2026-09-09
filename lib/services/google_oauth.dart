@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/services/oauth_loopback_callback.dart';
 
 /// Google OAuth Service - Backend-assisted flow for Gmail & Calendar APIs
 class GoogleOAuth {
@@ -697,69 +698,18 @@ class GoogleOAuth {
   }
 
   Future<void> _startCallbackServer() async {
-    _callbackServer = await io.HttpServer.bind('127.0.0.1', callbackPort);
-
-    _callbackServer!.listen((io.HttpRequest request) async {
-      if (request.uri.path == '/callback') {
-        final code = request.uri.queryParameters['code'];
-        final state = request.uri.queryParameters['state'];
-        final error = request.uri.queryParameters['error'];
-
-        if (error != null) {
-          _authCodeCompleter?.completeError(Exception('OAuth error: $error'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Authorization Failed', false));
-          await request.response.close();
-          return;
-        }
-
-        if (state != _state) {
-          _authCodeCompleter?.completeError(Exception('CSRF state mismatch'));
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Security Error', false));
-          await request.response.close();
-          return;
-        }
-
-        if (code != null) {
-          if (!_authCodeCompleter!.isCompleted) {
-            _authCodeCompleter!.complete(code);
-          }
-          request.response
-            ..statusCode = 200
-            ..headers.set('Content-Type', 'text/html; charset=utf-8')
-            ..write(_buildHtml('Google Connected!', true));
-          await request.response.close();
-        } else {
-          request.response
-            ..statusCode = 400
-            ..write('Missing authorization code');
-          await request.response.close();
-        }
-      }
-    });
+    _callbackServer = await startOAuthLoopbackServer(
+      port: callbackPort,
+      expectedState: _state!,
+      codeCompleter: _authCodeCompleter!,
+      connectedTitle: 'Google Connected!',
+      theme: OAuthCallbackTheme.google,
+    );
   }
 
   Future<void> _stopCallbackServer() async {
     await _callbackServer?.close();
     _callbackServer = null;
-  }
-
-  String _buildHtml(String title, bool success) {
-    final color = success ? '#34A853' : '#EA4335';
-    return '<!DOCTYPE html><html><head><title>$title</title>'
-        '<style>body{font-family:sans-serif;display:flex;'
-        'justify-content:center;align-items:center;'
-        'height:100vh;margin:0;background:#202124;color:#e8eaed;}'
-        '.c{text-align:center;padding:40px;background:#292a2d;'
-        'border-radius:12px;border:1px solid #3c4043;}'
-        'h1{color:$color;}</style></head><body>'
-        '<div class="c"><h1>$title</h1>'
-        '<p>You can close this window.</p></div></body></html>';
   }
 
   Future<void> _fetchUserInfo() async {
