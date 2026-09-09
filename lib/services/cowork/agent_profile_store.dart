@@ -53,6 +53,9 @@ class AgentProfile {
   bool get isEmpty =>
       photoPath == null && colorValue == null && role == null && brief == null;
 
+  /// Merges the given fields. A `clear*` flag wins over a value, so an emptied
+  /// text field really removes what was stored instead of merging the old value
+  /// back in.
   AgentProfile copyWith({
     String? photoPath,
     int? colorValue,
@@ -60,11 +63,13 @@ class AgentProfile {
     String? brief,
     bool clearPhoto = false,
     bool clearColor = false,
+    bool clearRole = false,
+    bool clearBrief = false,
   }) => AgentProfile(
     photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
     colorValue: clearColor ? null : (colorValue ?? this.colorValue),
-    role: role ?? this.role,
-    brief: brief ?? this.brief,
+    role: clearRole ? null : (role ?? this.role),
+    brief: clearBrief ? null : (brief ?? this.brief),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -136,6 +141,8 @@ class AgentProfileStore extends ChangeNotifier {
     String? brief,
     bool clearPhoto = false,
     bool clearColor = false,
+    bool clearRole = false,
+    bool clearBrief = false,
   }) async {
     final AgentProfile next = profileOf(agentId).copyWith(
       photoPath: photoPath,
@@ -144,6 +151,8 @@ class AgentProfileStore extends ChangeNotifier {
       brief: brief,
       clearPhoto: clearPhoto,
       clearColor: clearColor,
+      clearRole: clearRole,
+      clearBrief: clearBrief,
     );
     if (next.isEmpty) {
       _profiles.remove(agentId);

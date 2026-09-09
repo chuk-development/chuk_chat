@@ -5,8 +5,10 @@
 /// phone layout applies and how much room the floating chrome takes, so the
 /// shell, the chat page and the tests all read one number.
 ///
-/// Design source: the Grok Bot iOS app as catalogued on Mobbin — see
-/// `docs/MOBILE_GROKBOT_STRUCTURE.md`.
+/// Design source: the Material 3 Expressive messenger this UI was rebuilt
+/// after — see `docs/EXPRESSIVE_UI_REDESIGN.md`. (The first phone layer
+/// followed Grok Bot, `docs/MOBILE_GROKBOT_STRUCTURE.md`; the geometry below is
+/// what survived of it.)
 library;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
@@ -23,8 +25,8 @@ class MobileLayout {
   /// layout is checked on Linux without an emulator.
   static const double phoneBreakpoint = 600;
 
-  /// Material's minimum touch target. Grok Bot uses 44 pt chips; the larger
-  /// of the two wins so nothing is hard to hit.
+  /// Material's minimum touch target. The reference uses 44 pt targets; the
+  /// larger of the two wins so nothing is hard to hit.
   static const double minTouchTarget = 48;
 
   /// Diameter of the round chips in the floating bars.

@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Golden-diff output from a failing image comparison (flutter_test writes it
+# next to the test); never committed.
+test/**/failures/
