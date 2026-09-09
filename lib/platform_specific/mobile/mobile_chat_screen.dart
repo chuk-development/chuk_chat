@@ -1,4 +1,4 @@
-/// The phone chat page: Grok Bot chrome floating over the chat body.
+/// The phone chat page: the messenger's floating chrome over the chat body.
 ///
 /// The body is whatever the shell already renders for a thread (the
 /// `CoworkThreadView`, which holds the verbatim chuk_chat phone screen). This

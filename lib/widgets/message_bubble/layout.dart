@@ -106,10 +106,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     required Color fill,
     required Color onFill,
   }) {
-    final String? label = _clockLabel;
     final QueueMark mark = isUser
         ? queueMarkFor(widget.status)
         : QueueMark.none;
+    // Only the LAST bubble of a run carries the time, the way a messenger does
+    // it: a stamp under every line of a burst is noise. A queue mark always
+    // shows — it is about this one message.
+    final String? label = widget.endsGroup ? _clockLabel : null;
     if (label == null && mark == QueueMark.none) return null;
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Padding(
@@ -194,7 +197,6 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     if (wake != null) return _buildAutomationWakeLine(context, wake);
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
@@ -223,10 +225,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
+          // The body is painted ON the accent, so its foreground is the
+          // scheme's on-primary, not the page's icon colour — otherwise the
+          // text sits dark on a dark accent.
           ..._buildClassicLayout(
-            iconFgColor: iconFgColor,
+            iconFgColor: onFill,
             accentColor: accentColor,
-            bgColor: bgColor,
+            bgColor: fill,
             isUserMessage: isUserMessage,
             alignRight: alignRight,
             hasInfoStatusBar: false,
@@ -288,7 +293,6 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     const bool alignRight = false;
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
@@ -334,15 +338,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         children: <Widget>[
           ...useContentBlocks
               ? _buildContentBlocksLayout(
-                  iconFgColor: iconFgColor,
+                  iconFgColor: colors.onFill,
                   accentColor: accentColor,
-                  bgColor: bgColor,
+                  bgColor: colors.fill,
                   alignRight: alignRight,
                 )
               : _buildClassicLayout(
-                  iconFgColor: iconFgColor,
+                  iconFgColor: colors.onFill,
                   accentColor: accentColor,
-                  bgColor: bgColor,
+                  bgColor: colors.fill,
                   isUserMessage: isUserMessage,
                   alignRight: alignRight,
                   hasInfoStatusBar: hasInfoStatusBar,

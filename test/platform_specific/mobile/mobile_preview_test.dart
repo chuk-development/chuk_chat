@@ -8,10 +8,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
+import 'package:cowork/widgets/message_bubble.dart';
 
 import 'mobile_support.dart';
 
@@ -19,6 +22,9 @@ const String _out = '../../../../docs/screenshots/c6';
 
 void main() {
   setUpAll(loadRealFonts);
+  // A bubble reads two display preferences on mount; without a mock store the
+  // plugin channel throws.
+  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
   final DateTime now = DateTime(2026, 9, 5, 14, 30);
 
@@ -137,6 +143,57 @@ void main() {
       theme: mono(Brightness.light),
     );
     await shoot(tester, 'preview_chat_chrome_light');
+  });
+
+  testWidgets('the message bubbles', (tester) async {
+    // The bubbles on their own, so the corner geometry, the colours per kind
+    // and the stamp can be read without the rest of the chat screen.
+    await pumpPhone(
+      tester,
+      ListView(
+        padding: const EdgeInsets.fromLTRB(12, 60, 12, 24),
+        children: <Widget>[
+          MessageBubble(
+            message: 'Morning. What is on today?',
+            isUser: true,
+            maxWidth: 300,
+            turnStartedAt: now,
+          ),
+          MessageBubble(
+            message: 'Three things are open, and one needs you.',
+            isUser: false,
+            maxWidth: 360,
+            startsNewGroup: true,
+            endsGroup: false,
+            turnStartedAt: now,
+          ),
+          MessageBubble(
+            message: 'I read the release notes and the two open PRs.',
+            isUser: false,
+            maxWidth: 360,
+            startsNewGroup: false,
+            endsGroup: true,
+            turnStartedAt: now,
+          ),
+          MessageBubble(
+            message: 'Ship it, and tell me when the build is green.',
+            isUser: true,
+            maxWidth: 300,
+            turnStartedAt: now,
+            status: ChatMessageStatus.pending,
+          ),
+          MessageBubble(
+            message: 'The stream broke off before I finished.',
+            isUser: false,
+            maxWidth: 360,
+            turnStartedAt: now,
+            status: ChatMessageStatus.interrupted,
+          ),
+        ],
+      ),
+      theme: mono(Brightness.light),
+    );
+    await shoot(tester, 'preview_bubbles_light');
   });
 }
 
