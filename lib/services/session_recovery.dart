@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Session;
 
 import 'package:cowork/services/account_session.dart';
+import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';
@@ -234,6 +235,13 @@ class CoworkRelayRecoveryLink implements RecoveryLink {
     final client = CoworkRelayClient(
       deviceId: identity.deviceId,
       signingKeyPair: identity.keyPair,
+      // The stored trust names the cloud relay, so the recovery link must dial
+      // it the same way the shell does: authenticated as this account's
+      // controller. A local `ws://` trust still opens the plain socket.
+      connector: coworkCloudRelayConnector(
+        deviceId: identity.deviceId,
+        sessionSource: sessionSource,
+      ),
       sessionSource: sessionSource,
       sessionAdopter: adopter,
       // docs/WIRE_CONTRACT.md, "Secrets": the set rides behind the token.
