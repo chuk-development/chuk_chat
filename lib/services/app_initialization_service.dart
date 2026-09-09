@@ -19,8 +19,6 @@ import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Callback for initialization events
-typedef InitProgressCallback = void Function(String stage, int progressPercent);
-
 /// Service for managing app initialization and user session startup
 class AppInitializationService {
   AppInitializationService._();
@@ -37,8 +35,7 @@ class AppInitializationService {
   static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3);
   static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2);
 
-  bool get isInitializing => _isInitializing;
-  bool get isSupabaseReady => _isSupabaseReady;
+
 
   /// Initialize core services (call from main())
   Future<void> initializeCoreServices() async {

@@ -268,28 +268,6 @@ class WorkspaceMessageService {
     }
   }
 
-  /// Inject workspace context into message list
-  /// Prepends a system message with workspace context to the conversation
-  static Future<List<Map<String, dynamic>>> injectProjectContext(
-    String workspaceId,
-    List<Map<String, dynamic>> messages,
-  ) async {
-    try {
-      final projectSystemMessage = await buildProjectSystemMessage(workspaceId);
-
-      // Create system message
-      final systemMessage = {'role': 'system', 'text': projectSystemMessage};
-
-      // Prepend to messages
-      return [systemMessage, ...messages];
-    } catch (e, st) {
-      if (kDebugMode) {
-        debugPrint('❌ [ProjectMessage] Failed to inject context: $e\n$st');
-      }
-      // Return original messages if context injection fails
-      return messages;
-    }
-  }
 
   /// Get a summary of workspace context (for UI display)
   static String getProjectContextSummary(Workspace workspace) {

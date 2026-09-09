@@ -767,6 +767,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         onMediaTapped: _openMediaPage,
         onNewChatTapped: _newChatFromSidebar,
         onChatDeleted: _handleChatDeleted,
+        // The drawer had no visible close control, only the swipe.
+        onCollapseTapped: _toggleSidebar,
         selectedChatId: ChatStorageService.selectedChatId,
         isCompactMode: true,
       ),

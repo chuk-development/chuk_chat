@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' as io;
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:chuk_chat/services/oauth_loopback_callback.dart';
+import 'package:chuk_chat/services/oauth_loopback_server.dart';
 
 /// Google OAuth Service - Backend-assisted flow for Gmail & Calendar APIs
 class GoogleOAuth {
@@ -30,14 +28,23 @@ class GoogleOAuth {
     'https://www.googleapis.com/auth/userinfo.profile',
   ];
 
-  io.HttpServer? _callbackServer;
-  Completer<String>? _authCodeCompleter;
+  final OAuthLoopbackServer _callback = OAuthLoopbackServer(
+    port: callbackPort,
+    successTitle: 'Google Connected!',
+    theme: const OAuthResultPageTheme(
+      successColor: '#34A853',
+      errorColor: '#EA4335',
+      background: '#202124',
+      card: '#292a2d',
+      border: '#3c4043',
+      text: '#e8eaed',
+    ),
+  );
 
   String? _accessToken;
   String? _refreshToken;
   DateTime? _tokenExpiry;
   String? _userEmail;
-  String? _state;
 
   bool get isAuthenticated => _accessToken != null;
   String? get userEmail => _userEmail;
@@ -49,39 +56,42 @@ class GoogleOAuth {
   /// Start OAuth flow - gets auth URL from backend, opens browser, starts
   /// local callback server.
   Future<void> startAuth() async {
-    _state = _generateState();
+    final state = OAuthLoopbackServer.generateState();
 
-    _authCodeCompleter = Completer<String>();
-    await _startCallbackServer();
+    await _callback.start(expectedState: state);
 
-    final response = await http.get(
-      Uri.parse('$_backendUrl/google/auth-url').replace(
-        queryParameters: {
-          'redirect_uri': redirectUri,
-          'state': _state!,
-          'scopes': scopes.join(' '),
-        },
-      ),
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/google/auth-url').replace(
+          queryParameters: {
+            'redirect_uri': redirectUri,
+            'state': state,
+            'scopes': scopes.join(' '),
+          },
+        ),
+      );
 
-    if (response.statusCode != 200) {
-      await _stopCallbackServer();
-      throw Exception('Failed to get auth URL: ${response.statusCode}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('Failed to get auth URL: ${response.statusCode}');
+      }
 
-    final data = jsonDecode(response.body);
-    final authUrl = data['auth_url'] as String?;
-    if (authUrl == null) {
-      await _stopCallbackServer();
-      throw Exception('Backend did not return auth_url');
-    }
+      final data = jsonDecode(response.body);
+      final authUrl = data['auth_url'] as String?;
+      if (authUrl == null) {
+        throw Exception('Backend did not return auth_url');
+      }
 
-    final uri = Uri.parse(authUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      await _stopCallbackServer();
-      throw Exception('Could not launch Google authorization URL');
+      final uri = Uri.parse(authUrl);
+      final launched =
+          await canLaunchUrl(uri) &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        throw Exception('Could not launch Google authorization URL');
+      }
+    } catch (_) {
+      // A failure here leaves the port bound with nobody to answer it.
+      await _callback.stop();
+      rethrow;
     }
   }
 
@@ -89,12 +99,12 @@ class GoogleOAuth {
   /// fetch user info.
   Future<bool> completeAuth() async {
     try {
-      final code = await _authCodeCompleter!.future.timeout(
+      final code = await _callback.code.timeout(
         const Duration(minutes: 5),
         onTimeout: () => throw TimeoutException('Authorization timed out'),
       );
 
-      await _stopCallbackServer();
+      await _callback.stop();
 
       // Exchange code for tokens via backend
       final response = await http.post(
@@ -121,7 +131,7 @@ class GoogleOAuth {
       await _saveTokens();
       return true;
     } catch (_) {
-      await _stopCallbackServer();
+      await _callback.stop();
       return false;
     }
   }
@@ -690,27 +700,6 @@ class GoogleOAuth {
     'Authorization': 'Bearer $_accessToken',
     'Accept': 'application/json',
   };
-
-  String _generateState() {
-    final random = Random.secure();
-    final values = List<int>.generate(32, (_) => random.nextInt(256));
-    return base64Url.encode(values);
-  }
-
-  Future<void> _startCallbackServer() async {
-    _callbackServer = await startOAuthLoopbackServer(
-      port: callbackPort,
-      expectedState: _state!,
-      codeCompleter: _authCodeCompleter!,
-      connectedTitle: 'Google Connected!',
-      theme: OAuthCallbackTheme.google,
-    );
-  }
-
-  Future<void> _stopCallbackServer() async {
-    await _callbackServer?.close();
-    _callbackServer = null;
-  }
 
   Future<void> _fetchUserInfo() async {
     try {

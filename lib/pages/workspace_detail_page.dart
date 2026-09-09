@@ -371,8 +371,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
             child: OutlinedButton.icon(
               onPressed: isUploadingFile
                   ? null
-                  : () => pickAndUploadWorkspaceFile(
-                      warnWhenPathUnavailable: true,
+                  : () => uploadFileToWorkspace(
                       confirmOversizedUpload: _confirmContextBudget,
                     ),
               icon: const Icon(Icons.upload_file),

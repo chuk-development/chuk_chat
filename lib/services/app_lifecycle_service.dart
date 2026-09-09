@@ -12,8 +12,6 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 
 /// Callback when app state changes
-typedef AppStateCallback = void Function(AppLifecycleState state);
-
 /// Service for managing app lifecycle events and related operations
 class AppLifecycleService extends ChangeNotifier {
   AppLifecycleService._();

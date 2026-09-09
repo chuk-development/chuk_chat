@@ -1,4 +1,6 @@
 // lib/widgets/workspace_panel.dart
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
@@ -275,7 +277,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                     isExpanded: _isFilesExpanded,
                     onToggle: () =>
                         setState(() => _isFilesExpanded = !_isFilesExpanded),
-                    onAdd: isUploadingFile ? null : pickAndUploadWorkspaceFile,
+                    onAdd: isUploadingFile ? null : uploadFileToWorkspace,
                     hasContent: _project!.files.isNotEmpty,
                     child: _buildFilesContent(),
                     accentColor: displayColor,
@@ -587,7 +589,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
     if (_project!.files.isEmpty) {
       return InkWell(
         borderRadius: kBorderRadiusRow,
-        onTap: pickAndUploadWorkspaceFile,
+        onTap: uploadFileToWorkspace,
         child: Column(
           children: [
             Icon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
@@ -607,7 +609,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
         ..._project!.files.map((file) => _buildFileItem(file, isDark)),
         const SizedBox(height: 8),
         InkWell(
-          onTap: pickAndUploadWorkspaceFile,
+          onTap: uploadFileToWorkspace,
           borderRadius: BorderRadius.circular(4),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),

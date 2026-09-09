@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' as io;
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:chuk_chat/services/oauth_loopback_callback.dart';
+import 'package:chuk_chat/services/oauth_loopback_server.dart';
 
 /// GitHub OAuth Service - Supports both OAuth App and Personal Access Token
 class GitHubOAuth {
@@ -23,10 +21,19 @@ class GitHubOAuth {
   String? _accessToken;
   String? _clientId;
   bool _isPersonalToken = false;
-  String? _state;
 
-  io.HttpServer? _callbackServer;
-  Completer<String>? _authCodeCompleter;
+  final OAuthLoopbackServer _callback = OAuthLoopbackServer(
+    port: callbackPort,
+    successTitle: 'GitHub Connected!',
+    theme: const OAuthResultPageTheme(
+      successColor: '#28a745',
+      errorColor: '#dc3545',
+      background: '#0d1117',
+      card: '#161b22',
+      border: '#30363d',
+      text: '#c9d1d9',
+    ),
+  );
 
   bool get isAuthenticated => _accessToken != null;
   bool get isPersonalToken => _isPersonalToken;
@@ -70,17 +77,16 @@ class GitHubOAuth {
       );
     }
 
-    _state = _generateState();
+    final state = OAuthLoopbackServer.generateState();
 
     final params = {
       'client_id': _clientId!,
       'redirect_uri': redirectUri,
       'scope': scopes.join(' '),
-      'state': _state!,
+      'state': state,
     };
 
-    _authCodeCompleter = Completer<String>();
-    await _startCallbackServer();
+    await _callback.start(expectedState: state);
 
     final uri = Uri.parse(authEndpoint).replace(queryParameters: params);
     if (await canLaunchUrl(uri)) {
@@ -90,30 +96,14 @@ class GitHubOAuth {
     }
   }
 
-  String _generateState() {
-    final random = Random.secure();
-    final values = List<int>.generate(32, (_) => random.nextInt(256));
-    return base64Url.encode(values);
-  }
-
-  Future<void> _startCallbackServer() async {
-    _callbackServer = await startOAuthLoopbackServer(
-      port: callbackPort,
-      expectedState: _state!,
-      codeCompleter: _authCodeCompleter!,
-      connectedTitle: 'GitHub Connected!',
-      theme: OAuthCallbackTheme.github,
-    );
-  }
-
   Future<bool> completeAuth({String? clientSecret}) async {
     try {
-      final code = await _authCodeCompleter!.future.timeout(
+      final code = await _callback.code.timeout(
         const Duration(minutes: 5),
         onTimeout: () => throw TimeoutException('Authorization timed out'),
       );
 
-      await _stopCallbackServer();
+      await _callback.stop();
 
       if (clientSecret != null) {
         final response = await http.post(
@@ -147,14 +137,9 @@ class GitHubOAuth {
         );
       }
     } catch (e) {
-      await _stopCallbackServer();
+      await _callback.stop();
       rethrow;
     }
-  }
-
-  Future<void> _stopCallbackServer() async {
-    await _callbackServer?.close();
-    _callbackServer = null;
   }
 
   Future<void> _saveToken() async {
