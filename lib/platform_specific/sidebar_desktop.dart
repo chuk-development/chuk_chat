@@ -468,8 +468,11 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     );
     int budget = _displayLimit;
     for (final group in groups) {
-      if (budget <= 0) break;
-      final int shown = math.min(budget, group.items.length);
+      // A folded group renders no tiles, so it must not spend the page
+      // either — otherwise folding the top group empties the ones below it.
+      final bool folded = _collapsedGroups.contains(group.label);
+      if (!folded && budget <= 0) break;
+      final int shown = folded ? 0 : math.min(budget, group.items.length);
       budget -= shown;
       slivers.addAll(
         _buildGroup(
