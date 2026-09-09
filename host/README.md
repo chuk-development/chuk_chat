@@ -52,10 +52,14 @@ the stored pairing and mint one fresh code).
 The relay wants a Supabase JWT, and a brand-new host has no account. So:
 
 1. **First pairing:** the host presents no token at all, only a 256-bit
-   CSPRNG pairing channel — the bearer capability in the QR. The relay parks that
-   socket on the channel, where it can reach nobody until a logged-in app claims
-   it. §15 then runs E2E over that channel, so a malicious relay still cannot
-   MITM.
+   CSPRNG pairing channel — the bearer capability in the QR. The relay *parks*
+   that socket: until a logged-in app claims the channel it may send only
+   `{"type":"ping"}`, so the host queues its hello instead of spending it. The
+   claim arrives as `{"type":"cowork_pair_bound"}` and releases the queue; §15
+   then runs E2E over that channel, so a malicious relay still cannot MITM. A
+   channel nobody claims within five minutes dies
+   (`{"type":"cowork_pair_expired"}` + `close(1008)`), and the host mints a fresh
+   channel and a fresh code and prints them rather than retrying a dead one.
 2. **Ever after:** the app provisions the account token in the first sealed frame
    (§15 step 7). It is stored `0600` in `account.json` next to `paired.json`, and
    every later connect is the ordinary `{"type":"auth","token":...}` handshake.
