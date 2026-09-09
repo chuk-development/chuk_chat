@@ -7,9 +7,13 @@
 // cannot drift apart as either one is edited.
 //
 // Nothing in here knows about chats, storage or navigation — the two platform
-// sidebars supply the data and the callbacks.
+// sidebars supply the data and the callbacks. The one thing the chrome does
+// resolve for itself is its own labels: every tooltip and hint falls back to
+// `AppLocalizations`, so a caller that passes nothing still speaks the user's
+// language instead of English.
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
@@ -318,7 +322,7 @@ class SbProfileCard extends StatelessWidget {
     this.subtitle,
     this.onTap,
     this.onCollapse,
-    this.collapseTooltip = 'Hide sidebar',
+    this.collapseTooltip,
   });
 
   final String name;
@@ -330,7 +334,9 @@ class SbProfileCard extends StatelessWidget {
   /// Null hides the round button entirely, for a host that has no way to
   /// collapse the panel.
   final VoidCallback? onCollapse;
-  final String collapseTooltip;
+
+  /// Null takes the localized default.
+  final String? collapseTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -372,7 +378,9 @@ class SbProfileCard extends StatelessWidget {
             const SizedBox(width: 6),
             SbRoundAction(
               icon: Icons.keyboard_double_arrow_left_rounded,
-              tooltip: collapseTooltip,
+              tooltip: collapseTooltip ??
+                  AppLocalizations.of(context)?.hideSidebar ??
+                  'Hide sidebar',
               onTap: onCollapse!,
               diameter: 36,
               iconSize: 20,
@@ -538,19 +546,61 @@ class SbGroupHeader extends StatelessWidget {
 }
 
 /// The pill-shaped search field of the bottom bar.
-class SbSearchField extends StatelessWidget {
+class SbSearchField extends StatefulWidget {
   const SbSearchField({
     super.key,
     required this.controller,
     required this.focusNode,
     required this.onClear,
-    this.hintText = 'Search chats',
+    this.hintText,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onClear;
-  final String hintText;
+
+  /// Null takes the localized default.
+  final String? hintText;
+
+  @override
+  State<SbSearchField> createState() => _SbSearchFieldState();
+}
+
+class _SbSearchFieldState extends State<SbSearchField> {
+  /// Whether the clear button belongs on screen. Tracked here, from the
+  /// controller, because the field must not depend on the host happening to
+  /// rebuild it on every keystroke — a host that debounces its own work
+  /// would otherwise leave the button behind.
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasText = widget.controller.text.isNotEmpty;
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SbSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _hasText = widget.controller.text.isNotEmpty;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    final bool hasText = widget.controller.text.isNotEmpty;
+    if (hasText == _hasText) return;
+    setState(() => _hasText = hasText);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -563,12 +613,14 @@ class SbSearchField extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: TextField(
-        controller: controller,
-        focusNode: focusNode,
+        controller: widget.controller,
+        focusNode: widget.focusNode,
         style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14),
         cursorColor: theme.colorScheme.primary,
         decoration: InputDecoration(
-          hintText: hintText,
+          hintText: widget.hintText ??
+              AppLocalizations.of(context)?.searchChatsHint ??
+              'Search chats',
           hintStyle: TextStyle(color: muted, fontSize: 14),
           prefixIcon: Icon(Icons.search_rounded, size: 19, color: muted),
           prefixIconConstraints:
@@ -578,11 +630,11 @@ class SbSearchField extends StatelessWidget {
           border: InputBorder.none,
           // The clear button only exists while there is something to clear,
           // so an untouched field stays a clean pill.
-          suffixIcon: controller.text.isEmpty
+          suffixIcon: !_hasText
               ? null
               : InkResponse(
                   radius: 16,
-                  onTap: onClear,
+                  onTap: widget.onClear,
                   child: Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: Icon(Icons.close_rounded, size: 17, color: muted),
@@ -604,8 +656,8 @@ class SbBottomBar extends StatelessWidget {
     required this.search,
     required this.onSettings,
     required this.onNewChat,
-    this.settingsTooltip = 'Settings',
-    this.newChatTooltip = 'New chat',
+    this.settingsTooltip,
+    this.newChatTooltip,
     this.padding =
         const EdgeInsets.fromLTRB(kSbBlockInset, 6, kSbBlockInset, 10),
   });
@@ -613,8 +665,10 @@ class SbBottomBar extends StatelessWidget {
   final Widget search;
   final VoidCallback onSettings;
   final VoidCallback onNewChat;
-  final String settingsTooltip;
-  final String newChatTooltip;
+
+  /// Null on either takes the localized default.
+  final String? settingsTooltip;
+  final String? newChatTooltip;
   final EdgeInsets padding;
 
   @override
@@ -628,13 +682,17 @@ class SbBottomBar extends StatelessWidget {
           const SizedBox(width: 6),
           SbRoundAction(
             icon: Icons.settings_rounded,
-            tooltip: settingsTooltip,
+            tooltip: settingsTooltip ??
+                AppLocalizations.of(context)?.settings ??
+                'Settings',
             onTap: onSettings,
           ),
           const SizedBox(width: 6),
           SbRoundAction(
             icon: Icons.edit_square,
-            tooltip: newChatTooltip,
+            tooltip: newChatTooltip ??
+                AppLocalizations.of(context)?.newChat ??
+                'New chat',
             onTap: onNewChat,
             fill: theme.colorScheme.primary,
           ),
@@ -790,7 +848,17 @@ class _SbChatTileBody extends StatelessWidget {
           AnimatedOpacity(
             opacity: hovered ? 1 : 0,
             duration: const Duration(milliseconds: 120),
-            child: IgnorePointer(ignoring: !hovered, child: hoverTrailing!),
+            // A faded-out control must be gone for everyone, not just for
+            // the pointer: without these a keyboard user tabs onto an
+            // invisible button and a screen reader reads it out.
+            child: ExcludeFocus(
+              excluding: !hovered,
+              child: ExcludeSemantics(
+                excluding: !hovered,
+                child:
+                    IgnorePointer(ignoring: !hovered, child: hoverTrailing!),
+              ),
+            ),
           ),
         ?trailing,
       ],
@@ -880,12 +948,14 @@ class SbOfflineNotice extends StatelessWidget {
     super.key,
     required this.label,
     required this.onRetry,
-    this.retryTooltip = 'Check for updates',
+    this.retryTooltip,
   });
 
   final String label;
   final VoidCallback onRetry;
-  final String retryTooltip;
+
+  /// Null takes the localized default.
+  final String? retryTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -921,7 +991,9 @@ class SbOfflineNotice extends StatelessWidget {
                 size: 18,
                 color: theme.m3.onWarningContainer,
               ),
-              tooltip: retryTooltip,
+              tooltip: retryTooltip ??
+                  AppLocalizations.of(context)?.checkForUpdates ??
+                  'Check for updates',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 28, height: 28),
               onPressed: onRetry,

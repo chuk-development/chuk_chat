@@ -604,6 +604,14 @@ const Map<String, String> stringsDe = {
   'newChat': 'Neuer Chat',
   'workspaces': 'Arbeitsbereiche',
   'media': 'Medien',
+  'search': 'Suche',
+  'today': 'Heute',
+  'thisWeek': 'Diese Woche',
+  'thisMonth': 'Diesen Monat',
+  'pinned': 'Angeheftet',
+  'searchChatsHint': 'Chats durchsuchen',
+  'hideSidebar': 'Seitenleiste ausblenden',
+  'checkForUpdates': 'Nach Updates suchen',
 
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Medienverwaltung',

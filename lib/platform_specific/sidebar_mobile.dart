@@ -149,6 +149,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
     setState(() {
       if (!_collapsedGroups.remove(label)) _collapsedGroups.add(label);
     });
+    // Folding a group can leave the content shorter than the viewport, and
+    // the scroll listener only fires near the bottom — so without a nudge
+    // here the list would sit there with pages left unloaded and no gesture
+    // able to ask for them.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onScrollForAutoLoad();
+    });
   }
 
   void _onSearchChanged() {
@@ -639,21 +646,43 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
 
     if (pinnedChats.isNotEmpty) {
-      slivers.addAll(_buildGroup('Pinned', pinnedChats, accent));
+      slivers.addAll(_buildGroup(
+        AppLocalizations.of(context)?.pinned ?? 'Pinned',
+        pinnedChats,
+        accent,
+      ));
     }
 
-    // Pagination applies to the unpinned chats only, and before grouping, so
-    // the visible groups always describe exactly what is on screen.
-    final int visible = math.min(restChats.length, _displayLimit);
+    // Grouping runs on the whole unpinned list so a header's number is the
+    // size of the real bucket. Pagination then walks the groups in order and
+    // stops once the page budget is spent — a count that only described the
+    // loaded page would read as a total and grow as the user scrolled.
     final MaterialLocalizations localizations =
         MaterialLocalizations.of(context);
+    // The month buckets follow the locale through formatMonthYear; the three
+    // named buckets have to be handed in, or they sit in English next to them.
+    final AppLocalizations? l = AppLocalizations.of(context);
     final List<SbChatGroup<StoredChat>> groups = sbGroupByTime<StoredChat>(
-      restChats.take(visible).toList(),
+      restChats,
       (chat) => chat.updatedAt ?? chat.createdAt,
       monthLabel: localizations.formatMonthYear,
+      todayLabel: l?.today ?? 'Today',
+      weekLabel: l?.thisWeek ?? 'This week',
+      thisMonthLabel: l?.thisMonth ?? 'This month',
     );
+    int budget = _displayLimit;
     for (final group in groups) {
-      slivers.addAll(_buildGroup(group.label, group.items, accent));
+      if (budget <= 0) break;
+      final int shown = math.min(budget, group.items.length);
+      budget -= shown;
+      slivers.addAll(
+        _buildGroup(
+          group.label,
+          group.items.take(shown).toList(),
+          accent,
+          total: group.items.length,
+        ),
+      );
     }
 
     slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
@@ -677,7 +706,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
         ),
       SbNavCard(
         icon: Icons.search_rounded,
-        label: 'Search',
+        label: l.search,
         onTap: _focusSearch,
       ),
     ];
@@ -688,14 +717,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
   List<Widget> _buildGroup(
     String label,
     List<StoredChat> chats,
-    Color accent,
-  ) {
+    Color accent, {
+    /// The size of the whole bucket, which is larger than [chats] once
+    /// pagination has cut the group short. Null means the two are the same.
+    int? total,
+  }) {
     final bool collapsed = _collapsedGroups.contains(label);
     return <Widget>[
       SliverToBoxAdapter(
         child: SbGroupHeader(
           label: label,
-          count: chats.length,
+          count: total ?? chats.length,
           collapsed: collapsed,
           onToggle: () => _toggleGroup(label),
         ),
@@ -766,9 +798,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
       onLongPress: isLocked ? null : openSheet,
       trailing: isLocked
           ? null
+          // The glyph stays small, but the box around it is Material's 48 px
+          // minimum: it sits right beside the tile's own tap area, and a
+          // near miss on a smaller target opens the chat instead of the
+          // sheet.
           : SizedBox(
-              width: 32,
-              height: 32,
+              width: 48,
+              height: 48,
               child: IconButton(
                 icon: Icon(
                   Icons.more_horiz_rounded,
@@ -776,11 +812,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   color: theme.m3.onSurfaceVariant,
                 ),
                 padding: EdgeInsets.zero,
-                splashRadius: 18,
-                visualDensity: VisualDensity.compact,
+                splashRadius: 24,
                 tooltip: 'Chat options',
                 constraints:
-                    const BoxConstraints.tightFor(width: 32, height: 32),
+                    const BoxConstraints.tightFor(width: 48, height: 48),
                 onPressed: openSheet,
               ),
             ),

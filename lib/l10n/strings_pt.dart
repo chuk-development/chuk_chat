@@ -482,6 +482,14 @@ const Map<String, String> stringsPt = {
   'newChat': 'Novo chat',
   'workspaces': 'Espaços de trabalho',
   'media': 'Mídia',
+  'search': 'Pesquisar',
+  'today': 'Hoje',
+  'thisWeek': 'Esta semana',
+  'thisMonth': 'Este mês',
+  'pinned': 'Fixados',
+  'searchChatsHint': 'Pesquisar chats',
+  'hideSidebar': 'Ocultar a barra lateral',
+  'checkForUpdates': 'Procurar atualizações',
 
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gerenciador de Mídia',

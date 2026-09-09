@@ -595,6 +595,14 @@ const Map<String, String> stringsEn = {
   'newChat': 'New chat',
   'workspaces': 'Workspaces',
   'media': 'Media',
+  'search': 'Search',
+  'today': 'Today',
+  'thisWeek': 'This week',
+  'thisMonth': 'This month',
+  'pinned': 'Pinned',
+  'searchChatsHint': 'Search chats',
+  'hideSidebar': 'Hide sidebar',
+  'checkForUpdates': 'Check for updates',
 
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Media Manager',

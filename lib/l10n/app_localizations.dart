@@ -606,6 +606,14 @@ class AppLocalizations {
   String get newChat => _get('newChat');
   String get workspaces => _get('workspaces');
   String get media => _get('media');
+  String get search => _get('search');
+  String get today => _get('today');
+  String get thisWeek => _get('thisWeek');
+  String get thisMonth => _get('thisMonth');
+  String get pinned => _get('pinned');
+  String get searchChatsHint => _get('searchChatsHint');
+  String get hideSidebar => _get('hideSidebar');
+  String get checkForUpdates => _get('checkForUpdates');
 
   // ── Media manager ──────────────────────────────────────────
   String get mediaManager => _get('mediaManager');

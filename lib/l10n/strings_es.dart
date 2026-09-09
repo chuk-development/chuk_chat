@@ -469,6 +469,14 @@ const Map<String, String> stringsEs = {
   'newChat': 'Nuevo chat',
   'workspaces': 'Espacios de trabajo',
   'media': 'Medios',
+  'search': 'Buscar',
+  'today': 'Hoy',
+  'thisWeek': 'Esta semana',
+  'thisMonth': 'Este mes',
+  'pinned': 'Fijados',
+  'searchChatsHint': 'Buscar chats',
+  'hideSidebar': 'Ocultar la barra lateral',
+  'checkForUpdates': 'Buscar actualizaciones',
 
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gestor de medios',
