@@ -1,0 +1,24 @@
+Chuk Chat is an AI chat client built for people who want to know what runs their AI and where their words end up.
+
+PRIVATE BY DESIGN
+Chats that sync to the server are encrypted on your device with AES-256-GCM before they leave it. We cannot read them, even if the server is compromised. Your encryption key never leaves the device. Release builds write no logs.
+
+OPEN-WEIGHT MODELS ONLY
+DeepSeek, Llama, Mistral, Qwen and more. No closed black boxes, no silent data collection, and you pick the model per conversation.
+
+BUILT FOR REAL WORK
+- Streaming answers you can read as they are written
+- Tool calling: web search, news, weather, places, calculator, notes, QR codes
+- Image generation and editing right inside the chat
+- Interactive charts and maps rendered inline from the model's answer
+- File attachments: images, PDFs and documents
+- Offline access to your history, with automatic recovery when the network returns
+
+MAKE IT YOURS
+Theme packs, accent colors, contrast, light and dark mode, and three bundled reading fonts. Material You picks up your system colors if you want it to.
+
+EVERYWHERE
+The same app on Android, iOS, Linux, macOS, Windows and the web. Your chats follow you.
+
+A NOTE ON YOUR PASSWORD
+If you lose it, your synced chats are gone. There is no recovery path, and that is the point: nobody else can open them either. Pick a strong one and keep it safe.

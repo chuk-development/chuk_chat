@@ -46,6 +46,18 @@
   <img src="assets/screenshots/screenshot_theme_settings.webp" width="44%" alt="Theme settings">
 </p>
 
+### Mobile
+
+Regenerated from the app's own widgets on every UI change
+(`.github/workflows/screenshots.yml`), so they never drift from the build.
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_chat.png" width="23%" alt="Chat with formatted output">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_tools.png" width="23%" alt="Web research with sources">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_reasoning.png" width="23%" alt="Visible reasoning">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_theme.png" width="23%" alt="Theme settings">
+</p>
+
 ## Why Chuk Chat?
 
 We use only open-weight models — no black boxes and no silent data collection. You know exactly what runs your AI.

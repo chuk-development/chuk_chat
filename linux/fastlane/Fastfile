@@ -3,6 +3,13 @@
 
 default_platform(:linux)
 
+require_relative "../../fastlane/env_guard"
+
+def ensure_env_file!
+  EnvGuard.env_file!
+end
+
+
 platform :linux do
   desc "Build Flatpak package"
   lane :build_flatpak do
@@ -149,22 +156,17 @@ platform :linux do
 
   desc "Build Flutter Linux binary"
   lane :build_flutter_linux do
-    # Ensure environment variables are set
-    supabase_url = ENV['SUPABASE_URL']
-    supabase_key = ENV['SUPABASE_ANON_KEY']
-
-    raise "SUPABASE_URL not set" unless supabase_url
-    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+    ensure_env_file!
 
     UI.message("🔨 Building Flutter Linux release...")
 
-    # Build release with Flutter
+    # Same flag set as ./build.sh linux — image generation is hardcoded on,
+    # FEATURE_PROJECTS does not exist, and voice mode ships off.
     sh("cd ../.. && flutter build linux --release " \
-       "--dart-define=SUPABASE_URL=#{supabase_url} " \
-       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
-       "--dart-define=FEATURE_PROJECTS=true " \
-       "--dart-define=FEATURE_IMAGE_GEN=true " \
-       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--dart-define-from-file=.env " \
+       "--dart-define=PLATFORM_DESKTOP=true " \
+       "--dart-define=FEATURE_VOICE_MODE=false " \
+       "--dart-define=FEATURE_SERVER_TOOLS=false " \
        "--tree-shake-icons")
 
     UI.success("✅ Flutter Linux build complete!")

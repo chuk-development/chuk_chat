@@ -88,9 +88,13 @@ extract_app_info() {
     # Package name uses hyphens (chuk-chat), binary name uses underscores (chuk_chat)
     PACKAGE_NAME=$(echo "$APP_NAME" | sed 's/_/-/g')
 
-    # Extract patch number as Android build number (e.g. 1.0.39 -> 39)
-    # This ensures --split-per-abi version codes increase when you bump the version
-    BUILD_NUMBER=$(echo "$VERSION" | awk -F. '{print $3}')
+    # Android build number from the whole semantic version, not just the patch:
+    # 1.0.109 -> 100109. A patch-only number goes backwards on a minor bump
+    # (1.1.0 would be 0), which Android refuses to install over.
+    # --split-per-abi multiplies this by 1000 and Android caps versionCode at
+    # 2100000000, so it must stay under 2100000. Same formula in
+    # android/fastlane/Fastfile and .github/workflows/build-cross-platform.yml.
+    BUILD_NUMBER=$(echo "$VERSION" | awk -F. '{print ($1*100000)+($2*1000)+$3}')
     if [ -z "$BUILD_NUMBER" ] || [ "$BUILD_NUMBER" -lt 1 ] 2>/dev/null; then
         BUILD_NUMBER=1
     fi
