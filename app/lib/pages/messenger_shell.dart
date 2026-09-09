@@ -75,13 +75,12 @@ import 'package:cowork/services/cowork/agent_read_marks.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/browser_presence.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
+import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
+import 'package:cowork/services/cowork/cowork_pairing_restore.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/room_source.dart';
-// Built by the persistence agent: restores the account's encrypted pairing from
-// Supabase so a fresh install reconnects with no code.
-import 'package:cowork/services/cowork/supabase_pairing_sync.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';

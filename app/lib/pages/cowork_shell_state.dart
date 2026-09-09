@@ -7,11 +7,20 @@ part of 'messenger_shell.dart';
 /// with no code.
 Future<CoworkRelayController> _buildRelayController(
   CoworkPairingStore store,
+  AccountSessionSource sessionSource,
 ) async {
   final identity = await store.loadOrCreateIdentity();
   return CoworkRelayClient(
     deviceId: identity.deviceId,
     signingKeyPair: identity.keyPair,
+    // The pipe. A `wss://…/v2/relay/ws` address goes through the cloud relay
+    // (authenticated as this account's controller, frames wrapped as opaque
+    // `cowork_relay` payloads); a plain `ws://127.0.0.1:8787` still opens the
+    // local blind relay exactly as before, for same-machine development.
+    connector: coworkCloudRelayConnector(
+      deviceId: identity.deviceId,
+      sessionSource: sessionSource,
+    ),
     // The user's UI-configured MCP servers ride along on each task frame,
     // resolved with their live bearers at launch (WS-D).
     mcpStore: McpStore(),
@@ -147,10 +156,11 @@ mixin CoworkShellHost on State<MessengerShell> {
     // and lands as soon as its target exists (bead cowork-8yb).
     _roster.addListener(_onRosterChanged);
     unawaited(_loadLastSelection());
-    // Auto-reconnect at startup. Deferred to after the first frame so the app's
-    // sign-in / key-unlock flow (which gates showing this shell) has completed —
-    // the cloud pairing cannot be decrypted before the EncryptionService key is
-    // unlocked, so running any earlier would just read null.
+    // Auto-link at startup. Started after the first frame so the app's sign-in
+    // / key-unlock flow (which gates showing this shell) has a head start, but
+    // it no longer DEPENDS on that: the restore supervisor retries and wakes on
+    // the auth event, because "the key is not unlocked yet" is a not-yet, not a
+    // no (see [_restoreCloudPairing]).
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreCloudPairing());
     // WS-7: a tapped "answer ready" toast (local or push) names a thread. The
     // router keeps the target until this shell takes it, so a tap that
@@ -267,6 +277,7 @@ mixin CoworkShellHost on State<MessengerShell> {
     _roster.removeListener(_onRosterChanged);
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
+    unawaited(_pairingRestore?.dispose() ?? Future<void>.value());
     _controller.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     if (_ownsThemeController) _themeController.dispose();
@@ -305,36 +316,37 @@ mixin CoworkShellHost on State<MessengerShell> {
   /// sign in, and the client reconnects to the same running host on its own —
   /// no re-pairing ritual. The connection info lives encrypted in Supabase.
   ///
+  /// This used to be one shot in a post-frame callback, and one shot is not
+  /// enough. At that moment the Supabase session may not be back off disk yet,
+  /// the `EncryptionService` key may not be unlocked yet — and without it the
+  /// mirror is unreadable ciphertext — or the network may simply be down for
+  /// those two seconds. Every one of those is a "not yet", and the old code read
+  /// them all as "never": the user signed in and still faced a pairing screen
+  /// for a computer they already owned.
+  ///
+  /// So it is a supervisor now ([CoworkPairingRestore]): capped backoff, woken
+  /// by the auth event that makes a retry meaningful, and a slow heartbeat after
+  /// that so a pairing made on another device lands here on its own. It stands
+  /// down for good once the device is paired.
+  ///
   /// Wiring, without touching the thread view: the thread view reads the local
   /// pairing store exactly once at bootstrap and reconnects from it. So this
-  /// writes the restored pairing into that same store with [savePairing], then
+  /// writes the restored pairing into that same store with `savePairing`, then
   /// swaps the thread view's [GlobalKey] once, which re-runs its bootstrap — the
-  /// very path a fresh local pairing already takes. Best-effort throughout: a
-  /// missing service, a locked key, a network error, or simply no stored pairing
-  /// all leave the manual connect bar in place.
-  Future<void> _restoreCloudPairing() async {
-    if (!mounted) return;
-    // Only after the user is signed in — the encrypted pairing is keyed to the
-    // account.
-    if (widget.sessionSource.current() == null) return;
-    try {
-      // A device that is already paired locally has nothing to restore.
-      final existing = await _pairingStore.loadPairing();
-      if (existing != null) return;
-      // Built by the persistence agent. Returns null until the EncryptionService
-      // key is unlocked, and null when the account has no stored pairing.
-      final CoworkStoredPairing? restored = await SupabasePairingSync()
-          .loadEncryptedPairing();
-      if (!mounted || restored == null) return;
-      // Persist locally so the next launch reconnects straight from the store.
-      await _pairingStore.savePairing(restored);
-      // Force the thread view to re-bootstrap so it reads the freshly restored
-      // pairing and reconnects through its own no-code path.
-      if (mounted) setState(() => _threadViewKey = GlobalKey());
-    } catch (_) {
-      // Best effort: fall back to the manual connect path.
-    }
+  /// very path a fresh local pairing already takes.
+  void _restoreCloudPairing() {
+    _pairingRestore ??= CoworkPairingRestore(
+      store: _pairingStore,
+      sessionSource: widget.sessionSource,
+      onRestored: () async {
+        if (!mounted) return;
+        setState(() => _threadViewKey = GlobalKey());
+      },
+    )..start();
   }
+
+  /// Keeps trying until this device is linked. Disposed with the shell.
+  CoworkPairingRestore? _pairingRestore;
 
   /// Which coworker owns [threadKey]. A run's events belong to the thread that
   /// started it, which is not always the one on screen.
@@ -388,7 +400,7 @@ mixin CoworkShellHost on State<MessengerShell> {
       key: _threadViewKey,
       controllerBuilder:
           widget.relayControllerBuilder ??
-          () => _buildRelayController(_pairingStore),
+          () => _buildRelayController(_pairingStore, widget.sessionSource),
       sessionSource: widget.sessionSource,
       pairingStore: _pairingStore,
       threadKey: _selectedThreadKey,

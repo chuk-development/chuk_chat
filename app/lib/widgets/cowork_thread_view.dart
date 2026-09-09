@@ -15,6 +15,9 @@ import 'package:cowork/services/app_theme_service.dart';
 import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
+import 'package:cowork/pages/cowork_pairing_page.dart';
+import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
+import 'package:cowork/services/cowork/cowork_pairing_uri.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
@@ -571,12 +574,81 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
-  Future<void> _persistTrust(CoworkRelayController controller) async {
+  Future<void> _persistTrust(
+    CoworkRelayController controller, {
+    Uri? hostUrl,
+  }) async {
     final store = widget.pairingStore;
-    final trust = controller.establishedTrust;
-    if (store == null || trust == null) return;
+    final established = controller.establishedTrust;
+    if (store == null || established == null) return;
+    // The address that gets remembered is the RECONNECT form: the relay plus
+    // the host's device id. The pairing form carries the single-use pairing
+    // channel, which must never be dialled twice and is worthless after the
+    // ceremony — a trust record holding it would ask the relay to claim a
+    // channel that no longer exists, on every launch, forever.
+    final trust = hostUrl == null
+        ? established
+        : CoworkStoredPairing(
+            hostUrl: hostUrl,
+            channelId: established.channelId,
+            channelKey: established.channelKey,
+            peerDeviceId: established.peerDeviceId,
+            peerPublicKey: established.peerPublicKey,
+          );
     await store.savePairing(trust);
     if (mounted) setState(() => _storedPairing = trust);
+  }
+
+  /// The QR path, and the whole of what a phone ever does to get linked: open
+  /// the camera, scan the code the computer shows, done. The typed code lands
+  /// here too — same invite, same ceremony, same result.
+  Future<void> _pairFromInvite(CoworkPairingInvite invite) async {
+    final controller = _controller;
+    if (controller == null || _busy) return;
+    setState(() {
+      _localError = null;
+      _busy = true;
+    });
+    try {
+      final address = CoworkCloudRelayAddress.forInvite(invite);
+      await controller.connect(
+        hostUrl: address.toUri(),
+        pairingCode: invite.pairingCode,
+      );
+      // Paired: hand the executor the account token (ExecutorProvisioning).
+      final session = widget.sessionSource.current();
+      if (session != null) {
+        await controller.provisionAccount(session);
+      }
+      final peerDeviceId = controller.establishedTrust?.peerDeviceId;
+      await _persistTrust(
+        controller,
+        hostUrl: peerDeviceId == null
+            ? null
+            : CoworkCloudRelayAddress.forHost(
+                base: invite.relayBase,
+                targetDeviceId: peerDeviceId,
+              ).toUri(),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _localError = _pairingFailureText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// One plain sentence for whatever went wrong. The user is not shown a code,
+  /// a URL or an exception type — there is nothing they could do with any of it.
+  static String _pairingFailureText(Object error) {
+    if (error is CoworkCloudRelayException) return error.message;
+    return 'That did not work. Make sure CoWork is running on your computer, '
+        'then scan the code again.';
+  }
+
+  Future<void> _openPairingScreen() async {
+    final invite = await CoworkPairingPage.show(context);
+    if (invite == null || !mounted) return;
+    await _pairFromInvite(invite);
   }
 
   /// Deletes the stored trust — the next connection needs a fresh code again —
@@ -1332,6 +1404,18 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 style: TextStyle(color: theme.hintColor),
               ),
             ),
+            // The one path a person is meant to take: scan the code the
+            // computer shows. Everything below it is the developer's
+            // same-machine path and is on its way out.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: FilledButton.icon(
+                key: const ValueKey<String>('cowork-add-computer'),
+                onPressed: _busy ? null : _openPairingScreen,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Add your computer'),
+              ),
+            ),
             if (banner != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -1352,50 +1436,54 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                   ],
                 ),
               ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: TextField(
-                    controller: _hostController,
-                    enabled: !_busy,
-                    decoration: const InputDecoration(
-                      labelText: 'Host',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+            // The same-machine developer path, and only that: a release build
+            // shows no address, no port and no code field. A phone reaches its
+            // host through the relay, and the QR above is the whole flow.
+            if (kDebugMode)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: TextField(
+                      controller: _hostController,
+                      enabled: !_busy,
+                      decoration: const InputDecoration(
+                        labelText: 'Host',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 4,
-                  child: TextField(
-                    controller: _codeController,
-                    enabled: !_busy,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Pairing code',
-                      hintText: 'chan1234-428913',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: TextField(
+                      controller: _codeController,
+                      enabled: !_busy,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Pairing code',
+                        hintText: 'chan1234-428913',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => _connect(),
                     ),
-                    onSubmitted: (_) => _connect(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _busy ? null : _connect,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Connect'),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _busy ? null : _connect,
+                    child: _busy
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Connect'),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
