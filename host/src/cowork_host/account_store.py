@@ -95,7 +95,10 @@ class AccountStore:
         """This host's stable relay device id, minted and persisted on first use.
 
         Stable matters: the relay keys an executor by it, so a new id on every
-        launch would look like a new machine to every controller.
+        launch would look like a new machine to every controller. uuid4
+        specifically, because the relay refuses anything else: ``device_id`` is
+        the one field it reads in cleartext, and a uuid1 would hand it this
+        machine's MAC address.
         """
         data = self._load()
         existing = data.get("device_id")
