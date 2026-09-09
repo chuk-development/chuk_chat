@@ -304,6 +304,16 @@ class AgentProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   SheetAction(
+                    icon: Icons.desktop_windows_rounded,
+                    label: "Agent's screen",
+                    subtitle: onOpenBrowser == null
+                        ? 'No screen open right now'
+                        : 'Watch and control the sandbox',
+                    enabled: onOpenBrowser != null,
+                    onTap: onOpenBrowser ?? () {},
+                  ),
+                  const SizedBox(height: 8),
+                  SheetAction(
                     icon: Icons.visibility_off_rounded,
                     label: 'Hide from the list',
                     subtitle: 'Keeps the coworker and its session',
@@ -474,16 +484,23 @@ class _ActionRow extends StatelessWidget {
             onTap: onOpenControls!,
           ),
         ],
-        if (onOpenBrowser != null) ...<Widget>[
-          const SizedBox(width: 14),
-          _Action(
-            icon: Icons.desktop_windows_rounded,
-            label: 'Browser',
-            color: scheme.tertiaryContainer,
-            onColor: scheme.onTertiaryContainer,
-            onTap: onOpenBrowser!,
-          ),
-        ],
+        const SizedBox(width: 14),
+        // The video call's slot everywhere else in the app: the coworker's
+        // screen, parked while it has none open.
+        _Action(
+          icon: Icons.desktop_windows_rounded,
+          label: 'Screen',
+          parked: onOpenBrowser == null,
+          color: onOpenBrowser == null ? null : scheme.tertiaryContainer,
+          onColor: onOpenBrowser == null ? null : scheme.onTertiaryContainer,
+          onTap:
+              onOpenBrowser ??
+              () => pillToast(
+                context,
+                'The coworker has no screen open right now',
+                icon: Icons.desktop_access_disabled_rounded,
+              ),
+        ),
       ],
     );
   }

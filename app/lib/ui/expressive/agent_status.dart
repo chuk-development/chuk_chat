@@ -8,27 +8,40 @@
 ///  * a green dot and the work in progress while a run is in flight — the tool
 ///    it is running, or the task the host says it picked up;
 ///  * an amber dot and "Scheduled" when it carries a schedule and waits for it;
-///  * "Active now" with no dot when it is idle and simply available.
+///  * a green dot and "Active now" when it is idle on a paired host;
+///  * a grey dot and "Not connected" when there is no transport. A coworker is
+///    reachable whenever the host is — but if this device cannot reach the
+///    host, saying "Active now" would send the reader looking for an answer
+///    that cannot arrive.
 ///
 /// Every one of those comes from something the app observes: [CoworkAgent
-/// .activity] and the run the [CoworkRunLedger] tracks for the thread. Nothing
-/// here invents a status.
+/// .activity], the run the [CoworkRunLedger] tracks for the thread, and the
+/// bound transport's own state. Nothing here invents a status.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/tool_call.dart';
+import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/cowork_run_ledger.dart';
 import 'package:cowork/ui/expressive/working_dots.dart';
 
 /// What one running tool is called, in words a reader recognises. The host's
-/// tool names are snake_case ids (`read_file`, `browser_click`); this only
-/// makes them readable, it never renames them into something they are not.
+/// tool names are ids (`read_file`, `mcp__playwright__browser_navigate`); this
+/// only makes them readable, it never renames them into something they are not.
 String humanToolLabel(String rawName) {
-  final String name = rawName.trim();
+  String name = rawName.trim();
   if (name.isEmpty) return 'working';
-  final String spaced = name.replaceAll('_', ' ').replaceAll('-', ' ');
+  // An MCP tool carries its server in the id: keep the tool, drop the routing.
+  final RegExpMatch? mcp = RegExp(r'^mcp__.+?__(.+)$').firstMatch(name);
+  if (mcp != null) name = mcp.group(1)!;
+  final String spaced = name
+      .replaceAll(RegExp(r'[_\-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (spaced.isEmpty) return 'working';
   return spaced[0].toUpperCase() + spaced.substring(1);
 }
 
@@ -66,6 +79,7 @@ class AgentStatusLine extends StatelessWidget {
     this.sessionKey,
     this.ledger,
     this.fontSize = 11,
+    this.link,
   });
 
   final CoworkAgent agent;
@@ -79,61 +93,87 @@ class AgentStatusLine extends StatelessWidget {
 
   final double fontSize;
 
+  /// The bound transport, for the reachability half of the line. Injectable for
+  /// tests; defaults to the process-wide link.
+  final CoworkRelayLink? link;
+
   @override
   Widget build(BuildContext context) {
     final CoworkRunLedger source = ledger ?? CoworkRunLedger.instance;
+    final CoworkRelayLink transport = link ?? CoworkRelayLink.instance;
     return AnimatedBuilder(
       animation: source,
-      builder: (BuildContext context, Widget? _) {
-        final ColorScheme scheme = Theme.of(context).colorScheme;
-        final String key = sessionKey ?? _defaultSessionKey();
-        final CoworkRun? run = key.isEmpty ? null : source.runFor(key);
-        final String? work = workInProgressLabel(agent, run);
-        final bool working = agent.activity == AgentActivity.working ||
-            (run?.running ?? false);
-        final bool scheduled =
-            !working && agent.activity == AgentActivity.scheduled;
+      builder: (BuildContext context, Widget? _) =>
+          ValueListenableBuilder<CoworkRelayController?>(
+            valueListenable: transport.controller,
+            builder: (BuildContext context, CoworkRelayController? controller, _) {
+              if (controller == null) {
+                return _line(context, source, paired: false);
+              }
+              return ValueListenableBuilder<CoworkRelayState>(
+                valueListenable: controller.state,
+                builder: (BuildContext context, CoworkRelayState state, _) =>
+                    _line(context, source, paired: state.isPaired),
+              );
+            },
+          ),
+    );
+  }
 
-        final Color dotColor = working
-            ? const Color(0xFF34C759)
-            : scheduled
-            ? const Color(0xFFFF9F0A)
-            : const Color(0xFF34C759);
-        // Idle is still "active": a coworker is reachable whenever the host is,
-        // so the dot stays, and the words say there is nothing running.
-        final String label = work ?? 'Active now';
+  Widget _line(
+    BuildContext context,
+    CoworkRunLedger source, {
+    required bool paired,
+  }) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final String key = sessionKey ?? _defaultSessionKey();
+    final CoworkRun? run = key.isEmpty ? null : source.runFor(key);
+    final String? work = workInProgressLabel(agent, run);
+    final bool working = agent.activity == AgentActivity.working ||
+        (run?.running ?? false);
+    final bool scheduled =
+        !working && agent.activity == AgentActivity.scheduled;
 
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+    final Color dotColor = working
+        ? const Color(0xFF34C759)
+        : scheduled
+        ? const Color(0xFFFF9F0A)
+        : paired
+        ? const Color(0xFF34C759)
+        : scheme.onSurfaceVariant.withValues(alpha: 0.5);
+    // Idle on a paired host is still "active": a coworker does not go to
+    // sleep. Without a transport the line says so instead.
+    final String label = work ?? (paired ? 'Active now' : 'Not connected');
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: working
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+              fontSize: fontSize,
+              height: 1.2,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: working
-                      ? scheme.primary
-                      : scheme.onSurfaceVariant,
-                  fontSize: fontSize,
-                  height: 1.2,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (working) ...<Widget>[
-              const SizedBox(width: 4),
-              WorkingDots(color: scheme.primary, label: ''),
-            ],
-          ],
-        );
-      },
+          ),
+        ),
+        if (working) ...<Widget>[
+          const SizedBox(width: 4),
+          WorkingDots(color: scheme.primary, label: ''),
+        ],
+      ],
     );
   }
 

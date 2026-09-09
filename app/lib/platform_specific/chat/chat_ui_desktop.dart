@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
+import 'package:cowork/ui/expressive/day_divider.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/platform_config.dart';
 import 'package:cowork/models/chat_model.dart';
@@ -2128,6 +2129,39 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             _messageActionsHandler
                                                 .editingMessageIndex ==
                                             i;
+                                        // The day break, like a messenger's:
+                                        // one date chip where the day changes.
+                                        // A row with no timestamp gets none.
+                                        final DateTime? rowDay =
+                                            DateTime.tryParse(
+                                          _messages[i]['startedAt'] ?? '',
+                                        );
+                                        final DateTime? previousDay = i == 0
+                                            ? null
+                                            : DateTime.tryParse(
+                                                _messages[i - 1]['startedAt'] ??
+                                                    '',
+                                              );
+                                        final bool opensDay =
+                                            rowDay != null &&
+                                            (previousDay == null ||
+                                                !sameCalendarDay(
+                                                  previousDay.toLocal(),
+                                                  rowDay.toLocal(),
+                                                ));
+                                        Widget withDay(Widget bubble) =>
+                                            opensDay
+                                            ? Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: <Widget>[
+                                                  ChatDayDivider(
+                                                    when: rowDay.toLocal(),
+                                                  ),
+                                                  bubble,
+                                                ],
+                                              )
+                                            : bubble;
                                         // Build the bubble from a (text,
                                         // reasoning) pair so the streaming
                                         // bubble can be fed live values from the
@@ -2243,7 +2277,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             (data.isStreamingMessage ||
                                                 runtime.isSending.value);
                                         if (wrapForStream) {
-                                          return RepaintBoundary(
+                                          return withDay(RepaintBoundary(
                                             child:
                                                 ValueListenableBuilder<
                                                   StreamingLive?
@@ -2273,7 +2307,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                     );
                                                   },
                                                 ),
-                                          );
+                                          ));
                                         }
                                         final String uiKey =
                                             ChatUiHelpers.stableUiKey(
@@ -2282,20 +2316,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         );
                                         if (data.isUser &&
                                             uiKey == _flyInKey) {
-                                          return RepaintBoundary(
-                                            child: MessageFlyIn(
-                                              key: ValueKey('flyin_$uiKey'),
-                                              child: buildBubble(
-                                                data.displayText,
-                                                reasoningText,
+                                          return withDay(
+                                            RepaintBoundary(
+                                              child: MessageFlyIn(
+                                                key: ValueKey('flyin_$uiKey'),
+                                                child: buildBubble(
+                                                  data.displayText,
+                                                  reasoningText,
+                                                ),
                                               ),
                                             ),
                                           );
                                         }
-                                        return RepaintBoundary(
-                                          child: buildBubble(
-                                            data.displayText,
-                                            reasoningText,
+                                        return withDay(
+                                          RepaintBoundary(
+                                            child: buildBubble(
+                                              data.displayText,
+                                              reasoningText,
+                                            ),
                                           ),
                                         );
                                       },

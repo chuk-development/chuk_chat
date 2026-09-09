@@ -22,8 +22,9 @@ relay, the roster or a chat; every screen builds on it.
 | `bubble_kind.dart` | The coworker bubble's colour by what the turn IS: answer / work / delivery / problem. |
 | `agent_face.dart` | `AgentFace` — the blob face with the picture, the accent and the presence dot; `agentAccent`, `kAgentAccents`. |
 | `working_dots.dart` | The "working ●●●" indicator (the messenger's typing indicator, said honestly). |
-| `agent_status.dart` | `AgentStatusLine` — the messenger's "Active now" line, as the green dot plus what the coworker is working on right now (the running tool, or the task the host says it picked up). |
+| `agent_status.dart` | `AgentStatusLine` — the messenger's "Active now" line: the dot plus what the coworker is working on right now (the running tool, or the task the host says it picked up), "Active now" when it is idle on a paired host, "Not connected" when there is no transport. |
 | `waveform.dart` | `WaveformPainter` + `LiveWaveform` — rounded voice bars, used for the live microphone level. |
+| `day_divider.dart` | `ChatDayDivider`, `dayLabel`, `sameCalendarDay` — the date chip between two days of a thread. |
 
 Two stores carry the facts the redesign needed:
 
@@ -49,9 +50,13 @@ Two stores carry the facts the redesign needed:
 * **Coworker profile** (`pages/agent_profile_page.dart` + `_edit_page.dart`):
   face, state, brief, schedule, session, manage block; the editor sets picture,
   colour, name (→ host), role and brief.
+* **Day breaks** (`chat_ui_mobile.dart`, `chat_ui_desktop.dart`): one date chip
+  where the day changes. A row without a timestamp gets none — an undated
+  message is no evidence of a day.
 * **Bubbles** (`widgets/message_bubble/layout.dart`): connected corner
   geometry, the time in the bubble's own corner, and a coworker bubble with a
-  colour per kind. No delivery ticks anywhere: a coworker reads every task it
+  colour per kind. The stamp sits on the LAST bubble of a run, not under every
+  line of a burst. No delivery ticks anywhere: a coworker reads every task it
   is given, so "delivered" and "read" answer nothing. The only mark left is the
   local queue — a clock while a message waits offline, an error glyph when the
   send gave up.
@@ -78,7 +83,9 @@ and archived buckets, polls, wallpapers, message-body search across chats, and
   is not a question worth a glyph. What is left is the queue mark, which is
   about this device, not about the coworker.
 * "Active now" is a statement about the coworker's own state: the dot plus the
-  work in progress, both read from the roster and the run ledger.
+  work in progress, read from the roster, the run ledger and the bound
+  transport. Without a transport the line says "Not connected" rather than
+  claiming a coworker that cannot be reached is active.
 * A parked feature keeps its place, looks disabled, and explains itself on tap.
   It is never wired to something fake.
 * Profile fields that cannot reach the host are stored locally and labelled as

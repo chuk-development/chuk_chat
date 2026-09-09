@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:cowork/ui/expressive/day_divider.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/platform_config.dart';
 import 'package:cowork/models/chat_model.dart';
@@ -3597,6 +3598,38 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     }
                                   }
 
+                                  // The day break: a messenger puts a date chip
+                                  // between two days. A row with no timestamp
+                                  // gets none — an undated message is no
+                                  // evidence of a day.
+                                  final DateTime? rowDay = DateTime.tryParse(
+                                    raw['startedAt'] ?? '',
+                                  );
+                                  final DateTime? previousDay = i == 0
+                                      ? null
+                                      : DateTime.tryParse(
+                                          _messages[i - 1]['startedAt'] ?? '',
+                                        );
+                                  final bool opensDay =
+                                      rowDay != null &&
+                                      (previousDay == null ||
+                                          !sameCalendarDay(
+                                            previousDay.toLocal(),
+                                            rowDay.toLocal(),
+                                          ));
+                                  Widget withDay(Widget bubble) => opensDay
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: <Widget>[
+                                            ChatDayDivider(
+                                              when: rowDay.toLocal(),
+                                            ),
+                                            bubble,
+                                          ],
+                                        )
+                                      : bubble;
+
                                   // Build the bubble from a (text, reasoning)
                                   // pair so the streaming bubble can be fed live
                                   // values from the runtime notifier without a
@@ -3735,7 +3768,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       (isStreamingMessage ||
                                           runtime.isSending.value);
                                   if (wrapForStream) {
-                                    return RepaintBoundary(
+                                    return withDay(RepaintBoundary(
                                       child:
                                           ValueListenableBuilder<StreamingLive?>(
                                             valueListenable:
@@ -3760,7 +3793,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                               );
                                             },
                                           ),
-                                    );
+                                    ));
                                   }
                                   final String uiKey =
                                       ChatUiHelpers.stableUiKey(
@@ -3768,20 +3801,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     _uuid,
                                   );
                                   if (isUser && uiKey == _flyInKey) {
-                                    return RepaintBoundary(
-                                      child: MessageFlyIn(
-                                        key: ValueKey('flyin_$uiKey'),
-                                        child: buildBubble(
-                                          displayText,
-                                          reasoningText,
+                                    return withDay(
+                                      RepaintBoundary(
+                                        child: MessageFlyIn(
+                                          key: ValueKey('flyin_$uiKey'),
+                                          child: buildBubble(
+                                            displayText,
+                                            reasoningText,
+                                          ),
                                         ),
                                       ),
                                     );
                                   }
-                                  return RepaintBoundary(
-                                    child: buildBubble(
-                                      displayText,
-                                      reasoningText,
+                                  return withDay(
+                                    RepaintBoundary(
+                                      child: buildBubble(
+                                        displayText,
+                                        reasoningText,
+                                      ),
                                     ),
                                   );
                                 },
