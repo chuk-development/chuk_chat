@@ -108,6 +108,11 @@ dependencies:
   permission_handler: ">=12.0.1 <13.0.0"
   record: ^7.1.1
   share_plus: ^13.3.0
+
+  # The QR scanner the mobile pairing screen opens with. Android/iOS/macOS/web
+  # only — there is no Linux or Windows implementation, so every use is gated
+  # on the platform and the code field is what desktop gets.
+  mobile_scanner: ^7.4.0
   flutter_local_notifications: ^22.0.0
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.3
