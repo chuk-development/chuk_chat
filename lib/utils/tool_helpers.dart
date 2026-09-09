@@ -5,15 +5,6 @@ double toDouble(dynamic v) {
   return 0.0;
 }
 
-/// Safely parse a dynamic value to double, returning null if not parseable.
-double? parseDouble(dynamic value) {
-  if (value == null) return null;
-  if (value is double) return value;
-  if (value is int) return value.toDouble();
-  if (value is String) return double.tryParse(value);
-  return null;
-}
-
 /// Format milliseconds duration as mm:ss string.
 String formatDuration(int ms) {
   final duration = Duration(milliseconds: ms);

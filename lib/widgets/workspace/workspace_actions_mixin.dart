@@ -12,14 +12,13 @@
 
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/workspace_file_upload.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
-import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 
 /// Shared workspace actions for a [State] that manages a single workspace.
@@ -103,95 +102,56 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
   /// [isUploadingFile] / [uploadFileName] / [uploadStatus] / [uploadProgress]
   /// fields along the way.
   ///
-  /// [warnWhenPathUnavailable] shows a "not supported on this platform" snack
-  /// bar when the picked file has no path (web). [confirmOversizedUpload] is
-  /// asked before uploading; return `false` to abort.
-  Future<void> pickAndUploadWorkspaceFile({
-    bool warnWhenPathUnavailable = false,
+  /// The picking and uploading itself is [pickAndUploadWorkspaceFile] in
+  /// services/workspace_file_upload.dart; this only owns the widget state and
+  /// the two snack bars, which is what the four surfaces were each repeating.
+  /// [confirmOversizedUpload] is asked with the file's byte count before
+  /// anything is sent; return false to abort.
+  Future<void> uploadFileToWorkspace({
     Future<bool> Function(int estimatedTokens)? confirmOversizedUpload,
   }) async {
-    try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: FileConstants.allowedExtensions,
-      );
-
-      if (file == null) return;
-
-      if (file.path == null) {
-        if (warnWhenPathUnavailable && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('File upload is not supported on this platform.'),
-            ),
-          );
-        }
-        return;
-      }
-
-      final filePath = file.path!;
-      final fileName = file.name;
-      final fileType = fileName.split('.').last;
-
-      // The native picker can outlive the page that opened it.
-      if (!mounted) return;
-      setState(() {
-        isUploadingFile = true;
-        uploadFileName = fileName;
-        uploadStatus = 'uploading';
-        uploadProgress = 0.0;
-      });
-
-      final fileBytes = await File(filePath).readAsBytes();
-
-      if (!mounted) return;
-
-      if (confirmOversizedUpload != null) {
-        final estimatedNewTokens = (fileBytes.length / 4).ceil();
-        final proceed = await confirmOversizedUpload(estimatedNewTokens);
-        if (!proceed || !mounted) return;
-      }
-
-      await WorkspaceStorageService.uploadFile(
-        workspaceId,
-        fileName,
-        fileBytes,
-        fileType,
-        filePath: filePath,
-        generateMarkdown: true,
-        onUploadProgress: (progress) {
-          if (mounted) setState(() => uploadProgress = progress);
-        },
-        onConversionStart: () {
-          if (mounted) setState(() => uploadStatus = 'converting');
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
-      }
-    } catch (e) {
-      if (mounted) {
-        final errorMessage = e is StateError ? e.message : e.toString();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red[700],
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
+    final outcome = await pickAndUploadWorkspaceFile(
+      workspaceId: workspaceId,
+      onStart: (fileName) {
+        // The native picker can outlive the page that opened it.
+        if (!mounted) return;
+        setState(() {
+          isUploadingFile = true;
+          uploadFileName = fileName;
+          uploadStatus = 'uploading';
+          uploadProgress = 0.0;
+        });
+      },
+      onProgress: (progress) {
+        if (mounted) setState(() => uploadProgress = progress);
+      },
+      onConverting: () {
+        if (mounted) setState(() => uploadStatus = 'converting');
+      },
+      onFinished: () {
+        if (!mounted) return;
         setState(() {
           isUploadingFile = false;
           uploadFileName = null;
           uploadStatus = '';
           uploadProgress = 0.0;
         });
-      }
+      },
+      confirmBytes: confirmOversizedUpload == null
+          ? null
+          : (byteCount) async {
+              if (!mounted) return false;
+              // Roughly four bytes to a token — enough to tell the user
+              // whether this file fits in the workspace's budget.
+              return confirmOversizedUpload((byteCount / 4).ceil());
+            },
+    );
+
+    if (!mounted) return;
+    if (outcome.fileName != null) {
+      NiceSnackBar.show(context, 'Uploaded: ${outcome.fileName}');
+    } else if (outcome.error != null) {
+      NiceSnackBar.showError(context, outcome.error!);
     }
   }
 

@@ -3,10 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Categories of actions that may require approval
 enum ApprovalCategory {
   bash, // Shell commands
-  email, // IMAP/SMTP email
   gmail, // Gmail via Google OAuth
   slack, // Slack messages
-  nextcloud, // Nextcloud file operations
   github, // GitHub actions
   calendar, // Calendar modifications
 }
@@ -40,10 +38,8 @@ class ApprovalConfig {
   // Category-level approval settings
   final Map<ApprovalCategory, bool> _categoryApproval = {
     ApprovalCategory.bash: true,
-    ApprovalCategory.email: true,
     ApprovalCategory.gmail: true,
     ApprovalCategory.slack: true,
-    ApprovalCategory.nextcloud: true,
     ApprovalCategory.github: false,
     ApprovalCategory.calendar: false,
   };
@@ -68,24 +64,6 @@ class ApprovalConfig {
       riskDescription: 'Could permanently delete important files.',
     ),
 
-    // Email (IMAP/SMTP) actions
-    ApprovalAction(
-      category: ApprovalCategory.email,
-      action: 'send_email',
-      description: 'Sending emails via SMTP',
-      riskLevel: 'high',
-      riskDescription:
-          'AI could send emails on your behalf without your knowledge. '
-          'Emails cannot be recalled once sent.',
-    ),
-    ApprovalAction(
-      category: ApprovalCategory.email,
-      action: 'delete_email',
-      description: 'Deleting emails from mailbox',
-      riskLevel: 'medium',
-      riskDescription: 'Could permanently delete important emails.',
-    ),
-
     // Gmail actions
     ApprovalAction(
       category: ApprovalCategory.gmail,
@@ -105,23 +83,6 @@ class ApprovalConfig {
       riskLevel: 'medium',
       riskDescription:
           'AI could post messages visible to your team or organization.',
-    ),
-
-    // Nextcloud actions
-    ApprovalAction(
-      category: ApprovalCategory.nextcloud,
-      action: 'delete_file',
-      description: 'Deleting files from Nextcloud',
-      riskLevel: 'medium',
-      riskDescription:
-          'Could permanently delete files from your cloud storage.',
-    ),
-    ApprovalAction(
-      category: ApprovalCategory.nextcloud,
-      action: 'upload_file',
-      description: 'Uploading files to Nextcloud',
-      riskLevel: 'low',
-      riskDescription: 'Could upload content to your cloud storage.',
     ),
 
     // GitHub actions
@@ -169,80 +130,10 @@ class ApprovalConfig {
     }
   }
 
-  /// Save a category setting
-  Future<void> setCategoryApproval(
-    ApprovalCategory category,
-    bool required,
-  ) async {
-    _categoryApproval[category] = required;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('approval_${category.name}', required);
-  }
-
   /// Check if approval is required for a category
   bool isApprovalRequired(ApprovalCategory category) {
     return _categoryApproval[category] ?? true;
   }
 
-  /// Check if approval is required for a specific action
-  bool isActionApprovalRequired(ApprovalCategory category, String action) {
-    if (!isApprovalRequired(category)) return false;
-    return allActions.any((a) => a.category == category && a.action == action);
-  }
 
-  /// Get actions for a specific category
-  static List<ApprovalAction> getActionsForCategory(ApprovalCategory category) {
-    return allActions.where((a) => a.category == category).toList();
-  }
-
-  /// Get risk description for disabling approval in a category
-  static String getRiskWarning(ApprovalCategory category) {
-    final actions = getActionsForCategory(category);
-    if (actions.isEmpty) return 'No known risks.';
-
-    final highRisk = actions.where(
-      (a) => a.riskLevel == 'high' || a.riskLevel == 'critical',
-    );
-    if (highRisk.isNotEmpty) {
-      return 'HIGH RISK: '
-          '${highRisk.map((a) => a.riskDescription).join(' ')}';
-    }
-
-    final mediumRisk = actions.where((a) => a.riskLevel == 'medium');
-    if (mediumRisk.isNotEmpty) {
-      return 'MEDIUM RISK: '
-          '${mediumRisk.map((a) => a.riskDescription).join(' ')}';
-    }
-
-    return 'Low risk: ${actions.first.riskDescription}';
-  }
-
-  /// Get a human-readable category name
-  static String getCategoryDisplayName(ApprovalCategory category) {
-    switch (category) {
-      case ApprovalCategory.bash:
-        return 'Bash Commands';
-      case ApprovalCategory.email:
-        return 'Email (IMAP/SMTP)';
-      case ApprovalCategory.gmail:
-        return 'Gmail';
-      case ApprovalCategory.slack:
-        return 'Slack Messages';
-      case ApprovalCategory.nextcloud:
-        return 'Nextcloud Files';
-      case ApprovalCategory.github:
-        return 'GitHub Actions';
-      case ApprovalCategory.calendar:
-        return 'Calendar Events';
-    }
-  }
-}
-
-/// Extension to easily get approval status from anywhere
-extension ApprovalCategoryExtension on ApprovalCategory {
-  bool get requiresApproval => ApprovalConfig().isApprovalRequired(this);
-  String get displayName => ApprovalConfig.getCategoryDisplayName(this);
-  String get riskWarning => ApprovalConfig.getRiskWarning(this);
-  List<ApprovalAction> get actions =>
-      ApprovalConfig.getActionsForCategory(this);
 }

@@ -529,10 +529,6 @@ class WorkspaceStorageService {
     return allChats.where((chat) => workspace.chatIds.contains(chat.id)).toList();
   }
 
-  /// Get all projects that contain a specific chat
-  static List<Workspace> getChatProjects(String chatId) {
-    return projects.where((p) => p.chatIds.contains(chatId)).toList();
-  }
 
   // ============ AVATAR IMAGE MANAGEMENT ============
 
@@ -579,33 +575,6 @@ class WorkspaceStorageService {
     }
   }
 
-  /// Delete the avatar image for a workspace.
-  static Future<void> deleteAvatar(String workspaceId) async {
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) throw StateError('User must be signed in.');
-
-    final existing = _projectsById[workspaceId];
-    if (existing?.avatarImagePath != null) {
-      try {
-        await ImageStorageService.deleteEncryptedImage(
-          existing!.avatarImagePath!,
-        );
-      } catch (_) {}
-    }
-
-    await SupabaseService.client
-        .from('projects')
-        .update({'avatar_image_path': null})
-        .eq('id', workspaceId)
-        .eq('user_id', user.id);
-
-    if (_projectsById.containsKey(workspaceId)) {
-      _projectsById[workspaceId] = _projectsById[workspaceId]!.copyWith(
-        avatarImagePath: null,
-      );
-      _notifyChanges();
-    }
-  }
 
   // ============ FILE MANAGEMENT ============
 
@@ -851,11 +820,6 @@ class WorkspaceStorageService {
     }
   }
 
-  /// Get all files for a workspace
-  static List<WorkspaceFile> getProjectFiles(String workspaceId) {
-    final workspace = _projectsById[workspaceId];
-    return workspace?.files ?? [];
-  }
 
   /// Download and decrypt a file's content from Supabase Storage
   static Future<String> decryptFile(String fileId) async {
@@ -1093,10 +1057,5 @@ class WorkspaceStorageService {
     _notifyChangesImmediate();
   }
 
-  /// Load projects for sidebar (only if empty)
-  static Future<void> loadProjectsForSidebar() async {
-    if (_projectsById.isEmpty) {
-      await loadProjects();
-    }
-  }
+
 }

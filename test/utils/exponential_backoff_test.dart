@@ -187,31 +187,6 @@ void main() {
     });
   });
 
-  group('ExponentialBackoff.executeSimple', () {
-    test('succeeds immediately', () async {
-      final result = await ExponentialBackoff.executeSimple<int>(
-        operation: () async => 42,
-      );
-      expect(result.success, isTrue);
-      expect(result.data, equals(42));
-    });
-
-    test('uses fixed delay (multiplier 1.0)', () async {
-      int attempt = 0;
-      final result = await ExponentialBackoff.executeSimple<String>(
-        operation: () async {
-          attempt++;
-          if (attempt < 2) throw Exception('once');
-          return 'ok';
-        },
-        maxRetries: 3,
-        retryDelay: const Duration(milliseconds: 10),
-      );
-      expect(result.success, isTrue);
-      expect(result.attempts, equals(2));
-    });
-  });
-
   group('ExponentialBackoff.shouldRetryError', () {
     test('network errors should retry', () {
       expect(

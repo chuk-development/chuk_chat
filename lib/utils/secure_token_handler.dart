@@ -36,46 +36,6 @@ class SecureTokenHandler {
     return token != null && token.isNotEmpty;
   }
 
-  /// Safe debug print that only prints in debug mode.
-  ///
-  /// Automatically masks any tokens in the message if maskTokens is true.
-  static void safeDebugPrint(String message, {bool maskTokens = false}) {
-    // Only print in debug mode
-    if (kDebugMode) {
-      String safeMes = message;
-
-      if (maskTokens) {
-        // Look for "Bearer <token>" pattern and mask it
-        safeMes = safeMes.replaceAllMapped(
-          RegExp(r'Bearer\s+([a-zA-Z0-9._-]{20,})'),
-          (match) {
-            final token = match.group(1);
-            if (token != null) {
-              return 'Bearer ${maskToken(token)}';
-            }
-            return match.group(0) ?? '';
-          },
-        );
-
-        // Look for "token": "<value>" pattern and mask it
-        safeMes = safeMes.replaceAllMapped(
-          RegExp(r'token["\s:]+([a-zA-Z0-9._-]{20,})'),
-          (match) {
-            final token = match.group(1);
-            if (token != null) {
-              final prefix = match
-                  .group(0)!
-                  .substring(0, match.group(0)!.indexOf(token));
-              return '$prefix${maskToken(token)}';
-            }
-            return match.group(0) ?? '';
-          },
-        );
-      }
-
-      debugPrint(safeMes);
-    }
-  }
 
   /// Creates a masked authorization header value for logging.
   static String maskAuthHeader(String authHeader) {
@@ -183,28 +143,5 @@ class SecureTokenHandler {
     debugPrint('═══════════════════════════════════════════════════════════');
   }
 
-  /// Logs a WebSocket connection with masked tokens.
-  static void logWebSocketConnection({
-    required String url,
-    String? accessToken,
-  }) {
-    if (!kDebugMode) return;
 
-    debugPrint('═══════════════════════════════════════════════════════════');
-    debugPrint('🔌 WEBSOCKET CONNECTION');
-    final safeUrl = url.replaceAllMapped(
-      RegExp(
-        r'([?&](?:token|access_token|auth|jwt|api_key)=)([^&]+)',
-        caseSensitive: false,
-      ),
-      (match) => '${match.group(1)}${maskToken(match.group(2) ?? '')}',
-    );
-    debugPrint('URL: $safeUrl');
-
-    if (accessToken != null) {
-      debugPrint('Token: ${maskToken(accessToken)}');
-    }
-
-    debugPrint('═══════════════════════════════════════════════════════════');
-  }
 }

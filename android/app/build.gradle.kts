@@ -34,7 +34,10 @@ kotlin {
 
 android {
     namespace = "dev.chuk.chat"
-    compileSdk = flutter.compileSdkVersion
+    // Bumped from flutter.compileSdkVersion (36) to 37: flutter_secure_storage
+    // 11 and permission_handler_android 14 both require Android SDK 37. AGP
+    // 8.13.2 + Gradle 8.14 build against 37 fine (android-37 platform installed).
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     // Compress native .so libraries inside the APK instead of storing them

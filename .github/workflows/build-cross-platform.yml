@@ -301,7 +301,12 @@ jobs:
 
       - name: Build Split APKs
         run: |
-          BUILD_NUM=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]' | cut -d'+' -f1 | awk -F. '{print $3}')
+          # Whole semantic version, not just the patch: 1.0.109 -> 100109.
+          # Must match android/fastlane/Fastfile and build.sh, or an APK from
+          # one path cannot upgrade an APK from the other. --split-per-abi
+          # multiplies this by 1000, and Android caps versionCode at
+          # 2100000000, so it stays under 2100000.
+          BUILD_NUM=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]' | cut -d'+' -f1 | awk -F. '{print ($1*100000)+($2*1000)+$3}')
           [ -z "$BUILD_NUM" ] && BUILD_NUM=1
           flutter build apk --release --split-per-abi \
             --build-number=$BUILD_NUM \

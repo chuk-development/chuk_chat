@@ -44,6 +44,7 @@ class SupabaseService {
     );
 
     _initialized = true;
+    initializedListenable.value = true;
   }
 
   static GoTrueClient get auth => client.auth;
@@ -52,38 +53,13 @@ class SupabaseService {
   /// auth state opportunistically without risking a [StateError].
   static bool get isInitialized => _initialized;
 
-  /// Force-refresh the session, bypassing the throttle.
-  /// Returns null if the refresh token has been revoked (auth error).
-  /// Throws on network errors so caller can distinguish.
-  static Future<Session?> forceRefreshSession() async {
-    if (_inFlightRefresh != null) {
-      return await _inFlightRefresh!;
-    }
-    // Bypass throttle by not checking _lastRefreshTime
-    Future<Session?> performForceRefresh() async {
-      try {
-        final current = auth.currentSession;
-        if (current == null) return null;
-        final response = await auth.refreshSession();
-        _lastRefreshTime = DateTime.now();
-        return response.session ?? auth.currentSession;
-      } on AuthException catch (error) {
-        _lastRefreshTime = DateTime.now();
-        if (NetworkStatusService.isNetworkError(error)) {
-          rethrow; // Let caller know it's a network issue
-        }
-        // Token revoked or invalid
-        return null;
-      }
-    }
+  /// Flips once [initialize] has completed. `main()` starts initialisation
+  /// without awaiting it and runs the app immediately, so a widget can be
+  /// built before the client exists; this lets it wait for the client instead
+  /// of polling for it or giving up for its whole lifetime.
+  static final ValueNotifier<bool> initializedListenable =
+      ValueNotifier<bool>(false);
 
-    try {
-      _inFlightRefresh = performForceRefresh();
-      return await _inFlightRefresh;
-    } finally {
-      _inFlightRefresh = null;
-    }
-  }
 
   static Future<Session?> refreshSession() async {
     final DateTime now = DateTime.now();

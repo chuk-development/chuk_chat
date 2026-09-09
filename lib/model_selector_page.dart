@@ -25,7 +25,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug;
-import 'package:chuk_chat/utils/app_snack_bar.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
@@ -605,7 +605,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
 
   void _showSnackBar(String message) {
     if (!mounted) return;
-    showAppSnackBar(context, message);
+    NiceSnackBar.show(context, message);
   }
 
   Future<void> _onEditModelPrompt(

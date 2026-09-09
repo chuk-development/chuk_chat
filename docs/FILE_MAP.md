@@ -62,7 +62,6 @@ Complete map of all Dart files in the codebase.
 | `message_composition_service.dart` | Prepare messages for API |
 | `local_chat_cache_service.dart` | In-memory cache |
 | `title_generation_service.dart` | AI-powered chat title generation |
-| `session_helper.dart` | Session validation utilities |
 
 ### Projects
 | File | Purpose |
@@ -73,7 +72,6 @@ Complete map of all Dart files in the codebase.
 ### Models
 | File | Purpose |
 |------|---------|
-| `model_prefetch_service.dart` | Preload models |
 | `model_cache_service.dart` | Cache models |
 | `model_capabilities_service.dart` | Model features |
 
@@ -81,7 +79,8 @@ Complete map of all Dart files in the codebase.
 | File | Purpose |
 |------|---------|
 | `current_user.dart` | `CurrentUser.id` / `CurrentUser.stillOwns` — the ownership check every user-scoped static cache needs |
-| `oauth_loopback_callback.dart` | The desktop OAuth redirect server + its callback page (GitHub, Google) |
+| `oauth_loopback_server.dart` | The desktop OAuth redirect server + its result page (GitHub, Google) |
+| `workspace_file_upload.dart` | Pick + upload one workspace file, with progress callbacks and an optional size confirmation |
 | `local_chat_cache_rows.dart` | Row shapes shared by the SQLite and the SharedPreferences cache |
 | `streaming_manager_base.dart` | Platform-independent stream registry; the io build layers notifications and throttling on top |
 | `supabase_schema_errors.dart` | `isMissingPreferencesColumn` |
@@ -100,7 +99,6 @@ Complete map of all Dart files in the codebase.
 | File | Purpose |
 |------|---------|
 | `image_storage_service.dart` | Encrypted image storage |
-| `image_generation_service.dart` | AI image gen |
 | `image_compression_service.dart` | JPEG compression |
 | `file_conversion_service.dart` | Doc conversion |
 
@@ -116,7 +114,6 @@ Complete map of all Dart files in the codebase.
 | `attachment_preview_bar.dart` | Pre-send attachments |
 | `model_selection_dropdown.dart` | Model dropdown |
 | `credit_display.dart` | Credit balance |
-| `free_message_display.dart` | Free message quota |
 | `password_strength_meter.dart` | Password strength |
 | `project_file_viewer.dart` | Project file viewer dialog |
 | `project_panel.dart` | Right-side project settings panel |
@@ -137,7 +134,6 @@ Complete map of all Dart files in the codebase.
 |------|---------|
 | `sidebar_desktop.dart` | Desktop nav |
 | `sidebar_mobile.dart` | Mobile drawer |
-| `widgets/sidebar/sidebar_common.dart` | Everything the two share: `SidebarStateCommon` mixin (search, time buckets, profile, star, rename, delete + undo), `SidebarFooterRow`, `SidebarPinnedSection`, `SidebarPalette`. Both sidebars render the same design — change it here, not in one of them |
 
 ### Chat (`lib/platform_specific/chat/`)
 | File | Purpose |
@@ -176,17 +172,14 @@ Complete map of all Dart files in the codebase.
 | `token_estimator.dart` | Token counting |
 | `secure_token_handler.dart` | Token handling |
 | `api_rate_limiter.dart` | Rate limiting |
-| `api_request_queue.dart` | Request queuing |
 | `exponential_backoff.dart` | Retry logic |
 | `file_upload_validator.dart` | File validation |
 | `upload_rate_limiter.dart` | Upload rate limiting (DoS protection) |
 | `certificate_pinning.dart` | SSL certificate pinning |
-| `service_logger.dart` | Logging |
 | `service_error_handler.dart` | Error handling |
 | `highlight_registry.dart` | Syntax highlighting |
 | `json_helpers.dart` | `tryDecodeJsonObject` (HTTP error bodies), `tryParseLenientJson` (model output), `looksLikeEncryptedPayload` |
 | `format_bytes.dart` | `formatBytes` — the one byte formatter |
-| `app_snack_bar.dart` | `showAppSnackBar` — the app's one snack bar shape |
 | `url_launcher_helper.dart` | `launchExternalUrl` for footer links |
 | `map_geometry.dart` | `hasPointSpread` — do these points cover more than one place |
 

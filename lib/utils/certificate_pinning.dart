@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart'
     show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
@@ -15,38 +13,6 @@ class CertificatePin {
     required this.sha256Hashes,
     this.includeSubdomains = false,
   });
-}
-
-/// Result of certificate validation.
-class CertificateValidationResult {
-  final bool isValid;
-  final String? errorMessage;
-  final String? presentedFingerprint;
-  final List<String>? expectedFingerprints;
-
-  const CertificateValidationResult({
-    required this.isValid,
-    this.errorMessage,
-    this.presentedFingerprint,
-    this.expectedFingerprints,
-  });
-
-  factory CertificateValidationResult.success() {
-    return const CertificateValidationResult(isValid: true);
-  }
-
-  factory CertificateValidationResult.failure({
-    required String message,
-    String? presented,
-    List<String>? expected,
-  }) {
-    return CertificateValidationResult(
-      isValid: false,
-      errorMessage: message,
-      presentedFingerprint: presented,
-      expectedFingerprints: expected,
-    );
-  }
 }
 
 /// Manages SSL certificate pinning for secure API communications.
@@ -154,112 +120,7 @@ class CertificatePinning {
     return dio;
   }
 
-  /// Validate a certificate's DER bytes against configured pins.
-  static Future<CertificateValidationResult> validateCertificateBytes({
-    required List<int> derBytes,
-    required String host,
-  }) async {
-    if (kIsWeb || !isEnabled) {
-      return CertificateValidationResult.success();
-    }
-
-    final pin = findPinForDomain(host);
-    if (pin == null) {
-      if (kDebugMode) {
-        return CertificateValidationResult.success();
-      }
-      return CertificateValidationResult.failure(
-        message: 'No certificate pin configured for domain: $host',
-      );
-    }
-
-    final sha256 = Sha256();
-    final hash = await sha256.hash(derBytes);
-    final fingerprint = base64.encode(hash.bytes);
-
-    if (pin.sha256Hashes.contains(fingerprint)) {
-      return CertificateValidationResult.success();
-    }
-
-    return CertificateValidationResult.failure(
-      message: 'Certificate does not match pinned certificates for $host',
-      presented: fingerprint,
-      expected: pin.sha256Hashes,
-    );
-  }
-
-  /// Find certificate pin for a given domain.
-  static CertificatePin? findPinForDomain(String host) {
-    for (final pin in _pins) {
-      if (pin.domain == host) {
-        return pin;
-      }
-
-      if (pin.includeSubdomains && host.endsWith('.${pin.domain}')) {
-        return pin;
-      }
-    }
-    return null;
-  }
-
   /// Get all configured pins.
   static List<CertificatePin> get configuredPins => List.unmodifiable(_pins);
 
-  /// Add a certificate pin dynamically (for testing or runtime configuration).
-  static void addPin(CertificatePin pin) {
-    if (_pins.any((p) => p.domain == pin.domain)) {
-      _pins.removeWhere((p) => p.domain == pin.domain);
-    }
-    _pins.add(pin);
-
-    if (kDebugMode) {
-      debugPrint('Added certificate pin for ${pin.domain}');
-      debugPrint('   Hashes: ${pin.sha256Hashes.length}');
-      debugPrint('   Subdomains: ${pin.includeSubdomains}');
-    }
-  }
-
-  /// Remove certificate pin for a domain.
-  static void removePin(String domain) {
-    _pins.removeWhere((pin) => pin.domain == domain);
-
-    if (kDebugMode) {
-      debugPrint('Removed certificate pin for $domain');
-    }
-  }
-
-  /// Clear all certificate pins (for testing).
-  static void clearAllPins() {
-    _pins.clear();
-
-    if (kDebugMode) {
-      debugPrint('Cleared all certificate pins');
-    }
-  }
-
-  /// Log certificate pinning status.
-  static void logStatus() {
-    if (!kDebugMode) return;
-
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('CERTIFICATE PINNING STATUS');
-    debugPrint('Enabled: ${isEnabled ? 'YES (production)' : 'NO (debug)'}');
-    debugPrint('Configured pins: ${_pins.length}');
-
-    for (final pin in _pins) {
-      debugPrint('  - ${pin.domain}');
-      debugPrint('    Hashes: ${pin.sha256Hashes.length}');
-      debugPrint('    Subdomains: ${pin.includeSubdomains}');
-    }
-
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  }
-}
-
-/// Extension to add certificate pinning to existing Dio instances.
-extension DioSecurityExtension on Dio {
-  /// Enable certificate pinning on this Dio instance.
-  void enableCertificatePinning() {
-    CertificatePinning.configureDio(this);
-  }
 }

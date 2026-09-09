@@ -91,6 +91,4 @@ class ChatRuntimeRegistry {
     }
   }
 
-  @visibleForTesting
-  int get debugCount => _runtimes.length;
 }

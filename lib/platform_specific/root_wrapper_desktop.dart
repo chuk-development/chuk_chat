@@ -719,6 +719,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     onMediaTapped: _openMediaPage,
                     onNewChatTapped: _handleNewChatFromSidebar,
                     onChatDeleted: _handleChatDeleted,
+                    // Same action as the hamburger above it — the
+                    // profile card carries a second, in-panel way to
+                    // fold back to the mini rail.
+                    onCollapseTapped: _toggleSidebar,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,

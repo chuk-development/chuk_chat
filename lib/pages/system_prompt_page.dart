@@ -17,7 +17,7 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
-import 'package:chuk_chat/utils/app_snack_bar.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class SystemPromptPage extends StatefulWidget {
   const SystemPromptPage({super.key});
@@ -509,7 +509,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   void _showSnackBar(String text) {
     if (!mounted) return;
-    showAppSnackBar(
+    NiceSnackBar.show(
       context,
       text,
       backgroundColor: Theme.of(context).colorScheme.primary,

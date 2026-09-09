@@ -1,12 +1,39 @@
-// Shared chrome primitives for the Final-mix sidebar.
-// Reads colors from the active app theme — no palette duplication.
-// Uses rounded icon variants for a softer, less standard look.
+// Shared chrome for the chat sidebar.
+//
+// The sidebar is drawn the way the settings pages are drawn: a vertical stack
+// of filled, rounded cards collected into blocks, each block under a quiet
+// header. Fill colour, press feedback and corner radii all come from the same
+// Material You tokens `expressive_settings.dart` uses, so the two surfaces
+// cannot drift apart as either one is edited.
+//
+// Nothing in here knows about chats, storage or navigation — the two platform
+// sidebars supply the data and the callbacks. The one thing the chrome does
+// resolve for itself is its own labels: every tooltip and hint falls back to
+// `AppLocalizations`, so a caller that passes nothing still speaks the user's
+// language instead of English.
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
-import 'package:chuk_chat/constants.dart';
+
+/// Gap between two cards inside one block. Deliberately tighter than the
+/// reference design's 4 px: the cards must still read as separate objects,
+/// but a block of three should scan as a single group at a glance.
+const double kSbCardGap = 2.5;
+
+/// Horizontal inset of every block from the sidebar edge.
+const double kSbBlockInset = 8.0;
+
+/// Corner radius of a sidebar card. Smaller than the settings pages' 26 px
+/// because the sidebar is roughly half as wide — the corner has to stay in
+/// proportion to the card, not to the screen.
+const double kSbCardRadius = 20.0;
+
+/// Height of a navigation card. The reference design uses 72 px on a phone;
+/// ours is shorter because the same block has to fit a desktop sidebar too.
+const double kSbNavCardHeight = 62.0;
 
 class SidebarTokens {
   final Color iconFg;
@@ -31,521 +58,788 @@ class SidebarTokens {
   factory SidebarTokens.of(BuildContext context) {
     final theme = Theme.of(context);
     final iconFg = theme.resolvedIconColor;
-    final accent = theme.colorScheme.primary;
-    final bg = theme.cardColor.darken(0.03);
     return SidebarTokens(
       iconFg: iconFg,
-      accent: accent,
-      bg: bg,
-      surface: bg.lighten(theme.brightness == Brightness.dark ? 0.04 : 0.02),
-      surfaceHigh:
-          bg.lighten(theme.brightness == Brightness.dark ? 0.08 : 0.05),
+      accent: theme.colorScheme.primary,
+      bg: theme.cardColor.darken(0.03),
+      surface: theme.m3.surfaceContainer,
+      surfaceHigh: theme.m3.surfaceContainerHigh,
       hairline: theme.dividerColor.withValues(alpha: 0.5),
-      muted: iconFg.withValues(alpha: 0.6),
+      muted: theme.m3.onSurfaceVariant,
       isDark: theme.brightness == Brightness.dark,
     );
   }
 }
 
-/// Brand row: optional logo square + text. Trailing widget on the right.
-class SbBrand extends StatelessWidget {
-  final Widget? trailing;
-  final EdgeInsets padding;
-  final String label;
-  final bool showLogo;
-  final double fontSize;
-  final FontWeight fontWeight;
-  const SbBrand({
-    super.key,
-    this.trailing,
-    this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12),
-    this.label = 'Chuk Chat',
-    this.showLogo = false,
-    this.fontSize = 20,
-    this.fontWeight = FontWeight.w700,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    return Padding(
-      padding: padding,
-      child: Row(
-        children: [
-          if (showLogo) ...[
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: t.accent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Text('C',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      color: t.isDark ? Colors.black : Colors.white)),
-            ),
-            const SizedBox(width: 10),
-          ],
-          // Brand label renders as the frozen SVG wordmark; any other
-          // label (none in production today) falls back to plain text.
-          if (label == 'Chuk Chat')
-            BrandWordmark(color: t.iconFg, height: fontSize * 0.75)
-          else
-            Text(label,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: fontWeight,
-                  color: t.iconFg,
-                )),
-          const Spacer(),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}
-
-/// Subtle search trigger — rounded icon button with "Search" label.
-/// Opens whatever search experience the caller wires up (focus inline search,
-/// open command palette, etc.).
-class SbSearchTrigger extends StatelessWidget {
-  final VoidCallback onTap;
-  final String label;
-  const SbSearchTrigger({super.key, required this.onTap, this.label = 'Search'});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: t.hairline),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.search_rounded, size: 15, color: t.muted),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: t.muted,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact accent pill — used for mobile top-right "New chat".
-class SbNewChatPill extends StatelessWidget {
-  final VoidCallback onTap;
-  final String label;
-  final IconData icon;
-  const SbNewChatPill({
-    super.key,
-    required this.onTap,
-    this.label = 'New',
-    this.icon = Icons.edit_rounded,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final on = t.isDark ? Colors.black : Colors.white;
-    return Material(
-      color: t.accent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: on),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: on)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sidebar nav row (icon + label, stacked vertically). Primary highlights accent.
-class SbNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool primary;
-  const SbNavItem({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.primary = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
-    final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: kBorderRadiusRow,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          child: Row(
-            children: [
-              Icon(icon, size: 19, color: iconColor),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
-                      color: textColor,
-                    )),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Rail-aligned nav row. 48 px tall, icon centred inside a 48x48 square at
-/// the same x as the floating mini-rail IconButtons — so opening/closing
-/// the sidebar doesn't shift any icon. Label sits to the right of the icon.
-class SbRailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool primary;
-  /// Inner padding inside the rounded hover pill. Combined with the 6 px
-  /// outer wrapper this yields an effective left offset of 8 — same as
-  /// `kFixedLeftPadding`, so the icon glyph centres line up with the
-  /// hamburger overlay above.
-  final double leftPadding;
-  final double rowHeight;
-  final double iconBoxWidth;
-  final double iconSize;
-  const SbRailRow({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.primary = false,
-    this.leftPadding = 2.0,
-    this.rowHeight = 40.0,
-    this.iconBoxWidth = 48.0,
-    this.iconSize = 24.0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
-    final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
-    final BorderRadius radius = BorderRadius.circular(10);
-    // Pill width is controlled by the parent (callers wrap a group of
-    // rail rows in `IntrinsicWidth + Column(stretch)` so every row in
-    // the group matches the widest label). Row uses mainAxisSize.min so
-    // its natural width can be measured by IntrinsicWidth.
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: SizedBox(
-        height: rowHeight,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: radius,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
-            child: Padding(
-              padding: EdgeInsets.only(left: leftPadding, right: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: iconBoxWidth,
-                    height: rowHeight,
-                    child: Icon(icon, size: iconSize, color: iconColor),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    label,
-                    overflow: TextOverflow.clip,
-                    softWrap: false,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight:
-                          primary ? FontWeight.w700 : FontWeight.w500,
-                      color: textColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Mixed-case section label with optional count. Claude.ai style.
-class SbSectionLabel extends StatelessWidget {
-  final String label;
-  final int? count;
-  final EdgeInsets padding;
-  final Color? color;
-  const SbSectionLabel({
-    super.key,
-    required this.label,
-    this.count,
-    this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 4),
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    // Just the label in the user's accent colour — no leading dot, no
-    // underline. The accent itself supplies the visual emphasis.
-    final Color c = color ?? t.accent;
-    return Padding(
-      padding: padding,
-      child: Row(
-        children: [
-          // Not upper case any more: small capitals read smaller than they
-          // measure, and this label has to be findable at a glance.
-          Text(label,
-              // A line height above 1 keeps the descenders inside the box
-              // whatever the font: without it the y and the p are clipped.
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.35,
-                letterSpacing: -0.2,
-                fontWeight: FontWeight.w900,
-                color: c,
-              )),
-          if (count != null) ...[
-            const Spacer(),
-            Text('$count',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: c.withValues(alpha: 0.7),
-                )),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Accent-tinted "Pinned" bento card. Caller supplies the row widgets.
-class SbPinnedBento extends StatelessWidget {
-  final int count;
-  final List<Widget> children;
-  final EdgeInsets margin;
-  const SbPinnedBento({
-    super.key,
-    required this.count,
-    required this.children,
-    this.margin = const EdgeInsets.symmetric(horizontal: 6),
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    // Neutral outlined card — a subtle hairline border (no accent fill, no
-    // accent border) wraps the pinned section so it's visually grouped
-    // without screaming colour.
-    return Padding(
-      padding: margin,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(0, 6, 0, 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: t.hairline),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
-              child: Row(
-                children: [
-                  Text('Pinned',
-                      style: TextStyle(
-                          fontSize: 12,
-                          letterSpacing: 0.1,
-                          fontWeight: FontWeight.w600,
-                          color: t.muted)),
-                  const Spacer(),
-                  Text('$count',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: t.muted.withValues(alpha: 0.65))),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: children,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Relative time helper (e.g. "now", "5m", "3h", "2d", "1w").
-String sbRelativeTime(DateTime? t) {
-  if (t == null) return '';
-  final diff = DateTime.now().difference(t);
-  if (diff.inSeconds < 60) return 'now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-  if (diff.inHours < 24) return '${diff.inHours}h';
-  if (diff.inDays < 7) return '${diff.inDays}d';
-  if (diff.inDays < 31) return '${diff.inDays ~/ 7}w';
-  if (diff.inDays < 365) return '${diff.inDays ~/ 30}mo';
-  return '${diff.inDays ~/ 365}y';
-}
-
-/// Demo-style flat chat row. Pin icon + title + unread dot + time + optional
-/// trailing menu (e.g. PopupMenuButton). Honors selected/locked/streaming.
+/// The filled, rounded card every sidebar row sits in.
 ///
-/// When [trailingOnHover] is true, the [trailing] widget is hidden by default
-/// and faded in on mouse hover — the time text shifts under to keep the row
-/// height stable. On mobile (no hover) the trailing simply stays hidden;
-/// long-press / secondary tap is used to open the actions menu instead.
-class SbChatTile extends StatefulWidget {
-  final String title;
-  final DateTime? createdAt;
-  final bool selected;
-  final bool pinned;
-  final bool locked;
-  final bool streaming;
-  final bool dimmed;
-  final VoidCallback? onTap;
-  final void Function(Offset globalPosition)? onSecondaryTap;
-  final VoidCallback? onLongPress;
-  final Widget? trailing;
-  final bool trailingOnHover;
-  final bool compact;
-  /// When true, skip the outer 6 px horizontal wrapper. Used when the tile is
-  /// hosted inside a container that supplies its own indent (e.g. the pinned
-  /// bento) so the title sits at the same x as tiles in the open list.
-  final bool noOuterPad;
-  const SbChatTile({
+/// Mirrors `ExpressiveTile`: same fill, same press squeeze. It differs in two
+/// ways the sidebar needs — a card can be *selected* (the open chat), and it
+/// can reveal extra controls on hover, which a settings page never does.
+class SbCard extends StatefulWidget {
+  const SbCard({
     super.key,
-    required this.title,
-    this.createdAt,
-    this.selected = false,
-    this.pinned = false,
-    this.locked = false,
-    this.streaming = false,
-    this.dimmed = false,
+    required this.child,
     this.onTap,
-    this.onSecondaryTap,
     this.onLongPress,
-    this.trailing,
-    this.trailingOnHover = false,
-    this.compact = false,
-    this.noOuterPad = false,
+    this.onSecondaryTap,
+    this.selected = false,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    this.minHeight,
+    this.radius = kSbCardRadius,
   });
 
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// Right-click, reported in global coordinates so the caller can anchor a
+  /// menu to the pointer.
+  final void Function(Offset globalPosition)? onSecondaryTap;
+  final bool selected;
+  final EdgeInsets padding;
+  final double? minHeight;
+  final double radius;
+
   @override
-  State<SbChatTile> createState() => _SbChatTileState();
+  State<SbCard> createState() => _SbCardState();
 }
 
-class _SbChatTileState extends State<SbChatTile> {
+class _SbCardState extends State<SbCard> {
+  bool _pressed = false;
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final Color titleColor = widget.locked
-        ? t.iconFg.withValues(alpha: 0.35)
-        : widget.dimmed
-            ? t.iconFg.withValues(alpha: 0.38)
-            : (widget.selected ? t.accent : t.iconFg);
-    final Color timeColor = t.iconFg.withValues(alpha: 0.55);
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final Color accent = theme.colorScheme.primary;
+    final bool enabled = widget.onTap != null;
 
-    // Trailing actions (pin/more) hover OVER the row's right edge rather
-    // than reserving a slot, so the title stretches as far right as
-    // possible. The time text on the right always shows; on hover, the
-    // actions overlay it (and a small chunk of trailing title).
-    final bool hoverOverlay =
-        widget.trailingOnHover && widget.trailing != null;
-    final bool hoverActive = hoverOverlay && _hovered;
+    final Color fill = widget.selected
+        ? Color.alphaBlend(accent.withValues(alpha: 0.20), m3.surfaceContainer)
+        : (_pressed || _hovered
+            ? m3.surfaceContainerHigh
+            : m3.surfaceContainer);
 
-    final row = Row(
-      children: [
-        if (widget.locked)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Icon(Icons.lock_rounded,
-                size: 14, color: t.iconFg.withValues(alpha: 0.4)),
+    Widget card = AnimatedScale(
+      scale: _pressed ? 0.985 : 1,
+      duration: const Duration(milliseconds: 130),
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOutCubic,
+        constraints: widget.minHeight == null
+            ? null
+            : BoxConstraints(minHeight: widget.minHeight!),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(widget.radius),
+          // The border is always reserved, transparent when unselected, so
+          // selecting a card only changes its colour and never its size.
+          border: Border.all(
+            color: widget.selected
+                ? accent.withValues(alpha: 0.55)
+                : Colors.transparent,
+            width: 1.5,
           ),
-        Expanded(
-          child: HoverMarqueeText(
-            widget.title,
-            style: TextStyle(
-              fontSize: widget.compact ? 13.5 : 15,
-              fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500,
-              color: titleColor,
-              fontStyle: widget.locked ? FontStyle.italic : null,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+            onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+            child: Padding(
+              padding: widget.padding,
+              child: SbCardHoverScope(hovered: _hovered, child: widget.child),
             ),
           ),
         ),
-        if (widget.streaming) ...[
+      ),
+    );
+
+    if (widget.onSecondaryTap != null) {
+      card = GestureDetector(
+        onSecondaryTapDown: (details) =>
+            widget.onSecondaryTap!(details.globalPosition),
+        child: card,
+      );
+    }
+
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: card,
+      ),
+    );
+  }
+}
+
+/// Publishes the hover state of the enclosing [SbCard] to its content.
+class SbCardHoverScope extends InheritedWidget {
+  const SbCardHoverScope({
+    super.key,
+    required this.hovered,
+    required super.child,
+  });
+
+  final bool hovered;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SbCardHoverScope>()?.hovered ??
+      false;
+
+  @override
+  bool updateShouldNotify(SbCardHoverScope old) => hovered != old.hovered;
+}
+
+/// A stack of cards that belong together — the navigation block, or the chats
+/// of one time group. The block is what carries the grouping; there are no
+/// dividers and no outer frame.
+class SbBlock extends StatelessWidget {
+  const SbBlock({
+    super.key,
+    required this.children,
+    this.inset = kSbBlockInset,
+  });
+
+  final List<Widget> children;
+  final double inset;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) rows.add(const SizedBox(height: kSbCardGap));
+      rows.add(children[i]);
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: inset),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      ),
+    );
+  }
+}
+
+/// The rounded square an icon sits in, matching `ExpressiveIconTile` but
+/// sized for the narrower sidebar.
+class SbIconTile extends StatelessWidget {
+  const SbIconTile({
+    super.key,
+    required this.icon,
+    this.tone,
+    this.size = 38,
+  });
+
+  final IconData icon;
+  final Color? tone;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final Color background = tone ?? cs.primaryContainer;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(size * 0.38),
+      ),
+      child: Icon(
+        icon,
+        size: size * 0.52,
+        color: tone == null
+            ? cs.onPrimaryContainer
+            : ThemeData.estimateBrightnessForColor(background) ==
+                    Brightness.dark
+                ? Colors.white
+                : Colors.black,
+      ),
+    );
+  }
+}
+
+/// One navigation entry: a full-width card with a tonal icon and a bold label.
+class SbNavCard extends StatelessWidget {
+  const SbNavCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.tone,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? tone;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SbCard(
+      onTap: onTap,
+      minHeight: kSbNavCardHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          SbIconTile(icon: icon, tone: tone),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
+      ),
+    );
+  }
+}
+
+/// The account card at the top: avatar, name, and the balance under it, with
+/// a round action on the right that folds the sidebar away.
+class SbProfileCard extends StatelessWidget {
+  const SbProfileCard({
+    super.key,
+    required this.name,
+    this.subtitle,
+    this.onTap,
+    this.onCollapse,
+    this.collapseTooltip,
+  });
+
+  final String name;
+
+  /// The quiet second line — the plan or the remaining balance.
+  final Widget? subtitle;
+  final VoidCallback? onTap;
+
+  /// Null hides the round button entirely, for a host that has no way to
+  /// collapse the panel.
+  final VoidCallback? onCollapse;
+
+  /// Null takes the localized default.
+  final String? collapseTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SbCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(10, 9, 9, 9),
+      child: Row(
+        children: [
+          SbAvatar(name: name),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  DefaultTextStyle.merge(
+                    style: theme.textTheme.bodySmall!.copyWith(
+                      color: theme.m3.onSurfaceVariant,
+                    ),
+                    child: subtitle!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (onCollapse != null) ...[
+            const SizedBox(width: 6),
+            SbRoundAction(
+              icon: Icons.keyboard_double_arrow_left_rounded,
+              tooltip: collapseTooltip ??
+                  AppLocalizations.of(context)?.hideSidebar ??
+                  'Hide sidebar',
+              onTap: onCollapse!,
+              diameter: 36,
+              iconSize: 20,
+              fill: theme.m3.surfaceContainerHighest,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Round avatar carrying the first letter of the display name.
+class SbAvatar extends StatelessWidget {
+  const SbAvatar({super.key, required this.name, this.diameter = 40});
+
+  final String name;
+  final double diameter;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final String trimmed = name.trim();
+    final String initial =
+        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+    return Container(
+      width: diameter,
+      height: diameter,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        initial,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+/// A round icon button on the card fill — the shape the bottom bar and the
+/// profile card use for their actions.
+class SbRoundAction extends StatelessWidget {
+  const SbRoundAction({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+    this.diameter = 44,
+    this.iconSize = 22,
+    this.fill,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+  final double diameter;
+  final double iconSize;
+
+  /// Null uses the same container fill the cards use; a colour here makes the
+  /// button the loud one of the pair (new chat).
+  final Color? fill;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color background = fill ?? theme.m3.surfaceContainer;
+    final Color foreground = fill == null
+        ? theme.colorScheme.onSurface
+        : ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: diameter,
+        height: diameter,
+        child: Material(
+          color: background,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Icon(icon, size: iconSize, color: foreground),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The header above a block: a quiet label, the number of items in the group,
+/// and a chevron that folds the block away.
+class SbGroupHeader extends StatelessWidget {
+  const SbGroupHeader({
+    super.key,
+    required this.label,
+    required this.collapsed,
+    this.count,
+    this.onToggle,
+  });
+
+  final String label;
+  final bool collapsed;
+  final int? count;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color fg = theme.m3.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(kSbBlockInset, 14, kSbBlockInset, 6),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        // The chevron says open or shut to the eye only; a screen reader
+        // would otherwise hear a label, a count and an unnamed icon.
+        child: Semantics(
+          button: true,
+          expanded: !collapsed,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (count != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '$count',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: fg.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: collapsed ? -0.25 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The pill-shaped search field of the bottom bar.
+class SbSearchField extends StatefulWidget {
+  const SbSearchField({
+    super.key,
+    required this.controller,
+    required this.focusNode,
+    required this.onClear,
+    this.hintText,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onClear;
+
+  /// Null takes the localized default.
+  final String? hintText;
+
+  @override
+  State<SbSearchField> createState() => _SbSearchFieldState();
+}
+
+class _SbSearchFieldState extends State<SbSearchField> {
+  /// Whether the clear button belongs on screen. Tracked here, from the
+  /// controller, because the field must not depend on the host happening to
+  /// rebuild it on every keystroke — a host that debounces its own work
+  /// would otherwise leave the button behind.
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasText = widget.controller.text.isNotEmpty;
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SbSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _hasText = widget.controller.text.isNotEmpty;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    final bool hasText = widget.controller.text.isNotEmpty;
+    if (hasText == _hasText) return;
+    setState(() => _hasText = hasText);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color muted = theme.m3.onSurfaceVariant;
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: theme.m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14),
+        cursorColor: theme.colorScheme.primary,
+        decoration: InputDecoration(
+          hintText: widget.hintText ??
+              AppLocalizations.of(context)?.searchChatsHint ??
+              'Search chats',
+          hintStyle: TextStyle(color: muted, fontSize: 14),
+          prefixIcon: Icon(Icons.search_rounded, size: 19, color: muted),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 40, minHeight: 44),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 13),
+          border: InputBorder.none,
+          // The clear button only exists while there is something to clear,
+          // so an untouched field stays a clean pill.
+          suffixIcon: !_hasText
+              ? null
+              : InkResponse(
+                  radius: 16,
+                  onTap: widget.onClear,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Icon(Icons.close_rounded, size: 17, color: muted),
+                  ),
+                ),
+          suffixIconConstraints:
+              const BoxConstraints(minWidth: 32, minHeight: 32),
+        ),
+      ),
+    );
+  }
+}
+
+/// The bar at the foot of the sidebar: the search pill, then the two round
+/// actions.
+class SbBottomBar extends StatelessWidget {
+  const SbBottomBar({
+    super.key,
+    required this.search,
+    required this.onSettings,
+    required this.onNewChat,
+    this.settingsTooltip,
+    this.newChatTooltip,
+    this.padding =
+        const EdgeInsets.fromLTRB(kSbBlockInset, 6, kSbBlockInset, 10),
+  });
+
+  final Widget search;
+  final VoidCallback onSettings;
+  final VoidCallback onNewChat;
+
+  /// Null on either takes the localized default.
+  final String? settingsTooltip;
+  final String? newChatTooltip;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          Expanded(child: search),
+          const SizedBox(width: 6),
+          SbRoundAction(
+            icon: Icons.settings_rounded,
+            tooltip: settingsTooltip ??
+                AppLocalizations.of(context)?.settings ??
+                'Settings',
+            onTap: onSettings,
+          ),
+          const SizedBox(width: 6),
+          SbRoundAction(
+            icon: Icons.edit_square,
+            tooltip: newChatTooltip ??
+                AppLocalizations.of(context)?.newChat ??
+                'New chat',
+            onTap: onNewChat,
+            fill: theme.colorScheme.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One chat in a group block: the title, the date under it, and the actions
+/// on the right.
+class SbChatTile extends StatelessWidget {
+  const SbChatTile({
+    super.key,
+    required this.title,
+    this.dateLine,
+    this.selected = false,
+    this.locked = false,
+    this.streaming = false,
+    this.onTap,
+    this.onLongPress,
+    this.onSecondaryTap,
+    this.trailing,
+    this.hoverTrailing,
+  });
+
+  final String title;
+  final String? dateLine;
+  final bool selected;
+  final bool locked;
+  final bool streaming;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final void Function(Offset globalPosition)? onSecondaryTap;
+
+  /// Always visible — the three-dot menu.
+  final Widget? trailing;
+
+  /// Revealed only while the pointer is over the card, for a control that
+  /// would be noise on a list of forty rows (the pin toggle).
+  final Widget? hoverTrailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return SbCard(
+      selected: selected,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTap: onSecondaryTap,
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      child: _SbChatTileBody(
+        title: title,
+        dateLine: dateLine,
+        selected: selected,
+        locked: locked,
+        streaming: streaming,
+        trailing: trailing,
+        hoverTrailing: hoverTrailing,
+      ),
+    );
+  }
+}
+
+/// Split out so it can read the card's hover state, which the card publishes
+/// through an inherited widget wrapped around its own child.
+class _SbChatTileBody extends StatelessWidget {
+  const _SbChatTileBody({
+    required this.title,
+    required this.dateLine,
+    required this.selected,
+    required this.locked,
+    required this.streaming,
+    required this.trailing,
+    required this.hoverTrailing,
+  });
+
+  final String title;
+  final String? dateLine;
+  final bool selected;
+  final bool locked;
+  final bool streaming;
+  final Widget? trailing;
+  final Widget? hoverTrailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool hovered = SbCardHoverScope.of(context);
+    final Color titleColor = locked
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.45)
+        : (selected ? theme.colorScheme.primary : theme.colorScheme.onSurface);
+
+    return Row(
+      children: [
+        if (locked)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Icon(
+              Icons.lock_rounded,
+              size: 14,
+              color: theme.m3.onSurfaceVariant,
+            ),
+          ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HoverMarqueeText(
+                title,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: titleColor,
+                  fontStyle: locked ? FontStyle.italic : null,
+                ),
+              ),
+              if (dateLine != null && dateLine!.isNotEmpty) ...[
+                const SizedBox(height: 1),
+                Text(
+                  dateLine!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.m3.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (streaming) ...[
           const SizedBox(width: 6),
           Container(
             width: 7,
             height: 7,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: t.accent,
+              color: theme.colorScheme.primary,
               boxShadow: [
                 BoxShadow(
-                  color: t.accent.withValues(alpha: 0.5),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
                   blurRadius: 4,
                   spreadRadius: 1,
                 ),
@@ -553,165 +847,168 @@ class _SbChatTileState extends State<SbChatTile> {
             ),
           ),
         ],
-        if (widget.createdAt != null) ...[
-          const SizedBox(width: 8),
-          Text(
-            sbRelativeTime(widget.createdAt),
-            style: TextStyle(fontSize: 11.5, color: timeColor),
-          ),
-        ],
-        if (widget.trailing != null && !hoverOverlay) ...[
-          const SizedBox(width: 4),
-          widget.trailing!,
-        ],
-      ],
-    );
-
-    // Body padding's left value lines the chat title up with the left edge
-    // of the nav icons above: outer wrapper 6 + body 14 = 20, same as the
-    // hamburger / rail icon glyph left edge (left:8 + (48-24)/2 = 20).
-    final EdgeInsets pad = widget.compact
-        ? const EdgeInsets.fromLTRB(8, 4, 4, 4)
-        : const EdgeInsets.fromLTRB(14, 5, 8, 5);
-
-    // Opaque backdrop the trailing pin / options buttons paint over the title
-    // text. It must match the tile's own fill exactly, otherwise the patch
-    // behind the buttons shows as a different colour — visible only on the
-    // selected row, whose fill (accent @0.18) differed from the old 0.12.
-    final Color rowBg = widget.selected
-        ? Color.alphaBlend(t.accent.withValues(alpha: 0.18), t.bg)
-        : (_hovered
-            ? Color.alphaBlend(t.iconFg.withValues(alpha: 0.05), t.bg)
-            : t.bg);
-
-    Widget body = AnimatedContainer(
-      duration: const Duration(milliseconds: 110),
-      padding: pad,
-      decoration: BoxDecoration(
-        color: widget.selected
-            ? t.accent.withValues(alpha: 0.18)
-            : (_hovered ? t.iconFg.withValues(alpha: 0.05) : null),
-        // Always reserve the 1.5px border so selecting a row only changes its
-        // colour, never its size — a selected border of `null` on the
-        // unselected state grew the tile by 3px per axis and shifted the whole
-        // list. Transparent keeps the layout identical across states.
-        border: Border.all(
-          color: widget.selected
-              ? t.accent.withValues(alpha: 0.55)
-              : Colors.transparent,
-          width: 1.5,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Stack(
-        children: [
-          row,
-          // Hover-only action overlay: floats over the right edge of the
-          // row, painting its own background to mask whatever title text
-          // or time tag is behind it. The title's `Expanded(Text)` keeps
-          // its full width so it only clips when the title is actually
-          // too long, not because of reserved trailing space.
-          if (hoverActive)
-            Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                color: rowBg,
-                padding: const EdgeInsets.only(left: 4),
-                alignment: Alignment.center,
-                child: widget.trailing!,
+        // The hover control keeps its slot at all times and only changes
+        // opacity. Adding the widget on hover would resize the row and make
+        // the title jump under the pointer.
+        if (hoverTrailing != null)
+          AnimatedOpacity(
+            opacity: hovered ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            // A faded-out control must be gone for everyone, not just for
+            // the pointer: without these a keyboard user tabs onto an
+            // invisible button and a screen reader reads it out.
+            child: ExcludeFocus(
+              excluding: !hovered,
+              child: ExcludeSemantics(
+                excluding: !hovered,
+                child:
+                    IgnorePointer(ignoring: !hovered, child: hoverTrailing!),
               ),
             ),
-        ],
-      ),
+          ),
+        ?trailing,
+      ],
     );
-
-    body = InkWell(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      // Same radius as the tile above, or the splash bleeds past its corners.
-      borderRadius: BorderRadius.circular(12),
-      child: body,
-    );
-
-    if (widget.onSecondaryTap != null) {
-      body = GestureDetector(
-        onSecondaryTapDown: (details) =>
-            widget.onSecondaryTap!(details.globalPosition),
-        child: body,
-      );
-    }
-
-    body = MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: body,
-    );
-
-    if (!widget.compact && !widget.noOuterPad) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: body,
-      );
-    }
-
-    return RepaintBoundary(child: body);
   }
 }
 
-/// Sliver delegate that renders an SbSectionLabel as a pinned header. The
-/// header stays glued to the top of the viewport until the next pinned
-/// header pushes it out — a classic "current section" indicator while
-/// scrolling through Today / This week / Older buckets.
-class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate {
+/// A time group: the header label and the chats that fall into it.
+class SbChatGroup<T> {
+  const SbChatGroup(this.label, this.items);
   final String label;
-  final Color background;
-  final Color? color;
-  final double height;
-  const SbStickyLabelDelegate({
+  final List<T> items;
+}
+
+/// Buckets chats into Today / This week / This month / one group per older
+/// month. Pure and generic, so the grouping can be tested without a theme, a
+/// store or a `StoredChat`.
+///
+/// [monthLabel] renders the header of an older bucket; callers hand in
+/// `MaterialLocalizations.formatMonthYear` so the month name follows the
+/// user's locale.
+List<SbChatGroup<T>> sbGroupByTime<T>(
+  List<T> items,
+  DateTime Function(T item) dateOf, {
+  required String Function(DateTime date) monthLabel,
+  String todayLabel = 'Today',
+  String weekLabel = 'This week',
+  String thisMonthLabel = 'This month',
+  DateTime? now,
+}) {
+  final DateTime reference = now ?? DateTime.now();
+  final DateTime startOfToday =
+      DateTime(reference.year, reference.month, reference.day);
+  final DateTime startOfWeek = startOfToday.subtract(const Duration(days: 6));
+  final DateTime startOfMonth = DateTime(reference.year, reference.month);
+
+  final List<T> today = <T>[];
+  final List<T> week = <T>[];
+  final List<T> month = <T>[];
+  // Insertion-ordered, and the source list is already newest first, so the
+  // older months come out newest first as well.
+  final Map<String, List<T>> older = <String, List<T>>{};
+
+  for (final T item in items) {
+    final DateTime date = dateOf(item);
+    if (!date.isBefore(startOfToday)) {
+      today.add(item);
+    } else if (!date.isBefore(startOfWeek)) {
+      week.add(item);
+    } else if (!date.isBefore(startOfMonth)) {
+      month.add(item);
+    } else {
+      older.putIfAbsent(monthLabel(date), () => <T>[]).add(item);
+    }
+  }
+
+  return <SbChatGroup<T>>[
+    if (today.isNotEmpty) SbChatGroup<T>(todayLabel, today),
+    if (week.isNotEmpty) SbChatGroup<T>(weekLabel, week),
+    if (month.isNotEmpty) SbChatGroup<T>(thisMonthLabel, month),
+    for (final entry in older.entries) SbChatGroup<T>(entry.key, entry.value),
+  ];
+}
+
+/// The muted line under a chat title: the time for anything from today, the
+/// date for everything else. Formatted through [MaterialLocalizations], so it
+/// follows the user's locale and 12/24-hour setting.
+String sbChatDateLine(BuildContext context, DateTime? date) {
+  if (date == null) return '';
+  final MaterialLocalizations localizations = MaterialLocalizations.of(context);
+  final DateTime now = DateTime.now();
+  final bool isToday =
+      date.year == now.year && date.month == now.month && date.day == now.day;
+  if (isToday) {
+    return localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(date),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+  }
+  return localizations.formatMediumDate(date);
+}
+
+/// The strip that says the list is stale because the device is offline, with
+/// a retry.
+class SbOfflineNotice extends StatelessWidget {
+  const SbOfflineNotice({
+    super.key,
     required this.label,
-    required this.background,
-    this.color,
-    this.height = 32,
+    required this.onRetry,
+    this.retryTooltip,
   });
 
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: background,
-      child: SbSectionLabel(
-        label: label,
-        color: color,
-        padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
-      ),
-    );
-  }
+  final String label;
+  final VoidCallback onRetry;
 
-  @override
-  double get maxExtent => height;
-  @override
-  double get minExtent => height;
+  /// Null takes the localized default.
+  final String? retryTooltip;
 
-  @override
-  bool shouldRebuild(covariant SbStickyLabelDelegate oldDelegate) {
-    return oldDelegate.label != label ||
-        oldDelegate.background != background ||
-        oldDelegate.color != color ||
-        oldDelegate.height != height;
-  }
-}
-
-/// Hairline divider matching app palette.
-class SbHairline extends StatelessWidget {
-  final EdgeInsets margin;
-  const SbHairline({super.key, this.margin = EdgeInsets.zero});
   @override
   Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
+    final theme = Theme.of(context);
     return Padding(
-      padding: margin,
-      child: Container(height: 1, color: t.hairline),
+      padding: const EdgeInsets.fromLTRB(kSbBlockInset, 6, kSbBlockInset, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: theme.m3.warningContainer,
+          borderRadius: BorderRadius.circular(kSbCardRadius),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 16,
+              color: theme.m3.onWarningContainer,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.m3.onWarningContainer,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.refresh_rounded,
+                size: 18,
+                color: theme.m3.onWarningContainer,
+              ),
+              // This retries the connection, not an app update: the banner
+              // is about being offline.
+              tooltip: retryTooltip ??
+                  AppLocalizations.of(context)?.retryConnection ??
+                  'Try again',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+              onPressed: onRetry,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

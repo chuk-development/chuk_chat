@@ -1,4 +1,6 @@
 // lib/pages/workspace_management_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -248,7 +250,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
             child: OutlinedButton.icon(
               onPressed: isUploadingFile
                   ? null
-                  : pickAndUploadWorkspaceFile,
+                  : uploadFileToWorkspace,
               icon: const Icon(Icons.upload_file),
               label: const Text('Upload File'),
               style: OutlinedButton.styleFrom(

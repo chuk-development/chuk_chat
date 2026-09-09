@@ -1,109 +1,244 @@
-# Fastlane configuration for chuk_chat Android
-# Handles building, signing, and uploading to Google Play Store
+# Fastlane for chuk_chat Android.
+#
+# Fastlane does not compile anything itself — it drives `flutter build`, which
+# drives Gradle. Every lane below runs wherever it is invoked: this laptop, the
+# GitHub runner, or a build box. Nothing here needs a server of its own.
+#
+#   bundle exec fastlane lanes            # what is available
+#   bundle exec fastlane screenshots      # regenerate store screenshots
+#   bundle exec fastlane build_aab        # Play Store bundle
+#   bundle exec fastlane validate         # dry-run the Play upload
+#   bundle exec fastlane deploy track:internal
+
+require "fileutils"
+require "shellwords"
+
+require_relative "../../fastlane/env_guard"
 
 default_platform(:android)
 
+# Repository root. The Fastfile lives at android/fastlane/, so two levels up.
+ROOT = File.expand_path("../..", __dir__)
+
+# The listing tree. It sits at the repository root, not under android/, because
+# F-Droid reads `fastlane/metadata/android/<locale>/` straight out of the git
+# repository. `supply` is pointed at the same tree, so one set of text and
+# screenshots serves both stores.
+METADATA_PATH = File.join(ROOT, "fastlane", "metadata", "android")
+
+# --- helpers ---------------------------------------------------------------
+
+# `version: 1.0.109` in pubspec.yaml, without any `+build` suffix.
+def pubspec_version
+  raw = File.read(File.join(ROOT, "pubspec.yaml"))[/^version:\s*(.+)$/, 1]
+  UI.user_error!("No `version:` in pubspec.yaml") if raw.nil?
+  raw.strip.split("+").first
+end
+
+# Play rejects an upload whose version code it has already seen, and the app
+# does not carry a `+build` suffix, so Flutter would hand Gradle a constant 1.
+# Derive a strictly increasing code from the semantic version instead:
+# 1.0.109 -> 100_109.
+#
+# The headroom is smaller than it looks. `flutter build apk --split-per-abi`
+# multiplies the build number by 1000 and adds a per-ABI offset, and Android
+# caps versionCode at 2_100_000_000 — so the number below has to stay under
+# 2_100_000. Keep this identical to build.sh and build-cross-platform.yml, or
+# an APK from one path cannot upgrade an APK from the other.
+def play_version_code
+  major, minor, patch = pubspec_version.split(".").map(&:to_i)
+  if major > 20 || minor > 99 || patch > 999
+    UI.user_error!(
+      "Version #{pubspec_version} overflows the version-code scheme " \
+      "(major <= 20, minor <= 99, patch <= 999)"
+    )
+  end
+  (major * 100_000) + (minor * 1_000) + patch
+end
+
+def env_file
+  EnvGuard.env_file!
+end
+
+# The flags every mobile build shares. `store:` flips the one setting the Play
+# Store cares about: in-app payments must go through Google Play Billing, so
+# the direct Stripe flow is compiled out of anything uploaded there.
+def dart_defines(store:)
+  [
+    "--dart-define-from-file=#{env_file.shellescape}",
+    "--dart-define=PLATFORM_MOBILE=true",
+    "--dart-define=FEATURE_PAYMENTS_DIRECT=#{store ? 'false' : 'true'}",
+    "--dart-define=FEATURE_VOICE_MODE=false",
+    "--dart-define=FEATURE_SERVER_TOOLS=false",
+  ].join(" ")
+end
+
+def flutter(args)
+  sh("cd #{ROOT.shellescape} && flutter #{args}")
+end
+
 platform :android do
-  desc "Build and sign release APK"
-  lane :build_apk do
-    # Ensure environment variables are set
-    supabase_url = ENV['SUPABASE_URL']
-    supabase_key = ENV['SUPABASE_ANON_KEY']
+  # --- build ---------------------------------------------------------------
 
-    raise "SUPABASE_URL not set" unless supabase_url
-    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+  desc "Build the release APK for direct distribution (Stripe payments on)"
+  lane :build_apk do |options|
+    allowed = %w[android-arm android-arm64 android-x64]
+    arch = options[:arch] || "android-arm64"
+    unless allowed.include?(arch)
+      UI.user_error!("Unknown arch #{arch.inspect}. One of: #{allowed.join(', ')}")
+    end
 
-    # Build release APK with Flutter
-    sh("cd ../.. && flutter build apk --release " \
-       "--dart-define=SUPABASE_URL=#{supabase_url} " \
-       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
-       "--dart-define=PLATFORM_MOBILE=true " \
-       "--dart-define=FEATURE_PROJECTS=true " \
-       "--dart-define=FEATURE_IMAGE_GEN=true " \
-       "--dart-define=FEATURE_VOICE_MODE=true " \
-       "--tree-shake-icons " \
-       "--target-platform android-arm64")
+    flutter(
+      "build apk --release #{dart_defines(store: false)} " \
+      "--build-number=#{play_version_code} " \
+      "--tree-shake-icons --target-platform #{arch}"
+    )
+
+    UI.success("APK: build/app/outputs/flutter-apk/app-release.apk")
   end
 
-  desc "Build and sign release AAB (Android App Bundle)"
+  desc "Build the release AAB for the Play Store (direct payments compiled out)"
   lane :build_aab do
-    # Ensure environment variables are set
-    supabase_url = ENV['SUPABASE_URL']
-    supabase_key = ENV['SUPABASE_ANON_KEY']
+    flutter(
+      "build appbundle --release #{dart_defines(store: true)} " \
+      "--build-number=#{play_version_code} --tree-shake-icons"
+    )
 
-    raise "SUPABASE_URL not set" unless supabase_url
-    raise "SUPABASE_ANON_KEY not set" unless supabase_key
-
-    # Build release AAB with Flutter
-    sh("cd ../.. && flutter build appbundle --release " \
-       "--dart-define=SUPABASE_URL=#{supabase_url} " \
-       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
-       "--dart-define=PLATFORM_MOBILE=true " \
-       "--dart-define=FEATURE_PROJECTS=true " \
-       "--dart-define=FEATURE_IMAGE_GEN=true " \
-       "--dart-define=FEATURE_VOICE_MODE=true " \
-       "--tree-shake-icons")
+    UI.success("AAB: build/app/outputs/bundle/release/app-release.aab")
+    UI.message("Version #{pubspec_version}, version code #{play_version_code}")
   end
 
-  desc "Upload AAB to Google Play Store (internal track)"
-  lane :deploy_internal do
+  # --- store assets --------------------------------------------------------
+
+  desc "Regenerate the store screenshots from the app's own widgets"
+  lane :screenshots do |options|
+    env = {}
+    env["SCREENSHOT_LOCALES"] = options[:locales] if options[:locales]
+    env["SCREENSHOT_DEVICES"] = options[:devices] if options[:devices]
+
+    prefix = env.map { |k, v| "#{k}=#{v.shellescape}" }.join(" ")
+    flutter_cmd = "test test_screenshots"
+    sh("cd #{ROOT.shellescape} && #{prefix} flutter #{flutter_cmd}".strip)
+
+    count = Dir.glob(File.join(METADATA_PATH, "*/images/**/*.png")).length
+    UI.success("#{count} images under fastlane/metadata/android/")
+  end
+
+  desc "Wrap the raw screenshots in device frames (needs ImageMagick)"
+  lane :frame_screenshots do
+    unless system("which convert > /dev/null 2>&1") ||
+           system("which magick > /dev/null 2>&1")
+      UI.user_error!("frameit needs ImageMagick: sudo apt install imagemagick")
+    end
+
+    frameit(path: METADATA_PATH)
+  end
+
+  desc "Write the Play changelog for this version from the git log"
+  lane :changelog do |options|
+    from = options[:from] || last_release_tag
+    to = options[:to] || "HEAD"
+
+    body = sh(
+      "cd #{ROOT.shellescape} && git log --no-merges --pretty=format:'- %s' " \
+      "#{from.shellescape}..#{to.shellescape}",
+      log: false
+    ).strip
+
+    UI.user_error!("No commits in #{from}..#{to}") if body.empty?
+
+    # Play truncates a release note at 500 characters, and the "\n..." marker
+    # costs four of them. Cut on a line break so the last entry is a whole
+    # commit subject, not half of one.
+    if body.length > 500
+      kept = body[0, 496]
+      kept = kept[0, kept.rindex("\n")] if kept.include?("\n")
+      body = "#{kept}\n..."
+    end
+
+    Dir.glob(File.join(METADATA_PATH, "*")).each do |locale_dir|
+      next unless File.directory?(locale_dir)
+
+      target = File.join(locale_dir, "changelogs", "#{play_version_code}.txt")
+      FileUtils.mkdir_p(File.dirname(target))
+      File.write(target, "#{body}\n")
+      UI.message("Wrote #{target.sub("#{ROOT}/", '')}")
+    end
+  end
+
+  # --- upload --------------------------------------------------------------
+
+  desc "Dry-run the Play upload: builds the AAB, validates, changes nothing"
+  lane :validate do
     build_aab
 
     upload_to_play_store(
-      track: 'internal',
-      aab: '../build/app/outputs/bundle/release/app-release.aab',
-      skip_upload_screenshots: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true
+      track: "internal",
+      aab: aab_path,
+      metadata_path: METADATA_PATH,
+      validate_only: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
     )
+
+    UI.success("Play accepted the bundle and the listing. Nothing published.")
   end
 
-  desc "Upload AAB to Google Play Store (beta track)"
-  lane :deploy_beta do
-    build_aab
-
+  desc "Upload only the listing text, images and screenshots — no binary"
+  lane :upload_metadata do
     upload_to_play_store(
-      track: 'beta',
-      aab: '../build/app/outputs/bundle/release/app-release.aab',
-      skip_upload_screenshots: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true
+      metadata_path: METADATA_PATH,
+      # Without a binary in this upload, supply has no version to hang the
+      # changelog on, so name the one the last build produced.
+      version_code: play_version_code,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_changelogs: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
     )
   end
 
-  desc "Upload AAB to Google Play Store (production)"
-  lane :deploy_production do
+  desc "Build and upload to a Play track (internal, alpha, beta, production)"
+  lane :deploy do |options|
+    track = options[:track] || "internal"
+
     build_aab
 
-    upload_to_play_store(
-      track: 'production',
-      aab: '../build/app/outputs/bundle/release/app-release.aab',
-      skip_upload_screenshots: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true
-    )
-  end
-
-  desc "Full release: Build APK and AAB, upload to Play Store"
-  lane :release do |options|
-    track = options[:track] || 'internal'
-
-    # Build both APK (for GitHub release) and AAB (for Play Store)
-    build_apk
-    build_aab
-
-    # Upload to Play Store
     upload_to_play_store(
       track: track,
-      aab: '../build/app/outputs/bundle/release/app-release.aab',
-      skip_upload_screenshots: true,
-      skip_upload_images: true,
-      skip_upload_metadata: true
+      aab: aab_path,
+      metadata_path: METADATA_PATH,
+      release_status: track == "production" ? "completed" : "draft",
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
     )
 
-    UI.success("✅ Android release complete!")
-    UI.message("📦 APK: build/app/outputs/flutter-apk/app-release.apk")
-    UI.message("📦 AAB: build/app/outputs/bundle/release/app-release.aab")
-    UI.message("🚀 Uploaded to Play Store (#{track} track)")
+    UI.success("Uploaded #{pubspec_version} (#{play_version_code}) to #{track}")
+  end
+
+  desc "Everything for a store release: screenshots, changelog, AAB, upload. " \
+       "Also builds the direct-download APK, so two Flutter builds run."
+  lane :release do |options|
+    track = options[:track] || "internal"
+
+    screenshots
+    changelog
+    build_apk
+    deploy(track: track)
+  end
+
+  # --- private -------------------------------------------------------------
+
+  private_lane :aab_path do
+    File.join(ROOT, "build/app/outputs/bundle/release/app-release.aab")
+  end
+
+  # The newest `vX.Y.Z` tag, i.e. where the last release notes stopped.
+  private_lane :last_release_tag do
+    sh(
+      "cd #{ROOT.shellescape} && git describe --tags --abbrev=0 --match 'v*'",
+      log: false
+    ).strip
   end
 end
