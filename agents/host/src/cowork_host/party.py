@@ -1,8 +1,9 @@
 """The host party — the pairing initiator and the app's counterpart.
 
-This is the host's own end of the local relay. It connects to the blind relay as
-the ``executor`` role, drives the §15 pairing ceremony as the **initiator**, and
-then serves tasks:
+This is the host's own end of the pipe. It opens a
+:class:`~cowork_host.transport.PartyTransport` (the blind loopback relay for
+same-machine development, the cloud relay in production), drives the §15 pairing
+ceremony as the **initiator**, and then serves tasks:
 
 1. **pair** — publish the commitment, reveal ``A`` after the joiner's ``B``,
    confirm keys, exchange device keys. On success it holds the channel key and
@@ -11,6 +12,12 @@ then serves tasks:
    build the model factory from the token, and start the :class:`TaskServer`.
 3. **serve** — forward every later sealed frame to the Executor and stream its
    sealed results back to the app.
+
+Nothing below knows which pipe it is on. The transport owns the connection and
+whatever hello it needs (``join`` on the loopback relay, the ``auth`` handshake
+plus ``cowork_relay`` wrapping on the cloud one) and hands this class plain
+party-protocol dicts in both directions. That is what made the cloud transport a
+new file rather than a rewrite of this one.
 
 Only the token frame is opened here (at ``seq`` 0); the shared
 :class:`~cowork_crypto.CoworkFrameOpener` is then handed to the Executor, which
@@ -36,11 +43,7 @@ from cowork_crypto import (
     ReconnectError,
     ReconnectHandshake,
 )
-from websockets.exceptions import ConnectionClosed
-from websockets.sync.client import connect as ws_connect
-
 from .protocol import (
-    ROLE_EXECUTOR,
     STEP_COMMIT,
     STEP_CONFIRM_C,
     STEP_DEVICE_C,
@@ -50,10 +53,10 @@ from .protocol import (
     TYPE_FRAME,
     TYPE_PAIRING,
     frame_envelope,
-    join_message,
     pairing_envelope,
 )
 from .serve import TaskServer
+from .transport import PartyLink, PartyTransport
 
 # Builds a TaskServer once the token is provisioned. Given the shared opener,
 # sealer, and the decoded token dict, it wires and returns a ready TaskServer.
@@ -98,7 +101,7 @@ class HostParty:
     def __init__(
         self,
         *,
-        url: str,
+        transport: PartyTransport,
         channel_id: str,
         pairing_factory: PairingFactory,
         device_id: str,
@@ -106,13 +109,18 @@ class HostParty:
         key_version: int,
         build_task_server: TaskServerBuilder,
         logger: Callable[[str], None] | None = None,
-        open_timeout: float = 10.0,
         controller_token: ControllerToken | None = None,
+        # A pipe that can vanish (the cloud one) redials with capped backoff; the
+        # loopback relay lives in this process, so it does not.
+        reconnect: bool = False,
+        backoff_seconds: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0),
         reconnect_factory: ReconnectFactory | None = None,
         on_pair_established: PairEstablished | None = None,
         on_reprovision: Callable[[dict], None] | None = None,
     ) -> None:
-        self._url = url
+        self._transport = transport
+        self._reconnect_pipe = reconnect
+        self._backoff = backoff_seconds or (5.0,)
         # docs/WIRE_CONTRACT.md: called with the token of a later account frame
         # so the host refreshes its session in place (the task server outlives
         # the socket, so it is never rebuilt for a new token).
@@ -129,11 +137,10 @@ class HostParty:
         self._key_version = key_version
         self._build_task_server = build_task_server
         self._log = logger or (lambda _msg: None)
-        self._open_timeout = open_timeout
         self._controller_token = controller_token
 
-        self._ws: Any | None = None
-        self._ws_lock = threading.Lock()
+        self._link: PartyLink | None = None
+        self._link_lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
@@ -181,12 +188,10 @@ class HostParty:
             self._task_server = None
         if task_server is not None:
             task_server.stop()
-        with self._ws_lock:
-            if self._ws is not None:
-                try:
-                    self._ws.close()
-                except Exception:
-                    pass
+        with self._link_lock:
+            link = self._link
+        if link is not None:
+            link.close()
         if self._thread is not None:
             self._thread.join(timeout=3.0)
             self._thread = None
@@ -308,27 +313,55 @@ class HostParty:
     # -- run loop --------------------------------------------------------
 
     def _run(self) -> None:
+        """Hold the pipe open for this host's lifetime.
+
+        One attempt for a pipe that cannot come back (the in-process loopback
+        relay); an endless redial with capped backoff for one that can (the cloud
+        relay: a dropped connection, a rotated token, a restarted API replica).
+        The session state is reset on every drop, so the next controller pairs or
+        reconnects cleanly — runs keep going regardless, they belong to the
+        process and not to the socket."""
+        attempt = 0
+        while not self._stop.is_set():
+            connected = self._run_once()
+            if not self._reconnect_pipe or self._stop.is_set():
+                return
+            attempt = 0 if connected else attempt + 1
+            delay = self._backoff[min(attempt, len(self._backoff) - 1)]
+            self._log(f"pipe down; redialling in {delay:g}s")
+            if self._stop.wait(delay):
+                return
+
+    def _run_once(self) -> bool:
+        """One connect + pump. Returns True when the pipe was actually open, so
+        the caller can tell a dropped connection from one that never came up."""
+        connected = False
         try:
-            with ws_connect(self._url, open_timeout=self._open_timeout) as ws:
-                with self._ws_lock:
-                    self._ws = ws
-                self._send(join_message(self._channel_id, ROLE_EXECUTOR))
-                self._on_ws_ready()
-                self._log("waiting for the app to pair...")
-                for raw in ws:
-                    if self._stop.is_set():
-                        break
-                    self._handle(raw)
-        except ConnectionClosed:
-            pass
+            link = self._transport.open()
+        except Exception as exc:  # noqa: BLE001 - a refused dial is ordinary
+            self._log(f"could not open the pipe: {type(exc).__name__}: {exc}")
+            return False
+        try:
+            with self._link_lock:
+                self._link = link
+            connected = True
+            self._on_ws_ready()
+            self._log("waiting for the app to pair...")
+            for message in link.messages():
+                if self._stop.is_set():
+                    break
+                self._handle(message)
         except Exception as exc:  # never crash the process on a party failure
             self._log(f"party stopped: {type(exc).__name__}: {exc}")
         finally:
             with self._session_lock:
                 self._ws_ready = False
                 self._started_token = None
-            with self._ws_lock:
-                self._ws = None
+                self._controller_present = False
+            with self._link_lock:
+                self._link = None
+            link.close()
+        return connected
 
     def _on_ws_ready(self) -> None:
         """The executor link is up. If a controller is already waiting on the
@@ -340,15 +373,13 @@ class HostParty:
             self.on_controller_joined(token)
 
     def _send(self, obj: dict[str, Any]) -> None:
-        with self._ws_lock:
-            if self._ws is not None:
-                self._ws.send(json.dumps(obj, separators=(",", ":")))
+        with self._link_lock:
+            link = self._link
+        if link is not None:
+            link.send(obj)
 
-    def _handle(self, raw: Any) -> None:
-        try:
-            msg = json.loads(raw)
-        except (ValueError, TypeError):
-            return
+    def _handle(self, msg: dict[str, Any]) -> None:
+        """One inbound party message, already decoded by the pipe."""
         if not isinstance(msg, dict):
             return
         kind = msg.get("type")
