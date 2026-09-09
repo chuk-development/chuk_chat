@@ -244,7 +244,7 @@ def is_paired(workspace: str) -> bool:
 
 
 def _build_host(args: argparse.Namespace) -> LocalHost:
-    return LocalHost(
+    host = LocalHost(
         port=args.port,
         workspace_dir=args.workspace,
         model_id=args.model,
@@ -263,6 +263,14 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         model_factory_override=_mock_model_factory if args.mock_model else None,
         logger=_log,
     )
+    # A pairing code that expires unused is replaced by a fresh one, and the
+    # replacement is printed the same way the first one was.
+    qr = not getattr(args, "no_qr", False)
+    qr_invert = not getattr(args, "qr_light", False)
+    host.set_pairing_reset_listener(
+        lambda: _on_pairing_reset(host, qr=qr, qr_invert=qr_invert)
+    )
+    return host
 
 
 def _print_pairing_qr(host: LocalHost, *, invert: bool = True) -> bool:
@@ -287,6 +295,18 @@ def _print_pairing_qr(host: LocalHost, *, invert: bool = True) -> bool:
         print("    " + line, flush=True)
     print("", flush=True)
     return True
+
+
+def _on_pairing_reset(host: LocalHost, *, qr: bool, qr_invert: bool) -> None:
+    """Print the code that replaced an expired one. Same banner, one line of
+    context so the user knows why the code on screen changed."""
+    print("", flush=True)
+    print(
+        "  The previous pairing code expired unused (5 minutes). Here is a "
+        "fresh one — the old code and QR are dead.",
+        flush=True,
+    )
+    _print_banner(host, qr=qr, qr_invert=qr_invert)
 
 
 def _print_banner(host: LocalHost, *, qr: bool = True, qr_invert: bool = True) -> None:

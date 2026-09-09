@@ -257,6 +257,47 @@ def test_a_host_with_neither_credential_says_so(tmp_path):
         host.stop()
 
 
+# -- an expired pairing channel ----------------------------------------------
+
+
+def test_an_expired_code_is_replaced_by_a_fresh_one(tmp_path):
+    """A user who walked away comes back to a new code, not a dead terminal."""
+    printed: list[str] = []
+    host = _cloud_host(tmp_path, channel_id="testchannel00", digits="428913")
+    host.set_pairing_reset_listener(lambda: printed.append(host.pairing_uri))
+    try:
+        first_code = host.pairing_code
+        first_channel = host.pairing_channel
+        host._on_pairing_channel_expired()
+
+        assert host.pairing_code != first_code
+        assert host.pairing_channel != first_channel
+        # Same host, same crypto channel: only the code's digits and the bearer
+        # capability are new.
+        assert host.pairing_code.startswith("testchannel00-")
+        assert printed == [host.pairing_uri]
+        # And the next dial carries the fresh channel, never the dead one.
+        transport, _, _ = host._build_transport()
+        assert transport.credential() == ("pairing_channel", host.pairing_channel)
+    finally:
+        host.stop()
+
+
+def test_a_paired_host_mints_no_code_when_a_channel_expires(tmp_path):
+    """Nothing to replace: the trust record is the way in now."""
+    host = _cloud_host(tmp_path, channel_id="testchannel00", digits="428913")
+    try:
+        host._persist_account_token(ACCOUNT_TOKEN)
+        host._trust = object()  # stands in for a stored pairing
+        host._burn_pairing_code()
+        host._on_pairing_channel_expired()
+        assert host.pairing_code is None
+        assert host.pairing_channel is None
+    finally:
+        host._trust = None
+        host.stop()
+
+
 # -- the seam itself ---------------------------------------------------------
 
 
