@@ -1,12 +1,17 @@
 # cowork-host
 
-A runnable **local host** for the whole CoWork platform on one machine — no
-production relay involved.
+A runnable **host** for the whole CoWork platform on one machine.
+
+By default it reaches the app through the **cloud relay**
+(`wss://api.chuk.chat/v2/relay/ws`): the host dials *out*, so a phone on mobile
+data can reach it and neither end has to be addressable. The old blind loopback
+relay is still here as the same-machine developer path, behind `--local-relay`.
 
 It bundles four things into one process:
 
-1. a **blind localhost relay** (a `websockets` server on `127.0.0.1:<port>`) that
-   just routes JSON messages verbatim between two parties on the same channel;
+1. a **pipe to the app** — the cloud relay by default, or a **blind localhost
+   relay** (a `websockets` server on `127.0.0.1:<port>`) with `--local-relay`,
+   which routes JSON messages verbatim between two parties on the same channel;
 2. an **agent roster** (`cowork_manager`) with a persistent workspace per agent;
 3. the **pairing initiator** (`cowork_crypto`, §15) — it prints a short human code
    the CoWork app types in to establish an E2E channel key + mutual device trust;
@@ -19,18 +24,44 @@ The Dart app implements the *other* end of the same local relay protocol.
 
 ```bash
 cd host
-uv run cowork-host --port 8787
+uv run cowork-host            # cloud relay (the default)
+uv run cowork-host --local-relay --port 8787   # same-machine development
 ```
 
-You will see something like:
+You will see a QR code, the link it encodes, and the code to type:
 
 ```
-Open the CoWork app, Connect to  ws://127.0.0.1:8787  and enter code:  1a2b3c4d5e6f7a8b-428913
+  Scan this with the CoWork app:
+
+    <QR block>
+
+  ...or paste this link into the app:  cowork://pair?c=<pairing channel>&k=<code>&r=wss%3A%2F%2Fapi.chuk.chat
+
+  Open the CoWork app, Connect to  wss://api.chuk.chat/v2/relay/ws  and enter code:  1a2b3c4d5e6f7a8b-428913
 ```
 
-Enter that in the app to pair, then drive the agent from your phone.
+Scan it to pair, then drive the agent from your phone. The QR is the default
+mobile path; the code is the fallback when the camera is not available.
 
-## The local relay protocol
+Useful flags: `--relay-url` (a self-hosted backend — it rides in the QR, so no
+rebuild), `--no-qr`, `--qr-light` (a light-background terminal), `--pair` (forget
+the stored pairing and mint one fresh code).
+
+### How the host authenticates to the relay
+
+The relay wants a Supabase JWT, and a brand-new host has no account. So:
+
+1. **First pairing:** the host presents no token at all, only a 256-bit
+   CSPRNG pairing channel — the bearer capability in the QR. The relay parks that
+   socket on the channel, where it can reach nobody until a logged-in app claims
+   it. §15 then runs E2E over that channel, so a malicious relay still cannot
+   MITM.
+2. **Ever after:** the app provisions the account token in the first sealed frame
+   (§15 step 7). It is stored `0600` in `account.json` next to `paired.json`, and
+   every later connect is the ordinary `{"type":"auth","token":...}` handshake.
+   The unauthenticated path runs **once per host**.
+
+## The party protocol (the same on both pipes)
 
 - On connect a party sends `{"type":"join","channel":"<id>","role":"executor"|"controller"}`.
   The relay pairs the two roles on a channel and forwards everything after, blind.
@@ -40,3 +71,8 @@ Enter that in the app to pair, then drive the agent from your phone.
 
 The host is the **executor** role and the pairing **initiator**; the app is the
 **controller** role and the pairing **joiner**.
+
+On the cloud relay these exact messages ride inside one `cowork_relay` frame
+each — `{"req_id":"<hex>","type":"cowork_relay","payload":"<the JSON above>"}` —
+and the relay never reads the payload. Nothing about the ceremony or the seal
+changes with the pipe; see `docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md`.

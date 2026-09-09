@@ -36,9 +36,11 @@ from typing import Any
 
 from cowork_agent import DEFAULT_MODEL_ID, MockModelClient
 
-from .host import DEFAULT_WORKSPACE, LocalHost
+from .cloud_relay import DEFAULT_RELAY_BASE_URL
+from .host import DEFAULT_WORKSPACE, TRANSPORT_CLOUD, TRANSPORT_LOCAL, LocalHost
 from .identity import HOST_DEVICE_ID
 from .pairing_store import HostPairingStore
+from .pairing_uri import qr_lines
 from .service import UNIT_NAME, SystemdUserService, user_unit_path
 
 #: How long ``connect`` waits for the app before giving up, in seconds.
@@ -81,7 +83,33 @@ def _mock_model_factory():
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     """Options shared by ``run`` and ``connect`` (both build a real host)."""
     parser.add_argument(
-        "--port", type=int, default=8787, help="relay TCP port (default 8787)"
+        "--port", type=int, default=8787, help="loopback relay TCP port (default "
+        "8787; only used with --local-relay)",
+    )
+    parser.add_argument(
+        "--local-relay",
+        action="store_true",
+        help="same-machine development: run the blind loopback relay on "
+        "127.0.0.1 instead of dialling the cloud relay. A phone can never reach "
+        "this — it is a loopback address.",
+    )
+    parser.add_argument(
+        "--relay-url",
+        default=os.environ.get("COWORK_RELAY_URL", DEFAULT_RELAY_BASE_URL),
+        help=f"cloud relay base URL (default {DEFAULT_RELAY_BASE_URL}, or "
+        "$COWORK_RELAY_URL). It rides in the pairing QR, so a self-hosted "
+        "backend needs no rebuild.",
+    )
+    parser.add_argument(
+        "--no-qr",
+        action="store_true",
+        help="print only the pairing code, no QR block",
+    )
+    parser.add_argument(
+        "--qr-light",
+        action="store_true",
+        help="render the QR for a light-background terminal (default assumes a "
+        "dark one; a scan fails on the wrong polarity)",
     )
     parser.add_argument(
         "--workspace",
@@ -227,12 +255,41 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         supabase_url=args.supabase_url,
         anon_key=args.anon_key,
         force_repair=args.pair,
+        # The cloud relay is the default: a phone on mobile data can reach a host
+        # no other way, and the host may itself sit behind carrier NAT. The
+        # loopback relay is the explicit same-machine developer opt-in.
+        transport=TRANSPORT_LOCAL if getattr(args, "local_relay", False) else TRANSPORT_CLOUD,
+        relay_base_url=getattr(args, "relay_url", DEFAULT_RELAY_BASE_URL),
         model_factory_override=_mock_model_factory if args.mock_model else None,
         logger=_log,
     )
 
 
-def _print_banner(host: LocalHost) -> None:
+def _print_pairing_qr(host: LocalHost, *, invert: bool = True) -> bool:
+    """Print the QR the phone scans. False when there is nothing to print.
+
+    The QR is the default mobile path (there is no keyboard next to a terminal),
+    but it is never the only one: the code is printed either way, so a terminal
+    that renders the blocks badly, a missing library, or a broken camera all still
+    leave a way to pair.
+    """
+    # ``getattr``: a banner must never be what stops a pairing. A host that
+    # offers no URI (an older one, a test double) still prints its code below.
+    uri = getattr(host, "pairing_uri", None)
+    if not uri:
+        return False
+    lines = qr_lines(uri, invert=invert)
+    if not lines:
+        return False
+    print("  Scan this with the CoWork app:", flush=True)
+    print("", flush=True)
+    for line in lines:
+        print("    " + line, flush=True)
+    print("", flush=True)
+    return True
+
+
+def _print_banner(host: LocalHost, *, qr: bool = True, qr_invert: bool = True) -> None:
     print("", flush=True)
     print("  CoWork host is ready.", flush=True)
     print(f"    Relay:     {host.url}", flush=True)
@@ -261,6 +318,15 @@ def _print_banner(host: LocalHost) -> None:
             flush=True,
         )
     else:
+        if qr:
+            _print_pairing_qr(host, invert=qr_invert)
+        # The paste-able line, for a terminal with no camera pointed at it. The
+        # QR and this link carry the same string; the code alone carries only the
+        # §15 half of it.
+        uri = getattr(host, "pairing_uri", None)
+        if uri:
+            print(f"  ...or paste this link into the app:  {uri}", flush=True)
+            print("", flush=True)
         print(
             f"  Open the CoWork app, Connect to  {host.url}  and enter code:  "
             f"{code}",
@@ -290,7 +356,11 @@ def cmd_run(
     if args.mock_model:
         _log("MOCK MODEL mode: no account, canned agent — transport test only.")
     host.start()
-    _print_banner(host)
+    _print_banner(
+        host,
+        qr=not getattr(args, "no_qr", False),
+        qr_invert=not getattr(args, "qr_light", False),
+    )
 
     stop = threading.Event()
     try:
@@ -351,7 +421,11 @@ def cmd_connect(
     paired = False
     try:
         host.start()
-        _print_banner(host)
+        _print_banner(
+            host,
+            qr=not getattr(args, "no_qr", False),
+            qr_invert=not getattr(args, "qr_light", False),
+        )
         deadline = monotonic() + max(args.timeout, 0.0)
         while monotonic() < deadline:
             if host.has_stored_pairing:

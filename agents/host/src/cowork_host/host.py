@@ -50,11 +50,20 @@ from cowork_executor import (
     resolve_backend_model_wiring,
 )
 
+from .account_store import AccountStore
+from .cloud_relay import (
+    DEFAULT_RELAY_BASE_URL,
+    CloudRelayTransport,
+    new_pairing_channel,
+    relay_ws_url,
+)
 from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
 from .pairing_store import HostPairingStore, HostTrust
+from .pairing_uri import pairing_uri
 from .party import HostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
+from .transport import LocalRelayTransport
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
 from .secrets_key import secrets_at_rest_key
@@ -70,6 +79,14 @@ RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("COWORK_RUN_ACK_TIMEOUT_SECONDS",
 
 DEFAULT_WORKSPACE = "~/.cowork"
 KEY_VERSION = 1
+
+#: The two pipes the party can run on (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
+#: ``cloud`` is the product default — a phone on mobile data can only ever reach
+#: the host through the relay. ``local`` is the same-machine developer path and
+#: stays the default of *this class* so the in-process test suite never dials out;
+#: the CLI passes ``cloud`` unless ``--local-relay`` is given.
+TRANSPORT_LOCAL = "local"
+TRANSPORT_CLOUD = "cloud"
 DEFAULT_SYSTEM_PROMPT = "You are a CoWork coworker running on the user's own machine."
 
 
@@ -109,11 +126,19 @@ class LocalHost:
         # Deliberate re-pair: drop any stored trust at startup and mint a fresh,
         # single-use code (``cowork-host --pair``).
         force_repair: bool = False,
+        # Which pipe the party runs on. See TRANSPORT_* above for why this class
+        # defaults to the loopback relay while the CLI defaults to the cloud.
+        transport: str = TRANSPORT_LOCAL,
+        relay_base_url: str = DEFAULT_RELAY_BASE_URL,
         # Test seam: skip the real Supabase/backend and use this factory.
         model_factory_override: ModelFactory | None = None,
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self._log = logger or (lambda _msg: None)
+        self._transport_kind = (
+            TRANSPORT_CLOUD if transport == TRANSPORT_CLOUD else TRANSPORT_LOCAL
+        )
+        self._relay_base_url = relay_base_url or DEFAULT_RELAY_BASE_URL
         self._host_addr = host_addr
         self._model_id = model_id
         self._provider_slug = provider_slug
@@ -201,8 +226,18 @@ class LocalHost:
         # channel, the channel key and the app's approved device key, so every
         # later connection reconnects with no code.
         self._store = HostPairingStore(self._workspace / "paired.json")
+        # The relay identity and the account token (§15 step 7), 0600 next to the
+        # trust. The device id is minted here so the host has one before anything
+        # is provisioned; the token is what every later relay handshake carries.
+        self._account = AccountStore(self._workspace / "account.json")
+        self._relay_device_id = self._account.device_id()
         if force_repair:
             self._store.clear()
+            # A deliberate re-pair may hand this host to a different account, and
+            # the relay only ever routes within one account. Keeping the old token
+            # would park the host where the new app cannot reach it, so the
+            # unauthenticated pairing path is opened again — once, as always.
+            self._account.clear_token()
             self._trust: HostTrust | None = None
         else:
             self._trust = self._store.load()
@@ -243,6 +278,14 @@ class LocalHost:
         # else: a trust record exists, so NO code is generated at all. There is
         # nothing to print, nothing to type, and nothing an attacker can replay —
         # the only way in is the signed reconnect handshake.
+
+        # The pairing channel: the relay routing id the unauthenticated bootstrap
+        # socket is parked on, 256 CSPRNG bits, minted per host process while this
+        # host still has a code to offer. It is a bearer capability — it rides in
+        # the QR and is NEVER logged.
+        self._pairing_channel: str | None = (
+            new_pairing_channel() if self._pairing_code is not None else None
+        )
 
         self._relay = LocalRelay(
             host_addr, port, logger=self._log, on_peer_event=self._on_peer_event
@@ -286,6 +329,9 @@ class LocalHost:
             burned = self._pairing_code is not None
             self._pairing_code = None
             self._digits = None
+            # The pairing channel dies with the code: it was only ever the
+            # bootstrap capability for THIS pairing.
+            self._pairing_channel = None
         return burned
 
     def _reconnect_factory(
@@ -347,6 +393,9 @@ class LocalHost:
         Returns True if a stored record was removed."""
         removed = self._store.clear()
         self._trust = None
+        # The account token goes with the trust: a new device may be a new
+        # account, and a stale token would park this host on the wrong one.
+        self._account.clear_token()
         probe = Pairing.initiator(
             device_id=self._device_id,
             device_identity=self._identity,
@@ -356,6 +405,7 @@ class LocalHost:
         with self._code_lock:
             self._pairing_code = probe.pairing_code
             self._digits = probe.pairing_code.rpartition("-")[2]
+            self._pairing_channel = new_pairing_channel()
         return removed
 
     def _on_peer_event(self, channel: str, role: str, event: str, token: int) -> None:
@@ -453,10 +503,9 @@ class LocalHost:
             self._automations.start()
         except Exception as exc:  # noqa: BLE001 — automations must not block startup
             self._log(f"could not start automations: {type(exc).__name__}: {exc}")
-        self._relay.start()
-        self._port = self._relay.port
+        transport, controller_token, reconnect_pipe = self._build_transport()
         self._party = HostParty(
-            url=self.url,
+            transport=transport,
             channel_id=self._channel_id,
             pairing_factory=self._pairing_factory,
             device_id=self._device_id,
@@ -464,14 +513,54 @@ class LocalHost:
             key_version=KEY_VERSION,
             build_task_server=self._build_task_server,
             logger=self._log,
-            controller_token=lambda: self._relay.current_peer_token(
-                self._channel_id, ROLE_CONTROLLER
-            ),
+            controller_token=controller_token,
+            reconnect=reconnect_pipe,
             reconnect_factory=self._reconnect_factory,
             on_pair_established=self._persist_pairing,
             on_reprovision=self._on_reprovision,
         )
         self._party.start()
+
+    def _build_transport(self):
+        """Open the pipe this host runs on and return it with its controller-token
+        source and its redial policy.
+
+        Cloud: nothing is bound locally at all — the host *dials out*, which is
+        the only shape that works when both ends sit behind carrier NAT. Local:
+        the blind loopback relay comes up first and reports peers itself.
+        """
+        if self._transport_kind == TRANSPORT_CLOUD:
+            transport = CloudRelayTransport(
+                device_id=self._relay_device_id,
+                channel_id=self._channel_id,
+                base_url=self._relay_base_url,
+                token_provider=self._relay_access_token,
+                pairing_channel_provider=self._current_pairing_channel,
+                on_controller_event=self._on_cloud_controller_event,
+                logger=self._log,
+            )
+            # The cloud relay reports no peer list to an executor, so there is no
+            # controller to adopt at connect time; presence comes from traffic.
+            return transport, None, True
+        self._relay.start()
+        self._port = self._relay.port
+        transport = LocalRelayTransport(url=self.url, channel_id=self._channel_id)
+        return (
+            transport,
+            lambda: self._relay.current_peer_token(self._channel_id, ROLE_CONTROLLER),
+            False,
+        )
+
+    def _on_cloud_controller_event(self, event: str, token: int) -> None:
+        """The cloud pipe derived a controller join / leave from its traffic. Same
+        two calls the loopback relay's peer events make, same party code."""
+        party = self._party
+        if party is None:
+            return
+        if event == EVENT_JOIN:
+            party.on_controller_joined(token)
+        elif event == EVENT_LEAVE:
+            party.on_controller_left(token)
 
     def stop(self) -> None:
         automations = getattr(self, "_automations", None)
@@ -528,11 +617,56 @@ class LocalHost:
 
     @property
     def url(self) -> str:
+        """Where the app reaches this host: the relay endpoint on the cloud pipe,
+        the loopback relay on the developer one."""
+        if self._transport_kind == TRANSPORT_CLOUD:
+            return relay_ws_url(self._relay_base_url)
         return f"ws://{self._host_addr}:{self._port}"
+
+    @property
+    def transport_kind(self) -> str:
+        """``"cloud"`` or ``"local"`` — which pipe the party runs on."""
+        return self._transport_kind
+
+    @property
+    def relay_base_url(self) -> str:
+        return self._relay_base_url
+
+    @property
+    def relay_device_id(self) -> str:
+        """The uuid4 the relay routes on. Not the crypto device id."""
+        return self._relay_device_id
 
     @property
     def channel_id(self) -> str:
         return self._channel_id
+
+    @property
+    def pairing_channel(self) -> str | None:
+        """The bootstrap channel this host's unauthenticated socket is parked on,
+        or ``None`` once the code is used (or when a stored pairing means none was
+        ever minted). Key material: print it, never log it."""
+        with self._code_lock:
+            return self._pairing_channel
+
+    def _current_pairing_channel(self) -> str | None:
+        return self.pairing_channel
+
+    @property
+    def pairing_uri(self) -> str | None:
+        """The one line a QR encodes, or ``None`` when there is nothing to pair.
+
+        ``cowork://pair?c=<pairing channel>&k=<code>&r=<relay base url>`` — the
+        scan path and the type-it-in path carry the same payload.
+        """
+        with self._code_lock:
+            code = self._pairing_code
+            channel = self._pairing_channel
+        if not code or not channel:
+            return None
+        return pairing_uri(
+            pairing_channel=channel, code=code, relay_base_url=self._relay_base_url
+        )
 
     @property
     def pairing_code(self) -> str | None:
@@ -701,6 +835,10 @@ class LocalHost:
     ) -> TaskServer:
         # This session's sealer, for frames the host itself originates.
         self._sealer = sealer
+        # §15 step 7 landed: keep the whole set (refresh token included) so this
+        # host can still authenticate to the relay — and still refresh — after a
+        # restart with the app closed for weeks.
+        self._persist_account_token(token)
         model_factory, model_select = self._make_model_wiring(token)
         # A fresh controller connection: hand over any pair the host rotated
         # while nobody was attached (unless this provision already carried it).
@@ -801,6 +939,7 @@ class LocalHost:
         user_id = token.get("user_id")
         if isinstance(user_id, str) and user_id:
             self._user_id = user_id
+        self._persist_account_token(token)
         self._log("account session refreshed in place from a new token frame")
         # An app that adopted our rotated pair sends it back: that is the ack.
         self._note_incoming_token(token)
@@ -812,6 +951,81 @@ class LocalHost:
             notifier.flush_outbox()
 
     # -- account session: who refreshes, and how the pair stays in sync (c91) --
+
+    def _persist_account_token(self, token: dict) -> None:
+        """Write the account credential to ``account.json`` (0600).
+
+        Called on every path that changes the pair — the first provision, a later
+        ``account_authentication``, and the host's own rotation — because the
+        relay handshake needs a token that is still alive at the *next* process
+        start, not only in this one."""
+        try:
+            if self._account.save_token(token):
+                self._log("account token persisted for the next relay handshake")
+        except OSError as exc:
+            self._log(f"could not persist the account token: {exc}")
+
+    def _account_session(self) -> SupabaseSession | None:
+        """The live account session, built from the persisted token when nothing
+        has provisioned one yet.
+
+        This is what lets a host that has been running alone for months still
+        hold a valid access token: the existing :class:`SupabaseSession` owns the
+        three freshness paths (bead cowork-c91) and this only makes sure one
+        exists before any app has connected. It is replaced, not duplicated, by
+        the session the next provisioning builds.
+        """
+        if self._session is not None:
+            return self._session
+        token = self._account.token()
+        if token is None:
+            return None
+        supabase_url = token.get("supabase_url") or self._supabase_url
+        anon_key = token.get("anon_key") or self._anon_key
+        if not supabase_url or not anon_key:
+            self._log(
+                "a token is stored but no Supabase URL / anon key: cannot refresh "
+                "it (set --supabase-url / --anon-key)"
+            )
+            return None
+        session = SupabaseSession(
+            access_token=str(token.get("access_token") or ""),
+            refresh_token=str(token.get("refresh_token") or ""),
+            supabase_url=str(supabase_url),
+            anon_key=str(anon_key),
+            expires_at=(
+                float(token["expires_at"])
+                if isinstance(token.get("expires_at"), (int, float))
+                and not isinstance(token.get("expires_at"), bool)
+                else None
+            ),
+        )
+        session.may_self_refresh = lambda: not self._controller_attached()
+        session.request_reprovision = self._request_reprovision
+        session.on_self_refreshed = self._on_session_self_refreshed
+        self._session = session
+        self._user_id = str(token.get("user_id") or getattr(self, "_user_id", "") or "")
+        return session
+
+    def _relay_access_token(self) -> str | None:
+        """A CURRENT access token for the relay handshake, or ``None`` while this
+        host has never been provisioned (so it bootstraps by pairing instead).
+
+        An expired token is refreshed through the session — the same single path
+        every other caller uses, so the app stays the token source while it is
+        attached and the host only spends the refresh token when it is alone. A
+        refresh that fails is not fatal here: the stale token is still offered,
+        the relay answers ``auth_error``, and the party redials with backoff.
+        """
+        session = self._account_session()
+        if session is None:
+            return None
+        if session.is_expired():
+            try:
+                session.refresh(reason="token_expired")
+            except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the pipe
+                self._log(f"could not refresh the account token: {type(exc).__name__}: {exc}")
+        return session.access_token or None
 
     def _send_host_payload(self, payload: dict) -> bool:
         """Seal a host-originated payload with the current session's sealer and
@@ -851,6 +1065,7 @@ class LocalHost:
         if session.expires_at is not None:
             payload["expires_at"] = session.expires_at
         self._pending_session_rotation = payload
+        self._persist_account_token(payload)
         self._log("account session refreshed by the host; reporting the rotated pair")
         self._flush_pending_session_rotation()
 
