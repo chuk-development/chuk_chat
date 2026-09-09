@@ -44,6 +44,7 @@ class SupabaseService {
     );
 
     _initialized = true;
+    initializedListenable.value = true;
   }
 
   static GoTrueClient get auth => client.auth;
@@ -51,6 +52,13 @@ class SupabaseService {
   /// Whether [initialize] has completed. Lets callers (and tests) read
   /// auth state opportunistically without risking a [StateError].
   static bool get isInitialized => _initialized;
+
+  /// Flips once [initialize] has completed. `main()` starts initialisation
+  /// without awaiting it and runs the app immediately, so a widget can be
+  /// built before the client exists; this lets it wait for the client instead
+  /// of polling for it or giving up for its whole lifetime.
+  static final ValueNotifier<bool> initializedListenable =
+      ValueNotifier<bool>(false);
 
 
   static Future<Session?> refreshSession() async {

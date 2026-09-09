@@ -596,6 +596,7 @@ const Map<String, String> stringsEn = {
   'workspaces': 'Workspaces',
   'media': 'Media',
   'search': 'Search',
+  'retryConnection': 'Try again',
   'today': 'Today',
   'thisWeek': 'This week',
   'thisMonth': 'This month',

@@ -470,6 +470,7 @@ const Map<String, String> stringsEs = {
   'workspaces': 'Espacios de trabajo',
   'media': 'Medios',
   'search': 'Buscar',
+  'retryConnection': 'Reintentar',
   'today': 'Hoy',
   'thisWeek': 'Esta semana',
   'thisMonth': 'Este mes',

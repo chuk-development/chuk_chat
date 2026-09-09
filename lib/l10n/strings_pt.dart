@@ -483,6 +483,7 @@ const Map<String, String> stringsPt = {
   'workspaces': 'Espaços de trabalho',
   'media': 'Mídia',
   'search': 'Pesquisar',
+  'retryConnection': 'Tentar novamente',
   'today': 'Hoje',
   'thisWeek': 'Esta semana',
   'thisMonth': 'Este mês',

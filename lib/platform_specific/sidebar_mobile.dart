@@ -324,6 +324,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
   // One snack shape for the whole sidebar, so an error, a rename failure and
   // a delete confirmation all look the same.
   void _showSnack(ScaffoldMessengerState messenger, String message) {
+    // Two failures in a row otherwise queue: the second message would wait out
+    // the first one's two seconds before the user ever sees it.
+    messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         content: Text(
@@ -690,23 +693,25 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   List<Widget> _buildNavCards() {
-    final l = AppLocalizations.of(context)!;
+    // Null-safe like every other lookup here: a host that builds the sidebar
+    // without the delegate should get English labels, not a crashed nav block.
+    final AppLocalizations? l = AppLocalizations.of(context);
     return <Widget>[
       if (kFeatureWorkspaces)
         SbNavCard(
           icon: Icons.folder_rounded,
-          label: l.workspaces,
+          label: l?.workspaces ?? 'Workspaces',
           onTap: widget.onWorkspacesTapped,
         ),
       if (kFeatureMediaManager)
         SbNavCard(
           icon: Icons.image_rounded,
-          label: l.media,
+          label: l?.media ?? 'Media',
           onTap: widget.onMediaTapped,
         ),
       SbNavCard(
         icon: Icons.search_rounded,
-        label: l.search,
+        label: l?.search ?? 'Search',
         onTap: _focusSearch,
       ),
     ];

@@ -487,23 +487,25 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   List<Widget> _buildNavCards() {
-    final l = AppLocalizations.of(context)!;
+    // Null-safe like every other lookup here: a host that builds the sidebar
+    // without the delegate should get English labels, not a crashed nav block.
+    final AppLocalizations? l = AppLocalizations.of(context);
     return <Widget>[
       if (kFeatureWorkspaces && widget.showWorkspacesButton)
         SbNavCard(
           icon: Icons.folder_rounded,
-          label: l.workspaces,
+          label: l?.workspaces ?? 'Workspaces',
           onTap: widget.onWorkspacesTapped,
         ),
       if (kFeatureMediaManager)
         SbNavCard(
           icon: Icons.image_rounded,
-          label: l.media,
+          label: l?.media ?? 'Media',
           onTap: widget.onMediaTapped,
         ),
       SbNavCard(
         icon: Icons.search_rounded,
-        label: l.search,
+        label: l?.search ?? 'Search',
         onTap: _focusSearch,
       ),
     ];
