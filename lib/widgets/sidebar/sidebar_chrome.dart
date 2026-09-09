@@ -502,41 +502,47 @@ class SbGroupHeader extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
+        // The chevron says open or shut to the eye only; a screen reader
+        // would otherwise hear a label, a count and an unnamed icon.
+        child: Semantics(
+          button: true,
+          expanded: !collapsed,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                if (count != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    '$count',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: fg.withValues(alpha: 0.7),
+                  if (count != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '$count',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: fg.withValues(alpha: 0.7),
+                      ),
                     ),
+                  ],
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: collapsed ? -0.25 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
                   ),
                 ],
-                const Spacer(),
-                AnimatedRotation(
-                  turns: collapsed ? -0.25 : 0,
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -991,9 +997,11 @@ class SbOfflineNotice extends StatelessWidget {
                 size: 18,
                 color: theme.m3.onWarningContainer,
               ),
+              // This retries the connection, not an app update: the banner
+              // is about being offline.
               tooltip: retryTooltip ??
-                  AppLocalizations.of(context)?.checkForUpdates ??
-                  'Check for updates',
+                  AppLocalizations.of(context)?.retryConnection ??
+                  'Try again',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 28, height: 28),
               onPressed: onRetry,

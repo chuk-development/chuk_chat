@@ -607,6 +607,7 @@ class AppLocalizations {
   String get workspaces => _get('workspaces');
   String get media => _get('media');
   String get search => _get('search');
+  String get retryConnection => _get('retryConnection');
   String get today => _get('today');
   String get thisWeek => _get('thisWeek');
   String get thisMonth => _get('thisMonth');

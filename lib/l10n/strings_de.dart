@@ -605,6 +605,7 @@ const Map<String, String> stringsDe = {
   'workspaces': 'Arbeitsbereiche',
   'media': 'Medien',
   'search': 'Suche',
+  'retryConnection': 'Erneut versuchen',
   'today': 'Heute',
   'thisWeek': 'Diese Woche',
   'thisMonth': 'Diesen Monat',
