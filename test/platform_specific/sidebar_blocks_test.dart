@@ -1,0 +1,361 @@
+// Proves the redesigned sidebar is the block stack it claims to be, on both
+// platforms: an account card, a navigation block of three cards, one header
+// plus its own block per time group, and a bottom bar with the search field
+// and the two round actions.
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
+import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+
+/// Seeds the store the sidebars read from. Returns nothing — the sidebars
+/// pull straight off `ChatStorageState`.
+void _seedChats() {
+  ChatStorageState.chatsById.clear();
+  final DateTime now = DateTime.now();
+  ChatStorageState.chatsById['a'] = StoredChat.forSidebar(
+    id: 'a',
+    createdAt: now,
+    updatedAt: now,
+    isStarred: false,
+    title: 'Alpha chat',
+  );
+  ChatStorageState.chatsById['b'] = StoredChat.forSidebar(
+    id: 'b',
+    createdAt: now.subtract(const Duration(days: 3)),
+    updatedAt: now.subtract(const Duration(days: 3)),
+    isStarred: false,
+    title: 'Beta chat',
+  );
+  ChatStorageState.chatsById['c'] = StoredChat.forSidebar(
+    id: 'c',
+    createdAt: now.subtract(const Duration(days: 400)),
+    updatedAt: now.subtract(const Duration(days: 400)),
+    isStarred: true,
+    title: 'Gamma chat',
+  );
+}
+
+Widget _host(Widget child) {
+  return MaterialApp(
+    localizationsDelegates: const [AppLocalizations.delegate],
+    home: Scaffold(body: SizedBox(width: 320, child: child)),
+  );
+}
+
+/// Gives the test a window tall enough that a whole sidebar — account card,
+/// navigation block and several groups — is on screen at once, so a missing
+/// header means a missing header and not a missing scroll.
+void _tallWindow(WidgetTester tester) {
+  tester.view.physicalSize = const Size(420, 1400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
+/// The background update check starts a 5 s timeout timer. Tearing the tree
+/// down and letting fake time run past it keeps that timer from outliving
+/// the test.
+Future<void> _settleStartupWork(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(seconds: 10));
+}
+
+void main() {
+  setUp(_seedChats);
+  tearDown(ChatStorageState.chatsById.clear);
+
+  group('SidebarDesktop', () {
+    testWidgets('navigation block holds one card per destination',
+        (tester) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: null,
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SbNavCard), findsNWidgets(3));
+      expect(find.text('Workspaces'), findsOneWidget);
+      expect(find.text('Media'), findsOneWidget);
+      expect(find.text('Search'), findsOneWidget);
+
+      await _settleStartupWork(tester);
+    });
+
+    testWidgets('every time group has a header and its own chats',
+        (tester) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: null,
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Pinned first, then the time buckets the seed data falls into.
+      expect(find.widgetWithText(SbGroupHeader, 'Pinned'), findsOneWidget);
+      expect(find.widgetWithText(SbGroupHeader, 'Today'), findsOneWidget);
+      expect(find.widgetWithText(SbGroupHeader, 'This week'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsOneWidget);
+      expect(find.text('Beta chat'), findsOneWidget);
+      expect(find.text('Gamma chat'), findsOneWidget);
+
+      // The chevron folds a group away without touching its neighbours.
+      await tester.tap(find.widgetWithText(SbGroupHeader, 'Today'));
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha chat'), findsNothing);
+      expect(find.text('Beta chat'), findsOneWidget);
+      expect(find.widgetWithText(SbGroupHeader, 'Today'), findsOneWidget);
+
+      await _settleStartupWork(tester);
+    });
+
+    testWidgets('bottom bar carries the search field and both actions',
+        (tester) async {
+      _tallWindow(tester);
+      var settings = 0;
+      var newChat = 0;
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () => settings++,
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () => newChat++,
+            selectedChatId: null,
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SbSearchField), findsOneWidget);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.tap(find.byTooltip('New chat'));
+      await tester.pump();
+      expect(settings, 1);
+      expect(newChat, 1);
+
+      // Typing filters the list without any second field appearing.
+      await tester.enterText(find.byType(TextField), 'Beta');
+      await tester.pump();
+      expect(find.text('Alpha chat'), findsNothing);
+      expect(find.text('Beta chat'), findsOneWidget);
+
+      await _settleStartupWork(tester);
+    });
+
+    testWidgets('the collapse button reports back, and hides without a host',
+        (tester) async {
+      _tallWindow(tester);
+      var collapsed = 0;
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            onCollapseTapped: () => collapsed++,
+            selectedChatId: null,
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pump();
+      expect(collapsed, 1);
+
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: null,
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byTooltip('Hide sidebar'), findsNothing);
+
+      await _settleStartupWork(tester);
+    });
+
+    testWidgets('the workspaces flag drops its card, not the block',
+        (tester) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: null,
+            isCompactMode: true,
+            showWorkspacesButton: false,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Workspaces'), findsNothing);
+      expect(find.byType(SbNavCard), findsNWidgets(2));
+
+      await _settleStartupWork(tester);
+    });
+  });
+
+  group('SidebarMobile', () {
+    testWidgets('shows the same blocks as the desktop sidebar',
+        (tester) async {
+      _tallWindow(tester);
+      var settings = 0;
+      var newChat = 0;
+      var collapsed = 0;
+      await tester.pumpWidget(
+        _host(
+          SidebarMobile(
+            onChatSelected: (_) {},
+            onSettingsTapped: () => settings++,
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () => newChat++,
+            onCollapseTapped: () => collapsed++,
+            selectedChatId: null,
+            isCompactMode: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(SbNavCard), findsNWidgets(3));
+      expect(find.byType(SbProfileCard), findsOneWidget);
+      expect(find.byType(SbSearchField), findsOneWidget);
+      expect(find.widgetWithText(SbGroupHeader, 'Pinned'), findsOneWidget);
+      expect(find.widgetWithText(SbGroupHeader, 'Today'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.tap(find.byTooltip('New chat'));
+      await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pump();
+      expect(settings, 1);
+      expect(newChat, 1);
+      expect(collapsed, 1);
+
+      await _settleStartupWork(tester);
+    });
+
+    testWidgets('a header folds its own group only', (tester) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarMobile(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: null,
+            isCompactMode: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Gamma chat'), findsOneWidget);
+      await tester.tap(find.widgetWithText(SbGroupHeader, 'Pinned'));
+      await tester.pumpAndSettle();
+      expect(find.text('Gamma chat'), findsNothing);
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      await _settleStartupWork(tester);
+    });
+  });
+
+  group('sbGroupByTime', () {
+    final DateTime now = DateTime(2026, 6, 15, 12);
+    String month(DateTime d) => '${d.month}/${d.year}';
+
+    List<String> labelsFor(List<DateTime> dates) {
+      return sbGroupByTime<DateTime>(
+        dates,
+        (d) => d,
+        monthLabel: month,
+        now: now,
+      ).map((g) => g.label).toList();
+    }
+
+    test('splits today, this week, this month and the older months', () {
+      final labels = labelsFor([
+        DateTime(2026, 6, 15, 9),
+        DateTime(2026, 6, 12),
+        DateTime(2026, 6, 2),
+        DateTime(2026, 5, 20),
+        DateTime(2026, 4, 3),
+      ]);
+      expect(labels, ['Today', 'This week', 'This month', '5/2026', '4/2026']);
+    });
+
+    test('an empty bucket produces no header', () {
+      expect(labelsFor([DateTime(2026, 6, 15, 1)]), ['Today']);
+      expect(labelsFor(const []), isEmpty);
+    });
+
+    test('two chats from the same old month share one group', () {
+      final groups = sbGroupByTime<DateTime>(
+        [DateTime(2026, 3, 20), DateTime(2026, 3, 2)],
+        (d) => d,
+        monthLabel: month,
+        now: now,
+      );
+      expect(groups, hasLength(1));
+      expect(groups.single.items, hasLength(2));
+    });
+
+    test('the week window reaches back six days, not seven', () {
+      // 9 June is six days before 15 June and still "this week"; 8 June is
+      // not, and falls through to the month bucket.
+      expect(labelsFor([DateTime(2026, 6, 9)]), ['This week']);
+      expect(labelsFor([DateTime(2026, 6, 8)]), ['This month']);
+    });
+  });
+}

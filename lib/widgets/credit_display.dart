@@ -593,6 +593,10 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   @override
   void initState() {
     super.initState();
+    // Every path below reaches `Supabase.instance.client`, which throws until
+    // the app has signed in. Without a session there is no balance to show
+    // anyway, so the badge simply stays on its placeholder.
+    if (!SupabaseService.isInitialized) return;
     _loadFromCacheThenRemote();
     _initListener();
   }
