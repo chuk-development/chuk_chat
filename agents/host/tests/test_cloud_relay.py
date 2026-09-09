@@ -18,7 +18,10 @@ import pytest
 from cowork_host.account_store import AccountStore
 from cowork_host.cloud_relay import (
     CODE_CONTROLLER_OFFLINE,
+    CODE_PAIRING_UNCLAIMED,
     DEFAULT_RELAY_BASE_URL,
+    TYPE_PAIR_BOUND,
+    TYPE_PAIR_EXPIRED,
     CloudRelayError,
     CloudRelayLink,
     CloudRelayTransport,
@@ -142,8 +145,10 @@ def test_a_stored_token_beats_the_pairing_channel():
 # -- opening the pipe --------------------------------------------------------
 
 
-def test_open_sends_the_bootstrap_handshake_then_the_executor_join():
-    ws = FakeWebSocket([{"type": "auth_ok"}])
+def test_a_parked_socket_sends_the_handshake_and_then_nothing_at_all():
+    """The relay refuses everything but a ping until an account claims the
+    channel, so the executor hello waits rather than being spent."""
+    ws = FakeWebSocket([{"type": "auth_ok", "mode": "pairing", "expires_in": 300}])
     connect = _connector(ws)
     device_id = str(uuid.uuid4())
     transport = CloudRelayTransport(
@@ -152,19 +157,93 @@ def test_open_sends_the_bootstrap_handshake_then_the_executor_join():
         pairing_channel_provider=lambda: "PAIRING-CHANNEL",
         connect=connect,
     )
-    transport.open()
+    link = transport.open()
 
     assert connect.url == "wss://api.chuk.chat/v2/relay/ws"
-    handshake, hello = ws.sent
-    assert handshake == {
-        "type": "auth",
-        "role": "executor",
-        "device_id": device_id,
-        "pairing_channel": "PAIRING-CHANNEL",
-    }
+    assert ws.sent == [
+        {
+            "type": "auth",
+            "role": "executor",
+            "device_id": device_id,
+            "pairing_channel": "PAIRING-CHANNEL",
+        }
+    ]
+    assert link.claimed is False
+    assert link.pending == [join_message("chan-1", ROLE_EXECUTOR)]
+
+    # Whatever the party hands down while parked waits with it.
+    link.send(pairing_envelope("commit", {"type": "commit"}))
+    assert len(ws.sent) == 1
+    # ... and a ping is the one thing that may still go out.
+    link.send_control({"type": "ping"})
+    assert ws.sent[-1] == {"type": "ping"}
+
+
+def test_the_claim_releases_the_queue_and_attaches_the_controller():
+    events: list[tuple[str, int]] = []
+    ws = FakeWebSocket([{"type": "auth_ok", "mode": "pairing", "expires_in": 300}])
+    transport = CloudRelayTransport(
+        device_id=str(uuid.uuid4()),
+        channel_id="chan-1",
+        pairing_channel_provider=lambda: "PAIRING-CHANNEL",
+        on_controller_event=lambda event, token: events.append((event, token)),
+        connect=_connector(ws),
+    )
+    link = transport.open()
+
+    assert link.handle_frame({"type": TYPE_PAIR_BOUND}) == []
+    assert link.claimed is True
+    assert link.pending == []
     # The hello is the same message the loopback relay gets, inside a payload.
+    hello = ws.sent[-1]
     assert hello["type"] == "cowork_relay"
     assert unwrap_payload(hello) == join_message("chan-1", ROLE_EXECUTOR)
+    # The bind is the GO signal, so the ceremony starts without waiting for the
+    # app's own join payload...
+    assert events == [(EVENT_JOIN, 1)]
+    # ... and that join, when it arrives, does not start a second one.
+    link.handle_frame(wrap_payload(join_message("chan-1", ROLE_CONTROLLER)))
+    assert events == [(EVENT_JOIN, 1)]
+
+
+def test_a_claimed_socket_sends_at_once():
+    ws = FakeWebSocket([{"type": "auth_ok"}])
+    transport = CloudRelayTransport(
+        device_id=str(uuid.uuid4()),
+        channel_id="chan-1",
+        token_provider=lambda: "supabase.jwt",
+        connect=_connector(ws),
+    )
+    link = transport.open()
+    assert link.claimed is True
+    assert unwrap_payload(ws.sent[-1]) == join_message("chan-1", ROLE_EXECUTOR)
+
+
+def test_an_expired_channel_is_reported_and_never_redialled():
+    """Not a network error: the same channel would only be refused again."""
+    expired: list[bool] = []
+    ws = FakeWebSocket([{"type": "auth_ok", "mode": "pairing", "expires_in": 300}])
+    transport = CloudRelayTransport(
+        device_id=str(uuid.uuid4()),
+        channel_id="chan-1",
+        pairing_channel_provider=lambda: "PAIRING-CHANNEL",
+        on_pairing_expired=lambda: expired.append(True),
+        connect=_connector(ws),
+    )
+    link = transport.open()
+    assert link.handle_frame({"type": TYPE_PAIR_EXPIRED}) == []
+    assert expired == [True]
+    # Whatever was waiting for a claim that never came is dropped with it.
+    assert link.pending == []
+
+
+def test_a_refusal_for_sending_while_parked_is_loud():
+    logged: list[str] = []
+    link, _ = _link(logger=logged.append)
+    link.handle_frame(
+        {"type": "error", "code": CODE_PAIRING_UNCLAIMED, "detail": "not claimed yet", "req_id": "r1"}
+    )
+    assert any(CODE_PAIRING_UNCLAIMED in line for line in logged)
 
 
 def test_open_uses_the_account_token_once_one_is_stored():

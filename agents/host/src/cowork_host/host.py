@@ -130,6 +130,9 @@ class LocalHost:
         # defaults to the loopback relay while the CLI defaults to the cloud.
         transport: str = TRANSPORT_LOCAL,
         relay_base_url: str = DEFAULT_RELAY_BASE_URL,
+        # Called after an unclaimed pairing channel expired and a fresh code was
+        # minted, so whoever printed the first one prints the new one.
+        on_pairing_reset: Callable[[], None] | None = None,
         # Test seam: skip the real Supabase/backend and use this factory.
         model_factory_override: ModelFactory | None = None,
         logger: Callable[[str], None] | None = None,
@@ -139,6 +142,7 @@ class LocalHost:
             TRANSPORT_CLOUD if transport == TRANSPORT_CLOUD else TRANSPORT_LOCAL
         )
         self._relay_base_url = relay_base_url or DEFAULT_RELAY_BASE_URL
+        self._on_pairing_reset = on_pairing_reset
         self._host_addr = host_addr
         self._model_id = model_id
         self._provider_slug = provider_slug
@@ -537,6 +541,7 @@ class LocalHost:
                 token_provider=self._relay_access_token,
                 pairing_channel_provider=self._current_pairing_channel,
                 on_controller_event=self._on_cloud_controller_event,
+                on_pairing_expired=self._on_pairing_channel_expired,
                 logger=self._log,
             )
             # The cloud relay reports no peer list to an executor, so there is no
@@ -550,6 +555,37 @@ class LocalHost:
             lambda: self._relay.current_peer_token(self._channel_id, ROLE_CONTROLLER),
             False,
         )
+
+    def _on_pairing_channel_expired(self) -> None:
+        """The relay dropped an unclaimed pairing channel after its five minutes.
+
+        Not a network error: redialling the same channel would only be refused
+        again. So a fresh channel AND a fresh code are minted — the old code was
+        never used, and a code is per pairing attempt anyway — and whoever printed
+        the first one is asked to print this one. The user who walked away comes
+        back to a new code, not to a dead terminal.
+
+        A host that has been paired in the meantime keeps its trust and mints
+        nothing: there is no code to replace.
+        """
+        if self._trust is not None:
+            return
+        probe = Pairing.initiator(
+            device_id=self._device_id,
+            device_identity=self._identity,
+            sas_digits=self._sas_digits,
+            channel_id=self._channel_id,
+        )
+        with self._code_lock:
+            self._pairing_code = probe.pairing_code
+            self._digits = probe.pairing_code.rpartition("-")[2]
+            self._pairing_channel = new_pairing_channel()
+        self._log("the pairing code expired unused; here is a fresh one")
+        if self._on_pairing_reset is not None:
+            try:
+                self._on_pairing_reset()
+            except Exception as exc:  # noqa: BLE001 - printing must not kill the pipe
+                self._log(f"could not report the fresh pairing code: {exc}")
 
     def _on_cloud_controller_event(self, event: str, token: int) -> None:
         """The cloud pipe derived a controller join / leave from its traffic. Same
@@ -622,6 +658,11 @@ class LocalHost:
         if self._transport_kind == TRANSPORT_CLOUD:
             return relay_ws_url(self._relay_base_url)
         return f"ws://{self._host_addr}:{self._port}"
+
+    def set_pairing_reset_listener(self, listener: Callable[[], None] | None) -> None:
+        """Be told when an expired pairing code was replaced by a fresh one, so
+        the new code reaches the same place the first one was printed."""
+        self._on_pairing_reset = listener
 
     @property
     def transport_kind(self) -> str:
