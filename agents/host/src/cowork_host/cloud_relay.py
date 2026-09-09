@@ -102,17 +102,6 @@ def new_pairing_channel() -> str:
     ).rstrip("=")
 
 
-def new_relay_device_id() -> str:
-    """A fresh uuid4 for the relay's routing header.
-
-    Deliberately random and opaque: the relay reads ``device_id`` in cleartext to
-    route, and refuses anything but a uuid4 because a uuid1 would hand it this
-    machine's MAC address. It is not the host's crypto device id (that one is
-    ``cowork-host``, and it never leaves the sealed payload).
-    """
-    return str(uuid.uuid4())
-
-
 def relay_ws_url(base_url: str) -> str:
     """The full websocket URL for a relay base (``wss://api.chuk.chat``).
 
