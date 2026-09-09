@@ -252,6 +252,7 @@ test/
 | `docs/DATABASE.md` | Supabase tables and schema |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
+| `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
 
 ## API Server
 
@@ -259,6 +260,38 @@ Separate repo at `/home/user/git/api_server/`. FastAPI + Supabase + Stripe.
 - No test suite — verify with `python3 -c "import py_compile; py_compile.compile('main.py', doraise=True)"`
 - Pre-existing LSP type errors (mutagen, fal_client, Supabase dynamic typing) are not bugs
 - User-scoped endpoints must pass `user.client` to PaymentService methods (not admin client)
+
+## Fastlane / Play Store / F-Droid
+
+`docs/FASTLANE.md` is the reference. The short version:
+
+- Fastlane compiles nothing; every lane shells out to `flutter build`. Lanes run
+  on this machine, on a GitHub runner, or on a Mac for macOS/iOS.
+  **No build server is needed.**
+- Install once: `sudo apt install ruby-dev build-essential && gem install
+  bundler && bundle install`. Then `cd android && bundle exec fastlane lanes`.
+- **`fastlane/metadata/android/` lives at the repository root, not under
+  `android/`.** That is the path F-Droid reads straight out of the git repo;
+  `supply` is pointed at the same tree via `metadata_path`, and the README
+  embeds the same PNGs. Do not move it back.
+- **Store screenshots are generated, not captured:** `flutter test
+  test_screenshots` renders the app's real widgets at 1080x1920. The harness
+  lives outside `test/` so the normal suite does not run it, and
+  `.github/workflows/screenshots.yml` regenerates + commits them on every push
+  to `master` that touches `lib/`. That workflow needs no secrets.
+  `scripts/device_screenshots.sh` is the `adb` path for a real device shot.
+- **`build_aab` hardcodes `FEATURE_PAYMENTS_DIRECT=false`** — a Play build that
+  ships the direct Stripe flow puts the listing at risk. `build_apk` (direct
+  downloads) keeps it on. Do not merge the two flag sets.
+- `pubspec.yaml` has no `+build` suffix, so the build number is derived from the
+  semantic version: `major*100_000 + minor*1_000 + patch` (`1.0.109` → `100109`).
+  **The same formula is in `android/fastlane/Fastfile`, `build.sh` and
+  `build-cross-platform.yml` and they must stay identical**, or an APK from one
+  path cannot upgrade an APK from another. It must stay under 2 100 000 because
+  `--split-per-abi` multiplies it by 1000.
+- Play production access needs a 12-tester closed test over 14 days first, so
+  the upload lanes are pre-work. The F-Droid tree and the README screenshots
+  pay off today.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker

@@ -80,6 +80,9 @@ android/.kotlin/
 .env.*.local
 
 # Fastlane
+# CodeRabbit CLI output
+.cr-review.txt
+
 **/fastlane/report.xml
 **/fastlane/Preview.html
 **/fastlane/screenshots
@@ -88,6 +91,8 @@ android/.kotlin/
 **/fastlane/*.p12
 **/fastlane/*.mobileprovision
 **/fastlane/google-play-key.json
+# Play Console service account (fastlane supply). Never commit.
+android/play-store-key.json
 android/Gemfile.lock
 macos/Gemfile.lock
 linux/Gemfile.lock

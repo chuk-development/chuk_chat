@@ -1,0 +1,24 @@
+Chuk Chat ist ein KI-Chat für Leute, die wissen wollen, welches Modell antwortet und wo ihre Texte landen.
+
+PRIVAT VON ANFANG AN
+Chats, die auf den Server synchronisiert werden, verschlüsselt das Gerät vorher mit AES-256-GCM. Wir können sie nicht lesen, auch nicht bei einem kompromittierten Server. Der Schlüssel verlässt das Gerät nie. Release-Builds schreiben keine Logs.
+
+NUR OFFENE MODELLE
+DeepSeek, Llama, Mistral, Qwen und mehr. Keine geschlossenen Blackboxen, keine stille Datensammlung, und du wählst das Modell pro Unterhaltung.
+
+FÜR ECHTE ARBEIT GEBAUT
+- Antworten im Stream, lesbar während sie entstehen
+- Werkzeuge: Websuche, News, Wetter, Orte, Rechner, Notizen, QR-Codes
+- Bildgenerierung und Bildbearbeitung direkt im Chat
+- Interaktive Diagramme und Karten, direkt aus der Antwort gerendert
+- Anhänge: Bilder, PDFs und Dokumente
+- Offline-Zugriff auf den Verlauf, mit automatischer Wiederverbindung, sobald das Netz zurück ist
+
+MACH IHN ZU DEINEM
+Theme-Pakete, Akzentfarben, Kontrast, heller und dunkler Modus, drei mitgelieferte Leseschriften. Material You übernimmt auf Wunsch die Systemfarben.
+
+ÜBERALL
+Dieselbe App auf Android, iOS, Linux, macOS, Windows und im Web. Deine Chats kommen mit.
+
+ZUM PASSWORT
+Wenn du es verlierst, sind die synchronisierten Chats weg. Es gibt keinen Wiederherstellungsweg, und genau das ist der Punkt: niemand sonst kommt an sie heran. Nimm ein starkes und bewahre es sicher auf.
