@@ -620,14 +620,23 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       if (session != null) {
         await controller.provisionAccount(session);
       }
-      final peerDeviceId = controller.establishedTrust?.peerDeviceId;
+      // The relay's own answer to the claim is the ONLY place the host's relay
+      // device id comes from, so that is what the trust record remembers — not
+      // the id the ceremony carried, which is the host's, not the relay's view
+      // of it. Falls back to the ceremony's when the dial was local.
+      final targetDeviceId =
+          CoworkCloudRelaySocket.learnedTarget(
+            base: invite.relayBase,
+            pairingChannel: invite.pairingChannel,
+          ) ??
+          controller.establishedTrust?.peerDeviceId;
       await _persistTrust(
         controller,
-        hostUrl: peerDeviceId == null
+        hostUrl: targetDeviceId == null
             ? null
             : CoworkCloudRelayAddress.forHost(
                 base: invite.relayBase,
-                targetDeviceId: peerDeviceId,
+                targetDeviceId: targetDeviceId,
               ).toUri(),
       );
     } catch (error) {
