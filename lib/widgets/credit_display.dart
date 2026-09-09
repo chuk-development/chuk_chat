@@ -601,12 +601,12 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     // that, so a sidebar can be built first. Waiting for the client beats
     // both crashing and sitting on the placeholder for the widget's lifetime.
     if (!SupabaseService.isInitialized) {
-      _loading = false;
+      // _loading stays true on purpose: it renders the €-- placeholder, and
+      // the alternative would show €0.00 as if it were the real balance.
       _readyListener = () {
         if (!mounted || !SupabaseService.isInitialized) return;
         _dropReadyListener();
-        setState(() => _loading = true);
-        _loadFromCacheThenRemote();
+        unawaited(_loadFromCacheThenRemote());
         _initListener();
       };
       SupabaseService.initializedListenable.addListener(_readyListener!);

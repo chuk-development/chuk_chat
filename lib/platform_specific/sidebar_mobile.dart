@@ -324,6 +324,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
   // One snack shape for the whole sidebar, so an error, a rename failure and
   // a delete confirmation all look the same.
   void _showSnack(ScaffoldMessengerState messenger, String message) {
+    // The messenger is captured before an await and outlives this sidebar, so
+    // a failure that lands after the drawer closed would otherwise put a snack
+    // on a screen the user already left.
+    if (!mounted) return;
     // Two failures in a row otherwise queue: the second message would wait out
     // the first one's two seconds before the user ever sees it.
     messenger.hideCurrentSnackBar();
@@ -675,8 +679,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
     int budget = _displayLimit;
     for (final group in groups) {
-      if (budget <= 0) break;
-      final int shown = math.min(budget, group.items.length);
+      // A folded group renders no tiles, so it must not spend the page
+      // either — otherwise folding the top group empties the ones below it.
+      final bool folded = _collapsedGroups.contains(group.label);
+      if (!folded && budget <= 0) break;
+      final int shown = folded ? 0 : math.min(budget, group.items.length);
       budget -= shown;
       slivers.addAll(
         _buildGroup(
