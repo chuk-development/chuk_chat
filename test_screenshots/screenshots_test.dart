@@ -17,6 +17,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
+
 import 'src/harness.dart';
 import 'src/scenes.dart';
 
@@ -51,6 +53,30 @@ const Map<String, DeviceSpec> _deviceByName = <String, DeviceSpec>{
   'tenInch': DeviceSpec.tenInch,
 };
 
+/// Maps a Play locale (`de-DE`) to the app locale it renders in (`de`), and
+/// refuses one the app has no strings for.
+///
+/// Without this an unsupported locale renders in English and lands in that
+/// locale's listing, which reads as a shipped translation that does not exist.
+_Locale _resolveLocale(String play) {
+  final String app = play.split('-').first;
+
+  final bool supported = AppLocalizations.supportedLocales
+      .any((Locale locale) => locale.languageCode == app);
+  if (!supported) {
+    final String known = AppLocalizations.supportedLocales
+        .map((Locale locale) => locale.languageCode)
+        .join(', ');
+    throw ArgumentError(
+      'The app has no strings for "$app" (from "$play"), so its screenshots '
+      'would render in English. Translate it first, or drop it from '
+      'SCREENSHOT_LOCALES. Known: $known',
+    );
+  }
+
+  return _Locale(play, app);
+}
+
 List<String> _csvEnv(String key, List<String> fallback) {
   final String? raw = Platform.environment[key];
   if (raw == null || raw.trim().isEmpty) return fallback;
@@ -64,7 +90,7 @@ List<String> _csvEnv(String key, List<String> fallback) {
 void main() {
   final List<_Locale> locales = _csvEnv('SCREENSHOT_LOCALES',
           <String>['en-US', 'de-DE'])
-      .map((String play) => _Locale(play, play.split('-').first))
+      .map(_resolveLocale)
       .toList();
 
   final List<DeviceSpec> devices =
