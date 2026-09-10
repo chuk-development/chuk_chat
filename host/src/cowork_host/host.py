@@ -399,6 +399,24 @@ class LocalHost:
         """True when a trust record exists, so the host reconnects (no code)."""
         return self._trust is not None
 
+    @property
+    def sandbox_summary(self) -> str:
+        """One line for the banner: what the agent runs in, and whether it can
+        drive a browser the user can take over.
+
+        Printed because the failure it describes is silent otherwise: a host on
+        the local backend simply has no browser, and the first sign of that used
+        to be an "unknown tool" deep inside a run (bead cowork-3i5c).
+        """
+        if self._sandbox_kind != "docker":
+            return f"{self._sandbox_kind} (no container, so no watchable browser)"
+        if self._browser_mcp:
+            return f"docker {self._sandbox_image} (browser ready)"
+        return (
+            f"docker {self._sandbox_image} "
+            "(no browser in this image; build cowork-browser:latest)"
+        )
+
     def forget_pairing(self) -> bool:
         """Delete the stored trust and mint one fresh, single-use pairing code —
         the deliberate "pair a new device" action behind ``cowork-host --pair``.

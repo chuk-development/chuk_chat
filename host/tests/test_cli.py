@@ -115,6 +115,7 @@ class FakeHost:
         self.pairing_uri = "cowork://pair?c=CHAN&k=chan1-123456&r=wss%3A%2F%2Fapi.chuk.chat"
         self.agent = argparse.Namespace(name="ada", workspace_dir="/tmp/ada")
         self.estop_path = "/tmp/ada/ESTOP"
+        self.sandbox_summary = "docker cowork-browser:latest (browser ready)"
 
     def start(self):
         self.started += 1
