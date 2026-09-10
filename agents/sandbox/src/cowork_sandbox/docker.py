@@ -50,6 +50,7 @@ from .lifecycle import (
     DockerCli,
     DockerUnavailableError,
     build_labels,
+    default_cli,
     docker_available,
     find_agent_container,
     label_args,
@@ -59,10 +60,19 @@ from .result import ProcessResult
 
 #: The image ``install.sh`` builds (``sandbox/docker/Dockerfile``).
 BASE_IMAGE = "cowork-base:latest"
+#: The image ``sandbox/docker/Dockerfile.browser`` builds: base + Chromium +
+#: Xvfb + x11vnc + the Playwright MCP launcher. The watchable browser (§9.1)
+#: exists in this image and in no other.
+BROWSER_IMAGE = "cowork-browser:latest"
 #: Environment override, so a host can point every sandbox at its own build.
 IMAGE_ENV_VAR = "COWORK_SANDBOX_IMAGE"
 #: Kept for backwards compatibility with callers importing ``DEFAULT_IMAGE``.
 DEFAULT_IMAGE = BASE_IMAGE
+
+#: The launcher the browser image installs. Its presence IS the capability:
+#: a tag that says "browser" proves nothing, and a tag that does not say it can
+#: still carry the launcher (bead cowork-3i5c).
+BROWSER_MCP_PATH = "/usr/local/bin/cowork-browser-mcp"
 
 #: Unprivileged user with passwordless sudo in the base image. Used only when the
 #: image actually has it (probed once per container).
@@ -73,6 +83,8 @@ CONTAINER_WORKSPACE = "/workspace"
 
 __all__ = [
     "BASE_IMAGE",
+    "BROWSER_IMAGE",
+    "BROWSER_MCP_PATH",
     "CONTAINER_WORKSPACE",
     "DEFAULT_IMAGE",
     "DEFAULT_USER",
@@ -80,7 +92,10 @@ __all__ = [
     "DockerUnavailableError",
     "IMAGE_ENV_VAR",
     "SESSION_LABEL",
+    "default_image",
     "docker_available",
+    "image_has_browser",
+    "image_present",
     "resolve_image",
 ]
 
@@ -90,6 +105,56 @@ def resolve_image(image: str | None = None) -> str:
     if image:
         return image
     return os.environ.get(IMAGE_ENV_VAR) or BASE_IMAGE
+
+
+def image_present(image: str, cli: DockerCli | None = None) -> bool:
+    """True when that image is on this machine."""
+    cli = cli or default_cli()
+    return cli.run("image", "inspect", image, timeout=20).ok
+
+
+#: ``image -> has the browser launcher``. A probe starts a container, so it runs
+#: once per image per process.
+_BROWSER_PROBE: dict[str, bool] = {}
+
+
+def image_has_browser(image: str, cli: DockerCli | None = None) -> bool:
+    """True when that image carries :data:`BROWSER_MCP_PATH`.
+
+    The answer is the file, not the tag. An image is probed once and the answer
+    is kept, because the probe costs a container start.
+    """
+    cached = _BROWSER_PROBE.get(image)
+    if cached is not None:
+        return cached
+    cli = cli or default_cli()
+    probe = cli.run(
+        "run", "--rm", "--entrypoint", "test", image, "-x", BROWSER_MCP_PATH,
+        timeout=60,
+    )
+    _BROWSER_PROBE[image] = probe.ok
+    return probe.ok
+
+
+def forget_image_probes() -> None:
+    """Drop the cached browser probes (a rebuilt image, and tests)."""
+    _BROWSER_PROBE.clear()
+
+
+def default_image(cli: DockerCli | None = None) -> str:
+    """The image a host should run when the user named none.
+
+    ``COWORK_SANDBOX_IMAGE`` still wins. Otherwise the browser image is taken
+    when it is built on this machine: it is the base image plus the watchable
+    browser, so preferring it costs disk and gains the one capability the user
+    asks for by name. Falls back to the base image.
+    """
+    override = os.environ.get(IMAGE_ENV_VAR)
+    if override:
+        return override
+    if image_present(BROWSER_IMAGE, cli):
+        return BROWSER_IMAGE
+    return BASE_IMAGE
 
 
 def _slug(text: str, limit: int = 24) -> str:

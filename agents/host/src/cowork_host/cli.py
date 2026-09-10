@@ -127,9 +127,11 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
                         help="default reasoning effort for new autonomous sessions")
     parser.add_argument(
         "--sandbox",
-        choices=("local", "docker"),
-        default=os.environ.get("COWORK_SANDBOX_KIND", "local"),
-        help="sandbox backend for the agent (default local, or $COWORK_SANDBOX_KIND)",
+        choices=("auto", "local", "docker"),
+        default=os.environ.get("COWORK_SANDBOX_KIND", "auto"),
+        help="sandbox backend for the agent: auto (docker when the daemon "
+        "answers, else local), local, or docker. Default auto, or "
+        "$COWORK_SANDBOX_KIND",
     )
     parser.add_argument(
         "--agent-name",
@@ -243,6 +245,26 @@ def is_paired(workspace: str) -> bool:
     return store.load() is not None
 
 
+def resolve_sandbox_kind(choice: str) -> str:
+    """``auto`` -> the best backend this machine actually has.
+
+    ``local`` runs the agent's commands on this machine; it has no container,
+    and therefore no watchable browser (§9.1) — the Playwright MCP server lives
+    inside the image. So ``auto`` takes docker whenever the daemon answers, and
+    only falls back to local when it does not (bead cowork-3i5c).
+    """
+    if choice != "auto":
+        return choice
+    try:
+        from cowork_sandbox import docker_available
+    except Exception:  # noqa: BLE001 — a missing backend is just "local"
+        return "local"
+    try:
+        return "docker" if docker_available() else "local"
+    except Exception:  # noqa: BLE001 — a broken daemon is just "local"
+        return "local"
+
+
 def _build_host(args: argparse.Namespace) -> LocalHost:
     host = LocalHost(
         port=args.port,
@@ -250,7 +272,7 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         model_id=args.model,
         provider_slug=getattr(args, "provider", None),
         reasoning_effort=getattr(args, "reasoning_effort", None),
-        sandbox_kind=args.sandbox,
+        sandbox_kind=resolve_sandbox_kind(args.sandbox),
         agent_name=args.agent_name,
         supabase_url=args.supabase_url,
         anon_key=args.anon_key,

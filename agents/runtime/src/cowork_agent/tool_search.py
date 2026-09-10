@@ -50,7 +50,7 @@ from typing import Any
 
 from .context import estimate_tokens
 from .prompt import render_tool_block
-from .registry import ToolRegistry
+from .registry import ToolRegistry, unknown_tool_message
 
 #: Tools that must stay in the prompt whatever the size of the tool surface.
 CORE_TOOLS = frozenset(
@@ -278,7 +278,7 @@ def make_tool_describe_handler(registry: ToolRegistry):
     def tool_describe(name: str) -> dict:
         key = (name or "").strip()
         if not registry.has(key):
-            return {"ok": False, "error": f"unknown tool: {key}"}
+            return {"ok": False, "error": unknown_tool_message(key)}
         if not registry.available(key):
             return {"ok": False, "error": f"tool unavailable: {key}"}
         return {
@@ -297,7 +297,7 @@ def make_tool_call_handler(registry: ToolRegistry):
     def tool_call(name: str, arguments: dict | None = None) -> Any:
         key = (name or "").strip()
         if not registry.has(key):
-            return {"ok": False, "error": f"unknown tool: {key}"}
+            return {"ok": False, "error": unknown_tool_message(key)}
         if not registry.is_deferred(key):
             # A visible tool is called directly. Refusing here keeps one tool to
             # one calling convention, which is what stops the model from

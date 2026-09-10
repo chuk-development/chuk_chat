@@ -40,6 +40,7 @@ from cowork_manager import (
     RosterStore,
 )
 from cowork_sandbox import BaseEnvironment, make_environment
+from cowork_sandbox.docker import default_image, image_has_browser
 
 from cowork_executor import (
     ModelFactory,
@@ -149,12 +150,17 @@ class LocalHost:
         self._provider_slug = provider_slug
         self._reasoning_effort = reasoning_effort
         self._sandbox_kind = sandbox_kind
+        # The image every container of this host runs. ``COWORK_SANDBOX_IMAGE``
+        # still wins; with nothing set the browser image is taken when it is
+        # built on this machine, because it is the base image plus the watchable
+        # browser (§9.1).
+        self._sandbox_image = default_image() if sandbox_kind == "docker" else None
         # The Playwright MCP + watchable browser (§9.1) ship in the browser image
-        # only; on the base image the launcher script is absent, so leave it off.
-        # The image is what COWORK_SANDBOX_IMAGE selects (resolve_image); "browser"
-        # in the tag is the browser variant.
-        self._browser_mcp = sandbox_kind == "docker" and (
-            "browser" in os.environ.get("COWORK_SANDBOX_IMAGE", "").lower()
+        # only. Ask the image, not its tag: a tag saying "browser" proves
+        # nothing, and an own build that does not say it can still carry the
+        # launcher (bead cowork-3i5c).
+        self._browser_mcp = self._sandbox_image is not None and image_has_browser(
+            self._sandbox_image
         )
         self._supabase_url = supabase_url
         self._anon_key = anon_key
@@ -204,6 +210,7 @@ class LocalHost:
             # read and write each other's files even with two containers.
             self._containers = ContainerSupervisor(
                 workspace_resolver=self._workspace_for_agent,
+                image=self._sandbox_image,
             )
         # The environments handed out per agent, so one agent keeps ONE box
         # across its turns. The host agent's own environment is built when the
