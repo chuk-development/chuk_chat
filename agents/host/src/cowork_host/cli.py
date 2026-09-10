@@ -340,6 +340,7 @@ def _print_banner(host: LocalHost, *, qr: bool = True, qr_invert: bool = True) -
         flush=True,
     )
     print(f"    Device:    {host.device_id}", flush=True)
+    print(f"    Sandbox:   {host.sandbox_summary}", flush=True)
     # The app-free stop (§7.1). Printed here because the moment you need it is
     # the moment the app is the thing that is not working.
     print(f"    Stop a run without the app:  touch {host.estop_path}", flush=True)
