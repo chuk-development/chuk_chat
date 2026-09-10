@@ -24,6 +24,29 @@ ERROR_CAP = 2048
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
+#: The tool-name prefix the MCP client gives the browser server
+#: (``cowork_agent.mcp_client.tool_name``). Named here too because a model that
+#: has seen the name once keeps calling it, and a bare "unknown tool" tells it
+#: nothing about what to do instead.
+BROWSER_TOOL_PREFIX = "mcp__playwright__"
+
+#: What the model gets when it reaches for the browser and the browser is not
+#: there. It names the tool that IS there, so the turn recovers on its own
+#: instead of failing the user's errand (bead cowork-3i5c).
+BROWSER_UNAVAILABLE_HINT = (
+    "the browser is not attached to this session. Use browser_task(task=...) "
+    "for a page you must see rendered, or web_fetch / web_search for a page you "
+    "only need to read."
+)
+
+
+def unknown_tool_message(name: str) -> str:
+    """The error body for a name no tool answers to."""
+    if name.startswith(BROWSER_TOOL_PREFIX):
+        return f"unknown tool: {name} — {BROWSER_UNAVAILABLE_HINT}"
+    return f"unknown tool: {name}"
+
+
 @dataclass
 class ToolSpec:
     name: str
@@ -181,7 +204,7 @@ class ToolRegistry:
         args = dict(args or {})
         spec = self._tools.get(name)
         if spec is None:
-            return self._error(name, f"unknown tool: {name}")
+            return self._error(name, unknown_tool_message(name))
         if not self.available(name):
             return self._error(name, f"tool unavailable: {name}")
 
