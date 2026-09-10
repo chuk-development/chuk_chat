@@ -49,5 +49,11 @@ session.txt
 # here into app/lib/pages/. Delete the folder and this rule when it is empty.
 _p4_pending/
 
-# Host boot log written by host/ on every start; not source.
+# Host boot log written by host/ on every start; not source. `.prev` is the
+# previous boot, rotated by the same writer.
 .hostlive
+.hostlive.prev
+
+# Loose verification scratch a session dropped in the root instead of in
+# `_scratch/`. Same rule, same reason: it is a log, not source.
+_scratch_*
