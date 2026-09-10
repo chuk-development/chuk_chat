@@ -86,3 +86,25 @@ def test_a_local_sandbox_has_no_image_and_no_browser(tmp_path, monkeypatch):
     )
     assert host._sandbox_image is None
     assert host._browser_mcp is False
+
+
+# -- the banner says it out loud ---------------------------------------------
+
+
+def test_the_summary_names_the_image_and_the_browser(tmp_path, monkeypatch):
+    host = _docker_host(tmp_path, monkeypatch, image="own:1", has_browser=True)
+    assert host.sandbox_summary == "docker own:1 (browser ready)"
+
+
+def test_the_summary_says_when_the_image_has_no_browser(tmp_path, monkeypatch):
+    host = _docker_host(tmp_path, monkeypatch, image="plain:1", has_browser=False)
+    assert "no browser in this image" in host.sandbox_summary
+
+
+def test_the_summary_says_a_local_sandbox_cannot_browse(tmp_path):
+    from cowork_host.host import LocalHost
+
+    host = LocalHost(
+        port=0, workspace_dir=str(tmp_path), agent_name="w", sandbox_kind="local"
+    )
+    assert "no watchable browser" in host.sandbox_summary
