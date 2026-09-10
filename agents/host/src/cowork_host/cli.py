@@ -46,7 +46,7 @@ from .service import UNIT_NAME, SystemdUserService, user_unit_path
 #: How long ``connect`` waits for the app before giving up, in seconds.
 DEFAULT_CONNECT_TIMEOUT = 600.0
 
-SUBCOMMANDS = ("run", "connect", "status")
+SUBCOMMANDS = ("run", "connect", "status", "doctor")
 
 
 def _mock_model_factory():
@@ -206,6 +206,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workspace",
         default=os.environ.get("COWORK_HOME", DEFAULT_WORKSPACE),
         help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $COWORK_HOME)",
+    )
+
+    doctor_parser = sub.add_parser(
+        "doctor",
+        help="check that the backend can actually work (docker, image, browser)",
+        description="Ask every part of the backend whether it works, instead of "
+        "finding out mid-run. Starts the browser server and makes it answer.",
+    )
+    doctor_parser.add_argument(
+        "--workspace",
+        default=os.environ.get("COWORK_HOME", DEFAULT_WORKSPACE),
+        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $COWORK_HOME)",
+    )
+    doctor_parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="skip starting the browser server (no container, no minute of wait)",
     )
     return parser
 
@@ -552,6 +569,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_connect(args)
     if command == "status":
         return cmd_status(args)
+    if command == "doctor":
+        from .doctor import cmd_doctor
+
+        return cmd_doctor(args)
     return cmd_run(args)
 
 
