@@ -18,6 +18,46 @@ fields they do not know.
 - `session_key` selects the thread on the executor. It equals the agent's thread key
   in the app (one session per agent).
 
+## Multiple account controllers (cloud transport)
+
+Production traffic is `Flutter ↔ API relay ↔ self-hosted Python host`. The API
+authenticates account JWTs and routes opaque payloads across replicas; it never
+receives a plaintext pairing capability or a device private key. Local relay
+mode remains an explicit development/migration option, not mobile routing.
+
+After the initial pairing, the encrypted account trust is a **recovery
+capability**: possession of its channel key authorizes enrolling a new account
+device. This deliberately differs from the legacy single-approved-device
+reconnect. Revoking that capability requires re-pairing/rotating the channel key;
+removing only a session does not revoke an account device holding the capability.
+The initial host public key remains pinned. Device private signing seeds never
+leave their own installation.
+
+Cloud resume envelopes are `controller_resume`, `controller_challenge`,
+`controller_proof`, `controller_ready`, followed by `controller_frame`. The
+transcript is UTF-8 compact JSON `[channel, device_id, public_key_b64,
+client_nonce_b64, host_nonce_b64]`. Both nonces are random 32-byte values.
+The host signs `cowork/controller/host/ || transcript`; the device signs
+`cowork/controller/device/ || transcript` and proves the stored channel key with
+HMAC-SHA256 under label `cowork/controller/approve/`. A traffic key is derived
+with label `cowork/controller/traffic/`; the ready proof uses that traffic key
+and label `cowork/controller/ready/`. Labels have no implicit separators.
+All HMAC inputs are `label || transcript`. Challenges expire after 30 seconds
+and are single-use. Each connection has independent sealing/replay state;
+resuming one device replaces only that device's session.
+
+One host executor owns all runs. Request results route back to their controller;
+`agent_list` snapshots broadcast immediately to every authenticated controller,
+including after create/rename. Resume requests a new snapshot after account
+provisioning. A closed mobile process catches up on its next connection; it
+cannot render updates while terminated. `controller_close` is sealed.
+
+The sealed `host_route` payload carries `url` with the actual API routing UUID
+in `cw_device`. The crypto identity `cowork-host` is NOT that UUID. Publish trust
+only after this route is known, retry failed encrypted uploads, and never guess
+a remote route from a loopback address. The account encryption key must be
+unlocked to transfer pairing; a successful JWT login alone does not unlock it.
+
 ## Outbound: app → executor
 
 | type | fields | notes |

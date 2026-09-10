@@ -42,6 +42,7 @@ import 'package:cowork/services/cowork/cowork_frame_codec.dart';
 import 'package:cowork/services/cowork/cowork_pairing.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_reconnect.dart';
+import 'package:cowork/services/cowork/cowork_controller_session.dart';
 import 'package:cowork/services/executor_provisioning.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_service.dart';
@@ -1321,6 +1322,7 @@ class CoworkRelayClient
     McpStore? mcpStore,
     HereNowStore? hereNowStore,
     Future<void> Function()? secretsForwarder,
+    this.onTrustUpdated,
     Iterable<String> Function()? replaySessions,
     AccountSessionSource? sessionSource,
     Stream<AuthState>? authChanges,
@@ -1343,6 +1345,7 @@ class CoworkRelayClient
        _scheduler = scheduler ?? SessionRefreshScheduler.instance;
 
   final String _deviceId;
+  final Future<void> Function(CoworkStoredPairing trust)? onTrustUpdated;
   final SimpleKeyPair _signingKeyPair;
   final RelaySocketConnector _connector;
   final CoworkApprovedDevices _approvedDevices;
@@ -1530,6 +1533,7 @@ class CoworkRelayClient
   StreamSubscription<dynamic>? _sub;
   CoworkPairing? _pairing;
   CoworkReconnect? _reconnect;
+  CoworkControllerSession? _controllerSession;
   CoworkStoredPairing? _establishedTrust;
 
   /// The authenticated host device, set by BOTH the first pairing and a code-free
@@ -1578,6 +1582,8 @@ class CoworkRelayClient
     if (_socket != null) throw StateError('Already connected');
 
     final String channelId;
+    _controllerSession = null;
+    _reconnect = null;
     try {
       channelId = channelIdOf(pairingCode);
     } on FormatException catch (e) {
@@ -1675,6 +1681,35 @@ class CoworkRelayClient
         peerPublicKey: peerPublicKey,
       );
     }
+    if (hostUrl.path == '/v2/relay/ws' && _establishedTrust != null) {
+      final controller = CoworkControllerSession(
+        _deviceId,
+        _signingKeyPair,
+        _establishedTrust!,
+      );
+      _controllerSession = controller;
+      final resumed = Completer<void>();
+      _pairingDone = resumed;
+      socket.send(jsonEncode(await controller.resume()));
+      try {
+        await resumed.future.timeout(_pairingTimeout);
+      } catch (error) {
+        _fail(_pairingErrorText(error));
+        await _closeSocket();
+        rethrow;
+      }
+      _sealer = CoworkFrameSealer.withChannelKey(
+        channelKey: controller.trafficKey!,
+        keyVersion: _keyVersion,
+        deviceId: _deviceId,
+        signingKeyPair: _signingKeyPair,
+      );
+      _opener = CoworkFrameOpener.withChannelKey(
+        channelKey: controller.trafficKey!,
+        keyVersion: _keyVersion,
+        approvedDevices: pairing.approvedDevices,
+      );
+    }
     _set(
       CoworkRelayState(
         phase: CoworkRelayPhase.paired,
@@ -1714,13 +1749,18 @@ class CoworkRelayClient
 
     // Build the reconnect joiner BEFORE listening so the host's reconnect-hello
     // can never race an unset session.
-    _reconnect = CoworkReconnect.joiner(
-      deviceId: _deviceId,
-      deviceKeyPair: _signingKeyPair,
-      peerDeviceId: pairing.peerDeviceId,
-      peerPublicKey: pairing.peerPublicKey,
-      channelId: pairing.channelId,
-    );
+    _controllerSession = hostUrl.path == '/v2/relay/ws'
+        ? CoworkControllerSession(_deviceId, _signingKeyPair, pairing)
+        : null;
+    _reconnect = _controllerSession != null
+        ? null
+        : CoworkReconnect.joiner(
+            deviceId: _deviceId,
+            deviceKeyPair: _signingKeyPair,
+            peerDeviceId: pairing.peerDeviceId,
+            peerPublicKey: pairing.peerPublicKey,
+            channelId: pairing.channelId,
+          );
 
     final done = Completer<void>();
     _pairingDone = done;
@@ -1731,13 +1771,18 @@ class CoworkRelayClient
       cancelOnError: false,
     );
 
-    socket.send(
-      jsonEncode(<String, dynamic>{
-        'type': 'join',
-        'channel': pairing.channelId,
-        'role': 'controller',
-      }),
-    );
+    final controllerSession = _controllerSession;
+    if (controllerSession != null) {
+      socket.send(jsonEncode(await controllerSession.resume()));
+    } else {
+      socket.send(
+        jsonEncode(<String, dynamic>{
+          'type': 'join',
+          'channel': pairing.channelId,
+          'role': 'controller',
+        }),
+      );
+    }
     _set(
       const CoworkRelayState(
         phase: CoworkRelayPhase.pairing,
@@ -1753,17 +1798,19 @@ class CoworkRelayClient
       rethrow;
     }
 
-    // Authenticated: resume the sealed channel from the STORED channel key.
+    // Every cloud controller has a fresh traffic key and independent replay
+    // guard. The encrypted account pairing is only a recovery capability.
+    final trafficKey = _controllerSession?.trafficKey ?? pairing.channelKey;
     final approved = CoworkApprovedDevices.empty()
       ..approve(pairing.peerDeviceId, pairing.peerPublicKey);
     _sealer = CoworkFrameSealer.withChannelKey(
-      channelKey: pairing.channelKey,
+      channelKey: trafficKey,
       keyVersion: _keyVersion,
       deviceId: _deviceId,
       signingKeyPair: _signingKeyPair,
     );
     _opener = CoworkFrameOpener.withChannelKey(
-      channelKey: pairing.channelKey,
+      channelKey: trafficKey,
       keyVersion: _keyVersion,
       approvedDevices: approved,
     );
@@ -2223,6 +2270,13 @@ class CoworkRelayClient
   @override
   Future<void> dispose() async {
     if (_disposed) return;
+    if (_controllerSession?.authenticated == true && _state.value.isPaired) {
+      try {
+        await _sendFramePayload({'type': 'controller_close'});
+      } catch (_) {
+        // A vanished connection is closed already.
+      }
+    }
     _disposed = true;
     if (identical(_scheduler.reconnectHost, _reattachForScheduler)) {
       // Our hooks, not a successor client's: withdraw them.
@@ -2254,6 +2308,28 @@ class CoworkRelayClient
     }
 
     final type = env['type'];
+    final controller = _controllerSession;
+    if (controller != null) {
+      if (type == 'controller_frame') {
+        if (controller.authenticated &&
+            env['connection'] == controller.connection) {
+          unawaited(_handleFrame(env));
+        }
+      } else if (type == 'controller_challenge' || type == 'controller_ready') {
+        _pairingQueue = _pairingQueue
+            .then((_) async {
+              if (type == 'controller_challenge') {
+                final proof = await controller.challenge(env);
+                if (proof != null) _socket?.send(jsonEncode(proof));
+              } else if (await controller.ready(env)) {
+                final done = _pairingDone;
+                if (done != null && !done.isCompleted) done.complete();
+              }
+            })
+            .catchError(_failPairing);
+      }
+      return;
+    }
     if (type == 'frame') {
       unawaited(_handleFrame(env));
       return;
@@ -2383,6 +2459,27 @@ class CoworkRelayClient
     // The replay cursor. Every replayed event carries it; a live event may.
     final mid = CoworkRelayTool._asInt(payload['mid']);
     switch (payload['type']) {
+      case 'host_route':
+        final trust = _establishedTrust;
+        final value = payload['url'];
+        final url = value is String ? Uri.tryParse(value) : null;
+        // This is inside a verified host frame, never an API routing hint.
+        if (trust != null &&
+            url != null &&
+            url.scheme == 'wss' &&
+            url.path == '/v2/relay/ws' &&
+            (url.queryParameters['cw_device']?.isNotEmpty ?? false)) {
+          final migrated = CoworkStoredPairing(
+            hostUrl: url,
+            channelId: trust.channelId,
+            channelKey: trust.channelKey,
+            peerDeviceId: trust.peerDeviceId,
+            peerPublicKey: trust.peerPublicKey,
+          );
+          _establishedTrust = migrated;
+          final sink = onTrustUpdated;
+          if (sink != null) unawaited(sink(migrated).catchError((Object _) {}));
+        }
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
@@ -2724,7 +2821,7 @@ class CoworkRelayClient
     final frame = await sealer.seal(utf8.encode(jsonEncode(payload)));
     socket.send(
       jsonEncode(<String, dynamic>{
-        'type': 'frame',
+        'type': _controllerSession == null ? 'frame' : 'controller_frame',
         'frame': _frameToWire(frame),
       }),
     );

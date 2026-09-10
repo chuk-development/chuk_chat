@@ -61,6 +61,7 @@ from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
 from .pairing_store import HostPairingStore, HostTrust
 from .pairing_uri import pairing_uri
 from .party import HostParty
+from .cloud_party import CloudHostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .transport import LocalRelayTransport
@@ -508,7 +509,10 @@ class LocalHost:
         except Exception as exc:  # noqa: BLE001 — automations must not block startup
             self._log(f"could not start automations: {type(exc).__name__}: {exc}")
         transport, controller_token, reconnect_pipe = self._build_transport()
-        self._party = HostParty(
+        party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
+        extra = {"trust_provider": lambda: self._trust} if party_class is CloudHostParty else {}
+        self._party = party_class(
+            **extra,
             transport=transport,
             channel_id=self._channel_id,
             pairing_factory=self._pairing_factory,
@@ -918,6 +922,7 @@ class LocalHost:
             model_select=model_select,
             db_path=self._db_path,
             send_frame=party.send_result_frame,
+            send_routed_frame=getattr(party, "send_routed_result", None),
             system_prompt=self._agent.persona or DEFAULT_SYSTEM_PROMPT,
             workspace=self._agent.workspace_dir or None,
             estop_path=self._estop_path,
@@ -1073,6 +1078,8 @@ class LocalHost:
         send it to the attached app. False when there is no session or no
         controller (the party drops frames while none is attached)."""
         party, sealer = self._party, self._sealer
+        if isinstance(party, CloudHostParty):
+            sealer = party._sealer
         if party is None or sealer is None or not self._controller_attached():
             return False
         try:
@@ -1292,6 +1299,12 @@ class LocalHost:
     def _on_agent_frame(self, payload: dict) -> list[dict]:
         """The app's ``agent_create`` / ``agent_rename`` / ``agent_list``: keep
         the name, answer with the current list."""
+        # Announce the actual API routing UUID through the authenticated
+        # channel. It is NOT the crypto identity (usually "cowork-host").
+        self._send_host_payload({
+            "type": "host_route",
+            "url": f"{relay_ws_url(self._relay_base_url)}?cw_device={self._relay_device_id}",
+        })
         return handle_agent_frame(self._coworker_names, payload, log=self._log)
 
     def _on_secret_request_pending(self, info: dict) -> None:

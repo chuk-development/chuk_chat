@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -131,6 +132,18 @@ class _HostSide {
   late final CoworkPairing _initiator;
   CoworkFrameSealer? _sealer;
   CoworkFrameOpener? _opener;
+  String? connection;
+  List<int>? sessionTranscript;
+  Uint8List? sessionKey;
+  SimplePublicKey? controllerKey;
+
+  Future<Uint8List> mac(List<int> key, String label) async =>
+      Uint8List.fromList(
+        (await Hmac.sha256().calculateMac([
+          ...utf8.encode(label),
+          ...sessionTranscript!,
+        ], secretKey: SecretKey(key))).bytes,
+      );
 
   /// Payloads the host opened out of the app's sealed frames.
   final List<Map<String, dynamic>> opened = <Map<String, dynamic>>[];
@@ -153,6 +166,66 @@ class _HostSide {
 
   Future<void> _onEnvelope(Map<String, dynamic> env) async {
     switch (env['type']) {
+      case 'controller_resume':
+        final nonce = base64Encode(List<int>.filled(32, 42));
+        connection = 'test-connection';
+        sessionTranscript = utf8.encode(
+          jsonEncode([
+            channelId,
+            env['device_id'],
+            env['public_key'],
+            env['client_nonce'],
+            nonce,
+          ]),
+        );
+        controllerKey = SimplePublicKey(
+          base64Decode(env['public_key'] as String),
+          type: KeyPairType.ed25519,
+        );
+        final signature = await Ed25519().sign([
+          ...utf8.encode('cowork/controller/host/'),
+          ...sessionTranscript!,
+        ], keyPair: signingKeyPair);
+        server.fromHost({
+          'type': 'controller_challenge',
+          'device_id': env['device_id'],
+          'client_nonce': env['client_nonce'],
+          'host_nonce': nonce,
+          'connection': connection,
+          'signature': base64Encode(signature.bytes),
+        });
+      case 'controller_proof':
+        expect(
+          env['proof'],
+          base64Encode(
+            await mac(_initiator.channelKey, 'cowork/controller/approve/'),
+          ),
+        );
+        expect(
+          await Ed25519().verify(
+            [
+              ...utf8.encode('cowork/controller/device/'),
+              ...sessionTranscript!,
+            ],
+            signature: Signature(
+              base64Decode(env['signature'] as String),
+              publicKey: controllerKey!,
+            ),
+          ),
+          isTrue,
+        );
+        sessionKey = await mac(
+          _initiator.channelKey,
+          'cowork/controller/traffic/',
+        );
+        _establishCodec();
+        server.fromHost({
+          'type': 'controller_ready',
+          'connection': connection,
+          'proof': base64Encode(
+            await mac(sessionKey!, 'cowork/controller/ready/'),
+          ),
+        });
       case 'join':
         _send('commit', _initiator.createCommit());
       case 'pairing':
@@ -170,6 +243,7 @@ class _HostSide {
             if (!paired.isCompleted) paired.complete();
         }
       case 'frame':
+      case 'controller_frame':
         final frame = CoworkFrame.fromJsonString(
           utf8.decode(base64.decode(env['frame'] as String)),
         );
@@ -182,13 +256,13 @@ class _HostSide {
 
   void _establishCodec() {
     _sealer = CoworkFrameSealer.withChannelKey(
-      channelKey: _initiator.channelKey,
+      channelKey: sessionKey ?? _initiator.channelKey,
       keyVersion: 1,
       deviceId: deviceId,
       signingKeyPair: signingKeyPair,
     );
     _opener = CoworkFrameOpener.withChannelKey(
-      channelKey: _initiator.channelKey,
+      channelKey: sessionKey ?? _initiator.channelKey,
       keyVersion: 1,
       approvedDevices: _initiator.approvedDevices,
     );
@@ -197,7 +271,8 @@ class _HostSide {
   Future<void> emit(Map<String, dynamic> payload) async {
     final frame = await _sealer!.seal(utf8.encode(jsonEncode(payload)));
     server.fromHost(<String, dynamic>{
-      'type': 'frame',
+      'type': connection == null ? 'frame' : 'controller_frame',
+      if (connection != null) 'connection': connection,
       'frame': base64.encode(utf8.encode(frame.toJsonString())),
     });
   }
@@ -280,6 +355,38 @@ void main() {
   });
 
   group('the handshake', () {
+    test(
+      'host offline closes the healthy API pipe so the client reauthenticates',
+      () async {
+        final server = _FakeRelayServer();
+        final socket = await CoworkCloudRelaySocket.connect(
+          address: CoworkCloudRelayAddress.forHost(
+            base: Uri.parse('wss://api.chuk.chat'),
+            targetDeviceId: _FakeRelayServer.hostDeviceId,
+          ),
+          deviceId: appDeviceId,
+          sessionSource: signedIn,
+          inner: (_) async => server,
+        );
+        final done = Completer<void>();
+        socket.incoming.listen((_) {}, onDone: done.complete);
+        server._deliver({
+          'type': 'executor_status',
+          'device_id': 'another-host',
+          'online': false,
+        });
+        await Future<void>.delayed(Duration.zero);
+        expect(server.closed, isFalse);
+        server._deliver({
+          'type': 'executor_status',
+          'device_id': _FakeRelayServer.hostDeviceId,
+          'online': false,
+        });
+        await done.future.timeout(const Duration(seconds: 1));
+        expect(server.closed, isTrue);
+      },
+    );
+
     test(
       'authenticates as the controller and claims the scanned channel',
       () async {
