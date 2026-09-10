@@ -531,7 +531,13 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       _manuallyDisconnected = false;
     });
     try {
-      await controller.reconnect(hostUrl: stored.hostUrl, pairing: stored);
+      // The authenticated host may have migrated our loopback trust to its
+      // cloud route since this view was mounted. Do not keep dialling a stale
+      // in-memory URL after a host restart.
+      final latest = await widget.pairingStore?.loadPairing() ?? stored;
+      if (!mounted) return;
+      _storedPairing = latest;
+      await controller.reconnect(hostUrl: latest.hostUrl, pairing: latest);
       final session = widget.sessionSource.current();
       if (session != null) {
         await controller.provisionAccount(session);

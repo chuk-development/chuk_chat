@@ -31,6 +31,14 @@ class _FakeMirror extends SupabasePairingSync {
   final CoworkStoredPairing record;
   bool available = false;
   int reads = 0;
+  int publishes = 0;
+  bool writable = false;
+
+  @override
+  Future<bool> publishEncryptedPairing(CoworkStoredPairing pairing) async {
+    publishes++;
+    return writable;
+  }
 
   @override
   Future<CoworkStoredPairing?> loadEncryptedPairing() async {
@@ -61,9 +69,9 @@ void main() {
   setUpAll(() async {
     final hostKey = await CoworkDeviceKeys.generate();
     record = CoworkStoredPairing(
-      // What the mirror really holds for a pairing made on the host's own
-      // machine: an address only that machine can dial.
-      hostUrl: Uri.parse('ws://127.0.0.1:8787'),
+      hostUrl: Uri.parse(
+        'wss://api.chuk.chat/v2/relay/ws?cw_device=host-device-uuid',
+      ),
       channelId: 'chan-1',
       channelKey: Uint8List.fromList(List<int>.generate(32, (i) => i)),
       peerDeviceId: 'host-device-uuid',
@@ -109,6 +117,40 @@ void main() {
     expect(mirror.reads, 0);
     expect(restored, 0);
   });
+
+  test(
+    'retries failed upload of existing pairing and stops duplicate writes',
+    () async {
+      final mirror = _FakeMirror(record);
+      final store = CoworkPairingStore(
+        backend: _MemoryStore(),
+        cloudSync: mirror,
+      );
+      await store.savePairing(record);
+      final session = _Session()
+        ..session = const AccountSession(
+          accessToken: 'jwt',
+          refreshToken: 'refresh',
+          userId: 'user-1',
+        );
+      final supervisor = CoworkPairingRestore(
+        store: store,
+        sessionSource: session,
+        onRestored: () async {},
+        authChanges: const Stream<Never>.empty(),
+        sleep: noSleep,
+      )..start();
+      addTearDown(supervisor.dispose);
+      await until(() => mirror.publishes >= 3);
+      mirror.writable = true;
+      final previous = mirror.publishes;
+      await until(() => mirror.publishes > previous);
+      final successful = mirror.publishes;
+      final attempts = supervisor.attempts;
+      await until(() => supervisor.attempts > attempts + 3);
+      expect(mirror.publishes, successful);
+    },
+  );
 
   test(
     'keeps trying while the session and the key are still missing, then restores',

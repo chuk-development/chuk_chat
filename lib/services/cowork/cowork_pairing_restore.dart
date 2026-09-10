@@ -18,13 +18,12 @@
 /// and it keeps a slow heartbeat afterwards so a pairing made on another device
 /// lands here on its own.
 ///
-/// It is deliberately cheap when there is nothing to do: one secure-storage read
-/// and, at most, one small select every five minutes. It stops for good the
-/// moment a local pairing exists, because from then on the ordinary code-free
-/// reconnect owns the connection.
+/// Once paired, unchanged successfully published trust only needs a local read.
+/// Missing cloud trust is retried; foreground/auth events wake it immediately.
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
@@ -48,14 +47,14 @@ class CoworkPairingRestore {
     Future<bool> Function()? loadEncryptionKey,
     Future<void> Function(Duration delay)? sleep,
     List<Duration> backoff = kDefaultBackoff,
-    Duration heartbeat = const Duration(minutes: 5),
+    Duration heartbeat = const Duration(seconds: 1),
   }) : _store = store,
        _sessionSource = sessionSource,
        _onRestored = onRestored,
        _authChanges = authChanges,
        _hasEncryptionKey = hasEncryptionKey ?? _defaultHasKey,
        _loadEncryptionKey = loadEncryptionKey ?? _defaultLoadKey,
-       _sleep = sleep ?? _defaultSleep,
+       _sleep = sleep,
        _backoff = backoff,
        _heartbeat = heartbeat;
 
@@ -77,7 +76,7 @@ class CoworkPairingRestore {
   final Stream<AuthState>? _authChanges;
   final bool Function() _hasEncryptionKey;
   final Future<bool> Function() _loadEncryptionKey;
-  final Future<void> Function(Duration delay) _sleep;
+  final Future<void> Function(Duration delay)? _sleep;
   final List<Duration> _backoff;
   final Duration _heartbeat;
 
@@ -86,6 +85,8 @@ class CoworkPairingRestore {
   bool _running = false;
   bool _disposed = false;
   bool _done = false;
+  String? _published;
+  Timer? _timer;
 
   /// How many passes the loop has made. Test-visible so a test can assert the
   /// supervisor really did retry rather than give up.
@@ -112,6 +113,7 @@ class CoworkPairingRestore {
 
   Future<void> dispose() async {
     _disposed = true;
+    _timer?.cancel();
     nudge();
     await _authSub?.cancel();
     _authSub = null;
@@ -135,10 +137,8 @@ class CoworkPairingRestore {
     while (!_disposed) {
       _attempts++;
       final settled = await _attempt();
-      if (settled || _disposed) {
-        _done = settled;
-        return;
-      }
+      _done = settled;
+      if (_disposed) return;
       await _waitBeforeRetry();
     }
   }
@@ -147,9 +147,36 @@ class CoworkPairingRestore {
   /// device is paired now, or it already was.
   Future<bool> _attempt() async {
     try {
-      // Already paired locally: the ordinary code-free reconnect owns it.
+      // A local pairing is not proof it was uploaded. Retry once the account
+      // key becomes available, and again after a route/pairing change.
       final existing = await _store.loadPairing();
-      if (existing != null) return true;
+      if (existing != null) {
+        final account = _sessionSource.current();
+        final address = CoworkCloudRelayAddress.tryParse(existing.hostUrl);
+        if (account != null &&
+            (address?.targetDeviceId == null ||
+                address?.targetDeviceId == 'cowork-host')) {
+          final cloud = await _store.loadPairingFromCloud();
+          if (cloud != null && _hasCloudRoute(cloud)) {
+            await _store.savePairing(cloud);
+            if (!_disposed) await _onRestored();
+          }
+          return true;
+        }
+        if (account != null &&
+            CoworkCloudRelayAddress.tryParse(
+                  existing.hostUrl,
+                )?.targetDeviceId !=
+                null) {
+          final fingerprint =
+              '${account.userId}:${jsonEncode(existing.toJson())}';
+          if (_published != fingerprint &&
+              await _store.publishPairing(existing)) {
+            _published = fingerprint;
+          }
+        }
+        return true;
+      }
     } catch (_) {
       // A locked keystore is a "not yet", not a "never".
       return false;
@@ -173,7 +200,9 @@ class CoworkPairingRestore {
     } catch (_) {
       return false;
     }
-    if (restored == null || _disposed) return false;
+    if (restored == null || _disposed || !_hasCloudRoute(restored)) {
+      return false;
+    }
 
     // The mirror was written by another device. Its address may be that
     // device's own loopback, which is meaningless here — the relay plus the
@@ -205,19 +234,35 @@ class CoworkPairingRestore {
 
   Future<void> _waitBeforeRetry() async {
     final index = (_attempts - 1).clamp(0, _backoff.length - 1);
-    final delay = _attempts > _backoff.length ? _heartbeat : _backoff[index];
+    final delay = _done || _attempts > _backoff.length
+        ? _heartbeat
+        : _backoff[index];
     final wake = Completer<void>();
     _wake = wake;
-    await Future.any(<Future<void>>[_sleep(delay), wake.future]);
+    final sleep = _sleep;
+    if (sleep != null) {
+      await Future.any(<Future<void>>[sleep(delay), wake.future]);
+    } else {
+      _timer = Timer(delay, () {
+        if (!wake.isCompleted) wake.complete();
+      });
+      await wake.future;
+      _timer?.cancel();
+      _timer = null;
+    }
     _wake = null;
   }
 
   static bool _defaultHasKey() => EncryptionService.hasKey;
 
-  static Future<bool> _defaultLoadKey() => EncryptionService.tryLoadKey();
+  static bool _hasCloudRoute(CoworkStoredPairing trust) {
+    final target = CoworkCloudRelayAddress.tryParse(
+      trust.hostUrl,
+    )?.targetDeviceId;
+    return target != null && target.isNotEmpty && target != 'cowork-host';
+  }
 
-  static Future<void> _defaultSleep(Duration delay) =>
-      Future<void>.delayed(delay);
+  static Future<bool> _defaultLoadKey() => EncryptionService.tryLoadKey();
 
   static Stream<AuthState>? _defaultAuthChanges() =>
       SupabaseService.isInitialized

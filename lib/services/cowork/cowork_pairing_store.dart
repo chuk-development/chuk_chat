@@ -91,15 +91,15 @@ class CoworkStoredPairing {
   final SimplePublicKey peerPublicKey;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'version': 1,
-        'host_url': hostUrl.toString(),
-        'channel_id': channelId,
-        'channel_key_b64': base64.encode(channelKey),
-        'peer': <String, dynamic>{
-          'device_id': peerDeviceId,
-          'ed25519_pub_b64': base64.encode(peerPublicKey.bytes),
-        },
-      };
+    'version': 1,
+    'host_url': hostUrl.toString(),
+    'channel_id': channelId,
+    'channel_key_b64': base64.encode(channelKey),
+    'peer': <String, dynamic>{
+      'device_id': peerDeviceId,
+      'ed25519_pub_b64': base64.encode(peerPublicKey.bytes),
+    },
+  };
 
   /// Parses a stored record, or returns null if it is malformed / a future
   /// version — the caller then falls back to a fresh pairing rather than
@@ -138,9 +138,9 @@ class CoworkPairingStore {
     CoworkSecureKeyValueStore? backend,
     Uuid? uuid,
     SupabasePairingSync? cloudSync,
-  })  : _store = backend ?? const FlutterSecureKeyValueStore(),
-        _uuid = uuid ?? const Uuid(),
-        _cloudSync = cloudSync ?? const SupabasePairingSync();
+  }) : _store = backend ?? const FlutterSecureKeyValueStore(),
+       _uuid = uuid ?? const Uuid(),
+       _cloudSync = cloudSync ?? const SupabasePairingSync();
 
   static const String _kDeviceId = 'cowork_device_id';
   static const String _kDeviceSeed = 'cowork_device_seed';
@@ -193,7 +193,13 @@ class CoworkPairingStore {
   /// caller never waits on the network.
   Future<void> savePairing(CoworkStoredPairing pairing) async {
     await _store.write(_kPairing, jsonEncode(pairing.toJson()));
-    unawaited(_cloudSync.saveEncryptedPairing(pairing));
+    // A local address cannot be restored on another device. Wait for the
+    // authenticated host_route announcement before publishing the capability.
+    if (pairing.hostUrl.path == '/v2/relay/ws' &&
+        pairing.hostUrl.queryParameters['cw_device'] != null &&
+        pairing.hostUrl.queryParameters['cw_device'] != 'cowork-host') {
+      unawaited(_cloudSync.saveEncryptedPairing(pairing));
+    }
   }
 
   /// Loads the trust record from the encrypted Supabase mirror. Returns null
@@ -201,6 +207,9 @@ class CoworkPairingStore {
   /// a fresh install to recover pairing that no local store has yet.
   Future<CoworkStoredPairing?> loadPairingFromCloud() =>
       _cloudSync.loadEncryptedPairing();
+
+  Future<bool> publishPairing(CoworkStoredPairing pairing) =>
+      _cloudSync.publishEncryptedPairing(pairing);
 
   /// Deletes the trust record — the "un-pair / forget" action. The stable device
   /// identity is kept, so a later fresh pairing reuses the same device key. The
