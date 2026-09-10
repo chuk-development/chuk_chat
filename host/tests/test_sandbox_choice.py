@@ -108,3 +108,12 @@ def test_the_summary_says_a_local_sandbox_cannot_browse(tmp_path):
         port=0, workspace_dir=str(tmp_path), agent_name="w", sandbox_kind="local"
     )
     assert "no watchable browser" in host.sandbox_summary
+
+
+def test_doctor_is_a_real_subcommand():
+    parser = cli_mod._build_parser()
+    args = parser.parse_args(["doctor"])
+    assert args.command == "doctor"
+    assert args.quick is False
+    assert "doctor" in cli_mod.SUBCOMMANDS
+    assert cli_mod.normalize_argv(["doctor"]) == ["doctor"]
