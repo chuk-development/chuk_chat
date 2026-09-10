@@ -30,7 +30,13 @@ import threading
 from typing import Any, Callable
 
 from cowork_crypto import CoworkFrameOpener, CoworkFrameSealer
-from cowork_manager import RosterStore, RuntimeState, decode_frames, encode_frame, make_request
+from cowork_manager import (
+    RosterStore,
+    RuntimeState,
+    decode_frames,
+    encode_frame,
+    make_request,
+)
 from cowork_sandbox import BaseEnvironment
 
 from cowork_executor import (
@@ -63,6 +69,7 @@ class TaskServer:
         model_select: ModelSelect | None = None,
         db_path: str,
         send_frame: FrameSink,
+        send_routed_frame: Callable[[str, str | None], None] | None = None,
         system_prompt: str | None = None,
         workspace: str | None = None,
         max_iterations: int = 50,
@@ -86,6 +93,8 @@ class TaskServer:
         self._roster = roster
         self._agent_id = agent_id
         self._send_frame = send_frame
+        self._send_routed_frame = send_routed_frame
+        self._routes: dict[str, str] = {}
         self._controller_ep, self._executor_ep = loopback_pair()
 
         def factory(agent):
@@ -169,7 +178,7 @@ class TaskServer:
         self._pump.start()
         return state
 
-    def submit(self, frame_b64: str) -> str:
+    def submit(self, frame_b64: str, *, controller_device: str | None = None) -> str:
         """Hand one sealed app frame to the Executor. Returns its request id.
 
         A task and a Stop travel the same way, because this side cannot tell them
@@ -181,9 +190,9 @@ class TaskServer:
         could forge.
         """
         request_id = f"task-{next(self._ids)}"
-        envelope = make_request(
-            METHOD_RUN_TASK, {"frame": frame_b64}, request_id
-        )
+        if controller_device is not None:
+            self._routes[request_id] = controller_device
+        envelope = make_request(METHOD_RUN_TASK, {"frame": frame_b64}, request_id)
         self._submitted.append(request_id)
         self._controller_ep.send(encode_frame(envelope))
         return request_id
@@ -219,7 +228,17 @@ class TaskServer:
             for frame in frames:
                 inner = self._inner_frame(frame)
                 if inner is not None:
-                    self._send_frame(inner)
+                    request_id = (
+                        (frame.get("params") or {}).get("requestId")
+                        if frame.get("method") == METHOD_EVENT
+                        else frame.get("requestId")
+                    )
+                    if self._send_routed_frame is not None:
+                        self._send_routed_frame(inner, self._routes.get(request_id))
+                    else:
+                        self._send_frame(inner)
+                    if frame.get("type") == "response":
+                        self._routes.pop(request_id, None)
 
     @staticmethod
     def _inner_frame(frame: dict) -> str | None:

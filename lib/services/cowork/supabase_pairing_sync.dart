@@ -55,28 +55,32 @@ class SupabasePairingSync {
   /// swallows network / server errors. It never throws, so callers can mirror
   /// on every local save without guarding.
   Future<void> saveEncryptedPairing(CoworkStoredPairing pairing) async {
+    await publishEncryptedPairing(pairing);
+  }
+
+  /// Returns success so the supervisor can retry a locked key or failed upload.
+  Future<bool> publishEncryptedPairing(CoworkStoredPairing pairing) async {
     try {
-      if (!SupabaseService.isInitialized) return;
+      if (!SupabaseService.isInitialized) return false;
       final user = SupabaseService.auth.currentUser;
-      if (user == null) return;
-      if (!await _ensureEncryptionKey()) return;
+      if (user == null) return false;
+      if (!await _ensureEncryptionKey()) return false;
 
       final plaintext = jsonEncode(pairing.toJson());
       final ciphertext = await EncryptionService.encrypt(plaintext);
 
-      await SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          columnUserId: user.id,
-          columnCiphertext: ciphertext,
-          columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: columnUserId,
-      );
+      await SupabaseService.client.from(table).upsert(<String, dynamic>{
+        columnUserId: user.id,
+        columnCiphertext: ciphertext,
+        columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: columnUserId);
+      return true;
     } catch (error) {
       // Best-effort mirror: offline / server errors must not break local save.
       if (kDebugMode) {
         debugPrint('⚠️ [CoworkPairingSync] save skipped: $error');
       }
+      return false;
     }
   }
 

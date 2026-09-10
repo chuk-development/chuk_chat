@@ -570,10 +570,22 @@ class CoworkCloudRelaySocket implements RelaySocket {
         if (kDebugMode) {
           debugPrint('[cowork-cloud] relay error: ${frame['code']}');
         }
+        if (frame['code'] == 'executor_offline' &&
+            frame['target_device_id'] == _targetDeviceId) {
+          unawaited(close());
+        }
       case 'ping':
         // A control frame, answered on the socket and never passed upward.
         _transport.send(jsonEncode(<String, dynamic>{'type': 'pong'}));
       case 'executor_status':
+        // The API socket may still be healthy while the host restarted. The
+        // old traffic keys are no longer usable: tell the reconnect supervisor
+        // this connection is down instead of leaving a green but dead client.
+        if (_ready &&
+            frame['device_id'] == _targetDeviceId &&
+            frame['online'] == false) {
+          unawaited(close());
+        }
       case 'cowork_presence':
       case 'pong':
         break;

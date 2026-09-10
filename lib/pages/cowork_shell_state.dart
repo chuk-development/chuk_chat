@@ -13,6 +13,7 @@ Future<CoworkRelayController> _buildRelayController(
   return CoworkRelayClient(
     deviceId: identity.deviceId,
     signingKeyPair: identity.keyPair,
+    onTrustUpdated: store.savePairing,
     // The pipe. A `wss://…/v2/relay/ws` address goes through the cloud relay
     // (authenticated as this account's controller, frames wrapped as opaque
     // `cowork_relay` payloads); a plain `ws://127.0.0.1:8787` still opens the
@@ -145,7 +146,18 @@ mixin CoworkShellHost on State<MessengerShell> {
       widget.agentProfiles ?? AgentProfileStore.instance;
 
   /// The `initState` half of the host. Called by the state after `super`.
+  AppLifecycleListener? _hostLifecycle;
+
   void _hostInit() {
+    _hostLifecycle = AppLifecycleListener(
+      onResume: () {
+        _pairingRestore?.nudge();
+        final controller = _controller.value;
+        if (controller != null && controller.state.value.isPaired) {
+          unawaited(controller.requestAgentList().catchError((Object _) {}));
+        }
+      },
+    );
     // Both stores read one preferences key each and then notify; the inbox and
     // every face listen to them, so a late load lands on its own.
     unawaited(_readMarks.load());
@@ -260,9 +272,8 @@ mixin CoworkShellHost on State<MessengerShell> {
     final CoworkAgent? target =
         restored ?? (visible.isEmpty ? null : visible.first);
     if (target == null || target.threads.isEmpty) return;
-    final String threadKey = target.threads.any(
-      (thread) => thread.key == _restoredThreadKey,
-    )
+    final String threadKey =
+        target.threads.any((thread) => thread.key == _restoredThreadKey)
         ? _restoredThreadKey!
         : target.threads.first.key;
     setState(() {
@@ -274,6 +285,7 @@ mixin CoworkShellHost on State<MessengerShell> {
 
   /// The `dispose` half of the host. Called by the state before `super`.
   void _hostDispose() {
+    _hostLifecycle?.dispose();
     _roster.removeListener(_onRosterChanged);
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
