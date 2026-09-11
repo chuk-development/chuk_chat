@@ -27,6 +27,7 @@ import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/ui/expressive/bubble_kind.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
@@ -440,13 +441,21 @@ class _ArtifactCard extends StatelessWidget {
     // chat bubble are louder than the message they belong to, and they squeezed
     // the one thing that identifies the file — its name — down to "gesch…".
     if (child == null) {
-      return Align(
-        alignment: Alignment.centerLeft,
+      // A file message is a message: it takes the lane a coworker's bubble
+      // takes, edge to edge, and it carries the same fill as that bubble. A
+      // card that shrank to its content read as an attachment chip stuck under
+      // the text instead of as the delivery it is.
+      final AgentBubbleColors bubble = agentBubbleColors(
+        scheme,
+        AgentBubbleKind.answer,
+      );
+      return SizedBox(
+        width: double.infinity,
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 2),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(14),
+            color: bubble.fill,
+            borderRadius: BorderRadius.circular(18),
           ),
           clipBehavior: Clip.antiAlias,
           child: Material(
@@ -454,9 +463,8 @@ class _ArtifactCard extends StatelessWidget {
             child: InkWell(
               onTap: onOpen,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 40,
@@ -468,7 +476,7 @@ class _ArtifactCard extends StatelessWidget {
                       child: Icon(_icon, size: 21, color: scheme.primary),
                     ),
                     const SizedBox(width: 12),
-                    Flexible(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
