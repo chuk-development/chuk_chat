@@ -86,13 +86,45 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
+### Android APK (user instruction, 2026-09-10)
+
+- **Always build the phone app with `scripts/build_apk.sh`.** Never hand-roll
+  `flutter build apk`. A plain build has no compile-time environment: Supabase
+  URL/key come from `app/.env` via `--dart-define-from-file`, and CoWork mode
+  needs `--dart-define=FEATURE_COWORK=true`. Without them the APK installs and
+  then shows a dead app.
+- **arm64 only** (`--target-platform android-arm64`, ~47 MB). The phone is a
+  Pixel 7 Pro. Never build the fat APK or `--split-per-abi`.
+- **Deliver by `adb install -r`, not by any other route.** adb over USB is the
+  transport; the script installs and launches `dev.chuk.cowork` itself. Do not
+  serve the APK over HTTP and do not try `SendUserFile` (30 MiB limit; the APK
+  is bigger).
+- Build only: `scripts/build_apk.sh --no-install`.
 
 ```bash
-# Example:
-# npm install
-# npm test
+scripts/build_apk.sh          # arm64 release + adb install + launch
 ```
+
+### Android emulator (user instruction, 2026-09-11)
+
+- The local AVD is the second target next to the Pixel 7 Pro. Start it with
+  `scripts/emulator.sh start` (creates `cowork_x64` on first run: Android 16 /
+  API 36, `google_apis`, **x86_64**, Pixel 7 Pro profile, 4 GB RAM, 8 GB data).
+- **x86_64, never arm64.** The host is x86_64, so an arm64 image runs without
+  KVM and is too slow to use. `hw.gpu.mode=host` puts rendering on the RTX 3060
+  over Vulkan; the emulator log names the physical GPU it picked.
+- Gradle follows Flutter: `app/android/app/build.gradle.kts` reads the
+  `target-platform` property, so a phone build stays arm64-v8a and an emulator
+  build is x86_64. Do not pin the ABI again.
+- Release APK on the AVD: `scripts/build_apk.sh --emulator` (picks the
+  `emulator-*` serial; the plain call still picks the phone).
+- Hot reload on the AVD, from `app/`:
+  `FLUTTER_HOT_EXTRA="--dart-define-from-file=.env" flutter-hot start emulator-5554`.
+- Cost on this machine: the emulator idles near half a core and holds about
+  5 GB RSS, so the script starts it under `memguard-allow 8G`. The CPU spike
+  during `flutter run` is the Gradle daemon and the Dart frontend, not the VM.
+  The daemon keeps about 4 GB after a build; kill it when RAM gets tight.
+- Other commands: `scripts/emulator.sh status|wait|shot [out.png]|stop`.
 
 ## Architecture Overview
 
