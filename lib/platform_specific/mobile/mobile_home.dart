@@ -17,6 +17,8 @@ import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/services/cowork/agent_read_marks.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/top_veil.dart';
 import 'package:cowork/widgets/chat_documents_panel.dart';
 
 class MobileHome extends StatefulWidget {
@@ -94,9 +96,20 @@ class _MobileHomeState extends State<MobileHome> {
         return Stack(
           children: <Widget>[
             Positioned.fill(
-              child: Padding(
-                // The bar floats, so the content keeps its own room under it.
-                padding: const EdgeInsets.only(bottom: MobileNavBar.height),
+              // The bar floats over the content, and the content scrolls out
+              // under it. Every tab already keeps the window's bottom inset
+              // free, so the bar's height is added to that inset instead of
+              // cutting the tab short above it — one change, and a list fades
+              // out behind the bar the way the chat fades out behind its
+              // header.
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  padding: MediaQuery.paddingOf(context).copyWith(
+                    bottom:
+                        MediaQuery.paddingOf(context).bottom +
+                        MobileNavBar.height,
+                  ),
+                ),
                 child: IndexedStack(
                   index: _index,
                   children: <Widget>[
@@ -122,28 +135,30 @@ class _MobileHomeState extends State<MobileHome> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: MobileNavBar(
-                index: _index,
-                onSelected: (int i) => setState(() => _index = i),
-                destinations: <MobileNavDestination>[
-                  MobileNavDestination(
-                    icon: Icons.chat_bubble_rounded,
-                    label: 'Chats',
-                    badge: unread,
-                  ),
-                  const MobileNavDestination(
-                    icon: Icons.photo_library_rounded,
-                    label: 'Media',
-                  ),
-                  const MobileNavDestination(
-                    icon: Icons.folder_rounded,
-                    label: 'Files',
-                  ),
-                  const MobileNavDestination(
-                    icon: Icons.settings_rounded,
-                    label: 'Settings',
-                  ),
-                ],
+              child: BottomVeil(
+                child: MobileNavBar(
+                  index: _index,
+                  onSelected: (int i) => setState(() => _index = i),
+                  destinations: <MobileNavDestination>[
+                    MobileNavDestination(
+                      icon: HugeIcons.message01,
+                      label: 'Chats',
+                      badge: unread,
+                    ),
+                    const MobileNavDestination(
+                      icon: HugeIcons.album02,
+                      label: 'Media',
+                    ),
+                    const MobileNavDestination(
+                      icon: HugeIcons.folder03,
+                      label: 'Files',
+                    ),
+                    const MobileNavDestination(
+                      icon: HugeIcons.settings01,
+                      label: 'Settings',
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
