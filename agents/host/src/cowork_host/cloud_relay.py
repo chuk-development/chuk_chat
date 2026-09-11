@@ -120,6 +120,21 @@ class CloudRelayError(RuntimeError):
     """The relay refused the handshake, or the pipe could not be opened."""
 
 
+class RelayAuthRejected(CloudRelayError):
+    """The relay refused the account token this host offered.
+
+    Carries the token that was refused so the caller can refresh exactly that
+    one and redial at once. Without it a host with an aged-out token offers the
+    same dead JWT on every backoff tick, forever: no controller can attach, and
+    a controller is the other way a fresh token could arrive (bead cowork-fm8w).
+    """
+
+    def __init__(self, detail: str, *, token: str) -> None:
+        super().__init__(f"relay refused the handshake: {detail}")
+        self.detail = detail
+        self.token = token
+
+
 class PairingChannelExpired(CloudRelayError):
     """The pairing channel went unclaimed and the relay dropped it.
 
@@ -285,6 +300,8 @@ class CloudRelayTransport:
         if reply is None or reply.get("type") != TYPE_AUTH_OK:
             detail = "no reply" if reply is None else str(reply.get("detail") or reply.get("type"))
             _close_quietly(ws)
+            if kind == "token":
+                raise RelayAuthRejected(detail, token=value)
             raise CloudRelayError(f"relay refused the handshake: {detail}")
         # ``auth_ok`` carries extra fields on the pairing path
         # (``mode``, ``expires_in``). Read what is useful, ignore the rest: the

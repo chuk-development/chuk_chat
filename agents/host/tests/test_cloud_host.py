@@ -17,7 +17,7 @@ import pytest
 from cowork_crypto import Pairing
 from cowork_host import LocalHost
 from cowork_host.account_store import AccountStore
-from cowork_host.cloud_relay import CloudRelayError, CloudRelayTransport
+from cowork_host.cloud_relay import CloudRelayError, CloudRelayTransport, RelayAuthRejected
 from cowork_host.identity import HOST_DEVICE_ID, load_or_create_identity
 from cowork_host.party import HostParty
 from cowork_host.protocol import STEP_COMMIT, TYPE_JOIN
@@ -365,5 +365,103 @@ def test_the_party_publishes_its_commit_on_whatever_pipe_it_is_given(tmp_path):
         # The fake pipe has no hello of its own; the loopback relay's ``join`` is
         # the transport's business now, not the party's.
         assert all(message.get("type") != TYPE_JOIN for message in link.sent)
+    finally:
+        party.stop()
+
+
+# -- a refused credential is replaced, not repeated ---------------------------
+
+
+class _RejectingTransport:
+    """Refuses the first dial the way the relay refuses a dead JWT, then opens."""
+
+    def __init__(self, link, *, refusals: int = 1) -> None:
+        self.link = link
+        self.tokens_offered: list[str] = []
+        self._refusals = refusals
+        self.token = "stale-jwt"
+
+    def open(self):
+        self.tokens_offered.append(self.token)
+        if self._refusals > 0:
+            self._refusals -= 1
+            raise RelayAuthRejected("Invalid token", token=self.token)
+        return self.link
+
+
+def test_a_refused_token_is_refreshed_and_redialled_without_backoff(tmp_path):
+    """The relay said no to this exact token. Sleeping through a backoff and then
+    offering the same one again is how a host sits offline for a day
+    (bead cowork-fm8w): refresh it, dial again at once."""
+    identity = load_or_create_identity(tmp_path / "host_device.key")
+    link = _FakeLink()
+    transport = _RejectingTransport(link)
+    logged: list[str] = []
+
+    def refreshed(token: str) -> bool:
+        assert token == "stale-jwt"
+        transport.token = "fresh-jwt"
+        return True
+
+    party = HostParty(
+        transport=transport,
+        channel_id="testchannel00",
+        pairing_factory=lambda: Pairing.initiator(
+            device_id=HOST_DEVICE_ID,
+            device_identity=identity,
+            channel_id="testchannel00",
+            digits="428913",
+        ),
+        device_id=HOST_DEVICE_ID,
+        device_identity=identity,
+        key_version=1,
+        build_task_server=lambda *_args: None,
+        logger=logged.append,
+        reconnect=True,
+        # A backoff long enough that a test which waits it out would fail.
+        backoff_seconds=(30.0,),
+        on_auth_rejected=refreshed,
+    )
+    party.start()
+    try:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and len(transport.tokens_offered) < 2:
+            time.sleep(0.01)
+        assert transport.tokens_offered[:2] == ["stale-jwt", "fresh-jwt"]
+        assert any("credential refreshed" in line for line in logged)
+    finally:
+        party.stop()
+
+
+def test_a_refusal_nobody_can_fix_keeps_the_ordinary_backoff(tmp_path):
+    """No fresh token means no new attempt to make: hammering the relay every
+    few milliseconds would only get this host rate-limited."""
+    identity = load_or_create_identity(tmp_path / "host_device.key")
+    transport = _RejectingTransport(_FakeLink(), refusals=99)
+    logged: list[str] = []
+
+    party = HostParty(
+        transport=transport,
+        channel_id="testchannel00",
+        pairing_factory=lambda: Pairing.initiator(
+            device_id=HOST_DEVICE_ID,
+            device_identity=identity,
+            channel_id="testchannel00",
+            digits="428913",
+        ),
+        device_id=HOST_DEVICE_ID,
+        device_identity=identity,
+        key_version=1,
+        build_task_server=lambda *_args: None,
+        logger=logged.append,
+        reconnect=True,
+        backoff_seconds=(30.0,),
+        on_auth_rejected=lambda _token: False,
+    )
+    party.start()
+    try:
+        time.sleep(0.3)
+        assert len(transport.tokens_offered) == 1
+        assert any("redialling in 30s" in line for line in logged)
     finally:
         party.stop()
