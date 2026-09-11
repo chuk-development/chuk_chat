@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/storage/cowork_chat_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/ui/expressive/connected_group.dart';
 import 'package:cowork/widgets/chat_documents_panel.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 
@@ -128,7 +129,7 @@ void main() {
       await tester.tap(find.text('Budget'));
       await tester.pump();
       expect(find.byType(ChatDocumentView), findsOneWidget);
-      await tester.tap(find.byTooltip('Back to the list'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pump();
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -156,7 +157,12 @@ void main() {
         ],
       });
       await tester.pump();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Workspace'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(ConnectedGroup),
+          matching: find.text('Files'),
+        ),
+      );
       await tester.pump();
       expect(find.text('reports'), findsOneWidget);
       expect(find.text('brief.md'), findsNothing);
@@ -164,17 +170,17 @@ void main() {
       await tester.tap(find.text('reports'));
       await tester.pump();
       expect(find.text('brief.md'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'reports'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('files_crumb_0')), findsOneWidget);
       await tester.tap(find.byTooltip('Grid view'));
       await tester.pump();
-      expect(find.byType(GridView), findsOneWidget);
+      expect(find.byType(SliverGrid), findsOneWidget);
       await tester.tap(find.text('brief.md'));
       await tester.pump();
       expect(relay.requests.last, 'file:reports/brief.md');
-      await tester.tap(find.byTooltip('Back to the list'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pump();
-      expect(find.byType(GridView), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Workspace'));
+      expect(find.byType(SliverGrid), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey<String>('files_crumb_root')));
       await tester.pump();
       expect(find.text('README.md'), findsOneWidget);
       expect(find.text('brief.md'), findsNothing);

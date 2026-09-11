@@ -4,12 +4,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/storage/cowork_chat_store.dart';
+import 'package:cowork/ui/expressive/connected_group.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 import 'package:cowork/widgets/sandbox_artifact_block.dart';
@@ -331,9 +334,10 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final rows = _rows;
+    if (widget.fullPage) return _buildScreen(context, rows);
     final theme = Theme.of(context);
     final media = MediaQuery.sizeOf(context);
-    final rows = _rows;
     // The house shell: margin collapses on a small window, the outer radius
     // drops with it, and one Material both draws the edge and clips it.
     final margin = media.width < 560 || media.height < 560 ? 8.0 : 24.0;
@@ -355,21 +359,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
                       : _buildOnePane(context, rows),
                 ),
         ),
-        if (!widget.fullPage) _buildScopeFooter(context),
+        _buildScopeFooter(context),
       ],
     );
-    if (widget.fullPage) {
-      return PopScope(
-        canPop: _selectedId == null,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop && _selectedId != null) _deselect();
-        },
-        child: Scaffold(
-          backgroundColor: theme.colorScheme.surface,
-          body: SafeArea(child: contents),
-        ),
-      );
-    }
     return Dialog(
       clipBehavior: Clip.antiAlias,
       insetPadding: EdgeInsets.all(margin),
@@ -380,6 +372,159 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       child: SizedBox(width: width, height: height, child: contents),
     );
   }
+
+  // --- the phone screen ------------------------------------------------------
+
+  /// The full-screen form: the app's own frame ([ExpressiveScreen]), so the
+  /// title, the one back target and the veil are the same ones every other
+  /// screen wears. The list and the reader are the same screen, one behind the
+  /// other: back leaves the reader first and the route second.
+  Widget _buildScreen(BuildContext context, List<Map<String, dynamic>> rows) {
+    final bool reading = _selectedId != null;
+    final Map<String, dynamic>? open = _selected;
+    final bool readable = open != null && open['kind'] != 'file';
+    final String name = '${_documents[_selectedId]?['title'] ?? 'Document'}';
+    return PopScope(
+      canPop: !reading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && reading) _deselect();
+      },
+      child: ExpressiveScreen(
+        title: reading ? null : 'Files',
+        titleWidget: reading ? _MiddleEllipsis(text: name) : null,
+        onBack: reading ? _deselect : null,
+        actions: reading
+            ? <Widget>[
+                if (readable)
+                  ExpressiveIconButton(
+                    hugeIcon: HugeIcons.share01,
+                    tooltip: 'Share',
+                    semanticsId: 'files_share',
+                    onTap: () => ChatDocumentView.share(open),
+                  ),
+                if (readable)
+                  ExpressiveIconButton(
+                    hugeIcon: HugeIcons.download01,
+                    tooltip: 'Save',
+                    semanticsId: 'files_save',
+                    onTap: () => ChatDocumentView.save(open),
+                  ),
+              ]
+            : <Widget>[
+                ExpressiveIconButton(
+                  hugeIcon: _explorerOptions.grid
+                      ? HugeIcons.listView
+                      : HugeIcons.gridView,
+                  tooltip: _explorerOptions.grid ? 'List view' : 'Grid view',
+                  semanticsId: 'files_view_mode',
+                  onTap: () => setState(
+                    () => _explorerOptions.grid = !_explorerOptions.grid,
+                  ),
+                ),
+                ExpressiveIconButton(
+                  hugeIcon: HugeIcons.refresh,
+                  tooltip: 'Refresh files',
+                  semanticsId: 'files_refresh',
+                  onTap: _request,
+                ),
+              ],
+        builder: (BuildContext context) => reading
+            ? _buildScreenReader(context)
+            : _buildScreenList(context, rows),
+      ),
+    );
+  }
+
+  Widget _buildScreenList(
+    BuildContext context,
+    List<Map<String, dynamic>> rows,
+  ) {
+    final double top = MediaQuery.paddingOf(context).top;
+    if (_loading) {
+      return Padding(
+        padding: EdgeInsets.only(top: top),
+        child: const Center(child: ExpressiveLoader()),
+      );
+    }
+    if (rows.isEmpty) {
+      return _EmptyBlock(
+        topInset: top,
+        icon: HugeIcons.folder01,
+        title: 'No files yet',
+        detail:
+            'Ask $_owner for a table, a chart or a note. It is kept in this '
+            'chat across restarts, and files it writes in its container show '
+            'up here too.',
+      );
+    }
+    return _DocumentExplorer(
+      options: _explorerOptions,
+      documents: rows,
+      owner: _owner,
+      selectedId: _selectedId,
+      onSelect: _select,
+      phone: true,
+      topInset: top + 8,
+      banner: _error == null ? null : _buildErrorCard(context, _error!),
+    );
+  }
+
+  Widget _buildScreenReader(BuildContext context) {
+    final double top = MediaQuery.paddingOf(context).top;
+    final double bottom = MediaQuery.paddingOf(context).bottom;
+    if (_reading) {
+      return Padding(
+        padding: EdgeInsets.only(top: top),
+        child: const Center(child: ExpressiveLoader()),
+      );
+    }
+    if (_error != null) {
+      return _EmptyBlock(
+        topInset: top,
+        icon: HugeIcons.alertCircle,
+        title: 'This document could not be opened',
+        detail: _error!,
+        action: _PillAction(
+          icon: HugeIcons.refresh,
+          label: 'Try again',
+          onTap: () => _request(id: _selectedId),
+        ),
+      );
+    }
+    if (_selected == null) {
+      return _EmptyBlock(
+        topInset: top,
+        icon: HugeIcons.laptop,
+        title: 'This document is not on the device yet',
+        detail:
+            'It is in $_owner’s container. Reading it needs the laptop to '
+            'be connected.',
+        action: _PillAction(
+          icon: HugeIcons.refresh,
+          label: 'Try again',
+          onTap: () => _request(id: _selectedId),
+        ),
+      );
+    }
+    if (_file != null) {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(16, top + 8, 16, bottom + 24),
+        children: <Widget>[SandboxArtifactBlock(payload: _file!)],
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ChatDocumentView(
+        document: _selected!,
+        showActions: false,
+        // The document starts below the bar and then travels up behind it,
+        // which is the only way the veil has anything to veil.
+        topInset: top + 8,
+      ),
+    );
+  }
+
+  // --- the dialog form -------------------------------------------------------
 
   /// The house header: an accent rule on top, the owning coworker in an avatar
   /// tile, and one status line. The status is what the panel actually knows —
@@ -419,8 +564,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               color: scheme.primary.withValues(alpha: isDark ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: AppIcon(
-              Icons.folder_shared_outlined,
+            child: HugeIcon(
+              HugeIcons.folder01,
               size: 20,
               color: scheme.primary,
             ),
@@ -432,7 +577,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.fullPage ? 'Files · $_owner' : '$_owner · Documents',
+                  '$_owner · Documents',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -451,15 +596,16 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               ],
             ),
           ),
-          IconButton(
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.refresh,
             tooltip: 'Refresh documents',
-            onPressed: _request,
-            icon: const AppIcon(Icons.refresh),
+            onTap: _request,
           ),
-          IconButton(
+          const SizedBox(width: 8),
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.cancel01,
             tooltip: 'Close',
-            onPressed: () => Navigator.pop(context),
-            icon: const AppIcon(Icons.close),
+            onTap: () => Navigator.pop(context),
           ),
         ],
       ),
@@ -480,7 +626,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AppIcon(Icons.inventory_2_outlined, size: 12, color: color),
+          HugeIcon(HugeIcons.layers01, size: 12, color: color),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -504,8 +650,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
-          AppIcon(
-            Icons.error_outline,
+          HugeIcon(
+            HugeIcons.alertCircle,
             size: 18,
             color: scheme.onErrorContainer,
           ),
@@ -516,6 +662,38 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: scheme.onErrorContainer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The same message on the phone, where a band across the top would cut the
+  /// veil in two: a card that scrolls with the list it belongs to.
+  Widget _buildErrorCard(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: kBorderRadiusRow,
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: <Widget>[
+          HugeIcon(
+            HugeIcons.alertCircle,
+            size: 18,
+            color: scheme.onErrorContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onErrorContainer,
+              ),
             ),
           ),
         ],
@@ -538,8 +716,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
         ],
       );
 
-  /// On a phone the two panes become two screens: the list, and the document
-  /// with a way back to it.
+  /// On a narrow dialog the two panes become two views: the list, and the
+  /// document with a way back to it.
   Widget _buildOnePane(BuildContext context, List<Map<String, dynamic>> rows) {
     if (_selectedId == null) return _buildList(context, rows);
     final theme = Theme.of(context);
@@ -548,14 +726,15 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 6, 16, 6),
+          padding: const EdgeInsets.fromLTRB(8, 6, 16, 6),
           child: Row(
             children: [
-              IconButton(
+              ExpressiveIconButton(
+                hugeIcon: HugeIcons.arrowLeft02,
                 tooltip: 'Back to the list',
-                onPressed: _deselect,
-                icon: const AppIcon(Icons.arrow_back),
+                onTap: _deselect,
               ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '${title ?? 'Document'}',
@@ -586,7 +765,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   Widget _buildList(BuildContext context, List<Map<String, dynamic>> rows) {
     if (rows.isEmpty) {
       return _EmptyBlock(
-        icon: Icons.folder_open_outlined,
+        icon: HugeIcons.folder01,
         title: 'No documents yet',
         detail:
             'Ask $_owner for a table, a chart or a note. It is kept in this '
@@ -609,16 +788,15 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       // A selected document with no body is a read that did not arrive. Saying
       // "select a document" here would blame the reader for a failed request.
       return _EmptyBlock(
-        icon: Icons.cloud_off_outlined,
+        icon: HugeIcons.laptop,
         title: 'This document is not on the device yet',
         detail:
             'It is in $_owner’s container. Reading it needs the laptop to '
             'be connected.',
-        action: FilledButton.tonalIcon(
-          style: _pillButton,
-          onPressed: () => _request(id: _selectedId),
-          icon: const AppIcon(Icons.refresh, size: 18),
-          label: const Text('Try again'),
+        action: _PillAction(
+          icon: HugeIcons.refresh,
+          label: 'Try again',
+          onTap: () => _request(id: _selectedId),
         ),
       );
     }
@@ -628,7 +806,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       // row the agent touched last.
       final recent = rows.isEmpty ? null : rows.first;
       return _EmptyBlock(
-        icon: Icons.article_outlined,
+        icon: HugeIcons.file01,
         title: rows.isEmpty
             ? 'No documents yet'
             : 'Select a document to read it',
@@ -639,14 +817,10 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
                   'beside each name say how current it is.',
         action: recent == null
             ? null
-            : FilledButton.tonalIcon(
-                style: _pillButton,
-                onPressed: () => _select(recent),
-                icon: AppIcon(_documentIcon(recent), size: 18),
-                label: Text(
-                  'Open ${recent['title']}',
-                  overflow: TextOverflow.ellipsis,
-                ),
+            : _PillAction(
+                icon: _documentIcon(recent),
+                label: 'Open ${recent['title']}',
+                onTap: () => _select(recent),
               ),
       );
     }
@@ -677,29 +851,32 @@ class _GroupHeading extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     return Padding(
-      padding: EdgeInsets.fromLTRB(4, topInset, 4, 10),
+      padding: EdgeInsets.fromLTRB(10, topInset, 10, 10),
       child: Row(
         children: [
           Flexible(
             child: Text(
               title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.m3.onSurfaceVariant,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: kBorderRadiusPill,
             ),
             child: Text(
               '$count',
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: accent,
               ),
             ),
@@ -710,9 +887,10 @@ class _GroupHeading extends StatelessWidget {
   }
 }
 
-/// One list row, in the house file-tile shape: a tinted type icon, the name on
-/// the first line, and the facts a reader cannot get anywhere else on the
-/// second — where the file sits, how big it is, and how current it is.
+/// One list row, in the shape every other list in the app uses (the roster, the
+/// media tab): a springing surface with no border, a typed tile on the left,
+/// the name on the first line, and the facts a reader cannot get anywhere else
+/// on the second — where the file sits, how big it is, and how current it is.
 class _DocumentRow extends StatelessWidget {
   const _DocumentRow({
     required this.document,
@@ -729,7 +907,6 @@ class _DocumentRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final m3 = theme.m3;
-    final isDark = theme.brightness == Brightness.dark;
     final isFile = document['kind'] == 'file';
     final path = '${document['path'] ?? ''}';
     final title = '${document['title']}';
@@ -741,85 +918,135 @@ class _DocumentRow extends StatelessWidget {
         _kindLabel(document),
       ?documentFreshness(document),
     ].join(' · ');
-    return Material(
-      color: selected
-          ? scheme.primary.withValues(alpha: isDark ? 0.22 : 0.14)
-          : m3.surfaceContainer,
-      borderRadius: kBorderRadiusCard,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: kBorderRadiusCard,
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: MorphTap(
         onTap: onTap,
-        child: Semantics(
-          selected: selected,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(
-                      alpha: isDark ? 0.18 : 0.12,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: AppIcon(
-                    _documentIcon(document),
-                    size: 22,
-                    color: scheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Tooltip(
-                        message: isFile && path.isNotEmpty ? path : title,
-                        child: Text(
-                          title,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: selected ? scheme.primary : null,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
+        pressedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            _KindTile(document: document, selected: selected),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Tooltip(
+                    message: isFile && path.isNotEmpty ? path : title,
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                       ),
-                      if (detail.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          detail,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: m3.onSurfaceVariant,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
+                  if (detail.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: m3.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Every button in the house style is a pill.
-final ButtonStyle _pillButton = FilledButton.styleFrom(
-  shape: const StadiumBorder(),
-  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-);
+/// The square that carries a row's type glyph: the corner of the icon targets
+/// in the chrome, so a list of files and the buttons above it read as one set.
+class _KindTile extends StatelessWidget {
+  const _KindTile({required this.document, this.selected = false});
+
+  final Map<String, dynamic> document;
+  final bool selected;
+
+  static const double size = 48;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.18)
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(size * 0.34),
+      ),
+      child: HugeIcon(
+        _documentIcon(document),
+        size: size * 0.46,
+        color: selected ? scheme.primary : scheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+/// The app's labelled button, with an icon from the app's own set.
+class _PillAction extends StatelessWidget {
+  const _PillAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final HugeIconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return MorphTap(
+      onTap: onTap,
+      color: scheme.secondaryContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          HugeIcon(icon, size: 20, color: scheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: scheme.onSecondaryContainer,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Where a workspace file sits, short enough for one line. Twenty skills all
 /// carry a `SKILL.md`, so the folder is what tells the rows apart — and the
@@ -854,20 +1081,46 @@ String _kindLabel(Map<String, dynamic> document) => switch (document['kind']) {
   _ => 'Document',
 };
 
-IconData _documentIcon(Map<String, dynamic> document) {
-  if (document['kind'] == 'table') return Icons.table_chart_outlined;
-  if (document['kind'] == 'bar_chart') return Icons.bar_chart;
-  if (document['kind'] != 'file') return Icons.description_outlined;
+/// The glyph for a row, from the app's own set: the kind first, then the file
+/// extension (docs/DESIGN.md §5 — sheet for tables, text for markdown, braces
+/// for JSON, source code for markup, and so on down the list).
+HugeIconData _documentIcon(Map<String, dynamic> document) {
+  if (document['kind'] == 'table') return HugeIcons.sheet;
+  if (document['kind'] == 'bar_chart') return HugeIcons.presentation01;
+  if (document['kind'] != 'file') return HugeIcons.fileText;
   final name = '${document['path'] ?? document['title'] ?? ''}'.toLowerCase();
   final suffix = name.contains('.') ? name.split('.').last : '';
   return switch (suffix) {
-    'pdf' => Icons.picture_as_pdf_outlined,
-    'csv' || 'xlsx' => Icons.table_chart_outlined,
-    'pptx' => Icons.slideshow_outlined,
-    'docx' => Icons.article_outlined,
-    'html' || 'svg' => Icons.code_outlined,
-    'md' || 'markdown' || 'txt' => Icons.description_outlined,
-    _ => Icons.insert_drive_file_outlined,
+    'pdf' => HugeIcons.pdf01,
+    'csv' || 'tsv' || 'xlsx' || 'xls' || 'ods' => HugeIcons.sheet,
+    'pptx' || 'ppt' || 'key' => HugeIcons.presentation01,
+    'md' || 'markdown' || 'rst' => HugeIcons.fileText,
+    'json' || 'yaml' || 'yml' || 'toml' => HugeIcons.braces,
+    'html' ||
+    'htm' ||
+    'xml' ||
+    'css' ||
+    'js' ||
+    'ts' ||
+    'dart' ||
+    'py' ||
+    'c' ||
+    'cpp' ||
+    'go' ||
+    'rs' => HugeIcons.sourceCode,
+    'sh' || 'bash' || 'zsh' || 'fish' => HugeIcons.terminal,
+    'png' ||
+    'jpg' ||
+    'jpeg' ||
+    'gif' ||
+    'webp' ||
+    'bmp' ||
+    'svg' => HugeIcons.image01,
+    'mp4' || 'mov' || 'webm' || 'mkv' => HugeIcons.video01,
+    'zip' || 'tar' || 'gz' || 'tgz' || 'rar' || '7z' => HugeIcons.zip01,
+    'db' || 'sqlite' || 'sql' => HugeIcons.database01,
+    'epub' => HugeIcons.bookOpen01,
+    _ => HugeIcons.file01,
   };
 }
 
@@ -879,12 +1132,17 @@ class _EmptyBlock extends StatelessWidget {
     required this.title,
     required this.detail,
     this.action,
+    this.topInset = 0,
   });
 
-  final IconData icon;
+  final HugeIconData icon;
   final String title;
   final String detail;
   final Widget? action;
+
+  /// Room the floating bar needs above the block, so a short empty state is
+  /// centred in what the reader can actually see.
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
@@ -892,15 +1150,15 @@ class _EmptyBlock extends StatelessWidget {
     final m3 = theme.m3;
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(24, 24 + topInset, 24, 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 340),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppIcon(
+              HugeIcon(
                 icon,
-                size: 64,
+                size: 56,
                 color: m3.onSurfaceVariant.withValues(alpha: 0.4),
               ),
               const SizedBox(height: 16),
@@ -908,14 +1166,14 @@ class _EmptyBlock extends StatelessWidget {
                 title,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: m3.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 detail,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: m3.onSurfaceVariant,
                   height: 1.45,
                 ),
@@ -925,6 +1183,54 @@ class _EmptyBlock extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A screen title that loses its middle, not its end.
+///
+/// A file name ends with the part that says what it is — `.md`, `.xlsx` — and
+/// ellipsising from the right throws exactly that away. Cut from the middle and
+/// both ends survive (docs/DESIGN.md §2).
+class _MiddleEllipsis extends StatelessWidget {
+  const _MiddleEllipsis({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle? style = Theme.of(context).textTheme.headlineSmall
+        ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double scale = MediaQuery.textScalerOf(context).scale(1);
+        double width(String candidate) {
+          final TextPainter painter = TextPainter(
+            text: TextSpan(text: candidate, style: style),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+            textScaler: TextScaler.linear(scale),
+          )..layout();
+          return painter.width;
+        }
+
+        String shown = text;
+        if (width(shown) > constraints.maxWidth) {
+          int head = text.length ~/ 2;
+          int tail = text.length - head;
+          while (head + tail > 4) {
+            if (head > tail) {
+              head--;
+            } else {
+              tail--;
+            }
+            shown =
+                '${text.substring(0, head)}…${text.substring(text.length - tail)}';
+            if (width(shown) <= constraints.maxWidth) break;
+          }
+        }
+        return Text(shown, style: style, maxLines: 1, softWrap: false);
+      },
     );
   }
 }
