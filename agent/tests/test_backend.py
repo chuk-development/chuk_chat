@@ -881,3 +881,35 @@ def test_client_exposes_the_effort_it_sends():
         client.close()
     finally:
         server.stop()
+
+
+def _jwt(exp: float) -> str:
+    """A token shaped like a GoTrue JWT: only the payload is ever read."""
+    import base64
+    import json as _json
+
+    def seg(obj):
+        raw = _json.dumps(obj, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    return f"{seg({'alg': 'HS256'})}.{seg({'exp': int(exp), 'sub': 'u1'})}.sig"
+
+
+def test_session_reads_its_deadline_from_the_token_when_none_was_passed():
+    """A caller that omits ``expires_at`` must not get a session that believes it
+    never expires: the host then redials the relay forever with a dead JWT
+    (bead cowork-fm8w)."""
+    import time as _time
+
+    stale = _session(token=_jwt(_time.time() - 60))
+    assert stale.expires_at is None or stale.expires_at > 0
+    assert stale.is_expired() is True
+
+    fresh = _session(token=_jwt(_time.time() + 3600))
+    assert fresh.is_expired() is False
+
+
+def test_session_without_a_readable_token_still_assumes_valid():
+    """An opaque token carries no deadline, and guessing one would refresh in a
+    loop. The ``auth_error`` frame stays the backstop there."""
+    assert _session(token="not-a-jwt").is_expired() is False
