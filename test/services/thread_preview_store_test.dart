@@ -74,4 +74,19 @@ void main() {
     ]);
     expect(store.newestOf(<String>['a', 'b'])!.text, 'newer');
   });
+
+  test('blocks that arrive as a JSON string are read too', () {
+    final store = ThreadPreviewStore();
+    store.noteRows('t5', <Map<String, dynamic>>[
+      {
+        'sender': 'ai',
+        'text': '',
+        'contentBlocks':
+            '[{"type":"sandboxArtifact","sandboxArtifact":'
+            '{"storagePath":"p","filename":"Bericht.md","mime":"text/markdown",'
+            '"sizeBytes":12}}]',
+      },
+    ]);
+    expect(store.of('t5')!.text, 'Bericht.md');
+  });
 }

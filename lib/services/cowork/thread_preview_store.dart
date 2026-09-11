@@ -21,6 +21,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/cowork/media_index.dart';
 
 /// One thread's last line.
 @immutable
@@ -51,6 +52,26 @@ class ThreadPreview {
       at: DateTime.tryParse('${value['at']}'),
     );
   }
+}
+
+/// The content blocks of a stored row.
+///
+/// Two shapes reach this code and both are legitimate: the chat's own rows hold
+/// a list, the cowork replay rows hold the SAME list as a JSON string (it goes
+/// through a column that takes text). Reading only one of them is why the media
+/// index and the roster preview came back empty for relayed files.
+List<Object?> contentBlocksOf(Map<String, dynamic> row) {
+  final Object? raw = row['contentBlocks'];
+  if (raw is List) return raw;
+  if (raw is String && raw.trim().isNotEmpty) {
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is List) return decoded;
+    } catch (_) {
+      // A row whose blocks cannot be read carries none.
+    }
+  }
+  return const <Object?>[];
 }
 
 class ThreadPreviewStore extends ChangeNotifier {
@@ -125,7 +146,13 @@ class ThreadPreviewStore extends ChangeNotifier {
         final StoredChat? chat = await ChatStorageService.loadFullChat(key);
         final List<ChatMessage>? messages = chat?.messagesOrNull;
         if (messages == null || messages.isEmpty) continue;
-        noteRows(key, messages.map((ChatMessage m) => m.toJson()).toList());
+        final List<Map<String, dynamic>> rows = messages
+            .map((ChatMessage m) => m.toJson())
+            .toList();
+        noteRows(key, rows);
+        // The same read fills the media index, so the Media tab works after a
+        // restart without a second pass over every thread.
+        MediaIndex.instance.noteRows(key, rows);
       } catch (_) {
         // A thread that cannot be read leaves its line empty.
       }
@@ -175,8 +202,8 @@ class ThreadPreviewStore extends ChangeNotifier {
     if (text is String && text.trim().isNotEmpty) {
       return _flatten(text);
     }
-    final Object? blocks = row['contentBlocks'];
-    if (blocks is List) {
+    final List<Object?> blocks = contentBlocksOf(row);
+    if (blocks.isNotEmpty) {
       for (final Object? block in blocks.reversed) {
         if (block is! Map) continue;
         final Object? blockText = block['text'];
