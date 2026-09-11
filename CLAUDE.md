@@ -469,8 +469,17 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 - Fastlane compiles nothing; every lane shells out to `flutter build`. Lanes run
   on this machine, on a GitHub runner, or on a Mac for macOS/iOS.
   **No build server is needed.**
-- Install once: `sudo apt install ruby-dev build-essential && gem install
-  bundler && bundle install`. Then `cd android && bundle exec fastlane lanes`.
+- Install once: `sudo apt install ruby-dev build-essential`, then
+  `gem install --user-install bundler` (a plain `gem install` hits
+  `Gem::FilePermissionError` on `/var/lib/gems`), then
+  `export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"` — RubyGems does not
+  add that directory itself, so `bundle` is otherwise not found — and finally
+  `bundle install` at the repository root. Then
+  `cd android && bundle exec fastlane lanes`.
+- **One `Gemfile`, at the root, with a committed `Gemfile.lock`.** Bundler walks
+  up from the working directory, so it serves `android/`, `linux/` and `macos/`.
+  Do not re-add per-platform Gemfiles — that is how the repo ended up with three
+  unlocked dependency sets and a plugin no Fastfile called.
 - **`fastlane/metadata/android/` lives at the repository root, not under
   `android/`.** That is the path F-Droid reads straight out of the git repo;
   `supply` is pointed at the same tree via `metadata_path`, and the README

@@ -1,6 +1,10 @@
-# Fastlane and its plugins. No Gemfile.lock is committed, so every
-# `bundle install` resolves the newest gem the constraint below allows. Commit
-# a lock if a release ever has to be reproducible down to the fastlane build.
+# Fastlane, for every platform. This is the only Gemfile in the repository:
+# bundler walks up from the working directory, so `bundle exec fastlane` finds
+# it from android/, linux/ and macos/ alike. There used to be one per platform,
+# which meant three unlocked dependency sets and a plugin
+# (fastlane-plugin-flutter_version) that no Fastfile ever called.
+#
+# Gemfile.lock is committed, so a local run and a CI run use the same versions.
 #
 #   gem install bundler
 #   bundle install
