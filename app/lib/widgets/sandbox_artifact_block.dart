@@ -435,66 +435,189 @@ class _ArtifactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final human = _humanReadableBytes(payload.sizeBytes);
+    // A file with nothing to preview is one line: a typed badge, the name with
+    // its extension, the size. The row itself opens it. Two big buttons in a
+    // chat bubble are louder than the message they belong to, and they squeezed
+    // the one thing that identifies the file — its name — down to "gesch…".
+    if (child == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(_icon, size: 21, color: scheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _FileName(filename: payload.filename, scheme: scheme),
+                          const SizedBox(height: 2),
+                          Text(
+                            human,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      onPressed: onSave,
+                      icon: const Icon(Icons.download, size: 20),
+                      tooltip: 'Download',
+                      visualDensity: VisualDensity.compact,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(_icon, size: 22, color: scheme.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      payload.filename,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$human  •  ${payload.mime}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    Icon(_icon, size: 22, color: scheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _FileName(filename: payload.filename, scheme: scheme),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$human  ·  ${_kindLabel(payload.mime)}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    IconButton(
+                      onPressed: onSave,
+                      icon: const Icon(Icons.download, size: 20),
+                      tooltip: 'Download',
+                      visualDensity: VisualDensity.compact,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              if (onOpen != null) ...[
-                FilledButton.tonalIcon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('Open'),
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 10),
+                child!,
               ],
-              FilledButton.tonalIcon(
-                onPressed: onSave,
-                icon: const Icon(Icons.download, size: 18),
-                label: const Text('Download'),
-              ),
-            ],
+            ),
           ),
-          if (child != null) ...[const SizedBox(height: 10), child!],
-        ],
+        ),
       ),
     );
   }
+}
+
+/// The file name, with the extension in the quieter colour.
+///
+/// `Marktdaten_TEST_2026-09-11.md` is read as a name and a kind, and the kind
+/// is the part a reader does not need in full strength. Nothing is hidden: the
+/// whole name is there, it simply stops shouting the last four characters.
+class _FileName extends StatelessWidget {
+  const _FileName({required this.filename, required this.scheme});
+
+  final String filename;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final int dot = filename.lastIndexOf('.');
+    final bool hasExtension = dot > 0 && dot < filename.length - 1;
+    final String stem = hasExtension ? filename.substring(0, dot) : filename;
+    final String extension = hasExtension ? filename.substring(dot) : '';
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: stem),
+          if (extension.isNotEmpty)
+            TextSpan(
+              text: extension,
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+        ],
+      ),
+      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+/// A short, readable name for a mime type. `text/markdown` says nothing to a
+/// reader that "Markdown" does not say better, and the raw type was long
+/// enough to push the size off the line.
+String _kindLabel(String mime) {
+  final String m = mime.toLowerCase().split(';').first.trim();
+  return switch (m) {
+    'text/markdown' || 'text/x-markdown' => 'Markdown',
+    'text/plain' => 'Text',
+    'text/html' || 'application/xhtml+xml' => 'HTML',
+    'text/csv' => 'CSV',
+    'application/json' => 'JSON',
+    'application/xml' || 'text/xml' => 'XML',
+    'application/pdf' => 'PDF',
+    'image/svg+xml' => 'SVG',
+    _ =>
+      m.startsWith('image/')
+          ? 'Image'
+          : m.startsWith('video/')
+          ? 'Video'
+          : m.startsWith('audio/')
+          ? 'Audio'
+          : m.startsWith('text/')
+          ? 'Text'
+          : m,
+  };
 }
 
 class _ArtifactErrorRow extends StatelessWidget {
