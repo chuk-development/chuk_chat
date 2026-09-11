@@ -17,6 +17,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/room_thread_view.dart';
@@ -139,13 +141,18 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            Icon(Icons.wifi_off, size: 16, color: theme.colorScheme.onErrorContainer),
+            AppIcon(
+              Icons.wifi_off,
+              size: 16,
+              color: theme.colorScheme.onErrorContainer,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Connection changed. Reopen the room to continue.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onErrorContainer),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
               ),
             ),
           ],
@@ -173,12 +180,12 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     if (!mounted) return;
     switch (event) {
       case CoworkRelayRoomTurn(
-          :final roomId,
-          :final round,
-          :final agentId,
-          :final handle,
-          :final text,
-        ):
+        :final roomId,
+        :final round,
+        :final agentId,
+        :final handle,
+        :final text,
+      ):
         if (roomId != widget.roomId) break; // another room on the same socket
         setState(() {
           _turns.add(
@@ -246,7 +253,12 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     if (widget.onSend == null) {
       return banner == null
           ? thread
-          : Column(children: [banner, Expanded(child: thread)]);
+          : Column(
+              children: [
+                banner,
+                Expanded(child: thread),
+              ],
+            );
     }
     return Column(
       children: [
@@ -278,7 +290,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
-                  icon: const Icon(Icons.send),
+                  icon: const AppIcon(Icons.send),
                   onPressed: _disconnected ? null : _send,
                 ),
               ],

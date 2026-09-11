@@ -38,6 +38,8 @@ import 'package:cowork/services/mcp/chuk_mcp_mirror.dart';
 import 'package:cowork/services/mcp/mcp_connector_sync.dart';
 import 'package:cowork/services/mcp/mcp_oauth.dart';
 import 'package:cowork/services/mcp/mcp_redirect.dart';
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
+import 'package:cowork/services/mcp/mcp_probe_control.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 
 /// The MCP revision the challenge probe claims to speak. It only has to be a
@@ -223,7 +225,8 @@ class McpService {
   static bool _isAdoptDue() {
     final now = clock();
     final adopted = _adoptedAt;
-    if (adopted != null && now.difference(adopted) < adoptInterval) return false;
+    if (adopted != null && now.difference(adopted) < adoptInterval)
+      return false;
     final attempted = _attemptedAt;
     if (attempted != null && now.difference(attempted) < adoptRetryInterval) {
       return false;
@@ -254,12 +257,15 @@ class McpService {
       final rawConnections = blob['connections'];
       if (rawConnections is! List) return true;
       final rawSecrets = blob['secrets'];
-      final secrets = rawSecrets is Map ? rawSecrets : const <Object?, Object?>{};
+      final secrets = rawSecrets is Map
+          ? rawSecrets
+          : const <Object?, Object?>{};
 
       for (final entry in rawConnections) {
         if (entry is! Map) continue;
-        final connection =
-            McpConnection.fromJson(Map<String, dynamic>.from(entry));
+        final connection = McpConnection.fromJson(
+          Map<String, dynamic>.from(entry),
+        );
         if (connection.id.isEmpty || connection.url.isEmpty) continue;
 
         final secret = secrets[connection.id];
@@ -270,7 +276,8 @@ class McpService {
           final creds = secret['api_credentials'];
           if (creds is Map) {
             apiCreds = <String, String>{
-              for (final e in creds.entries) e.key.toString(): e.value.toString(),
+              for (final e in creds.entries)
+                e.key.toString(): e.value.toString(),
             };
           }
         }
@@ -317,8 +324,9 @@ class McpService {
       final local = {for (final c in await store.load()) c.id: c};
       var changed = false;
       for (final row in rows.values) {
-        final connection = McpConnection.fromJson(row.connection)
-            .copyWith(tools: const <McpTool>[]);
+        final connection = McpConnection.fromJson(
+          row.connection,
+        ).copyWith(tools: const <McpTool>[]);
         if (connection.id.isEmpty || connection.url.isEmpty) continue;
         if (!local.containsKey(connection.id)) {
           await store.upsert(connection);
@@ -447,7 +455,8 @@ class McpService {
       if (row.id != id || (row.connection['id'] ?? '').toString() != id) return;
       await chukMirror.delete(id);
     } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ [MCP] chuk row delete for $id skipped: $e');
+      if (kDebugMode)
+        debugPrint('⚠️ [MCP] chuk row delete for $id skipped: $e');
     }
   }
 
@@ -511,6 +520,9 @@ class McpService {
       await store.upsert(connection);
       connections.value = await store.load();
       unawaited(_pushRemote());
+      // The host has the credentials now; ask it to dial before the user goes
+      // looking for the tools this connector was signed in for.
+      unawaited(probe());
       return McpConnectResult(
         McpConnectStatus.connected,
         connection: connection,
@@ -575,6 +587,9 @@ class McpService {
       await store.setApiCredentials(id, credentials);
       connections.value = await store.load();
       unawaited(_pushRemote());
+      // The host has the credentials now; ask it to dial before the user goes
+      // looking for the tools this connector was signed in for.
+      unawaited(probe());
       return McpConnectResult(
         McpConnectStatus.connected,
         connection: connection,
@@ -647,10 +662,7 @@ class McpService {
     final challenge = wwwAuthenticate ?? await _challengeFor(endpoint);
     final McpAuthServer server;
     try {
-      server = await oauth.discover(
-        endpoint,
-        wwwAuthenticate: challenge,
-      );
+      server = await oauth.discover(endpoint, wwwAuthenticate: challenge);
     } on McpAuthException {
       if (signInOptional) return '';
       rethrow;
@@ -854,6 +866,33 @@ class McpService {
     return applied;
   }
 
+  // ─── Asking the host to check them ────────────────────────────────────
+
+  /// Ask the paired host to dial every stored connector now.
+  ///
+  /// This is what makes a connector the user just signed in to show its tools
+  /// straight away instead of after the next task. The sign-in stays here (a
+  /// consent screen needs a person); the dialling is the host's, always — it
+  /// holds the network the connectors are reachable from and it is the side
+  /// that will use them.
+  ///
+  /// Does nothing when no host is attached: an unpaired app has nobody to ask,
+  /// and the list keeps saying "not checked" rather than inventing a zero.
+  static Future<void> probe({McpProbeControl? control}) async {
+    final McpProbeControl? target =
+        control ??
+        CoworkRelayLink.instance.controller.value as McpProbeControl?;
+    if (target == null) return;
+    try {
+      final List<Map<String, dynamic>> payloads = await store.forwardPayloads();
+      if (payloads.isEmpty) return;
+      await target.probeMcpServers(payloads);
+    } catch (_) {
+      // A probe is a convenience. A relay that is down leaves the list as it
+      // was; the next task reports the same thing anyway.
+    }
+  }
+
   // ─── What the connectors answered with ─────────────────────────────────
 
   /// Take an `mcp_tools` frame from the host and record what each connector
@@ -892,22 +931,28 @@ class McpService {
       final List<McpTool> tools = <McpTool>[
         if (toolsRaw is List)
           for (final Object? tool in toolsRaw)
-            if (tool is Map)
-              McpTool.fromJson(Map<String, dynamic>.from(tool)),
+            if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
       ];
+      final String error = '${row['error'] ?? ''}'.trim();
       final List<String> before = target.tools
           .map((McpTool tool) => tool.name)
           .toList();
-      final List<String> after = tools.map((McpTool tool) => tool.name).toList();
-      if (before.length == after.length &&
-          List<String>.generate(
-            before.length,
-            (int i) => before[i],
-          ).join('\u0000') ==
-              after.join('\u0000')) {
-        continue;
-      }
-      await store.upsert(target.copyWith(tools: tools));
+      final List<String> after = tools
+          .map((McpTool tool) => tool.name)
+          .toList();
+      final bool sameTools =
+          before.length == after.length &&
+          before.join('\u0000') == after.join('\u0000');
+      final bool sameError = (target.lastError ?? '') == error;
+      if (sameTools && sameError && target.checkedAt != null) continue;
+      await store.upsert(
+        target.copyWith(
+          tools: tools,
+          checkedAt: DateTime.now(),
+          clearError: error.isEmpty,
+          lastError: error.isEmpty ? null : error,
+        ),
+      );
       changed++;
     }
     if (changed > 0) connections.value = await store.load();
@@ -944,8 +989,9 @@ class McpService {
       final accessToken = payload['access_token']?.toString() ?? '';
       final next = record.withTokens(
         McpTokens(
-          accessToken:
-              accessToken.isNotEmpty ? accessToken : record.tokens.accessToken,
+          accessToken: accessToken.isNotEmpty
+              ? accessToken
+              : record.tokens.accessToken,
           refreshToken: refreshToken,
           expiresAt: DateTime.tryParse(oauth['expires_at']?.toString() ?? ''),
           scope: record.tokens.scope,

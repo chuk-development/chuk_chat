@@ -15,7 +15,8 @@ class McpRedirectListener {
 
   Uri get redirectUri => throw UnsupportedError('Not supported on the web');
 
-  Future<Uri> get callback => throw UnsupportedError('Not supported on the web');
+  Future<Uri> get callback =>
+      throw UnsupportedError('Not supported on the web');
 
   Future<void> close() async {}
 }

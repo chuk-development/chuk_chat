@@ -216,7 +216,8 @@ class EncryptionService {
   static bool get _usePrefsBackend =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
-       (defaultTargetPlatform == TargetPlatform.linux && !kFeatureLinuxKeyring));
+          (defaultTargetPlatform == TargetPlatform.linux &&
+              !kFeatureLinuxKeyring));
 
   static Future<SharedPreferences> _prefs() async {
     _prefsCache ??= await SharedPreferences.getInstance();
@@ -369,9 +370,18 @@ class EncryptionService {
       } catch (_) {
         // Rollback local storage to maintain consistency
         await Future.wait([
-          if (oldLocalKey != null) _writeLocalSecret(keyKey, oldLocalKey) else _deleteLocalSecret(keyKey),
-          if (oldLocalSalt != null) _writeLocalSecret(saltKey, oldLocalSalt) else _deleteLocalSecret(saltKey),
-          if (oldLocalVersion != null) _writeLocalSecret(versionKey, oldLocalVersion) else _deleteLocalSecret(versionKey),
+          if (oldLocalKey != null)
+            _writeLocalSecret(keyKey, oldLocalKey)
+          else
+            _deleteLocalSecret(keyKey),
+          if (oldLocalSalt != null)
+            _writeLocalSecret(saltKey, oldLocalSalt)
+          else
+            _deleteLocalSecret(saltKey),
+          if (oldLocalVersion != null)
+            _writeLocalSecret(versionKey, oldLocalVersion)
+          else
+            _deleteLocalSecret(versionKey),
         ]);
         rethrow;
       }

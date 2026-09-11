@@ -33,8 +33,7 @@ class ToolCall {
   DateTime? completedAt;
 
   /// How long the tool call has been running (or ran).
-  Duration get elapsed =>
-      (completedAt ?? DateTime.now()).difference(startedAt);
+  Duration get elapsed => (completedAt ?? DateTime.now()).difference(startedAt);
 
   Map<String, dynamic> toJson() => {
     'id': id,

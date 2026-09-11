@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/room_thread_page.dart';
 
@@ -32,8 +34,9 @@ void main() {
     return ctrl;
   }
 
-  testWidgets('starts running with no turns, then accumulates arrivals',
-      (tester) async {
+  testWidgets('starts running with no turns, then accumulates arrivals', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
 
     // Running from the start: no stop footer, a talking indicator.
@@ -68,8 +71,9 @@ void main() {
     expect(find.text('@cobalt'), findsOneWidget);
   });
 
-  testWidgets('room_done stops the running state and names the reason',
-      (tester) async {
+  testWidgets('room_done stops the running state and names the reason', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
     ctrl.add(
       const CoworkRelayRoomTurn(
@@ -80,7 +84,9 @@ void main() {
         text: 'x',
       ),
     );
-    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'rounds_exhausted'));
+    ctrl.add(
+      const CoworkRelayRoomDone(roomId: 'r1', reason: 'rounds_exhausted'),
+    );
     await tester.pump();
 
     expect(find.text('the room is talking…'), findsNothing);
@@ -118,8 +124,9 @@ void main() {
     expect(find.text('the room is talking…'), findsOneWidget);
   });
 
-  testWidgets('an unknown stop reason leaves no footer but stops running',
-      (tester) async {
+  testWidgets('an unknown stop reason leaves no footer but stops running', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
     ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'who_knows'));
     await tester.pump();
@@ -130,7 +137,7 @@ void main() {
 
   testWidgets('no composer when onSend is null', (tester) async {
     await pump(tester);
-    expect(find.byIcon(Icons.send), findsNothing);
+    expect(findIcon(Icons.send), findsNothing);
   });
 
   testWidgets('the composer sends and resets the thread', (tester) async {
@@ -151,7 +158,7 @@ void main() {
     expect(find.text('old turn'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'new question');
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(findIcon(Icons.send));
     await tester.pump();
 
     expect(sent, ['new question']);
@@ -164,7 +171,7 @@ void main() {
     final sent = <String>[];
     await pump(tester, onSend: sent.add);
     await tester.enterText(find.byType(TextField), '   ');
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(findIcon(Icons.send));
     await tester.pump();
     expect(sent, isEmpty);
   });
@@ -176,8 +183,9 @@ void main() {
     expect(ready, 1);
   });
 
-  testWidgets('room_history replaces the thread and marks it not running',
-      (tester) async {
+  testWidgets('room_history replaces the thread and marks it not running', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
     ctrl.add(
       const CoworkRelayRoomTurn(
@@ -221,8 +229,9 @@ void main() {
     expect(find.text('the room is talking…'), findsNothing);
   });
 
-  testWidgets('an empty room_history leaves the page running and empty',
-      (tester) async {
+  testWidgets('an empty room_history leaves the page running and empty', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
     ctrl.add(const CoworkRelayRoomHistory(roomId: 'r1', turns: []));
     await tester.pump();
@@ -249,16 +258,18 @@ void main() {
     expect(find.text('other'), findsNothing);
   });
 
-  testWidgets('a no_such_room done names the missing-room reason',
-      (tester) async {
+  testWidgets('a no_such_room done names the missing-room reason', (
+    tester,
+  ) async {
     final ctrl = await pump(tester);
     ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'no_such_room'));
     await tester.pump();
     expect(find.text('This room is not on your host yet'), findsOneWidget);
   });
 
-  testWidgets('when the inbound stream closes, a reconnect banner appears',
-      (tester) async {
+  testWidgets('when the inbound stream closes, a reconnect banner appears', (
+    tester,
+  ) async {
     final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
     await tester.pumpWidget(
       MaterialApp(
@@ -285,7 +296,9 @@ void main() {
     expect(find.text('the room is talking…'), findsNothing);
   });
 
-  testWidgets('the composer is disabled after the stream closes', (tester) async {
+  testWidgets('the composer is disabled after the stream closes', (
+    tester,
+  ) async {
     final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
     final sent = <String>[];
     await tester.pumpWidget(
@@ -305,7 +318,9 @@ void main() {
 
     // Enabled before the drop.
     expect(
-      tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send)).onPressed,
+      tester
+          .widget<IconButton>(findWidgetWithIcon<IconButton>(Icons.send))
+          .onPressed,
       isNotNull,
     );
 
@@ -314,14 +329,17 @@ void main() {
 
     // Disabled after: the send button is dead and typing hits nothing.
     expect(
-      tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send)).onPressed,
+      tester
+          .widget<IconButton>(findWidgetWithIcon<IconButton>(Icons.send))
+          .onPressed,
       isNull,
     );
     expect(find.text('Reopen the room to send'), findsOneWidget);
   });
 
-  testWidgets('following the rebind, a new controller re-subscribes the room',
-      (tester) async {
+  testWidgets('following the rebind, a new controller re-subscribes the room', (
+    tester,
+  ) async {
     final first = _FakeController();
     final notifier = ValueNotifier<CoworkRelayController?>(first);
     addTearDown(notifier.dispose);
@@ -344,8 +362,15 @@ void main() {
     );
     await tester.pump();
 
-    first.emit(const CoworkRelayRoomTurn(
-      roomId: 'r1', round: 1, agentId: 'a', handle: 'amber', text: 'on first'));
+    first.emit(
+      const CoworkRelayRoomTurn(
+        roomId: 'r1',
+        round: 1,
+        agentId: 'a',
+        handle: 'amber',
+        text: 'on first',
+      ),
+    );
     await tester.pump();
     expect(find.text('on first'), findsOneWidget);
 
@@ -358,8 +383,15 @@ void main() {
     // onReady re-ran on the swap (re-create + re-request history).
     expect(readyCalls, greaterThanOrEqualTo(1));
     // A turn on the NEW controller renders -> we re-subscribed.
-    second.emit(const CoworkRelayRoomTurn(
-      roomId: 'r1', round: 1, agentId: 'b', handle: 'cobalt', text: 'on second'));
+    second.emit(
+      const CoworkRelayRoomTurn(
+        roomId: 'r1',
+        round: 1,
+        agentId: 'b',
+        handle: 'cobalt',
+        text: 'on second',
+      ),
+    );
     await tester.pump();
     expect(find.text('on second'), findsOneWidget);
     // No dead-room banner: the rebind recovered it.

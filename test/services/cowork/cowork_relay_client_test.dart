@@ -1325,7 +1325,9 @@ void main() {
     final sub = client.inbound.listen(events.add);
 
     final rfb = base64.encode(<int>[0, 1, 82, 70, 66, 255]); // arbitrary bytes
-    await host.emit(<String, dynamic>{'type': 'browser_view', 'status': 'started'});
+    await host.emit(<String, dynamic>{
+      'type': 'browser_view', 'status': 'started', 'vnc_available': true,
+    });
     await host.emit(<String, dynamic>{'type': 'browser_data', 'size': 6, 'data': rfb});
     await host.emit(<String, dynamic>{
       'type': 'browser_view',
@@ -1337,6 +1339,8 @@ void main() {
     final views = events.whereType<CoworkRelayBrowserView>().toList();
     expect(views.map((e) => e.status), <String>['started', 'error']);
     expect(views.last.message, 'no browser open yet');
+    expect(views.first.vncAvailable, isTrue);
+    expect(views.last.vncAvailable, isFalse);
 
     final data = events.whereType<CoworkRelayBrowserData>().single;
     expect(data.bytes, <int>[0, 1, 82, 70, 66, 255]);

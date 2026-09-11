@@ -66,14 +66,11 @@ class McpConnectorSync {
       final plaintext = jsonEncode(payload);
       final ciphertext = await EncryptionService.encrypt(plaintext);
 
-      await SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          columnUserId: user.id,
-          columnCiphertext: ciphertext,
-          columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: columnUserId,
-      );
+      await SupabaseService.client.from(table).upsert(<String, dynamic>{
+        columnUserId: user.id,
+        columnCiphertext: ciphertext,
+        columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: columnUserId);
     } catch (error) {
       if (kDebugMode) {
         debugPrint('⚠️ [McpConnectorSync] save skipped: $error');

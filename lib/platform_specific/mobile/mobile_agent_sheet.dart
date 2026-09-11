@@ -15,6 +15,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
@@ -62,11 +64,8 @@ class MobileAgentSheet extends StatelessWidget {
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      // The expressive sheet shape: big top corners, like every other sheet in
-      // the redesigned UI.
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
-      ),
+      // The sheet shape comes from the theme: one big top radius for every
+      // sheet in the app, so no sheet invents its own corner.
       builder: (BuildContext sheetContext) {
         VoidCallback? closeThen(VoidCallback? action) {
           if (action == null) return null;
@@ -114,44 +113,44 @@ class MobileAgentSheet extends StatelessWidget {
               subtitle: role == null || role.isEmpty ? null : Text(role),
               trailing: onProfile == null
                   ? null
-                  : const Icon(Icons.chevron_right_rounded),
+                  : const AppIcon(Icons.chevron_right_rounded),
               onTap: onProfile,
             ),
             const Divider(height: 1),
             if (onProfile != null)
               ListTile(
-                leading: const Icon(Icons.person_outline_rounded),
+                leading: const AppIcon(Icons.person_outline_rounded),
                 title: const Text('Profile'),
                 onTap: onProfile,
               ),
             if (onRename != null)
               ListTile(
-                leading: const Icon(Icons.edit_outlined),
+                leading: const AppIcon(Icons.edit_outlined),
                 title: const Text('Rename agent'),
                 onTap: onRename,
               ),
             if (onControls != null)
               ListTile(
-                leading: const Icon(Icons.tune),
+                leading: const AppIcon(Icons.tune),
                 title: const Text('Agent controls'),
                 onTap: onControls,
               ),
             if (onRooms != null)
               ListTile(
-                leading: const Icon(Icons.groups_outlined),
+                leading: const AppIcon(Icons.groups_outlined),
                 title: const Text('Rooms'),
                 onTap: onRooms,
               ),
             if (onCopyChat != null)
               ListTile(
-                leading: const Icon(Icons.copy_all_rounded),
+                leading: const AppIcon(Icons.copy_all_rounded),
                 title: const Text('Copy Debug Chat'),
                 onTap: onCopyChat,
               ),
             // Parked, like the header target: there is no voice channel to a
             // coworker, and the row says so instead of hiding the idea.
             ListTile(
-              leading: Icon(
+              leading: AppIcon(
                 Icons.call_rounded,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
               ),
@@ -170,13 +169,13 @@ class MobileAgentSheet extends StatelessWidget {
             ),
             if (onSettings != null)
               ListTile(
-                leading: const Icon(Icons.settings_outlined),
+                leading: const AppIcon(Icons.settings_outlined),
                 title: const Text('Settings'),
                 onTap: onSettings,
               ),
             if (onSignOut != null)
               ListTile(
-                leading: Icon(Icons.logout, color: theme.colorScheme.error),
+                leading: AppIcon(Icons.logout, color: theme.colorScheme.error),
                 title: Text(
                   'Sign out',
                   style: TextStyle(color: theme.colorScheme.error),

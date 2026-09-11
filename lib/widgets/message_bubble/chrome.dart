@@ -64,7 +64,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
 
     Widget arrow(IconData icon, bool enabled, VoidCallback? onTap) {
       return IconButton(
-        icon: Icon(
+        icon: AppIcon(
           icon,
           color: enabled ? iconFgColor : iconFgColor.withValues(alpha: 0.38),
           size: 18,
@@ -209,7 +209,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
         'https://www.google.com/s2/favicons?domain=$host&sz=32',
         width: size,
         height: size,
-        errorBuilder: (context, error, stackTrace) => Icon(
+        errorBuilder: (context, error, stackTrace) => AppIcon(
           Icons.public,
           size: size,
           color: colorScheme.onSurfaceVariant,
@@ -251,8 +251,11 @@ extension _MessageBubbleChrome on _MessageBubbleState {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: Row(
                     children: [
-                      Icon(Icons.language, size: 18,
-                          color: colorScheme.onSurfaceVariant),
+                      AppIcon(
+                        Icons.language,
+                        size: 18,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '${sources.length} source'
@@ -293,8 +296,11 @@ extension _MessageBubbleChrome on _MessageBubbleState {
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        trailing: Icon(Icons.open_in_new, size: 22,
-                            color: colorScheme.onSurfaceVariant),
+                        trailing: AppIcon(
+                          Icons.open_in_new,
+                          size: 22,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         onTap: () => _openSourceUrl(source),
                       );
                     },
@@ -309,11 +315,11 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   }
 
   Widget _buildUserActionButtons(Color iconFgColor) => _buildActionBar(
-        actions: widget.userMessageActions,
-        iconFgColor: iconFgColor,
-        alignRight: true,
-        dimDisabledIcon: true,
-      );
+    actions: widget.userMessageActions,
+    iconFgColor: iconFgColor,
+    alignRight: true,
+    dimDisabledIcon: true,
+  );
 
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) =>
       _buildActionBar(
@@ -361,7 +367,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
               return Tooltip(
                 message: action.tooltip,
                 child: IconButton(
-                  icon: Icon(
+                  icon: AppIcon(
                     action.icon,
                     color: (action.isEnabled || !dimDisabledIcon)
                         ? iconFgColor
@@ -409,7 +415,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
+            AppIcon(icon, size: 14, color: color),
             const SizedBox(width: 4),
             Flexible(
               child: Text(

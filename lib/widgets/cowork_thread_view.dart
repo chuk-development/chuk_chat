@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'package:cowork/services/settings/mobile_chat_preferences.dart';
 
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/constants.dart';
@@ -13,6 +16,7 @@ import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/app_theme_service.dart';
 import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/chat_runtime_registry.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
 import 'package:cowork/pages/cowork_pairing_page.dart';
@@ -22,8 +26,11 @@ import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/cowork_replay_loader.dart';
+import 'package:cowork/services/cowork/cowork_queued_marks.dart';
+import 'package:cowork/services/cowork/cowork_task_outbox.dart';
 import 'package:cowork/services/cowork/cowork_run_ledger.dart';
 import 'package:cowork/services/notifications/cowork_notifications.dart';
+import 'package:cowork/services/offline_retry_manager.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';
 import 'package:cowork/services/settings/verbose_service.dart';
 import 'package:cowork/services/automations/automations_source.dart';
@@ -180,7 +187,10 @@ class CoworkThreadView extends StatefulWidget {
   State<CoworkThreadView> createState() => CoworkThreadViewState();
 }
 
-class CoworkThreadViewState extends State<CoworkThreadView> {
+class CoworkThreadViewState extends State<CoworkThreadView>
+    with WidgetsBindingObserver {
+  bool _wasBackgrounded = false;
+  bool _rebuildingForResume = false;
   late final TextEditingController _hostController;
   final TextEditingController _codeController = TextEditingController();
 
@@ -207,6 +217,22 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   /// The imported screen reads its rows once, in `initState`, so a replay that
   /// rewrites the cache under it has to remount it — the revision is the key.
   int _revision = 0;
+
+  /// Extra turns of the same key, for rows that arrive from the CACHE rather
+  /// than from a replay. Only a completed replay moves the loader's revision,
+  /// so a screen that mounted on a cache miss — the SQLite read landed a beat
+  /// after the mount, which is the whole cold-start case — would keep its
+  /// empty transcript for the rest of the session (bead cowork-91pn).
+  int _cacheRevision = 0;
+
+  /// Watches the chat store for the late arrival described above.
+  StreamSubscription<String?>? _storeSub;
+
+  /// Whether this thread already had rows in memory when the screen mounted.
+  /// True means the screen is showing a transcript, and a later cache write is
+  /// then the app's OWN write (a send, a live turn) — never a reason to remount
+  /// and throw away what the reader is looking at or typing.
+  bool _mountedWithRows = false;
 
   /// A here.now publish waiting on the user. The run is BLOCKED on the executor
   /// until it is answered, so it is a standing card, not a fleeting prompt.
@@ -286,17 +312,27 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _hostController = TextEditingController(text: widget.defaultHostUrl);
     // The link's fan-out outlives every controller, so this one subscription
     // survives reconnects. It carries only what this view still owns: the
     // approval prompt and the live `run_ack`.
     _inboundSub = _link.inbound.listen(_onInbound);
     _loader.attach();
+    _running = _ledger.isRunning(widget.threadKey);
     _ledger.addListener(_onLedgerChanged);
     _loader.addListener(_onLoaderChanged);
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
     _revision = _loader.revisionFor(widget.threadKey);
+    _storeSub = ChatStorageService.changes.listen(_onChatStoreChanged);
+    // The Retry button in the imported bubble calls
+    // `OfflineRetryManager.instance.retryNow()`. With no host on the other end
+    // that must mean "go get the host": the manager has no transport of its
+    // own, so this view lends it one for as long as it is mounted.
+    OfflineRetryManager.instance.registerReconnect(
+      () => reconnect(force: true),
+    );
     _bootstrap();
     // The verbose flag is one shared singleton: mirror it now and rebuild on
     // every change.
@@ -304,6 +340,8 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     _loadVerbose();
     // The "show reasoning" setting reflows the transcript live, like chuk.
     AppThemeService.instance.addListener(_onThemeChanged);
+    MobileChatPreferences.instance.addListener(_onThemeChanged);
+    unawaited(MobileChatPreferences.instance.load());
     // Safety net (see [_watchdogTimer]): re-arm reconnect on a slow cadence.
     _watchdogTimer = Timer.periodic(
       const Duration(seconds: 8),
@@ -315,11 +353,16 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   void didUpdateWidget(CoworkThreadView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.threadKey != widget.threadKey) {
+      _running = _ledger.isRunning(widget.threadKey);
       // A different conversation. Point the link and the cache at it and ask
       // the host for whatever this client is missing.
-      _link.sessionKey.value = widget.threadKey;
-      ChatStorageService.selectedChatId = widget.threadKey;
+      if (widget.threadKey.isNotEmpty) {
+        _link.sessionKey.value = widget.threadKey;
+        ChatStorageService.selectedChatId = widget.threadKey;
+      }
       _revision = _loader.revisionFor(widget.threadKey);
+      _cacheRevision = 0;
+      _mountedWithRows = _threadHasRows;
       _approval = null;
       _approvalDecision = null;
       _clearSecretRequest();
@@ -329,16 +372,21 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    OfflineRetryManager.instance.registerFlush(widget.threadKey, null);
+    OfflineRetryManager.instance.registerReconnect(null);
     _autoReconnectTimer?.cancel();
     _watchdogTimer?.cancel();
     VerboseService.instance.removeListener(_onVerboseChanged);
     AppThemeService.instance.removeListener(_onThemeChanged);
+    MobileChatPreferences.instance.removeListener(_onThemeChanged);
     _ledger.removeListener(_onLedgerChanged);
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     _controller?.state.removeListener(_onStateChanged);
     _startupState.dispose();
     _inboundSub?.cancel();
+    _storeSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
     _codeController.dispose();
@@ -347,6 +395,31 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
   }
 
   // --- lifecycle -------------------------------------------------------------
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _wasBackgrounded = true;
+    } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
+      _wasBackgrounded = false;
+      // Android may leave a suspended socket marked paired. Replace it on
+      // resume rather than waiting for a heartbeat or an old backoff timer.
+      if (_storedPairing != null && !_manuallyDisconnected) {
+        unawaited(reconnect(force: true));
+        return;
+      }
+      // Still paired and nothing to reconnect: the queue may still hold a
+      // prompt typed while the phone was away. The `paired` transition is not
+      // the only moment a flush is owed — that transition may never come
+      // again on a socket that stayed up (bead cowork-i7sd follow-up). Each
+      // entry has its own backoff, so a resume cannot hammer the host.
+      final controller = _controller;
+      if (controller != null && controller.state.value.isPaired) {
+        unawaited(_flushOutbox(controller));
+      }
+    }
+  }
 
   /// Load any stored pairing first, then build the controller. If a pairing is
   /// stored, auto-reconnect with no code; otherwise show the connect form.
@@ -361,8 +434,12 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     // is cache-first anyway.
     unawaited(_warmCache());
     unawaited(_loader.load());
-    _link.sessionKey.value = widget.threadKey;
-    ChatStorageService.selectedChatId = widget.threadKey;
+    // An empty key means "nothing selected yet"; pointing the link and the
+    // store at it would only name a conversation that does not exist.
+    if (widget.threadKey.isNotEmpty) {
+      _link.sessionKey.value = widget.threadKey;
+      ChatStorageService.selectedChatId = widget.threadKey;
+    }
 
     final store = widget.pairingStore;
     if (store != null) {
@@ -394,7 +471,35 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         debugPrint('[cowork-thread] chat cache warm failed: $error');
       }
     }
-    if (mounted) setState(() => _cacheReady = true);
+    // The metadata read above fills the sidebar, not this thread. The screen
+    // looks its thread up in memory ONCE on mount and treats a miss as a new
+    // chat, so the one thread the reader actually opened is read in full
+    // before the gate opens: that is what puts the conversation on screen in
+    // the first frame of a cold start, with no socket and no cloud (bead
+    // cowork-91pn). A miss is not an error — the host's replay still fills it.
+    if (widget.threadKey.isNotEmpty) {
+      try {
+        await ChatStorageService.loadFullChat(widget.threadKey);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('[cowork-thread] thread cache read failed: $error');
+        }
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _mountedWithRows = _threadHasRows;
+      _cacheReady = true;
+    });
+  }
+
+  /// Whether the store holds a transcript for this thread right now.
+  bool get _threadHasRows {
+    if (widget.threadKey.isEmpty) return false;
+    final rows = ChatStorageService.getChatById(
+      widget.threadKey,
+    )?.messagesOrNull;
+    return rows != null && rows.isNotEmpty;
   }
 
   Future<void> _buildController() async {
@@ -454,9 +559,23 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       // cheap (the cursor makes it a delta) and it is what makes a reinstall,
       // a new device and a reconnect all land on the same transcript.
       _requestReplay();
+      // Then, and only then, the prompts that were typed while the socket was
+      // down. Replay first: the host's transcript is the base every local row
+      // aligns against, and a prompt sent before it races its own echo back up
+      // the wire (beads cowork-i7sd, cowork-4rpt).
+      //
+      // The same closure is what the Retry button runs: while a host is on the
+      // other end, "retry" means "send the backlog now", not "reconnect".
+      OfflineRetryManager.instance.registerFlush(
+        widget.threadKey,
+        () => _flushOutbox(controller),
+      );
+      unawaited(_flushOutbox(controller));
       return;
     }
-    if (phase == CoworkRelayPhase.closed &&
+    // Not paired any more: Retry falls back to fetching the host.
+    OfflineRetryManager.instance.registerFlush(widget.threadKey, null);
+    if ((phase == CoworkRelayPhase.closed || phase == CoworkRelayPhase.error) &&
         _storedPairing != null &&
         !_manuallyDisconnected) {
       // A run belongs to the host process, not to this socket: a dropped
@@ -465,11 +584,54 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     }
   }
 
+  /// Sends what the user typed while the host was unreachable.
+  ///
+  /// Nothing is retried forever: [CoworkTaskOutbox] gives up on an entry after
+  /// its own attempt cap, so one prompt the host will never take cannot block
+  /// the queue behind it.
+  Future<int> _flushOutbox(CoworkRelayController controller) async {
+    final String sessionKey = widget.threadKey;
+    if (sessionKey.isEmpty) return 0;
+    try {
+      final int sent = await CoworkTaskOutbox.flush(sessionKey, (task) async {
+        await controller.sendTask(
+          task.prompt,
+          sessionKey: sessionKey,
+          modelId: task.modelId,
+          providerSlug: task.providerSlug,
+          reasoningEffort: task.reasoningEffort,
+        );
+        // It is on the wire: the bubble stops saying "waiting" and stops
+        // offering Retry for something already on its way.
+        await CoworkQueuedMarks.clearMark(
+          sessionKey: sessionKey,
+          queueId: task.localId,
+        );
+      });
+      if (sent > 0 && kDebugMode) {
+        debugPrint(
+          '[cowork-outbox] sent $sent queued prompt(s) for $sessionKey',
+        );
+      }
+      return sent;
+    } catch (error) {
+      // A flush that fails leaves the queue where it is; the next pair tries
+      // again. It must never take the reconnect down with it.
+      if (kDebugMode) {
+        debugPrint('[cowork-outbox] flush failed for $sessionKey: $error');
+      }
+      return 0;
+    }
+  }
+
   /// Asks the host to re-stream this thread from the replay cursor.
   void _requestReplay() {
     final controller = _controller;
     if (controller == null || !controller.state.value.isPaired) return;
     final sessionKey = widget.threadKey;
+    // Nothing is selected: there is no conversation to replay, and asking for
+    // one would mint a cursor namespace for a key nobody ever writes.
+    if (sessionKey.isEmpty) return;
     final afterId = _loader.cursorFor(sessionKey);
     _loader.expect(sessionKey, afterId: afterId);
     unawaited(
@@ -546,6 +708,26 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
       if (mounted) setState(() => _localError = '$error');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Retry stored trust without exposing transport controls in the chat.
+  Future<void> reconnect({bool force = false}) async {
+    if (_busy ||
+        _rebuildingForResume ||
+        (!force && _controller?.state.value.isPaired == true)) {
+      return;
+    }
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+    _manuallyDisconnected = false;
+    _reconnectAttempts = 0;
+    _rebuildingForResume = true;
+    try {
+      await _rebuildController();
+      await _reconnect();
+    } finally {
+      _rebuildingForResume = false;
     }
   }
 
@@ -748,6 +930,23 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         if (event.sessionKey != null && event.sessionKey != widget.threadKey) {
           return;
         }
+        final runtime = ChatRuntimeRegistry.instance.lookup(widget.threadKey);
+        final localStreamActive =
+            runtime?.isStreaming.value == true ||
+            runtime?.isSending.value == true;
+        if (!localStreamActive && _ledger.isRunning(widget.threadKey)) {
+          // A run adopted after reconnect has no request adapter subscription
+          // to consume its terminal. Close its activity and fetch durable text.
+          _ledger.finish(
+            widget.threadKey,
+            finalAnswer: event.finalAnswer,
+            reason: event.reason,
+            runId: event.runId,
+            startedAt: event.startedAt,
+            finishedAt: event.finishedAt,
+          );
+          if (!event.hostNotified) _requestReplay();
+        }
         if (event.hostNotified) {
           // Background runs have no manual chat stream subscription.
           _requestReplay();
@@ -892,7 +1091,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     if (!mounted) return;
     final running = _ledger.isRunning(widget.threadKey);
     if (running != _running) {
-      _running = running;
+      setState(() => _running = running);
       widget.onRunStateChanged?.call(widget.threadKey, running);
     }
     widget.onActivity?.call(widget.threadKey, DateTime.now());
@@ -924,6 +1123,33 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     _syncRevision();
   }
 
+  /// The chat cache changed. Remount the screen ONLY when this thread's rows
+  /// arrived after it had already mounted with nothing — the cold-start miss.
+  ///
+  /// Three conditions, all of them load-bearing:
+  ///  * the event names THIS thread (a bulk event, id null, names every one);
+  ///  * the screen currently has no rows, so nothing on screen is lost;
+  ///  * no run is in flight — the same guard [_syncRevision] uses, and for the
+  ///    same reason: a remount would eat the answer streaming in right now.
+  void _onChatStoreChanged(String? changedId) {
+    if (!mounted) return;
+    final key = widget.threadKey;
+    if (key.isEmpty) return;
+    if (changedId != null && changedId != key) return;
+    if (_ledger.isRunning(key)) return;
+    final chat = ChatStorageService.getChatById(key);
+    if (chat == null || !chat.isFullyLoaded || chat.messages.isEmpty) return;
+    if (!_screenIsEmpty) return;
+    setState(() => _cacheRevision++);
+  }
+
+  /// Whether the screen on the tree is showing an empty transcript. The
+  /// imported screen owns its rows; what this view can say is that it has
+  /// painted no revision of them yet, which is exactly the mount-on-a-miss
+  /// case the remount is for.
+  bool get _screenIsEmpty =>
+      !_mountedWithRows && _revision == 0 && _cacheRevision == 0;
+
   /// Adopt a new replay revision — but never while a run is in flight: the
   /// remount would throw away the answer streaming into the screen right now.
   /// The ledger notifies when the run ends, and this runs again.
@@ -953,15 +1179,24 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(context, state, showAutomations ? automations : null),
+            if (_useDesktopChat(context))
+              _buildHeader(context, state, showAutomations ? automations : null)
+            else if (approval != null || secretRequest != null)
+              SizedBox(height: widget.topInset),
             if (connected && approval != null)
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
-            if (showAutomations && !_automationsCollapsed)
+            if (showAutomations &&
+                !_automationsCollapsed &&
+                (_useDesktopChat(context) ||
+                    MobileChatPreferences.instance.showActivity))
               _buildAutomationCards(context, automations),
             Expanded(key: const ValueKey('persistent-chat'), child: chat),
-            if (!connected && controller != null && _showConnectBar)
+            if (_useDesktopChat(context) &&
+                !connected &&
+                controller != null &&
+                _showConnectBar)
               _buildConnectBar(context, state),
           ],
         );
@@ -1065,11 +1300,18 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     // is a frame or two, and a spinner that flashes on every launch reads as
     // trouble.
     if (!_cacheReady) return const SizedBox.expand();
+    // No thread selected (a first launch with no roster and no host). The
+    // shell no longer invents a placeholder key, so there is nothing to open;
+    // mounting the screen on an empty id would give the cache a row nobody
+    // asked for and a replay cursor for a conversation that does not exist.
+    if (widget.threadKey.isEmpty) return const SizedBox.expand();
     final config = widget.shellConfig;
     // The screen reads its rows once, on mount. A replay that rewrote the cache
     // bumps the revision, which changes the key, which remounts it on fresh
     // rows — the only way to repaint history without editing an imported file.
-    final key = ValueKey<String>('cowork-chat-${widget.threadKey}-$_revision');
+    final key = ValueKey<String>(
+      'cowork-chat-${widget.threadKey}-$_revision-$_cacheRevision',
+    );
     if (_useDesktopChat(context)) {
       return ChukChatUIDesktop(
         key: key,
@@ -1092,18 +1334,22 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
     }
     return ChukChatUIMobile(
       key: key,
-      // Zero, not [CoworkThreadView.topInset]: the header above already sits
-      // below the floating chrome, so the list starts under the header and
-      // must not reserve the chrome's height a second time.
-      topInset: 0,
+      messengerMode: true,
+      hostRunActive: _ledger.isRunning(widget.threadKey),
+      // Reserve chrome inside the scrollable, not above its viewport: messages
+      // can pass behind the floating contact pill like the messenger reference.
+      // Action-required bars remain below the header and own their inset.
+      topInset: _approval != null || _secretRequest != null
+          ? 0
+          : widget.topInset,
       onToggleSidebar: _noopToggleSidebar,
       selectedChatId: widget.threadKey,
       onChatIdChanged: _onChatIdChanged,
       isSidebarExpanded: false,
-      showReasoningTokens: AppThemeService.instance.showReasoningTokens,
-      showModelInfo: config?.showModelInfo ?? _verbose,
-      showTps: _verbose,
-      showToolCalls: _verbose,
+      showReasoningTokens: MobileChatPreferences.instance.showThinking,
+      showModelInfo: false,
+      showTps: false,
+      showToolCalls: MobileChatPreferences.instance.showActivity,
       toolCallingEnabled: false,
       toolDiscoveryMode: false,
       autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
@@ -1177,7 +1423,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
               children: [
                 Row(
                   children: [
-                    Icon(
+                    AppIcon(
                       Icons.key_outlined,
                       size: 18,
                       color: theme.colorScheme.primary,
@@ -1221,7 +1467,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                             ? 'Already set. Leave blank to keep it.'
                             : null,
                         suffixIcon: setNames.contains(name)
-                            ? const Icon(Icons.check, size: 18)
+                            ? const AppIcon(Icons.check, size: 18)
                             : null,
                       ),
                       onSubmitted: (_) => _submitSecretRequest(),
@@ -1314,7 +1560,11 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
           children: [
             Row(
               children: [
-                Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
+                AppIcon(
+                  Icons.public,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1351,7 +1601,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 padding: const EdgeInsets.only(top: 8, bottom: 4),
                 child: Row(
                   children: [
-                    Icon(
+                    AppIcon(
                       decision ? Icons.check_circle_outline : Icons.block,
                       size: 16,
                       color: decision
@@ -1427,7 +1677,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
               child: FilledButton.icon(
                 key: const ValueKey<String>('cowork-add-computer'),
                 onPressed: _busy ? null : _openPairingScreen,
-                icon: const Icon(Icons.qr_code_scanner),
+                icon: const AppIcon(Icons.qr_code_scanner),
                 label: const Text('Add your computer'),
               ),
             ),
@@ -1436,7 +1686,7 @@ class CoworkThreadViewState extends State<CoworkThreadView> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    Icon(
+                    AppIcon(
                       Icons.error_outline,
                       size: 16,
                       color: theme.colorScheme.error,

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -137,12 +139,16 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       } else {
         // No cache - keep loading state, server will provide value
         if (kDebugMode) {
-          debugPrint('📦 [CreditMixin] No cache - waiting for server (${sw.elapsedMilliseconds}ms)');
+          debugPrint(
+            '📦 [CreditMixin] No cache - waiting for server (${sw.elapsedMilliseconds}ms)',
+          );
         }
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] Cache load failed (${sw.elapsedMilliseconds}ms): $e');
+        debugPrint(
+          '⚠️ [CreditMixin] Cache load failed (${sw.elapsedMilliseconds}ms): $e',
+        );
       }
       // On error, keep loading - server will handle it
     }
@@ -177,11 +183,15 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         await prefs.remove(_kCachedBillingPeriodEnd);
       }
       if (kDebugMode) {
-        debugPrint('💾 [CreditMixin] Saved to cache (${sw.elapsedMilliseconds}ms)');
+        debugPrint(
+          '💾 [CreditMixin] Saved to cache (${sw.elapsedMilliseconds}ms)',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] Cache save failed (${sw.elapsedMilliseconds}ms): $e');
+        debugPrint(
+          '⚠️ [CreditMixin] Cache save failed (${sw.elapsedMilliseconds}ms): $e',
+        );
       }
     }
   }
@@ -199,7 +209,8 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
     final sw = Stopwatch()..start();
     try {
-      final session = await SupabaseService.refreshSession() ??
+      final session =
+          await SupabaseService.refreshSession() ??
           _supabase.auth.currentSession;
       if (session == null) {
         if (!mounted) return;
@@ -228,11 +239,11 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
           .maybeSingle()
           .then<Map<String, dynamic>?>((row) => row)
           .catchError((Object e) {
-        if (kDebugMode) {
-          debugPrint('⚠️ [CreditMixin] Billing period fetch failed: $e');
-        }
-        return null;
-      });
+            if (kDebugMode) {
+              debugPrint('⚠️ [CreditMixin] Billing period fetch failed: $e');
+            }
+            return null;
+          });
 
       final results = await Future.wait<Object?>([statusFuture, billingFuture]);
       final response = results[0] as http.Response;
@@ -269,15 +280,8 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         }
         if (periodStart != null) {
           // Handle month overflow (e.g., Jan 31 → Feb 28)
-          final nextMonth = DateTime(
-            periodStart.year,
-            periodStart.month + 1,
-          );
-          final lastDay = DateTime(
-            nextMonth.year,
-            nextMonth.month + 1,
-            0,
-          ).day;
+          final nextMonth = DateTime(periodStart.year, periodStart.month + 1);
+          final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
           periodEnd = DateTime(
             nextMonth.year,
             nextMonth.month,
@@ -320,7 +324,9 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         _hasLoadedOnce = true;
       });
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] API load failed (${sw.elapsedMilliseconds}ms, using cache): $error');
+        debugPrint(
+          '⚠️ [CreditMixin] API load failed (${sw.elapsedMilliseconds}ms, using cache): $error',
+        );
       }
     }
   }
@@ -373,8 +379,8 @@ class _CreditDisplayState extends State<CreditDisplay>
     final Color barColor = percentage > 0.5
         ? m3.success
         : percentage > 0.2
-            ? m3.warning
-            : theme.colorScheme.error;
+        ? m3.warning
+        : theme.colorScheme.error;
 
     // No Card here. This block is placed inside a rounded section on the
     // subscription page, and a card inside a card gave it two borders, two
@@ -420,61 +426,69 @@ class _CreditDisplayState extends State<CreditDisplay>
           const SizedBox(height: 18),
           Divider(height: 1, color: m3.outlineVariant),
           const SizedBox(height: 14),
-          Builder(builder: (context) {
-            final now = DateTime.now().toUtc();
-            final start = creditBalances.billingPeriodStart!;
-            final end = creditBalances.billingPeriodEnd!;
-            final int daysLeft = end.difference(now).inDays;
-            final double totalDuration =
-                end.difference(start).inSeconds.toDouble();
-            final double elapsed = now.difference(start).inSeconds.toDouble();
-            final double progress = totalDuration > 0
-                ? (elapsed / totalDuration).clamp(0.0, 1.0)
-                : 0.0;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.event_repeat_outlined, color: muted, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Billing cycle',
-                      style: theme.textTheme.labelMedium?.copyWith(
+          Builder(
+            builder: (context) {
+              final now = DateTime.now().toUtc();
+              final start = creditBalances.billingPeriodStart!;
+              final end = creditBalances.billingPeriodEnd!;
+              final int daysLeft = end.difference(now).inDays;
+              final double totalDuration = end
+                  .difference(start)
+                  .inSeconds
+                  .toDouble();
+              final double elapsed = now.difference(start).inSeconds.toDouble();
+              final double progress = totalDuration > 0
+                  ? (elapsed / totalDuration).clamp(0.0, 1.0)
+                  : 0.0;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppIcon(
+                        Icons.event_repeat_outlined,
                         color: muted,
-                        letterSpacing: 0.4,
+                        size: 16,
                       ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      daysLeft > 0 ? '$daysLeft days left' : 'Renews soon',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 8),
+                      Text(
+                        'Billing cycle',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: muted,
+                          letterSpacing: 0.4,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                    backgroundColor: m3.surfaceContainerHighest,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      accent.withValues(alpha: 0.6),
+                      const Spacer(),
+                      Text(
+                        daysLeft > 0 ? '$daysLeft days left' : 'Renews soon',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      backgroundColor: m3.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        accent.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                _MetaLine(
-                  left: _formatDate(start),
-                  right: 'Renews ${_formatDate(end)}',
-                ),
-              ],
-            );
-          }),
+                  const SizedBox(height: 10),
+                  _MetaLine(
+                    left: _formatDate(start),
+                    right: 'Renews ${_formatDate(end)}',
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ],
     );
@@ -671,17 +685,23 @@ class _BalanceBadgeState extends State<BalanceBadge> {
           _loading = false;
         });
         if (kDebugMode) {
-          debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits (${sw.elapsedMilliseconds}ms)');
+          debugPrint(
+            '📦 [BalanceBadge] Loaded from cache: €$_credits (${sw.elapsedMilliseconds}ms)',
+          );
         }
       } else {
         // No cache - keep loading state, server will provide value
         if (kDebugMode) {
-          debugPrint('📦 [BalanceBadge] No cache - waiting for server (${sw.elapsedMilliseconds}ms)');
+          debugPrint(
+            '📦 [BalanceBadge] No cache - waiting for server (${sw.elapsedMilliseconds}ms)',
+          );
         }
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [BalanceBadge] Cache load failed (${sw.elapsedMilliseconds}ms): $e');
+        debugPrint(
+          '⚠️ [BalanceBadge] Cache load failed (${sw.elapsedMilliseconds}ms): $e',
+        );
       }
       // On error, keep loading - server will handle it
     }
@@ -697,11 +717,15 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       await prefs.setInt(_kCachedFreeMessagesRemaining, _freeMessagesRemaining);
       await prefs.setInt(_kCachedFreeMessagesTotal, _freeMessagesTotal);
       if (kDebugMode) {
-        debugPrint('💾 [BalanceBadge] Saved to cache (${sw.elapsedMilliseconds}ms)');
+        debugPrint(
+          '💾 [BalanceBadge] Saved to cache (${sw.elapsedMilliseconds}ms)',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [BalanceBadge] Cache save failed (${sw.elapsedMilliseconds}ms): $e');
+        debugPrint(
+          '⚠️ [BalanceBadge] Cache save failed (${sw.elapsedMilliseconds}ms): $e',
+        );
       }
     }
   }
@@ -713,7 +737,8 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
     final sw = Stopwatch()..start();
     try {
-      final session = await SupabaseService.refreshSession() ??
+      final session =
+          await SupabaseService.refreshSession() ??
           _supabase.auth.currentSession;
       if (session == null) {
         if (mounted) setState(() => _loading = false);
@@ -759,7 +784,9 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [BalanceBadge] API load failed (${sw.elapsedMilliseconds}ms, using cache): $e');
+        debugPrint(
+          '⚠️ [BalanceBadge] API load failed (${sw.elapsedMilliseconds}ms, using cache): $e',
+        );
       }
       if (mounted) setState(() => _loading = false);
       // Don't clear data on error - keep showing cached values

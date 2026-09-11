@@ -252,11 +252,14 @@ class ChatModeService {
     if (server.isNotEmpty) return server;
     return reasoningLevelsFor(
       providerSlug: providerSlug,
-      supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(modelId),
+      supportsReasoning: ModelCapabilitiesService.supportsReasoningSync(
+        modelId,
+      ),
       supportsReasoningEffort:
           ModelCapabilitiesService.supportsReasoningEffortSync(modelId),
-      reasoningMandatory:
-          ModelCapabilitiesService.isReasoningMandatorySync(modelId),
+      reasoningMandatory: ModelCapabilitiesService.isReasoningMandatorySync(
+        modelId,
+      ),
     );
   }
 
@@ -420,7 +423,9 @@ class ChatModeService {
       );
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ChatMode] Could not read the config for ${mode.name}: $e');
+        debugPrint(
+          '⚠️ [ChatMode] Could not read the config for ${mode.name}: $e',
+        );
       }
       return fallback;
     }
@@ -434,7 +439,9 @@ class ChatModeService {
       await prefs.setString(_configKey(mode), jsonEncode(config.toJson()));
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ChatMode] Could not store the config for ${mode.name}: $e');
+        debugPrint(
+          '⚠️ [ChatMode] Could not store the config for ${mode.name}: $e',
+        );
       }
     }
   }
@@ -465,8 +472,9 @@ class ChatModeService {
     // would make the next load fall back to the default provider, pairing
     // the new model with a provider it was never pinned to — so keep the
     // mode's current provider when the caller has none.
-    final effectiveProvider =
-        providerSlug.isNotEmpty ? providerSlug : current.providerSlug;
+    final effectiveProvider = providerSlug.isNotEmpty
+        ? providerSlug
+        : current.providerSlug;
     final updated = current.copyWith(
       modelId: modelId,
       providerSlug: effectiveProvider,

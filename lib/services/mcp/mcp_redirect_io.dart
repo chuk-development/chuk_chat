@@ -28,21 +28,24 @@ class McpRedirectListener {
   Future<Uri> get callback => _result.future;
 
   void _listen() {
-    _server.listen((HttpRequest request) async {
-      final uri = request.uri;
-      final ok = uri.queryParameters.containsKey('code');
+    _server.listen(
+      (HttpRequest request) async {
+        final uri = request.uri;
+        final ok = uri.queryParameters.containsKey('code');
 
-      request.response
-        ..statusCode = 200
-        ..headers.contentType = ContentType.html
-        ..write(_page(ok));
-      await request.response.close();
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.html
+          ..write(_page(ok));
+        await request.response.close();
 
-      if (!_result.isCompleted) _result.complete(uri);
-      await close();
-    }, onError: (Object error) {
-      if (!_result.isCompleted) _result.completeError(error);
-    });
+        if (!_result.isCompleted) _result.complete(uri);
+        await close();
+      },
+      onError: (Object error) {
+        if (!_result.isCompleted) _result.completeError(error);
+      },
+    );
   }
 
   Future<void> close() async {

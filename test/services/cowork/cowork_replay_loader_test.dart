@@ -22,7 +22,11 @@ void main() {
   late FakeRelayController controller;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    // The one-time repeat repair (bead cowork-4rpt) is a migration, not
+    // the steady state these tests describe: mark it done.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      kReplayRepeatRepairKey: true,
+    });
     loader.reset();
     CoworkRelayLink.instance.reset();
     CoworkRunLedger.instance.reset();
@@ -73,6 +77,23 @@ void main() {
     expect(rows[0]['text'], 'do the thing');
     expect(rows[1]['role'], 'ai');
     expect(rows[1]['text'], 'all set');
+    expect(rows.every((row) => row['sentAt'] == null), isTrue);
+  });
+
+  test('replay preserves real host timestamps independently of run duration', () async {
+    final userTime = DateTime.utc(2026, 9, 8, 12, 30);
+    final answerTime = userTime.add(const Duration(seconds: 5));
+    await replay(<CoworkRelayInbound>[
+      CoworkRelayUser('hello', mid: 1, sentAt: userTime),
+      CoworkRelayReasoning('checking', mid: 2, replay: true, sentAt: answerTime),
+      CoworkRelayDelta('hi', mid: 2, replay: true, sentAt: answerTime),
+      const CoworkRelayDone(reason: 'replay', replay: true),
+    ]);
+    final rows = rowsFor(sessionKey);
+    expect(rows[0]['sentAt'], userTime.toIso8601String());
+    expect(rows[1]['sentAt'], answerTime.toIso8601String());
+    expect(rows[1]['startedAt'], isNull);
+    expect(rows[1]['generationMs'], isNull);
   });
 
   test('a replayed tool lands as a completed tool call on the answer',
@@ -312,6 +333,19 @@ void main() {
     loader.reset();
     await loader.load();
     expect(loader.cursorFor(sessionKey), 9);
+  });
+
+  test('pre-timestamp cursor re-fetches history without deleting its cache', () async {
+    await replay(const <CoworkRelayInbound>[
+      CoworkRelayUser('old message', mid: 1),
+      CoworkRelayDone(reason: 'replay', replay: true),
+    ]);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$kReplayTimestampCursorPrefix$sessionKey');
+    loader.reset();
+    await loader.load();
+    expect(loader.cursorFor(sessionKey), 0);
+    expect(rowsFor(sessionKey).single['text'], 'old message');
   });
 
   test('forgetting the cursor makes the next replay replace instead of append',

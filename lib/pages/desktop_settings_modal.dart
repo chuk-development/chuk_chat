@@ -16,8 +16,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/widgets/settings_list_view.dart';
 
 import 'package:cowork/constants.dart';
 import 'package:cowork/l10n/app_localizations.dart';
@@ -54,8 +55,10 @@ Future<void> showDesktopSettingsModal(
     barrierColor: Colors.black.withValues(alpha: 0.55),
     transitionDuration: const Duration(milliseconds: 180),
     routeSettings: const RouteSettings(name: 'tour:settings'),
-    pageBuilder: (dialogContext, anim, secondaryAnim) =>
-        DesktopSettingsModal(config: config, initialSectionId: initialSectionId),
+    pageBuilder: (dialogContext, anim, secondaryAnim) => DesktopSettingsModal(
+      config: config,
+      initialSectionId: initialSectionId,
+    ),
     transitionBuilder: (dialogContext, animation, secondaryAnim, child) {
       final curved = CurvedAnimation(
         parent: animation,
@@ -172,7 +175,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'account',
           icon: Icons.person_outline,
           label: l.accountSettings,
-          keywords: 'account profile email sign out log out logout '
+          keywords:
+              'account profile email sign out log out logout '
               'konto profil abmelden',
           builder: (_) => const AccountSettingsPage(),
         ),
@@ -182,7 +186,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'model',
           icon: Icons.smart_toy_outlined,
           label: l.modelSelection,
-          keywords: 'model models ai llm gpt deepseek glm provider selection '
+          keywords:
+              'model models ai llm gpt deepseek glm provider selection '
               'default fast thinking reasoning modell auswahl',
           builder: (_) => const ModelSelectorPage(),
         ),
@@ -191,7 +196,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'connectors',
             icon: Icons.extension_outlined,
             label: l.connectors,
-            keywords: 'connectors mcp integrations github slack gmail calendar '
+            keywords:
+                'connectors mcp integrations github slack gmail calendar '
                 'notion email nextcloud oauth verbindungen integration',
             builder: (_) => const McpConnectorsPage(),
           ),
@@ -210,7 +216,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'herenow',
           icon: Icons.place_outlined,
           label: 'here.now',
-          keywords: 'herenow here now publish page site approval '
+          keywords:
+              'herenow here now publish page site approval '
               'veröffentlichen seite freigabe',
           builder: (_) => const HereNowSettingsPage(),
         ),
@@ -218,7 +225,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'embedding',
           icon: Icons.memory_outlined,
           label: 'Embedding',
-          keywords: 'embedding index vector memory model einbettung index '
+          keywords:
+              'embedding index vector memory model einbettung index '
               'gedächtnis',
           builder: (_) => const EmbeddingSettingsPage(),
         ),
@@ -226,7 +234,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'apikeys',
           icon: Icons.key_outlined,
           label: 'API Keys',
-          keywords: 'api keys key secret secrets token password credentials '
+          keywords:
+              'api keys key secret secrets token password credentials '
               'env environment schlüssel geheimnis zugangsdaten',
           builder: (_) => const SecretsSettingsPage(),
         ),
@@ -234,7 +243,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'automations',
           icon: Icons.schedule_outlined,
           label: 'Automations',
-          keywords: 'automations automation schedule cron watcher watch monitor '
+          keywords:
+              'automations automation schedule cron watcher watch monitor '
               'poll trigger remind zeitplan überwachen automatisierung',
           builder: (_) => const AutomationsPage(),
         ),
@@ -244,7 +254,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'theme',
           icon: Icons.palette_outlined,
           label: l.themeSettings,
-          keywords: 'theme color colour colors farbe farben accent background '
+          keywords:
+              'theme color colour colors farbe farben accent background '
               'dark mode light mode contrast palette dynamic color preset '
               'interface font chat font typeface appearance look design hell '
               'dunkel kontrast schrift schriftart aussehen',
@@ -254,7 +265,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'customization',
           icon: Icons.tune,
           label: l.customization,
-          keywords: 'customization language sprache font size ui scale zoom '
+          keywords:
+              'customization language sprache font size ui scale zoom '
               'reasoning tokens model info tps images in context typography '
               'verbose full log detail anpassung schriftgröße skalierung',
           builder: (_) => CustomizationPage(config: widget.config),
@@ -273,7 +285,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'developer',
             icon: Icons.code,
             label: l.developerOptions,
-            keywords: 'developer debug diagnostics logs advanced experimental '
+            keywords:
+                'developer debug diagnostics logs advanced experimental '
                 'entwickler fehlersuche',
             builder: (_) => const DeveloperSettingsPage(),
             tone: Theme.of(context).colorScheme.tertiary,
@@ -383,9 +396,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                     // editors) stay local to the modal.
                     : Navigator(
                         key: ValueKey<String>(_selectedId),
-                        onGenerateRoute: (_) => MaterialPageRoute(
-                          builder: selectedPage.builder!,
-                        ),
+                        onGenerateRoute: (_) =>
+                            MaterialPageRoute(builder: selectedPage.builder!),
                       ),
               ),
               // Floating close button, top-right of the content pane.
@@ -396,8 +408,10 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   color: m3.surfaceContainerHigh,
                   shape: const CircleBorder(),
                   child: IconButton(
-                    icon: Icon(Icons.close, color: theme.resolvedIconColor),
-                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -438,7 +452,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           child: Row(
             children: [
               IconButton(
-                icon: Icon(Icons.arrow_back, color: theme.resolvedIconColor),
+                icon: AppIcon(Icons.arrow_back, color: theme.resolvedIconColor),
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => setState(() => _compactPageId = null),
               ),
@@ -454,7 +468,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.close, color: theme.resolvedIconColor),
+                icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
                 tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 onPressed: () => Navigator.of(context).pop(),
               ),
@@ -464,8 +478,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         Expanded(
           child: Navigator(
             key: ValueKey<String>('compact:${page.id}'),
-            onGenerateRoute: (_) =>
-                MaterialPageRoute(builder: page.builder!),
+            onGenerateRoute: (_) => MaterialPageRoute(builder: page.builder!),
           ),
         ),
       ],
@@ -526,7 +539,12 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           // Title (with a close button when compact — no content pane to host
           // the floating close in single-column layout).
           Padding(
-            padding: EdgeInsets.fromLTRB(20, compact ? 14 : 22, compact ? 6 : 20, 12),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              compact ? 14 : 22,
+              compact ? 6 : 20,
+              12,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -540,9 +558,10 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 ),
                 if (compact)
                   IconButton(
-                    icon: Icon(Icons.close, color: theme.resolvedIconColor),
-                    tooltip:
-                        MaterialLocalizations.of(context).closeButtonTooltip,
+                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
               ],
@@ -559,7 +578,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 isDense: true,
                 hintText: '${l.settings}…',
                 hintStyle: TextStyle(color: m3.onSurfaceVariant, fontSize: 14),
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.search,
                   size: 18,
                   color: m3.onSurfaceVariant,
@@ -593,7 +612,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     final cs = theme.colorScheme;
     final bool selected = dest.isPage && dest.id == _selectedId;
     final Color fg = selected ? cs.onSecondaryContainer : cs.onSurface;
-    final Color iconColor = dest.tone ?? (selected ? cs.onSecondaryContainer : m3.onSurfaceVariant);
+    final Color iconColor =
+        dest.tone ?? (selected ? cs.onSecondaryContainer : m3.onSurfaceVariant);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -603,11 +623,16 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         child: InkWell(
           borderRadius: BorderRadius.circular(kRadiusRow),
           onTap: () => _onSelect(dest),
-          child: Padding(
+          child: Container(
+            // A 20 dp icon inside 10 dp of padding is a 40 dp row: too small
+            // to hit, on the phone as much as under a mouse.
+            constraints: const BoxConstraints(
+              minHeight: kMinInteractiveDimension,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(dest.icon, size: 20, color: iconColor),
+                AppIcon(dest.icon, size: 20, color: iconColor),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -622,7 +647,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   ),
                 ),
                 if (dest.onAction != null)
-                  Icon(
+                  AppIcon(
                     Icons.chevron_right,
                     size: 18,
                     color: m3.onSurfaceVariant.withValues(alpha: 0.6),
@@ -650,11 +675,14 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         child: InkWell(
           borderRadius: BorderRadius.circular(kRadiusRow),
           onTap: _logout,
-          child: Padding(
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: kMinInteractiveDimension,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
+                AppIcon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
                 const SizedBox(width: 14),
                 Text(
                   l.logout,
@@ -688,7 +716,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       messenger.showSnackBar(_snack('Could not sign out. Please try again.'));
     }
   }
-
 
   SnackBar _snack(String text) => SnackBar(
     content: Text(

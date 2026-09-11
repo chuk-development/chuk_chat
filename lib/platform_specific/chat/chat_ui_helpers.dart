@@ -101,7 +101,6 @@ class MessageRenderData {
   bool get isUser => sender == 'user';
 }
 
-
 /// Static utility functions shared between the desktop and mobile chat UIs.
 class ChatUiHelpers {
   const ChatUiHelpers._();
@@ -193,14 +192,16 @@ class ChatUiHelpers {
       return dropdownSlug;
     }
 
-    final String? prefsSlug =
-        await UserPreferencesService.loadSelectedProvider(modelId);
+    final String? prefsSlug = await UserPreferencesService.loadSelectedProvider(
+      modelId,
+    );
     if (prefsSlug != null && prefsSlug.isNotEmpty) return prefsSlug;
 
     // Third fallback: use the static in-memory providers list — survives
     // network glitches.
-    final providers =
-        ModelSelectionDropdown.availableProvidersForModel(modelId);
+    final providers = ModelSelectionDropdown.availableProvidersForModel(
+      modelId,
+    );
     return providers.isNotEmpty ? providers.first.slug : null;
   }
 
@@ -341,6 +342,9 @@ class ChatUiHelpers {
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
     }
+    if (message.sentAt != null && message.sentAt!.isNotEmpty) {
+      map['sentAt'] = message.sentAt!;
+    }
     // The turn's clock survives reload: without these two, a reloaded answer
     // loses the request timestamp and its recorded duration, so the header
     // falls back to the tool-call stamps for a turn that had already timed
@@ -399,6 +403,7 @@ class ChatUiHelpers {
   static const List<String> kVariantArchiveOnlyKeys = <String>[
     'messageId',
     'startedAt',
+    'sentAt',
   ];
 
   /// Build a variant snapshot of one assistant message's swappable content.
@@ -776,7 +781,9 @@ class ChatUiHelpers {
 
     final documents = attachedFiles
         .where((f) => !f.isImage && f.markdownContent != null)
-        .map((f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent})
+        .map(
+          (f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent},
+        )
         .toList();
     if (documents.isNotEmpty) {
       message['attachments'] = jsonEncode(documents);

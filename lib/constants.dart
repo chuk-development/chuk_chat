@@ -101,11 +101,11 @@ double contrastFactor(double contrast) {
    surfaces. Anything a pointer can hover, focus or press must round its
    ink to one of these — a square highlight inside a rounded card is the
    single most visible inconsistency in the app. */
-const double kRadiusCard = 20.0;
-const double kRadiusField = 16.0;
-const double kRadiusMenu = 16.0;
-const double kRadiusRow = 14.0;
-const double kRadiusDialog = 28.0;
+const double kRadiusCard = 28.0;
+const double kRadiusField = 20.0;
+const double kRadiusMenu = 20.0;
+const double kRadiusRow = 20.0;
+const double kRadiusDialog = 32.0;
 
 /// Stadium radius for every button. Buttons are pills app-wide.
 const double kRadiusPill = 999.0;
@@ -453,7 +453,9 @@ ThemeData buildAppTheme({
       backgroundColor: surfaceLow,
       elevation: 0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusDialog)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(kRadiusDialog),
+        ),
       ),
     ),
     tooltipTheme: TooltipThemeData(

@@ -26,9 +26,9 @@ sealed class ControlValue<T> {
 
   /// The value when it is really known, else null.
   T? get valueOrNull => switch (this) {
-        ControlAvailable<T>(:final value) => value,
-        _ => null,
-      };
+    ControlAvailable<T>(:final value) => value,
+    _ => null,
+  };
 }
 
 /// The host reported a real value.
@@ -65,10 +65,10 @@ class AgentSkill {
   final bool enabled;
 
   AgentSkill copyWith({bool? enabled}) => AgentSkill(
-        name: name,
-        description: description,
-        enabled: enabled ?? this.enabled,
-      );
+    name: name,
+    description: description,
+    enabled: enabled ?? this.enabled,
+  );
 }
 
 /// The model this coworker's last run really used.
@@ -167,9 +167,8 @@ class AgentSessionRuntime {
   /// How long the run in flight has been going, when one is.
   final Duration? current;
 
-  static Duration _seconds(Object? value) => Duration(
-        milliseconds: value is num ? (value * 1000).round() : 0,
-      );
+  static Duration _seconds(Object? value) =>
+      Duration(milliseconds: value is num ? (value * 1000).round() : 0);
 
   static AgentSessionRuntime? fromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
@@ -256,14 +255,13 @@ class AgentControlSnapshot {
     ControlValue<AgentSessionRuntime>? runtime,
     ControlValue<AgentSandbox>? sandbox,
     ControlValue<List<AgentSkill>>? skills,
-  }) =>
-      AgentControlSnapshot(
-        model: model ?? this.model,
-        tokens: tokens ?? this.tokens,
-        runtime: runtime ?? this.runtime,
-        sandbox: sandbox ?? this.sandbox,
-        skills: skills ?? this.skills,
-      );
+  }) => AgentControlSnapshot(
+    model: model ?? this.model,
+    tokens: tokens ?? this.tokens,
+    runtime: runtime ?? this.runtime,
+    sandbox: sandbox ?? this.sandbox,
+    skills: skills ?? this.skills,
+  );
 }
 
 /// The control surface's data source. One instance for the app; every call
@@ -290,7 +288,7 @@ abstract interface class AgentControlSource {
 /// host's skill list and its switches.
 class RelayAgentControlSource implements AgentControlSource {
   RelayAgentControlSource({SkillsSource? skills})
-      : _skills = skills ?? SkillsSource.instance {
+    : _skills = skills ?? SkillsSource.instance {
     // The transport is rebuilt on every reconnect, so follow it rather than
     // hold one subscription that dies with the first socket.
     CoworkRelayLink.instance.controller.addListener(_onController);
@@ -311,9 +309,7 @@ class RelayAgentControlSource implements AgentControlSource {
   ValueNotifier<AgentControlSnapshot> _notifier(String sessionKey) =>
       _snapshots.putIfAbsent(
         sessionKey,
-        () => ValueNotifier<AgentControlSnapshot>(
-          const AgentControlSnapshot(),
-        ),
+        () => ValueNotifier<AgentControlSnapshot>(const AgentControlSnapshot()),
       );
 
   @override
@@ -349,7 +345,10 @@ class RelayAgentControlSource implements AgentControlSource {
   }
 
   @override
-  Future<void> setSkillEnabled(String skillName, {required bool enabled}) async {
+  Future<void> setSkillEnabled(
+    String skillName, {
+    required bool enabled,
+  }) async {
     final ok = await _skills.setEnabled(skillName, enabled);
     if (!ok) throw StateError('The host did not take that skill switch.');
   }
@@ -368,12 +367,12 @@ class RelayAgentControlSource implements AgentControlSource {
   }
 
   AgentControlSnapshot _unavailable(String reason) => AgentControlSnapshot(
-        model: ControlUnavailable<AgentModelChoice>(reason),
-        tokens: ControlUnavailable<AgentTokenUsage>(reason),
-        runtime: ControlUnavailable<AgentSessionRuntime>(reason),
-        sandbox: ControlUnavailable<AgentSandbox>(reason),
-        skills: ControlUnavailable<List<AgentSkill>>(reason),
-      );
+    model: ControlUnavailable<AgentModelChoice>(reason),
+    tokens: ControlUnavailable<AgentTokenUsage>(reason),
+    runtime: ControlUnavailable<AgentSessionRuntime>(reason),
+    sandbox: ControlUnavailable<AgentSandbox>(reason),
+    skills: ControlUnavailable<List<AgentSkill>>(reason),
+  );
 
   void _onController() {
     if (_disposed) return;
@@ -446,7 +445,7 @@ class HostUnavailableControlSource extends RelayAgentControlSource {
 @visibleForTesting
 class FakeAgentControlSource implements AgentControlSource {
   FakeAgentControlSource({AgentControlSnapshot? initial})
-      : _initial = initial ?? const AgentControlSnapshot();
+    : _initial = initial ?? const AgentControlSnapshot();
 
   final AgentControlSnapshot _initial;
   final Map<String, ValueNotifier<AgentControlSnapshot>> _snapshots =
@@ -469,7 +468,10 @@ class FakeAgentControlSource implements AgentControlSource {
   Future<void> refresh(String sessionKey) async => refreshed.add(sessionKey);
 
   @override
-  Future<void> setSkillEnabled(String skillName, {required bool enabled}) async {
+  Future<void> setSkillEnabled(
+    String skillName, {
+    required bool enabled,
+  }) async {
     skillSwitches.add('$skillName=$enabled');
     for (final notifier in _snapshots.values) {
       final skills = notifier.value.skills.valueOrNull;

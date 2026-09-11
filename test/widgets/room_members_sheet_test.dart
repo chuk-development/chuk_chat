@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/widgets/room_members_sheet.dart';
@@ -56,20 +58,21 @@ void main() {
       room: _room([_m('a', 'amber'), _m('b', 'cobalt')]),
       candidates: [_agent('c', 'jade')],
     );
-    await tester.tap(find.byIcon(Icons.add_circle_outline));
+    await tester.tap(findIcon(Icons.add_circle_outline));
     expect(added, hasLength(1));
     expect(added.single.agentId, 'c');
     expect(added.single.handle, 'jade');
   });
 
-  testWidgets('removing a member fires onRemove above the minimum',
-      (tester) async {
+  testWidgets('removing a member fires onRemove above the minimum', (
+    tester,
+  ) async {
     final (_, removed) = await pump(
       tester,
       room: _room([_m('a', 'amber'), _m('b', 'cobalt'), _m('c', 'jade')]),
       candidates: const [],
     );
-    await tester.tap(find.byIcon(Icons.remove_circle_outline).first);
+    await tester.tap(findIcon(Icons.remove_circle_outline).first);
     expect(removed, ['a']);
   });
 
@@ -97,6 +100,57 @@ void main() {
       find.widgetWithIcon(IconButton, Icons.add_circle_outline),
     );
     expect(add.onPressed, isNull);
+  });
+
+  testWidgets('a long member list scrolls under an open keyboard', (
+    tester,
+  ) async {
+    // A short phone with the keyboard up: 360x640 minus a 300 px inset. Twelve
+    // members do not fit, so the sheet must scroll instead of overflowing.
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final room = _room([for (var i = 0; i < 12; i++) _m('id$i', 'h$i')]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(viewInsets: const EdgeInsets.only(bottom: 300)),
+            child: Scaffold(
+              body: RoomMembersSheet(
+                room: room,
+                candidates: [_agent('x', 'extra')],
+                onAdd: (_) {},
+                onRemove: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Nothing ran off the edge: a Column of bare rows threw a RenderFlex
+    // overflow here before the list became scrollable.
+    expect(tester.takeException(), isNull);
+
+    // The last member starts below the fold ...
+    final screen =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(tester.getRect(find.text('@h11')).top, greaterThan(screen - 300));
+
+    // ... and scrolling brings it, and the candidate list under it, into view.
+    final list = find.byType(ListView);
+    expect(list, findsOneWidget);
+    await tester.drag(list, const Offset(0, -1500));
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.text('@h11')).bottom, lessThan(screen - 300));
+    expect(find.text('extra'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an empty candidate list says so', (tester) async {

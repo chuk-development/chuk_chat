@@ -31,9 +31,40 @@ import 'package:cowork/utils/path_provider_stub.dart'
 
 /// One coworker's display profile. Every field is optional: an agent with no
 /// entry renders exactly as it did before this store existed.
+/// The silhouette a coworker's face is cut from. `expressive` is the automatic
+/// one: it derives a shape from the agent id, which is what a coworker gets
+/// until the user picks. The rest are the shapes of the expressive family,
+/// named so the user can choose one on purpose.
+///
+/// Values are persisted by name, and an unknown name reads back as null (=
+/// automatic), so an older build simply falls back instead of breaking.
+enum AgentAvatarShape {
+  round,
+  oval,
+  roundedSquare,
+  square,
+  expressive,
+  cookie,
+  clover,
+  flower,
+  diamond,
+  gem,
+  triangle,
+  burst,
+}
+
 @immutable
 class AgentProfile {
-  const AgentProfile({this.photoPath, this.colorValue, this.role, this.brief});
+  const AgentProfile({
+    this.photoPath,
+    this.colorValue,
+    this.role,
+    this.brief,
+    this.shape,
+  });
+
+  /// Null keeps the original stable expressive silhouette.
+  final AgentAvatarShape? shape;
 
   /// Absolute path of the picture copied into the app's support directory.
   /// Null means "use the generated blob face".
@@ -51,7 +82,11 @@ class AgentProfile {
   final String? brief;
 
   bool get isEmpty =>
-      photoPath == null && colorValue == null && role == null && brief == null;
+      photoPath == null &&
+      colorValue == null &&
+      role == null &&
+      brief == null &&
+      shape == null;
 
   /// Merges the given fields. A `clear*` flag wins over a value, so an emptied
   /// text field really removes what was stored instead of merging the old value
@@ -61,15 +96,18 @@ class AgentProfile {
     int? colorValue,
     String? role,
     String? brief,
+    AgentAvatarShape? shape,
     bool clearPhoto = false,
     bool clearColor = false,
     bool clearRole = false,
     bool clearBrief = false,
+    bool clearShape = false,
   }) => AgentProfile(
     photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
     colorValue: clearColor ? null : (colorValue ?? this.colorValue),
     role: clearRole ? null : (role ?? this.role),
     brief: clearBrief ? null : (brief ?? this.brief),
+    shape: clearShape ? null : (shape ?? this.shape),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -77,6 +115,7 @@ class AgentProfile {
     if (colorValue != null) 'color': colorValue,
     if (role != null) 'role': role,
     if (brief != null) 'brief': brief,
+    if (shape != null) 'shape': shape!.name,
   };
 
   static AgentProfile fromJson(Map<String, dynamic> json) => AgentProfile(
@@ -86,7 +125,15 @@ class AgentProfile {
         : int.tryParse('${json['color']}'),
     role: json['role'] as String?,
     brief: json['brief'] as String?,
+    shape: _readShape(json['shape']),
   );
+
+  static AgentAvatarShape? _readShape(Object? value) {
+    for (final shape in AgentAvatarShape.values) {
+      if (shape.name == value) return shape;
+    }
+    return null;
+  }
 }
 
 class AgentProfileStore extends ChangeNotifier {
@@ -139,20 +186,24 @@ class AgentProfileStore extends ChangeNotifier {
     int? colorValue,
     String? role,
     String? brief,
+    AgentAvatarShape? shape,
     bool clearPhoto = false,
     bool clearColor = false,
     bool clearRole = false,
     bool clearBrief = false,
+    bool clearShape = false,
   }) async {
     final AgentProfile next = profileOf(agentId).copyWith(
       photoPath: photoPath,
       colorValue: colorValue,
       role: role,
       brief: brief,
+      shape: shape,
       clearPhoto: clearPhoto,
       clearColor: clearColor,
       clearRole: clearRole,
       clearBrief: clearBrief,
+      clearShape: clearShape,
     );
     if (next.isEmpty) {
       _profiles.remove(agentId);

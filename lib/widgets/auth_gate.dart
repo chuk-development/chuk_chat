@@ -72,6 +72,17 @@ class _AuthGateState extends State<AuthGate> {
   Session? _lastSession;
 
   bool _recovering = false;
+
+  /// The stash the running recovery started from, when it names a user.
+  ///
+  /// A stashed session IS a signed-in user: the tokens are on disk, only the
+  /// live pair has to be fetched back. So the shell mounts at once and the
+  /// recovery runs behind it (bead cowork-91pn) — the thread the user was in
+  /// paints from the local cache in the same frame, instead of sitting behind
+  /// a spinner for up to twenty seconds. The wait screen is kept for the one
+  /// case it is honest about: a recovery with no user to mount a shell for.
+  SessionStash? _recoveringFrom;
+
   StreamSubscription<AuthState>? _sub;
 
   Session? _readCurrent() {
@@ -153,17 +164,28 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _startRecovery(SessionStash stash) async {
     if (_recovering) return;
-    setState(() => _recovering = true);
+    setState(() {
+      _recovering = true;
+      _recoveringFrom = stash.userId.isEmpty ? null : stash;
+    });
+    // The shell is mounted alongside this, so it must not race the recovery
+    // for the device's one relay socket. It waits on this handle instead; see
+    // [SessionRecovery.inFlight].
+    final work = (widget.recover ?? _recoverThroughHost)(stash);
+    SessionRecovery.inFlight = work.then<void>((_) {}, onError: (Object _) {});
     try {
-      await (widget.recover ?? _recoverThroughHost)(stash);
+      await work;
     } catch (_) {
       // Whatever happened, the session reader below has the last word.
+    } finally {
+      SessionRecovery.inFlight = null;
     }
     if (identical(SessionStash.pending, stash)) SessionStash.pending = null;
     await SessionStash.clearPersisted();
     if (!mounted) return;
     setState(() {
       _recovering = false;
+      _recoveringFrom = null;
       _session = _readCurrent();
       _lastSession = _session ?? _lastSession;
     });
@@ -171,8 +193,12 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_recovering) return const _RecoveringView();
-    if (_session != null) {
+    // A recovery for a stashed user does not hold the shell back: everything
+    // the shell needs on the first frame (the cached roster, the local
+    // transcript) is on this device already, and the socket reconnects behind
+    // it. Only a recovery with no user to show still waits.
+    if (_recovering && _recoveringFrom == null) return const _RecoveringView();
+    if (_session != null || _recoveringFrom != null) {
       final build = widget.buildShell;
       if (build != null) return build(context);
       return MessengerShell(themeController: widget.themeController);

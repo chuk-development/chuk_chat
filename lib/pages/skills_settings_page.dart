@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+
 import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/services/skills/cowork_skill.dart';
 import 'package:cowork/services/skills/skills_source.dart';
@@ -22,7 +26,7 @@ import 'package:cowork/widgets/settings_list_view.dart';
 /// `skills/workspace/`, which belong to the coworker from the first minute.
 class SkillsSettingsPage extends StatefulWidget {
   const SkillsSettingsPage({super.key, SkillsSource? source})
-      : _injectedSource = source;
+    : _injectedSource = source;
 
   final SkillsSource? _injectedSource;
 
@@ -68,9 +72,9 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
   Future<void> _toggle(CoworkSkill skill, bool enabled) async {
     final sent = await _source.setEnabled(skill.name, enabled);
     if (!mounted || sent) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Not connected to the host')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Not connected to the host')));
   }
 
   @override
@@ -82,34 +86,38 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
     final workspace = _source.workspace;
     final errors = _source.errors;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        centerTitle: false,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _refreshing ? null : _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
+    return ExpressiveScreen(
+      title: title,
+      actions: <Widget>[
+        ExpressiveIconButton(
+          hugeIcon: HugeIcons.refresh,
+          tooltip: 'Refresh',
+          onTap: _refreshing ? null : _refresh,
+        ),
+      ],
+      builder: (BuildContext context) => RefreshIndicator(
         onRefresh: _refresh,
         // The house scroll container for a settings page: it lays every row
         // out up front, so the scrollbar does not resize while you scroll —
         // and the second section exists even before you reach it.
         child: SettingsListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            MediaQuery.paddingOf(context).top + 8,
+            16,
+            MediaQuery.paddingOf(context).bottom + 32,
+          ),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             ExpressiveTitle(
               title,
               subtitle:
-                  l?.skillsSubtitle ?? 'Procedures the coworker loads on demand',
+                  l?.skillsSubtitle ??
+                  'Procedures the coworker loads on demand',
             ),
             ExpressiveInfoCard(
-              text: l?.skillsExplainer ??
+              text:
+                  l?.skillsExplainer ??
                   'A skill is a procedure the coworker loads when it needs '
                       'it. Only its name and description are in every prompt; '
                       'the full instructions load on use.',
@@ -117,7 +125,8 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
             if (_offline) ...[
               const SizedBox(height: 12),
               const ExpressiveInfoCard(
-                text: 'Not connected to the host. The list shows what this '
+                text:
+                    'Not connected to the host. The list shows what this '
                     'app last heard; connect to refresh or change anything.',
               ),
             ],
@@ -135,48 +144,48 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
                 child: Text(
                   _source.listed
                       ? 'The host has no skills. Put a SKILL.md into the '
-                          'workspace\'s skills folder and refresh.'
+                            'workspace\'s skills folder and refresh.'
                       : 'Waiting for the host…',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             if (builtin.isNotEmpty) ...[
               ExpressiveSectionHeader(l?.skillsBuiltin ?? 'Built in'),
               const ExpressiveInfoCard(
                 icon: Icons.verified_outlined,
-                text: 'The CoWork host\'s own. Each one explains a part of '
+                text:
+                    'The CoWork host\'s own. Each one explains a part of '
                     'the app the coworker works with — schedules, the secrets '
                     'vault, the sandbox terminal, the workspace itself. They '
                     'ship with the host and come back with every update.',
               ),
               const SizedBox(height: 10),
               ExpressiveGroup(
-                children: [
-                  for (final skill in builtin) _row(skill),
-                ],
+                children: [for (final skill in builtin) _row(skill)],
               ),
             ],
             if (workspace.isNotEmpty) ...[
               const ExpressiveSectionHeader('Workspace'),
               const ExpressiveInfoCard(
                 icon: Icons.folder_outlined,
-                text: 'Files in the coworker\'s workspace, under skills/. Your '
+                text:
+                    'Files in the coworker\'s workspace, under skills/. Your '
                     'coworker or you put them there, and either of you can '
                     'edit or delete them. A few come with a new workspace to '
                     'start you off — those are yours too.',
               ),
               const SizedBox(height: 10),
               ExpressiveGroup(
-                children: [
-                  for (final skill in workspace) _row(skill),
-                ],
+                children: [for (final skill in workspace) _row(skill)],
               ),
             ],
             const SizedBox(height: 8),
             const ExpressiveInfoCard(
-              text: 'Switching a skill off keeps the file where it is; the '
+              text:
+                  'Switching a skill off keeps the file where it is; the '
                   'coworker stops getting it from its next task on.',
             ),
           ],
@@ -186,11 +195,11 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
   }
 
   Widget _row(CoworkSkill skill) => ExpressiveSwitchRow(
-        key: ValueKey<String>('skill-${skill.name}'),
-        title: skill.name,
-        subtitle: skill.description.isEmpty ? null : skill.description,
-        icon: skill.isBuiltin ? Icons.verified_outlined : Icons.folder_outlined,
-        value: skill.enabled,
-        onChanged: (value) => _toggle(skill, value),
-      );
+    key: ValueKey<String>('skill-${skill.name}'),
+    title: skill.name,
+    subtitle: skill.description.isEmpty ? null : skill.description,
+    icon: skill.isBuiltin ? Icons.verified_outlined : Icons.folder_outlined,
+    value: skill.enabled,
+    onChanged: (value) => _toggle(skill, value),
+  );
 }

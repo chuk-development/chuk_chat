@@ -170,8 +170,9 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
                 explicitChildNodes: true,
                 child: ScrollConfiguration(
                   // No scrollbar over the menu — it looked messy on desktop.
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(scrollbars: false),
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: ListBody(children: items),
@@ -255,17 +256,20 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final double maxXAll =
-        math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    final double maxXAll = math.max(
+      _kEdgeMargin,
+      size.width - _kEdgeMargin - childSize.width,
+    );
     // Cascade: sit to the right of the anchor, or flip to the left when the
     // right side would run off screen. Top edges aligned.
     if (besideAnchor) {
       final double toRight = anchor.right + _kAnchorGap;
       final double toLeft = anchor.left - _kAnchorGap - childSize.width;
       final double x =
-          (toRight + childSize.width <= size.width - _kEdgeMargin || toLeft < _kEdgeMargin)
-              ? toRight
-              : toLeft;
+          (toRight + childSize.width <= size.width - _kEdgeMargin ||
+              toLeft < _kEdgeMargin)
+          ? toRight
+          : toLeft;
       return Offset(
         x.clamp(_kEdgeMargin, maxXAll),
         anchor.top.clamp(
@@ -275,7 +279,8 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       );
     }
 
-    final bool openDown = !_forceAbove &&
+    final bool openDown =
+        !_forceAbove &&
         (childSize.height <= _roomBelow || _roomBelow >= _roomAbove);
     final double y = openDown
         ? anchor.bottom + _kAnchorGap
@@ -285,11 +290,12 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
     // right side of the screen opens leftwards (right edges aligned) so the
     // menu never runs off toward the centre; one on the left opens rightwards
     // as before. Then clamp so it always stays on screen.
-    final double maxX = math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    final double maxX = math.max(
+      _kEdgeMargin,
+      size.width - _kEdgeMargin - childSize.width,
+    );
     final bool ar = alignRight ?? (anchor.right > size.width * 0.6);
-    final double x = ar
-        ? anchor.right - childSize.width
-        : anchor.left;
+    final double x = ar ? anchor.right - childSize.width : anchor.left;
     return Offset(
       x.clamp(_kEdgeMargin, maxX),
       y.clamp(usableTop, math.max(usableTop, usableBottom - childSize.height)),

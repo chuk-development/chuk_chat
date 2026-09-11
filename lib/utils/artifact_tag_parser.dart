@@ -82,8 +82,7 @@ List<ParsedArtifactTag> parseArtifactTags(String text) {
     for (final a in _attrPattern.allMatches(attrsRaw)) {
       final key = a.group(1)?.toLowerCase();
       if (key == null || key.isEmpty) continue;
-      final value =
-          a.group(2) ?? a.group(3) ?? a.group(4) ?? a.group(5) ?? '';
+      final value = a.group(2) ?? a.group(3) ?? a.group(4) ?? a.group(5) ?? '';
       attrs[key] = value;
     }
 

@@ -50,8 +50,5 @@ AutomationWake? parseAutomationWake(String text) {
       .trimRight();
   final match = _headerPattern.firstMatch(header);
   if (match == null) return null;
-  return AutomationWake(
-    id: match.group(1)!,
-    name: match.group(2)!.trim(),
-  );
+  return AutomationWake(id: match.group(1)!, name: match.group(2)!.trim());
 }

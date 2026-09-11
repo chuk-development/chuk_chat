@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/services/settings/embedding_model_service.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
@@ -41,12 +44,17 @@ class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Embedding model')),
-      body: _loading
+    return ExpressiveScreen(
+      title: 'Embedding model',
+      builder: (BuildContext context) => _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 32,
+              ),
               children: [
                 const ExpressiveTitle(
                   'Embedding model',
@@ -61,8 +69,10 @@ class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage> {
                         title: option.name,
                         subtitle: '${option.dimensions} dimensions',
                         trailing: option.id == _selected
-                            ? Icon(Icons.check,
-                                color: Theme.of(context).colorScheme.primary)
+                            ? AppIcon(
+                                Icons.check,
+                                color: Theme.of(context).colorScheme.primary,
+                              )
                             : null,
                         onTap: () => _pick(option.id),
                       ),

@@ -20,6 +20,9 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/models/stream_phase.dart';
@@ -42,6 +45,11 @@ import 'package:cowork/widgets/map_block_renderer.dart';
 import 'package:cowork/widgets/weather_widget.dart';
 import 'package:cowork/utils/tool_detail_format.dart';
 import 'package:cowork/widgets/markdown_message.dart';
+import 'package:cowork/models/chat_reply.dart';
+import 'package:cowork/utils/incomplete_markdown_links.dart';
+import 'package:cowork/widgets/messenger_context_menu.dart';
+import 'package:cowork/services/settings/mobile_chat_preferences.dart';
+import 'package:cowork/widgets/messenger_typing_indicator.dart';
 import 'package:cowork/widgets/message_bubble/web_search_sources.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/document_viewer.dart';
@@ -144,6 +152,7 @@ class MessageBubble extends StatefulWidget {
     super.key,
     required this.message,
     required this.isUser,
+    this.messengerMode = false,
     this.startsNewGroup = true,
     this.endsGroup = true,
     this.maxWidth,
@@ -165,6 +174,7 @@ class MessageBubble extends StatefulWidget {
     this.contentBlocks,
     this.isStreamingMessage = false,
     this.turnStartedAt,
+    this.sentAt,
     this.workedFor,
     this.images,
     this.imageMetas,
@@ -183,9 +193,20 @@ class MessageBubble extends StatefulWidget {
     this.variantCount = 0,
     this.onPrevVariant,
     this.onNextVariant,
+    this.onReply,
+    this.onEditRequested,
+    this.reaction,
+    this.onReaction,
   });
 
   final String message;
+  final VoidCallback? onReply;
+  final VoidCallback? onEditRequested;
+  final String? reaction;
+  final ValueChanged<String>? onReaction;
+
+  /// Opt-in quiet mobile chrome. Data, model settings and desktop stay intact.
+  final bool messengerMode;
   final bool
   isUser; // true for bot, false for user in voice mode (to match image)
   // In regular chat, true for user, false for AI.
@@ -221,6 +242,10 @@ class MessageBubble extends StatefulWidget {
   /// can count real seconds from the send rather than from the first tool
   /// call — which on a slow turn starts long after the reader began waiting.
   final DateTime? turnStartedAt;
+
+  /// Actual message timestamp, distinct from the generation stopwatch.
+  /// Null on undated legacy rows; never synthesised from the render clock.
+  final DateTime? sentAt;
 
   /// The finished turn's length as it was written down. Once present the
   /// header shows it unchanged, so reopening a chat cannot produce a
@@ -286,8 +311,14 @@ class MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
+  /// Files this answer produced. They are pulled out of the bubble while the
+  /// body is built and drawn under it as messages of their own, so a document
+  /// arrives the way a messenger delivers one.
+  final List<Widget> _artifactMessages = <Widget>[];
+
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
+  late final bool _animateMessengerEntrance;
 
   // User preferences for display - null until loaded
   bool? _showReasoningTokens;
@@ -303,6 +334,13 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void initState() {
     super.initState();
+    // Only a newly mounted live assistant turn enters. Historical rows and
+    // subsequent token updates stay still; outgoing messages already fly in
+    // once via the mobile list's MessageFlyIn wrapper.
+    _animateMessengerEntrance =
+        widget.messengerMode &&
+        !widget.isUser &&
+        (widget.isStreamingMessage || widget.isReasoningStreaming);
     _loadPreferences();
   }
 
@@ -327,19 +365,55 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void didUpdateWidget(covariant MessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.isStreamingMessage != oldWidget.isStreamingMessage) {
+      _strippedMessageCache = null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     // The timing is reported at most once per bubble, so stop paying for a
     // Stopwatch on every later rebuild.
-    final Stopwatch? stopwatch =
-        _complexBubbleLogged ? null : (Stopwatch()..start());
+    final Stopwatch? stopwatch = _complexBubbleLogged
+        ? null
+        : (Stopwatch()..start());
 
     final bool isUserMessage = widget.isUser;
-    final Widget result = isUserMessage
+    final Widget body = isUserMessage
         ? _buildUserBubble(context)
         : _buildAiBubble(context);
+    final Widget result = widget.messengerMode && widget.reaction != null
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              body,
+              Align(
+                alignment: widget.isUser
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: TextButton(
+                    onPressed: widget.onReaction == null
+                        ? null
+                        : () => widget.onReaction!(widget.reaction!),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHigh,
+                      minimumSize: const Size(48, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    child: Text(
+                      widget.reaction!,
+                      style: const TextStyle(fontSize: 20),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : body;
 
     stopwatch?.stop();
     final imageCount = widget.images?.length ?? 0;
@@ -365,6 +439,22 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
 
-    return result;
+    if (!_animateMessengerEntrance || MediaQuery.disableAnimationsOf(context)) {
+      return result;
+    }
+    return TweenAnimationBuilder<double>(
+      key: const ValueKey('messenger-message-entrance'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      child: result,
+      builder: (context, progress, child) => Opacity(
+        opacity: 0.6 + 0.4 * progress,
+        child: Transform.translate(
+          offset: Offset(0, 6 * (1 - progress)),
+          child: child,
+        ),
+      ),
+    );
   }
 }

@@ -87,7 +87,8 @@ class AutomationsSource extends ChangeNotifier {
     if (sessionKey == 'default') return 'Default coworker';
     if (sessionKey.startsWith('local:')) {
       final parts = sessionKey.split(':');
-      if (parts.length >= 2 && parts[1].trim().isNotEmpty) return parts[1].trim();
+      if (parts.length >= 2 && parts[1].trim().isNotEmpty)
+        return parts[1].trim();
     }
     if (sessionKey.startsWith('host:')) {
       final device = sessionKey.substring('host:'.length).trim();

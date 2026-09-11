@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
@@ -14,7 +17,7 @@ import 'package:cowork/widgets/expressive_settings.dart';
 /// what CoWork forwards on the task frame.
 class HereNowSettingsPage extends StatefulWidget {
   const HereNowSettingsPage({super.key, HereNowStore? store})
-      : _injectedStore = store;
+    : _injectedStore = store;
 
   final HereNowStore? _injectedStore;
 
@@ -50,12 +53,17 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('here.now Publishing')),
-      body: _loading
+    return ExpressiveScreen(
+      title: 'here.now Publishing',
+      builder: (BuildContext context) => _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 32,
+              ),
               children: [
                 const ExpressiveTitle(
                   'here.now Publishing',
@@ -93,12 +101,12 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
                               segments: const <ButtonSegment<HereNowApproval>>[
                                 ButtonSegment<HereNowApproval>(
                                   value: HereNowApproval.ask,
-                                  icon: Icon(Icons.verified_user_outlined),
+                                  icon: AppIcon(Icons.verified_user_outlined),
                                   label: Text('Ask each time'),
                                 ),
                                 ButtonSegment<HereNowApproval>(
                                   value: HereNowApproval.auto,
-                                  icon: Icon(Icons.bolt_outlined),
+                                  icon: AppIcon(Icons.bolt_outlined),
                                   label: Text('Auto-approve'),
                                 ),
                               ],
@@ -111,16 +119,14 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
                             Text(
                               _settings.approval == HereNowApproval.ask
                                   ? 'You approve each publish in the chat before '
-                                      'anything goes public.'
+                                        'anything goes public.'
                                   : 'Publishes go out without asking. The agent '
-                                      'does not wait for you.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                                        'does not wait for you.',
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                             ),
                           ],

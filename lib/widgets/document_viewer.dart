@@ -1,5 +1,9 @@
 // lib/widgets/document_viewer.dart
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:cowork/widgets/markdown_message.dart';
 
@@ -49,41 +53,35 @@ class _DocumentViewerState extends State<DocumentViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = Theme.of(context).colorScheme.onSurface;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(widget.fileName, style: TextStyle(color: iconColor)),
-        leading: IconButton(
-          icon: Icon(Icons.close, color: iconColor),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Close',
-        ),
-        actions: [
-          if (!_isEditing)
-            IconButton(
-              icon: Icon(Icons.copy, color: iconColor),
-              onPressed: _copyToClipboard,
-              tooltip: 'Copy to clipboard',
-            ),
-          IconButton(
-            icon: Icon(
-              _isEditing ? Icons.visibility : Icons.edit,
-              color: iconColor,
-            ),
-            onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-              });
-            },
-            tooltip: _isEditing ? 'View mode' : 'Edit mode',
+      title: widget.fileName,
+      actions: <Widget>[
+        if (!_isEditing)
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.copy01,
+            onTap: _copyToClipboard,
+            tooltip: 'Copy to clipboard',
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        ExpressiveIconButton(
+          hugeIcon: _isEditing ? HugeIcons.view : HugeIcons.edit02,
+          onTap: () {
+            setState(() {
+              _isEditing = !_isEditing;
+            });
+          },
+          tooltip: _isEditing ? 'View mode' : 'Edit mode',
+        ),
+      ],
+      builder: (BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 16,
+          16,
+          MediaQuery.paddingOf(context).bottom + 16,
+        ),
         child: _isEditing ? _buildEditView() : _buildMarkdownView(),
       ),
     );

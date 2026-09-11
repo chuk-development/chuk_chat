@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:cowork/ui/expressive/day_divider.dart';
@@ -12,6 +14,7 @@ import 'package:cowork/models/tool_call.dart';
 import 'package:cowork/services/offline_retry_manager.dart';
 import 'package:cowork/services/offline_send_coordinator.dart';
 import 'package:cowork/services/chat_runtime.dart';
+import 'package:cowork/models/chat_reply.dart';
 import 'package:cowork/services/mcp/mcp_availability.dart';
 import 'package:cowork/services/chat_runtime_registry.dart';
 import 'package:cowork/services/chat_storage_service.dart';
@@ -24,7 +27,11 @@ import 'package:cowork/services/multiplex_session.dart';
 import 'package:cowork/services/title_generation_service.dart';
 import 'package:cowork/services/app_lifecycle_service.dart';
 import 'package:cowork/core/model_selection_events.dart';
+import 'package:cowork/services/chat_model_selection_service.dart';
+import 'package:cowork/services/chat_reaction_service.dart';
 import 'package:cowork/widgets/message_bubble.dart';
+import 'package:cowork/widgets/chat_reply_preview.dart';
+import 'package:cowork/widgets/messenger_typing_indicator.dart';
 import 'package:cowork/widgets/message_fly_in.dart';
 import 'package:cowork/widgets/measure_size.dart';
 import 'package:cowork/widgets/selection_copy_area.dart';
@@ -108,6 +115,13 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
 
+  /// Messenger presentation only; does not change model or reasoning settings.
+  final bool messengerMode;
+
+  /// Host activity survives the lifetime of a local streaming subscription.
+  /// Only set from an observed live run, never inferred from offline history.
+  final bool hostRunActive;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -131,6 +145,8 @@ class ChukChatUIMobile extends StatefulWidget {
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
+    this.messengerMode = false,
+    this.hostRunActive = false,
   });
 
   @override
@@ -195,6 +211,46 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   // Model and provider state
   String _selectedModelId = ''; // Will be loaded from user preferences
+  final Map<String, ChatReply> _replyDrafts = {};
+  void _onReactionsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _reactionKeyAt(int index) {
+    final key = ChatReactionService.messageKey(_messages[index]);
+    if (!key.startsWith('legacy:') ||
+        (_messages[index]['sentAt']?.isNotEmpty ?? false) ||
+        (_messages[index]['startedAt']?.isNotEmpty ?? false)) {
+      return key;
+    }
+    // Distinguish identical undated legacy messages without using absolute
+    // list indices, so inserting unrelated history does not move reactions.
+    var occurrence = 0;
+    for (var i = 0; i < index; i++) {
+      if (ChatReactionService.messageKey(_messages[i]) == key) occurrence++;
+    }
+    return '$key:$occurrence';
+  }
+
+  Future<void> _toggleReaction(
+    String chatId,
+    String messageId,
+    String emoji,
+  ) async {
+    try {
+      await ChatReactionService.instance.toggle(chatId, messageId, emoji);
+    } catch (_) {
+      if (mounted) {
+        ChatUiHelpers.showSnackBar(
+          context,
+          'Could not save reaction. Please try again.',
+        );
+      }
+    }
+  }
+
+  String get _replyChatKey =>
+      widget.selectedChatId ?? _activeChatId ?? 'default';
   String? _selectedProviderSlug;
   String? _systemPrompt;
 
@@ -209,12 +265,37 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? get selectedProviderSlug => _selectedProviderSlug;
   @override
   set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
+  @override
+  String? get modelSelectionChatId => widget.selectedChatId ?? _activeChatId;
+
+  void _onChatModelChanged() {
+    if (mounted) {
+      unawaited(_hydrateChatModel().catchError((Object _) => false));
+    }
+  }
+
+  Future<bool> _hydrateChatModel() async {
+    final chatId = modelSelectionChatId;
+    if (chatId == null) return false;
+    final choice = await ChatModelSelectionService.instance.load(chatId);
+    if (!mounted || modelSelectionChatId != chatId || choice == null) {
+      return false;
+    }
+    setState(() {
+      _selectedModelId = choice.modelId;
+      _selectedProviderSlug = choice.providerSlug;
+    });
+    unawaited(_refreshSelectedModelName(choice.modelId));
+    return true;
+  }
+
   ChatMode _chatMode = ChatModeService.fallbackMode;
 
   /// The active mode's reasoning level (`none` … `xhigh`, `none` = off).
   /// Loaded from the mode's config; each mode remembers its own.
-  String _reasoningEffort =
-      ChatModeService.defaultConfig(ChatModeService.fallbackMode).reasoningEffort;
+  String _reasoningEffort = ChatModeService.defaultConfig(
+    ChatModeService.fallbackMode,
+  ).reasoningEffort;
 
   /// Human name of the selected model, for the mode menu. Null until the
   /// model list has been cached — the menu then shows the raw id.
@@ -279,6 +360,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     super.initState();
     _initializeHandlers();
     _initializeListeners();
+    ChatModelSelectionService.instance.addListener(_onChatModelChanged);
+    ChatReactionService.instance.addListener(_onReactionsChanged);
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
     // Mode + its config (model, provider, reasoning) restore once, via
@@ -293,8 +376,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// source of truth for what a send uses; this projects it into the live
   /// fields and keeps the shared selected-model plumbing in step.
   Future<void> _restoreChatMode() async {
+    final chatId = modelSelectionChatId;
+    // The account-wide capabilities catalogue may still be loading. Restore
+    // the explicit chat pair first so it never waits behind that network work.
+    final hasChatChoice = await _hydrateChatModel();
     final mode = await ChatModeService.load();
     final config = await ChatModeService.loadConfig(mode);
+    if (!mounted || modelSelectionChatId != chatId) return;
+    if (hasChatChoice) {
+      if (mounted && modelSelectionChatId == chatId) {
+        setState(() {
+          _chatMode = mode;
+          _reasoningEffort = config.reasoningEffort;
+        });
+      }
+      return;
+    }
+    if (!mounted || modelSelectionChatId != chatId) return;
+    if (chatId != null) {
+      // A legacy chat inherits defaults locally. Merely opening a chat must
+      // never publish a global selected-model/provider mutation.
+      setState(() {
+        _chatMode = mode;
+        _reasoningEffort = config.reasoningEffort;
+        _selectedModelId = config.modelId;
+        _selectedProviderSlug = config.providerSlug;
+      });
+      unawaited(_refreshSelectedModelName(config.modelId));
+      return;
+    }
     await _applyModeConfig(mode, config);
   }
 
@@ -367,11 +477,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           setState(() {
             _activeChatId = chatId;
           });
-          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-            }
-          }));
+          unawaited(
+            MultiplexSession.openForChat(chatId).catchError((e) {
+              if (kDebugMode) {
+                debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+              }
+            }),
+          );
         }
       };
 
@@ -514,7 +626,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.chat_bubble_outline,
               color: theme.colorScheme.primary,
               size: 28,
@@ -547,7 +659,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
               child: Row(
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.computer,
                     color: theme.colorScheme.primary,
                     size: 24,
@@ -595,6 +707,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Model selection listener
     _modelSelectionListener = () {
+      final scopedId = modelSelectionChatId;
+      if (scopedId != null) {
+        unawaited(_hydrateChatModel());
+        return;
+      }
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
       if (newModelId != _selectedModelId) {
@@ -672,6 +789,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     super.didUpdateWidget(oldWidget);
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
+      unawaited(_loadSavedModelPreference());
       if (kDebugMode) {
         debugPrint('');
       }
@@ -804,6 +922,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    ChatReactionService.instance.removeListener(_onReactionsChanged);
+    ChatModelSelectionService.instance.removeListener(_onChatModelChanged);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     if (_activeChatId != null) {
@@ -840,6 +960,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // --- CHAT MANAGEMENT ---
 
   void _loadChatById(String? chatId) {
+    if (chatId != null) unawaited(ChatReactionService.instance.load(chatId));
     // The regenerate seed belongs to the chat we are leaving. If its turn is
     // still running it keeps going in the background, so hand the seed over
     // instead of dropping it — otherwise the background completion cannot fold
@@ -894,11 +1015,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // Returning to a chat whose regenerate was still running in the
         // background: re-arm its seed so the now-foreground answer folds.
         restoreVariantSeedForChat(cached.id);
-        unawaited(MultiplexSession.openForChat(cached.id).catchError((e) {
-          if (kDebugMode) {
-            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-          }
-        }));
+        unawaited(
+          MultiplexSession.openForChat(cached.id).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }),
+        );
         _applyLoadedChat(cached, sidebarWasExpanded);
         return;
       }
@@ -948,8 +1071,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Splice buffered streaming content (if any) into the freshly-built list
     // before it lands in _messages, so the user never sees a stale snapshot.
     final bool chatIsStreaming =
-        activeChatId != null &&
-        _streamingHandler.isChatStreaming(activeChatId);
+        activeChatId != null && _streamingHandler.isChatStreaming(activeChatId);
     final bool chatHasCompletedStream =
         activeChatId != null &&
         _streamingHandler.hasCompletedStream(activeChatId);
@@ -1104,11 +1226,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // Returning to a chat whose regenerate was still running in the
         // background: re-arm its seed so the now-foreground answer folds.
         restoreVariantSeedForChat(storedChat.id);
-        unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
-          if (kDebugMode) {
-            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-          }
-        }));
+        unawaited(
+          MultiplexSession.openForChat(storedChat.id).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }),
+        );
         _applyLoadedChat(storedChat, sidebarWasExpanded);
         return;
       }
@@ -1167,7 +1291,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the active mode. Debug only.
-  bool get debugReasoningEnabled => _reasoningEffort != ChatModeService.reasoningOff;
+  bool get debugReasoningEnabled =>
+      _reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
@@ -1495,9 +1620,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     bool isEnabled = true,
     bool isSelected = false,
   }) {
-    final Color color = isEnabled
-        ? iconFg
-        : iconFg.withValues(alpha: 0.35);
+    final Color color = isEnabled ? iconFg : iconFg.withValues(alpha: 0.35);
 
     return PopupMenuItem<T>(
       value: value,
@@ -1506,7 +1629,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: color),
+          AppIcon(icon, size: 18, color: color),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1518,7 +1641,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           ),
           if (isSelected) ...[
             const SizedBox(width: 12),
-            Icon(Icons.check, size: 18, color: color),
+            AppIcon(Icons.check, size: 18, color: color),
           ],
         ],
       ),
@@ -1539,6 +1662,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
     );
   }
+
   /// The workspace in use, shown beside the mode pill — not floating over
   /// the middle of the chat, where it covered the conversation. Tapping it
   /// opens the same workspace menu the plus button does.
@@ -1565,7 +1689,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              AppIcon(
                 Icons.folder_outlined,
                 size: 17,
                 color: workspace.displayColor,
@@ -1737,7 +1861,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       if (raw is List) {
         decoded = raw
             .map(
-              (item) => DocumentAttachment.fromJson(item as Map<String, dynamic>),
+              (item) =>
+                  DocumentAttachment.fromJson(item as Map<String, dynamic>),
             )
             .toList();
       }
@@ -2243,6 +2368,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
 
+    // Restore a chat-local choice before validating; a cold global dropdown
+    // must not reject a perfectly configured chat.
+    final chatAtSend = modelSelectionChatId;
+    try {
+      await _hydrateChatModel();
+    } catch (_) {
+      ChatStorageService.isMessageOperationInProgress = false;
+      if (mounted) {
+        _showSnackBar('Could not load this chat model. Please retry.');
+      }
+      return;
+    }
+    if (!mounted || chatAtSend != modelSelectionChatId) {
+      ChatStorageService.isMessageOperationInProgress = false;
+      return;
+    }
     // Check if a model is selected
     if (_selectedModelId.isEmpty) {
       _showSnackBar('Please select a model first');
@@ -2276,8 +2417,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Credit/free message checks are handled server-side (API returns 402)
 
-    final String originalUserInput = _controller.text.trim();
+    final String typedInput = _controller.text.trim();
     final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;
+    final replyForSend = _replyDrafts[_replyChatKey];
+    final String originalUserInput =
+        replyForSend != null && (typedInput.isNotEmpty || hasAttachments)
+        ? replyForSend.compose(typedInput)
+        : typedInput;
 
     if (originalUserInput.isEmpty && !hasAttachments) {
       _isSendingMessage = false;
@@ -2289,15 +2435,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     // Validate message using MessageCompositionService
+    final route = await ChatModelSelectionService.instance.resolveForSend(
+      chatAtSend ?? '',
+      modelId: _selectedModelId,
+      providerSlug: _selectedProviderSlug ?? '',
+    );
+    final modelIdForThisMessage = route.modelId;
+    final rawProviderForThisMessage = route.providerSlug.isNotEmpty
+        ? route.providerSlug
+        : await ensureProviderSlugForCurrentModel();
+    final providerForThisMessage = rawProviderForThisMessage == null
+        ? null
+        : ModelSelectionDropdown.resolveProviderSlugForSend(
+            modelIdForThisMessage,
+            rawProviderForThisMessage,
+          );
+    final reasoningForThisMessage = _clampedReasoningEffort(
+      modelIdForThisMessage,
+      providerForThisMessage,
+    );
+    if (!mounted || modelSelectionChatId != chatAtSend) {
+      _isSendingMessage = false;
+      ChatStorageService.isMessageOperationInProgress = false;
+      return;
+    }
     final List<Map<String, dynamic>> apiHistory = _buildApiHistory();
     final MessageCompositionResult validationResult =
         await MessageCompositionService.prepareMessage(
           userInput: originalUserInput,
           attachedFiles: _fileHandler.attachedFiles,
-          selectedModelId: _selectedModelId,
+          selectedModelId: modelIdForThisMessage,
           apiHistory: apiHistory,
           systemPrompt: _systemPrompt,
-          getProviderSlug: ensureProviderSlugForCurrentModel,
+          getProviderSlug: () async => providerForThisMessage,
         );
 
     if (!validationResult.isValid) {
@@ -2310,8 +2480,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
 
-    // Check if widget was disposed during async operation
-    if (!mounted) {
+    // Do not append the prepared turn to a different chat after a switch.
+    if (!mounted || modelSelectionChatId != chatAtSend) {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
@@ -2356,15 +2526,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Add user message
     setState(() {
+      final sentAt = DateTime.now().toIso8601String();
+      _replyDrafts.remove(chatIdForThisMessage);
       // Store message with images and attachments (if any)
       final userMessage = {
         'sender': 'user',
         'text': displayMessageText,
         'reasoning': '',
-        'modelId': _selectedModelId,
-        'provider': _selectedProviderSlug ?? '',
+        'modelId': modelIdForThisMessage,
+        'provider': providerForThisMessage ?? '',
         // The wall time the reader sent it, so the bubble can carry a clock.
-        'startedAt': DateTime.now().toIso8601String(),
+        'startedAt': sentAt,
+        'sentAt': sentAt,
       };
 
       // Store images as JSON-encoded string if present
@@ -2419,13 +2592,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       if (_fileHandler.attachedFiles.isNotEmpty) {
         _fileHandler.attachedFiles.clear();
       }
+      final responseStartedAt = DateTime.now().toIso8601String();
       _messages.add({
         'sender': 'ai',
         'text': 'Thinking...',
         'reasoning': '',
-        'modelId': _selectedModelId,
-        'provider': _selectedProviderSlug ?? '',
-        'startedAt': DateTime.now().toIso8601String(),
+        'modelId': modelIdForThisMessage,
+        'provider': providerForThisMessage ?? '',
+        'startedAt': responseStartedAt,
+        'sentAt': responseStartedAt,
       });
     });
 
@@ -2446,17 +2621,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           OfflineSendPayload(
             chatId: chatIdForThisMessage,
             messageText: validationResult.aiPromptContent ?? displayMessageText,
-            modelId: _selectedModelId,
-            providerSlug: _selectedProviderSlug ?? '',
+            modelId: modelIdForThisMessage,
+            providerSlug: providerForThisMessage ?? '',
             systemPrompt: resolvedSystemPrompt,
             imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
                 ? jsonEncode(imageDataUrls)
                 : null,
             maxTokens: validationResult.maxResponseTokens ?? 512,
-            reasoningEffort: _clampedReasoningEffort(
-              _selectedModelId,
-              _selectedProviderSlug,
-            ),
+            reasoningEffort: reasoningForThisMessage,
           ),
         );
         if (mounted) {
@@ -2619,15 +2791,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
     await _streamingHandler.sendMessage(
+      modelSelectionCaptured: true,
       userInput: originalUserInput,
       attachedFiles: attachedFilesForApi,
-      selectedModelId: _selectedModelId,
-      selectedProviderSlug: _selectedProviderSlug,
+      selectedModelId: modelIdForThisMessage,
+      selectedProviderSlug: providerForThisMessage,
       messages: _messages,
       systemPrompt: resolvedSystemPrompt,
       activeChatId: chatIdForThisMessage,
       placeholderIndex: placeholderIndex,
-      getProviderSlug: ensureProviderSlugForCurrentModel,
+      getProviderSlug: () async => providerForThisMessage,
       isOffline: _isOffline,
       includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
       includeAllImagesInHistory: widget.includeAllImagesInHistory,
@@ -2635,10 +2808,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       includeToolResultsInHistory: widget.includeToolResultsInHistory,
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
-      reasoningEffort: _clampedReasoningEffort(
-        _selectedModelId,
-        _selectedProviderSlug,
-      ),
+      reasoningEffort: reasoningForThisMessage,
     );
   }
 
@@ -2829,8 +2999,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Answer-version pager: on a regenerate, archive the answer being
     // discarded so the fresh answer can be appended as a new variant. Must run
     // BEFORE the tail is removed below.
-    final List<Map<String, dynamic>>? regenVariantSeed =
-        isRegenerate ? _captureRegenSeed(index) : null;
+    final List<Map<String, dynamic>>? regenVariantSeed = isRegenerate
+        ? _captureRegenSeed(index)
+        : null;
 
     // Before removing AI messages, collect:
     //   * artifact ids they created (legacy fallback for chats whose
@@ -2931,6 +3102,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // clear it when this is not a regenerate.
     armVariantSeed(regenVariantSeed, assistantMessageId);
     setState(() {
+      final responseStartedAt = DateTime.now().toIso8601String();
       _messages.add({
         'sender': 'ai',
         'text': 'Thinking...',
@@ -2938,7 +3110,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'modelId': modelIdToUse,
         'provider': providerToUse ?? '',
         'messageId': assistantMessageId,
-        'startedAt': DateTime.now().toIso8601String(),
+        'startedAt': responseStartedAt,
+        'sentAt': responseStartedAt,
       });
       placeholderIndex = _messages.length - 1;
     });
@@ -3080,9 +3253,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // here is list-only (see _removeComposerAttachment) so the original message
     // is never corrupted if the edit is cancelled.
     final List<AttachedFile> attached =
-        ChatUiHelpers.reconstructAttachedFilesForResend(_messages[index], _uuid);
+        ChatUiHelpers.reconstructAttachedFilesForResend(
+          _messages[index],
+          _uuid,
+        );
     if (text.isEmpty && attached.isEmpty) return;
     setState(() {
+      _replyDrafts.remove(_replyChatKey);
       _messageActionsHandler.startEdit(index);
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
@@ -3094,6 +3271,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _fileHandler.attachedFiles
         ..clear()
         ..addAll(attached);
+    });
+    _textFieldFocusNode.requestFocus();
+  }
+
+  void _replyToMessage(int index) {
+    if (index < 0 || index >= _messages.length) return;
+    final message = _messages[index];
+    final text = (message['text'] ?? '').trim();
+    if (text.isEmpty || text == 'Thinking...') return;
+    setState(() {
+      _messageActionsHandler.cancelEdit();
+      _replyDrafts[_replyChatKey] = ChatReply(
+        author: message['sender'] == 'user' ? 'You' : 'AI',
+        text: text,
+      );
     });
     _textFieldFocusNode.requestFocus();
   }
@@ -3201,7 +3393,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final String priorText = (_messages[aiIndex]['text'] ?? '').trim();
     final String? priorContentBlocks = _messages[aiIndex]['contentBlocks'];
-    if (priorText.isEmpty && (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+    if (priorText.isEmpty &&
+        (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
       _showSnackBar('Nothing to continue from');
       return;
     }
@@ -3235,12 +3428,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final String modelIdToUse =
         _messages[aiIndex]['modelId']?.trim().isNotEmpty == true
-            ? _messages[aiIndex]['modelId']!
-            : _selectedModelId;
+        ? _messages[aiIndex]['modelId']!
+        : _selectedModelId;
     final String? providerToUse =
         _messages[aiIndex]['provider']?.trim().isNotEmpty == true
-            ? _messages[aiIndex]['provider']
-            : _selectedProviderSlug;
+        ? _messages[aiIndex]['provider']
+        : _selectedProviderSlug;
 
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
@@ -3408,6 +3601,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }) {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
+    final bool hasLocalTypingBubble =
+        hasMessages &&
+        _messages.last['sender'] != 'user' &&
+        (_isCurrentChatStreaming || _isSendingMessage);
+    final bool showHostTyping =
+        widget.messengerMode && widget.hostRunActive && !hasLocalTypingBubble;
     // Fallback estimate, used only for the first frame before MeasureSize
     // reports the composer's real height. Kept close to the real value so
     // there's no visible jump when the measured height lands.
@@ -3458,7 +3657,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               },
               child: Stack(
                 children: [
-                  hasMessages
+                  (hasMessages || showHostTyping)
                       ? Align(
                           alignment: Alignment.center,
                           child: Container(
@@ -3469,7 +3668,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               child: ListView.builder(
                                 controller: scrollController,
                                 padding: listPadding,
-                                itemCount: _messages.length,
+                                itemCount:
+                                    _messages.length + (showHostTyping ? 1 : 0),
                                 addAutomaticKeepAlives: false,
                                 // Each item already wraps itself in a
                                 // RepaintBoundary below; letting the list add
@@ -3482,6 +3682,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // animates.
                                 cacheExtent: 400.0,
                                 itemBuilder: (_, int i) {
+                                  if (i == _messages.length) {
+                                    return const Padding(
+                                      key: ValueKey('host-run-typing'),
+                                      padding: EdgeInsets.only(
+                                        top: 8,
+                                        bottom: 8,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: MessengerTypingIndicator(),
+                                      ),
+                                    );
+                                  }
                                   final Map<String, String> raw = _messages[i];
                                   final String sender = raw['sender'] ?? 'ai';
                                   final bool isAiMessage = sender != 'user';
@@ -3542,11 +3755,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
                                   // Content blocks for interleaved tool
                                   // call / text display.
-                                  final List<ContentBlock>? parsedContentBlocks =
-                                      _decodeContentBlocks(
-                                        i,
-                                        raw['contentBlocks'],
-                                      );
+                                  final List<ContentBlock>?
+                                  parsedContentBlocks = _decodeContentBlocks(
+                                    i,
+                                    raw['contentBlocks'],
+                                  );
 
                                   final String? imageCostStr =
                                       raw['imageCostEur'];
@@ -3584,9 +3797,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   int variantCount = 0;
                                   int variantIndex = 0;
                                   if (isAiMessage) {
-                                    final variants = ChatUiHelpers.decodeVariants(
-                                      raw['variants'],
-                                    );
+                                    final variants =
+                                        ChatUiHelpers.decodeVariants(
+                                          raw['variants'],
+                                        );
                                     variantCount = variants.length;
                                     if (variantCount > 0) {
                                       variantIndex =
@@ -3603,12 +3817,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   // gets none — an undated message is no
                                   // evidence of a day.
                                   final DateTime? rowDay = DateTime.tryParse(
-                                    raw['startedAt'] ?? '',
+                                    raw['sentAt'] ?? raw['startedAt'] ?? '',
                                   );
                                   final DateTime? previousDay = i == 0
                                       ? null
                                       : DateTime.tryParse(
-                                          _messages[i - 1]['startedAt'] ?? '',
+                                          _messages[i - 1]['sentAt'] ??
+                                              _messages[i - 1]['startedAt'] ??
+                                              '',
                                         );
                                   final bool opensDay =
                                       rowDay != null &&
@@ -3635,6 +3851,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   // values from the runtime notifier without a
                                   // screen-wide rebuild. All other props are
                                   // stable for the duration of a stream.
+                                  final reactionChatId = _replyChatKey;
+                                  final reactionMessageId = _reactionKeyAt(i);
                                   MessageBubble buildBubble(
                                     String msgText,
                                     String? msgReasoning,
@@ -3646,11 +3864,30 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       ),
                                     ),
                                     message: msgText,
+                                    messengerMode: widget.messengerMode,
+                                    reaction: ChatReactionService.instance.peek(
+                                      reactionChatId,
+                                      reactionMessageId,
+                                    ),
+                                    onReaction:
+                                        widget.messengerMode &&
+                                            !isStreamingMessage
+                                        ? (emoji) => unawaited(
+                                            _toggleReaction(
+                                              reactionChatId,
+                                              reactionMessageId,
+                                              emoji,
+                                            ),
+                                          )
+                                        : null,
                                     reasoning: msgReasoning,
                                     isUser: isUser,
                                     startsNewGroup: startsNewGroup,
                                     endsGroup: endsGroup,
-                                    maxWidth: isUser
+                                    maxWidth: widget.messengerMode
+                                        ? expandedInputWidth *
+                                              (isUser ? 0.72 : 1)
+                                        : isUser
                                         ? expandedInputWidth * 0.8
                                         : expandedInputWidth,
                                     isReasoningStreaming: isStreamingMessage,
@@ -3660,12 +3897,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     toolCalls: toolCalls,
                                     showToolCalls: widget.showToolCalls,
                                     contentBlocks: parsedContentBlocks,
-                                    isStreamingMessage: isStreamingMessage,
+                                    isStreamingMessage:
+                                        isStreamingMessage ||
+                                        (widget.messengerMode &&
+                                            isAiMessage &&
+                                            i == _messages.length - 1 &&
+                                            _isSendingMessage),
                                     // Both senders carry it now: the
                                     // assistant's drives the live counter,
                                     // the user's only its bubble clock.
                                     turnStartedAt: DateTime.tryParse(
                                       raw['startedAt'] ?? '',
+                                    ),
+                                    sentAt: DateTime.tryParse(
+                                      raw['sentAt'] ?? '',
                                     ),
                                     workedFor: _workedForOf(raw, isAiMessage),
                                     images: images,
@@ -3683,6 +3928,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                           onResendMessage: _resendMessageAt,
                                           onBranch: _branchFromIndex,
                                         ),
+                                    onReply:
+                                        widget.messengerMode &&
+                                            msgText.trim().isNotEmpty
+                                        ? () => _replyToMessage(i)
+                                        : null,
+                                    onEditRequested:
+                                        widget.messengerMode &&
+                                            isUser &&
+                                            !_isCurrentChatStreaming
+                                        ? () => _editMessageAt(i)
+                                        : null,
                                     userMessageActions: isUser
                                         ? _messageActionsHandler
                                               .buildUserMessageActions(
@@ -3730,15 +3986,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                         : null,
                                     status: status,
                                     lastError: lastError,
-                                    onRetryPending: isUser &&
+                                    onRetryPending:
+                                        isUser &&
                                             (status ==
                                                     ChatMessageStatus.pending ||
                                                 status ==
                                                     ChatMessageStatus.failed)
                                         ? () => OfflineRetryManager.instance
-                                            .retryNow()
+                                              .retryNow()
                                         : null,
-                                    onContinueGeneration: !isUser &&
+                                    onContinueGeneration:
+                                        !isUser &&
                                             status ==
                                                 ChatMessageStatus.interrupted &&
                                             !_isCurrentChatStreaming
@@ -3768,38 +4026,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       (isStreamingMessage ||
                                           runtime.isSending.value);
                                   if (wrapForStream) {
-                                    return withDay(RepaintBoundary(
-                                      child:
-                                          ValueListenableBuilder<StreamingLive?>(
-                                            valueListenable:
-                                                runtime.streamingLive,
-                                            builder: (context, live, _) {
-                                              final bool match =
-                                                  live != null &&
-                                                  live.index == i;
-                                              final String msgText = match
-                                                  ? live.text.trimRight()
-                                                  : displayText;
-                                              final String reasoningRaw = match
-                                                  ? live.reasoning
-                                                  : reasoning;
-                                              final String? msgReasoning =
-                                                  reasoningRaw.trim().isEmpty
-                                                  ? null
-                                                  : reasoningRaw;
-                                              return buildBubble(
-                                                msgText,
-                                                msgReasoning,
-                                              );
-                                            },
-                                          ),
-                                    ));
+                                    return withDay(
+                                      RepaintBoundary(
+                                        child:
+                                            ValueListenableBuilder<
+                                              StreamingLive?
+                                            >(
+                                              valueListenable:
+                                                  runtime.streamingLive,
+                                              builder: (context, live, _) {
+                                                final bool match =
+                                                    live != null &&
+                                                    live.index == i;
+                                                final String msgText = match
+                                                    ? live.text.trimRight()
+                                                    : displayText;
+                                                final String reasoningRaw =
+                                                    match
+                                                    ? live.reasoning
+                                                    : reasoning;
+                                                final String? msgReasoning =
+                                                    reasoningRaw.trim().isEmpty
+                                                    ? null
+                                                    : reasoningRaw;
+                                                return buildBubble(
+                                                  msgText,
+                                                  msgReasoning,
+                                                );
+                                              },
+                                            ),
+                                      ),
+                                    );
                                   }
                                   final String uiKey =
                                       ChatUiHelpers.stableUiKey(
-                                    _messages[i],
-                                    _uuid,
-                                  );
+                                        _messages[i],
+                                        _uuid,
+                                      );
                                   if (isUser && uiKey == _flyInKey) {
                                     return withDay(
                                       RepaintBoundary(
@@ -3864,7 +4127,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             onTap: () => scrollChatToBottom(force: true),
                             child: Padding(
                               padding: const EdgeInsets.all(8),
-                              child: Icon(
+                              child: AppIcon(
                                 Icons.keyboard_arrow_down,
                                 size: 24,
                                 color: theme.colorScheme.onSurface,
@@ -3949,27 +4212,28 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         child: ChatModeSelector(
           mode: _chatMode,
           showLabel: false,
-        selectedModelId: _selectedModelId,
-        modelLabel: _selectedModelName ??
-            (_selectedModelId.isEmpty ? null : _selectedModelId),
-        customModelLabel: _customModelName,
-        pickedModels: _pickedModels,
-        reasoningEffort: ChatModeService.sanitizeReasoningForModel(
-          _reasoningEffort,
-          modelId: _selectedModelId,
-          providerSlug: _selectedProviderSlug ?? '',
-        ),
-        // The picker options come straight from the server's per-model
-        // `supported_efforts` (derived list only as a cold-start fallback),
-        // so a level the model does not support can never be offered.
-        reasoningLevels: ChatModeService.reasoningLevelsForModel(
-          modelId: _selectedModelId,
-          // Before the provider resolves, use the mode's own default provider
-          // so the derived fallback never briefly offers a wrong ladder.
-          providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
-              ? _selectedProviderSlug!
-              : ChatModeService.defaultConfig(_chatMode).providerSlug,
-        ),
+          selectedModelId: _selectedModelId,
+          modelLabel:
+              _selectedModelName ??
+              (_selectedModelId.isEmpty ? null : _selectedModelId),
+          customModelLabel: _customModelName,
+          pickedModels: _pickedModels,
+          reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+            _reasoningEffort,
+            modelId: _selectedModelId,
+            providerSlug: _selectedProviderSlug ?? '',
+          ),
+          // The picker options come straight from the server's per-model
+          // `supported_efforts` (derived list only as a cold-start fallback),
+          // so a level the model does not support can never be offered.
+          reasoningLevels: ChatModeService.reasoningLevelsForModel(
+            modelId: _selectedModelId,
+            // Before the provider resolves, use the mode's own default provider
+            // so the derived fallback never briefly offers a wrong ladder.
+            providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
+                ? _selectedProviderSlug!
+                : ChatModeService.defaultConfig(_chatMode).providerSlug,
+          ),
           onReasoningEffortChanged: _setReasoningEffort,
           onModeChanged: _setChatMode,
           onModelSelected: _applyModelSelection,
@@ -4008,7 +4272,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
     final config = await ChatModeService.loadConfig(ChatMode.custom);
-    final name = await ModelCacheService.displayNameFor(config.modelId) ??
+    final name =
+        await ModelCacheService.displayNameFor(config.modelId) ??
         prettyModelId(config.modelId);
     if (!mounted || name == _customModelName) return;
     setState(() => _customModelName = name);
@@ -4090,13 +4355,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   /// The full model screen: add models, pin providers.
   Future<void> _openModelScreen() async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<ChatModelSelection>(
+          builder: (_) => ModelSelectorPage(chatId: chatId),
+        ),
+      );
+      if (mounted) await _hydrateChatModel();
+      return;
+    }
     // Only a genuinely new pick should flip the composer into Custom. Merely
     // browsing the screen — pinning a provider, retuning Fast/Thinking — must
     // leave the active mode untouched, so compare against the model in use.
     final String before = _selectedModelId;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()));
     if (!mounted) return;
     final selected = await UserPreferencesService.loadSelectedModel();
     if (mounted &&
@@ -4111,6 +4386,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Switch mode, swapping in that mode's own model, provider and reasoning
   /// level. The next send uses them.
   Future<void> _setChatMode(ChatMode mode) async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      final config = await ChatModeService.loadConfig(mode);
+      final provider = ModelSelectionDropdown.resolveProviderSlugForSend(
+        config.modelId,
+        config.providerSlug,
+      );
+      if (provider == null || provider.isEmpty) {
+        if (mounted) _showSnackBar('Choose a provider for this model');
+        return;
+      }
+      await ChatModelSelectionService.instance.save(
+        chatId,
+        ChatModelSelection(modelId: config.modelId, providerSlug: provider),
+      );
+      if (!mounted || modelSelectionChatId != chatId) return;
+      setState(() {
+        _chatMode = mode;
+        _reasoningEffort = config.reasoningEffort;
+      });
+      await _hydrateChatModel();
+      return;
+    }
     await ChatModeService.save(mode);
     final config = await ChatModeService.loadConfig(mode);
     await _applyModeConfig(mode, config);
@@ -4147,6 +4445,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// it. Reload the pinned provider so model and provider cannot drift apart on
   /// the next send.
   Future<void> _applyModelSelection(String modelId) async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      var provider = await UserPreferencesService.loadSelectedProvider(modelId);
+      provider ??= ModelSelectionDropdown.providerSlugForModel(modelId);
+      if (provider == kAutoCheapestProviderSlug) {
+        provider = ModelSelectionDropdown.resolveProviderSlugForSend(
+          modelId,
+          provider!,
+        );
+      }
+      if (provider == null || provider.isEmpty) {
+        final providers = ModelSelectionDropdown.availableProvidersForModel(
+          modelId,
+        );
+        if (providers.isNotEmpty) provider = providers.first.slug;
+      }
+      if (provider == null || provider.isEmpty) {
+        if (mounted) _showSnackBar('Choose a provider for this model');
+        return;
+      }
+      await ChatModelSelectionService.instance.save(
+        chatId,
+        ChatModelSelection(modelId: modelId, providerSlug: provider),
+      );
+      if (!mounted || modelSelectionChatId != chatId) return;
+      setState(() => _chatMode = ChatMode.custom);
+      await _hydrateChatModel();
+      return;
+    }
     setState(() {
       _selectedModelId = modelId;
       _chatMode = ChatMode.custom;
@@ -4239,12 +4566,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
             ),
           if (_messageActionsHandler.isEditing)
-            _buildComposerNotice(
-              theme: theme,
-              icon: Icons.edit,
-              label: 'Editing message',
-              actionLabel: 'Cancel',
-              onAction: _cancelEditMessage,
+            ChatEditNotice(onCancel: _cancelEditMessage),
+          if (_replyDrafts[_replyChatKey] case final reply?)
+            ChatReplyPreview(
+              reply: reply,
+              onCancel: () =>
+                  setState(() => _replyDrafts.remove(_replyChatKey)),
             ),
           if (_pendingMessageText != null)
             _buildComposerNotice(
@@ -4329,7 +4656,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 onTap: _openFullscreenEditor,
                                 child: Padding(
                                   padding: const EdgeInsets.only(left: 4),
-                                  child: Icon(
+                                  child: AppIcon(
                                     Icons.open_in_full_rounded,
                                     size: 14,
                                     color: iconFg.withValues(alpha: 0.4),
@@ -4375,10 +4702,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
               const SizedBox(width: 4),
-              _buildModelControl(
-                isCompactMode: isCompactMode,
-                iconFg: iconFg,
-              ),
+              _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
               if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
                 const SizedBox(width: 4),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
@@ -4453,7 +4777,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       padding: const EdgeInsets.only(bottom: 4, right: 6),
       child: Row(
         children: [
-          Icon(icon, size: 12, color: color),
+          AppIcon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Expanded(
             child: Text(

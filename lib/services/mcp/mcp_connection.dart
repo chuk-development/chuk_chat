@@ -48,14 +48,14 @@ class McpTool {
   final String description;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'name': name,
-        'description': description,
-      };
+    'name': name,
+    'description': description,
+  };
 
   static McpTool fromJson(Map<String, dynamic> json) => McpTool(
-        name: (json['name'] ?? '').toString(),
-        description: (json['description'] ?? '').toString(),
-      );
+    name: (json['name'] ?? '').toString(),
+    description: (json['description'] ?? '').toString(),
+  );
 }
 
 /// A configured MCP server. The non-secret config; the token or the API
@@ -116,50 +116,49 @@ class McpConnection {
     // it through the usual `?? this.lastError`.
     bool clearError = false,
     String? lastError,
-  }) =>
-      McpConnection(
-        id: id,
-        name: name ?? this.name,
-        url: url ?? this.url,
-        description: description ?? this.description,
-        iconUrl: iconUrl ?? this.iconUrl,
-        tools: tools ?? this.tools,
-        addedByHand: addedByHand,
-        auth: auth ?? this.auth,
-        checkedAt: checkedAt ?? this.checkedAt,
-        lastError: clearError ? null : (lastError ?? this.lastError),
-      );
+  }) => McpConnection(
+    id: id,
+    name: name ?? this.name,
+    url: url ?? this.url,
+    description: description ?? this.description,
+    iconUrl: iconUrl ?? this.iconUrl,
+    tools: tools ?? this.tools,
+    addedByHand: addedByHand,
+    auth: auth ?? this.auth,
+    checkedAt: checkedAt ?? this.checkedAt,
+    lastError: clearError ? null : (lastError ?? this.lastError),
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'name': name,
-        'url': url,
-        'description': description,
-        'icon_url': iconUrl,
-        'added_by_hand': addedByHand,
-        'auth': auth.name,
-        'tools': <Map<String, dynamic>>[for (final t in tools) t.toJson()],
-        if (checkedAt != null) 'checked_at': checkedAt!.toIso8601String(),
-        if (lastError != null) 'last_error': lastError,
-      };
+    'id': id,
+    'name': name,
+    'url': url,
+    'description': description,
+    'icon_url': iconUrl,
+    'added_by_hand': addedByHand,
+    'auth': auth.name,
+    'tools': <Map<String, dynamic>>[for (final t in tools) t.toJson()],
+    if (checkedAt != null) 'checked_at': checkedAt!.toIso8601String(),
+    if (lastError != null) 'last_error': lastError,
+  };
 
   static McpConnection fromJson(Map<String, dynamic> json) => McpConnection(
-        id: (json['id'] ?? '').toString(),
-        name: (json['name'] ?? '').toString(),
-        url: (json['url'] ?? '').toString(),
-        description: (json['description'] ?? '').toString(),
-        iconUrl: json['icon_url']?.toString(),
-        addedByHand: json['added_by_hand'] == true,
-        auth: McpAuth.parse(json['auth']?.toString()),
-        tools: <McpTool>[
-          for (final tool in (json['tools'] as List? ?? const []))
-            if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
-        ],
-        checkedAt: DateTime.tryParse('${json['checked_at'] ?? ''}'),
-        lastError: (json['last_error'] as String?)?.trim().isEmpty ?? true
-            ? null
-            : json['last_error'] as String,
-      );
+    id: (json['id'] ?? '').toString(),
+    name: (json['name'] ?? '').toString(),
+    url: (json['url'] ?? '').toString(),
+    description: (json['description'] ?? '').toString(),
+    iconUrl: json['icon_url']?.toString(),
+    addedByHand: json['added_by_hand'] == true,
+    auth: McpAuth.parse(json['auth']?.toString()),
+    tools: <McpTool>[
+      for (final tool in (json['tools'] as List? ?? const []))
+        if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
+    ],
+    checkedAt: DateTime.tryParse('${json['checked_at'] ?? ''}'),
+    lastError: (json['last_error'] as String?)?.trim().isEmpty ?? true
+        ? null
+        : json['last_error'] as String,
+  );
 
   /// The name a model sees for [tool] on this server. Prefixed, because two
   /// servers may both offer `search`, and capped at 64 characters.

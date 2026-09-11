@@ -78,12 +78,12 @@ class SupabaseAccountSession implements AccountSessionSource {
     Session? Function()? currentSession,
     Future<Session?> Function()? refreshSession,
     Future<Session?> Function(String refreshToken, String accessToken)?
-        restoreSession,
+    restoreSession,
     DateTime Function()? now,
-  })  : _currentSession = currentSession,
-        _refreshSession = refreshSession,
-        _restoreSession = restoreSession,
-        _now = now;
+  }) : _currentSession = currentSession,
+       _refreshSession = refreshSession,
+       _restoreSession = restoreSession,
+       _now = now;
 
   /// How much life the access token must still have for a host request to be
   /// answered with the current pair instead of a refresh. Above gotrue's own
@@ -95,7 +95,7 @@ class SupabaseAccountSession implements AccountSessionSource {
   final Session? Function()? _currentSession;
   final Future<Session?> Function()? _refreshSession;
   final Future<Session?> Function(String refreshToken, String accessToken)?
-      _restoreSession;
+  _restoreSession;
   final DateTime Function()? _now;
 
   Session? _readCurrent() {
@@ -179,8 +179,10 @@ class SupabaseAccountSession implements AccountSessionSource {
         _stillValid(before) &&
         (before.refreshToken ?? '').isNotEmpty) {
       try {
-        final restored =
-            await _doRestore(before.refreshToken!, before.accessToken);
+        final restored = await _doRestore(
+          before.refreshToken!,
+          before.accessToken,
+        );
         if (restored != null && restored.accessToken.isNotEmpty) {
           return AccountSession.fromSupabase(restored);
         }

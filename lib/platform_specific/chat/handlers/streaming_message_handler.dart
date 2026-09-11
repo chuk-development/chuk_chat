@@ -153,6 +153,7 @@ class StreamingMessageHandler {
     String? continuePriorText,
     String? continuePriorContentBlocksJson,
     bool regenerate = false,
+    bool modelSelectionCaptured = false,
   }) async {
     if (_isDisposed) return;
 
@@ -543,6 +544,7 @@ class StreamingMessageHandler {
       }
 
       final stream = WebSocketChatService.sendStreamingChat(
+        modelSelectionCaptured: modelSelectionCaptured,
         accessToken: accessToken,
         message: message,
         modelId: selectedModelId,
@@ -579,8 +581,9 @@ class StreamingMessageHandler {
           // on completion. A plain round with no tool calls streams live.
           final isWorkingRound =
               contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
-          final displayContent =
-              isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+          final displayContent = isWorkingRound
+              ? ''
+              : stripToolCallBlocksForDisplay(content);
           final prefix = accumulatedText.toString();
           final fullDisplay = prefix.isEmpty
               ? displayContent
@@ -622,25 +625,20 @@ class StreamingMessageHandler {
                 _streamingManager.getLatestMeta(chatId),
               );
 
-              final loopResult = await _toolCallHandler
-                  .processAssistantResponse(
-                    session: toolSession,
-                    content: finalContent,
-                    reasoning: finalReasoning,
-                    turnSignals: turnSignals,
-                    // Native tool calls assembled server-side this pass. When
-                    // non-empty the loop drives a native assistant(tool_calls) +
-                    // tool round-trip; empty means a plain text turn (or the
-                    // prompt-based fallback), handled by text parsing.
-                    nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
-                    onToolCallsUpdated: (toolCalls) {
-                      onToolCallsUpdate?.call(
-                        placeholderIndex,
-                        toolCalls,
-                        chatId,
-                      );
-                    },
-                  );
+              final loopResult = await _toolCallHandler.processAssistantResponse(
+                session: toolSession,
+                content: finalContent,
+                reasoning: finalReasoning,
+                turnSignals: turnSignals,
+                // Native tool calls assembled server-side this pass. When
+                // non-empty the loop drives a native assistant(tool_calls) +
+                // tool round-trip; empty means a plain text turn (or the
+                // prompt-based fallback), handled by text parsing.
+                nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
+                onToolCallsUpdated: (toolCalls) {
+                  onToolCallsUpdate?.call(placeholderIndex, toolCalls, chatId);
+                },
+              );
 
               if (_isDisposed) return;
 
@@ -709,8 +707,7 @@ class StreamingMessageHandler {
                 }
 
                 // Fire content blocks update so the UI can render them.
-                if (appendedBlocks.isNotEmpty ||
-                    producedThisRound.isNotEmpty) {
+                if (appendedBlocks.isNotEmpty || producedThisRound.isNotEmpty) {
                   onContentBlocksUpdate?.call(
                     placeholderIndex,
                     encodeBlocks(),
@@ -722,7 +719,8 @@ class StreamingMessageHandler {
                   _recordSnapshot(
                     chatId: chatId,
                     index: placeholderIndex,
-                    content: _currentSnapshot?.content ?? accumulatedText.toString(),
+                    content:
+                        _currentSnapshot?.content ?? accumulatedText.toString(),
                     reasoning: _currentSnapshot?.reasoning ?? '',
                     contentBlocksJson: encodeBlocks(),
                   );
@@ -1397,8 +1395,6 @@ class StreamingMessageHandler {
     includeToolResults: includeToolResults,
   );
 
-
-
   /// Get session safely with network error handling
   Future<dynamic> getSessionSafely() async {
     try {
@@ -1470,7 +1466,8 @@ class StreamingMessageHandler {
       index: index,
       content: content,
       reasoning: reasoning,
-      contentBlocksJson: contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
+      contentBlocksJson:
+          contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
     );
     _snapshotTimer ??= Timer.periodic(_snapshotInterval, (_) {
       _flushSnapshot();

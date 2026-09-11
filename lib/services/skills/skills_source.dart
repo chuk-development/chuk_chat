@@ -22,7 +22,7 @@ import 'package:cowork/services/skills/skill_settings_sync.dart';
 /// the account always holds what the host holds.
 class SkillsSource extends ChangeNotifier {
   SkillsSource._({SkillSettingsMirror mirror = const SkillSettingsSync()})
-      : _mirror = mirror;
+    : _mirror = mirror;
 
   static SkillsSource instance = SkillsSource._();
 

@@ -266,9 +266,7 @@ class ChatPreloadService {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint(
-          '⚠️ [Preload] Remote batch load failed: $e',
-        );
+        debugPrint('⚠️ [Preload] Remote batch load failed: $e');
       }
     }
   }
@@ -314,8 +312,7 @@ class ChatPreloadService {
         // `chatsById`: holding every chat's message list in memory is what
         // made a large history cost hundreds of megabytes. The chat is
         // hydrated from this cache row when the user opens it.
-        final title =
-            existing?.title ?? _extractTitle(chatPayload.messages);
+        final title = existing?.title ?? _extractTitle(chatPayload.messages);
         await LocalChatCacheService.upsert(
           userId,
           LocalChatCacheService.buildPlaintextRow(

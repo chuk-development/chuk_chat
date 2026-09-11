@@ -75,16 +75,15 @@ void main() {
     expect(await McpService.store.load(), isEmpty);
   });
 
-  test('a frame that changes nothing writes nothing', () async {
+  test('the same answer twice is written once', () async {
     await McpService.store.upsert(
       const McpConnection(
         id: 'plane',
         name: 'Plane',
         url: 'https://mcp.plane.so/mcp',
-        tools: <McpTool>[McpTool(name: 'workitem')],
       ),
     );
-    final applied = await McpService.applyToolsFrame(<String, dynamic>{
+    final Map<String, dynamic> frame = <String, dynamic>{
       'servers': <Map<String, dynamic>>[
         {
           'id': 'plane',
@@ -93,8 +92,39 @@ void main() {
           ],
         },
       ],
+    };
+    // The first answer is news even when the tools match what was stored: it
+    // is what turns "not checked" into "checked".
+    expect(await McpService.applyToolsFrame(frame), 1);
+    expect(await McpService.applyToolsFrame(frame), 0);
+    expect((await McpService.store.load()).single.checkedAt, isNotNull);
+  });
+
+  test('an unreachable server keeps its error until it answers again', () async {
+    await McpService.store.upsert(
+      const McpConnection(id: 'canva', name: 'Canva', url: 'https://c/mcp'),
+    );
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        {'id': 'canva', 'connected': false, 'tools': [], 'error': '401'},
+      ],
     });
-    expect(applied, 0);
+    expect((await McpService.store.load()).single.lastError, '401');
+
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        {
+          'id': 'canva',
+          'connected': true,
+          'tools': [
+            {'name': 'export-design'},
+          ],
+        },
+      ],
+    });
+    final McpConnection healed = (await McpService.store.load()).single;
+    expect(healed.lastError, isNull);
+    expect(healed.tools.single.name, 'export-design');
   });
 
   test('a server the host could not reach keeps no stale tools', () async {

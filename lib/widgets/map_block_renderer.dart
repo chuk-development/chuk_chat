@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -188,9 +190,7 @@ bool _isExplicitNumericZero(dynamic v) {
   return false;
 }
 
-List<Map<String, dynamic>> _filterValidCoordItems(
-  List<dynamic>? items,
-) {
+List<Map<String, dynamic>> _filterValidCoordItems(List<dynamic>? items) {
   if (items == null) return const [];
   final valid = items
       .whereType<Map<String, dynamic>>()
@@ -216,9 +216,12 @@ List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items) {
 
   for (final item in items) {
     final name = (item['name'] ?? item['label'] ?? '').toString().trim();
-    final coordKey = '${_toDouble(item['lat']).toStringAsFixed(5)},'
+    final coordKey =
+        '${_toDouble(item['lat']).toStringAsFixed(5)},'
         '${_toDouble(item['lon']).toStringAsFixed(5)}';
-    final key = name.isNotEmpty ? 'n:${name.toLowerCase()}:$coordKey' : 'c:$coordKey';
+    final key = name.isNotEmpty
+        ? 'n:${name.toLowerCase()}:$coordKey'
+        : 'c:$coordKey';
 
     final existing = byKey[key];
     if (existing == null) {
@@ -229,8 +232,8 @@ List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items) {
     }
     item.forEach((field, value) {
       final present = existing[field];
-      final isEmpty = present == null ||
-          (present is String && present.trim().isEmpty);
+      final isEmpty =
+          present == null || (present is String && present.trim().isEmpty);
       if (isEmpty && value != null) existing[field] = value;
     });
   }
@@ -240,8 +243,9 @@ List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items) {
 
 /// Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
 @visibleForTesting
-List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(List<dynamic>? items) =>
-    _filterValidCoordItems(items);
+List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(
+  List<dynamic>? items,
+) => _filterValidCoordItems(items);
 
 double _mapPreviewHeight(BuildContext context) {
   final h = MediaQuery.of(context).size.height;
@@ -415,7 +419,7 @@ Widget _buildMapPreview(
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.touch_app, color: Colors.white70, size: 16),
+                  AppIcon(Icons.touch_app, color: Colors.white70, size: 16),
                   SizedBox(width: 4),
                   Text(
                     'Tap to explore',
@@ -486,7 +490,7 @@ class _MarkersMapBlock extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                const Icon(
+                const AppIcon(
                   Icons.location_on,
                   color: Colors.redAccent,
                   size: 26,
@@ -808,7 +812,7 @@ class _PlaceCard extends StatelessWidget {
                         onTap: onShowOnMap,
                         child: Padding(
                           padding: const EdgeInsets.all(6),
-                          child: Icon(
+                          child: AppIcon(
                             Icons.map,
                             size: 22,
                             color: Colors.blue.shade300,
@@ -912,9 +916,7 @@ class _PlaceCard extends StatelessWidget {
                           return _buildInfoChip(
                             Icons.phone,
                             phone,
-                            onTap: uri == null
-                                ? null
-                                : () => launchUrl(uri),
+                            onTap: uri == null ? null : () => launchUrl(uri),
                           );
                         }(),
                       if (hours != null)
@@ -926,9 +928,7 @@ class _PlaceCard extends StatelessWidget {
                           return _buildInfoChip(
                             Icons.language,
                             'Website',
-                            onTap: uri == null
-                                ? null
-                                : () => launchUrl(uri),
+                            onTap: uri == null ? null : () => launchUrl(uri),
                           );
                         }(),
                     ],
@@ -947,7 +947,7 @@ class _PlaceCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.white54),
+          AppIcon(icon, size: 12, color: Colors.white54),
           const SizedBox(width: 3),
           Flexible(
             child: Text(
@@ -973,11 +973,11 @@ class _PlaceCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (int i = 0; i < fullStars; i++)
-          Icon(Icons.star, size: size, color: Colors.amber.shade400),
+          AppIcon(Icons.star, size: size, color: Colors.amber.shade400),
         if (hasHalf)
-          Icon(Icons.star_half, size: size, color: Colors.amber.shade400),
+          AppIcon(Icons.star_half, size: size, color: Colors.amber.shade400),
         for (int i = 0; i < emptyStars; i++)
-          Icon(Icons.star_border, size: size, color: Colors.amber.shade700),
+          AppIcon(Icons.star_border, size: size, color: Colors.amber.shade700),
       ],
     );
   }
@@ -1000,7 +1000,7 @@ class _RouteMapBlock extends StatelessWidget {
     final durMin = data['duration_min']?.toString() ?? '?';
     final steps =
         (data['steps'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
-            const [];
+        const [];
 
     if (!_isValidLatLon(from['lat'], from['lon']) ||
         !_isValidLatLon(to['lat'], to['lon'])) {

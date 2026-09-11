@@ -7,13 +7,14 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';
 import 'package:cowork/services/secrets/secrets_store.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
 
 class SecretsSettingsPage extends StatefulWidget {
   const SecretsSettingsPage({super.key, SecretsService? service})
-      : _injected = service;
+    : _injected = service;
 
   final SecretsService? _injected;
 
@@ -80,15 +81,20 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('API Keys')),
-      body: _loading
+    return ExpressiveScreen(
+      title: 'API Keys',
+      builder: (BuildContext context) => _loading
           ? const Center(child: CircularProgressIndicator())
           : ValueListenableBuilder<List<String>>(
               valueListenable: _service.names,
               builder: (context, names, _) {
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    MediaQuery.paddingOf(context).top + 8,
+                    16,
+                    MediaQuery.paddingOf(context).bottom + 32,
+                  ),
                   children: [
                     const ExpressiveTitle(
                       'API Keys',
@@ -113,8 +119,7 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const ExpressiveBadge('set',
-                                    icon: Icons.check),
+                                const ExpressiveBadge('set', icon: Icons.check),
                                 PopupMenuButton<String>(
                                   tooltip: 'Options for $name',
                                   onSelected: (choice) {
@@ -183,8 +188,9 @@ class _SecretDialog extends StatefulWidget {
 }
 
 class _SecretDialogState extends State<_SecretDialog> {
-  late final TextEditingController _name =
-      TextEditingController(text: widget.fixedName ?? '');
+  late final TextEditingController _name = TextEditingController(
+    text: widget.fixedName ?? '',
+  );
   final TextEditingController _value = TextEditingController();
   String? _nameError;
 

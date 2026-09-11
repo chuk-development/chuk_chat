@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/services/auth_service.dart';
 import 'package:cowork/services/encryption_service.dart';
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/shapes.dart';
+import 'package:cowork/ui/expressive/staggered.dart';
 
 /// Minimal email + password login. On success the [AuthGate] stream reacts
 /// and swaps to the messenger shell, so this screen has nothing to do after
@@ -23,6 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
 
   bool _busy = false;
+  bool _obscurePassword = true;
   String? _error;
 
   @override
@@ -68,6 +74,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -80,58 +88,116 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Chuk Chat',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium,
+                  // The mark, then the wordmark. The blob is the same
+                  // [CookieShape] a coworker's face is cut from, so the first
+                  // screen already speaks the language the rest of the app
+                  // speaks.
+                  StaggeredItem(
+                    index: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: ShapeDecoration(
+                            color: cs.primaryContainer,
+                            shape: const CookieShape(lobes: 7, softness: 0.13),
+                          ),
+                          child: AppIcon(
+                            Icons.forum_rounded,
+                            size: 44,
+                            color: cs.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Chuk Chat',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      border: OutlineInputBorder(),
+                  StaggeredItem(
+                    index: 1,
+                    child: TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      validator: (value) =>
+                          (value == null || !value.contains('@'))
+                          ? 'Enter a valid email'
+                          : null,
                     ),
-                    validator: (value) =>
-                        (value == null || !value.contains('@'))
-                        ? 'Enter a valid email'
-                        : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.password],
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => (value == null || value.isEmpty)
-                        ? 'Enter your password'
-                        : null,
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                  StaggeredItem(
+                    index: 2,
+                    child: TextFormField(
+                      key: const ValueKey('login-password-field'),
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      autofillHints: const [AutofillHints.password],
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        suffixIcon: IconButton(
+                          key: const ValueKey(
+                            'login-password-visibility-toggle',
+                          ),
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          icon: AppIcon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
                       ),
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'Enter your password'
+                          : null,
+                      onFieldSubmitted: (_) => _submit(),
                     ),
-                  ],
+                  ),
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _busy ? null : _submit,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign in'),
+                  // The error rides with the button rather than sitting
+                  // between the fields: the child count of the form stays
+                  // constant, so an error does not restart the cascade.
+                  StaggeredItem(
+                    index: 3,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_error != null) ...[
+                          Text(
+                            _error!,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.error,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        FilledButton(
+                          onPressed: _busy ? null : _submit,
+                          child: _busy
+                              ? ExpressiveLoader(size: 20, color: cs.onSurface)
+                              : const Text('Sign in'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

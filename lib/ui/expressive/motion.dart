@@ -10,9 +10,27 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
+
+import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:flutter/physics.dart';
 
 /// The bouncy spatial spring used for press and selection feedback.
+/// The curve for widgets that cannot take a spring.
+///
+/// [AnimatedContainer], [AnimatedOpacity] and friends interpolate along a
+/// [Curve]; they have no place to put a [SpringSimulation]. Left without a
+/// `curve:` they run on [Curves.linear], which reads as mechanical next to the
+/// spring everything else uses. This is M3's emphasized-decelerate shape: it
+/// leaves fast and settles slowly, which is the half of a spring the eye
+/// actually reads.
+const Cubic kExpressiveDecelerate = Cubic(0.05, 0.7, 0.1, 1.0);
+
+/// The matching duration. Long enough to be seen, short enough not to be
+/// waited for.
+const Duration kExpressiveShort = Duration(milliseconds: 180);
+
 const SpringDescription kSpatialSpring = SpringDescription(
   mass: 1,
   stiffness: 420,
@@ -34,6 +52,7 @@ class MorphTap extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.color,
+    this.pressedColor,
     this.shape = const StadiumBorder(),
     this.pressedShape,
     this.padding = EdgeInsets.zero,
@@ -44,6 +63,9 @@ class MorphTap extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final Color? color;
+
+  /// The colour the surface fades toward while held. Null keeps [color].
+  final Color? pressedColor;
   final ShapeBorder shape;
 
   /// The shape the surface morphs toward while held. Defaults to a blockier
@@ -56,7 +78,8 @@ class MorphTap extends StatefulWidget {
   State<MorphTap> createState() => _MorphTapState();
 }
 
-class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin {
+class _MorphTapState extends State<MorphTap>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController.unbounded(
     vsync: this,
     value: 0,
@@ -71,6 +94,19 @@ class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin
             )
           : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)));
 
+  /// Reduced motion: the press still happens, it just does not travel.
+  bool _reducedMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reducedMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reducedMotion && _c.isAnimating) {
+      _c.stop();
+      _c.value = _c.value >= 0.5 ? 1 : 0;
+    }
+  }
+
   @override
   void dispose() {
     _c.dispose();
@@ -78,6 +114,10 @@ class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin
   }
 
   void _press(bool down) {
+    if (_reducedMotion) {
+      _c.value = down ? 1 : 0;
+      return;
+    }
     if (down) {
       _c.animateTo(
         1,
@@ -97,11 +137,15 @@ class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin
         final double t = _c.value.clamp(0.0, 1.0);
         final ShapeBorder shape = ShapeBorder.lerp(widget.shape, _pressed, t)!;
         final double scale = 1 - (1 - widget.pressedScale) * t;
+        final Color resting = widget.color ?? Colors.transparent;
+        final Color fill = widget.pressedColor == null
+            ? resting
+            : Color.lerp(resting, widget.pressedColor, t)!;
         return Transform.scale(
           scale: scale,
           child: PhysicalShape(
             clipper: ShapeBorderClipper(shape: shape),
-            color: widget.color ?? Colors.transparent,
+            color: fill,
             elevation: 0,
             shadowColor: Colors.transparent,
             child: Material(
@@ -155,7 +199,7 @@ class ExpressiveButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, color: fg, size: 20),
+            AppIcon(icon, color: fg, size: 20),
             const SizedBox(width: 10),
           ],
           Text(
@@ -182,7 +226,8 @@ class ExpressiveButton extends StatelessWidget {
 class ExpressiveIconButton extends StatelessWidget {
   const ExpressiveIconButton({
     super.key,
-    required this.icon,
+    this.icon,
+    this.hugeIcon,
     required this.onTap,
     this.color,
     this.onColor,
@@ -192,7 +237,12 @@ class ExpressiveIconButton extends StatelessWidget {
     this.parked = false,
   });
 
-  final IconData icon;
+  /// A Material glyph. Kept for the screens that have not been moved over yet;
+  /// new code passes [hugeIcon].
+  final IconData? icon;
+
+  /// The app's own set (docs/DESIGN.md). Wins when both are given.
+  final HugeIconData? hugeIcon;
 
   /// Null disables the button.
   final VoidCallback? onTap;
@@ -223,11 +273,17 @@ class ExpressiveIconButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.20),
       ),
       padding: EdgeInsets.all((size - 22) / 2),
-      child: Icon(
-        icon,
-        size: 22,
-        color: enabled ? glyph : glyph.withValues(alpha: 0.38),
-      ),
+      child: hugeIcon != null
+          ? HugeIcon(
+              hugeIcon!,
+              size: 22,
+              color: enabled ? glyph : glyph.withValues(alpha: 0.38),
+            )
+          : AppIcon(
+              icon,
+              size: 22,
+              color: enabled ? glyph : glyph.withValues(alpha: 0.38),
+            ),
     );
     if (tooltip != null) {
       button = Tooltip(message: tooltip!, child: button);
@@ -275,7 +331,9 @@ class _ExpressiveLoaderState extends State<ExpressiveLoader>
       builder: (BuildContext context, Widget? _) => SizedBox(
         width: widget.size,
         height: widget.size,
-        child: CustomPaint(painter: _BlobPainter(t: _c.value, color: color)),
+        child: CustomPaint(
+          painter: _BlobPainter(t: _c.value, color: color),
+        ),
       ),
     );
   }

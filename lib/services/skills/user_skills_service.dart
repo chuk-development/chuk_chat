@@ -167,8 +167,10 @@ class UserSkillsService {
       );
     } on SkillParseException catch (error) {
       if (kDebugMode) {
-        debugPrint('[UserSkills] skipping unparseable local skill: '
-            '${error.message}');
+        debugPrint(
+          '[UserSkills] skipping unparseable local skill: '
+          '${error.message}',
+        );
       }
       return null;
     }
@@ -217,15 +219,23 @@ class UserSkillsService {
       userIds.add(userId);
     }
     if (ciphertexts.isEmpty) {
-      return (skills: const <Skill>[], localRows: const <Map<String, dynamic>>[]);
+      return (
+        skills: const <Skill>[],
+        localRows: const <Map<String, dynamic>>[],
+      );
     }
 
     final List<String?> plaintexts;
     try {
-      plaintexts = await EncryptionService.decryptBatchInBackground(ciphertexts);
+      plaintexts = await EncryptionService.decryptBatchInBackground(
+        ciphertexts,
+      );
     } catch (error) {
       if (kDebugMode) debugPrint('[UserSkills] batch decrypt failed: $error');
-      return (skills: const <Skill>[], localRows: const <Map<String, dynamic>>[]);
+      return (
+        skills: const <Skill>[],
+        localRows: const <Map<String, dynamic>>[],
+      );
     }
 
     final skills = <Skill>[];
@@ -236,7 +246,10 @@ class UserSkillsService {
       final env = _decodeEnvelope(plaintext);
       try {
         skills.add(
-          parseSkillMarkdown(env.source, skillSource: SkillSource.user).copyWith(
+          parseSkillMarkdown(
+            env.source,
+            skillSource: SkillSource.user,
+          ).copyWith(
             id: ids[i],
             catalogName: env.catalogName,
             baselineHash: env.baselineHash,
@@ -252,7 +265,9 @@ class UserSkillsService {
         });
       } on SkillParseException catch (error) {
         if (kDebugMode) {
-          debugPrint('[UserSkills] skipping unparseable skill: ${error.message}');
+          debugPrint(
+            '[UserSkills] skipping unparseable skill: ${error.message}',
+          );
         }
       }
     }

@@ -2,6 +2,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -85,7 +88,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = AppLocalizations.of(context)!.failedToLoadProfile(error.toString());
+        _errorMessage = AppLocalizations.of(
+          context,
+        )!.failedToLoadProfile(error.toString());
         _isLoading = false;
       });
     }
@@ -199,7 +204,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               icon: Icons.lock_open,
               title: l.encryptedChatRecovery,
               subtitle: l.recoverChats,
-              trailing: const Icon(Icons.chevron_right, size: 20),
+              trailing: const AppIcon(Icons.chevron_right, size: 20),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -221,7 +226,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final confirmPassword = _confirmPasswordCtrl.text;
     if (newPassword.trim() != confirmPassword.trim()) {
       setState(() {
-        _passwordChangeError = AppLocalizations.of(context)!.passwordsDoNotMatch;
+        _passwordChangeError = AppLocalizations.of(
+          context,
+        )!.passwordsDoNotMatch;
         _passwordChangeNotice = null;
       });
       return;
@@ -275,7 +282,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (!mounted) return;
       setState(() {
         _isChangingPassword = false;
-        _passwordChangeError = AppLocalizations.of(context)!.failedToChangePassword(error.toString());
+        _passwordChangeError = AppLocalizations.of(
+          context,
+        )!.failedToChangePassword(error.toString());
       });
     }
   }
@@ -290,7 +299,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
+            AppIcon(Icons.warning_amber_rounded, color: cs.error, size: 28),
             const SizedBox(width: 10),
             Expanded(child: Text(l.deleteAccountQuestion)),
           ],
@@ -319,7 +328,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.delete_forever, color: cs.error, size: 28),
+            AppIcon(Icons.delete_forever, color: cs.error, size: 28),
             const SizedBox(width: 10),
             Expanded(child: Text(l.thisIsPermanent)),
           ],
@@ -352,6 +361,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) {
         String? errorText;
         bool isVerifying = false;
+        bool obscurePassword = true;
 
         Future<void> verify(StateSetter setDialogState) async {
           final password = passwordController.text.trim();
@@ -397,23 +407,37 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: passwordController,
-                  obscureText: true,
+                  obscureText: obscurePassword,
                   autofocus: true,
                   decoration: InputDecoration(
                     labelText: l.password,
                     errorText: errorText,
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: const AppIcon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      tooltip: obscurePassword
+                          ? 'Show password'
+                          : 'Hide password',
+                      icon: AppIcon(
+                        obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setDialogState(() {
+                          obscurePassword = !obscurePassword;
+                        });
+                      },
+                    ),
                   ),
-                  onSubmitted:
-                      isVerifying ? null : (_) => verify(setDialogState),
+                  onSubmitted: isVerifying
+                      ? null
+                      : (_) => verify(setDialogState),
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: isVerifying
-                    ? null
-                    : () => Navigator.of(ctx).pop(),
+                onPressed: isVerifying ? null : () => Navigator.of(ctx).pop(),
                 child: Text(l.cancel),
               ),
               TextButton(
@@ -507,233 +531,234 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loadProfile,
-                child: Text(l.retry),
-              ),
+              FilledButton(onPressed: _loadProfile, child: Text(l.retry)),
             ],
           ),
         ),
       );
     } else {
-      bodyContent = SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          if (_errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ExpressiveInfoCard(
-                text: _errorMessage!,
-                icon: Icons.error_outline,
-                tone: cs.errorContainer,
-              ),
-            ),
-
-          // Profile
-          const ExpressiveSectionHeader('Profile'),
-          _FieldLabel(l.displayName),
-          TextFormField(
-            controller: _displayNameCtrl,
-            textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(
-              hintText: l.displayNameHint,
-              prefixIcon: const Icon(Icons.person_outline),
-            ),
+      bodyContent = Builder(
+        builder: (BuildContext context) => SettingsListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            MediaQuery.paddingOf(context).top + 8,
+            16,
+            MediaQuery.paddingOf(context).bottom + 24,
           ),
-          const SizedBox(height: 12),
-          _FieldLabel(l.emailAddress),
-          TextFormField(
-            controller: _emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              hintText: l.emailAddressHint,
-              prefixIcon: const Icon(Icons.mail_outline),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              icon: _isSaving
-                  ? SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          cs.onPrimary,
-                        ),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.check),
-              label: Text(_isSaving ? l.saving : l.saveChanges),
-              onPressed: _isSaving || _profile == null
-                  ? null
-                  : _saveAccountSettings,
-            ),
-          ),
-
-          // Security
-          const ExpressiveSectionHeader('Security'),
-          if (_passwordChangeError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ExpressiveInfoCard(
-                text: _passwordChangeError!,
-                icon: Icons.error_outline,
-                tone: cs.errorContainer,
-              ),
-            ),
-          if (_passwordChangeNotice != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ExpressiveInfoCard(
-                text: _passwordChangeNotice!,
-                icon: Icons.check_circle_outline,
-                tone: m3.successContainer,
-              ),
-            ),
-          _FieldLabel(l.currentPassword),
-          TextField(
-            controller: _currentPasswordCtrl,
-            obscureText: _obscureCurrentPassword,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureCurrentPassword
-                      ? Icons.visibility_off
-                      : Icons.visibility,
-                  size: 20,
+          children: [
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ExpressiveInfoCard(
+                  text: _errorMessage!,
+                  icon: Icons.error_outline,
+                  tone: cs.errorContainer,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _obscureCurrentPassword = !_obscureCurrentPassword;
-                  });
-                },
+              ),
+
+            // Profile
+            const ExpressiveSectionHeader('Profile'),
+            _FieldLabel(l.displayName),
+            TextFormField(
+              controller: _displayNameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: l.displayNameHint,
+                prefixIcon: const AppIcon(Icons.person_outline),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _FieldLabel(l.newPassword, helper: l.minCharsPassword),
-          TextField(
-            controller: _newPasswordCtrl,
-            obscureText: _obscureNewPassword,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.lock_reset),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureNewPassword
-                      ? Icons.visibility_off
-                      : Icons.visibility,
-                  size: 20,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _obscureNewPassword = !_obscureNewPassword;
-                  });
-                },
+            const SizedBox(height: 12),
+            _FieldLabel(l.emailAddress),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: l.emailAddressHint,
+                prefixIcon: const AppIcon(Icons.mail_outline),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _FieldLabel(l.confirmNewPassword),
-          TextField(
-            controller: _confirmPasswordCtrl,
-            obscureText: _obscureConfirmPassword,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) {
-              if (!_isChangingPassword) {
-                _changePassword();
-              }
-            },
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.check_circle_outline),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirmPassword
-                      ? Icons.visibility_off
-                      : Icons.visibility,
-                  size: 20,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _obscureConfirmPassword = !_obscureConfirmPassword;
-                  });
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonalIcon(
-              icon: _isChangingPassword
-                  ? SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          cs.onSecondaryContainer,
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: _isSaving
+                    ? SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            cs.onPrimary,
+                          ),
+                          strokeWidth: 2,
                         ),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.password),
-              label: Text(l.updatePassword),
-              onPressed: _isChangingPassword ? null : _changePassword,
-            ),
-          ),
-
-          // Chat Recovery (conditional).
-          _buildRecoverChatsSection(l),
-
-          const SizedBox(height: 24),
-
-          // Danger Zone
-          ExpressiveSectionHeader('Danger zone', color: cs.error),
-          ExpressiveInfoCard(
-            text: l.deleteAccountWarning,
-            icon: Icons.warning_amber_rounded,
-            tone: cs.errorContainer,
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.errorContainer,
-                foregroundColor: cs.onErrorContainer,
+                      )
+                    : const AppIcon(Icons.check),
+                label: Text(_isSaving ? l.saving : l.saveChanges),
+                onPressed: _isSaving || _profile == null
+                    ? null
+                    : _saveAccountSettings,
               ),
-              icon: _isDeletingAccount
-                  ? SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          cs.onErrorContainer,
-                        ),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.delete_forever),
-              onPressed: _isDeletingAccount ? null : _deleteAccount,
-              label: Text(l.deleteAccount),
             ),
-          ),
-          const SizedBox(height: 32),
-        ],
+
+            // Security
+            const ExpressiveSectionHeader('Security'),
+            if (_passwordChangeError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ExpressiveInfoCard(
+                  text: _passwordChangeError!,
+                  icon: Icons.error_outline,
+                  tone: cs.errorContainer,
+                ),
+              ),
+            if (_passwordChangeNotice != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ExpressiveInfoCard(
+                  text: _passwordChangeNotice!,
+                  icon: Icons.check_circle_outline,
+                  tone: m3.successContainer,
+                ),
+              ),
+            _FieldLabel(l.currentPassword),
+            TextField(
+              controller: _currentPasswordCtrl,
+              obscureText: _obscureCurrentPassword,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                prefixIcon: const AppIcon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: AppIcon(
+                    _obscureCurrentPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureCurrentPassword = !_obscureCurrentPassword;
+                    });
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FieldLabel(l.newPassword, helper: l.minCharsPassword),
+            TextField(
+              controller: _newPasswordCtrl,
+              obscureText: _obscureNewPassword,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                prefixIcon: const AppIcon(Icons.lock_reset),
+                suffixIcon: IconButton(
+                  icon: AppIcon(
+                    _obscureNewPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureNewPassword = !_obscureNewPassword;
+                    });
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FieldLabel(l.confirmNewPassword),
+            TextField(
+              controller: _confirmPasswordCtrl,
+              obscureText: _obscureConfirmPassword,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_isChangingPassword) {
+                  _changePassword();
+                }
+              },
+              decoration: InputDecoration(
+                prefixIcon: const AppIcon(Icons.check_circle_outline),
+                suffixIcon: IconButton(
+                  icon: AppIcon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                icon: _isChangingPassword
+                    ? SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            cs.onSecondaryContainer,
+                          ),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const AppIcon(Icons.password),
+                label: Text(l.updatePassword),
+                onPressed: _isChangingPassword ? null : _changePassword,
+              ),
+            ),
+
+            // Chat Recovery (conditional).
+            _buildRecoverChatsSection(l),
+
+            const SizedBox(height: 24),
+
+            // Danger Zone
+            ExpressiveSectionHeader('Danger zone', color: cs.error),
+            ExpressiveInfoCard(
+              text: l.deleteAccountWarning,
+              icon: Icons.warning_amber_rounded,
+              tone: cs.errorContainer,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.errorContainer,
+                  foregroundColor: cs.onErrorContainer,
+                ),
+                icon: _isDeletingAccount
+                    ? SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            cs.onErrorContainer,
+                          ),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const AppIcon(Icons.delete_forever),
+                onPressed: _isDeletingAccount ? null : _deleteAccount,
+                label: Text(l.deleteAccount),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l.accountSettings),
-        centerTitle: false,
-      ),
-      body: bodyContent,
+    return ExpressiveScreen(
+      title: l.accountSettings,
+      builder: (BuildContext context) => bodyContent,
     );
   }
 }
@@ -766,10 +791,7 @@ class _FieldLabel extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               helper!,
-              style: TextStyle(
-                fontSize: 11.5,
-                color: m3.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 11.5, color: m3.onSurfaceVariant),
             ),
           ],
         ],
@@ -777,4 +799,3 @@ class _FieldLabel extends StatelessWidget {
     );
   }
 }
-

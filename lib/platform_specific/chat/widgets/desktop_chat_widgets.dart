@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/widgets/desktop_chat_widgets.dart
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 /// Build icon button for desktop UI
 Widget buildDesktopIconButton({
   required IconData icon,
@@ -52,11 +54,10 @@ Widget buildDesktopIconButton({
                 width: effectiveBorderWidth,
               ),
             ),
-            child: Icon(icon, color: effectiveIconColor, size: 20),
+            child: AppIcon(icon, color: effectiveIconColor, size: 20),
           );
         },
       ),
     ),
   );
 }
-

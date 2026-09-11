@@ -113,10 +113,11 @@ class CoworkReconnectCrypto {
     String label,
     String channelId,
     List<int> transcript,
-  ) =>
-      Uint8List.fromList(
-        <int>[...utf8.encode(label), ...utf8.encode(channelId), ...transcript],
-      );
+  ) => Uint8List.fromList(<int>[
+    ...utf8.encode(label),
+    ...utf8.encode(channelId),
+    ...transcript,
+  ]);
 
   /// A fresh 32-byte nonce from the platform's secure RNG.
   static Uint8List randomNonce() {
@@ -144,13 +145,13 @@ class CoworkReconnect {
     required SimplePublicKey peerPublicKey,
     required String channelId,
     required List<int> nonce,
-  })  : _role = role,
-        _deviceId = deviceId,
-        _deviceKeyPair = deviceKeyPair,
-        _peerDeviceId = peerDeviceId,
-        _peerPublicKey = peerPublicKey,
-        _channelId = channelId,
-        _nonce = nonce;
+  }) : _role = role,
+       _deviceId = deviceId,
+       _deviceKeyPair = deviceKeyPair,
+       _peerDeviceId = peerDeviceId,
+       _peerPublicKey = peerPublicKey,
+       _channelId = channelId,
+       _nonce = nonce;
 
   final CoworkReconnectRole _role;
   final String _deviceId;
@@ -176,16 +177,15 @@ class CoworkReconnect {
     required SimplePublicKey peerPublicKey,
     required String channelId,
     List<int>? nonce,
-  }) =>
-      CoworkReconnect._(
-        role: CoworkReconnectRole.initiator,
-        deviceId: deviceId,
-        deviceKeyPair: deviceKeyPair,
-        peerDeviceId: peerDeviceId,
-        peerPublicKey: peerPublicKey,
-        channelId: channelId,
-        nonce: _resolveNonce(nonce),
-      );
+  }) => CoworkReconnect._(
+    role: CoworkReconnectRole.initiator,
+    deviceId: deviceId,
+    deviceKeyPair: deviceKeyPair,
+    peerDeviceId: peerDeviceId,
+    peerPublicKey: peerPublicKey,
+    channelId: channelId,
+    nonce: _resolveNonce(nonce),
+  );
 
   /// Join a reconnect as the app — it answers the host's `hello`.
   static CoworkReconnect joiner({
@@ -195,16 +195,15 @@ class CoworkReconnect {
     required SimplePublicKey peerPublicKey,
     required String channelId,
     List<int>? nonce,
-  }) =>
-      CoworkReconnect._(
-        role: CoworkReconnectRole.joiner,
-        deviceId: deviceId,
-        deviceKeyPair: deviceKeyPair,
-        peerDeviceId: peerDeviceId,
-        peerPublicKey: peerPublicKey,
-        channelId: channelId,
-        nonce: _resolveNonce(nonce),
-      );
+  }) => CoworkReconnect._(
+    role: CoworkReconnectRole.joiner,
+    deviceId: deviceId,
+    deviceKeyPair: deviceKeyPair,
+    peerDeviceId: peerDeviceId,
+    peerPublicKey: peerPublicKey,
+    channelId: channelId,
+    nonce: _resolveNonce(nonce),
+  );
 
   static List<int> _resolveNonce(List<int>? nonce) {
     if (nonce == null) return CoworkReconnectCrypto.randomNonce();
@@ -257,16 +256,24 @@ class CoworkReconnect {
   }
 
   Future<Uint8List> _sign(String label) async {
-    final message =
-        CoworkReconnectCrypto.signedBytes(label, _channelId, _currentTranscript());
-    final signature =
-        await CoworkReconnectCrypto.ed25519.sign(message, keyPair: _deviceKeyPair);
+    final message = CoworkReconnectCrypto.signedBytes(
+      label,
+      _channelId,
+      _currentTranscript(),
+    );
+    final signature = await CoworkReconnectCrypto.ed25519.sign(
+      message,
+      keyPair: _deviceKeyPair,
+    );
     return Uint8List.fromList(signature.bytes);
   }
 
   Future<void> _verifyPeer(String label, List<int> signature) async {
-    final message =
-        CoworkReconnectCrypto.signedBytes(label, _channelId, _currentTranscript());
+    final message = CoworkReconnectCrypto.signedBytes(
+      label,
+      _channelId,
+      _currentTranscript(),
+    );
     final valid = await CoworkReconnectCrypto.ed25519.verify(
       message,
       signature: Signature(signature, publicKey: _peerPublicKey),

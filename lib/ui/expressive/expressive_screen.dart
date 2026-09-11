@@ -27,7 +27,7 @@ import 'package:cowork/ui/expressive/top_veil.dart';
 class ExpressiveScreen extends StatelessWidget {
   const ExpressiveScreen({
     super.key,
-    required this.child,
+    required this.builder,
     this.title,
     this.titleWidget,
     this.actions = const <Widget>[],
@@ -37,9 +37,13 @@ class ExpressiveScreen extends StatelessWidget {
     this.backgroundColor,
   });
 
-  /// The page itself. It should use `MediaQuery.paddingOf(context)` for its own
-  /// top and bottom padding; then it starts under the bar and travels behind it.
-  final Widget child;
+  /// The page itself, built BELOW the media query this widget grows.
+  ///
+  /// A builder, not a widget: a page that reads `MediaQuery.paddingOf(context)`
+  /// in its own `build` would read the window's inset, not the one with the bars
+  /// added, and its first row would sit under the title. The context handed in
+  /// here already carries the room.
+  final WidgetBuilder builder;
 
   final String? title;
 
@@ -80,7 +84,7 @@ class ExpressiveScreen extends StatelessWidget {
               data: media.copyWith(
                 padding: media.padding.copyWith(top: top, bottom: bottom),
               ),
-              child: child,
+              child: Builder(builder: builder),
             ),
           ),
           Positioned(

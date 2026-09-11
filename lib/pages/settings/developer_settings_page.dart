@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 
 import 'package:cowork/services/api_config_service.dart';
@@ -46,12 +49,17 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final apiBase = ApiConfigService.apiBaseUrl;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Developer')),
-      body: _loading
+    return ExpressiveScreen(
+      title: 'Developer',
+      builder: (BuildContext context) => _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 32,
+              ),
               children: [
                 const ExpressiveTitle(
                   'Developer',
@@ -66,7 +74,7 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
                       subtitle: apiBase,
                       trailing: IconButton(
                         tooltip: 'Copy',
-                        icon: const Icon(Icons.copy, size: 18),
+                        icon: const AppIcon(Icons.copy, size: 18),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: apiBase));
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +97,8 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
                         return ExpressiveSwitchRow(
                           icon: Icons.receipt_long_outlined,
                           title: 'Verbose view',
-                          subtitle: 'Show every command, tool call, and browser '
+                          subtitle:
+                              'Show every command, tool call, and browser '
                               'action in the thread',
                           value: verbose.enabled,
                           onChanged: verbose.setEnabled,
@@ -99,7 +108,8 @@ class _DeveloperSettingsPageState extends State<DeveloperSettingsPage> {
                     ExpressiveSwitchRow(
                       icon: Icons.data_object,
                       title: 'Capture model context (debug)',
-                      subtitle: 'Send each task with debug on and keep the raw '
+                      subtitle:
+                          'Send each task with debug on and keep the raw '
                           'model context, so it can be copied from the thread',
                       value: _captureContext,
                       onChanged: _setCaptureContext,

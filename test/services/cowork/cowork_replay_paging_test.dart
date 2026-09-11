@@ -21,7 +21,11 @@ void main() {
   late FakeRelayController controller;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    // The one-time repeat repair (bead cowork-4rpt) is a migration, not
+    // the steady state these tests describe: mark it done.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      kReplayRepeatRepairKey: true,
+    });
     loader.reset();
     CoworkRelayLink.instance.reset();
     CoworkRunLedger.instance.reset();

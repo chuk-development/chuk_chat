@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:markdown_widget/markdown_widget.dart';
 
 import 'package:cowork/utils/lenient_json.dart';
 import 'package:cowork/widgets/chart_widget.dart';
+import 'package:cowork/widgets/markdown_message.dart';
 
 /// One piece of an agent reply: prose, or a chart the agent asked for.
 sealed class AgentSegment {
@@ -59,7 +59,8 @@ List<AgentSegment> splitAgentSegments(String data) {
     final chart = decodeChartBody(match.group(1) ?? '');
     // A block with no number in it is not a chart; leaving it in the prose
     // shows the reader what the agent sent instead of an empty frame.
-    if (chart == null || !ChartRenderer.hasPlottableData(normalizeChartData(chart))) {
+    if (chart == null ||
+        !ChartRenderer.hasPlottableData(normalizeChartData(chart))) {
       continue;
     }
     addText(data.substring(cursor, match.start));
@@ -83,28 +84,45 @@ List<AgentSegment> splitAgentSegments(String data) {
 
 /// Renders an agent reply as Markdown, with `<chart>` blocks drawn as charts.
 ///
-/// The agent is instructed to answer in Markdown — headings, lists, fenced code
-/// with a language — so the thread must render it. A raw `#` and stray
-/// backticks are what a chat UI looks like when it forgets to. The same is true
-/// of a `<chart>` block: a markdown renderer drops it, so the reader sees the
-/// numbers vanish instead of a chart.
+/// This widget exists for one thing the plain markdown renderer cannot do: a
+/// `<chart>` block. A markdown renderer drops the tag, so the reader watches
+/// the numbers vanish instead of seeing a chart. Splitting the reply into prose
+/// and charts is therefore the whole job here — the prose itself is handed to
+/// [MarkdownMessage], the app's one markdown renderer, so a document gets the
+/// same inline code chips, underlined accent links, monotonic heading sizes,
+/// list markers, horizontally scrolling code blocks and [ChukTable] tables that
+/// the chat gets. A second, simpler markdown path only means a second set of
+/// bugs.
 ///
 /// It is a block, not a page: it brings no scroll view of its own, so it
-/// composes inside the thread's [ListView]. The syntax theme follows the app
-/// theme, and code keeps a monospace font at chat size.
+/// composes inside the thread's [ListView] or a document's scroll view.
+///
+/// [fontSize] and [height] set the reading size of the prose. A document passes
+/// a larger size and a looser line height than a chat bubble; leaving them null
+/// keeps the chat defaults.
 class AgentMarkdown extends StatelessWidget {
-  const AgentMarkdown(this.data, {super.key});
+  const AgentMarkdown(
+    this.data, {
+    super.key,
+    this.fontSize,
+    this.height,
+    this.selectable = true,
+  });
 
   final String data;
+  final double? fontSize;
+  final double? height;
+
+  /// One [SelectionArea] around the whole reply, so a drag selects across a
+  /// heading, a list and the paragraph after it. Turn it off when the caller
+  /// already provides one — a nested selection area swallows the outer drag.
+  final bool selectable;
 
   @override
   Widget build(BuildContext context) {
     final segments = splitAgentSegments(data);
-    if (segments.length == 1 && segments.first is AgentTextSegment) {
-      return _markdown(context, (segments.first as AgentTextSegment).text);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         for (final segment in segments)
@@ -114,30 +132,21 @@ class AgentMarkdown extends StatelessWidget {
           },
       ],
     );
+    if (!selectable) return body;
+    return SelectionArea(child: body);
   }
 
   Widget _markdown(BuildContext context, String text) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final base = dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
-    final pre = dark ? PreConfig.darkConfig : const PreConfig();
-
-    return MarkdownBlock(
-      data: text,
-      selectable: true,
-      config: base.copy(
-        configs: [
-          PConfig(
-            textStyle: theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14),
-          ),
-          pre.copy(
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.symmetric(vertical: 6),
-            textStyle: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-          ),
-          dark ? CodeConfig.darkConfig : const CodeConfig(),
-        ],
-      ),
+    final scheme = Theme.of(context).colorScheme;
+    return MarkdownMessage(
+      text: text,
+      textColor: scheme.onSurface,
+      backgroundColor: scheme.surface,
+      // The one selection area is put up by [build]; a second one here would
+      // cut every selection at a segment boundary.
+      wrapWithSelectionArea: false,
+      paragraphFontSize: fontSize,
+      paragraphHeight: height,
     );
   }
 }

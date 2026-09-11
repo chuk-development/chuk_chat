@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/chat_ui_desktop.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
@@ -187,8 +189,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   /// The active mode's reasoning level (`none` … `xhigh`, `none` = off).
   /// Loaded from the mode's config; each mode remembers its own.
-  String _reasoningEffort =
-      ChatModeService.defaultConfig(ChatModeService.fallbackMode).reasoningEffort;
+  String _reasoningEffort = ChatModeService.defaultConfig(
+    ChatModeService.fallbackMode,
+  ).reasoningEffort;
 
   /// Human name of the selected model, for the mode menu. Null until the
   /// model list has been cached — the menu then shows the raw id.
@@ -323,11 +326,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _activeChatId = chatId;
           });
           widget.onChatIdChanged(chatId);
-          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-            }
-          }));
+          unawaited(
+            MultiplexSession.openForChat(chatId).catchError((e) {
+              if (kDebugMode) {
+                debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+              }
+            }),
+          );
         }
       };
     _textFieldFocusNode = FocusNode(
@@ -431,7 +436,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         .listen((_) {
           // Reload provider slug when settings are changed —
           // skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
+          unawaited(
+            loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true),
+          );
         });
   }
 
@@ -624,11 +631,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // through the normal path.
     restoreVariantSeedForChat(chatId);
     if (chatId != null) {
-      unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-        if (kDebugMode) {
-          debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-        }
-      }));
+      unawaited(
+        MultiplexSession.openForChat(chatId).catchError((e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+          }
+        }),
+      );
     }
 
     _clearMessageDecodeCaches();
@@ -1026,7 +1035,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the active mode. Debug only.
-  bool get debugReasoningEnabled => _reasoningEffort != ChatModeService.reasoningOff;
+  bool get debugReasoningEnabled =>
+      _reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
@@ -1755,7 +1765,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.red.withValues(alpha: opacity),
-                      Colors.redAccent.shade200.withValues(alpha: opacity * 0.7),
+                      Colors.redAccent.shade200.withValues(
+                        alpha: opacity * 0.7,
+                      ),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(3),
@@ -1787,10 +1799,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           const _DesktopRecordingDot(),
           const SizedBox(width: 10),
           Expanded(
-            child: _buildAudioVisualizer(
-              accent: Colors.red,
-              iconFg: iconFg,
-            ),
+            child: _buildAudioVisualizer(accent: Colors.red, iconFg: iconFg),
           ),
         ],
       ),
@@ -1984,7 +1993,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
+                                    AppIcon(
                                       Icons.cloud_upload,
                                       color: accent,
                                       size: 32,
@@ -2043,306 +2052,326 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 context,
                               ).copyWith(scrollbars: false),
                               child: Align(
-                              alignment: Alignment.center,
-                              child: Container(
-                                constraints: BoxConstraints(
-                                  maxWidth: expandedInputWidth,
-                                ),
-                                child: SelectionCopyArea(
-                                  focusNode: _messageSelectionFocusNode,
-                                  contextMenuBuilder: _buildMessageContextMenu,
-                                  // Listener (not GestureDetector) so this does
-                                  // not enter the gesture arena. A competing tap
-                                  // recognizer here would beat SelectionArea's
-                                  // double-tap recognizer and break
-                                  // double-click-to-select-word.
-                                  child: Listener(
-                                    behavior: HitTestBehavior.translucent,
-                                    onPointerDown: (_) {
-                                      // Move the focus to the selection region
-                                      // itself, so Flutter's own Ctrl+C path
-                                      // targets the messages instead of the
-                                      // composer. Plain `unfocus()` left the
-                                      // focus nowhere, which is exactly what
-                                      // broke copying. SelectionCopyArea copies
-                                      // even without focus — this is the second
-                                      // layer, not the only one.
-                                      _messageSelectionFocusNode.requestFocus();
-                                    },
-                                    // Re-evaluate the scroll-to-bottom button
-                                    // when layout metrics change without a
-                                    // user scroll (e.g. maxScrollExtent shrinks
-                                    // after a streaming message finalises).
-                                    // Plain scroll listener doesn't fire in
-                                    // that case and the button can get stuck.
-                                    child: NotificationListener<
-                                      ScrollMetricsNotification
-                                    >(
-                                      onNotification: (_) {
-                                        onScrollChanged();
-                                        return false;
+                                alignment: Alignment.center,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: expandedInputWidth,
+                                  ),
+                                  child: SelectionCopyArea(
+                                    focusNode: _messageSelectionFocusNode,
+                                    contextMenuBuilder:
+                                        _buildMessageContextMenu,
+                                    // Listener (not GestureDetector) so this does
+                                    // not enter the gesture arena. A competing tap
+                                    // recognizer here would beat SelectionArea's
+                                    // double-tap recognizer and break
+                                    // double-click-to-select-word.
+                                    child: Listener(
+                                      behavior: HitTestBehavior.translucent,
+                                      onPointerDown: (_) {
+                                        // Move the focus to the selection region
+                                        // itself, so Flutter's own Ctrl+C path
+                                        // targets the messages instead of the
+                                        // composer. Plain `unfocus()` left the
+                                        // focus nowhere, which is exactly what
+                                        // broke copying. SelectionCopyArea copies
+                                        // even without focus — this is the second
+                                        // layer, not the only one.
+                                        _messageSelectionFocusNode
+                                            .requestFocus();
                                       },
-                                      child: ListView.builder(
-                                        controller: scrollController,
-                                      padding: EdgeInsets.only(
-                                        left: effectiveHorizontalPadding,
-                                        right: effectiveHorizontalPadding,
-                                        top: 10,
-                                        bottom: messageListBottomPadding,
-                                      ),
-                                      itemCount: _messages.length,
-                                      addAutomaticKeepAlives:
-                                          true, // Keep message widgets alive
-                                      // Each item already wraps its own
-                                      // RepaintBoundary below, so the builder's
-                                      // automatic one would just be a redundant
-                                      // layer on every row.
-                                      addRepaintBoundaries: false,
-                                      cacheExtent: _isLinuxDesktop
-                                          ? 360.0
-                                          : 600.0, // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
-                                      itemBuilder: (_, int i) {
-                                        final MessageRenderData data =
-                                            _buildMessageRenderData(i);
-                                        final String? reasoningText =
-                                            data.reasoning.trim().isEmpty
-                                            ? null
-                                            : data.reasoning;
-                                        final bool previousIsUser = i == 0
-                                            ? data.isUser
-                                            : (_messages[i - 1]['sender'] ??
-                                                      'ai') ==
-                                                  'user';
-                                        final bool nextIsUser =
-                                            i == _messages.length - 1
-                                            ? data.isUser
-                                            : (_messages[i + 1]['sender'] ??
-                                                      'ai') ==
-                                                  'user';
-                                        final bool startsNewGroup =
-                                            i == 0 ||
-                                            previousIsUser != data.isUser;
-                                        final bool endsGroup =
-                                            i == _messages.length - 1 ||
-                                            nextIsUser != data.isUser;
-                                        final bool isBeingEdited =
-                                            _messageActionsHandler
-                                                .editingMessageIndex ==
-                                            i;
-                                        // The day break, like a messenger's:
-                                        // one date chip where the day changes.
-                                        // A row with no timestamp gets none.
-                                        final DateTime? rowDay =
-                                            DateTime.tryParse(
-                                          _messages[i]['startedAt'] ?? '',
-                                        );
-                                        final DateTime? previousDay = i == 0
-                                            ? null
-                                            : DateTime.tryParse(
-                                                _messages[i - 1]['startedAt'] ??
-                                                    '',
-                                              );
-                                        final bool opensDay =
-                                            rowDay != null &&
-                                            (previousDay == null ||
-                                                !sameCalendarDay(
-                                                  previousDay.toLocal(),
-                                                  rowDay.toLocal(),
-                                                ));
-                                        Widget withDay(Widget bubble) =>
-                                            opensDay
-                                            ? Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: <Widget>[
-                                                  ChatDayDivider(
-                                                    when: rowDay.toLocal(),
-                                                  ),
-                                                  bubble,
-                                                ],
-                                              )
-                                            : bubble;
-                                        // Build the bubble from a (text,
-                                        // reasoning) pair so the streaming
-                                        // bubble can be fed live values from the
-                                        // runtime notifier without a
-                                        // screen-wide rebuild. Every other prop
-                                        // is stable for the stream's duration.
-                                        MessageBubble buildBubble(
-                                          String msgText,
-                                          String? msgReasoning,
-                                        ) => MessageBubble(
-                                          key: ValueKey(
-                                            ChatUiHelpers.stableUiKey(
-                                              _messages[i],
-                                              _uuid,
-                                            ),
+                                      // Re-evaluate the scroll-to-bottom button
+                                      // when layout metrics change without a
+                                      // user scroll (e.g. maxScrollExtent shrinks
+                                      // after a streaming message finalises).
+                                      // Plain scroll listener doesn't fire in
+                                      // that case and the button can get stuck.
+                                      child: NotificationListener<ScrollMetricsNotification>(
+                                        onNotification: (_) {
+                                          onScrollChanged();
+                                          return false;
+                                        },
+                                        child: ListView.builder(
+                                          controller: scrollController,
+                                          padding: EdgeInsets.only(
+                                            left: effectiveHorizontalPadding,
+                                            right: effectiveHorizontalPadding,
+                                            top: 10,
+                                            bottom: messageListBottomPadding,
                                           ),
-                                          message: msgText,
-                                          reasoning: msgReasoning,
-                                          isUser: data.isUser,
-                                          startsNewGroup: startsNewGroup,
-                                          endsGroup: endsGroup,
-                                          maxWidth: data.isUser
-                                              ? expandedInputWidth *
-                                                    0.8 // User messages: 80%
-                                              : expandedInputWidth, // AI messages: 100%
-                                          isReasoningStreaming:
-                                              data.isReasoningStreaming,
-                                          modelLabel: data.modelLabel,
-                                          modelProvider: data.modelProvider,
-                                          tps: data.tps,
-                                          toolCalls: data.toolCalls,
-                                          showToolCalls: widget.showToolCalls,
-                                          contentBlocks: data.contentBlocks,
-                                          isStreamingMessage:
-                                              data.isStreamingMessage,
-                                          turnStartedAt: data.turnStartedAt,
-                                          workedFor: data.workedFor,
-                                          images: data.images,
-                                          imageMetas: data.imageMetas,
-                                          imageCostEur: data.imageCostEur,
-                                          imageGeneratedAt: data.imageGeneratedAt,
-                                          attachments: data.attachments,
-                                          actions: _buildMessageActionsForIndex(
-                                            i,
-                                            data,
-                                          ),
-                                          userMessageActions:
-                                              _buildUserMessageActionsForIndex(
-                                                i,
-                                                data,
-                                              ),
-                                          isEditing: isBeingEdited,
-                                          showReasoningTokens:
-                                              widget.showReasoningTokens,
-                                          showModelInfo: widget.showModelInfo,
-                                          showTps: widget.showTps,
-                                          onAskUserAnswer:
-                                              _askUserCallbackForIndex(i, data),
-                                          onConnectMcpServer:
-                                              _connectMcpCallbackForIndex(
-                                                i,
-                                                data,
-                                              ),
-                                          useSharedSelectionArea: true,
-                                          variantIndex: data.variantIndex,
-                                          variantCount: data.variantCount,
-                                          onPrevVariant: data.variantCount > 1
-                                              ? () => _switchVariantAt(
-                                                    i,
-                                                    data.variantIndex - 1,
+                                          itemCount: _messages.length,
+                                          addAutomaticKeepAlives:
+                                              true, // Keep message widgets alive
+                                          // Each item already wraps its own
+                                          // RepaintBoundary below, so the builder's
+                                          // automatic one would just be a redundant
+                                          // layer on every row.
+                                          addRepaintBoundaries: false,
+                                          cacheExtent: _isLinuxDesktop
+                                              ? 360.0
+                                              : 600.0, // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
+                                          itemBuilder: (_, int i) {
+                                            final MessageRenderData data =
+                                                _buildMessageRenderData(i);
+                                            final String? reasoningText =
+                                                data.reasoning.trim().isEmpty
+                                                ? null
+                                                : data.reasoning;
+                                            final bool previousIsUser = i == 0
+                                                ? data.isUser
+                                                : (_messages[i - 1]['sender'] ??
+                                                          'ai') ==
+                                                      'user';
+                                            final bool nextIsUser =
+                                                i == _messages.length - 1
+                                                ? data.isUser
+                                                : (_messages[i + 1]['sender'] ??
+                                                          'ai') ==
+                                                      'user';
+                                            final bool startsNewGroup =
+                                                i == 0 ||
+                                                previousIsUser != data.isUser;
+                                            final bool endsGroup =
+                                                i == _messages.length - 1 ||
+                                                nextIsUser != data.isUser;
+                                            final bool isBeingEdited =
+                                                _messageActionsHandler
+                                                    .editingMessageIndex ==
+                                                i;
+                                            // The day break, like a messenger's:
+                                            // one date chip where the day changes.
+                                            // A row with no timestamp gets none.
+                                            final DateTime? rowDay =
+                                                DateTime.tryParse(
+                                                  _messages[i]['startedAt'] ??
+                                                      '',
+                                                );
+                                            final DateTime? previousDay = i == 0
+                                                ? null
+                                                : DateTime.tryParse(
+                                                    _messages[i -
+                                                            1]['startedAt'] ??
+                                                        '',
+                                                  );
+                                            final bool opensDay =
+                                                rowDay != null &&
+                                                (previousDay == null ||
+                                                    !sameCalendarDay(
+                                                      previousDay.toLocal(),
+                                                      rowDay.toLocal(),
+                                                    ));
+                                            Widget withDay(Widget bubble) =>
+                                                opensDay
+                                                ? Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: <Widget>[
+                                                      ChatDayDivider(
+                                                        when: rowDay.toLocal(),
+                                                      ),
+                                                      bubble,
+                                                    ],
                                                   )
-                                              : null,
-                                          onNextVariant: data.variantCount > 1
-                                              ? () => _switchVariantAt(
-                                                    i,
-                                                    data.variantIndex + 1,
-                                                  )
-                                              : null,
-                                          status: data.status,
-                                          lastError: data.lastError,
-                                          onRetryPending: data.isUser &&
-                                                  (data.status ==
-                                                          ChatMessageStatus
-                                                              .pending ||
-                                                      data.status ==
-                                                          ChatMessageStatus
-                                                              .failed)
-                                              ? () => OfflineRetryManager
-                                                  .instance
-                                                  .retryNow()
-                                              : null,
-                                        );
-
-                                        // The streaming bubble rebuilds itself
-                                        // per token via the runtime's
-                                        // streamingLive notifier — the rest of
-                                        // the screen stays put.
-                                        final ChatRuntime? runtime =
-                                            _activeChatId == null
-                                            ? null
-                                            : ChatRuntimeRegistry.instance
-                                                  .lookup(_activeChatId!);
-                                        // Wrap the last AI bubble for the whole
-                                        // turn (isSending), not just while a
-                                        // stream is mid-flight: isStreaming
-                                        // briefly flips false between tool-loop
-                                        // passes and we must keep the live
-                                        // wrapper across that gap.
-                                        final bool wrapForStream =
-                                            runtime != null &&
-                                            !data.isUser &&
-                                            i == _messages.length - 1 &&
-                                            (data.isStreamingMessage ||
-                                                runtime.isSending.value);
-                                        if (wrapForStream) {
-                                          return withDay(RepaintBoundary(
-                                            child:
-                                                ValueListenableBuilder<
-                                                  StreamingLive?
-                                                >(
-                                                  valueListenable:
-                                                      runtime.streamingLive,
-                                                  builder: (context, live, _) {
-                                                    final bool match =
-                                                        live != null &&
-                                                        live.index == i;
-                                                    final String msgText = match
-                                                        ? live.text.trimRight()
-                                                        : data.displayText;
-                                                    final String reasoningRaw =
-                                                        match
-                                                        ? live.reasoning
-                                                        : data.reasoning;
-                                                    final String? msgReasoning =
-                                                        reasoningRaw
-                                                            .trim()
-                                                            .isEmpty
-                                                        ? null
-                                                        : reasoningRaw;
-                                                    return buildBubble(
-                                                      msgText,
-                                                      msgReasoning,
-                                                    );
-                                                  },
+                                                : bubble;
+                                            // Build the bubble from a (text,
+                                            // reasoning) pair so the streaming
+                                            // bubble can be fed live values from the
+                                            // runtime notifier without a
+                                            // screen-wide rebuild. Every other prop
+                                            // is stable for the stream's duration.
+                                            MessageBubble buildBubble(
+                                              String msgText,
+                                              String? msgReasoning,
+                                            ) => MessageBubble(
+                                              key: ValueKey(
+                                                ChatUiHelpers.stableUiKey(
+                                                  _messages[i],
+                                                  _uuid,
                                                 ),
-                                          ));
-                                        }
-                                        final String uiKey =
-                                            ChatUiHelpers.stableUiKey(
-                                          _messages[i],
-                                          _uuid,
-                                        );
-                                        if (data.isUser &&
-                                            uiKey == _flyInKey) {
-                                          return withDay(
-                                            RepaintBoundary(
-                                              child: MessageFlyIn(
-                                                key: ValueKey('flyin_$uiKey'),
+                                              ),
+                                              message: msgText,
+                                              reasoning: msgReasoning,
+                                              isUser: data.isUser,
+                                              startsNewGroup: startsNewGroup,
+                                              endsGroup: endsGroup,
+                                              maxWidth: data.isUser
+                                                  ? expandedInputWidth *
+                                                        0.8 // User messages: 80%
+                                                  : expandedInputWidth, // AI messages: 100%
+                                              isReasoningStreaming:
+                                                  data.isReasoningStreaming,
+                                              modelLabel: data.modelLabel,
+                                              modelProvider: data.modelProvider,
+                                              tps: data.tps,
+                                              toolCalls: data.toolCalls,
+                                              showToolCalls:
+                                                  widget.showToolCalls,
+                                              contentBlocks: data.contentBlocks,
+                                              isStreamingMessage:
+                                                  data.isStreamingMessage,
+                                              turnStartedAt: data.turnStartedAt,
+                                              workedFor: data.workedFor,
+                                              images: data.images,
+                                              imageMetas: data.imageMetas,
+                                              imageCostEur: data.imageCostEur,
+                                              imageGeneratedAt:
+                                                  data.imageGeneratedAt,
+                                              attachments: data.attachments,
+                                              actions:
+                                                  _buildMessageActionsForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              userMessageActions:
+                                                  _buildUserMessageActionsForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              isEditing: isBeingEdited,
+                                              showReasoningTokens:
+                                                  widget.showReasoningTokens,
+                                              showModelInfo:
+                                                  widget.showModelInfo,
+                                              showTps: widget.showTps,
+                                              onAskUserAnswer:
+                                                  _askUserCallbackForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              onConnectMcpServer:
+                                                  _connectMcpCallbackForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              useSharedSelectionArea: true,
+                                              variantIndex: data.variantIndex,
+                                              variantCount: data.variantCount,
+                                              onPrevVariant:
+                                                  data.variantCount > 1
+                                                  ? () => _switchVariantAt(
+                                                      i,
+                                                      data.variantIndex - 1,
+                                                    )
+                                                  : null,
+                                              onNextVariant:
+                                                  data.variantCount > 1
+                                                  ? () => _switchVariantAt(
+                                                      i,
+                                                      data.variantIndex + 1,
+                                                    )
+                                                  : null,
+                                              status: data.status,
+                                              lastError: data.lastError,
+                                              onRetryPending:
+                                                  data.isUser &&
+                                                      (data.status ==
+                                                              ChatMessageStatus
+                                                                  .pending ||
+                                                          data.status ==
+                                                              ChatMessageStatus
+                                                                  .failed)
+                                                  ? () => OfflineRetryManager
+                                                        .instance
+                                                        .retryNow()
+                                                  : null,
+                                            );
+
+                                            // The streaming bubble rebuilds itself
+                                            // per token via the runtime's
+                                            // streamingLive notifier — the rest of
+                                            // the screen stays put.
+                                            final ChatRuntime? runtime =
+                                                _activeChatId == null
+                                                ? null
+                                                : ChatRuntimeRegistry.instance
+                                                      .lookup(_activeChatId!);
+                                            // Wrap the last AI bubble for the whole
+                                            // turn (isSending), not just while a
+                                            // stream is mid-flight: isStreaming
+                                            // briefly flips false between tool-loop
+                                            // passes and we must keep the live
+                                            // wrapper across that gap.
+                                            final bool wrapForStream =
+                                                runtime != null &&
+                                                !data.isUser &&
+                                                i == _messages.length - 1 &&
+                                                (data.isStreamingMessage ||
+                                                    runtime.isSending.value);
+                                            if (wrapForStream) {
+                                              return withDay(
+                                                RepaintBoundary(
+                                                  child:
+                                                      ValueListenableBuilder<
+                                                        StreamingLive?
+                                                      >(
+                                                        valueListenable: runtime
+                                                            .streamingLive,
+                                                        builder: (context, live, _) {
+                                                          final bool match =
+                                                              live != null &&
+                                                              live.index == i;
+                                                          final String msgText =
+                                                              match
+                                                              ? live.text
+                                                                    .trimRight()
+                                                              : data.displayText;
+                                                          final String
+                                                          reasoningRaw = match
+                                                              ? live.reasoning
+                                                              : data.reasoning;
+                                                          final String?
+                                                          msgReasoning =
+                                                              reasoningRaw
+                                                                  .trim()
+                                                                  .isEmpty
+                                                              ? null
+                                                              : reasoningRaw;
+                                                          return buildBubble(
+                                                            msgText,
+                                                            msgReasoning,
+                                                          );
+                                                        },
+                                                      ),
+                                                ),
+                                              );
+                                            }
+                                            final String uiKey =
+                                                ChatUiHelpers.stableUiKey(
+                                                  _messages[i],
+                                                  _uuid,
+                                                );
+                                            if (data.isUser &&
+                                                uiKey == _flyInKey) {
+                                              return withDay(
+                                                RepaintBoundary(
+                                                  child: MessageFlyIn(
+                                                    key: ValueKey(
+                                                      'flyin_$uiKey',
+                                                    ),
+                                                    child: buildBubble(
+                                                      data.displayText,
+                                                      reasoningText,
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return withDay(
+                                              RepaintBoundary(
                                                 child: buildBubble(
                                                   data.displayText,
                                                   reasoningText,
                                                 ),
                                               ),
-                                            ),
-                                          );
-                                        }
-                                        return withDay(
-                                          RepaintBoundary(
-                                            child: buildBubble(
-                                              data.displayText,
-                                              reasoningText,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
+                                            );
+                                          },
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
                             ),
                           ),
                         ),
@@ -2369,7 +2398,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         scrollChatToBottom(force: true),
                                     child: Padding(
                                       padding: const EdgeInsets.all(8),
-                                      child: Icon(
+                                      child: AppIcon(
                                         Icons.keyboard_arrow_down,
                                         size: 24,
                                         color: t.colorScheme.onSurface,
@@ -2477,7 +2506,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.edit,
                         size: 14,
                         color: iconFg.withValues(alpha: 0.6),
@@ -2514,7 +2543,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.schedule,
                         size: 14,
                         color: iconFg.withValues(alpha: 0.6),
@@ -2536,7 +2565,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: _cancelPendingMessage,
-                        child: Icon(
+                        child: AppIcon(
                           Icons.close,
                           size: 16,
                           color: accent.withValues(alpha: 0.8),
@@ -2563,50 +2592,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           TourSlots.chatInput,
                         ),
                         child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
-                        contextMenuBuilder: _buildComposerContextMenu,
-                        autofocus: true,
-                        showCursor: true,
-                        minLines: 1,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.done,
-                        scrollController: _composerScrollController,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: TextStyle(
-                          color: iconFg,
-                          fontWeight: FontWeight.w600,
-                          height: 1.4,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: _messageActionsHandler.isEditing
-                              ? AppLocalizations.of(context)!.editYourMessage
-                              : hasAttachments
-                              ? AppLocalizations.of(context)!.addMessageOrDocs
-                              : AppLocalizations.of(context)!.askMeAnything,
-                          hintStyle: TextStyle(
-                            color: iconFg.withValues(alpha: 0.8),
+                          controller: _controller,
+                          focusNode: _textFieldFocusNode,
+                          contextMenuBuilder: _buildComposerContextMenu,
+                          autofocus: true,
+                          showCursor: true,
+                          minLines: 1,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.done,
+                          scrollController: _composerScrollController,
+                          textAlignVertical: TextAlignVertical.top,
+                          style: TextStyle(
+                            color: iconFg,
                             fontWeight: FontWeight.w600,
+                            height: 1.4,
                           ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          filled: false,
-                          fillColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 0,
+                          decoration: InputDecoration(
+                            hintText: _messageActionsHandler.isEditing
+                                ? AppLocalizations.of(context)!.editYourMessage
+                                : hasAttachments
+                                ? AppLocalizations.of(context)!.addMessageOrDocs
+                                : AppLocalizations.of(context)!.askMeAnything,
+                            hintStyle: TextStyle(
+                              color: iconFg.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            filled: false,
+                            fillColor: Colors.transparent,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 0,
+                            ),
+                            isDense: true,
                           ),
-                          isDense: true,
+                          cursorColor: accent,
+                          cursorWidth: 2,
+                          cursorRadius: const Radius.circular(1),
                         ),
-                        cursorColor: accent,
-                        cursorWidth: 2,
-                        cursorRadius: const Radius.circular(1),
-                      ),
                       ),
                     ),
                   ),
@@ -2743,7 +2772,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           color: accent,
                           borderRadius: BorderRadius.circular(buttonRadius),
                         ),
-                        child: const Icon(
+                        child: const AppIcon(
                           Icons.graphic_eq,
                           color: Colors.black,
                         ),
@@ -2794,7 +2823,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         ),
                       )
                     : (_isStreaming || _isSending)
-                    ? const Icon(
+                    ? const AppIcon(
                         Icons.stop_rounded,
                         color: Colors.black,
                         size: 22,
@@ -2802,7 +2831,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     : Transform(
                         transform: Matrix4.diagonal3Values(1, 0.95, 1),
                         alignment: Alignment.center,
-                        child: const Icon(
+                        child: const AppIcon(
                           Icons.arrow_upward_rounded,
                           color: Colors.black,
                           size: 26,
@@ -2834,33 +2863,34 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
         child: ChatModeSelector(
           mode: _chatMode,
-        // Match the round composer icon buttons (mic, voice, attach) beside
-        // it — the default 40 made the pill stand taller than the row.
-        height: 36,
-        // Always upwards here: the composer sits at the bottom of a tall
-        // window, and a menu dropping down covers the box it belongs to.
-        menuAbove: true,
-        selectedModelId: _selectedModelId,
-        modelLabel: _selectedModelName ??
-            (_selectedModelId.isEmpty ? null : _selectedModelId),
-        customModelLabel: _customModelName,
-        pickedModels: _pickedModels,
-        reasoningEffort: ChatModeService.sanitizeReasoningForModel(
-          _reasoningEffort,
-          modelId: _selectedModelId,
-          providerSlug: _selectedProviderSlug ?? '',
-        ),
-        // The picker options come straight from the server's per-model
-        // `supported_efforts` (derived list only as a cold-start fallback),
-        // so a level the model does not support can never be offered.
-        reasoningLevels: ChatModeService.reasoningLevelsForModel(
-          modelId: _selectedModelId,
-          // Before the provider resolves, use the mode's own default provider
-          // so the derived fallback never briefly offers a wrong ladder.
-          providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
-              ? _selectedProviderSlug!
-              : ChatModeService.defaultConfig(_chatMode).providerSlug,
-        ),
+          // Match the round composer icon buttons (mic, voice, attach) beside
+          // it — the default 40 made the pill stand taller than the row.
+          height: 36,
+          // Always upwards here: the composer sits at the bottom of a tall
+          // window, and a menu dropping down covers the box it belongs to.
+          menuAbove: true,
+          selectedModelId: _selectedModelId,
+          modelLabel:
+              _selectedModelName ??
+              (_selectedModelId.isEmpty ? null : _selectedModelId),
+          customModelLabel: _customModelName,
+          pickedModels: _pickedModels,
+          reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+            _reasoningEffort,
+            modelId: _selectedModelId,
+            providerSlug: _selectedProviderSlug ?? '',
+          ),
+          // The picker options come straight from the server's per-model
+          // `supported_efforts` (derived list only as a cold-start fallback),
+          // so a level the model does not support can never be offered.
+          reasoningLevels: ChatModeService.reasoningLevelsForModel(
+            modelId: _selectedModelId,
+            // Before the provider resolves, use the mode's own default provider
+            // so the derived fallback never briefly offers a wrong ladder.
+            providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
+                ? _selectedProviderSlug!
+                : ChatModeService.defaultConfig(_chatMode).providerSlug,
+          ),
           onReasoningEffortChanged: _setReasoningEffort,
           onModeChanged: _setChatMode,
           onModelSelected: _applyModelSelection,
@@ -2899,7 +2929,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
     final config = await ChatModeService.loadConfig(ChatMode.custom);
-    final name = await ModelCacheService.displayNameFor(config.modelId) ??
+    final name =
+        await ModelCacheService.displayNameFor(config.modelId) ??
         prettyModelId(config.modelId);
     if (!mounted || name == _customModelName) return;
     setState(() => _customModelName = name);
@@ -3177,7 +3208,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         BlendMode.srcIn,
                       ),
                     )
-                  : Icon(icon!, color: effectiveIconColor, size: iconSize),
+                  : AppIcon(icon!, color: effectiveIconColor, size: iconSize),
             );
           },
         ),
@@ -3205,9 +3236,10 @@ class _DesktopRecordingDotState extends State<_DesktopRecordingDot>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

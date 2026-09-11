@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/widgets/cowork_thread_header.dart';
 
 /// The header only ever gets the width its parent has, so every test states
@@ -36,31 +38,35 @@ void main() {
     expect(find.byTooltip('Connected'), findsOneWidget);
   });
 
-  testWidgets('a connection that is down colours the dot and says so on hover', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _wrap(
-        const CoworkThreadHeader(
-          title: 'Marta',
-          subtitle: 'release manager',
-          connection: CoworkThreadConnection.down,
+  testWidgets(
+    'a connection that is down colours the dot and says so on hover',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const CoworkThreadHeader(
+            title: 'Marta',
+            subtitle: 'release manager',
+            connection: CoworkThreadConnection.down,
+          ),
         ),
-      ),
-    );
+      );
 
-    // Still no status line anywhere: the connection is not the user's job.
-    expect(find.text('Offline'), findsNothing);
-    expect(find.text('release manager'), findsOneWidget);
-    expect(find.byTooltip('Offline'), findsOneWidget);
-    final dot = tester.widget<Icon>(
-      find.descendant(
-        of: find.byTooltip('Offline'),
-        matching: find.byIcon(Icons.circle),
-      ),
-    );
-    expect(dot.color, Theme.of(tester.element(find.text('Marta'))).colorScheme.error);
-  });
+      // Still no status line anywhere: the connection is not the user's job.
+      expect(find.text('Offline'), findsNothing);
+      expect(find.text('release manager'), findsOneWidget);
+      expect(find.byTooltip('Offline'), findsOneWidget);
+      expect(
+        iconColor(
+          tester,
+          find.descendant(
+            of: find.byTooltip('Offline'),
+            matching: findIcon(Icons.circle),
+          ),
+        ),
+        Theme.of(tester.element(find.text('Marta'))).colorScheme.error,
+      );
+    },
+  );
 
   testWidgets('the automation chip names the run and toggles the cards', (
     tester,
@@ -77,7 +83,7 @@ void main() {
     );
 
     expect(find.text('Wahlradar · Active'), findsOneWidget);
-    expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    expect(findIcon(Icons.expand_more), findsOneWidget);
     await tester.tap(find.text('Wahlradar · Active'));
     expect(toggles, 1);
   });
@@ -85,8 +91,8 @@ void main() {
   testWidgets('no automation, no chip', (tester) async {
     await tester.pumpWidget(_wrap(const CoworkThreadHeader(title: 'Marta')));
 
-    expect(find.byIcon(Icons.expand_more), findsNothing);
-    expect(find.byIcon(Icons.expand_less), findsNothing);
+    expect(findIcon(Icons.expand_more), findsNothing);
+    expect(findIcon(Icons.expand_less), findsNothing);
   });
 
   testWidgets('every action is a button of its own, and each one fires', (
@@ -126,35 +132,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a narrow header folds actions into a menu instead of overflowing', (
-    tester,
-  ) async {
-    final log = <String>[];
-    await tester.pumpWidget(
-      _wrap(
-        CoworkThreadHeader(
-          title: 'Marta',
-          actions: <CoworkThreadAction>[
-            _action('Documents', log),
-            _action('Agent controls', log),
-            _action('Control Rooms', log),
-            _action('Copy Debug Chat', log),
-          ],
+  testWidgets(
+    'a narrow header folds actions into a menu instead of overflowing',
+    (tester) async {
+      final log = <String>[];
+      await tester.pumpWidget(
+        _wrap(
+          CoworkThreadHeader(
+            title: 'Marta',
+            actions: <CoworkThreadAction>[
+              _action('Documents', log),
+              _action('Agent controls', log),
+              _action('Control Rooms', log),
+              _action('Copy Debug Chat', log),
+            ],
+          ),
+          width: 220,
         ),
-        width: 220,
-      ),
-    );
+      );
 
-    expect(tester.takeException(), isNull);
-    expect(find.byTooltip('More actions'), findsOneWidget);
-    // Folded, not dropped: the menu still reaches the last action.
-    expect(find.byTooltip('Copy Debug Chat'), findsNothing);
-    await tester.tap(find.byTooltip('More actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Copy Debug Chat'));
-    await tester.pumpAndSettle();
-    expect(log, <String>['Copy Debug Chat']);
-  });
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('More actions'), findsOneWidget);
+      // Folded, not dropped: the menu still reaches the last action.
+      expect(find.byTooltip('Copy Debug Chat'), findsNothing);
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy Debug Chat'));
+      await tester.pumpAndSettle();
+      expect(log, <String>['Copy Debug Chat']);
+    },
+  );
 
   testWidgets('the dense phone header drops the title, keeps the actions', (
     tester,

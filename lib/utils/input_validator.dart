@@ -310,9 +310,7 @@ class InputValidator {
       // ALPHA / DIGIT / "+" / "-" / ".") at the start of the string. This
       // correctly distinguishes `javascript:` / `file:` (must reject) from
       // `example.com:8080` (valid host:port, must accept).
-      final schemeMatch = RegExp(
-        r'^([a-z][a-z0-9+\-.]*):',
-      ).firstMatch(lower);
+      final schemeMatch = RegExp(r'^([a-z][a-z0-9+\-.]*):').firstMatch(lower);
       if (schemeMatch != null) {
         // Explicit non-http scheme — refuse; callers that want those go
         // through dedicated launchers.
