@@ -4212,6 +4212,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         child: ChatModeSelector(
           mode: _chatMode,
           showLabel: false,
+          // Shorter than the touch target: the composer row is already full of
+          // round targets, and this one is a label, not a primary action. The
+          // tap area stays big enough because the row around it is 48 tall.
+          height: 36,
           selectedModelId: _selectedModelId,
           modelLabel:
               _selectedModelName ??
