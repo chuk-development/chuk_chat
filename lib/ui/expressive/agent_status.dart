@@ -106,16 +106,18 @@ class AgentStatusLine extends StatelessWidget {
       builder: (BuildContext context, Widget? _) =>
           ValueListenableBuilder<CoworkRelayController?>(
             valueListenable: transport.controller,
-            builder: (BuildContext context, CoworkRelayController? controller, _) {
-              if (controller == null) {
-                return _line(context, source, paired: false);
-              }
-              return ValueListenableBuilder<CoworkRelayState>(
-                valueListenable: controller.state,
-                builder: (BuildContext context, CoworkRelayState state, _) =>
-                    _line(context, source, paired: state.isPaired),
-              );
-            },
+            builder:
+                (BuildContext context, CoworkRelayController? controller, _) {
+                  if (controller == null) {
+                    return _line(context, source, paired: false);
+                  }
+                  return ValueListenableBuilder<CoworkRelayState>(
+                    valueListenable: controller.state,
+                    builder:
+                        (BuildContext context, CoworkRelayState state, _) =>
+                            _line(context, source, paired: state.isPaired),
+                  );
+                },
           ),
     );
   }
@@ -129,8 +131,8 @@ class AgentStatusLine extends StatelessWidget {
     final String key = sessionKey ?? _defaultSessionKey();
     final CoworkRun? run = key.isEmpty ? null : source.runFor(key);
     final String? work = workInProgressLabel(agent, run);
-    final bool working = agent.activity == AgentActivity.working ||
-        (run?.running ?? false);
+    final bool working =
+        agent.activity == AgentActivity.working || (run?.running ?? false);
     final bool scheduled =
         !working && agent.activity == AgentActivity.scheduled;
 
@@ -160,9 +162,7 @@ class AgentStatusLine extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: working
-                  ? scheme.primary
-                  : scheme.onSurfaceVariant,
+              color: working ? scheme.primary : scheme.onSurfaceVariant,
               fontSize: fontSize,
               height: 1.2,
               fontWeight: FontWeight.w700,

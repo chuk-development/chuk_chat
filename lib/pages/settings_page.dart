@@ -3,6 +3,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
 import 'package:cowork/model_selector_page.dart';
 import 'package:cowork/models/app_shell_config.dart';
@@ -105,18 +108,20 @@ class _SettingsPageState extends State<SettingsPage> {
     final cs = theme.colorScheme;
     final m3 = theme.m3;
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
 
-    return Scaffold(
+    return ExpressiveScreen(
+      title: l.settings,
       backgroundColor: scaffoldBg,
-      appBar: AppBar(
-        title: Text(l.settings, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: theme.resolvedIconColor),
-      ),
-      body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      // Inside the home's Settings tab there is nowhere to go back to: the
+      // navigation bar is the way out.
+      showBack: Navigator.of(context).canPop(),
+      builder: (BuildContext context) => SettingsListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 8,
+          16,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
         children: [
           ExpressiveSectionHeader('Account'),
           ExpressiveGroup(
@@ -141,8 +146,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ExpressiveGroup(
             children: [
               KeyedSubtree(
-                key: TourKeyRegistry.instance
-                    .keyFor(TourSlots.settingsModelSelectionTile),
+                key: TourKeyRegistry.instance.keyFor(
+                  TourSlots.settingsModelSelectionTile,
+                ),
                 child: _SettingsRow(
                   icon: Icons.smart_toy_outlined,
                   title: l.modelSelection,
@@ -242,9 +248,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const AutomationsPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const AutomationsPage()),
                   );
                 },
               ),
@@ -407,7 +411,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-
 }
 
 class _SettingsRow extends StatelessWidget {
@@ -424,12 +427,8 @@ class _SettingsRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => ExpressiveRow(
-    icon: icon,
-    title: title,
-    subtitle: subtitle,
-    onTap: onTap,
-  );
+  Widget build(BuildContext context) =>
+      ExpressiveRow(icon: icon, title: title, subtitle: subtitle, onTap: onTap);
 }
 
 class _DevTile extends StatelessWidget {
@@ -461,7 +460,7 @@ class _DevTile extends StatelessWidget {
                 SizedBox(
                   width: 26,
                   height: 26,
-                  child: Icon(
+                  child: AppIcon(
                     Icons.developer_mode,
                     size: 24,
                     color: m3.onSurfaceVariant,
@@ -498,7 +497,11 @@ class _DevTile extends StatelessWidget {
                 const SizedBox(width: 10),
                 const _Badge('Dev', tone: BadgeTone.warning),
                 const SizedBox(width: 10),
-                Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+                AppIcon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: m3.onSurfaceVariant,
+                ),
               ],
             ),
           ),

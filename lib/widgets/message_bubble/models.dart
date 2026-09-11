@@ -86,13 +86,13 @@ class MessageBubbleAction {
 
 class _RenderSegment {
   _RenderSegment._({this.text, this.sandboxArtifact})
-      : toolCalls = <ToolCall>[],
-        timeline = <_ToolTimelineEntry>[];
+    : toolCalls = <ToolCall>[],
+      timeline = <_ToolTimelineEntry>[];
 
   _RenderSegment.text(String t) : this._(text: t);
   _RenderSegment.round() : this._();
   _RenderSegment.sandboxArtifact(SandboxArtifactPayload p)
-      : this._(sandboxArtifact: p);
+    : this._(sandboxArtifact: p);
 
   final String? text;
 

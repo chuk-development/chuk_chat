@@ -129,24 +129,24 @@ class CoworkAutomation {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'session_key': sessionKey,
-        'kind': kind,
-        'name': name,
-        'state': state,
-        'spec': spec,
-        'prompt': prompt,
-        if (nextFireAt != null)
-          'next_fire_at': nextFireAt!.millisecondsSinceEpoch / 1000,
-        if (lastFiredAt != null)
-          'last_fired_at': lastFiredAt!.millisecondsSinceEpoch / 1000,
-        'fire_count': fireCount,
-        'suppressed_count': suppressedCount,
-        if (lastError != null) 'last_error': lastError,
-        if (logPath != null) 'log_path': logPath,
-        if (createdAt != null)
-          'created_at': createdAt!.millisecondsSinceEpoch / 1000,
-      };
+    'id': id,
+    'session_key': sessionKey,
+    'kind': kind,
+    'name': name,
+    'state': state,
+    'spec': spec,
+    'prompt': prompt,
+    if (nextFireAt != null)
+      'next_fire_at': nextFireAt!.millisecondsSinceEpoch / 1000,
+    if (lastFiredAt != null)
+      'last_fired_at': lastFiredAt!.millisecondsSinceEpoch / 1000,
+    'fire_count': fireCount,
+    'suppressed_count': suppressedCount,
+    if (lastError != null) 'last_error': lastError,
+    if (logPath != null) 'log_path': logPath,
+    if (createdAt != null)
+      'created_at': createdAt!.millisecondsSinceEpoch / 1000,
+  };
 
   static int? _int(Object? value) {
     if (value is int) return value;

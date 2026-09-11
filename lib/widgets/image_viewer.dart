@@ -4,6 +4,11 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:cowork/services/file_save_service.dart';
@@ -120,9 +125,7 @@ class _ImageViewerState extends State<ImageViewer> {
         throw Exception('HTTP ${resp.statusCode} fetching image');
       }
       if (resp.bodyBytes.length > maxImageBytes) {
-        throw Exception(
-          'Image exceeds maximum size of $maxImageBytes bytes',
-        );
+        throw Exception('Image exceeds maximum size of $maxImageBytes bytes');
       }
       bytes = resp.bodyBytes;
     } else {
@@ -195,70 +198,63 @@ class _ImageViewerState extends State<ImageViewer> {
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
-      child: Scaffold(
+      child: ExpressiveScreen(
         backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black.withValues(alpha: 0.7),
-          leading: IconButton(
-            icon: Icon(Icons.close, color: iconColor),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Close',
-          ),
-          actions: [
-            if (_currentModel != null)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.auto_awesome,
-                            size: 12, color: iconColor.withValues(alpha: 0.9)),
-                        const SizedBox(width: 4),
-                        Text(
-                          _currentModel!,
-                          style: TextStyle(
-                            color: iconColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+        titleWidget: _hasMultipleImages
+            ? Text(
+                'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
+                style: TextStyle(color: iconColor),
+              )
+            : Text('Image', style: TextStyle(color: iconColor)),
+        actions: <Widget>[
+          if (_currentModel != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppIcon(
+                        Icons.auto_awesome,
+                        size: 12,
+                        color: iconColor.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _currentModel!,
+                        style: TextStyle(
+                          color: iconColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            IconButton(
-              icon: Icon(Icons.file_copy_outlined,
-                  color: iconColor, size: 20),
-              onPressed: _copyCurrentImage,
-              tooltip: 'Copy image',
             ),
-            if (!kIsWeb)
-              IconButton(
-                icon: Icon(Icons.file_download_outlined,
-                    color: iconColor, size: 22),
-                onPressed: _downloadCurrentImage,
-                tooltip: 'Download image',
-              ),
-          ],
-          title: _hasMultipleImages
-              ? Text(
-                  'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
-                  style: TextStyle(color: iconColor),
-                )
-              : Text('Image', style: TextStyle(color: iconColor)),
-        ),
-        body: Listener(
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.copy01,
+            onTap: _copyCurrentImage,
+            tooltip: 'Copy image',
+          ),
+          if (!kIsWeb)
+            ExpressiveIconButton(
+              hugeIcon: HugeIcons.download01,
+              onTap: _downloadCurrentImage,
+              tooltip: 'Download image',
+            ),
+        ],
+        builder: (BuildContext context) => Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: _handleOutsideImageTap,
           child: Stack(
@@ -295,7 +291,7 @@ class _ImageViewerState extends State<ImageViewer> {
                             color: Colors.black.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: const AppIcon(
                             Icons.chevron_left,
                             color: Colors.white,
                             size: 32,
@@ -323,7 +319,7 @@ class _ImageViewerState extends State<ImageViewer> {
                             color: Colors.black.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: const AppIcon(
                             Icons.chevron_right,
                             color: Colors.white,
                             size: 32,
@@ -361,7 +357,7 @@ class _ImageViewerState extends State<ImageViewer> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                const AppIcon(Icons.broken_image, size: 64, color: Colors.grey),
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load image',
@@ -392,7 +388,7 @@ class _ImageViewerState extends State<ImageViewer> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          const AppIcon(
                             Icons.broken_image,
                             size: 64,
                             color: Colors.grey,

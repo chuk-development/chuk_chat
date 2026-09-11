@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/pages/skills_settings_page.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
@@ -91,14 +93,14 @@ void main() {
     // The mark on the row repeats the section, so a scrolled row still reads.
     Finder markOf(String name) => find.descendant(
           of: find.byKey(ValueKey<String>('skill-$name')),
-          matching: find.byIcon(Icons.verified_outlined),
+          matching: findIcon(Icons.verified_outlined),
         );
     expect(markOf('automations'), findsOneWidget);
     expect(markOf('youtube-transcript'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('skill-youtube-transcript')),
-        matching: find.byIcon(Icons.folder_outlined),
+        matching: findIcon(Icons.folder_outlined),
       ),
       findsOneWidget,
     );

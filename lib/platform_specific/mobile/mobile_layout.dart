@@ -32,10 +32,18 @@ class MobileLayout {
   /// Diameter of the round chips in the floating bars.
   static const double chipDiameter = minTouchTarget;
 
-  /// Height of the floating top bar's own content: 8 padding + 48 chip + 6
-  /// padding. Same numbers as chuk's `root_wrapper_mobile`, so the imported
-  /// chat screen reserves the same space it does upstream.
-  static const double barHeight = 8 + chipDiameter + 6;
+  /// Height at normal text size: 8 padding + 54.4 contact pill + 10 padding.
+  /// [chromeInset] also accounts for accessible larger text sizes.
+  static const double barHeight = 8 + 54.4 + 10;
+
+  /// Grow the contact bar with accessibility text sizing rather than clip it.
+  static double headerContentHeight(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return (scaler.scale(16) * 1.5 + scaler.scale(11) * 1.45 + 12 + 2.4).clamp(
+      54.4,
+      double.infinity,
+    );
+  }
 
   /// The soft fade under the bar. It overlaps the first list row on purpose:
   /// the messages scroll under the chips and fade out, like Grok Bot.
@@ -59,8 +67,8 @@ class MobileLayout {
     if (width < phoneBreakpoint) return true;
     if (kPlatformDesktop || kIsWeb) return false;
     final platform = defaultTargetPlatform;
-    final bool mobilePlatform = platform == TargetPlatform.android ||
-        platform == TargetPlatform.iOS;
+    final bool mobilePlatform =
+        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
     return mobilePlatform && width < kTabletBreakpoint;
   }
 
@@ -74,5 +82,5 @@ class MobileLayout {
   ///
   /// `paddingOf`, not `of`: see [isPhone].
   static double chromeInset(BuildContext context) =>
-      MediaQuery.paddingOf(context).top + barHeight;
+      MediaQuery.paddingOf(context).top + 8 + headerContentHeight(context) + 10;
 }

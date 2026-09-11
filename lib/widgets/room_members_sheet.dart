@@ -6,13 +6,22 @@
 /// The sheet is a pure view over what it is given: the room and the candidates
 /// (roster agents not already in it). Add/remove go out through callbacks; the
 /// caller updates the room source and tells the host.
+///
+/// Everything below the title scrolls. The sheet carries two lists — the
+/// members and the candidates to add — and a bare `Column` of rows ran off the
+/// bottom of a short phone as soon as a room had about six members. One
+/// `Flexible` `ListView` holds both sections, and its bottom padding carries
+/// the keyboard inset so the last row stays reachable while a keyboard is up.
 library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/cowork_room.dart';
+import 'package:cowork/widgets/expressive_settings.dart';
 
 class RoomMembersSheet extends StatelessWidget {
   const RoomMembersSheet({
@@ -37,6 +46,9 @@ class RoomMembersSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final double keyboard = MediaQuery.viewInsetsOf(context).bottom;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -52,66 +64,92 @@ class RoomMembersSheet extends StatelessWidget {
                 Text(
                   '${room.members.length}/$kRoomMaxMembers',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: _full ? theme.colorScheme.primary : theme.hintColor,
+                    color: _full ? cs.primary : cs.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text('Members', style: theme.textTheme.labelLarge),
-            for (final m in room.members)
-              ListTile(
-                dense: true,
-                leading: ExpressiveFace(id: m.agentId, label: m.handle, size: 28),
-                title: Text('@${m.handle}', overflow: TextOverflow.ellipsis),
-                trailing: IconButton(
-                  tooltip: _atMinimum
-                      ? 'A room needs at least two members'
-                      : 'Remove',
-                  icon: const Icon(Icons.remove_circle_outline, size: 20),
-                  onPressed: _atMinimum ? null : () => onRemove(m.agentId),
-                ),
-              ),
-            const SizedBox(height: 12),
-            Text('Add a coworker', style: theme.textTheme.labelLarge),
-            if (candidates.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'No other coworkers to add.',
-                  style: TextStyle(color: theme.hintColor),
-                ),
-              )
-            else
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final agent in candidates)
-                      ListTile(
-                        dense: true,
-                        leading: ExpressiveFace(
-                          id: agent.id,
-                          label: agent.name,
-                          size: 28,
+            Flexible(
+              child: ListView(
+                // The keyboard inset rides at the bottom of the scroll view:
+                // the candidate list can sit under an open keyboard.
+                padding: EdgeInsets.only(bottom: keyboard),
+                children: [
+                  Text('Members', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  ExpressiveGroup(
+                    children: [
+                      for (final m in room.members)
+                        ExpressiveRow(
+                          key: ValueKey<String>('room-member-${m.agentId}'),
+                          title: '@${m.handle}',
+                          leading: ExpressiveFace(
+                            id: m.agentId,
+                            label: m.handle,
+                            size: 28,
+                          ),
+                          trailing: IconButton(
+                            tooltip: _atMinimum
+                                ? 'A room needs at least two members'
+                                : 'Remove',
+                            icon: const AppIcon(
+                              Icons.remove_circle_outline,
+                              size: 20,
+                            ),
+                            onPressed: _atMinimum
+                                ? null
+                                : () => onRemove(m.agentId),
+                          ),
                         ),
-                        title: Text(agent.name, overflow: TextOverflow.ellipsis),
-                        trailing: IconButton(
-                          tooltip: _full ? 'The room is full' : 'Add',
-                          icon: const Icon(Icons.add_circle_outline, size: 20),
-                          onPressed: _full
-                              ? null
-                              : () => onAdd(
-                                    CoworkRoomMember(
-                                      agentId: agent.id,
-                                      handle: agent.name,
-                                    ),
-                                  ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Add a coworker', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  if (candidates.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'No other coworkers to add.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
-                  ],
-                ),
+                    )
+                  else
+                    ExpressiveGroup(
+                      children: [
+                        for (final agent in candidates)
+                          ExpressiveRow(
+                            key: ValueKey<String>('room-candidate-${agent.id}'),
+                            title: agent.name,
+                            leading: ExpressiveFace(
+                              id: agent.id,
+                              label: agent.name,
+                              size: 28,
+                            ),
+                            trailing: IconButton(
+                              tooltip: _full ? 'The room is full' : 'Add',
+                              icon: const AppIcon(
+                                Icons.add_circle_outline,
+                                size: 20,
+                              ),
+                              onPressed: _full
+                                  ? null
+                                  : () => onAdd(
+                                      CoworkRoomMember(
+                                        agentId: agent.id,
+                                        handle: agent.name,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),

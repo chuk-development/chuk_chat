@@ -4,16 +4,12 @@
 ///
 ///  * a back target that springs and morphs on press;
 ///  * an outlined pill with the coworker's blob face, its name and its status
-///    line — the green dot plus what it is working on right now, or "Active
-///    now" when it is idle (see [AgentStatusLine]). Tapping the pill opens the
-///    coworker's profile;
-///  * the messenger's two call targets, with CoWork's own meaning. The voice
-///    call is PARKED — there is no voice channel to an agent, so the button
-///    holds its place, looks disabled and says why. The video call's slot is
-///    the coworker's SCREEN: it opens the live VNC view of its sandbox
-///    ([BrowserViewPage]), which is the thing worth watching here. It is
-///    parked in the same way while the coworker has no screen open;
-///  * the "more" target with the shell's secondary actions.
+///    line — a quiet role label when idle, three dots while working.
+///    Tapping the pill opens the
+///    coworker's settings;
+///  * a stable screen target. It is lit when the coworker has a screen to take
+///    over, parked when it has none — and a parked tap says why, so the target
+///    is never a dead button.
 ///
 /// The bar reads only `paddingOf`, so it never rebuilds on a keyboard frame. The
 /// body under it reserves [MobileLayout.chromeInset]; [MobileChatScreen] does
@@ -23,13 +19,14 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chips.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
+import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/agent_status.dart';
-import 'package:cowork/ui/expressive/feedback.dart';
 import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/top_veil.dart';
+import 'package:cowork/ui/expressive/working_dots.dart';
 
 class MobileChatChrome extends StatelessWidget {
   const MobileChatChrome({
@@ -38,8 +35,10 @@ class MobileChatChrome extends StatelessWidget {
     required this.onBack,
     this.onOpenProfile,
     this.onOpenBrowser,
+    this.browserAvailable = false,
+    this.onOpenFiles,
+    this.onReconnect,
     this.onMore,
-    this.showCallButton = true,
     this.profiles,
   });
 
@@ -51,90 +50,81 @@ class MobileChatChrome extends StatelessWidget {
   /// Tap on the coworker pill — its profile page. Null renders the pill flat.
   final VoidCallback? onOpenProfile;
 
-  /// The "computer" target: the coworker's browser. Null hides it.
+  /// The "computer" target: the coworker's screen. Called whether or not a
+  /// screen is open — when none is, it is expected to say so, which is why the
+  /// target is never silently dead (bead cowork-egrg).
   final VoidCallback? onOpenBrowser;
+
+  /// Is a screen open right now? False draws the target parked: visibly not
+  /// ready, still answering a tap with the reason.
+  final bool browserAvailable;
+  final VoidCallback? onOpenFiles;
+  final VoidCallback? onReconnect;
 
   /// The "more" target: the shell's secondary actions. Null hides it.
   final VoidCallback? onMore;
-
-  /// Whether the parked voice-call target is shown at all.
-  final bool showCallButton;
 
   final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    return MobileBarFade(
-      child: SafeArea(
-        bottom: false,
+    return TickerMode(
+      enabled: !MediaQuery.disableAnimationsOf(context),
+      // The shared veil: heaviest behind the status bar, gone below the row.
+      child: TopVeil(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-          child: SizedBox(
-            height: MobileLayout.chipDiameter,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MobileLayout.headerContentHeight(context),
+            ),
             child: Row(
               children: <Widget>[
                 ExpressiveIconButton(
                   icon: Icons.arrow_back_rounded,
                   onTap: onBack,
-                  color: scheme.surface,
-                  tooltip: 'Coworkers',
+                  color: scheme.surfaceContainerHighest,
+                  tooltip: 'Agents',
                   semanticsId: 'mobile_chat_back',
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 // Expanded + left alignment: a long name ellipsises inside the
                 // pill instead of pushing the targets off the right edge.
                 Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _AgentPill(
-                      agent: agent,
-                      onTap: onOpenProfile,
-                      profiles: profiles,
-                    ),
+                  child: _AgentPill(
+                    agent: agent,
+                    onTap: onOpenProfile,
+                    onReconnect: onReconnect,
+                    profiles: profiles,
                   ),
                 ),
-                if (showCallButton) ...<Widget>[
+                if (onOpenFiles != null) ...<Widget>[
                   const SizedBox(width: 8),
-                  // Parked: CoWork has no voice channel to a coworker. The
-                  // target holds the place, it looks disabled, and it says why
-                  // when it is pressed. It is never wired to a fake call.
                   ExpressiveIconButton(
-                    icon: Icons.call_rounded,
-                    parked: true,
-                    color: scheme.surface,
-                    tooltip: 'Voice call is not available yet',
-                    semanticsId: 'mobile_chat_call',
-                    onTap: () => pillToast(
-                      context,
-                      'Voice calls with a coworker are not available yet',
-                      icon: Icons.call_end_rounded,
-                    ),
+                    icon: Icons.folder_open_rounded,
+                    color: scheme.surfaceContainerHighest,
+                    onColor: scheme.onSurface,
+                    tooltip: 'Shared files',
+                    semanticsId: 'mobile_chat_files',
+                    onTap: onOpenFiles,
                   ),
                 ],
                 const SizedBox(width: 8),
-                // The video-call slot, with the thing this app actually has to
-                // show: the coworker's screen. Parked while none is open.
                 ExpressiveIconButton(
                   icon: Icons.desktop_windows_rounded,
-                  parked: onOpenBrowser == null,
-                  color: onOpenBrowser == null
-                      ? scheme.surface
-                      : scheme.tertiaryContainer,
-                  onColor: onOpenBrowser == null
-                      ? null
-                      : scheme.onTertiaryContainer,
-                  tooltip: onOpenBrowser == null
-                      ? 'No screen open right now'
-                      : "Agent's screen",
+                  color: browserAvailable
+                      ? scheme.primaryContainer
+                      : scheme.surfaceContainerHighest,
+                  onColor: browserAvailable
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurface,
+                  tooltip: browserAvailable
+                      ? 'Take over the screen'
+                      : 'No screen open yet',
                   semanticsId: 'mobile_chat_browser',
-                  onTap:
-                      onOpenBrowser ??
-                      () => pillToast(
-                        context,
-                        'The coworker has no screen open right now',
-                        icon: Icons.desktop_access_disabled_rounded,
-                      ),
+                  parked: !browserAvailable,
+                  onTap: onOpenBrowser,
                 ),
                 if (onMore != null) ...<Widget>[
                   const SizedBox(width: 8),
@@ -158,14 +148,33 @@ class MobileChatChrome extends StatelessWidget {
 /// The coworker pill: face, name, live state. As tall as a chip, so the whole
 /// row is one line of touch targets.
 class _AgentPill extends StatelessWidget {
-  const _AgentPill({required this.agent, required this.onTap, this.profiles});
+  const _AgentPill({
+    required this.agent,
+    required this.onTap,
+    this.profiles,
+    this.onReconnect,
+  });
 
   final CoworkAgent agent;
   final VoidCallback? onTap;
+  final VoidCallback? onReconnect;
   final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<CoworkRelayController?>(
+      valueListenable: CoworkRelayLink.instance.controller,
+      builder: (context, controller, _) => controller == null
+          ? _surface(context, paired: false)
+          : ValueListenableBuilder<CoworkRelayState>(
+              valueListenable: controller.state,
+              builder: (context, state, _) =>
+                  _surface(context, paired: state.isPaired),
+            ),
+    );
+  }
+
+  Widget _surface(BuildContext context, {required bool paired}) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final AgentProfileStore store = profiles ?? AgentProfileStore.instance;
@@ -178,11 +187,9 @@ class _AgentPill extends StatelessWidget {
         message: role == null ? agent.name : '${agent.name} · $role',
         child: MorphTap(
           onTap: onTap,
-          color: scheme.surface,
+          color: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              MobileLayout.chipDiameter / 2,
-            ),
+            borderRadius: BorderRadius.circular(30),
             side: BorderSide(color: scheme.outlineVariant, width: 1.2),
           ),
           pressedShape: RoundedRectangleBorder(
@@ -190,34 +197,124 @@ class _AgentPill extends StatelessWidget {
             side: BorderSide(color: scheme.outlineVariant, width: 1.2),
           ),
           pressedScale: 0.97,
-          // 36 face + 2 x 6 = the 48 dp touch target the chips have.
-          padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              AgentFace(agent: agent, size: 36, store: store),
-              const SizedBox(width: 9),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      agent.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      // Tight line height: the name and the state line share
-                      // the pill's 36 px of inner height.
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
+          // A ShapeBorder on MorphTap clips but does not paint an outline.
+          // Paint the reference's translucent surface AND border explicitly.
+          child: Container(
+            key: const ValueKey('mobile_contact_surface'),
+            padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: scheme.outlineVariant, width: 1.2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: <Widget>[
+                Stack(
+                  children: [
+                    AgentFace(
+                      agent: agent,
+                      size: 38,
+                      store: store,
+                      showPresence: false,
                     ),
-                    AgentStatusLine(agent: agent),
+                    if (paired)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF34C759),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: scheme.surface, width: 1),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        agent.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        // Tight line height: the name and the state line share
+                        // the pill's 36 px of inner height.
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          height: 1.5,
+                        ),
+                      ),
+                      if (!paired && onReconnect != null)
+                        GestureDetector(
+                          onTap: onReconnect,
+                          behavior: HitTestBehavior.opaque,
+                          child: Semantics(
+                            button: true,
+                            label: 'Offline. Reconnect',
+                            child: Text(
+                              'Offline · Reconnect',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: scheme.primary,
+                                fontSize: 11,
+                                height: 1.45,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (agent.running && paired)
+                        Semantics(
+                          label: 'Working',
+                          child: SizedBox(
+                            height:
+                                MediaQuery.textScalerOf(context).scale(11) *
+                                1.45,
+                            child: ExcludeSemantics(
+                              child: MediaQuery.disableAnimationsOf(context)
+                                  ? Text(
+                                      '…',
+                                      style: TextStyle(
+                                        color: scheme.primary,
+                                        fontSize: 11,
+                                        height: 1.45,
+                                      ),
+                                    )
+                                  : WorkingDots(
+                                      color: scheme.primary,
+                                      label: '',
+                                    ),
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          paired ? 'Active now' : 'Offline',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: paired
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                            fontSize: 11,
+                            height: 1.45,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

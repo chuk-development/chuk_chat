@@ -14,12 +14,13 @@ import 'package:flutter/foundation.dart';
 import 'package:cowork/services/supabase_service.dart';
 
 /// Test seam: how a consume is written. The default talks to Supabase.
-typedef RunNotificationsWriter = Future<void> Function({
-  required String userId,
-  String? sessionKey,
-  String? runId,
-  required String consumedAt,
-});
+typedef RunNotificationsWriter =
+    Future<void> Function({
+      required String userId,
+      String? sessionKey,
+      String? runId,
+      required String consumedAt,
+    });
 
 class RunNotifications {
   RunNotifications._();

@@ -86,8 +86,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // to discard so the fresh answer can be appended as a new variant. Must
       // run BEFORE the tail is removed below. Not a regenerate (a real prompt
       // edit is a new question) → clear any stale seed so nothing folds.
-      final List<Map<String, dynamic>>? regenVariantSeed =
-          isRegenerate ? _captureRegenSeed(index) : null;
+      final List<Map<String, dynamic>>? regenVariantSeed = isRegenerate
+          ? _captureRegenSeed(index)
+          : null;
 
       // For resend flows on older messages, reset the chat branch from this
       // point by clearing everything below the resent message. Before removing
@@ -278,6 +279,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': modelIdToUse,
           'provider': providerToUse ?? '',
           'messageId': assistantMessageId,
+          'sentAt': DateTime.now().toIso8601String(),
           // The turn's clock starts here — at the request, not at the first
           // token. The wait before the first token is the one the reader
           // feels most, and it used to be counted as nothing.
@@ -481,8 +483,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // completion. A plain round with no tool calls streams live.
               final isWorkingRound =
                   contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
-              final displayContent =
-                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+              final displayContent = isWorkingRound
+                  ? ''
+                  : stripToolCallBlocksForDisplay(content);
               final prefix = accumulatedText.toString();
               final fullDisplay = prefix.isEmpty
                   ? displayContent
@@ -800,11 +803,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                _persistBackgroundAssistant(
-                  chatIdForStream,
-                  placeholderIndex,
-                  {'text': paymentMessage, 'reasoning': ''},
-                );
+                _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                  'text': paymentMessage,
+                  'reasoning': '',
+                });
               }
               _showPaymentRequiredDialog();
               return;
@@ -819,11 +821,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
               _persistChatWithId(chatIdForStream);
             } else {
-              _persistBackgroundAssistant(
-                chatIdForStream,
-                placeholderIndex,
-                {'text': 'Error: $errorMessage', 'reasoning': ''},
-              );
+              _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                'text': 'Error: $errorMessage',
+                'reasoning': '',
+              });
             }
           },
         );
@@ -1100,7 +1101,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.chat_bubble_outline,
               color: theme.colorScheme.primary,
               size: 28,
@@ -1139,14 +1140,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             child: const Text('Maybe Later'),
           ),
           ElevatedButton.icon(
-            icon: const Icon(Icons.rocket_launch, size: 18),
+            icon: const AppIcon(Icons.rocket_launch, size: 18),
             label: const Text('Subscribe Now'),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: kBorderRadiusPill,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
             ),
             onPressed: () {
               Navigator.pop(dialogContext);
@@ -1436,6 +1435,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': _selectedModelId,
           'provider': providerSlug,
           // The wall time the reader sent it, so the bubble can carry a clock.
+          'sentAt': DateTime.now().toIso8601String(),
           'startedAt': DateTime.now().toIso8601String(),
         };
 
@@ -1497,6 +1497,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': _selectedModelId,
           'provider': providerSlug,
           'startedAt': DateTime.now().toIso8601String(),
+          'sentAt': DateTime.now().toIso8601String(),
         });
         placeholderIndex = _messages.length - 1;
       });
@@ -1520,7 +1521,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               ? jsonEncode(imageDataUrls)
               : null,
           maxTokens: maxResponseTokens,
-          reasoningEffort: _clampedReasoningEffort(_selectedModelId, providerSlug),
+          reasoningEffort: _clampedReasoningEffort(
+            _selectedModelId,
+            providerSlug,
+          ),
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1655,7 +1659,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
-          reasoningEffort: _clampedReasoningEffort(_selectedModelId, providerSlug),
+          reasoningEffort: _clampedReasoningEffort(
+            _selectedModelId,
+            providerSlug,
+          ),
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1675,8 +1682,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // mid-loop / tool-call content out of the answer body.
               final isWorkingRound =
                   contentBlocks2.isNotEmpty || hasToolCallStartMarker(content);
-              final displayContent =
-                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+              final displayContent = isWorkingRound
+                  ? ''
+                  : stripToolCallBlocksForDisplay(content);
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
                 _messages[placeholderIndex]['text'] = displayContent;
@@ -2015,11 +2023,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                _persistBackgroundAssistant(
-                  chatIdForStream,
-                  placeholderIndex,
-                  {'text': paymentMessage, 'reasoning': ''},
-                );
+                _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                  'text': paymentMessage,
+                  'reasoning': '',
+                });
               }
               _showPaymentRequiredDialog();
               return;
@@ -2106,11 +2113,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }
               _persistChatWithId(chatIdForStream);
             } else {
-              _persistBackgroundAssistant(
-                chatIdForStream,
-                placeholderIndex,
-                {'text': errorText},
-              );
+              _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                'text': errorText,
+              });
             }
           },
         );
@@ -2394,8 +2399,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     // bubble renders from the persisted message text, not a stale live value.
     final String? finalizingChatId = _activeChatId;
     if (finalizingChatId != null) {
-      ChatRuntimeRegistry.instance.lookup(finalizingChatId)?.streamingLive
-          .value = null;
+      ChatRuntimeRegistry.instance
+              .lookup(finalizingChatId)
+              ?.streamingLive
+              .value =
+          null;
     }
     if (index < 0 || index >= _messages.length) {
       if (mounted) {

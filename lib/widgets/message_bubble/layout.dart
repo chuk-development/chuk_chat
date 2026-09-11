@@ -9,16 +9,73 @@
 part of '../message_bubble.dart';
 
 extension _MessageBubbleLayout on _MessageBubbleState {
+  Future<void> _showMessengerMenu(Offset? position) async {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final result = await showMessengerContextMenu(
+      context: context,
+      anchor: box.localToGlobal(Offset.zero) & box.size,
+      isUser: widget.isUser,
+      // No Edit. A sent turn is already in the host's transcript and in the
+      // model's context; rewriting the bubble here would only make the two
+      // disagree, and the user asked for the entry to go (bead cowork-9edt).
+      canEdit: false,
+      canReply: widget.onReply != null,
+      canReact: widget.onReaction != null,
+      reaction: widget.reaction,
+      preview: MessageBubble(
+        message: widget.message,
+        isUser: widget.isUser,
+        messengerMode: true,
+        sentAt: widget.sentAt,
+        showToolCalls: false,
+        showReasoningTokens: false,
+      ),
+    );
+    if (!mounted) return;
+    if (result == 'reply') widget.onReply?.call();
+    if (result == 'copy') {
+      await Clipboard.setData(ClipboardData(text: widget.message));
+    }
+    if (result != null && result.startsWith('reaction:')) {
+      widget.onReaction?.call(result.substring('reaction:'.length));
+    }
+  }
+
+  Widget _withMessengerMenu(Widget child) {
+    if (widget.message.trim().isEmpty) return child;
+    return Semantics(
+      onLongPress: () => _showMessengerMenu(null),
+      child: GestureDetector(
+        onLongPressStart: (details) =>
+            _showMessengerMenu(details.globalPosition),
+        child: child,
+      ),
+    );
+  }
+
   /// Returns the user-selected chat font family, falling back to the historic
   /// Arimo default when the user has explicitly picked the system font.
   String get _chatFontFamily {
+    if (widget.messengerMode &&
+        MobileChatPreferences.instance.messengerTypography) {
+      return _kAiResponseFontFamilyDefault;
+    }
     final resolved = resolveChatFontFamily(
       AppThemeService.instance.chatFontFamily,
     );
     return resolved ?? _kAiResponseFontFamilyDefault;
   }
 
+  double get _chatFontSize =>
+      widget.messengerMode && MobileChatPreferences.instance.messengerTypography
+      ? 15.0
+      : AppThemeService.instance.chatFontSize;
+
   bool get _hasReasoning {
+    if (widget.messengerMode && widget.showReasoningTokens != true) {
+      return false;
+    }
     // Prioritize widget prop, then loaded preference, then cached, then default
     final show =
         widget.showReasoningTokens ??
@@ -31,6 +88,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   }
 
   bool get _hasModelInfo {
+    if (widget.messengerMode && widget.showModelInfo != true) return false;
     // Prioritize widget prop, then loaded preference, then cached, then default
     final show =
         widget.showModelInfo ??
@@ -41,6 +99,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   }
 
   bool get _shouldShowTps {
+    if (widget.messengerMode && widget.showTps != true) return false;
     final show = widget.showTps ?? kDefaultShowTps;
     return show && widget.tps != null && widget.tps! > 0;
   }
@@ -74,9 +133,24 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     if (_strippedMessageCache == null ||
         _strippedMessageSource != widget.message) {
       _strippedMessageSource = widget.message;
-      _strippedMessageCache = stripToolCallBlocksForDisplay(widget.message);
+      _strippedMessageCache = _stripForPresentation(widget.message);
     }
     return _strippedMessageCache!;
+  }
+
+  String _stripForPresentation(String text) {
+    final cleaned = stripToolCallBlocksForDisplay(text);
+    // The sanitizer historically trims both ends. When it removed no tool
+    // markup, preserve Markdown-significant indentation and hard line breaks.
+    final preserved = widget.messengerMode && cleaned == text.trim()
+        ? text
+        : cleaned;
+    return widget.messengerMode && !widget.isUser
+        ? presentIncompleteMarkdownLinks(
+            preserved,
+            streaming: widget.isStreamingMessage,
+          )
+        : preserved;
   }
 
   /// Where this bubble sits in a run of messages from the same sender. Drives
@@ -90,7 +164,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   /// timestamp. Older rows and rows replayed from the host have none, and
   /// stamping them with "now" would show a time that never happened.
   String? get _clockLabel {
-    final DateTime? when = widget.turnStartedAt?.toLocal();
+    final DateTime? when = (widget.sentAt ?? widget.turnStartedAt)?.toLocal();
     if (when == null) return null;
     final String hh = when.hour.toString().padLeft(2, '0');
     final String mm = when.minute.toString().padLeft(2, '0');
@@ -115,14 +189,17 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final String? label = widget.endsGroup ? _clockLabel : null;
     if (label == null && mark == QueueMark.none) return null;
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final stamp = MessageStamp(
+      time: label ?? '',
+      mark: mark,
+      fg: onFill.withValues(alpha: 0.75),
+      errorColor: isUser ? onFill : scheme.error,
+    );
     return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: MessageStamp(
-        time: label ?? '',
-        mark: mark,
-        fg: onFill.withValues(alpha: 0.75),
-        errorColor: isUser ? onFill : scheme.error,
-      ),
+      padding: EdgeInsets.only(top: widget.messengerMode ? 0 : 3),
+      child: widget.messengerMode && !_isPlainMessengerText
+          ? Align(alignment: Alignment.centerRight, child: stamp)
+          : stamp,
     );
   }
 
@@ -164,7 +241,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.bolt_outlined, size: 14, color: color),
+          AppIcon(Icons.bolt_outlined, size: 14, color: color),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
@@ -186,6 +263,56 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
   }
 
+  /// A turn that really did work but has nothing left to read: one quiet
+  /// line, in the automation wake's style.
+  ///
+  /// The quiet toggles can filter every block of a turn away — the steps are
+  /// hidden, the thinking is hidden, and the turn said nothing on top of them.
+  /// Drawing the bubble around that leaves the unexplained empty block the
+  /// reader sees on the phone, and drawing nothing at all drops the fact that
+  /// the coworker worked. So the fact gets a line, and a tap on it turns the
+  /// details back on. Typography and padding are the wake line's, so the two
+  /// system lines read as one family.
+  Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls) {
+    final ThemeData theme = Theme.of(context);
+    final Color color = theme.colorScheme.onSurfaceVariant;
+    final TextStyle style =
+        (theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+          color: color,
+        );
+    final int steps = calls.length;
+    final int failed = calls
+        .where((ToolCall call) => call.status == ToolCallStatus.error)
+        .length;
+    final String label =
+        'Worked · $steps ${steps == 1 ? 'step' : 'steps'}'
+        '${failed > 0 ? ' · $failed failed' : ''}';
+    return Padding(
+      padding: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 4, bottom: 4),
+      child: Semantics(
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => MobileChatPreferences.instance.setActivity(true),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(Icons.bolt_outlined, size: 14, color: color),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: style,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserBubble(BuildContext context) {
     const bool isUserMessage = true;
     const bool alignRight = true;
@@ -200,11 +327,12 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+        widget.maxWidth ??
+        MediaQuery.of(context).size.width * (widget.messengerMode ? 0.72 : 0.8);
 
-    final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
-      horizontal: 14,
-      vertical: 10,
+    final EdgeInsetsGeometry containerPadding = EdgeInsets.symmetric(
+      horizontal: widget.messengerMode ? 15 : 14,
+      vertical: widget.messengerMode ? 9 : 10,
     );
 
     // Expressive geometry: big rounding everywhere, a small radius only where
@@ -238,20 +366,26 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             hasVisibleToolCalls: false,
           ),
           // Time + ticks, in the corner of the bubble itself.
-          ?_buildBubbleFooter(
-            context: context,
-            isUser: true,
-            fill: fill,
-            onFill: onFill,
-          ),
+          if (!_isPlainMessengerText)
+            ?_buildBubbleFooter(
+              context: context,
+              isUser: true,
+              fill: fill,
+              onFill: onFill,
+            ),
         ],
       ),
     );
 
     final bool hasUserActions = widget.userMessageActions.isNotEmpty;
-    final Widget userBubble = hasUserActions
+    final Widget userBubble = widget.messengerMode
+        ? _withMessengerMenu(bubbleContent)
+        : hasUserActions
         ? GestureDetector(
             onTap: () => setState(() => _showUserActions = !_showUserActions),
+            onLongPress: widget.messengerMode
+                ? () => setState(() => _showUserActions = !_showUserActions)
+                : null,
             child: bubbleContent,
           )
         : bubbleContent;
@@ -275,7 +409,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               const SizedBox(height: 2),
             ],
             if (!hideEmptyUserBubble) userBubble,
-            if (hasUserActions && _showUserActions)
+            if (!widget.messengerMode && hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
             // The stamp in the bubble already marks a queued or failed send.
             // The row below stays only for a failure, because it carries the
@@ -291,17 +425,48 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   Widget _buildAiBubble(BuildContext context) {
     const bool isUserMessage = false;
     const bool alignRight = false;
+    final working =
+        widget.messengerMode &&
+        (widget.isStreamingMessage || widget.isReasoningStreaming);
+    final hasContent =
+        (_strippedMessage.trim().isNotEmpty &&
+            widget.message != 'Thinking...') ||
+        (widget.contentBlocks?.any(
+              (block) =>
+                  block.type == ContentBlockType.sandboxArtifact ||
+                  (block.type == ContentBlockType.text &&
+                      stripToolCallBlocksForDisplay(
+                        block.text ?? '',
+                      ).trim().isNotEmpty &&
+                      block.text != 'Thinking...'),
+            ) ??
+            false) ||
+        (widget.images?.isNotEmpty ?? false) ||
+        (widget.attachments?.isNotEmpty ?? false) ||
+        // A callback is not a question. `ask_user` reaches the bubble with a
+        // handler attached even when the call carries no options, and then
+        // there is no card to read — ask the builder, which is the thing that
+        // decides whether a card exists at all.
+        _buildAskUserOptions().isNotEmpty ||
+        _buildMcpConnectOptions().isNotEmpty ||
+        _collectAllToolCalls().any(
+          (call) => call.status == ToolCallStatus.error,
+        ) ||
+        _buildArtifactCards(_collectAllToolCalls()).isNotEmpty;
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+        widget.maxWidth ??
+        MediaQuery.of(context).size.width * (widget.messengerMode ? 1 : 0.8);
 
     final bool hasActions = widget.actions.isNotEmpty;
 
     final bool useContentBlocks =
-        widget.contentBlocks != null && widget.contentBlocks!.isNotEmpty;
+        !_isPlainMessengerText &&
+        widget.contentBlocks != null &&
+        widget.contentBlocks!.isNotEmpty;
 
     final bool hasVisibleToolCalls =
         !useContentBlocks &&
@@ -314,19 +479,100 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         (widget.message == 'Thinking...' || widget.message.isEmpty);
     final bool hasInfoStatusBar =
         !useContentBlocks &&
-        (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
+        (_hasReasoning ||
+            _hasModelInfo ||
+            (isWaitingForFirstTokens && !widget.messengerMode)) &&
         !hasVisibleToolCalls;
 
     // A coworker's turn gets a real bubble now, and its colour says what the
     // turn IS: prose, work, a delivery, or a break-off (see bubble_kind.dart).
     final AgentBubbleColors colors = agentBubbleColors(
       Theme.of(context).colorScheme,
-      _agentBubbleKind,
+      widget.messengerMode && widget.status != ChatMessageStatus.interrupted
+          ? AgentBubbleKind.answer
+          : _agentBubbleKind,
     );
 
+    // The body is built BEFORE the bubble, because the body is what decides
+    // whether there is a bubble at all. The quiet toggles filter blocks out
+    // inside these builders — reasoning when Thinking is off, the whole tool
+    // round when Activity is off, text that strips to nothing — and a second,
+    // hand-kept list of "does this turn count" conditions up here could never
+    // stay in step with them. It did not: an Activity-on/Thinking-off turn, a
+    // failed tool, an ask_user with no options and a reasoning row that also
+    // carried content blocks all walked past it and drew the empty block the
+    // reader sees. Now nothing rendered means no bubble, by construction.
+    _artifactMessages.clear();
+    final List<Widget> bodyChildren = useContentBlocks
+        ? _buildContentBlocksLayout(
+            iconFgColor: colors.onFill,
+            accentColor: accentColor,
+            bgColor: colors.fill,
+            alignRight: alignRight,
+          )
+        : _buildClassicLayout(
+            iconFgColor: colors.onFill,
+            accentColor: accentColor,
+            bgColor: colors.fill,
+            isUserMessage: isUserMessage,
+            alignRight: alignRight,
+            hasInfoStatusBar: hasInfoStatusBar,
+            hasVisibleToolCalls: hasVisibleToolCalls,
+          );
+
+    if (working && bodyChildren.isEmpty && _artifactMessages.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: widget.startsNewGroup ? 10 : 2,
+            bottom: 2,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const MessengerTypingIndicator(),
+              // A regenerate's earlier versions remain reachable while waiting.
+              _buildBottomBar(Theme.of(context).resolvedIconColor, false),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Nothing rendered, nothing still running, and no break-off to explain:
+    // this turn has no chat message in it. Either it did work the reader may
+    // still want to reach — then it gets the one quiet line — or it did
+    // nothing at all and leaves the thread untouched.
+    // A turn whose whole content is a file is not an empty turn: the file was
+    // lifted out of `bodyChildren` on purpose and is drawn below the bubble.
+    if (widget.messengerMode &&
+        bodyChildren.isEmpty &&
+        _artifactMessages.isEmpty &&
+        !working &&
+        widget.status != ChatMessageStatus.interrupted) {
+      final List<ToolCall> calls = _collectAllToolCalls();
+      if (calls.isEmpty) return const SizedBox.shrink();
+      return _buildQuietWorkLine(context, calls);
+    }
+
+    // With the files pulled out, an answer that was nothing but a file would
+    // leave an empty bubble carrying a timestamp. Then the file is the message.
+    final bool bubbleCarriesContent =
+        bodyChildren.isNotEmpty || _artifactMessages.isEmpty;
     final Widget bubbleContent = Container(
+      // Incoming messages use the readable lane; outgoing messages retain
+      // their compact messenger silhouette.
+      key: widget.messengerMode
+          ? const ValueKey('messenger-answer-bubble')
+          : null,
+      width: widget.messengerMode ? double.infinity : null,
       margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.messengerMode ? 15 : 14,
+        vertical: widget.messengerMode ? 9 : 10,
+      ),
       decoration: BoxDecoration(
         color: colors.fill,
         borderRadius: bubbleRadius(false, _bubblePosition),
@@ -336,34 +582,26 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          ...useContentBlocks
-              ? _buildContentBlocksLayout(
-                  iconFgColor: colors.onFill,
-                  accentColor: accentColor,
-                  bgColor: colors.fill,
-                  alignRight: alignRight,
-                )
-              : _buildClassicLayout(
-                  iconFgColor: colors.onFill,
-                  accentColor: accentColor,
-                  bgColor: colors.fill,
-                  isUserMessage: isUserMessage,
-                  alignRight: alignRight,
-                  hasInfoStatusBar: hasInfoStatusBar,
-                  hasVisibleToolCalls: hasVisibleToolCalls,
-                ),
+          ...bodyChildren,
+          // A tool call that failed is the coworker's business, not the
+          // user's: the turn routes around it and answers anyway. A banner
+          // under a good answer only reads as "something is broken" (bead
+          // cowork-wsev). The failure stays in the tool list, which the user
+          // opens when they want it.
           // The time only: a coworker's bubble carries no ticks.
-          ?_buildBubbleFooter(
-            context: context,
-            isUser: false,
-            fill: colors.fill,
-            onFill: colors.onFill,
-          ),
+          if (!_isPlainMessengerText)
+            ?_buildBubbleFooter(
+              context: context,
+              isUser: false,
+              fill: colors.fill,
+              onFill: colors.onFill,
+            ),
         ],
       ),
     );
 
-    final bool showContinueButton = !widget.isUser &&
+    final bool showContinueButton =
+        !widget.isUser &&
         !widget.isStreamingMessage &&
         widget.status == ChatMessageStatus.interrupted &&
         widget.onContinueGeneration != null;
@@ -376,9 +614,28 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            bubbleContent,
+            if (bubbleCarriesContent)
+              widget.messengerMode
+                  ? _withMessengerMenu(bubbleContent)
+                  : bubbleContent,
+            for (final Widget artifact in _artifactMessages)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: bubbleCarriesContent ? 4 : 2,
+                  bottom: 2,
+                ),
+                child: artifact,
+              ),
+            // Dots mean "nothing to read yet". The moment the first token is
+            // on screen the answer speaks for itself, and a second indicator
+            // under it just hangs there (bead cowork-i7sd).
+            if (working && !hasContent)
+              const Padding(
+                padding: EdgeInsets.only(top: 4, bottom: 2),
+                child: MessengerTypingIndicator(connectedAbove: true),
+              ),
             if (showContinueButton) _buildContinueButton(context, accentColor),
-            _buildBottomBar(iconFgColor, hasActions),
+            _buildBottomBar(iconFgColor, hasActions && !widget.messengerMode),
           ],
         ),
       ),
@@ -402,14 +659,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             borderRadius: BorderRadius.circular(20),
             onTap: widget.onContinueGeneration,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.play_arrow_outlined,
                     size: 16,
                     color: accentColor,
@@ -491,7 +745,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             },
           );
 
-    final Widget messageBody = _buildMessageBody(
+    // Null when the turn's text strips to nothing. It used to be a
+    // `SizedBox.shrink()`, which made the layout look non-empty to any caller
+    // and kept an empty bubble alive around it.
+    final Widget? messageBody = _buildMessageBody(
       iconFgColor: iconFgColor,
       bgColor: bgColor,
       isUserMessage: isUserMessage,
@@ -515,13 +772,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         _buildAttachmentsChips(widget.attachments!),
         const SizedBox(height: _kBlockGap),
       ],
-      if (streamingTextBeforeTools) messageBody,
+      if (streamingTextBeforeTools && messageBody != null) messageBody,
       if (hasVisibleToolCalls) toolBarSection,
+      if (widget.messengerMode && !hasVisibleToolCalls && !isUserMessage)
+        ..._stackArtifactCards(_buildArtifactCards(_collectAllToolCalls())),
       if (renderImagesInBubble && placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         const SizedBox(height: _kBlockGap),
       ],
-      if (!streamingTextBeforeTools) messageBody,
+      if (!streamingTextBeforeTools && messageBody != null) messageBody,
       ..._buildAskUserOptions(),
       ..._buildMcpConnectOptions(),
     ];
@@ -579,7 +838,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         .trim();
 
     // Live tool calls from the current streaming pass that aren't in blocks.
-    final liveToolCalls = widget.showToolCalls &&
+    final liveToolCalls =
+        (widget.showToolCalls || widget.messengerMode) &&
             widget.toolCalls != null &&
             widget.toolCalls!.isNotEmpty
         ? widget.toolCalls!
@@ -609,7 +869,12 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Trailing widget.message (streaming or finalized tail like an error)
     // computed up front so we know whether trailing text "ends" the last
     // round before live tools or appears after.
-    var trailingText = _strippedMessage.trim();
+    var trailingText = widget.messengerMode
+        ? _strippedMessage
+        : _strippedMessage.trim();
+    if (widget.messengerMode && trailingText == 'Thinking...') {
+      trailingText = '';
+    }
     if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
       if (trailingText == finalizedTextPrefix ||
           // The flat text field usually holds only the LAST pass, while the
@@ -627,6 +892,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     for (final block in blocks) {
       switch (block.type) {
         case ContentBlockType.reasoning:
+          if (widget.messengerMode && widget.showReasoningTokens != true) {
+            break;
+          }
           final r = block.text?.trim() ?? '';
           if (r.isNotEmpty) {
             // Reasoning that arrives AFTER tool calls in the same open round is
@@ -656,7 +924,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           // already persisted raw in the cache) can still carry a lone `<`
           // text block — this guarantees it never renders as a stray `<`
           // line above a tool-call bar, on every platform.
-          final t = stripToolCallBlocksForDisplay(block.text ?? '').trim();
+          final cleaned = _stripForPresentation(block.text ?? '');
+          final t = widget.messengerMode ? cleaned : cleaned.trim();
           // A text block that strips to nothing (e.g. a lone `<` junk block a
           // Kimi multiplex leaks between two tool-call sections) is NOT a real
           // separator. Closing the round on it would split one logical tool
@@ -664,7 +933,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           // rendering as four bars instead of one `web_search (4×)`. Skip it
           // (mirroring the trailing-text `isNotEmpty` guard) so adjacent
           // tool-call blocks still merge into a single bar.
-          if (t.isEmpty) break;
+          if (t.trim().isEmpty) break;
           closeCurrentRound();
           segments.add(_RenderSegment.text(t));
         case ContentBlockType.sandboxArtifact:
@@ -716,6 +985,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           children.add(_buildBlockReasoning(reasoning, accentColor));
           children.add(const SizedBox(height: _kCardStackGap));
           hasRenderedMainContent = true;
+        }
+        if (widget.messengerMode) {
+          final cards = _buildArtifactCards(seg.toolCalls);
+          if (cards.isNotEmpty) {
+            children.addAll(_stackArtifactCards(cards));
+            children.add(const SizedBox(height: _kArtifactGap));
+            hasRenderedMainContent = true;
+          }
         }
         return;
       }
@@ -802,12 +1079,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         );
         hasRenderedMainContent = true;
       } else if (seg.isSandboxArtifact) {
-        if (hasRenderedMainContent) {
-          children.add(const SizedBox(height: _kArtifactGap));
-        }
-        children.add(SandboxArtifactBlock(payload: seg.sandboxArtifact!));
-        children.add(const SizedBox(height: _kArtifactGap));
-        hasRenderedMainContent = true;
+        // A file the coworker produced is its own message, hung after the
+        // text, the way a messenger sends a file: inside the answer bubble it
+        // read as a footnote to the prose, and a 20 KB document is not a
+        // footnote. Collected here, rendered under the bubble by `build`.
+        _artifactMessages.add(
+          SandboxArtifactBlock(payload: seg.sandboxArtifact!),
+        );
       } else {
         renderRound(
           seg,
@@ -826,10 +1104,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Inline MCP Connect card.
     children.addAll(_buildMcpConnectOptions());
 
-    if (children.isEmpty) {
-      children.add(const SizedBox.shrink());
-    }
-
+    // No placeholder. An empty list is the honest answer, and the caller uses
+    // it to decide there is no bubble to draw (see `_buildAiBubble`).
     return children;
   }
 
@@ -852,7 +1128,83 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     return text;
   }
 
-  Widget _buildMessageBody({
+  bool get _isPlainMessengerText {
+    // Assistant output always uses the canonical Markdown/rich renderer.
+    // A punctuation regex cannot recognise the complete Markdown grammar
+    // (setext headings, indented code, entities and strikethrough, for example).
+    if (!widget.isUser ||
+        !widget.messengerMode ||
+        widget.message.trim().isEmpty ||
+        widget.message == 'Thinking...' ||
+        _hasReasoning ||
+        _hasModelInfo ||
+        (!widget.isUser && widget.showToolCalls) ||
+        (widget.images?.isNotEmpty ?? false) ||
+        (widget.attachments?.isNotEmpty ?? false) ||
+        widget.onAskUserAnswer != null ||
+        widget.onConnectMcpServer != null) {
+      return false;
+    }
+    final blocks = widget.contentBlocks;
+    if (blocks == null || blocks.isEmpty) return true;
+    if (blocks.any((block) => block.type == ContentBlockType.sandboxArtifact)) {
+      return false;
+    }
+    final text = blocks
+        .where((block) => block.type == ContentBlockType.text)
+        .map((block) => block.text?.trim() ?? '')
+        .where((text) => text.isNotEmpty)
+        .join('\n\n');
+    return text.isEmpty || text == widget.message.trim();
+  }
+
+  Widget _buildMessengerText(String text, Color foreground, Color background) {
+    final style = TextStyle(
+      color: foreground,
+      fontSize: _chatFontSize,
+      fontFamily: _chatFontFamily,
+      fontWeight: FontWeight.w400,
+      height: 1.38,
+    );
+    final footer = _buildBubbleFooter(
+      context: context,
+      isUser: widget.isUser,
+      fill: background,
+      onFill: foreground,
+    );
+    if (footer == null) return Text(text, style: style);
+    // The invisible trailing span reserves exactly the time's footprint on
+    // the final line. The visible footer is pinned inside the lower corner.
+    return Stack(
+      children: [
+        Text.rich(
+          TextSpan(
+            style: style,
+            children: [
+              TextSpan(text: text),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.bottom,
+                child: ExcludeSemantics(
+                  child: Opacity(
+                    opacity: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: footer,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(right: 0, bottom: 0, child: footer),
+      ],
+    );
+  }
+
+  /// The turn's own text, or null when it has none to show. Null — not an
+  /// empty box — so the caller can leave the slot out entirely.
+  Widget? _buildMessageBody({
     required Color iconFgColor,
     required Color bgColor,
     required bool isUserMessage,
@@ -863,10 +1215,61 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     if (!isUserMessage &&
         (displayText.trim().isEmpty || displayText == 'Thinking...')) {
-      return const SizedBox.shrink();
+      return null;
     }
     if (isUserMessage && displayText.trim().isEmpty) {
-      return const SizedBox.shrink();
+      return null;
+    }
+    final reply = isUserMessage && widget.messengerMode
+        ? ChatReply.parse(displayText)
+        : null;
+    if (reply != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconFgColor.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(12),
+              border: Border(
+                left: BorderSide(
+                  color: iconFgColor.withValues(alpha: 0.5),
+                  width: 3,
+                ),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reply.reply.author,
+                  style: TextStyle(
+                    color: iconFgColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  reply.reply.text,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: iconFgColor.withValues(alpha: 0.8),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _buildMessengerText(reply.message, iconFgColor, bgColor),
+        ],
+      );
+    }
+    if (_isPlainMessengerText) {
+      return _buildMessengerText(displayText, iconFgColor, bgColor);
     }
 
     if (isUserMessage) {
@@ -879,10 +1282,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           displayText,
           style: TextStyle(
             color: iconFgColor,
-            fontSize: AppThemeService.instance.chatFontSize,
-            fontFamily: resolveChatFontFamily(
-              AppThemeService.instance.chatFontFamily,
-            ),
+            fontSize: _chatFontSize,
+            fontFamily: _chatFontFamily,
             height: 1.38,
           ),
         ),
@@ -901,7 +1302,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       bgColor: bgColor,
     );
     if (aiParagraphs.isEmpty) {
-      return const SizedBox.shrink();
+      return null;
     }
     if (aiParagraphs.length == 1) {
       return aiParagraphs.first;

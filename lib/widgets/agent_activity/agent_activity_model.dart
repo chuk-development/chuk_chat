@@ -344,9 +344,7 @@ List<AgentActivitySource> extractSourcesFor(ToolCall call) {
       AgentActivitySource(
         url: trimmed,
         host: host.replaceFirst(RegExp(r'^www\.'), ''),
-        title: (title != null && title.trim().isNotEmpty)
-            ? title.trim()
-            : host,
+        title: (title != null && title.trim().isNotEmpty) ? title.trim() : host,
       ),
     );
   }
@@ -354,22 +352,22 @@ List<AgentActivitySource> extractSourcesFor(ToolCall call) {
   if (call.name == 'web_crawl') {
     final url = call.arguments['url'];
     if (url is String && url.isNotEmpty) {
-      add(url, result.split('\n').first.replaceFirst(
-        RegExp(r'^Content from\s+'),
-        '',
-      ));
+      add(
+        url,
+        result.split('\n').first.replaceFirst(RegExp(r'^Content from\s+'), ''),
+      );
     }
     return List<AgentActivitySource>.unmodifiable(sources);
   }
 
-  final titles = RegExp(r'^\d+\.\s+(.+)$', multiLine: true)
-      .allMatches(result)
-      .map((m) => m.group(1)!)
-      .toList(growable: false);
-  final urls = RegExp(r'^\s+(https?://\S+)', multiLine: true)
-      .allMatches(result)
-      .map((m) => m.group(1)!)
-      .toList(growable: false);
+  final titles = RegExp(
+    r'^\d+\.\s+(.+)$',
+    multiLine: true,
+  ).allMatches(result).map((m) => m.group(1)!).toList(growable: false);
+  final urls = RegExp(
+    r'^\s+(https?://\S+)',
+    multiLine: true,
+  ).allMatches(result).map((m) => m.group(1)!).toList(growable: false);
 
   if (urls.isNotEmpty) {
     for (int i = 0; i < urls.length; i++) {

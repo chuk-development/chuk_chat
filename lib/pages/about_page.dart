@@ -11,6 +11,9 @@
 //    GitHub row points at the repository this build comes from.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -114,163 +117,180 @@ class _AboutPageState extends State<AboutPage> {
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(l.about),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: Builder(
-        builder: (context) {
-          // COWORK ADAPTATION: upstream awaits `PackageInfo.fromPlatform()`
-          // here. CoWork reads the build-time constants, so there is nothing
-          // to await and no loading spinner.
-          final String? versionText =
-              AboutPage.appVersion.trim().isEmpty
-                  ? null
-                  : AboutPage.appVersion.trim();
+      title: l.about,
+      builder: (BuildContext context) {
+        // COWORK ADAPTATION: upstream awaits `PackageInfo.fromPlatform()`
+        // here. CoWork reads the build-time constants, so there is nothing
+        // to await and no loading spinner.
+        final String? versionText = AboutPage.appVersion.trim().isEmpty
+            ? null
+            : AboutPage.appVersion.trim();
 
-          return SettingsListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              // Hero header — the icon, the name, the version.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: _handleVersionTap,
-                      child: Container(
-                        width: 88,
-                        height: 88,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            kExpressiveOuterRadius,
-                          ),
-                          color: m3.surfaceContainerHigh,
+        return SettingsListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            MediaQuery.paddingOf(context).top + 8,
+            16,
+            MediaQuery.paddingOf(context).bottom + 24,
+          ),
+          children: [
+            // Hero header — the icon, the name, the version.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _handleVersionTap,
+                    child: Container(
+                      width: 88,
+                      height: 88,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          kExpressiveOuterRadius,
                         ),
-                        // COWORK ADAPTATION: upstream draws assets/logo.svg.
-                        child: Icon(
-                          Icons.diversity_3_outlined,
-                          size: 44,
-                          color: colorScheme.onSurface,
-                        ),
+                        color: m3.surfaceContainerHigh,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      AboutPage.appName,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
+                      // COWORK ADAPTATION: upstream draws assets/logo.svg.
+                      child: AppIcon(
+                        Icons.diversity_3_outlined,
+                        size: 44,
                         color: colorScheme.onSurface,
                       ),
                     ),
-                    if (versionText != null) ...[
-                      const SizedBox(height: 4),
-                      GestureDetector(
-                        onTap: _handleVersionTap,
-                        child: Text(
-                          l.versionText(versionText),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: m3.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 4),
-                      GestureDetector(
-                        onTap: _handleVersionTap,
-                        child: Text(
-                          l.versionUnavailable,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: m3.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (BuildInfo.formatted() != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        l.builtOn(BuildInfo.formatted()!),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: m3.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    // COWORK ADAPTATION: upstream shows an update badge fed by
-                    // UpdateCheckService. CoWork has no release feed, so the
-                    // badge states what this build really is. Only the agent
-                    // host is self-hosted, so the badge must not claim more.
-                    ExpressiveBadge(
-                      'Self-hosted agent host',
-                      tone: m3.successContainer,
-                      icon: Icons.dns_outlined,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    AboutPage.appName,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      color: colorScheme.onSurface,
                     ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'In CoWork mode the agent host runs on your own '
-                        'machine. The app, your account and the model APIs '
-                        'are not self-hosted.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: m3.onSurfaceVariant,
+                  ),
+                  if (versionText != null) ...[
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _handleVersionTap,
+                      // Tapping the version line is what opens the
+                      // developer options, so the line has to be a real
+                      // target and not one line of 20 dp text.
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: kMinInteractiveDimension,
+                        ),
+                        child: Center(
+                          child: Text(
+                            l.versionText(versionText),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: m3.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _handleVersionTap,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: kMinInteractiveDimension,
+                        ),
+                        child: Center(
+                          child: Text(
+                            l.versionUnavailable,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: m3.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ],
-                ),
-              ),
-
-              const ExpressiveSectionHeader('Links'),
-              ExpressiveGroup(
-                children: [
-                  ExpressiveRow(
-                    icon: Icons.article_outlined,
-                    title: l.openSourceLicenses,
-                    subtitle: l.openSourceLicensesSubtitle,
-                    trailing: Icon(
-                      Icons.chevron_right,
-                      size: 20,
-                      color: m3.onSurfaceVariant,
+                  if (BuildInfo.formatted() != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      l.builtOn(BuildInfo.formatted()!),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: m3.onSurfaceVariant,
+                      ),
                     ),
-                    onTap: () => AboutPage._openLicenses(context, versionText),
+                  ],
+                  const SizedBox(height: 14),
+                  // COWORK ADAPTATION: upstream shows an update badge fed by
+                  // UpdateCheckService. CoWork has no release feed, so the
+                  // badge states what this build really is. Only the agent
+                  // host is self-hosted, so the badge must not claim more.
+                  ExpressiveBadge(
+                    'Self-hosted agent host',
+                    tone: m3.successContainer,
+                    icon: Icons.dns_outlined,
                   ),
-                  ExpressiveRow(
-                    icon: Icons.code,
-                    title: 'GitHub',
-                    subtitle: 'chukfinley/cowork',
-                    trailing: Icon(
-                      Icons.north_east,
-                      size: 18,
-                      color: m3.onSurfaceVariant,
-                    ),
-                    onTap: () => AboutPage._launchUrl(
-                      'https://github.com/chukfinley/cowork',
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'In CoWork mode the agent host runs on your own '
+                      'machine. The app, your account and the model APIs '
+                      'are not self-hosted.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: m3.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 28),
-              Text(
-                l.copyrightYear(DateTime.now().year.toString()),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: m3.onSurfaceVariant.withValues(alpha: 0.7),
-                  fontSize: 11,
+            ),
+
+            const ExpressiveSectionHeader('Links'),
+            ExpressiveGroup(
+              children: [
+                ExpressiveRow(
+                  icon: Icons.article_outlined,
+                  title: l.openSourceLicenses,
+                  subtitle: l.openSourceLicensesSubtitle,
+                  trailing: AppIcon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: m3.onSurfaceVariant,
+                  ),
+                  onTap: () => AboutPage._openLicenses(context, versionText),
                 ),
+                ExpressiveRow(
+                  icon: Icons.code,
+                  title: 'GitHub',
+                  subtitle: 'chukfinley/cowork',
+                  trailing: AppIcon(
+                    Icons.north_east,
+                    size: 18,
+                    color: m3.onSurfaceVariant,
+                  ),
+                  onTap: () => AboutPage._launchUrl(
+                    'https://github.com/chukfinley/cowork',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            Text(
+              l.copyrightYear(DateTime.now().year.toString()),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant.withValues(alpha: 0.7),
+                fontSize: 11,
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -328,16 +348,10 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
 
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(l.licenses),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: FutureBuilder<List<_LicensePackage>>(
+      title: l.licenses,
+      builder: (BuildContext context) => FutureBuilder<List<_LicensePackage>>(
         future: _licensesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -360,7 +374,12 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
           // One tile per package. The list is long enough that a builder
           // matters, so every package is its own group of one.
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              MediaQuery.paddingOf(context).top + 8,
+              16,
+              MediaQuery.paddingOf(context).bottom + 24,
+            ),
             itemCount: packages.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -401,7 +420,7 @@ class _LicenseTile extends StatelessWidget {
       title: package.name,
       subtitle: AppLocalizations.of(context)!.tapToViewLicense,
       trailing: licenseLabel == null
-          ? Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant)
+          ? AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant)
           : ExpressiveBadge(licenseLabel, tone: m3.primaryContainer),
       onTap: () {
         Navigator.of(context).push(
@@ -482,17 +501,16 @@ class _LicenseDetailPage extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(package.name),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      title: package.name,
+      builder: (BuildContext context) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 8,
+          16,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
         child: ExpressiveCard(
           child: SelectableText(
             package.license,

@@ -33,11 +33,11 @@ class SessionRefreshScheduler with WidgetsBindingObserver {
     Duration tick = defaultTick,
     Duration headroom = SupabaseAccountSession.refreshHeadroom,
     Duration reconnectGrace = defaultReconnectGrace,
-  })  : _source = source,
-        _now = now ?? DateTime.now,
-        _tick = tick,
-        _headroom = headroom,
-        _reconnectGrace = reconnectGrace;
+  }) : _source = source,
+       _now = now ?? DateTime.now,
+       _tick = tick,
+       _headroom = headroom,
+       _reconnectGrace = reconnectGrace;
 
   /// The app-wide scheduler, started by `SupabaseService.initialize`.
   static final SessionRefreshScheduler instance = SessionRefreshScheduler();

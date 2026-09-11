@@ -43,9 +43,7 @@ const String kCoworkNotificationIconAsset = 'assets/icons/app_icon.png';
 /// What the service needs from the platform. The real one wraps
 /// `FlutterLocalNotificationsPlugin`; tests pass a fake.
 abstract class LocalNotificationsBackend {
-  Future<bool> initialize({
-    required void Function(String? payload) onTap,
-  });
+  Future<bool> initialize({required void Function(String? payload) onTap});
 
   Future<void> show({
     required int id,
@@ -98,12 +96,8 @@ class LocalNotifications {
   /// Stable id per thread, so a newer toast replaces the older one.
   static int idFor(String sessionKey) => sessionKey.hashCode & 0x7fffffff;
 
-  static String payloadFor(String sessionKey, {String? runId}) => jsonEncode(
-        <String, String>{
-          'session_key': sessionKey,
-          'run_id': ?runId,
-        },
-      );
+  static String payloadFor(String sessionKey, {String? runId}) =>
+      jsonEncode(<String, String>{'session_key': sessionKey, 'run_id': ?runId});
 
   /// "Answer ready" for [sessionKey]. [threadLabel] is the coworker's name
   /// (or whatever the shell calls the thread) — never the answer.
@@ -167,8 +161,9 @@ class LocalNotifications {
     if (payload == null || payload.isEmpty) return;
     try {
       final Object? decoded = jsonDecode(payload);
-      final NotificationTarget? target =
-          NotificationTarget.fromData(decoded is Map ? decoded : null);
+      final NotificationTarget? target = NotificationTarget.fromData(
+        decoded is Map ? decoded : null,
+      );
       if (target == null) return;
       // The tapped toast is gone; the shell replays the thread.
       unawaited(cancelForSession(target.sessionKey));
@@ -232,7 +227,8 @@ class _PluginBackend implements LocalNotificationsBackend {
     if (Platform.isAndroid) {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.createNotificationChannel(
             const AndroidNotificationChannel(
               kCoworkNotificationChannelId,
@@ -320,8 +316,10 @@ class _PluginBackend implements LocalNotificationsBackend {
   @override
   Future<bool> requestPermission() async {
     if (!Platform.isAndroid) return true;
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (android == null) return false;
     return await android.requestNotificationsPermission() ?? false;
   }

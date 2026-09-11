@@ -245,8 +245,9 @@ class AppThemeService extends ChangeNotifier {
   /// Reads the locally cached onboarding state for the signed-in user,
   /// falling back to the legacy device-global key from older app versions.
   bool _readLocalOnboarding(SharedPreferences prefs) {
-    final user =
-        SupabaseService.isInitialized ? SupabaseService.auth.currentUser : null;
+    final user = SupabaseService.isInitialized
+        ? SupabaseService.auth.currentUser
+        : null;
     if (user == null) {
       return prefs.getBool(_kOnboardingCompletedKey) ?? false;
     }
@@ -660,7 +661,6 @@ class AppThemeService extends ChangeNotifier {
     _debouncedSyncCustomization();
   }
 
-
   void setUiLocale(String locale) {
     _uiLocale = locale;
     notifyListeners();
@@ -728,8 +728,9 @@ class AppThemeService extends ChangeNotifier {
     _onboardingCompleted = completed;
     notifyListeners();
     final prefs = await _getPrefs();
-    final user =
-        SupabaseService.isInitialized ? SupabaseService.auth.currentUser : null;
+    final user = SupabaseService.isInitialized
+        ? SupabaseService.auth.currentUser
+        : null;
     if (user != null) {
       await prefs.setBool(_onboardingKeyFor(user.id), _onboardingCompleted);
       _debouncedSyncCustomization();

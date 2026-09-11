@@ -68,7 +68,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
               backgroundColor: bgColor,
               wrapWithSelectionArea: !widget.useSharedSelectionArea,
               fontFamily: _chatFontFamily,
-              paragraphFontSize: AppThemeService.instance.chatFontSize,
+              paragraphFontSize: _chatFontSize,
             ),
           ),
         );
@@ -153,7 +153,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             backgroundColor: bgColor,
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
-            paragraphFontSize: AppThemeService.instance.chatFontSize,
+            paragraphFontSize: _chatFontSize,
           ),
         ),
       );
@@ -169,7 +169,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             backgroundColor: bgColor,
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
-            paragraphFontSize: AppThemeService.instance.chatFontSize,
+            paragraphFontSize: _chatFontSize,
           ),
         ),
       );
@@ -227,7 +227,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             ),
             child: Row(
               children: [
-                Icon(
+                AppIcon(
                   Icons.email_outlined,
                   size: 18,
                   color: colorScheme.primary,
@@ -284,7 +284,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: () => _openMailto(to, subject, body, cc, bcc),
-                icon: const Icon(Icons.open_in_new, size: 16),
+                icon: const AppIcon(Icons.open_in_new, size: 16),
                 label: Text(AppLocalizations.of(context)!.openInMailApp),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -474,7 +474,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
                     height: 120,
                     color: colorScheme.surfaceContainerHighest,
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: AppIcon(
                       Icons.broken_image_outlined,
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -541,7 +541,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
         backgroundColor: bgColor,
         wrapWithSelectionArea: !widget.useSharedSelectionArea,
         fontFamily: _chatFontFamily,
-        paragraphFontSize: AppThemeService.instance.chatFontSize,
+        paragraphFontSize: _chatFontSize,
       ),
     );
   }
@@ -551,7 +551,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     required Color textColor,
     required Color bgColor,
   }) {
-    final String trimmed = text.trim();
+    final String trimmed = widget.messengerMode ? text : text.trim();
     if (trimmed.isEmpty) {
       return const <Widget>[];
     }

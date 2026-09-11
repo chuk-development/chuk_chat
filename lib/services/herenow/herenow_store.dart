@@ -49,11 +49,12 @@ class HereNowSettings {
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'enabled': enabled,
-        'approval': approval.wire,
-      };
+    'enabled': enabled,
+    'approval': approval.wire,
+  };
 
-  factory HereNowSettings.fromJson(Map<String, dynamic> json) => HereNowSettings(
+  factory HereNowSettings.fromJson(Map<String, dynamic> json) =>
+      HereNowSettings(
         enabled: json['enabled'] == true,
         approval: HereNowApproval.fromWire(json['approval']),
       );

@@ -28,7 +28,9 @@ class ArtifactStorageService {
   static final ValueNotifier<int> openRequestNotifier = ValueNotifier<int>(0);
 
   static final ValueNotifier<({String artifactId, int? version})?>
-  pendingInitialOpen = ValueNotifier<({String artifactId, int? version})?>(null);
+  pendingInitialOpen = ValueNotifier<({String artifactId, int? version})?>(
+    null,
+  );
 
   static void requestOpen({required String artifactId, int? version}) {}
 

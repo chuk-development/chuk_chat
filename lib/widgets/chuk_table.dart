@@ -12,6 +12,8 @@
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 
 /// One parsed markdown table plus the metadata needed to render it.
@@ -124,6 +126,7 @@ class ChukTable extends StatefulWidget {
     required this.accentColor,
     this.fontFamily,
     this.fontSize = 13.5,
+    this.onTapLink,
   });
 
   final ParsedTable table;
@@ -132,6 +135,11 @@ class ChukTable extends StatefulWidget {
   final String? fontFamily;
   final double fontSize;
 
+  /// Opens a link from a cell. Null leaves links unopenable — they still read
+  /// as links, they just do nothing, which is what a table with no host to ask
+  /// gets. The chat passes its own confirm-then-open handler.
+  final ValueChanged<String>? onTapLink;
+
   @override
   State<ChukTable> createState() => _ChukTableState();
 }
@@ -139,12 +147,25 @@ class ChukTable extends StatefulWidget {
 class _ChukTableState extends State<ChukTable> {
   bool _copied = false;
 
+  /// One recognizer per link span of the current build. Rebuilt with the
+  /// spans and disposed with them: a recognizer outliving its span leaks the
+  /// gesture arena entry it holds.
+  final List<TapGestureRecognizer> _linkTaps = <TapGestureRecognizer>[];
+
+  void _releaseLinkTaps() {
+    for (final TapGestureRecognizer tap in _linkTaps) {
+      tap.dispose();
+    }
+    _linkTaps.clear();
+  }
+
   /// Shared by the horizontal Scrollbar and its SingleChildScrollView so the
   /// scrollbar thumb is draggable and the two stay in sync.
   final ScrollController _hCtrl = ScrollController();
 
   @override
   void dispose() {
+    _releaseLinkTaps();
     _hCtrl.dispose();
     super.dispose();
   }
@@ -172,6 +193,9 @@ class _ChukTableState extends State<ChukTable> {
 
   @override
   Widget build(BuildContext context) {
+    // The spans about to be built own the recognizers; the previous build's
+    // are now unreachable.
+    _releaseLinkTaps();
     final ParsedTable t = widget.table;
     final Color border = widget.textColor.withValues(alpha: 0.12);
     final Color headerBg = widget.accentColor.withValues(alpha: 0.10);
@@ -227,11 +251,26 @@ class _ChukTableState extends State<ChukTable> {
               final bool fits =
                   !maxW.isFinite || _estimatedNaturalWidth(t) <= maxW;
 
+              // A phone column cannot hold a grid this wide. Sideways scrolling
+              // there is not a reading experience: the right-hand columns are
+              // off screen, and nothing on the card says they exist (bead
+              // cowork-8vqt). Below the threshold the table becomes one card
+              // per row, each field labelled by its header, so every value is
+              // readable without panning.
+              if (!fits && maxW < _stackBelowWidth && t.columnCount >= 2) {
+                return _stacked(t, border: border, headerBg: headerBg);
+              }
+
               final Widget table = Table(
-                columnWidths: fits ? _flexColumnWidths(t) : null,
+                columnWidths: fits
+                    ? _flexColumnWidths(t)
+                    : {
+                        for (var c = 0; c < t.columnCount; c++)
+                          c: FixedColumnWidth(maxW < 500 ? 160 : 240),
+                      },
                 defaultColumnWidth: fits
                     ? const FlexColumnWidth()
-                    : const IntrinsicColumnWidth(),
+                    : const FixedColumnWidth(160),
                 defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 border: TableBorder(
                   horizontalInside: BorderSide(color: border, width: 1),
@@ -266,10 +305,13 @@ class _ChukTableState extends State<ChukTable> {
                 ),
                 child: Scrollbar(
                   controller: _hCtrl,
+                  thickness: 3,
+                  radius: const Radius.circular(6),
                   thumbVisibility: true,
                   interactive: true,
                   child: SingleChildScrollView(
                     controller: _hCtrl,
+                    padding: const EdgeInsets.only(bottom: 10),
                     scrollDirection: Axis.horizontal,
                     child: card,
                   ),
@@ -320,6 +362,108 @@ class _ChukTableState extends State<ChukTable> {
   int _visibleLen(String raw) =>
       raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
 
+  /// Under this much room a table that does not fit is stacked instead of
+  /// scrolled. A phone message column is around 340-400 logical pixels.
+  static const double _stackBelowWidth = 560;
+
+  /// One card per data row: the first column is the card's title, every other
+  /// column becomes a labelled field under it. No horizontal scrolling, so
+  /// nothing is hidden off the right edge.
+  Widget _stacked(
+    ParsedTable t, {
+    required Color border,
+    required Color headerBg,
+  }) {
+    final TextStyle labelStyle = TextStyle(
+      color: widget.textColor.withValues(alpha: 0.62),
+      fontSize: widget.fontSize - 1.5,
+      height: 1.3,
+      fontFamily: widget.fontFamily,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    final List<Widget> cards = <Widget>[];
+    for (int r = 0; r < t.rows.length; r++) {
+      final List<String> row = t.rows[r];
+      final List<Widget> fields = <Widget>[];
+      for (int c = 1; c < t.columnCount; c++) {
+        final String value = c < row.length ? row[c] : '';
+        if (value.trim().isEmpty) continue;
+        fields.add(
+          Padding(
+            padding: EdgeInsets.only(top: fields.isEmpty ? 0 : 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  c < t.header.length ? _plain(t.header[c]) : '',
+                  style: labelStyle,
+                ),
+                const SizedBox(height: 2),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _cellContent(
+                    value,
+                    align: TextAlign.left,
+                    header: false,
+                    emphasis: false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      cards.add(
+        Padding(
+          padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: border, width: 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Container(
+                  color: headerBg,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _cellContent(
+                      row.isEmpty ? '' : row[0],
+                      align: TextAlign.left,
+                      header: false,
+                      emphasis: true,
+                    ),
+                  ),
+                ),
+                if (fields.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: fields,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: cards,
+    );
+  }
+
+  /// A header label with its inline markdown markers removed — a field label
+  /// is drawn as plain text, never as a chip.
+  String _plain(String raw) => raw.replaceAll(RegExp(r'[*_`]'), '').trim();
+
   /// Rough natural pixel width of the table if every cell sat on one line.
   /// Used only to decide between filling the width (flex columns) and
   /// horizontal scrolling (intrinsic columns) — a slight misestimate near the
@@ -347,6 +491,32 @@ class _ChukTableState extends State<ChukTable> {
     required bool header,
     required bool firstCol,
   }) {
+    Alignment boxAlign = Alignment.centerLeft;
+    if (align == TextAlign.center) boxAlign = Alignment.center;
+    if (align == TextAlign.right) boxAlign = Alignment.centerRight;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+      child: Align(
+        alignment: boxAlign,
+        child: _cellContent(
+          raw,
+          align: align,
+          header: header,
+          emphasis: header || firstCol,
+        ),
+      ),
+    );
+  }
+
+  /// The drawn content of one cell, with no cell padding of its own — the
+  /// grid wraps it in [_cell], the stacked layout places it in a field.
+  Widget _cellContent(
+    String raw, {
+    required TextAlign align,
+    required bool header,
+    required bool emphasis,
+  }) {
     final String trimmed = raw.trim();
     // A fully-bold cell is a highlight: strip the ** and draw an accent chip.
     final bool highlight =
@@ -361,12 +531,11 @@ class _ChukTableState extends State<ChukTable> {
       fontSize: widget.fontSize,
       height: 1.35,
       fontFamily: widget.fontFamily,
-      fontWeight: header || firstCol ? FontWeight.w600 : FontWeight.w400,
+      fontWeight: emphasis ? FontWeight.w600 : FontWeight.w400,
     );
 
-    Widget content;
     if (highlight) {
-      content = Container(
+      return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
           color: widget.accentColor.withValues(alpha: 0.14),
@@ -383,23 +552,15 @@ class _ChukTableState extends State<ChukTable> {
           textAlign: align,
         ),
       );
-    } else {
-      content = Text.rich(_inlineSpans(trimmed, base), textAlign: align);
     }
-
-    Alignment boxAlign = Alignment.centerLeft;
-    if (align == TextAlign.center) boxAlign = Alignment.center;
-    if (align == TextAlign.right) boxAlign = Alignment.centerRight;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-      child: Align(alignment: boxAlign, child: content),
-    );
+    return Text.rich(_inlineSpans(trimmed, base), textAlign: align);
   }
 
   /// Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
-  /// Links render as accent-coloured text (non-tappable here to keep the table
-  /// selectable and simple); everything else falls back to plain text.
+  /// A link reads as a link — accent colour AND an underline — and opens on a
+  /// tap through [ChukTable.onTapLink]. It used to be accent-coloured text
+  /// with no underline and no recognizer, so the source links the coworker
+  /// puts in its comparison tables were dead (bead cowork-94s9).
   TextSpan _inlineSpans(String text, TextStyle base) {
     final List<InlineSpan> spans = <InlineSpan>[];
     final RegExp pattern = RegExp(
@@ -413,36 +574,59 @@ class _ChukTableState extends State<ChukTable> {
     int last = 0;
     for (final RegExpMatch mtch in pattern.allMatches(text)) {
       if (mtch.start > last) {
-        spans.add(TextSpan(text: text.substring(last, mtch.start), style: base));
+        spans.add(
+          TextSpan(text: text.substring(last, mtch.start), style: base),
+        );
       }
       final String? b = mtch.namedGroup('b') ?? mtch.namedGroup('b2');
       final String? code = mtch.namedGroup('c');
       final String? link = mtch.namedGroup('lt');
       final String? italic = mtch.namedGroup('i') ?? mtch.namedGroup('i2');
       if (b != null) {
-        spans.add(TextSpan(
-          text: b,
-          style: base.copyWith(fontWeight: FontWeight.w700),
-        ));
-      } else if (code != null) {
-        spans.add(TextSpan(
-          text: code,
-          style: base.copyWith(
-            fontFamily: 'monospace',
-            fontSize: base.fontSize! - 0.5,
-            color: widget.accentColor,
+        spans.add(
+          TextSpan(
+            text: b,
+            style: base.copyWith(fontWeight: FontWeight.w700),
           ),
-        ));
+        );
+      } else if (code != null) {
+        spans.add(
+          TextSpan(
+            text: code,
+            style: base.copyWith(
+              fontFamily: 'monospace',
+              fontSize: base.fontSize! - 0.5,
+              color: widget.accentColor,
+            ),
+          ),
+        );
       } else if (link != null) {
-        spans.add(TextSpan(
-          text: link,
-          style: base.copyWith(color: widget.accentColor),
-        ));
+        final String? href = mtch.namedGroup('lu');
+        TapGestureRecognizer? tap;
+        final ValueChanged<String>? onTap = widget.onTapLink;
+        if (onTap != null && href != null && href.trim().isNotEmpty) {
+          tap = TapGestureRecognizer()..onTap = () => onTap(href.trim());
+          _linkTaps.add(tap);
+        }
+        spans.add(
+          TextSpan(
+            text: link,
+            recognizer: tap,
+            style: base.copyWith(
+              color: widget.accentColor,
+              decoration: TextDecoration.underline,
+              decorationColor: widget.accentColor,
+              decorationThickness: 1.2,
+            ),
+          ),
+        );
       } else if (italic != null) {
-        spans.add(TextSpan(
-          text: italic,
-          style: base.copyWith(fontStyle: FontStyle.italic),
-        ));
+        spans.add(
+          TextSpan(
+            text: italic,
+            style: base.copyWith(fontStyle: FontStyle.italic),
+          ),
+        );
       }
       last = mtch.end;
     }
@@ -476,7 +660,7 @@ class _CopyButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(
+          child: AppIcon(
             copied ? Icons.check_rounded : Icons.copy_rounded,
             size: 15,
             color: copied ? accent : color.withValues(alpha: 0.55),

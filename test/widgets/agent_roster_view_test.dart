@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart'
@@ -294,7 +296,7 @@ void main() {
       // chrome, but it is still exactly one row per agent.
       final localMenu = find.descendant(
         of: find.byKey(ValueKey<String>('agent-tile-${local.id}')),
-        matching: find.byIcon(Icons.more_vert),
+        matching: findIcon(Icons.more_vert),
       );
       await tester.tap(localMenu);
       await tester.pumpAndSettle();
@@ -306,7 +308,7 @@ void main() {
       // The host agent's menu has no Delete.
       final hostMenu = find.descendant(
         of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
-        matching: find.byIcon(Icons.more_vert),
+        matching: findIcon(Icons.more_vert),
       );
       await tester.tap(hostMenu);
       await tester.pumpAndSettle();
@@ -339,7 +341,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
-          matching: find.byIcon(Icons.more_vert),
+          matching: findIcon(Icons.more_vert),
         ),
       );
       await tester.pumpAndSettle();
@@ -389,7 +391,7 @@ void main() {
         await tester.tap(
           find.descendant(
             of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-            matching: find.byIcon(Icons.more_vert),
+            matching: findIcon(Icons.more_vert),
           ),
         );
         await tester.pumpAndSettle();
@@ -442,7 +444,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-          matching: find.byIcon(Icons.more_vert),
+          matching: findIcon(Icons.more_vert),
         ),
       );
       await tester.pumpAndSettle();
@@ -596,7 +598,7 @@ void main() {
       expect(find.text('amber-otter'), findsOneWidget);
 
       // Open the first row's menu and hide it.
-      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.tap(findIcon(Icons.more_vert).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Hide'));
       await tester.pumpAndSettle();

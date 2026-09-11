@@ -52,6 +52,20 @@ class AgentReadMarks extends ChangeNotifier {
   int unreadCount(Iterable<CoworkAgent> agents) =>
       agents.where(isUnread).length;
 
+  /// How many of one coworker's threads have something new in them. This is
+  /// what the number on a roster badge counts today; the count of new messages
+  /// needs the preview store that does not exist yet.
+  int unreadThreads(CoworkAgent agent) {
+    int count = 0;
+    for (final CoworkThreadInfo thread in agent.threads) {
+      final DateTime? activity = thread.lastActivity ?? agent.lastActivity;
+      if (activity == null) continue;
+      final DateTime? read = _marks[thread.key];
+      if (read == null || activity.isAfter(read)) count++;
+    }
+    return count;
+  }
+
   Future<void> load() async {
     if (_loaded) return;
     try {

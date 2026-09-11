@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -36,7 +37,7 @@ void main() {
     (tester) async {
       await pumpPage(tester);
       expect(controller.starts, 1);
-      expect(find.byType(AppBar), findsNothing);
+      expect(find.byType(ExpressiveScreen), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       await tester.tap(find.byKey(const Key('browser_view_exit_fullscreen')));
       await tester.pump();
@@ -66,7 +67,7 @@ void main() {
     'full screen hides the chrome and a floating button brings it back',
     (tester) async {
       await pumpPage(tester);
-      expect(find.byType(AppBar), findsNothing);
+      expect(find.byType(ExpressiveScreen), findsNothing);
       expect(find.text('Agent browser'), findsNothing);
       expect(find.text('connecting…'), findsNothing);
       expect(
@@ -83,7 +84,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('browser_view_exit_fullscreen')));
       await tester.pump();
-      expect(find.byType(AppBar), findsOneWidget);
+      expect(find.byType(ExpressiveScreen), findsOneWidget);
       expect(find.text('Agent browser'), findsOneWidget);
       expect(find.text('stream died'), findsOneWidget);
     },

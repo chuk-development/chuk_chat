@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/services/password_reset_service.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
@@ -217,14 +220,18 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     final iconFg = theme.iconTheme.color ?? Colors.white;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l.recoverEncryptedChats)),
-      body: _lockedInfo.isEmpty
+    return ExpressiveScreen(
+      title: l.recoverEncryptedChats,
+      builder: (BuildContext context) => _lockedInfo.isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_open, size: 48, color: iconFg.withValues(alpha: 0.3)),
+                  AppIcon(
+                    Icons.lock_open,
+                    size: 48,
+                    color: iconFg.withValues(alpha: 0.3),
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     l.noLockedChats,
@@ -243,7 +250,12 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 24,
+              ),
               children: [
                 ExpressiveInfoCard(text: l.recoverChatsInfo),
                 const SizedBox(height: 16),
@@ -263,7 +275,8 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     final isWorking = _isRecovering[version] ?? false;
     final message = _messages[version];
     final l = AppLocalizations.of(context)!;
-    final isError = message == l.recoveryFailed ||
+    final isError =
+        message == l.recoveryFailed ||
         message == l.deletionFailed ||
         message == l.pleaseEnterOldPassword;
     final isSuccess = message != null && !isError;
@@ -276,7 +289,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.lock, color: theme.colorScheme.primary, size: 20),
+                AppIcon(Icons.lock, color: theme.colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -306,7 +319,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 labelText: l.oldPassword,
                 hintText: l.enterOldPassword,
                 suffixIcon: IconButton(
-                  icon: Icon(
+                  icon: AppIcon(
                     (_obscurePasswords[version] ?? true)
                         ? Icons.visibility_off
                         : Icons.visibility,
@@ -328,9 +341,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               Text(
                 message,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: isSuccess
-                      ? Colors.green
-                      : Colors.redAccent,
+                  color: isSuccess ? Colors.green : Colors.redAccent,
                 ),
               ),
             ],
@@ -358,15 +369,17 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: isWorking ? null : () => _recoverVersion(version),
-                    icon: const Icon(Icons.lock_open, size: 18),
+                    onPressed: isWorking
+                        ? null
+                        : () => _recoverVersion(version),
+                    icon: const AppIcon(Icons.lock_open, size: 18),
                     label: Text(l.recover),
                   ),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: isWorking ? null : () => _deleteVersion(version),
-                  icon: const Icon(Icons.delete_forever, size: 18),
+                  icon: const AppIcon(Icons.delete_forever, size: 18),
                   label: Text(l.delete),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,

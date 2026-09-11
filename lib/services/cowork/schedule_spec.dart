@@ -251,7 +251,8 @@ class ScheduleSpec {
       count == 1 ? '$count $unit' : '$count ${unit}s';
 
   static String _prettyDateTime(DateTime value) {
-    final String date = '${_pad(value.year, 4)}-${_pad(value.month, 2)}-'
+    final String date =
+        '${_pad(value.year, 4)}-${_pad(value.month, 2)}-'
         '${_pad(value.day, 2)}';
     final String time = '${_pad(value.hour, 2)}:${_pad(value.minute, 2)}';
     if (value.second == 0) {
@@ -348,12 +349,7 @@ class _CronField {
     return _CronField(Set<int>.unmodifiable(values), restricted: restricted);
   }
 
-  static int _positiveInt(
-    String text,
-    String name,
-    String part,
-    String what,
-  ) {
+  static int _positiveInt(String text, String name, String part, String what) {
     final int? value = _plainInt(text);
     if (value == null || value < 1) {
       throw ScheduleFormatException(
@@ -461,9 +457,7 @@ class _CronSchedule {
     int steps = 0;
     const int maxSteps = 366 * 24 * 60 + 1000;
 
-    while (runs.length < count &&
-        cursor.isBefore(limit) &&
-        steps < maxSteps) {
+    while (runs.length < count && cursor.isBefore(limit) && steps < maxSteps) {
       steps++;
       // Skip whole months, days and hours that cannot match. That is what
       // keeps a 366-day scan cheap enough for a widget test.
@@ -476,7 +470,12 @@ class _CronSchedule {
         continue;
       }
       if (!hours.matches(cursor.hour)) {
-        cursor = DateTime(cursor.year, cursor.month, cursor.day, cursor.hour + 1);
+        cursor = DateTime(
+          cursor.year,
+          cursor.month,
+          cursor.day,
+          cursor.hour + 1,
+        );
         continue;
       }
       if (!minutes.matches(cursor.minute)) {

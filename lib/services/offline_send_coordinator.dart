@@ -1,12 +1,23 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/offline_send_coordinator.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
-// Reason: replaced by relay — upstream queues a send while the phone is offline
-// and replays it against the hosted API. In CoWork the run belongs to the host,
-// which keeps working with no client attached, so there is nothing to queue.
+// COWORK ADAPTER. Upstream: chuk_chat/lib/services/offline_send_coordinator.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// Reason: replaced by relay. Upstream queues a send while the phone is offline
+// and later replays it against the hosted API, ANSWER AND ALL. CoWork must not
+// do that: the run belongs to the host and keeps going with no client
+// attached, so only the PROMPT is queued here — never the reply.
 // [OfflineSendPayload] is kept verbatim (it is a plain value object several
-// imported files build); the coordinator itself is inert.
+// imported files build).
+//
+// It used to be inert, and that lost data. The imported send paths
+// (`chat_ui_mobile.dart`, `desktop_send_logic.dart`) short-circuit on
+// `NetworkStatusService.isOnline == false` BEFORE the relay is ever asked, and
+// they call this. With `enqueue` returning `''` the row was written with
+// `status: pending, queueId: ''` and nothing behind it: a prompt typed in
+// airplane mode was silently gone. It now goes into [CoworkTaskOutbox], the
+// same queue the host-unreachable path uses.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
 import 'dart:convert';
+
+import 'package:cowork/services/cowork/cowork_task_outbox.dart';
 
 class OfflineSendPayload {
   const OfflineSendPayload({
@@ -82,9 +93,32 @@ class OfflineSendPayload {
   }
 }
 
-/// Inert in CoWork: nothing is queued, so [enqueue] returns an id nobody reads.
+/// The imported send paths' door into [CoworkTaskOutbox].
+///
+/// One id names the same thing everywhere: the payload's [OfflineSendPayload.chatId]
+/// IS the executor's `session_key` AND the imported screen's `selectedChatId`
+/// (see `CoworkThreadView.threadKey`), so the prompt queues under the very key
+/// the flush later sends it on.
 class OfflineSendCoordinator {
   OfflineSendCoordinator._();
 
-  static Future<String> enqueue(OfflineSendPayload payload) async => '';
+  /// Queues the prompt and returns the outbox entry's id.
+  ///
+  /// The returned id is what the caller writes into the bubble's `queueId`, so
+  /// it must be REAL: it is how the flush later finds the row again and takes
+  /// the queue mark off it.
+  ///
+  /// Everything upstream would need to reproduce the answer — the system
+  /// prompt, the history, `maxTokens` — is deliberately dropped. The host
+  /// composes the run; this side only has to deliver the question.
+  static Future<String> enqueue(OfflineSendPayload payload) async {
+    final OutboxTask task = await CoworkTaskOutbox.enqueue(
+      sessionKey: payload.chatId,
+      prompt: payload.messageText,
+      modelId: payload.modelId.isEmpty ? null : payload.modelId,
+      providerSlug: payload.providerSlug.isEmpty ? null : payload.providerSlug,
+      reasoningEffort: payload.reasoningEffort,
+    );
+    return task.localId;
+  }
 }

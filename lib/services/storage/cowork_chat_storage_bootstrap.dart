@@ -145,6 +145,11 @@ class CoworkChatStorageBootstrap {
     if (_activeUserId == userId) return;
     if (_activeUserId != null) await _signedOut();
     _activeUserId = userId;
+    // The read key for the NEXT cold start (bead cowork-91pn). The local cache
+    // is keyed by user id, and on a cold start the app paints long before
+    // gotrue has restored the session — without this the rows are on disk and
+    // unreadable, and the thread the user was in comes up empty.
+    unawaited(CoworkChatStore.rememberUser(userId));
     final hook = onSignedInHook;
     if (hook != null) {
       await hook();

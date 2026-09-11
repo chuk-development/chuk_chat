@@ -51,9 +51,12 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/models/chat_message.dart';
+import 'package:cowork/services/cowork/cowork_queued_marks.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/models/stored_chat.dart';
 import 'package:cowork/services/chat_storage_crud.dart' show ChatStorageCrud;
+import 'package:cowork/services/chat_storage_sync.dart'
+    show deserializePayloadIsolate;
 import 'package:cowork/services/chat_storage_mutations.dart'
     show kChatPayloadVersion, saveTitlesToCache;
 import 'package:cowork/services/chat_storage_state.dart';
@@ -73,6 +76,12 @@ const String _kReplayCursorPrefix = 'cowork.replay_cursor.';
 
 /// Prefix of the per-user outbox key in the SQLite `kv_cache` table.
 const String kCloudOutboxPrefix = 'cowork.cloud_outbox.';
+
+/// Where the last signed-in user id is remembered, so the local cache can be
+/// READ before Supabase has its session back (bead cowork-91pn). It is only a
+/// read key: nothing is written to the cloud under it, and it is replaced the
+/// moment a real session names a user.
+const String kLastCacheUserKey = 'cowork.last_user_id';
 
 /// Signature of the cloud upsert. Injectable so the store is testable with no
 /// Supabase client. Returns the row as the server stored it (`created_at`,
@@ -165,6 +174,17 @@ class CoworkChatStore {
         messages.add(ChatMessage.fromJson(_documentRow(entry.value)));
       }
     }
+    // The queue mark has the same problem as a document, for a different
+    // reason: the imported chat screen persists ITS OWN list of messages, and
+    // that list never carried a `queueId`. A prompt that is waiting in the
+    // outbox would lose its mark — and with it the Retry button — the next
+    // time the screen saved anything. So a mark the store already holds is
+    // carried across a write that does not mention it. It is taken off
+    // explicitly by [CoworkQueuedMarks.clearMark] once the prompt goes out.
+    _retainQueueMarks(
+      ChatStorageState.chatsById[sessionKey]?.messagesOrNull ?? const [],
+      messages,
+    );
     if (messages.isEmpty) return null;
 
     final existing = ChatStorageState.chatsById[sessionKey];
@@ -241,6 +261,29 @@ class CoworkChatStore {
     ]);
   }
 
+  /// Copies a still-open queue mark from [stored] onto the matching row of
+  /// [incoming], in place. Matched on the prompt text, because that is the only
+  /// thing the imported screen and the store agree on for a user row.
+  static void _retainQueueMarks(
+    List<ChatMessage> stored,
+    List<ChatMessage> incoming,
+  ) {
+    final marks = CoworkQueuedMarks.marksIn(stored);
+    if (marks.isEmpty) return;
+    for (int i = 0; i < incoming.length; i++) {
+      final message = incoming[i];
+      if (!CoworkQueuedMarks.isUserRole(message.role)) continue;
+      if (message.queueId != null && message.queueId!.isNotEmpty) continue;
+      final mark = marks[message.text];
+      if (mark == null) continue;
+      incoming[i] = ChatMessage.fromJson({
+        ...message.toJson(),
+        'status': mark['status'],
+        'queueId': mark['queueId'],
+      });
+    }
+  }
+
   static num _documentVersion(Map<String, dynamic> document) =>
       document['version'] as num? ?? 0;
 
@@ -285,20 +328,126 @@ class CoworkChatStore {
     ]),
   };
 
+  /// Whose rows the local cache is read under.
+  ///
+  /// THE one answer. [loadThread], [hasThread] and — through [loadThread] —
+  /// `CoworkReplayLoader._cachedRows` all go through this, and all three fail
+  /// the same way when it is null. That is not tidiness, it is the safety
+  /// property: if `hasThread` said yes on one id while the row read used
+  /// another, the replay's cursor guard would splice a delta onto the wrong
+  /// base, `saveChat` REPLACES, and the history would be gone for good — the
+  /// host never re-sends below the cursor.
+  ///
+  /// A live Supabase session wins and is remembered. When there is none yet —
+  /// a cold start paints long before gotrue has its session back off disk —
+  /// the id the last session left behind is used, so the thread the user was
+  /// in paints from SQLite with no network at all.
+  static Future<String?> resolveCacheUserId() async {
+    final live = _currentUserId();
+    if (live != null) {
+      if (_rememberedUserId != live) unawaited(rememberUser(live));
+      return live;
+    }
+    if (_rememberedUserId != null) return _rememberedUserId;
+    if (_rememberedLoaded) return null;
+    await _loadRememberedUser();
+    return _rememberedUserId;
+  }
+
+  /// Writes the read key for the next cold start. Called when a session signs
+  /// in (`CoworkChatStorageBootstrap._signedIn`).
+  static Future<void> rememberUser(String userId) async {
+    if (userId.isEmpty) return;
+    _rememberedUserId = userId;
+    _rememberedLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(kLastCacheUserKey, userId);
+    } catch (_) {
+      // No preferences: this launch still reads the id from memory.
+    }
+  }
+
+  static String? _rememberedUserId;
+  static bool _rememberedLoaded = false;
+
+  static Future<void> _loadRememberedUser() async {
+    if (_rememberedLoaded) return;
+    _rememberedLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString(kLastCacheUserKey);
+      if (stored != null && stored.isNotEmpty) _rememberedUserId = stored;
+    } catch (_) {
+      // No preferences (a widget test): there is no remembered id.
+    }
+  }
+
   /// Reads a thread: memory when it is fully loaded there, else chuk_chat's
-  /// cache-first `loadFullChat` (SQLite, then the cloud) when a user is
-  /// signed in. With no Supabase session at all (a widget test, a signed-out
-  /// app) memory is all there is, so that is what comes back — upstream would
-  /// throw before its own memory check.
+  /// cache-first `loadFullChat` (SQLite, then the cloud) when a session is
+  /// live — and the SQLite row alone when the session is not back yet but
+  /// this device remembers whose rows these are. With no id at all (a widget
+  /// test, a never-signed-in app) memory is all there is, so that is what
+  /// comes back — upstream would throw before its own memory check.
   static Future<StoredChat?> loadThread(String chatId) async {
     final existing = ChatStorageState.chatsById[chatId];
     if (existing != null && existing.isFullyLoaded) return existing;
-    if (_currentUserId() == null) return existing;
+    final userId = await resolveCacheUserId();
+    if (userId == null) return existing;
+    if (_currentUserId() == null) {
+      // No live session: the cloud half of `loadFullChat` would throw before
+      // it read anything. Read the row this device already holds.
+      return await _loadFromLocalCache(userId, chatId, existing) ?? existing;
+    }
     try {
       return await ChatStorageCrud.loadFullChat(chatId) ?? existing;
     } catch (error) {
       if (kDebugMode) debugPrint('[cowork-chat-store] load failed: $error');
       return existing;
+    }
+  }
+
+  /// The offline half of [loadThread]: the plaintext SQLite row, decoded into
+  /// the same [StoredChat] shape chuk_chat's cache path produces, and put in
+  /// memory so the screen paints it. Null when there is no readable row.
+  static Future<StoredChat?> _loadFromLocalCache(
+    String userId,
+    String chatId,
+    StoredChat? existing,
+  ) async {
+    try {
+      final read = localCacheReader ?? LocalChatCacheService.loadById;
+      final row = await read(userId, chatId);
+      final payload = row?['payload'];
+      if (payload is! String || payload.isEmpty) return null;
+      // The payload is parsed HERE, not in an isolate: this is the cold-start
+      // paint path, and spawning an isolate to read one thread costs more than
+      // the parse it saves. `deserializePayloadIsolate` is a pure function —
+      // `deserializePayloadAsync` is only that same function behind `compute`.
+      final decoded = deserializePayloadIsolate(payload);
+      final messages = <ChatMessage>[
+        for (final row in decoded.messages) ChatMessage.fromJson(row),
+      ];
+      if (messages.isEmpty) return null;
+      final customName = _normalized(decoded.customName);
+      final title =
+          customName ??
+          existing?.title ??
+          ChatStorageCrud.extractTitleFromMessages(messages);
+      final chat = StoredChat.fromRow(
+        row!,
+        messages,
+        customName: customName,
+        title: title.isNotEmpty ? title : null,
+      );
+      ChatStorageState.chatsById[chatId] = chat;
+      ChatStorageState.notifyChanges(chatId);
+      return chat;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[cowork-chat-store] offline load failed: $error');
+      }
+      return null;
     }
   }
 
@@ -311,7 +460,8 @@ class CoworkChatStore {
   static Future<bool> hasThread(String sessionKey) async {
     final inMemory = ChatStorageState.chatsById[sessionKey];
     if (inMemory != null && inMemory.isFullyLoaded) return true;
-    final userId = _currentUserId();
+    // The SAME id [loadThread] reads under — see [resolveCacheUserId].
+    final userId = await resolveCacheUserId();
     if (userId == null) return false;
     try {
       final read = localCacheReader ?? LocalChatCacheService.loadById;
@@ -383,6 +533,8 @@ class CoworkChatStore {
     outboxRead = null;
     outboxWrite = null;
     outboxDelete = null;
+    _rememberedUserId = null;
+    _rememberedLoaded = false;
   }
 
   // ---------------------------------------------------------------------------

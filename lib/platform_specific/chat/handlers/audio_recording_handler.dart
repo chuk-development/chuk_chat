@@ -238,10 +238,7 @@ class AudioRecordingHandler {
     if (service == null) {
       _isTranscribingAudio = false;
       _isStreamingMode = false;
-      return TranscriptionResult(
-        success: false,
-        error: 'No streaming session',
-      );
+      return TranscriptionResult(success: false, error: 'No streaming session');
     }
 
     try {
@@ -409,7 +406,8 @@ class AudioRecordingHandler {
     if (kIsWeb) return true; // Browser handles permission via record package.
 
     // permission_handler only supports Android, iOS, macOS, Windows.
-    final bool supportsPermissionHandler = !kIsWeb &&
+    final bool supportsPermissionHandler =
+        !kIsWeb &&
         (Platform.isAndroid ||
             Platform.isIOS ||
             Platform.isMacOS ||

@@ -30,9 +30,9 @@ class SecretsSet {
   bool has(String name) => values.containsKey(name);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'revision': revision,
-        'values': values,
-      };
+    'revision': revision,
+    'values': values,
+  };
 
   static SecretsSet fromJson(Map<String, dynamic> json) {
     final raw = json['values'];
@@ -41,7 +41,9 @@ class SecretsSet {
       for (final entry in raw.entries) {
         final name = entry.key.toString();
         final value = entry.value;
-        if (SecretsStore.validName(name) && value is String && value.isNotEmpty) {
+        if (SecretsStore.validName(name) &&
+            value is String &&
+            value.isNotEmpty) {
           values[name] = value;
         }
       }
@@ -56,7 +58,7 @@ class SecretsSet {
 
 class SecretsStore {
   SecretsStore({CoworkSecureKeyValueStore? backend})
-      : _backend = backend ?? const FlutterSecureKeyValueStore();
+    : _backend = backend ?? const FlutterSecureKeyValueStore();
 
   /// The one secure-storage key holding the whole set.
   static const String storageKey = 'cowork_secrets_v1';
@@ -147,14 +149,13 @@ class SecretsStore {
   static Map<String, dynamic> forwardPayload(
     SecretsSet set, {
     String? requestId,
-  }) =>
-      <String, dynamic>{
-        'type': 'secrets',
-        'entries': <Map<String, String>>[
-          for (final name in set.names)
-            <String, String>{'name': name, 'value': set.values[name]!},
-        ],
-        'revision': set.revision,
-        if (requestId != null && requestId.isNotEmpty) 'request_id': requestId,
-      };
+  }) => <String, dynamic>{
+    'type': 'secrets',
+    'entries': <Map<String, String>>[
+      for (final name in set.names)
+        <String, String>{'name': name, 'value': set.values[name]!},
+    ],
+    'revision': set.revision,
+    if (requestId != null && requestId.isNotEmpty) 'request_id': requestId,
+  };
 }

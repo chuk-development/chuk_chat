@@ -13,10 +13,13 @@ class NiceSnackBar {
     String message, {
     Duration duration = const Duration(seconds: 2),
     Color? backgroundColor,
+    Color? foregroundColor,
   }) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
-    return messenger.showSnackBar(_build(message, duration, backgroundColor));
+    return messenger.showSnackBar(
+      _build(message, duration, backgroundColor, foregroundColor),
+    );
   }
 
   /// Same as [show] but colored for errors.
@@ -25,24 +28,34 @@ class NiceSnackBar {
     String message, {
     Duration duration = const Duration(seconds: 3),
   }) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     return show(
       context,
       message,
       duration: duration,
-      backgroundColor: Theme.of(context).colorScheme.error,
+      backgroundColor: cs.error,
+      // The error ground is `error`, so the words on it must be `onError` —
+      // the default snack bar foreground is unreadable there.
+      foregroundColor: cs.onError,
     );
   }
 
-  static SnackBar _build(String message, Duration duration, Color? bg) {
+  static SnackBar _build(
+    String message,
+    Duration duration,
+    Color? bg,
+    Color? fg,
+  ) {
     return SnackBar(
       content: Text(
         message,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg),
       ),
       backgroundColor: bg,
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      // The doc says pill; a pill is a stadium, not a 12 dp rectangle.
+      shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       duration: duration,
       dismissDirection: DismissDirection.horizontal,

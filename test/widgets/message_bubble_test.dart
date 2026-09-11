@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/l10n/app_localizations.dart';
@@ -51,7 +53,7 @@ void main() {
         find.text('Automation · Wahlradar LT Sachsen-Anhalt 2026'),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.bolt_outlined), findsOneWidget);
+      expect(findIcon(Icons.bolt_outlined), findsOneWidget);
       // Neither the marker header, the operator prompt nor the payload is
       // anywhere on screen.
       expect(find.textContaining('[automation'), findsNothing);
@@ -98,7 +100,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('ship the automation marker please'), findsOneWidget);
-      expect(find.byIcon(Icons.bolt_outlined), findsNothing);
+      expect(findIcon(Icons.bolt_outlined), findsNothing);
       expect(
         find.byWidgetPredicate(
           (w) => w is Container && w.decoration is BoxDecoration,
@@ -229,8 +231,8 @@ void main() {
           in tester.widgetList<MessageStamp>(find.byType(MessageStamp))) {
         expect(stamp.mark, QueueMark.none);
       }
-      expect(find.byIcon(Icons.done_all_rounded), findsNothing);
-      expect(find.byIcon(Icons.check_rounded), findsNothing);
+      expect(findIcon(Icons.done_all_rounded), findsNothing);
+      expect(findIcon(Icons.check_rounded), findsNothing);
     });
 
     testWidgets('a queued user message shows the clock mark', (tester) async {

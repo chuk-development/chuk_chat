@@ -49,9 +49,11 @@ abstract class RoomSource extends ChangeNotifier {
 
 /// In-memory room source.
 class LocalRoomSource extends RoomSource {
-  LocalRoomSource({List<CoworkRoom> seed = const <CoworkRoom>[], Random? random})
-      : _rooms = List<CoworkRoom>.of(seed),
-        _random = random ?? Random();
+  LocalRoomSource({
+    List<CoworkRoom> seed = const <CoworkRoom>[],
+    Random? random,
+  }) : _rooms = List<CoworkRoom>.of(seed),
+       _random = random ?? Random();
 
   final List<CoworkRoom> _rooms;
   final Random _random;
@@ -128,14 +130,17 @@ class LocalRoomSource extends RoomSource {
       final room = _rooms[i];
       if (!room.members.any((m) => m.agentId == agentId)) continue;
       final kept = <CoworkRoomMember>[
-        for (final m in room.members) if (m.agentId != agentId) m,
+        for (final m in room.members)
+          if (m.agentId != agentId) m,
       ];
       changed = true;
       if (kept.length < 2) {
         deleted.add(room.id);
         _rooms.removeAt(i);
       } else {
-        _rooms[i] = room.copyWith(members: List<CoworkRoomMember>.unmodifiable(kept));
+        _rooms[i] = room.copyWith(
+          members: List<CoworkRoomMember>.unmodifiable(kept),
+        );
       }
     }
     if (changed) notifyListeners();
@@ -154,9 +159,10 @@ class LocalRoomSource extends RoomSource {
         return;
       }
       _rooms[i] = room.copyWith(
-        members: List<CoworkRoomMember>.unmodifiable(
-          <CoworkRoomMember>[...room.members, member],
-        ),
+        members: List<CoworkRoomMember>.unmodifiable(<CoworkRoomMember>[
+          ...room.members,
+          member,
+        ]),
       );
       notifyListeners();
       return;
@@ -170,14 +176,17 @@ class LocalRoomSource extends RoomSource {
       if (room.id != roomId) continue;
       if (!room.members.any((m) => m.agentId == agentId)) return false;
       final kept = <CoworkRoomMember>[
-        for (final m in room.members) if (m.agentId != agentId) m,
+        for (final m in room.members)
+          if (m.agentId != agentId) m,
       ];
       if (kept.length < 2) {
         _rooms.removeAt(i);
         notifyListeners();
         return true;
       }
-      _rooms[i] = room.copyWith(members: List<CoworkRoomMember>.unmodifiable(kept));
+      _rooms[i] = room.copyWith(
+        members: List<CoworkRoomMember>.unmodifiable(kept),
+      );
       notifyListeners();
       return false;
     }

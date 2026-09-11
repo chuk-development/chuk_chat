@@ -22,6 +22,47 @@ import 'package:cowork/ui/expressive/face_image.dart';
 import 'package:cowork/ui/expressive/shapes.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 
+/// The selected silhouette, shared by monograms, photos and editor previews.
+ShapeBorder agentAvatarShape(String id, AgentAvatarShape? shape, double size) =>
+    switch (shape) {
+      AgentAvatarShape.round => const CircleBorder(),
+      AgentAvatarShape.oval => const _OvalAvatarBorder(),
+      AgentAvatarShape.roundedSquare => RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(size * 0.24),
+      ),
+      AgentAvatarShape.square => const RoundedRectangleBorder(),
+      AgentAvatarShape.cookie => expressiveShape(0),
+      AgentAvatarShape.clover => expressiveShape(1),
+      AgentAvatarShape.flower => expressiveShape(3),
+      AgentAvatarShape.diamond => expressiveShape(4),
+      AgentAvatarShape.gem => expressiveShape(5),
+      AgentAvatarShape.triangle => expressiveShape(6),
+      AgentAvatarShape.burst => expressiveShape(7),
+      AgentAvatarShape.expressive || null => expressiveShapeFor(id),
+    };
+
+class _OvalAvatarBorder extends ShapeBorder {
+  const _OvalAvatarBorder();
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => Path()
+    ..addOval(
+      Rect.fromCenter(
+        center: rect.center,
+        width: rect.width * 0.78,
+        height: rect.height,
+      ),
+    );
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      getOuterPath(rect, textDirection: textDirection);
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {}
+  @override
+  ShapeBorder scale(double t) => this;
+}
+
 /// The accent colour of a coworker: the picked colour, else the stable hue from
 /// the agent id.
 Color agentAccent(
@@ -29,13 +70,35 @@ Color agentAccent(
   String agentId, {
   AgentProfileStore? store,
 }) {
-  final AgentProfile profile =
-      (store ?? AgentProfileStore.instance).profileOf(agentId);
+  final AgentProfile profile = (store ?? AgentProfileStore.instance).profileOf(
+    agentId,
+  );
   final int? picked = profile.colorValue;
   if (picked != null) return Color(picked);
-  final double hue = AgentAvatar.hueOf(agentId);
   final bool dark = Theme.of(context).brightness == Brightness.dark;
+  // The hue is taken from the offered palette instead of straight from the
+  // hash. A raw hash spreads over the full circle, which sounds fair and in
+  // practice put two of three coworkers within a few degrees of each other —
+  // both read as "the teal one". The palette's hues are already spaced apart,
+  // so picking one of those keeps the colours tellable. Saturation and
+  // lightness stay fixed: the hue does the identifying, and every face keeps
+  // the same weight and the same contrast against a white monogram.
+  final double hue = HSLColor.fromColor(
+    kAgentAccents[_paletteIndex(agentId)],
+  ).hue;
   return HSLColor.fromAHSL(1, hue, 0.45, dark ? 0.42 : 0.62).toColor();
+}
+
+/// A stable index into [kAgentAccents] from the agent id. Its own hash, so a
+/// coworker's colour and its silhouette are not picked by the same number and
+/// two coworkers that share one do not automatically share the other.
+int _paletteIndex(String agentId) {
+  int hash = 0x811c9dc5;
+  for (final int unit in agentId.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0xffffffff;
+  }
+  return hash % kAgentAccents.length;
 }
 
 /// The palette the profile editor offers for a coworker's colour.
@@ -80,7 +143,11 @@ class ExpressiveFace extends StatelessWidget {
     return AnimatedBuilder(
       animation: profiles,
       builder: (BuildContext context, Widget? _) {
-        final ShapeBorder shape = expressiveShapeFor(id);
+        final ShapeBorder shape = agentAvatarShape(
+          id,
+          profiles.profileOf(id).shape,
+          size,
+        );
         final Color color = agentAccent(context, id, store: profiles);
         final ImageProvider<Object>? photo = faceImageProvider(
           profiles.profileOf(id).photoPath,
@@ -125,6 +192,7 @@ class AgentFace extends StatelessWidget {
     this.showPresence = true,
     this.store,
     this.dimmed = false,
+    this.profileOverride,
   });
 
   final CoworkAgent agent;
@@ -136,6 +204,9 @@ class AgentFace extends StatelessWidget {
 
   /// A hidden coworker is shown faded in the "show hidden" list.
   final bool dimmed;
+
+  /// An unsaved editor preview; normal app surfaces always read the store.
+  final AgentProfile? profileOverride;
 
   /// The presence dot colour for an activity, or null for no dot.
   static Color? presenceColor(AgentActivity activity) {
@@ -160,11 +231,19 @@ class AgentFace extends StatelessWidget {
 
   Widget _build(BuildContext context, AgentProfileStore profiles) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ShapeBorder shape = expressiveShapeFor(agent.id);
-    final Color color = agentAccent(context, agent.id, store: profiles);
-    final ImageProvider<Object>? photo = faceImageProvider(
-      profiles.profileOf(agent.id).photoPath,
-    );
+    final profile = profileOverride ?? profiles.profileOf(agent.id);
+    final ShapeBorder shape = agentAvatarShape(agent.id, profile.shape, size);
+    final Color color = profileOverride == null
+        ? agentAccent(context, agent.id, store: profiles)
+        : profile.colorValue != null
+        ? Color(profile.colorValue!)
+        : HSLColor.fromAHSL(
+            1,
+            AgentAvatar.hueOf(agent.id),
+            0.45,
+            Theme.of(context).brightness == Brightness.dark ? 0.42 : 0.62,
+          ).toColor();
+    final ImageProvider<Object>? photo = faceImageProvider(profile.photoPath);
     final bool hasPhoto = photo != null;
     final Color? dot = showPresence ? presenceColor(agent.activity) : null;
     final double opacity = dimmed ? 0.4 : 1.0;

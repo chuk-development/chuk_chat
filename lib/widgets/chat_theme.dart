@@ -20,13 +20,17 @@ abstract final class ChatMetrics {
   static const double tightGap = 6;
 
   /// The transcript's own outer padding inside the capped column.
-  static const EdgeInsets listPadding =
-      EdgeInsets.symmetric(horizontal: 16, vertical: 20);
+  static const EdgeInsets listPadding = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 20,
+  );
 
   /// The user pill corner radius and its inner padding.
   static const double userBubbleRadius = 22;
-  static const EdgeInsets userBubblePadding =
-      EdgeInsets.symmetric(horizontal: 16, vertical: 10);
+  static const EdgeInsets userBubblePadding = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 10,
+  );
 
   /// The user pill never spans the whole column; it stops at this fraction of
   /// the available width, like ChatGPT.
@@ -89,10 +93,10 @@ class ChatPalette {
 
   /// The paragraph style the agent answer renders with.
   TextStyle assistantParagraph() => TextStyle(
-        fontSize: ChatMetrics.assistantFontSize,
-        height: ChatMetrics.assistantLineHeight,
-        color: assistantText,
-      );
+    fontSize: ChatMetrics.assistantFontSize,
+    height: ChatMetrics.assistantLineHeight,
+    color: assistantText,
+  );
 }
 
 /// Wraps [child] so any Markdown inside it reads at the chat's paragraph size.

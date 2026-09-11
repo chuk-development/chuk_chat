@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/icon_finder.dart';
+
 import 'package:cowork/pages/account_settings_page.dart';
 import 'package:cowork/pages/desktop_settings_modal.dart';
 import 'package:cowork/pages/login_page.dart';
@@ -197,6 +199,38 @@ void main() {
       expect(find.text('Sign in'), findsOneWidget);
     });
 
+    testWidgets('can reveal and conceal the entered password', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+
+      final passwordField = find.byKey(const ValueKey('login-password-field'));
+      bool isObscured() => tester
+          .widget<EditableText>(
+            find.descendant(
+              of: passwordField,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .obscureText;
+
+      expect(isObscured(), isTrue);
+      expect(find.byTooltip('Show password'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('login-password-visibility-toggle')),
+      );
+      await tester.pump();
+
+      expect(isObscured(), isFalse);
+      expect(find.byTooltip('Hide password'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('login-password-visibility-toggle')),
+      );
+      await tester.pump();
+
+      expect(isObscured(), isTrue);
+    });
+
     testWidgets('shows an inline error when auth fails', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: LoginPage(auth: _FailingAuthService())),
@@ -243,7 +277,7 @@ void main() {
       // carries the sign-out — chuk's homes for both.
       expect(find.byType(AppBar), findsNothing);
       // The current shell starts with its sidebar collapsed.
-      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.tap(findIcon(Icons.menu_rounded));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
@@ -251,7 +285,7 @@ void main() {
       // Once: the modal's own footer row. The Account page it opens on is
       // chuk's (bead cowork-4ih): profile, password, recovery, delete account —
       // and no second sign-out, exactly like chuk.
-      expect(find.byIcon(Icons.logout), findsOneWidget);
+      expect(findIcon(Icons.logout), findsOneWidget);
       expect(find.byType(AccountSettingsPage), findsOneWidget);
 
       // Dispose inside the body and drain what the imported pages started

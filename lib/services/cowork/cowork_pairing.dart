@@ -96,9 +96,9 @@ class CoworkPairingException implements Exception {
   final String? detail;
 
   @override
-  String toString() =>
-      detail == null ? 'CoworkPairingException(${rejection.name})'
-          : 'CoworkPairingException(${rejection.name}: $detail)';
+  String toString() => detail == null
+      ? 'CoworkPairingException(${rejection.name})'
+      : 'CoworkPairingException(${rejection.name}: $detail)';
 }
 
 /// Byte-exact protocol constants + pure crypto helpers, shared by both roles and
@@ -146,7 +146,9 @@ class CoworkPairingCrypto {
     List<int> info,
     int length,
   ) async {
-    final kdf = length == 32 ? _hkdf : Hkdf(hmac: Hmac.sha256(), outputLength: length);
+    final kdf = length == 32
+        ? _hkdf
+        : Hkdf(hmac: Hmac.sha256(), outputLength: length);
     final out = await kdf.deriveKey(
       secretKey: SecretKey(ikm),
       // Empty nonce = empty HKDF-Extract salt, matching the Python twin.
@@ -186,7 +188,11 @@ class CoworkPairingCrypto {
     String pairingCode,
     int digits,
   ) async {
-    final info = <int>[...utf8.encode(sasLabel), ...t, ...utf8.encode(pairingCode)];
+    final info = <int>[
+      ...utf8.encode(sasLabel),
+      ...t,
+      ...utf8.encode(pairingCode),
+    ];
     final out = await hkdf(kRaw, info, sasHkdfBytes);
     var value = BigInt.zero;
     for (final b in out) {
@@ -209,12 +215,11 @@ class CoworkPairingCrypto {
     String label,
     List<int> t,
     String pairingCode,
-  ) =>
-      hkdf(
-        kRaw,
-        <int>[...utf8.encode(label), ...t, ...utf8.encode(pairingCode)],
-        macLength,
-      );
+  ) => hkdf(kRaw, <int>[
+    ...utf8.encode(label),
+    ...t,
+    ...utf8.encode(pairingCode),
+  ], macLength);
 
   static Future<Uint8List> deviceMac(
     List<int> kRaw,
@@ -223,23 +228,20 @@ class CoworkPairingCrypto {
     List<int> edPub,
     String deviceId,
     String pairingCode,
-  ) =>
-      hkdf(
-        kRaw,
-        <int>[
-          ...utf8.encode(label),
-          ...t,
-          ...edPub,
-          ...utf8.encode(deviceId),
-          ...utf8.encode(pairingCode),
-        ],
-        macLength,
-      );
+  ) => hkdf(kRaw, <int>[
+    ...utf8.encode(label),
+    ...t,
+    ...edPub,
+    ...utf8.encode(deviceId),
+    ...utf8.encode(pairingCode),
+  ], macLength);
 
   static Uint8List deviceProofMessage(List<int> t, String deviceId) =>
-      Uint8List.fromList(
-        <int>[...utf8.encode(deviceProofLabel), ...t, ...utf8.encode(deviceId)],
-      );
+      Uint8List.fromList(<int>[
+        ...utf8.encode(deviceProofLabel),
+        ...t,
+        ...utf8.encode(deviceId),
+      ]);
 
   /// The channel key that later seals frames (§14). Matches
   /// `derive_channel_key`: `HKDF(K_raw, info=channelKeyInfo, 32)`.
@@ -280,18 +282,18 @@ class CoworkPairing {
     required int expiresAtMs,
     required int Function() nowMs,
     required CoworkApprovedDevices approvedDevices,
-  })  : _role = role,
-        _deviceId = deviceId,
-        _deviceKeyPair = deviceKeyPair,
-        _devicePublicKey = devicePublicKey,
-        _ephemeralKeyPair = ephemeralKeyPair,
-        _ephemeralPublic = ephemeralPublic,
-        _channelId = channelId,
-        _pairingCode = pairingCode,
-        _sasDigits = sasDigits,
-        _expiresAtMs = expiresAtMs,
-        _nowMs = nowMs,
-        _approved = approvedDevices;
+  }) : _role = role,
+       _deviceId = deviceId,
+       _deviceKeyPair = deviceKeyPair,
+       _devicePublicKey = devicePublicKey,
+       _ephemeralKeyPair = ephemeralKeyPair,
+       _ephemeralPublic = ephemeralPublic,
+       _channelId = channelId,
+       _pairingCode = pairingCode,
+       _sasDigits = sasDigits,
+       _expiresAtMs = expiresAtMs,
+       _nowMs = nowMs,
+       _approved = approvedDevices;
 
   final CoworkPairingRole _role;
   final String _deviceId;
@@ -471,7 +473,10 @@ class CoworkPairing {
   void _require(CoworkPairingState expected) {
     if (_state == CoworkPairingState.completed ||
         _state == CoworkPairingState.aborted) {
-      throw CoworkPairingException(CoworkPairingRejection.consumed, _state.name);
+      throw CoworkPairingException(
+        CoworkPairingRejection.consumed,
+        _state.name,
+      );
     }
     if (_state != expected) {
       throw CoworkPairingException(
@@ -510,7 +515,9 @@ class CoworkPairing {
     final msg = <String, dynamic>{
       'type': 'commit',
       'channel_id': _channelId,
-      'commitment': base64.encode(CoworkPairingCrypto.commitment(_ephemeralPublic)),
+      'commitment': base64.encode(
+        CoworkPairingCrypto.commitment(_ephemeralPublic),
+      ),
       'expires_at': _expiresAtMs,
       'sas_digits': _sasDigits,
     };
@@ -834,10 +841,7 @@ class CoworkPairing {
     required List<int> publicA,
     required List<int> publicB,
   }) async {
-    final peerPublic = SimplePublicKey(
-      _peerPublic!,
-      type: KeyPairType.x25519,
-    );
+    final peerPublic = SimplePublicKey(_peerPublic!, type: KeyPairType.x25519);
     final shared = await CoworkPairingCrypto.x25519.sharedSecretKey(
       keyPair: _ephemeralKeyPair,
       remotePublicKey: peerPublic,
@@ -846,7 +850,12 @@ class CoworkPairing {
     _kRaw = kRaw;
     _channelKey = await CoworkPairingCrypto.deriveChannelKey(kRaw);
     final t = CoworkPairingCrypto.transcript(publicA, publicB);
-    _sas = await CoworkPairingCrypto.deriveSas(kRaw, t, _pairingCode, _sasDigits);
+    _sas = await CoworkPairingCrypto.deriveSas(
+      kRaw,
+      t,
+      _pairingCode,
+      _sasDigits,
+    );
   }
 
   Future<void> _verifyConfirm(Map<String, dynamic> msg, String label) async {

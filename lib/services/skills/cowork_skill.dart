@@ -54,12 +54,12 @@ class CoworkSkill {
   }
 
   CoworkSkill copyWith({bool? enabled}) => CoworkSkill(
-        name: name,
-        description: description,
-        source: source,
-        enabled: enabled ?? this.enabled,
-        path: path,
-      );
+    name: name,
+    description: description,
+    source: source,
+    enabled: enabled ?? this.enabled,
+    path: path,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -75,8 +75,7 @@ class CoworkSkill {
   int get hashCode => Object.hash(name, description, source, enabled, path);
 
   @override
-  String toString() =>
-      'CoworkSkill($name, $source, ${enabled ? 'on' : 'off'})';
+  String toString() => 'CoworkSkill($name, $source, ${enabled ? 'on' : 'off'})';
 }
 
 /// The two frames the app sends about skills. Kept apart from

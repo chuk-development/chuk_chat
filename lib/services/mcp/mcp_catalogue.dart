@@ -486,8 +486,7 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Developer',
     description: 'Headless browser automation and web scraping.',
     publisher: 'browserbase.com',
-    iconUrl:
-        'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128',
+    iconUrl: 'https://www.google.com/s2/favicons?domain=browserbase.com&sz=128',
     auth: McpAuth.apiKey,
     credentials: [
       McpCredentialField(

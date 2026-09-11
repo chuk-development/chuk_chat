@@ -43,6 +43,7 @@ void main() {
     recoveries.clear();
     recover = null;
     SessionStash.pending = null;
+    SessionRecovery.inFlight = null;
   });
 
   tearDown(() => auth.close());
@@ -74,8 +75,8 @@ void main() {
     expect(find.text('SHELL'), findsOneWidget);
   });
 
-  testWidgets('recovers a set-aside session through the host before login',
-      (tester) async {
+  testWidgets('a set-aside session mounts the shell at once and recovers '
+      'behind it', (tester) async {
     const stash = SessionStash(
       accessToken: 'a',
       refreshToken: 'r-stash',
@@ -86,9 +87,18 @@ void main() {
 
     await tester.pumpWidget(gate(stash: stash));
 
-    expect(find.text('Reconnecting to your host…'), findsOneWidget);
+    // A stashed session IS a signed-in user: the tokens are on this device and
+    // only the live pair has to be fetched back. So the shell is up in the
+    // first frame — the roster and the transcript are local — and nobody waits
+    // behind a spinner for the host (bead cowork-91pn).
+    expect(find.text('SHELL'), findsOneWidget);
+    expect(find.text('Reconnecting to your host…'), findsNothing);
     expect(find.text('LOGIN'), findsNothing);
+    // The recovery really did start, from the stashed pair.
     expect(recoveries.single.refreshToken, 'r-stash');
+    // And it holds the device's one relay socket while it runs, so the shell's
+    // own transport waits for it instead of displacing it.
+    expect(SessionRecovery.inFlight, isNotNull);
 
     current = _session(refresh: 'r-host-next');
     done.complete(AccountSession.fromSupabase(current!));
@@ -96,6 +106,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('SHELL'), findsOneWidget);
+    expect(SessionRecovery.inFlight, isNull);
   });
 
   testWidgets('falls back to the login page when nothing is recoverable',
@@ -131,19 +142,57 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.text('Reconnecting to your host…'), findsOneWidget);
+    // The reader was in the middle of a conversation and the pair rotated
+    // behind their back. That is not a sign-out, so the shell stays where it
+    // is and the recovery runs behind it — no spinner, no login form.
+    expect(find.text('SHELL'), findsOneWidget);
+    expect(find.text('Reconnecting to your host…'), findsNothing);
+    expect(find.text('LOGIN'), findsNothing);
     expect(recoveries.single.refreshToken, 'r-live');
+    expect(SessionRecovery.inFlight, isNotNull);
 
-    // The adoption's own signedIn must not mount the shell early.
+    // The adoption's own signedIn is not the user signing in: it must not end
+    // the recovery, and it must not be adopted as the gate's session while the
+    // recovery link still owns the socket.
     current = _session(refresh: 'r-host-next');
     auth.add(AuthState(AuthChangeEvent.signedIn, current));
     await tester.pump();
-    expect(find.text('Reconnecting to your host…'), findsOneWidget);
+    expect(recoveries, hasLength(1));
+    expect(SessionRecovery.inFlight, isNotNull);
+    expect(find.text('SHELL'), findsOneWidget);
 
     done.complete(AccountSession.fromSupabase(current!));
     await tester.pump();
     await tester.pump();
     expect(find.text('SHELL'), findsOneWidget);
+    expect(SessionRecovery.inFlight, isNull);
+  });
+
+  testWidgets('a recovery that finds nothing still ends at the login page', (
+    tester,
+  ) async {
+    // The one thing mounting the shell early may never do: leave a genuinely
+    // signed-out user inside it.
+    current = _session(refresh: 'r-live');
+    final done = Completer<AccountSession?>();
+    recover = (_) => done.future;
+    await tester.pumpWidget(gate());
+
+    current = null;
+    auth.add(const AuthState(
+      AuthChangeEvent.signedOut,
+      null,
+      signOutReason: SignOutReason.sessionExpired,
+    ));
+    await tester.pump();
+    expect(find.text('SHELL'), findsOneWidget);
+
+    done.complete(null);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('LOGIN'), findsOneWidget);
+    expect(find.text('SHELL'), findsNothing);
+    expect(SessionRecovery.inFlight, isNull);
   });
 
   testWidgets('a sign-out the user asked for goes straight to login',

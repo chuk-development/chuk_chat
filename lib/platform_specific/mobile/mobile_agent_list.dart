@@ -18,15 +18,22 @@
 library;
 
 import 'package:animations/animations.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/services/cowork/agent_read_marks.dart';
+import 'package:cowork/services/cowork/thread_preview_store.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/ui/expressive/connected_group.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/top_veil.dart';
 import 'package:cowork/ui/expressive/staggered.dart';
 import 'package:cowork/widgets/anchored_menu.dart';
 
@@ -61,6 +68,7 @@ class MobileAgentList extends StatefulWidget {
     this.now,
     this.readMarks,
     this.profiles,
+    this.title = 'Agents',
   });
 
   final AgentRosterSource source;
@@ -96,6 +104,11 @@ class MobileAgentList extends StatefulWidget {
   /// Injectable stores for tests; default to the app-wide ones.
   final AgentReadMarks? readMarks;
   final AgentProfileStore? profiles;
+
+  /// The headline. The roster is the Chats tab, but the same list picks a
+  /// coworker for the Artefacts and Files tabs, and a list headed "Coworkers"
+  /// there would not say what tapping a row does.
+  final String title;
 
   @override
   State<MobileAgentList> createState() => _MobileAgentListState();
@@ -245,6 +258,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         _query,
         _marks,
         _profiles,
+        ThreadPreviewStore.instance,
       ]),
       builder: (BuildContext context, Widget? _) => _buildList(context),
     );
@@ -254,136 +268,137 @@ class _MobileAgentListState extends State<MobileAgentList> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
     final List<CoworkAgent> agents = _visible();
+    // Threads this device already holds but has not previewed yet (a restart,
+    // a fresh install that synced). Reads once per thread, then never again.
+    unawaited(
+      ThreadPreviewStore.instance.ensureFor(<String>[
+        for (final CoworkAgent agent in agents)
+          for (final CoworkThreadInfo thread in agent.threads) thread.key,
+      ]),
+    );
     final int unread = _marks.unreadCount(widget.source.visibleAgents);
 
-    return CustomScrollView(
-      slivers: <Widget>[
-        SliverAppBar(
-          pinned: true,
-          backgroundColor: scheme.surface,
-          automaticallyImplyLeading: false,
-          titleSpacing: _searching ? 8 : 10,
-          toolbarHeight: 58,
-          leadingWidth: 56,
-          leading: _searching
-              ? Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ExpressiveIconButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: _closeSearch,
-                      size: 40,
-                      tooltip: 'Close search',
-                      semanticsId: 'mobile_home_search_close',
-                    ),
-                  ),
-                )
-              : (widget.onOpenAccount == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: _AccountFace(
-                          monogram: accountMonogram(widget.accountLabel),
-                          onTap: widget.onOpenAccount!,
-                        ),
-                      )),
-          title: _searching
-              ? TextField(
-                  controller: _query,
-                  focusNode: _searchFocus,
-                  textInputAction: TextInputAction.search,
-                  cursorColor: scheme.primary,
-                  style: text.titleLarge,
-                  decoration: InputDecoration(
-                    isCollapsed: true,
-                    hintText: 'Search coworkers',
-                    hintStyle: text.titleLarge?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    border: InputBorder.none,
-                  ),
-                )
-              : Text(
-                  'Coworkers',
-                  style: text.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-          actions: <Widget>[
-            if (_searching)
-              if (_query.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    onPressed: () => setState(_query.clear),
-                  ),
-                )
-              else
-                const SizedBox.shrink()
-            else ...<Widget>[
+    // The roster floats over its own list: the rows travel up behind the
+    // header and fade out in the veil, the same way the chat does. A pinned
+    // SliverAppBar could not do this — the list inside it is its own scroller,
+    // so nothing ever passed under the bar.
+    final Widget header = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: SizedBox(
+        height: 58,
+        child: Row(
+          children: <Widget>[
+            // Only the search back target lives on the left. The account used
+            // to sit here and opened settings — the navigation bar has that
+            // now, and one way in is enough.
+            if (_searching) ...<Widget>[
               ExpressiveIconButton(
-                icon: Icons.search_rounded,
+                hugeIcon: HugeIcons.arrowLeft02,
+                onTap: _closeSearch,
+                size: kMinInteractiveDimension,
+                tooltip: 'Close search',
+                semanticsId: 'mobile_home_search_close',
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: _searching
+                  ? TextField(
+                      controller: _query,
+                      focusNode: _searchFocus,
+                      textInputAction: TextInputAction.search,
+                      cursorColor: scheme.primary,
+                      style: text.titleLarge,
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        hintText: 'Search coworkers',
+                        hintStyle: text.titleLarge?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        border: InputBorder.none,
+                      ),
+                    )
+                  : Text(
+                      widget.title,
+                      style: text.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+            ),
+            if (_searching) ...<Widget>[
+              if (_query.text.isNotEmpty)
+                ExpressiveIconButton(
+                  hugeIcon: HugeIcons.cancel01,
+                  onTap: () => setState(_query.clear),
+                  size: kMinInteractiveDimension,
+                  tooltip: 'Clear',
+                ),
+            ] else ...<Widget>[
+              ExpressiveIconButton(
+                hugeIcon: HugeIcons.search01,
                 onTap: _openSearch,
-                size: 44,
-                tooltip: 'Search',
+                size: kMinInteractiveDimension,
+                color: scheme.surfaceContainerHighest,
+                tooltip: 'Search coworkers',
                 semanticsId: 'mobile_home_search',
               ),
               if (widget.onAddAgent != null) ...<Widget>[
                 const SizedBox(width: 8),
                 ExpressiveIconButton(
-                  icon: Icons.add_rounded,
+                  hugeIcon: HugeIcons.plusSign,
                   onTap: widget.onAddAgent,
-                  size: 44,
+                  size: kMinInteractiveDimension,
                   color: scheme.primary,
                   onColor: scheme.onPrimary,
                   tooltip: 'Add a coworker',
                   semanticsId: 'mobile_home_add',
                 ),
               ],
-              const SizedBox(width: 12),
             ],
           ],
         ),
+      ),
+    );
 
-        const SliverToBoxAdapter(child: SizedBox(height: 6)),
+    final Widget filters = Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 10),
+      child: ConnectedGroup(
+        labels: _filters,
+        selected: _filter,
+        badges: <int, int>{1: unread},
+        onSelected: (int i) => setState(() {
+          _reverse = i < _filter;
+          _filter = i;
+          _animate = true;
+        }),
+      ),
+    );
 
-        SliverToBoxAdapter(
-          child: ConnectedGroup(
-            labels: _filters,
-            selected: _filter,
-            badges: <int, int>{1: unread},
-            onSelected: (int i) => setState(() {
-              _reverse = i < _filter;
-              _filter = i;
-              _animate = true;
-            }),
-          ),
-        ),
+    // Status bar + header row + the filter group: what the list has to clear
+    // before its first row is readable.
+    final double headerSpace = MediaQuery.paddingOf(context).top + 58 + 4 + 72;
 
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-        SliverFillRemaining(
-          hasScrollBody: true,
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
           // The whole list moves as one: a later filter slides in from the
           // right, a earlier one from the left.
           child: PageTransitionSwitcher(
             duration: const Duration(milliseconds: 350),
             reverse: _reverse,
             transitionBuilder:
-                (Widget child, Animation<double> primary, Animation<double> secondary) =>
-                    SharedAxisTransition(
-                      animation: primary,
-                      secondaryAnimation: secondary,
-                      transitionType: SharedAxisTransitionType.horizontal,
-                      fillColor: Colors.transparent,
-                      child: child,
-                    ),
+                (
+                  Widget child,
+                  Animation<double> primary,
+                  Animation<double> secondary,
+                ) => SharedAxisTransition(
+                  animation: primary,
+                  secondaryAnimation: secondary,
+                  transitionType: SharedAxisTransitionType.horizontal,
+                  fillColor: Colors.transparent,
+                  child: child,
+                ),
             child: KeyedSubtree(
               key: ValueKey<int>(_filter),
               child: agents.isEmpty
@@ -394,6 +409,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                     )
                   : ListView.builder(
                       padding: EdgeInsets.only(
+                        top: headerSpace,
                         bottom: MediaQuery.paddingOf(context).bottom + 24,
                       ),
                       itemCount: agents.length,
@@ -404,6 +420,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                           agent: agent,
                           selected: agent.id == widget.selectedAgentId,
                           unread: _marks.isUnread(agent),
+                          unreadThreads: _marks.unreadThreads(agent),
                           role: _roleOf(agent),
                           now: _now(),
                           profiles: _profiles,
@@ -427,62 +444,23 @@ class _MobileAgentListState extends State<MobileAgentList> {
             ),
           ),
         ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: TopVeil(
+            fadeBelow: 14,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[header, filters],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-/// The account face: the user's monogram in a blob, top left of the title bar.
-class _AccountFace extends StatelessWidget {
-  const _AccountFace({required this.monogram, required this.onTap});
-
-  final String monogram;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      identifier: 'mobile_home_account',
-      button: true,
-      label: 'Account',
-      child: Tooltip(
-        message: 'Account',
-        child: MorphTap(
-          onTap: onTap,
-          color: scheme.primaryContainer,
-          shape: const CircleBorder(),
-          pressedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: EdgeInsets.zero,
-          child: SizedBox.square(
-            dimension: 38,
-            child: Center(
-              child: monogram.isEmpty
-                  ? Icon(
-                      Icons.person_rounded,
-                      size: 20,
-                      color: scheme.onPrimaryContainer,
-                    )
-                  : Text(
-                      monogram,
-                      style: TextStyle(
-                        color: scheme.onPrimaryContainer,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One inbox row: blob face with the presence dot, name, role tag, time,
-/// preview line, unread dot.
 class MobileAgentRow extends StatelessWidget {
   const MobileAgentRow({
     super.key,
@@ -490,6 +468,7 @@ class MobileAgentRow extends StatelessWidget {
     required this.now,
     this.selected = false,
     this.unread = false,
+    this.unreadThreads = 1,
     this.role,
     this.onTap,
     this.onLongPress,
@@ -501,6 +480,10 @@ class MobileAgentRow extends StatelessWidget {
   final bool selected;
   final bool unread;
 
+  /// How many of this coworker's threads have something new in them. Shown as
+  /// the number on the badge.
+  final int unreadThreads;
+
   /// The role line to show; null hides the tag.
   final String? role;
 
@@ -511,14 +494,23 @@ class MobileAgentRow extends StatelessWidget {
 
   final AgentProfileStore? profiles;
 
-  /// Rows keep the old height so the list rhythm does not change.
-  static const double height = 72;
+  /// One row's minimum height. Tight enough that a screen holds the roster,
+  /// loose enough for a 52 px face plus two lines of text.
+  static const double height = 64;
 
   /// The preview line under the name. What the coworker is doing now beats a
   /// stale thread title; a thread title beats the brief; the brief beats
   /// silence.
   static String previewOf(CoworkAgent agent, {AgentProfileStore? profiles}) {
     if (agent.running) return 'Working…';
+    // What was actually said last, whoever said it. This is the line a roster
+    // is read for; a thread title is what it falls back to.
+    final ThreadPreview? preview = ThreadPreviewStore.instance.newestOf(
+      agent.threads.map((CoworkThreadInfo thread) => thread.key),
+    );
+    if (preview != null && preview.text.isNotEmpty) {
+      return preview.fromUser ? 'You: ${preview.text}' : preview.text;
+    }
     for (final CoworkThreadInfo thread in agent.threads) {
       final String title = thread.title.trim();
       if (title.isNotEmpty && title != 'default' && title != 'General') {
@@ -534,7 +526,11 @@ class MobileAgentRow extends StatelessWidget {
     if (stored.isNotEmpty) return stored;
     final String brief = agent.brief?.trim() ?? '';
     if (brief.isNotEmpty) return brief;
-    return 'No activity yet';
+    // Nothing to say beats saying "No activity yet" on every row of a fresh
+    // install: the line is for what happened, and an empty line reads as
+    // "nothing yet" without spelling it out. The real last message lands here
+    // with the preview cache (bead: thread preview store).
+    return '';
   }
 
   @override
@@ -549,7 +545,7 @@ class MobileAgentRow extends StatelessWidget {
       button: onTap != null,
       selected: selected,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
         child: Builder(
           builder: (BuildContext rowContext) => MorphTap(
             onTap: onTap,
@@ -567,13 +563,13 @@ class MobileAgentRow extends StatelessWidget {
             pressedShape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: height - 4),
               child: Row(
                 children: <Widget>[
-                  AgentFace(agent: agent, size: 52, store: profiles),
-                  const SizedBox(width: 16),
+                  AgentFace(agent: agent, size: 48, store: profiles),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,7 +612,7 @@ class MobileAgentRow extends StatelessWidget {
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Row(
                           children: <Widget>[
                             Expanded(
@@ -635,13 +631,11 @@ class MobileAgentRow extends StatelessWidget {
                               ),
                             ),
                             if (unread)
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                width: 11,
-                                height: 11,
-                                decoration: BoxDecoration(
-                                  color: accent,
-                                  shape: BoxShape.circle,
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: _UnreadBadge(
+                                  count: unreadThreads,
+                                  colour: accent,
                                 ),
                               ),
                           ],
@@ -705,7 +699,7 @@ class _MenuRow extends StatelessWidget {
     final Color c = color ?? Theme.of(context).colorScheme.onSurface;
     return Row(
       children: <Widget>[
-        Icon(icon, size: 19, color: c),
+        AppIcon(icon, size: 19, color: c),
         const SizedBox(width: 12),
         Text(
           label,
@@ -746,7 +740,7 @@ class _EmptyState extends StatelessWidget {
                 borderRadius: BorderRadius.circular(42),
               ),
             ),
-            child: Icon(
+            child: AppIcon(
               searching
                   ? Icons.search_off_rounded
                   : filtering
@@ -812,4 +806,36 @@ String mobileTimeLabel(DateTime? when, {required DateTime now}) {
     return names[when.weekday - 1];
   }
   return '${when.day}.${when.month}.';
+}
+
+/// The number of new threads on a coworker, in that coworker's colour.
+///
+/// A bare dot said "something happened" and nothing more; the roster is read at
+/// a glance and the glance should carry the amount.
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count, required this.colour});
+
+  final int count;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = count > 99 ? '99+' : '${count < 1 ? 1 : count}';
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: ThemeData.estimateBrightnessForColor(colour) == Brightness.dark
+              ? Colors.white
+              : Colors.black,
+        ),
+      ),
+    );
+  }
 }

@@ -84,7 +84,10 @@ class CoworkNotifications {
 
   /// The user tapped a notification for [sessionKey]; the shell opened the
   /// thread. Same bookkeeping as a replay.
-  Future<void> onOpenedFromNotification(String sessionKey, {String? runId}) async {
+  Future<void> onOpenedFromNotification(
+    String sessionKey, {
+    String? runId,
+  }) async {
     await Future.wait(<Future<void>>[
       if (runId != null) RunNotifications.instance.consumeRun(runId),
       RunNotifications.instance.consumeForSession(sessionKey),

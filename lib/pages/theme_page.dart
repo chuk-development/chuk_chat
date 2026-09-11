@@ -2,6 +2,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
@@ -256,17 +259,16 @@ class _ThemePageState extends State<ThemePage> {
     final l = AppLocalizations.of(context)!;
     final bool isDarkMode = _selectedThemeMode == Brightness.dark;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: Text(l.themeSettings),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      title: l.themeSettings,
+      builder: (BuildContext context) => SettingsListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 8,
+          16,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
         children: [
           // Presets, up top so a whole look can be applied before tuning the
           // individual controls below. Every change is applied live, so there
@@ -423,7 +425,7 @@ class _ThemePageState extends State<ThemePage> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
+                        AppIcon(
                           Icons.contrast_outlined,
                           size: 20,
                           color: theme.m3.onSurfaceVariant,
@@ -596,12 +598,12 @@ class _ColorCard extends StatelessWidget {
               controller: hexController,
               decoration: InputDecoration(
                 border: InputBorder.none,
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.colorize_outlined,
                   color: m3.onSurfaceVariant,
                 ),
                 suffixIcon: IconButton(
-                  icon: Icon(Icons.check_circle, color: cs.primary),
+                  icon: AppIcon(Icons.check_circle, color: cs.primary),
                   onPressed: () => onHexChanged(hexController.text),
                 ),
                 hintText: '#RRGGBB',
@@ -626,7 +628,7 @@ class _ColorCard extends StatelessWidget {
                   onColorSelected(picked);
                 }
               },
-              icon: const Icon(Icons.palette_outlined, size: 18),
+              icon: const AppIcon(Icons.palette_outlined, size: 18),
               label: Text(AppLocalizations.of(context)!.pickCustomColor),
             ),
           ),
@@ -687,7 +689,6 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
     final l = AppLocalizations.of(context)!;
     final color = _hsv.toColor();
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: m3.surfaceContainerHigh,
       title: Text(l.pickAColor),
       content: SizedBox(
@@ -757,7 +758,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
             TextFormField(
               controller: _hexController,
               decoration: InputDecoration(
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.tag,
                   color: m3.onSurfaceVariant,
                   size: 18,
@@ -888,27 +889,44 @@ class _Swatch extends StatelessWidget {
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark
         ? Colors.white
         : Colors.black;
+    // The coloured circle stays as small as the grid wants it; the TAP square
+    // around it never falls under Material's minimum, so a swatch is still a
+    // swatch and a finger still lands on it.
+    final double target = size < kMinInteractiveDimension
+        ? kMinInteractiveDimension
+        : size;
     return InkWell(
       customBorder: const CircleBorder(),
       onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-          border: selected
-              ? Border.all(color: cs.onSurface, width: 2)
-              // The spacer ring must match the card the swatch sits in, not
-              // the scaffold surface, or the selected swatch shows a halo.
-              : Border.all(color: Colors.transparent, width: 2),
-          boxShadow: selected
-              ? [BoxShadow(color: theme.m3.surfaceContainer, spreadRadius: 3)]
-              : null,
+      child: SizedBox(
+        width: target,
+        height: target,
+        child: Center(
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              border: selected
+                  ? Border.all(color: cs.onSurface, width: 2)
+                  // The spacer ring must match the card the swatch sits in, not
+                  // the scaffold surface, or the selected swatch shows a halo.
+                  : Border.all(color: Colors.transparent, width: 2),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: theme.m3.surfaceContainer,
+                        spreadRadius: 3,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: selected
+                ? AppIcon(Icons.check, size: size * 0.5, color: checkColor)
+                : null,
+          ),
         ),
-        child: selected
-            ? Icon(Icons.check, size: size * 0.5, color: checkColor)
-            : null,
       ),
     );
   }
@@ -1129,4 +1147,3 @@ class _FontCard extends StatelessWidget {
     );
   }
 }
-

@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/ui/expressive/motion.dart';
 
 /// A floating pill toast — the expressive replacement for a flat SnackBar.
@@ -24,7 +26,7 @@ void pillToast(BuildContext context, String message, {IconData? icon}) {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, color: scheme.onInverseSurface, size: 20),
+            AppIcon(icon, color: scheme.onInverseSurface, size: 20),
             const SizedBox(width: 12),
           ],
           Flexible(
@@ -133,7 +135,7 @@ class SheetAction extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: Icon(icon, color: c, size: 22),
+              child: AppIcon(icon, color: c, size: 22),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -159,7 +161,10 @@ class SheetAction extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+            AppIcon(
+              Icons.chevron_right_rounded,
+              color: scheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),

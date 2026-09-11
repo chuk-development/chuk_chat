@@ -102,9 +102,7 @@ class FileAttachmentHandler {
     _isPicking = true;
     final List<XFile> pickedImages;
     try {
-      pickedImages = await _imagePicker.pickMultiImage(
-        imageQuality: 90,
-      );
+      pickedImages = await _imagePicker.pickMultiImage(imageQuality: 90);
     } catch (error) {
       onError?.call('Unable to access photo library: $error');
       return;
@@ -425,7 +423,9 @@ class FileAttachmentHandler {
         _attachedFiles.removeAt(index);
         onUpdate?.call();
       }
-      onError?.call('Failed to prepare the scanned pages of "$fileName": $error');
+      onError?.call(
+        'Failed to prepare the scanned pages of "$fileName": $error',
+      );
       return;
     }
 

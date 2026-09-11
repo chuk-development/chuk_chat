@@ -2,6 +2,8 @@
 // Reads colors from the active app theme — no palette duplication.
 // Uses rounded icon variants for a softer, less standard look.
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/utils/color_extensions.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/brand_wordmark.dart';
@@ -38,8 +40,9 @@ class SidebarTokens {
       accent: accent,
       bg: bg,
       surface: bg.lighten(theme.brightness == Brightness.dark ? 0.04 : 0.02),
-      surfaceHigh:
-          bg.lighten(theme.brightness == Brightness.dark ? 0.08 : 0.05),
+      surfaceHigh: bg.lighten(
+        theme.brightness == Brightness.dark ? 0.08 : 0.05,
+      ),
       hairline: theme.dividerColor.withValues(alpha: 0.5),
       muted: iconFg.withValues(alpha: 0.6),
       isDark: theme.brightness == Brightness.dark,
@@ -81,11 +84,14 @@ class SbBrand extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
-              child: Text('C',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      color: t.isDark ? Colors.black : Colors.white)),
+              child: Text(
+                'C',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  color: t.isDark ? Colors.black : Colors.white,
+                ),
+              ),
             ),
             const SizedBox(width: 10),
           ],
@@ -94,12 +100,14 @@ class SbBrand extends StatelessWidget {
           if (label == 'Chuk Chat')
             BrandWordmark(color: t.iconFg, height: fontSize * 0.75)
           else
-            Text(label,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: fontWeight,
-                  color: t.iconFg,
-                )),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: fontWeight,
+                color: t.iconFg,
+              ),
+            ),
           const Spacer(),
           ?trailing,
         ],
@@ -114,7 +122,11 @@ class SbBrand extends StatelessWidget {
 class SbSearchTrigger extends StatelessWidget {
   final VoidCallback onTap;
   final String label;
-  const SbSearchTrigger({super.key, required this.onTap, this.label = 'Search'});
+  const SbSearchTrigger({
+    super.key,
+    required this.onTap,
+    this.label = 'Search',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,13 +145,16 @@ class SbSearchTrigger extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_rounded, size: 15, color: t.muted),
+              AppIcon(Icons.search_rounded, size: 15, color: t.muted),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: t.muted,
-                      fontWeight: FontWeight.w500)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: t.muted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
         ),
@@ -175,13 +190,16 @@ class SbNewChatPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: on),
+              AppIcon(icon, size: 15, color: on),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: on)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: on,
+                ),
+              ),
             ],
           ),
         ),
@@ -218,17 +236,19 @@ class SbNavItem extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           child: Row(
             children: [
-              Icon(icon, size: 19, color: iconColor),
+              AppIcon(icon, size: 19, color: iconColor),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
-                      color: textColor,
-                    )),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
               ),
             ],
           ),
@@ -246,6 +266,7 @@ class SbRailRow extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool primary;
+
   /// Inner padding inside the rounded hover pill. Combined with the 6 px
   /// outer wrapper this yields an effective left offset of 8 — same as
   /// `kFixedLeftPadding`, so the icon glyph centres line up with the
@@ -295,7 +316,7 @@ class SbRailRow extends StatelessWidget {
                   SizedBox(
                     width: iconBoxWidth,
                     height: rowHeight,
-                    child: Icon(icon, size: iconSize, color: iconColor),
+                    child: AppIcon(icon, size: iconSize, color: iconColor),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -304,8 +325,7 @@ class SbRailRow extends StatelessWidget {
                     softWrap: false,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight:
-                          primary ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
                       color: textColor,
                     ),
                   ),
@@ -345,24 +365,28 @@ class SbSectionLabel extends StatelessWidget {
         children: [
           // Not upper case any more: small capitals read smaller than they
           // measure, and this label has to be findable at a glance.
-          Text(label,
-              // A line height above 1 keeps the descenders inside the box
-              // whatever the font: without it the y and the p are clipped.
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.35,
-                letterSpacing: -0.2,
-                fontWeight: FontWeight.w900,
-                color: c,
-              )),
+          Text(
+            label,
+            // A line height above 1 keeps the descenders inside the box
+            // whatever the font: without it the y and the p are clipped.
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.35,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w900,
+              color: c,
+            ),
+          ),
           if (count != null) ...[
             const Spacer(),
-            Text('$count',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: c.withValues(alpha: 0.7),
-                )),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: c.withValues(alpha: 0.7),
+              ),
+            ),
           ],
         ],
       ),
@@ -404,18 +428,24 @@ class SbPinnedBento extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
               child: Row(
                 children: [
-                  Text('Pinned',
-                      style: TextStyle(
-                          fontSize: 12,
-                          letterSpacing: 0.1,
-                          fontWeight: FontWeight.w600,
-                          color: t.muted)),
+                  Text(
+                    'Pinned',
+                    style: TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 0.1,
+                      fontWeight: FontWeight.w600,
+                      color: t.muted,
+                    ),
+                  ),
                   const Spacer(),
-                  Text('$count',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: t.muted.withValues(alpha: 0.65))),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: t.muted.withValues(alpha: 0.65),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -469,6 +499,7 @@ class SbChatTile extends StatefulWidget {
   final Widget? trailing;
   final bool trailingOnHover;
   final bool compact;
+
   /// When true, skip the outer 6 px horizontal wrapper. Used when the tile is
   /// hosted inside a container that supplies its own indent (e.g. the pinned
   /// bento) so the title sits at the same x as tiles in the open list.
@@ -504,16 +535,15 @@ class _SbChatTileState extends State<SbChatTile> {
     final Color titleColor = widget.locked
         ? t.iconFg.withValues(alpha: 0.35)
         : widget.dimmed
-            ? t.iconFg.withValues(alpha: 0.38)
-            : (widget.selected ? t.accent : t.iconFg);
+        ? t.iconFg.withValues(alpha: 0.38)
+        : (widget.selected ? t.accent : t.iconFg);
     final Color timeColor = t.iconFg.withValues(alpha: 0.55);
 
     // Trailing actions (pin/more) hover OVER the row's right edge rather
     // than reserving a slot, so the title stretches as far right as
     // possible. The time text on the right always shows; on hover, the
     // actions overlay it (and a small chunk of trailing title).
-    final bool hoverOverlay =
-        widget.trailingOnHover && widget.trailing != null;
+    final bool hoverOverlay = widget.trailingOnHover && widget.trailing != null;
     final bool hoverActive = hoverOverlay && _hovered;
 
     final row = Row(
@@ -521,8 +551,11 @@ class _SbChatTileState extends State<SbChatTile> {
         if (widget.locked)
           Padding(
             padding: const EdgeInsets.only(right: 6),
-            child: Icon(Icons.lock_rounded,
-                size: 14, color: t.iconFg.withValues(alpha: 0.4)),
+            child: AppIcon(
+              Icons.lock_rounded,
+              size: 14,
+              color: t.iconFg.withValues(alpha: 0.4),
+            ),
           ),
         Expanded(
           child: HoverMarqueeText(
@@ -581,8 +614,8 @@ class _SbChatTileState extends State<SbChatTile> {
     final Color rowBg = widget.selected
         ? Color.alphaBlend(t.accent.withValues(alpha: 0.18), t.bg)
         : (_hovered
-            ? Color.alphaBlend(t.iconFg.withValues(alpha: 0.05), t.bg)
-            : t.bg);
+              ? Color.alphaBlend(t.iconFg.withValues(alpha: 0.05), t.bg)
+              : t.bg);
 
     Widget body = AnimatedContainer(
       duration: const Duration(milliseconds: 110),
@@ -677,7 +710,11 @@ class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate {
   });
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(
       color: background,
       child: SbSectionLabel(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:cowork/widgets/chuk_table.dart';
 
 void main() {
   final document = <String, dynamic>{
@@ -22,7 +23,7 @@ void main() {
   };
 
   testWidgets(
-    'table shows values and separate copy/open controls for each URL',
+    'a table document draws through the chat table, with URLs as host links',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1400, 700));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -33,8 +34,18 @@ void main() {
       );
       expect(find.text('Song title'), findsOneWidget);
       expect(find.text('Artist name'), findsOneWidget);
-      expect(find.byTooltip('Copy link'), findsNWidgets(2));
-      expect(find.byTooltip('Open in browser'), findsNWidgets(2));
+      // One table widget, the same one the chat renders — not a second,
+      // half-built grid that cannot stack on a phone.
+      expect(find.byType(ChukTable), findsOneWidget);
+      // A URL cell reads as its host and opens on a tap. The whole table is
+      // copyable as markdown, with the full URLs in it, from ChukTable's own
+      // control — which is why the per-cell copy buttons are gone.
+      expect(find.textContaining('instagram.com', findRichText: true),
+          findsOneWidget);
+      expect(find.textContaining('open.spotify.com', findRichText: true),
+          findsOneWidget);
+      expect(find.textContaining('/reels/test', findRichText: true),
+          findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -107,7 +118,9 @@ void main() {
             w.decoration is BoxDecoration &&
             (w.decoration as BoxDecoration).color == colors.first,
       );
-      expect(tester.getSize(firstBar).width, closeTo(760 * .321, .01));
+      // The chart keeps a reading measure, so the bar is a share of 720
+      // rather than of the whole 760-pixel surface.
+      expect(tester.getSize(firstBar).width, closeTo(720 * .321, .01));
       expect(find.text('Four strongest parties — test data'), findsOneWidget);
       expect(find.byTooltip('Copy link'), findsOneWidget);
       expect(find.byTooltip('Open in browser'), findsOneWidget);

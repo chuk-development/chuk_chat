@@ -112,7 +112,7 @@ class ChartRenderer extends StatelessWidget {
   final Map<String, dynamic> data;
 
   ChartRenderer({super.key, required Map<String, dynamic> data})
-      : data = normalizeChartData(data);
+    : data = normalizeChartData(data);
 
   /// Convenience: try to parse a raw JSON string. Returns null on failure.
   ///
@@ -260,7 +260,8 @@ class ChartRenderer extends StatelessWidget {
     if (raw is! List) return const [];
     return [
       for (final item in raw)
-        if (item is Map && item['value'] is num) Map<String, dynamic>.from(item),
+        if (item is Map && item['value'] is num)
+          Map<String, dynamic>.from(item),
     ];
   }
 
@@ -282,9 +283,7 @@ class ChartRenderer extends StatelessWidget {
   static List<num?> _valuesOf(Map<String, dynamic> dataset) {
     final raw = dataset['data'];
     if (raw is! List) return const [];
-    return [
-      for (final v in raw) v is num ? v : num.tryParse('$v'),
-    ];
+    return [for (final v in raw) v is num ? v : num.tryParse('$v')];
   }
 
   /// True when this map holds at least one number to draw. Used to decide
@@ -298,7 +297,8 @@ class ChartRenderer extends StatelessWidget {
       final points = ds['data'];
       if (points is List) {
         for (final point in points) {
-          if (point is Map && point['x'] is num && point['y'] is num) return true;
+          if (point is Map && point['x'] is num && point['y'] is num)
+            return true;
         }
       }
       if (isScatter) continue;
@@ -374,7 +374,8 @@ class ChartRenderer extends StatelessWidget {
     // Round up to a multiple of yInterval so fl_chart doesn't add a stray
     // label one tick above the highest bar (e.g. "21" sitting on top of
     // "20" when the data tops out at 20.7).
-    final double computedMaxY = providedMaxY ??
+    final double computedMaxY =
+        providedMaxY ??
         (yInterval > 0
             ? ((dataMaxY / yInterval).ceilToDouble() * yInterval)
             : dataMaxY);
@@ -394,8 +395,11 @@ class ChartRenderer extends StatelessWidget {
         // single `color` paints the whole series. Missing entries fall back
         // to the series color, then to the palette.
         final perBar = dsMap['colors'];
-        final barColor = (perBar is List && i < perBar.length) ? perBar[i] : null;
-        final color = _tryParseColor(barColor) ??
+        final barColor = (perBar is List && i < perBar.length)
+            ? perBar[i]
+            : null;
+        final color =
+            _tryParseColor(barColor) ??
             _tryParseColor(dsMap['color']) ??
             _colorAt(ds);
         final value = i < values.length ? values[i] : null;
@@ -491,9 +495,7 @@ class ChartRenderer extends StatelessWidget {
                   ? '${datasets[dsIdx]['label'] ?? ''}'.trim()
                   : '';
               final valueText = _formatAxisValue(rod.toY);
-              final body = dsLabel.isEmpty
-                  ? valueText
-                  : '$dsLabel: $valueText';
+              final body = dsLabel.isEmpty ? valueText : '$dsLabel: $valueText';
               return BarTooltipItem(
                 '$label\n$body',
                 TextStyle(
@@ -536,7 +538,9 @@ class ChartRenderer extends StatelessWidget {
         // A missing value is a gap, not a shortcut: nullSpot breaks the line
         // there instead of drawing straight over the hole.
         spots.add(
-          value == null ? FlSpot.nullSpot : FlSpot(i.toDouble(), value.toDouble()),
+          value == null
+              ? FlSpot.nullSpot
+              : FlSpot(i.toDouble(), value.toDouble()),
         );
       }
 

@@ -44,10 +44,23 @@ class _StaggeredItemState extends State<StaggeredItem>
     curve: Interval(_delayMs / _totalMs, 1, curve: Curves.easeOutCubic),
   );
 
+  bool _started = false;
+
   @override
-  void initState() {
-    super.initState();
-    _c.forward();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced motion: the row is simply there. The cascade is decoration, so
+    // it is the first thing to go when the platform asks for less movement.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _started = true;
+      _c.stop();
+      _c.value = 1;
+      return;
+    }
+    if (!_started) {
+      _started = true;
+      _c.forward();
+    }
   }
 
   @override

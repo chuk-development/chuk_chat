@@ -15,6 +15,10 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/pages/agent_profile_edit_page.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
@@ -99,9 +103,10 @@ class AgentProfilePage extends StatelessWidget {
         if (agent == null) {
           // The coworker was deleted while the page was open. Say so instead of
           // rendering an empty shell.
-          return Scaffold(
-            appBar: AppBar(title: const Text('Coworker')),
-            body: const Center(child: Text('This coworker is gone.')),
+          return ExpressiveScreen(
+            title: 'Coworker',
+            builder: (BuildContext context) =>
+                const Center(child: Text('This coworker is gone.')),
           );
         }
         return _build(context, agent);
@@ -117,58 +122,35 @@ class AgentProfilePage extends StatelessWidget {
     final String? role = _roleOf(agent, profile);
     final String? brief = _briefOf(agent, profile);
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: scheme.surface,
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: scheme.surface,
-            toolbarHeight: 58,
-            titleSpacing: 6,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ExpressiveIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  size: 42,
-                  onTap: () => Navigator.of(context).maybePop(),
-                  tooltip: 'Back',
-                  semanticsId: 'agent_profile_back',
-                ),
-              ),
-            ),
-            leadingWidth: 62,
-            title: Text(
-              'Profile',
-              style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            actions: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: ExpressiveIconButton(
-                  icon: Icons.edit_rounded,
-                  size: 42,
-                  color: scheme.primaryContainer,
-                  onColor: scheme.onPrimaryContainer,
-                  tooltip: 'Edit profile',
-                  semanticsId: 'agent_profile_edit',
-                  onTap: () => AgentProfileEditPage.open(
-                    context,
-                    agent: agent,
-                    source: source,
-                    onRename: onRename,
-                    profiles: _store,
-                  ),
-                ),
-              ),
-            ],
+      title: 'Profile',
+      actions: <Widget>[
+        ExpressiveIconButton(
+          hugeIcon: HugeIcons.edit02,
+          color: scheme.primaryContainer,
+          onColor: scheme.onPrimaryContainer,
+          tooltip: 'Edit profile',
+          semanticsId: 'agent_profile_edit',
+          onTap: () => AgentProfileEditPage.open(
+            context,
+            agent: agent,
+            source: source,
+            onRename: onRename,
+            profiles: _store,
           ),
-
+        ),
+      ],
+      builder: (BuildContext context) => CustomScrollView(
+        slivers: <Widget>[
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+              padding: EdgeInsets.fromLTRB(
+                24,
+                MediaQuery.paddingOf(context).top + 8,
+                24,
+                4,
+              ),
               child: Column(
                 children: <Widget>[
                   AgentFace(agent: agent, size: 112, store: _store),
@@ -454,52 +436,63 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    // Each action takes an equal share of the row. Before, every action was
+    // as wide as its own label, and on a 360 dp phone the four of them
+    // overflowed the row by 39 px — the fourth label was cut off.
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        _Action(
-          icon: Icons.chat_bubble_rounded,
-          label: 'Message',
-          color: scheme.primaryContainer,
-          onColor: scheme.onPrimaryContainer,
-          onTap: onMessage ?? () => Navigator.of(context).maybePop(),
+        Expanded(
+          child: _Action(
+            icon: Icons.chat_bubble_rounded,
+            label: 'Message',
+            color: scheme.primaryContainer,
+            onColor: scheme.onPrimaryContainer,
+            onTap: onMessage ?? () => Navigator.of(context).maybePop(),
+          ),
         ),
         const SizedBox(width: 14),
         // Parked, exactly like the header target.
-        _Action(
-          icon: Icons.call_rounded,
-          label: 'Call',
-          parked: true,
-          onTap: () => pillToast(
-            context,
-            'Voice calls with a coworker are not available yet',
-            icon: Icons.call_end_rounded,
+        Expanded(
+          child: _Action(
+            icon: Icons.call_rounded,
+            label: 'Call',
+            parked: true,
+            onTap: () => pillToast(
+              context,
+              'Voice calls with a coworker are not available yet',
+              icon: Icons.call_end_rounded,
+            ),
           ),
         ),
         if (onOpenControls != null) ...<Widget>[
           const SizedBox(width: 14),
-          _Action(
-            icon: Icons.tune_rounded,
-            label: 'Controls',
-            onTap: onOpenControls!,
+          Expanded(
+            child: _Action(
+              icon: Icons.tune_rounded,
+              label: 'Controls',
+              onTap: onOpenControls!,
+            ),
           ),
         ],
         const SizedBox(width: 14),
         // The video call's slot everywhere else in the app: the coworker's
         // screen, parked while it has none open.
-        _Action(
-          icon: Icons.desktop_windows_rounded,
-          label: 'Screen',
-          parked: onOpenBrowser == null,
-          color: onOpenBrowser == null ? null : scheme.tertiaryContainer,
-          onColor: onOpenBrowser == null ? null : scheme.onTertiaryContainer,
-          onTap:
-              onOpenBrowser ??
-              () => pillToast(
-                context,
-                'The coworker has no screen open right now',
-                icon: Icons.desktop_access_disabled_rounded,
-              ),
+        Expanded(
+          child: _Action(
+            icon: Icons.desktop_windows_rounded,
+            label: 'Screen',
+            parked: onOpenBrowser == null,
+            color: onOpenBrowser == null ? null : scheme.tertiaryContainer,
+            onColor: onOpenBrowser == null ? null : scheme.onTertiaryContainer,
+            onTap:
+                onOpenBrowser ??
+                () => pillToast(
+                  context,
+                  'The coworker has no screen open right now',
+                  icon: Icons.desktop_access_disabled_rounded,
+                ),
+          ),
         ),
       ],
     );
@@ -541,6 +534,9 @@ class _Action extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: parked
                 ? scheme.onSurfaceVariant.withValues(alpha: 0.5)
@@ -586,7 +582,7 @@ class _InfoCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+            AppIcon(icon, size: 20, color: scheme.onSurfaceVariant),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

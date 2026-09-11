@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_run_views.dart';
@@ -28,13 +30,14 @@ class _RecordingSaver implements AgentFileSaver {
 }
 
 Widget _host(Widget child) => MaterialApp(
-      home: Scaffold(body: SingleChildScrollView(child: child)),
-    );
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
 
 void main() {
   group('AgentToolLine', () {
-    testWidgets('collapsed it is one line; tapping opens the full output',
-        (tester) async {
+    testWidgets('collapsed it is one line; tapping opens the full output', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(
           const AgentToolLine(
@@ -52,30 +55,34 @@ void main() {
       // The summary is there, the detail is not.
       expect(find.textContaining('run_command'), findsOneWidget);
       expect(find.textContaining('a.txt\nb.txt'), findsNothing);
-      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      expect(findIcon(Icons.expand_more), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.expand_more));
+      await tester.tap(findIcon(Icons.expand_more));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('a.txt\nb.txt'), findsOneWidget);
-      expect(find.byIcon(Icons.expand_less), findsOneWidget);
+      expect(findIcon(Icons.expand_less), findsOneWidget);
 
       // And it closes again.
-      await tester.tap(find.byIcon(Icons.expand_less));
+      await tester.tap(findIcon(Icons.expand_less));
       await tester.pumpAndSettle();
       expect(find.textContaining('a.txt\nb.txt'), findsNothing);
     });
 
-    testWidgets('a failed call looks different from a successful one',
-        (tester) async {
+    testWidgets('a failed call looks different from a successful one', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(
           const Column(
             children: [
               AgentToolLine(
                 key: Key('ok'),
-                call: CoworkRelayTool('run_command',
-                    arguments: 'true', exitCode: 0),
+                call: CoworkRelayTool(
+                  'run_command',
+                  arguments: 'true',
+                  exitCode: 0,
+                ),
               ),
               AgentToolLine(
                 key: Key('bad'),
@@ -93,26 +100,32 @@ void main() {
       );
 
       // Different icon: a check for the good one, an error mark for the bad one.
-      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
-      expect(find.byIcon(Icons.error_outline), findsOneWidget);
+      expect(findIcon(Icons.check_circle_outline), findsOneWidget);
+      expect(findIcon(Icons.error_outline), findsOneWidget);
       expect(find.textContaining('exit 2'), findsOneWidget);
 
       // And a different colour, taken from the theme's error role.
       final context = tester.element(find.byType(AgentToolLine).first);
       final errorColor = Theme.of(context).colorScheme.error;
-      final failIcon = tester.widget<Icon>(find.byIcon(Icons.error_outline));
-      final okIcon = tester.widget<Icon>(find.byIcon(Icons.check_circle_outline));
-      expect(failIcon.color, errorColor);
-      expect(okIcon.color, isNot(errorColor));
+      expect(iconColor(tester, findIcon(Icons.error_outline)), errorColor);
+      expect(
+        iconColor(tester, findIcon(Icons.check_circle_outline)),
+        isNot(errorColor),
+      );
     });
 
-    testWidgets('a duration is shown only when the host reported one',
-        (tester) async {
+    testWidgets('a duration is shown only when the host reported one', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(
           const AgentToolLine(
-            call: CoworkRelayTool('run_command',
-                arguments: 'sleep 2', exitCode: 0, duration: Duration(seconds: 2)),
+            call: CoworkRelayTool(
+              'run_command',
+              arguments: 'sleep 2',
+              exitCode: 0,
+              duration: Duration(seconds: 2),
+            ),
           ),
         ),
       );
@@ -122,7 +135,11 @@ void main() {
         _host(
           const AgentToolLine(
             key: Key('no-duration'),
-            call: CoworkRelayTool('run_command', arguments: 'sleep 2', exitCode: 0),
+            call: CoworkRelayTool(
+              'run_command',
+              arguments: 'sleep 2',
+              exitCode: 0,
+            ),
           ),
         ),
       );
@@ -131,8 +148,9 @@ void main() {
   });
 
   group('AgentReasoningBlock', () {
-    testWidgets('reasoning is folded away and never shown as the answer',
-        (tester) async {
+    testWidgets('reasoning is folded away and never shown as the answer', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(const AgentReasoningBlock(text: 'first I check the log')),
       );
@@ -168,8 +186,9 @@ void main() {
       expect(find.text('Save'), findsOneWidget);
     });
 
-    testWidgets('a non-image file saves through the injected saver',
-        (tester) async {
+    testWidgets('a non-image file saves through the injected saver', (
+      tester,
+    ) async {
       final saver = _RecordingSaver();
       await tester.pumpWidget(
         _host(
@@ -196,8 +215,9 @@ void main() {
       expect(find.textContaining('/tmp/report.csv'), findsOneWidget);
     });
 
-    testWidgets('a save that fails says so instead of looking done',
-        (tester) async {
+    testWidgets('a save that fails says so instead of looking done', (
+      tester,
+    ) async {
       final saver = _RecordingSaver()
         ..failWith = UnsupportedError('no filesystem here');
       await tester.pumpWidget(
@@ -221,8 +241,9 @@ void main() {
       expect(find.text('Saved'), findsNothing);
     });
 
-    testWidgets('a broken body becomes an error card, with no save action',
-        (tester) async {
+    testWidgets('a broken body becomes an error card, with no save action', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _host(
           AgentFileCard(

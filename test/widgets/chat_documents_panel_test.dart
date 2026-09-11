@@ -65,10 +65,25 @@ Map<String, dynamic> file(String path, {int? size}) => {
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    // Prime the plugin's static instance here, awaited, outside any pump.
+    // `setMockInitialValues` swaps the mock store but leaves the plugin's own
+    // static `getInstance()` state behind, so a test that is the first to ask
+    // for preferences from inside a `pumpAndSettle` — the panel does, through
+    // `CoworkChatStore.resolveCacheUserId()` — can sit on a future that never
+    // completes while the pump loop runs. `_loading` then stays true, the
+    // CircularProgressIndicator schedules a frame forever, and
+    // `pumpAndSettle` times out in `mount`. That is why this file passed test
+    // by test and failed as a file. Each test now starts from preferences it
+    // set itself, not from whatever the last one left.
+    await SharedPreferences.getInstance();
     await ChatStorageService.reset();
     await CoworkChatStore.reset();
   });
-  Future<_Relay> mount(WidgetTester tester, {Size size = const Size(1200, 900)}) async {
+  Future<_Relay> mount(
+    WidgetTester tester, {
+    Size size = const Size(1200, 900),
+    bool fullPage = false,
+  }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final relay = _Relay();
@@ -78,12 +93,94 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: ChatDocumentsPanel(sessionKey: 'panel-test', controller: relay),
+        home: ChatDocumentsPanel(
+          sessionKey: 'panel-test',
+          controller: relay,
+          fullPage: fullPage,
+        ),
       ),
     );
     await tester.pumpAndSettle();
     return relay;
   }
+
+  testWidgets(
+    'mobile explorer searches real names and retains query after reading',
+    (tester) async {
+      final relay = await mount(
+        tester,
+        size: const Size(390, 844),
+        fullPage: true,
+      );
+      relay.send({
+        'documents': [
+          doc('Budget', 1),
+          doc('Notes', 1),
+          file('reports/brief.md'),
+        ],
+      });
+      await tester.pump();
+      expect(find.byType(Dialog), findsNothing);
+      await tester.enterText(find.byType(TextField), 'budget');
+      await tester.pump();
+      expect(find.text('Budget'), findsOneWidget);
+      expect(find.text('Notes'), findsNothing);
+      await tester.tap(find.text('Budget'));
+      await tester.pump();
+      expect(find.byType(ChatDocumentView), findsOneWidget);
+      await tester.tap(find.byTooltip('Back to the list'));
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'budget',
+      );
+      await tester.enterText(find.byType(TextField), 'absent');
+      await tester.pump();
+      expect(find.text('No matching files'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'workspace folders derive only from catalog paths and grid keeps reads wired',
+    (tester) async {
+      final relay = await mount(
+        tester,
+        size: const Size(390, 844),
+        fullPage: true,
+      );
+      relay.send({
+        'documents': [
+          file('reports/brief.md'),
+          file('reports/data.csv'),
+          file('README.md'),
+        ],
+      });
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Workspace'));
+      await tester.pump();
+      expect(find.text('reports'), findsOneWidget);
+      expect(find.text('brief.md'), findsNothing);
+      expect(find.text('Downloads'), findsNothing);
+      await tester.tap(find.text('reports'));
+      await tester.pump();
+      expect(find.text('brief.md'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'reports'), findsOneWidget);
+      await tester.tap(find.byTooltip('Grid view'));
+      await tester.pump();
+      expect(find.byType(GridView), findsOneWidget);
+      await tester.tap(find.text('brief.md'));
+      await tester.pump();
+      expect(relay.requests.last, 'file:reports/brief.md');
+      await tester.tap(find.byTooltip('Back to the list'));
+      await tester.pump();
+      expect(find.byType(GridView), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Workspace'));
+      await tester.pump();
+      expect(find.text('README.md'), findsOneWidget);
+      expect(find.text('brief.md'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'new catalog version hides old rows until matching content arrives',
@@ -256,14 +353,8 @@ void main() {
     await tester.pump();
     // The name leads the row; the folder tells the three SKILL.md rows apart.
     expect(find.text('SKILL.md'), findsNWidgets(3));
-    expect(
-      find.text('skills/automations · 05.01. 14:03'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('skills/browser-to-curl · 05.01. 14:03'),
-      findsOneWidget,
-    );
+    expect(find.text('skills/automations · 05.01. 14:03'), findsOneWidget);
+    expect(find.text('skills/browser-to-curl · 05.01. 14:03'), findsOneWidget);
     expect(find.text('…/of/folders · 05.01. 14:03'), findsOneWidget);
     // A file at the workspace root has no folder line, only its own facts.
     expect(find.text('README.md'), findsOneWidget);
@@ -353,7 +444,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Ada · Documents'), findsOneWidget);
-    expect(find.textContaining('Ada runs in its own container'), findsOneWidget);
+    expect(
+      find.textContaining('Ada runs in its own container'),
+      findsOneWidget,
+    );
     expect(find.text('No documents yet'), findsWidgets);
   });
 }

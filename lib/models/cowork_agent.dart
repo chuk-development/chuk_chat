@@ -114,17 +114,16 @@ class CoworkAgent {
     bool? running,
     DateTime? lastActivity,
     List<CoworkThreadInfo>? threads,
-  }) =>
-      CoworkAgent(
-        id: id,
-        name: name ?? this.name,
-        role: role ?? this.role,
-        brief: brief ?? this.brief,
-        schedule: schedule ?? this.schedule,
-        attachmentNames: attachmentNames ?? this.attachmentNames,
-        onHost: onHost ?? this.onHost,
-        running: running ?? this.running,
-        lastActivity: lastActivity ?? this.lastActivity,
-        threads: threads ?? this.threads,
-      );
+  }) => CoworkAgent(
+    id: id,
+    name: name ?? this.name,
+    role: role ?? this.role,
+    brief: brief ?? this.brief,
+    schedule: schedule ?? this.schedule,
+    attachmentNames: attachmentNames ?? this.attachmentNames,
+    onHost: onHost ?? this.onHost,
+    running: running ?? this.running,
+    lastActivity: lastActivity ?? this.lastActivity,
+    threads: threads ?? this.threads,
+  );
 }

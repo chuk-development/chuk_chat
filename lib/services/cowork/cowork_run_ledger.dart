@@ -46,8 +46,8 @@ ToolCall toolCallFromRelay(CoworkRelayTool event, {DateTime? now}) {
   };
   final startedAt = event.startedAt ?? clock;
   final duration = event.duration;
-  final completedAt = event.completedAt ??
-      (duration != null ? startedAt.add(duration) : clock);
+  final completedAt =
+      event.completedAt ?? (duration != null ? startedAt.add(duration) : clock);
   final call = ToolCall(
     id: event.callId,
     name: event.name,
@@ -95,6 +95,10 @@ class CoworkRun {
   /// True between [CoworkRunLedger.begin] and [CoworkRunLedger.finish].
   bool running = false;
 
+  /// A host running header confirmed this turn; distinguishes it from a newly
+  /// submitted local request racing an older replay's idle header.
+  bool hostObserved = false;
+
   /// When the run started, for an elapsed readout. The host's clock once a
   /// `run_state` or a `done` carried it, else this client's.
   DateTime startedAt = DateTime.now();
@@ -139,7 +143,8 @@ ToolCall subagentCallFromRelay(
   String? error,
   DateTime? now,
 }) {
-  final call = existing ??
+  final call =
+      existing ??
       ToolCall(
         name: 'subagent',
         arguments: <String, dynamic>{
@@ -152,8 +157,9 @@ ToolCall subagentCallFromRelay(
   final terminal =
       state == 'succeeded' || state == 'failed' || state == 'cancelled';
   if (terminal) {
-    call.status =
-        state == 'succeeded' ? ToolCallStatus.completed : ToolCallStatus.error;
+    call.status = state == 'succeeded'
+        ? ToolCallStatus.completed
+        : ToolCallStatus.error;
     call.result = error ?? result ?? state;
     call.completedAt = now ?? DateTime.now();
   } else {
@@ -276,14 +282,28 @@ class CoworkRunLedger extends ChangeNotifier {
     DateTime? startedAt,
   }) {
     final existing = _runs[sessionKey];
-    if (existing != null && existing.running) return;
+    if (existing != null && existing.running) {
+      existing.hostObserved = true;
+      return;
+    }
     final run = CoworkRun(sessionKey)
       ..running = true
+      ..hostObserved = true
       ..runId = runId
       ..detachedPrompt = prompt
       ..startedAt = startedAt ?? DateTime.now()
       ..hostStamped = startedAt != null;
     _runs[sessionKey] = run;
+    notifyListeners();
+  }
+
+  /// A fresh host idle header reconciles a run whose terminal was missed
+  /// while disconnected. Retain all collected content until replay lands.
+  void reconcileIdle(String sessionKey) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running || !run.hostObserved) return;
+    run.running = false;
+    finalizeStaleToolCalls(run.toolCalls);
     notifyListeners();
   }
 

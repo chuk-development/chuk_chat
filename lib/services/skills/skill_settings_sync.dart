@@ -47,15 +47,12 @@ class SkillSettingsSync implements SkillSettingsMirror {
       if (!SupabaseService.isInitialized) return;
       final user = SupabaseService.auth.currentUser;
       if (user == null) return;
-      await SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          columnUserId: user.id,
-          columnName: name,
-          columnEnabled: enabled,
-          columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: '$columnUserId,$columnName',
-      );
+      await SupabaseService.client.from(table).upsert(<String, dynamic>{
+        columnUserId: user.id,
+        columnName: name,
+        columnEnabled: enabled,
+        columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: '$columnUserId,$columnName');
     } catch (error) {
       if (kDebugMode) debugPrint('⚠️ [SkillSettingsSync] save skipped: $error');
     }

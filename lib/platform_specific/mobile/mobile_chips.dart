@@ -19,7 +19,7 @@ List<BoxShadow> mobileChipShadow(ThemeData theme) {
   final bool dark = theme.brightness == Brightness.dark;
   return <BoxShadow>[
     BoxShadow(
-      color: Colors.black.withValues(alpha: dark ? 0.35 : 0.10),
+      color: theme.colorScheme.shadow.withValues(alpha: dark ? 0.35 : 0.10),
       blurRadius: 10,
       offset: const Offset(0, 2),
     ),

@@ -10,7 +10,6 @@ import 'package:cowork/services/streaming_foreground_service.dart';
 import 'package:cowork/services/notification_service.dart';
 import 'package:cowork/utils/tool_parser.dart';
 
-
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
   static final StreamingManager _instance = StreamingManager._internal();
@@ -331,7 +330,17 @@ class StreamingManager {
       }
     }
 
-    if (event is ContentEvent) {
+    if (event is FinalContentEvent) {
+      activeStream.contentBuffer
+        ..clear()
+        ..write(event.text);
+      // Publish the canonical snapshot before completion clears the live
+      // notifier, including when the33ms delta timer has not fired yet.
+      activeStream.uiThrottleTimer?.cancel();
+      activeStream.uiThrottleTimer = null;
+      activeStream.uiUpdatePending = false;
+      onUpdate(event.text, activeStream.reasoningBuffer.toString());
+    } else if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
       // Coalesced flush (see _uiUpdateInterval) — avoids re-parsing the whole
       // message on every token. Notification update happens inside the flush

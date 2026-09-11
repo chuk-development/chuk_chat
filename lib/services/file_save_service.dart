@@ -56,9 +56,7 @@ class FileSaveService {
     if (kIsWeb) {
       try {
         await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile.fromData(bytes, name: suggestedName)],
-          ),
+          ShareParams(files: [XFile.fromData(bytes, name: suggestedName)]),
         );
         return const SaveResult._(outcome: SaveOutcome.savedViaShare);
       } catch (error, stack) {

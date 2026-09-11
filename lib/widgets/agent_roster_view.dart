@@ -44,6 +44,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
@@ -55,6 +58,19 @@ import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/widgets/credit_display.dart';
 import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
+
+/// The brand row's sizing knob.
+///
+/// This is NOT a type-scale role and deliberately stays out of `textTheme`:
+/// with the production label ('Chuk Chat') `SbBrand` draws the frozen SVG
+/// wordmark and uses this number only as `height * 0.75`, so it is a logo
+/// height in disguise. Both neighbouring roles would resize the mark —
+/// `titleLarge` (22) grows it from 13.5 to 16.5 px, `titleMedium` (16) shrinks
+/// it to 12 px — and neither is a decision about text. It belongs with the
+/// sidebar's own metrics (`SidebarTokens`), which lives in chuk's shared
+/// `sidebar_chrome.dart`; until that file is opened for a token, it is named
+/// here instead of left as a bare literal.
+const double kSidebarBrandWordmarkSize = 18;
 
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
@@ -216,7 +232,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                 child: SbBrand(
                   label: 'Chuk Chat',
                   showLogo: false,
-                  fontSize: 18,
+                  fontSize: kSidebarBrandWordmarkSize,
                   padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
                 ),
               ),
@@ -323,6 +339,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   /// (`BalanceBadge`, chuk's hosted balance from the same account API), the
   /// gear. The badge is mounted only with a Supabase session (see [_hosted]).
   Widget _footerRow(BuildContext context, SidebarTokens t) {
+    final TextTheme text = Theme.of(context).textTheme;
     final String name = widget.accountLabel ?? _displayNameFor(_profile);
     final Color pillColor = Color.alphaBlend(
       t.accent.withValues(alpha: 0.08),
@@ -344,9 +361,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                   child: Text(
                     name,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    // The pill's own title — the account you are signed in as.
+                    style: text.titleMedium?.copyWith(
                       color: t.iconFg,
-                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -365,14 +382,13 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: BalanceBadge(
-                      textStyle: TextStyle(
+                      // A number inside a pill is a label, not body copy.
+                      textStyle: text.labelLarge?.copyWith(
                         color: t.accent,
-                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
-                      placeholderStyle: TextStyle(
+                      placeholderStyle: text.labelLarge?.copyWith(
                         color: t.iconFg.withValues(alpha: 0.55),
-                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                       padding: EdgeInsets.zero,
@@ -391,7 +407,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                       message: 'Settings',
                       child: Padding(
                         padding: const EdgeInsets.all(8),
-                        child: Icon(
+                        child: AppIcon(
                           Icons.settings_rounded,
                           size: 24,
                           color: t.iconFg.withValues(alpha: 0.8),
@@ -471,6 +487,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   }
 
   Widget _emptyState(BuildContext context, SidebarTokens t) {
+    final TextTheme text = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -480,7 +497,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
             Text(
               'No agents yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: t.muted),
+              // A sentence the user reads, not a label: body copy.
+              style: text.bodyMedium?.copyWith(color: t.muted),
             ),
             if (widget.onAddAgent != null) ...[
               const SizedBox(height: 12),
@@ -502,6 +520,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     SidebarTokens t,
     List<CoworkAgent> hidden,
   ) {
+    final TextTheme text = Theme.of(context).textTheme;
     return <Widget>[
       SbSectionLabel(label: 'Hidden', count: hidden.length, color: t.muted),
       for (final agent in hidden)
@@ -522,8 +541,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                   child: Text(
                     agent.name,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
+                    // The row's title, dimmed because the agent is hidden.
+                    style: text.titleSmall?.copyWith(
                       color: t.iconFg.withValues(alpha: 0.45),
                     ),
                   ),
@@ -607,6 +626,7 @@ class _AgentTileState extends State<_AgentTile> {
   @override
   Widget build(BuildContext context) {
     final t = SidebarTokens.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
     final agent = widget.agent;
     final selected = widget.selected;
     final working = agent.activity == AgentActivity.working;
@@ -618,9 +638,12 @@ class _AgentTileState extends State<_AgentTile> {
         onExit: (_) => setState(() => _hovered = false),
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 110),
+            // Without a curve this ran on Curves.linear — the only mechanical
+            // motion left in the app, on its most permanently visible surface.
+            duration: kExpressiveShort,
+            curve: kExpressiveDecelerate,
             padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
             decoration: BoxDecoration(
               color: selected
@@ -647,8 +670,8 @@ class _AgentTileState extends State<_AgentTile> {
                       Text(
                         agent.name,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
+                        // The row's title: the coworker's name.
+                        style: text.titleMedium?.copyWith(
                           height: 1.2,
                           // One weight in both states. A weight that changes on
                           // selection re-measures the glyphs, so the name
@@ -665,8 +688,8 @@ class _AgentTileState extends State<_AgentTile> {
                           child: Text(
                             _role!,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
+                            // The line under the title: a row subtitle.
+                            style: text.bodySmall?.copyWith(
                               height: 1.25,
                               color: t.accent.withValues(alpha: 0.85),
                             ),
@@ -683,8 +706,9 @@ class _AgentTileState extends State<_AgentTile> {
                                 '${activityLabel(agent.activity)} · '
                                 '${lastActivityLabel(agent.lastActivity, now: widget.now)}',
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11.5,
+                                // Status metadata beside the state dot — the
+                                // smallest supporting label on the row.
+                                style: text.labelSmall?.copyWith(
                                   height: 1.25,
                                   color: working
                                       ? t.accent.withValues(alpha: 0.9)
@@ -716,13 +740,14 @@ class _AgentTileState extends State<_AgentTile> {
                 // control is invisible on a touch screen — but it sits back at
                 // low contrast until the pointer is on the row.
                 AnimatedOpacity(
-                  duration: const Duration(milliseconds: 110),
+                  duration: kExpressiveShort,
+                  curve: kExpressiveDecelerate,
                   opacity: _hovered || selected ? 1 : 0.45,
                   child: PopupMenuButton<String>(
                     tooltip: 'More',
                     padding: EdgeInsets.zero,
                     iconSize: 18,
-                    icon: Icon(
+                    icon: AppIcon(
                       Icons.more_vert,
                       size: 18,
                       color: t.iconFg.withValues(alpha: 0.7),
@@ -740,7 +765,7 @@ class _AgentTileState extends State<_AgentTile> {
                           child: ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.person_outline, size: 18),
+                            leading: AppIcon(Icons.person_outline, size: 18),
                             title: Text('Profile'),
                           ),
                         ),
@@ -750,7 +775,7 @@ class _AgentTileState extends State<_AgentTile> {
                           child: ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.edit_outlined, size: 18),
+                            leading: AppIcon(Icons.edit_outlined, size: 18),
                             title: Text('Rename'),
                           ),
                         ),
@@ -759,7 +784,7 @@ class _AgentTileState extends State<_AgentTile> {
                         child: ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(
+                          leading: AppIcon(
                             Icons.visibility_off_outlined,
                             size: 18,
                           ),
@@ -772,7 +797,7 @@ class _AgentTileState extends State<_AgentTile> {
                           child: ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.delete_outline, size: 18),
+                            leading: AppIcon(Icons.delete_outline, size: 18),
                             title: Text('Delete'),
                           ),
                         ),
@@ -808,19 +833,7 @@ class _ActivityDot extends StatelessWidget {
     return Container(
       width: 7,
       height: 7,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: activity == AgentActivity.working
-            ? [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

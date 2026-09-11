@@ -10,6 +10,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/utils/theme_extensions.dart';
@@ -20,7 +22,11 @@ import 'package:cowork/utils/theme_extensions.dart';
 /// the full output. A failed call is drawn in the error colour with a different
 /// icon, so success and failure never look alike.
 class AgentToolLine extends StatefulWidget {
-  const AgentToolLine({super.key, required this.call, this.initiallyExpanded = false});
+  const AgentToolLine({
+    super.key,
+    required this.call,
+    this.initiallyExpanded = false,
+  });
 
   final CoworkRelayTool call;
   final bool initiallyExpanded;
@@ -65,7 +71,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
+                  AppIcon(
                     failed ? Icons.error_outline : Icons.check_circle_outline,
                     size: 14,
                     color: accent,
@@ -80,7 +86,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
                       overflow: _expanded ? null : TextOverflow.ellipsis,
                     ),
                   ),
-                  Icon(
+                  AppIcon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
                     color: accent,
@@ -95,7 +101,11 @@ class _AgentToolLineState extends State<AgentToolLine> {
     );
   }
 
-  Widget _buildDetail(BuildContext context, CoworkRelayTool call, TextStyle? mono) {
+  Widget _buildDetail(
+    BuildContext context,
+    CoworkRelayTool call,
+    TextStyle? mono,
+  ) {
     final theme = Theme.of(context);
     final lines = <String>[
       if (call.arguments != null && call.arguments!.isNotEmpty)
@@ -139,7 +149,8 @@ class _AgentToolLineState extends State<AgentToolLine> {
 
   static String _formatDuration(Duration d) {
     if (d.inMilliseconds < 1000) return '${d.inMilliseconds}ms';
-    if (d.inSeconds < 60) return '${(d.inMilliseconds / 1000).toStringAsFixed(1)}s';
+    if (d.inSeconds < 60)
+      return '${(d.inMilliseconds / 1000).toStringAsFixed(1)}s';
     return '${d.inMinutes}m ${d.inSeconds % 60}s';
   }
 }
@@ -149,7 +160,11 @@ class _AgentToolLineState extends State<AgentToolLine> {
 /// Reasoning is a separate channel: it is never merged into the reply text, and
 /// it stays folded away until the user asks for it.
 class AgentReasoningBlock extends StatefulWidget {
-  const AgentReasoningBlock({super.key, required this.text, this.initiallyExpanded = false});
+  const AgentReasoningBlock({
+    super.key,
+    required this.text,
+    this.initiallyExpanded = false,
+  });
 
   final String text;
   final bool initiallyExpanded;
@@ -180,10 +195,10 @@ class _AgentReasoningBlockState extends State<AgentReasoningBlock> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.psychology_outlined, size: 14, color: muted),
+                  AppIcon(Icons.psychology_outlined, size: 14, color: muted),
                   const SizedBox(width: 6),
                   Text('Reasoning', style: style),
-                  Icon(
+                  AppIcon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
                     color: muted,
@@ -264,8 +279,11 @@ class _AgentFileCardState extends State<AgentFileCard> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    Icon(Icons.broken_image_outlined,
-                        size: 16, color: theme.colorScheme.error),
+                    AppIcon(
+                      Icons.broken_image_outlined,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -297,8 +315,10 @@ class _AgentFileCardState extends State<AgentFileCard> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  Icon(
-                    file.isImage ? Icons.image_outlined : Icons.description_outlined,
+                  AppIcon(
+                    file.isImage
+                        ? Icons.image_outlined
+                        : Icons.description_outlined,
                     size: 16,
                     color: theme.hintColor,
                   ),
@@ -310,8 +330,9 @@ class _AgentFileCardState extends State<AgentFileCard> {
                         Text(file.name, overflow: TextOverflow.ellipsis),
                         Text(
                           _subtitle(file),
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.hintColor),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
                         ),
                       ],
                     ),

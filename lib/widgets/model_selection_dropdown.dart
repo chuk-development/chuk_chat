@@ -5,9 +5,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:cowork/models/chat_model.dart';
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/api_config_service.dart';
 import 'package:cowork/services/model_cache_service.dart';
 import 'package:cowork/services/model_capabilities_service.dart';
@@ -119,7 +122,7 @@ class ModelSelectionDropdown extends StatefulWidget {
   static List<ModelItem> _cachedModels = [];
   static Map<String, String> _cachedProviders = {};
   static final Map<String, List<ModelProviderSummary>>
-      _cachedAvailableProviders = {};
+  _cachedAvailableProviders = {};
   static bool _hasEverLoaded = false;
 
   static ValueListenable<String> get selectedModelListenable =>
@@ -264,9 +267,6 @@ class ModelSelectionDropdown extends StatefulWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
@@ -305,7 +305,7 @@ class ModelSelectionDropdown extends StatefulWidget {
                           ),
                         ),
                         trailing: selected
-                            ? Icon(Icons.check, color: iconFg, size: 18)
+                            ? AppIcon(Icons.check, color: iconFg, size: 18)
                             : null,
                         onTap: () async {
                           Navigator.of(sheetContext).pop();
@@ -1054,8 +1054,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
     double longestTextWidth = measure(_stripLabPrefix(selectedLabel));
     for (final model in _allModels.where((m) => !m.isToggle)) {
-      longestTextWidth =
-          math.max(longestTextWidth, measure(_stripLabPrefix(model.name)));
+      longestTextWidth = math.max(
+        longestTextWidth,
+        measure(_stripLabPrefix(model.name)),
+      );
     }
 
     final selectedTextWidth = measure(_stripLabPrefix(selectedLabel));
@@ -1110,7 +1112,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   double _effectiveButtonWidth(double maxAvailableWidth) {
     if (widget.isCompactMode) {
-      return 32.0;
+      return MobileLayout.minTouchTarget;
     }
 
     if (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0) {
@@ -1163,7 +1165,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
-    final double effectiveWidth = widget.isCompactMode ? 32.0 : buttonWidth;
+    final double effectiveWidth = widget.isCompactMode
+        ? MobileLayout.minTouchTarget
+        : buttonWidth;
 
     return MouseRegion(
       onEnter: (_) => _isHovered.value = true,
@@ -1171,18 +1175,19 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       child: ValueListenableBuilder<bool>(
         valueListenable: _isHovered,
         builder: (context, hovered, child) {
-          // Compact mode: 32x32 circle matching icon buttons
+          // Compact mode: a full 48 dp target, the same box every other icon
+          // button in the composer keeps.
           if (widget.isCompactMode) {
             return Container(
-              width: 32,
-              height: 32,
+              width: MobileLayout.minTouchTarget,
+              height: MobileLayout.minTouchTarget,
               decoration: BoxDecoration(
                 color: hovered
                     ? iconFgColor.withValues(alpha: 0.1)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
+              child: AppIcon(
                 Icons.tag_rounded,
                 size: 18,
                 color: iconFgColor.withValues(alpha: 0.6),
@@ -1197,7 +1202,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
               padding: const EdgeInsets.only(left: 10, right: 12),
-              height: 36,
+              height: MobileLayout.minTouchTarget,
               decoration: BoxDecoration(
                 color: hovered
                     ? iconFgColor.withValues(alpha: 0.08)
@@ -1244,7 +1249,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Icon(Icons.tag_rounded, color: iconFgColor, size: 20),
+                AppIcon(Icons.tag_rounded, color: iconFgColor, size: 20),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -1258,7 +1263,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                     maxLines: 1,
                   ),
                 ),
-                Icon(
+                AppIcon(
                   Icons.keyboard_arrow_down,
                   color: iconFgColor.withValues(alpha: 0.8),
                   size: 16,
@@ -1276,9 +1281,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final ThemeData theme = Theme.of(context);
-        final ThemeData compactTapTargetTheme = theme.copyWith(
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        );
         final double buttonWidth = _effectiveButtonWidth(constraints.maxWidth);
         final Widget buttonContent = _buildDropdownButtonContent(buttonWidth);
 
@@ -1292,149 +1294,146 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
         final double popupWidth = math.max(buttonWidth, _menuWidth);
 
-        return Theme(
-          data: compactTapTargetTheme,
-          child: PopupMenuButton<String>(
-            color: widget.transparentStyle
-                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.94)
-                : theme.scaffoldBackgroundColor,
-            constraints: BoxConstraints.tightFor(width: popupWidth),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(
-                color: theme.resolvedIconColor.withValues(alpha: 0.3),
-                width: 2,
-              ),
+        return PopupMenuButton<String>(
+          color: widget.transparentStyle
+              ? theme.scaffoldBackgroundColor.withValues(alpha: 0.94)
+              : theme.scaffoldBackgroundColor,
+          constraints: BoxConstraints.tightFor(width: popupWidth),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: theme.resolvedIconColor.withValues(alpha: 0.3),
+              width: 2,
             ),
-            onCanceled: () {
-              // Maintain keyboard focus when popup is cancelled
-              widget.textFieldFocusNode.requestFocus();
-            },
-            onSelected: (value) async {
-              final previousModelId = _selectedModelId;
+          ),
+          onCanceled: () {
+            // Maintain keyboard focus when popup is cancelled
+            widget.textFieldFocusNode.requestFocus();
+          },
+          onSelected: (value) async {
+            final previousModelId = _selectedModelId;
 
-              // Immediately request focus to keep keyboard open
-              widget.textFieldFocusNode.requestFocus();
+            // Immediately request focus to keep keyboard open
+            widget.textFieldFocusNode.requestFocus();
+
+            setState(() {
+              _selectedModelId = value;
+            });
+            _updateSelectedModelName();
+            widget.onModelSelected(value);
+            ModelSelectionDropdown.selectedModelNotifier.value = value;
+
+            try {
+              await UserPreferencesService.saveSelectedModel(value);
+            } catch (error) {
+              if (kDebugMode) {
+                debugPrint('Failed to save selected model: $error');
+              }
+
+              if (!context.mounted) return;
+
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'Failed to save model selection. Please try again.',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  duration: const Duration(seconds: 3),
+                  dismissDirection: DismissDirection.horizontal,
+                ),
+              );
 
               setState(() {
-                _selectedModelId = value;
+                _selectedModelId = previousModelId;
               });
               _updateSelectedModelName();
-              widget.onModelSelected(value);
-              ModelSelectionDropdown.selectedModelNotifier.value = value;
-
-              try {
-                await UserPreferencesService.saveSelectedModel(value);
-              } catch (error) {
-                if (kDebugMode) {
-                  debugPrint('Failed to save selected model: $error');
-                }
-
-                if (!context.mounted) return;
-
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: const Text(
-                      'Failed to save model selection. Please try again.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+              widget.onModelSelected(previousModelId);
+              // Re-request focus after error handling
+              widget.textFieldFocusNode.requestFocus();
+            }
+          },
+          itemBuilder: (context) {
+            final iconFgColor = Theme.of(context).resolvedIconColor;
+            return _allModels.map((model) {
+              final selected = _selectedModelId == model.value;
+              return PopupMenuItem<String>(
+                value: model.value,
+                height: MobileLayout.minTouchTarget,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    if (model.isToggle)
+                      Row(
+                        children: [
+                          Switch(
+                            value: selected,
+                            onChanged: (_) {},
+                            activeThumbColor: iconFgColor,
+                            activeTrackColor: iconFgColor.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            AppLocalizations.of(context)!.best,
+                            style: TextStyle(color: iconFgColor),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      Expanded(
+                        child: Text(
+                          _stripLabPrefix(model.name),
+                          style: TextStyle(
+                            color: selected
+                                ? iconFgColor
+                                : iconFgColor.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          softWrap: false,
+                        ),
                       ),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    duration: const Duration(seconds: 3),
-                    dismissDirection: DismissDirection.horizontal,
-                  ),
-                );
-
-                setState(() {
-                  _selectedModelId = previousModelId;
-                });
-                _updateSelectedModelName();
-                widget.onModelSelected(previousModelId);
-                // Re-request focus after error handling
-                widget.textFieldFocusNode.requestFocus();
-              }
-            },
-            itemBuilder: (context) {
-              final iconFgColor = Theme.of(context).resolvedIconColor;
-              return _allModels.map((model) {
-                final selected = _selectedModelId == model.value;
-                return PopupMenuItem<String>(
-                  value: model.value,
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      if (model.isToggle)
-                        Row(
-                          children: [
-                            Switch(
-                              value: selected,
-                              onChanged: (_) {},
-                              activeThumbColor: iconFgColor,
-                              activeTrackColor: iconFgColor.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(AppLocalizations.of(context)!.best, style: TextStyle(color: iconFgColor)),
-                          ],
-                        )
-                      else ...[
-                        Expanded(
-                          child: Text(
-                            _stripLabPrefix(model.name),
-                            style: TextStyle(
-                              color: selected
-                                  ? iconFgColor
-                                  : iconFgColor.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            softWrap: false,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(width: 12),
-                      if (!model.isToggle && selected)
-                        Icon(Icons.check, color: iconFgColor, size: 18),
-                      if (model.badge != null)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: model.badge == 'new'
-                                ? Colors.teal
-                                : Colors.orange,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            model.badge!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
                     ],
-                  ),
-                );
-              }).toList();
-            },
-            child: buttonContent,
-          ),
+                    const SizedBox(width: 12),
+                    if (!model.isToggle && selected)
+                      AppIcon(Icons.check, color: iconFgColor, size: 18),
+                    if (model.badge != null)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: model.badge == 'new'
+                              ? Colors.teal
+                              : Colors.orange,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          model.badge!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList();
+          },
+          child: buttonContent,
         );
       },
     );

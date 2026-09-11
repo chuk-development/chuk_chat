@@ -33,11 +33,10 @@ class NotificationService {
     required String chatId,
     required String chatTitle,
     required String contentPreview,
-  }) =>
-      LocalNotifications.instance.showAnswerReady(
-        sessionKey: chatId,
-        threadLabel: chatTitle,
-      );
+  }) => LocalNotifications.instance.showAnswerReady(
+    sessionKey: chatId,
+    threadLabel: chatTitle,
+  );
 
   static Future<void> checkLaunchNotification() =>
       LocalNotifications.instance.checkLaunchNotification();

@@ -9,6 +9,20 @@ Future<CoworkRelayController> _buildRelayController(
   CoworkPairingStore store,
   AccountSessionSource sessionSource,
 ) async {
+  // A session recovery holds the device's one relay socket while it runs (the
+  // link dials the same relay with the same device id). The gate mounts this
+  // shell immediately so the reader sees their conversation from disk, but the
+  // transport waits its turn — two sockets for one device would displace the
+  // recovery and lose the very session it was fetching back.
+  final Future<void>? recovery = SessionRecovery.inFlight;
+  if (recovery != null) {
+    try {
+      await recovery;
+    } catch (_) {
+      // A failed recovery is not this builder's problem; the gate decides
+      // whether the user stays in the shell at all.
+    }
+  }
   final identity = await store.loadOrCreateIdentity();
   return CoworkRelayClient(
     deviceId: identity.deviceId,
@@ -92,7 +106,16 @@ mixin CoworkShellHost on State<MessengerShell> {
   GlobalKey _threadViewKey = GlobalKey();
 
   String? _selectedAgentId;
-  String _selectedThreadKey = 'default';
+
+  /// The thread on screen. EMPTY means "nothing to mount yet", and that is
+  /// deliberate: the old placeholder `'default'` was a thread key nobody ever
+  /// wrote, so the first frame opened a conversation that has no cached
+  /// transcript, and the flip to the real key a moment later cost a
+  /// `didUpdateWidget` and a second replay round. A thread key is only ever
+  /// read back — from preferences or from the persisted roster — never
+  /// invented, because a second key means a second replay cursor and a second
+  /// cache row for one conversation.
+  String _selectedThreadKey = '';
 
   /// Where the last session left off. Written on every pick, read once at
   /// startup. Two keys, not one: a thread is only meaningful with its coworker.
@@ -162,6 +185,10 @@ mixin CoworkShellHost on State<MessengerShell> {
     // every face listen to them, so a late load lands on its own.
     unawaited(_readMarks.load());
     unawaited(_agentProfiles.load());
+    // The roster's preview lines survive a restart, so they are loaded with the
+    // rest of the shell state and not on the first frame of the list.
+    unawaited(ThreadPreviewStore.instance.load());
+    unawaited(MediaIndex.instance.load());
     // Open where the user left off. The roster fills in stages — nothing at
     // first, the host coworker on pairing, the rest when the host sends its
     // names — so the restore is not one shot at startup: it watches the roster
@@ -203,8 +230,23 @@ mixin CoworkShellHost on State<MessengerShell> {
     );
   }
 
-  /// Reads the remembered pick, then tries to land on it.
+  /// Reads the persisted roster and the remembered pick, then lands on it.
+  ///
+  /// The roster FIRST, and awaited: the remembered pick is an agent id, and
+  /// `_autoSelect` can only land on it if that agent is in the roster. Without
+  /// the cached roster the restore missed on every cold start and the shell
+  /// waited for the relay to pair — which is exactly the wait this closes.
   Future<void> _loadLastSelection() async {
+    try {
+      await _roster.load();
+    } catch (_) {
+      // A roster that cannot be read is an empty one, as it always was.
+    }
+    if (!mounted) return;
+    // Deletes outlive the launch they were made in: the host still lists a
+    // coworker the user removed (delete has no wire frame yet), so the ignore
+    // set has to start with what earlier launches deleted.
+    _deletedAgentIds.addAll(_roster.deletedIds);
     String? agentId;
     String? threadKey;
     try {

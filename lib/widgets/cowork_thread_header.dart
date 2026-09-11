@@ -2,7 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/cowork_agent.dart';
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/ui/expressive/agent_status.dart';
 import 'package:cowork/ui/expressive/feedback.dart';
@@ -136,9 +139,9 @@ class CoworkThreadHeader extends StatelessWidget {
   /// the target in place but parked — there is no screen open.
   final VoidCallback? onOpenScreen;
 
-  /// One action's footprint: Material's 40 px hit box, the size chuk's own
-  /// icon rows use.
-  static const double _slot = 40;
+  /// One action's footprint: Material's minimum 48 dp hit box, the size every
+  /// other icon row in the app uses.
+  static const double _slot = MobileLayout.minTouchTarget;
 
   /// Width the title keeps for itself before actions start folding away. Below
   /// it a header would be all buttons and no subject.
@@ -175,10 +178,7 @@ class CoworkThreadHeader extends StatelessWidget {
   Widget _buildRow(BuildContext context, double maxWidth) {
     // How many actions fit next to a title that keeps [_minTitleWidth]. One
     // slot goes back to the overflow button as soon as anything folds.
-    final int room = math.max(
-      0,
-      ((maxWidth - _minTitleWidth) / _slot).floor(),
-    );
+    final int room = math.max(0, ((maxWidth - _minTitleWidth) / _slot).floor());
     final bool overflows = actions.length > room;
     final int inline = overflows ? math.max(0, room - 1) : actions.length;
     return Row(
@@ -248,48 +248,70 @@ class CoworkThreadHeader extends StatelessWidget {
         children: [
           Tooltip(
             message: state,
-            child: Icon(Icons.circle, size: 8, color: dot),
+            child: AppIcon(Icons.circle, size: 8, color: dot),
           ),
           const SizedBox(width: 8),
           Flexible(
-            child: MorphTap(
-              onTap: onOpenProfile == null ? null : () => onOpenProfile!(who),
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-              shape: const StadiumBorder(),
-              pressedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              pressedScale: 0.98,
-              padding: const EdgeInsets.fromLTRB(4, 3, 12, 3),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AgentFace(agent: who, size: 30),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // Under this the pill has room for neither a face nor a
+                // readable name, and its own padding alone would overflow the
+                // row. Nothing is better than a sliver of a pill.
+                if (box.maxWidth.isFinite && box.maxWidth < 56) {
+                  return const SizedBox.shrink();
+                }
+                return MorphTap(
+                  onTap: onOpenProfile == null
+                      ? null
+                      : () => onOpenProfile!(who),
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                  shape: const StadiumBorder(),
+                  pressedShape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  pressedScale: 0.98,
+                  padding: const EdgeInsets.fromLTRB(4, 3, 12, 3),
+                  // The pill is the only thing in the header that gives way, so at
+                  // a narrow window it can be handed a few pixels. The face is 30
+                  // px and cannot shrink; kept unconditionally it overflowed the
+                  // row by exactly its own width plus the gap. Below the width
+                  // where a face and a readable name both fit, the name wins
+                  // (bead cowork-jvuu).
+                  child: LayoutBuilder(
+                    builder: (context, pill) => Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          who.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          // Tight metrics: the name and the status line share
-                          // the header's 34 px of inner height.
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            height: 1.1,
+                        if (!pill.maxWidth.isFinite || pill.maxWidth >= 46) ...[
+                          AgentFace(agent: who, size: 30),
+                          const SizedBox(width: 8),
+                        ],
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                who.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                // Tight metrics: the name and the status line share
+                                // the header's 34 px of inner height.
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  height: 1.1,
+                                ),
+                              ),
+                              AgentStatusLine(agent: who, fontSize: 10.5),
+                            ],
                           ),
                         ),
-                        AgentStatusLine(agent: who, fontSize: 10.5),
                       ],
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -300,7 +322,7 @@ class CoworkThreadHeader extends StatelessWidget {
       children: [
         Tooltip(
           message: state,
-          child: Icon(Icons.circle, size: 8, color: dot),
+          child: AppIcon(Icons.circle, size: 8, color: dot),
         ),
         const SizedBox(width: 8),
         Flexible(
@@ -404,7 +426,7 @@ class CoworkThreadHeader extends StatelessWidget {
                       value: action,
                       child: Row(
                         children: [
-                          Icon(action.icon, size: 18, color: iconFg),
+                          AppIcon(action.icon, size: 18, color: iconFg),
                           const SizedBox(width: 12),
                           Text(action.tooltip),
                         ],
@@ -486,7 +508,7 @@ class _AutomationChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.circle, size: 7, color: dot),
+              AppIcon(Icons.circle, size: 7, color: dot),
               const SizedBox(width: 7),
               Flexible(
                 child: Text(
@@ -499,7 +521,7 @@ class _AutomationChip extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
+              AppIcon(
                 expanded ? Icons.expand_less : Icons.expand_more,
                 size: 16,
                 color: scheme.onSurfaceVariant,

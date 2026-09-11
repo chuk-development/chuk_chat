@@ -13,8 +13,9 @@ class BuildInfo {
   BuildInfo._();
 
   /// Raw value from --dart-define=BUILD_TIMESTAMP=...
-  static const String buildTimestampRaw =
-      String.fromEnvironment('BUILD_TIMESTAMP');
+  static const String buildTimestampRaw = String.fromEnvironment(
+    'BUILD_TIMESTAMP',
+  );
 
   /// Parsed UTC build timestamp, or null if not provided / invalid.
   static DateTime? get buildTimestamp {

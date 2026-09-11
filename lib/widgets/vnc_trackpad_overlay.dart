@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -144,8 +146,7 @@ class _VncTrackpadOverlayState extends State<VncTrackpadOverlay> {
   void _updateFit(Size box) {
     final Size? fb = widget.controller.frameBufferSize;
     if (fb == null || fb.isEmpty || box.isEmpty) return;
-    final double scale =
-        math.min(box.width / fb.width, box.height / fb.height);
+    final double scale = math.min(box.width / fb.width, box.height / fb.height);
     final double shownW = fb.width * scale;
     final double shownH = fb.height * scale;
     _scale = scale;
@@ -170,8 +171,11 @@ class _VncTrackpadOverlayState extends State<VncTrackpadOverlay> {
     _cx += screenDelta.dx / _scale * _moveSensitivity;
     _cy += screenDelta.dy / _scale * _moveSensitivity;
     _clampCursor();
-    widget.controller
-        .pointer(x: _ix, y: _iy, buttons: pressed ? <int>{1} : <int>{});
+    widget.controller.pointer(
+      x: _ix,
+      y: _iy,
+      buttons: pressed ? <int>{1} : <int>{},
+    );
   }
 
   Offset _centroid() {
@@ -230,7 +234,8 @@ class _VncTrackpadOverlayState extends State<VncTrackpadOverlay> {
       _lastPos = e.localPosition;
       _scrollAccumY = 0;
       _scrollAccumX = 0;
-      final bool doubleTap = now - _lastTapEndMs < _doubleTapMs &&
+      final bool doubleTap =
+          now - _lastTapEndMs < _doubleTapMs &&
           (e.localPosition - _lastTapPos).distance < _doubleTapSlopPx;
       if (doubleTap) {
         // Press and hold left at the cursor; the follow-up drag moves it.
@@ -327,8 +332,7 @@ class _VncTrackpadOverlayState extends State<VncTrackpadOverlay> {
                 ),
               ),
             ),
-            if (_showHelp)
-              _TrackpadHelpCard(onDismiss: _dismissHelp),
+            if (_showHelp) _TrackpadHelpCard(onDismiss: _dismissHelp),
           ],
         );
       },
@@ -381,7 +385,7 @@ class _HelpButton extends StatelessWidget {
       shape: const CircleBorder(),
       child: IconButton(
         key: const Key('vnc_trackpad_help_button'),
-        icon: const Icon(Icons.help_outline, color: Colors.white),
+        icon: const AppIcon(Icons.help_outline, color: Colors.white),
         tooltip: 'How to control',
         onPressed: onPressed,
       ),
@@ -414,7 +418,10 @@ class _TrackpadHelpCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.touch_app, color: theme.colorScheme.primary),
+                        AppIcon(
+                          Icons.touch_app,
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Touch controls',
@@ -476,11 +483,7 @@ class _TrackpadHelpCard extends StatelessWidget {
 }
 
 class _HelpRow extends StatelessWidget {
-  const _HelpRow({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+  const _HelpRow({required this.icon, required this.title, required this.body});
 
   final IconData icon;
   final String title;
@@ -494,7 +497,7 @@ class _HelpRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          AppIcon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

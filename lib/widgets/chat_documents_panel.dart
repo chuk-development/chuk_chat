@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
@@ -11,6 +13,8 @@ import 'package:cowork/services/storage/cowork_chat_store.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 import 'package:cowork/widgets/sandbox_artifact_block.dart';
+
+part 'chat_documents_explorer.dart';
 
 /// Below this width a list column and a reading pane would each be too narrow
 /// to read, so the panel shows one at a time instead — the phone layout.
@@ -26,9 +30,13 @@ class ChatDocumentsPanel extends StatefulWidget {
     required this.sessionKey,
     this.controller,
     this.coworkerName,
+    this.fullPage = false,
   });
   final String sessionKey;
   final CoworkRelayController? controller;
+
+  /// Use inside a normal Navigator route on mobile. Dialog callers are unchanged.
+  final bool fullPage;
 
   /// The coworker whose container these documents live in, when the caller
   /// already knows it. Null lets the panel ask the host for the roster and fill
@@ -47,6 +55,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   String? _error;
   String? _coworker;
   bool _loading = true;
+  final _explorerOptions = _ExplorerOptions();
   StreamSubscription<CoworkRelayInbound>? _subscription;
 
   @override
@@ -145,6 +154,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     if (control == null ||
         control is! CoworkDocumentsControl ||
         control.state.value.phase != CoworkRelayPhase.paired) {
+      if (mounted && id != null && id == _selectedId) {
+        setState(() => _reading = false);
+      }
       return;
     }
     try {
@@ -327,38 +339,45 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     final margin = media.width < 560 || media.height < 560 ? 8.0 : 24.0;
     final width = math.max(280.0, math.min(1040.0, media.width - margin * 2));
     final height = math.max(320.0, math.min(760.0, media.height - margin * 2));
+    final contents = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(context, rows),
+        Divider(height: 1, color: theme.m3.outlineVariant),
+        if (_error != null) _buildErrorBanner(context, _error!),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : LayoutBuilder(
+                  builder: (context, constraints) =>
+                      constraints.maxWidth >= _kTwoPaneWidth
+                      ? _buildTwoPane(context, rows)
+                      : _buildOnePane(context, rows),
+                ),
+        ),
+        if (!widget.fullPage) _buildScopeFooter(context),
+      ],
+    );
+    if (widget.fullPage) {
+      return PopScope(
+        canPop: _selectedId == null,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop && _selectedId != null) _deselect();
+        },
+        child: Scaffold(
+          backgroundColor: theme.colorScheme.surface,
+          body: SafeArea(child: contents),
+        ),
+      );
+    }
     return Dialog(
       clipBehavior: Clip.antiAlias,
       insetPadding: EdgeInsets.all(margin),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(
-          width < _kTwoPaneWidth ? kRadiusCard : kRadiusDialog,
-        ),
+        borderRadius: BorderRadius.circular(kRadiusDialog),
         side: BorderSide(color: theme.m3.outlineVariant),
       ),
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(context, rows),
-            Divider(height: 1, color: theme.m3.outlineVariant),
-            if (_error != null) _buildErrorBanner(context, _error!),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : LayoutBuilder(
-                      builder: (context, constraints) =>
-                          constraints.maxWidth >= _kTwoPaneWidth
-                          ? _buildTwoPane(context, rows)
-                          : _buildOnePane(context, rows),
-                    ),
-            ),
-            _buildScopeFooter(context),
-          ],
-        ),
-      ),
+      child: SizedBox(width: width, height: height, child: contents),
     );
   }
 
@@ -400,7 +419,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               color: scheme.primary.withValues(alpha: isDark ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
+            child: AppIcon(
               Icons.folder_shared_outlined,
               size: 20,
               color: scheme.primary,
@@ -413,7 +432,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '$_owner · Documents',
+                  widget.fullPage ? 'Files · $_owner' : '$_owner · Documents',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -435,12 +454,12 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
           IconButton(
             tooltip: 'Refresh documents',
             onPressed: _request,
-            icon: const Icon(Icons.refresh),
+            icon: const AppIcon(Icons.refresh),
           ),
           IconButton(
             tooltip: 'Close',
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close),
+            icon: const AppIcon(Icons.close),
           ),
         ],
       ),
@@ -461,7 +480,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 12, color: color),
+          AppIcon(Icons.inventory_2_outlined, size: 12, color: color),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -485,14 +504,18 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
-          Icon(Icons.error_outline, size: 18, color: scheme.onErrorContainer),
+          AppIcon(
+            Icons.error_outline,
+            size: 18,
+            color: scheme.onErrorContainer,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: scheme.onErrorContainer,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onErrorContainer),
             ),
           ),
         ],
@@ -531,7 +554,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               IconButton(
                 tooltip: 'Back to the list',
                 onPressed: _deselect,
-                icon: const Icon(Icons.arrow_back),
+                icon: const AppIcon(Icons.arrow_back),
               ),
               Expanded(
                 child: Text(
@@ -571,34 +594,12 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
             'up here too.',
       );
     }
-    final saved = rows.where((d) => d['kind'] != 'file').length;
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      itemCount: rows.length,
-      itemBuilder: (context, i) {
-        final doc = rows[i];
-        final isFile = doc['kind'] == 'file';
-        final startsGroup = i == 0 || (rows[i - 1]['kind'] == 'file') != isFile;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (startsGroup)
-              _GroupHeading(
-                title: isFile ? '$_owner’s container' : 'Saved in this chat',
-                count: isFile ? rows.length - saved : saved,
-                topInset: i == 0 ? 4 : 20,
-              ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _DocumentRow(
-                document: doc,
-                selected: _selectedId == doc['id'],
-                onTap: () => _select(doc),
-              ),
-            ),
-          ],
-        );
-      },
+    return _DocumentExplorer(
+      options: _explorerOptions,
+      documents: rows,
+      owner: _owner,
+      selectedId: _selectedId,
+      onSelect: _select,
     );
   }
 
@@ -616,7 +617,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
         action: FilledButton.tonalIcon(
           style: _pillButton,
           onPressed: () => _request(id: _selectedId),
-          icon: const Icon(Icons.refresh, size: 18),
+          icon: const AppIcon(Icons.refresh, size: 18),
           label: const Text('Try again'),
         ),
       );
@@ -641,7 +642,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
             : FilledButton.tonalIcon(
                 style: _pillButton,
                 onPressed: () => _select(recent),
-                icon: Icon(_documentIcon(recent), size: 18),
+                icon: AppIcon(_documentIcon(recent), size: 18),
                 label: Text(
                   'Open ${recent['title']}',
                   overflow: TextOverflow.ellipsis,
@@ -650,7 +651,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       );
     }
     if (_file != null) {
-      return SingleChildScrollView(child: SandboxArtifactBlock(payload: _file!));
+      return SingleChildScrollView(
+        child: SandboxArtifactBlock(payload: _file!),
+      );
     }
     return ChatDocumentView(document: _selected!);
   }
@@ -731,7 +734,10 @@ class _DocumentRow extends StatelessWidget {
     final path = '${document['path'] ?? ''}';
     final title = '${document['title']}';
     final detail = <String>[
-      if (isFile) ...[?_folderLabel(path), ?_sizeLabel(document)] else
+      if (isFile) ...[
+        ?_folderLabel(path),
+        ?_sizeLabel(document),
+      ] else
         _kindLabel(document),
       ?documentFreshness(document),
     ].join(' · ');
@@ -760,7 +766,7 @@ class _DocumentRow extends StatelessWidget {
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
+                  child: AppIcon(
                     _documentIcon(document),
                     size: 22,
                     color: scheme.primary,
@@ -892,7 +898,7 @@ class _EmptyBlock extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              AppIcon(
                 icon,
                 size: 64,
                 color: m3.onSurfaceVariant.withValues(alpha: 0.4),
@@ -914,10 +920,7 @@ class _EmptyBlock extends StatelessWidget {
                   height: 1.45,
                 ),
               ),
-              if (action != null) ...[
-                const SizedBox(height: 20),
-                action!,
-              ],
+              if (action != null) ...[const SizedBox(height: 20), action!],
             ],
           ),
         ),

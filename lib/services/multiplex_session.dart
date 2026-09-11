@@ -274,9 +274,7 @@ class MultiplexSession {
       // Caller should have checked MultiplexSession.current first.
       // Surface as a stream-shaped error so callers don't crash.
       final controller = StreamController<ChatStreamEvent>();
-      controller.add(
-        const ChatStreamEvent.error('Multiplex session not open'),
-      );
+      controller.add(const ChatStreamEvent.error('Multiplex session not open'));
       controller.add(const ChatStreamEvent.done());
       unawaited(controller.close());
       return controller.stream;
@@ -325,42 +323,44 @@ class MultiplexSession {
     late final StreamSubscription<ChatStreamEvent> subscription;
     final tracker = _ActiveChatStream(controller: outbound);
 
-    subscription = connection.chat(payload: payload).listen(
-      (event) {
-        if (outbound.isClosed) return;
-        outbound.add(event);
-        if (event is DoneEvent) {
-          // Stream finished cleanly — drop from tracker so the next
-          // send for the same chat starts fresh without trying to
-          // cancel an already-finished stream.
-          if (identical(_activeChatStreams[chatId], tracker)) {
-            _activeChatStreams.remove(chatId);
-          }
-          unawaited(outbound.close());
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (outbound.isClosed) return;
-        outbound.add(ChatStreamEvent.error(error.toString()));
-        outbound.add(const ChatStreamEvent.done());
-        if (identical(_activeChatStreams[chatId], tracker)) {
-          _activeChatStreams.remove(chatId);
-        }
-        unawaited(outbound.close());
-      },
-      onDone: () {
-        if (outbound.isClosed) return;
-        // Defensive — if the source closed without DoneEvent ensure
-        // the wrapper closes too. Listener's DoneEvent path normally
-        // handles this; this is the safety net.
-        outbound.add(const ChatStreamEvent.done());
-        if (identical(_activeChatStreams[chatId], tracker)) {
-          _activeChatStreams.remove(chatId);
-        }
-        unawaited(outbound.close());
-      },
-      cancelOnError: false,
-    );
+    subscription = connection
+        .chat(payload: payload)
+        .listen(
+          (event) {
+            if (outbound.isClosed) return;
+            outbound.add(event);
+            if (event is DoneEvent) {
+              // Stream finished cleanly — drop from tracker so the next
+              // send for the same chat starts fresh without trying to
+              // cancel an already-finished stream.
+              if (identical(_activeChatStreams[chatId], tracker)) {
+                _activeChatStreams.remove(chatId);
+              }
+              unawaited(outbound.close());
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (outbound.isClosed) return;
+            outbound.add(ChatStreamEvent.error(error.toString()));
+            outbound.add(const ChatStreamEvent.done());
+            if (identical(_activeChatStreams[chatId], tracker)) {
+              _activeChatStreams.remove(chatId);
+            }
+            unawaited(outbound.close());
+          },
+          onDone: () {
+            if (outbound.isClosed) return;
+            // Defensive — if the source closed without DoneEvent ensure
+            // the wrapper closes too. Listener's DoneEvent path normally
+            // handles this; this is the safety net.
+            outbound.add(const ChatStreamEvent.done());
+            if (identical(_activeChatStreams[chatId], tracker)) {
+              _activeChatStreams.remove(chatId);
+            }
+            unawaited(outbound.close());
+          },
+          cancelOnError: false,
+        );
 
     tracker.subscription = subscription;
     _activeChatStreams[chatId] = tracker;

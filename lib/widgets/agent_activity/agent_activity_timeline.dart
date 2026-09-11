@@ -9,6 +9,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/stream_phase.dart';
 import 'package:cowork/models/tool_call.dart';
 import 'package:cowork/widgets/agent_activity/agent_activity_model.dart';
@@ -204,7 +206,8 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
           // Name the tool the model is waiting on ("Searching the web",
           // "Compiling document") so a long run says what it is doing, not a
           // bare "Working". Falls back to "Working" if the tool is unknown.
-          ? (runningActivityLabel(widget.toolCalls) ?? StreamPhase.working.label)
+          ? (runningActivityLabel(widget.toolCalls) ??
+                StreamPhase.working.label)
           : (widget.phase?.label ??
                 (widget.toolCalls.isEmpty ? 'Thinking' : 'Working'));
     } else {
@@ -234,7 +237,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
+              AppIcon(
                 _isExpanded
                     ? Icons.keyboard_arrow_down
                     : Icons.keyboard_arrow_right,
@@ -262,9 +265,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final Color color = entry.hasError
         ? theme.colorScheme.error.withValues(alpha: 0.85)
         : muted;
-    final Color railColor = theme.colorScheme.onSurface.withValues(
-      alpha: 0.15,
-    );
+    final Color railColor = theme.colorScheme.onSurface.withValues(alpha: 0.15);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,7 +381,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             shape: BoxShape.circle,
             border: Border.all(color: railColor),
           ),
-          child: Icon(_iconFor(entry), size: 14, color: color),
+          child: AppIcon(_iconFor(entry), size: 14, color: color),
         ),
       ],
     );
@@ -395,7 +396,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final detail = entry.detail;
 
     if (detail == null) {
-      return Text(entry.label, style: baseStyle, overflow: TextOverflow.ellipsis);
+      return Text(
+        entry.label,
+        style: baseStyle,
+        overflow: TextOverflow.ellipsis,
+      );
     }
 
     // The query or URL is the part worth reading, so it carries more
@@ -420,10 +425,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
   /// The pages a step found, as chips that scroll sideways — the row must
   /// never push the message wider than the bubble.
-  Widget _buildSourceChips(
-    ThemeData theme,
-    List<AgentActivitySource> sources,
-  ) {
+  Widget _buildSourceChips(ThemeData theme, List<AgentActivitySource> sources) {
     return SizedBox(
       height: 30,
       child: ListView.separated(
@@ -454,7 +456,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
               'https://www.google.com/s2/favicons?domain=${source.host}&sz=32',
               width: 16,
               height: 16,
-              errorBuilder: (_, _, _) => Icon(
+              errorBuilder: (_, _, _) => AppIcon(
                 Icons.public,
                 size: 14,
                 color: onSurface.withValues(alpha: 0.5),

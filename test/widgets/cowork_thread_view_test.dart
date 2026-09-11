@@ -8,11 +8,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/platform_specific/chat/chat_ui_desktop.dart';
+import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:cowork/services/settings/mobile_chat_preferences.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/chat_model_selection_service.dart';
+import 'package:cowork/services/chat_reaction_service.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/cowork_device_keys.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
+import 'package:cowork/services/cowork/cowork_queued_marks.dart';
+import 'package:cowork/services/cowork/cowork_task_outbox.dart';
+import 'package:cowork/services/offline_retry_manager.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/cowork_replay_loader.dart';
@@ -98,6 +105,7 @@ void main() {
     Size size = const Size(1400, 900),
     List<bool>? runStates,
     VoidCallback? onOpenModelScreen,
+    bool phoneLayout = false,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -108,6 +116,7 @@ void main() {
     await tester.pumpWidget(
       _app(
         CoworkThreadView(
+          phoneLayout: phoneLayout,
           controllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           threadKey: threadKey,
@@ -126,6 +135,21 @@ void main() {
   // ==========================================================================
   // Pairing / connect / reconnect — the transport half.
   // ==========================================================================
+
+  testWidgets('phone chat never displays the bottom transport form', (
+    tester,
+  ) async {
+    final controller = await pumpView(
+      tester,
+      phoneLayout: true,
+      size: const Size(390, 844),
+    );
+    controller.set(const CoworkRelayState(phase: CoworkRelayPhase.closed));
+    await tester.pump();
+    expect(find.text('Forget'), findsNothing);
+    expect(find.text('Reconnect'), findsNothing);
+    expect(find.byType(ChukChatUIMobile), findsOneWidget);
+  });
 
   testWidgets('chat mounts before controller initialization finishes', (
     tester,
@@ -307,6 +331,22 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('resume replaces a suspended paired socket immediately', (
+      tester,
+    ) async {
+      final (controllers, _) = await pumpPersistent(tester);
+      final before = controllers.length;
+      final state = tester.state<CoworkThreadViewState>(
+        find.byType(CoworkThreadView),
+      );
+      state.didChangeAppLifecycleState(AppLifecycleState.paused);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(controllers.length, before + 1);
+      expect(controllers.last.reconnectCalls, 1);
+    });
+
     testWidgets('a stored pairing auto-reconnects with no code form', (
       tester,
     ) async {
@@ -469,6 +509,207 @@ void main() {
   // ==========================================================================
 
   group('the imported chat, live', () {
+    testWidgets(
+      'host typing survives phone remount and reconnect until host idle',
+      (tester) async {
+        tester.binding.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(disableAnimations: true);
+        addTearDown(
+          tester.binding.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        var controller = await pumpView(
+          tester,
+          phoneLayout: true,
+          threadKey: 'host-typing',
+          size: const Size(420, 900),
+        );
+        expect(find.byKey(const ValueKey('host-run-typing')), findsNothing);
+        controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+        await tester.pumpAndSettle();
+        controller.emit(
+          const CoworkRelayRunState(
+            sessionKey: 'host-typing',
+            state: 'running',
+            prompt: 'Still working',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('host-run-typing')), findsOneWidget);
+        controller.set(const CoworkRelayState(phase: CoworkRelayPhase.closed));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('host-run-typing')), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _flushIdleTimers(tester);
+        controller = await pumpView(
+          tester,
+          phoneLayout: true,
+          threadKey: 'host-typing',
+          size: const Size(420, 900),
+        );
+        expect(find.byKey(const ValueKey('host-run-typing')), findsOneWidget);
+        controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+        await tester.pumpAndSettle();
+        controller.emit(
+          const CoworkRelayRunState(sessionKey: 'host-typing', state: 'idle'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('host-run-typing')), findsNothing);
+        expect(CoworkRunLedger.instance.isRunning('host-typing'), isFalse);
+        controller.emit(
+          const CoworkRelayRunState(
+            sessionKey: 'host-typing',
+            state: 'running',
+            prompt: 'Next run',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('host-run-typing')), findsOneWidget);
+        final replayCount = controller.replayRequests.length;
+        controller.emit(
+          const CoworkRelayDone(
+            sessionKey: 'host-typing',
+            finalAnswer: 'Finished',
+            reason: 'finished',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('host-run-typing')), findsNothing);
+        expect(CoworkRunLedger.instance.isRunning('host-typing'), isFalse);
+        expect(controller.replayRequests.length, greaterThan(replayCount));
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _flushIdleTimers(tester);
+      },
+    );
+
+    testWidgets('phone reaction survives transcript remount and toggles off', (
+      tester,
+    ) async {
+      final reactions = ChatReactionService.instance;
+      reactions.clearMemoryForTesting();
+      final controller = await pumpView(
+        tester,
+        phoneLayout: true,
+        threadKey: 'reaction-chat',
+        size: const Size(420, 900),
+      );
+      controller.set(
+        const CoworkRelayState(
+          phase: CoworkRelayPhase.paired,
+          peerDeviceId: 'cowork-host',
+        ),
+      );
+      await tester.pumpAndSettle();
+      controller.emit(
+        const CoworkRelayRunState(sessionKey: 'reaction-chat', state: 'idle'),
+      );
+      controller.emit(
+        const CoworkRelayUser('A message worth reacting to', mid: 1),
+      );
+      controller.emit(const CoworkRelayDone(reason: 'replay', replay: true));
+      await tester.pumpAndSettle();
+      MessageBubble bubble() => tester
+          .widgetList<MessageBubble>(find.byType(MessageBubble))
+          .firstWhere((b) => b.message == 'A message worth reacting to');
+      expect(bubble().onReaction, isNotNull);
+      bubble().onReaction!('❤️');
+      await tester.pumpAndSettle();
+      expect(bubble().reaction, '❤️');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _flushIdleTimers(tester);
+      reactions.clearMemoryForTesting();
+      await pumpView(
+        tester,
+        phoneLayout: true,
+        threadKey: 'reaction-chat',
+        size: const Size(420, 900),
+      );
+      await tester.pumpAndSettle();
+      expect(bubble().reaction, '❤️');
+      bubble().onReaction!('❤️');
+      await tester.pumpAndSettle();
+      expect(bubble().reaction, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _flushIdleTimers(tester);
+      reactions.clearMemoryForTesting();
+    });
+
+    testWidgets(
+      'mobile restores and refreshes this chats provider independently',
+      (tester) async {
+        final store = ChatModelSelectionService.instance;
+        store.clearMemoryForTesting();
+        await store.save(
+          'scope-a',
+          const ChatModelSelection(modelId: 'same-model', providerSlug: 'one'),
+        );
+        await store.save(
+          'scope-b',
+          const ChatModelSelection(modelId: 'same-model', providerSlug: 'two'),
+        );
+        await pumpView(
+          tester,
+          phoneLayout: true,
+          threadKey: 'scope-a',
+          size: const Size(420, 900),
+        );
+        ChukChatUIMobileState screen() =>
+            tester.state<ChukChatUIMobileState>(find.byType(ChukChatUIMobile));
+        expect(screen().debugModelId, 'same-model');
+        expect(screen().debugProviderSlug, 'one');
+        await store.save(
+          'scope-a',
+          const ChatModelSelection(
+            modelId: 'same-model',
+            providerSlug: 'three',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(screen().debugProviderSlug, 'three');
+        expect((await store.load('scope-b'))!.providerSlug, 'two');
+        await tester.pumpWidget(const SizedBox.shrink());
+        store.clearMemoryForTesting();
+      },
+    );
+
+    testWidgets('phone transcript starts quiet and updates details live', (
+      tester,
+    ) async {
+      final preferences = MobileChatPreferences.instance;
+      // This integration checks the presentation listener, not disk writes.
+      // Persistence has separate service tests; a process-wide pending prefs
+      // future can otherwise belong to an earlier widget test's FakeAsync.
+      void update({bool thinking = false, bool activity = false}) {
+        preferences.showThinking = thinking;
+        preferences.showActivity = activity;
+        // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+        preferences.notifyListeners();
+      }
+
+      update();
+      addTearDown(() {
+        preferences.showThinking = false;
+        preferences.showActivity = false;
+      });
+      await pumpView(tester, phoneLayout: true, size: const Size(420, 900));
+      ChukChatUIMobile screen() =>
+          tester.widget<ChukChatUIMobile>(find.byType(ChukChatUIMobile));
+      expect(screen().messengerMode, isTrue);
+      expect(screen().showReasoningTokens, isFalse);
+      expect(screen().showToolCalls, isFalse);
+      expect(screen().showModelInfo, isFalse);
+      expect(screen().showTps, isFalse);
+      expect(screen().toolCallingEnabled, isFalse);
+
+      update(activity: true);
+      await tester.pumpAndSettle();
+      expect(screen().showToolCalls, isTrue);
+      expect(screen().showReasoningTokens, isFalse);
+      update(thinking: true, activity: true);
+      await tester.pumpAndSettle();
+      expect(screen().showReasoningTokens, isTrue);
+      expect(screen().toolCallingEnabled, isFalse);
+    });
+
     Future<FakeRelayController> pumpPaired(
       WidgetTester tester, {
       String threadKey = 'thread-1',
@@ -589,6 +830,87 @@ void main() {
       expect(opened, 1);
     });
 
+    group('the outbox', () {
+      late Map<String, String> disk;
+
+      setUp(() {
+        disk = <String, String>{};
+        CoworkTaskOutbox.resetForTest();
+        CoworkTaskOutbox.read = (key) async => disk[key];
+        CoworkTaskOutbox.write = (key, value) async => disk[key] = value;
+        CoworkTaskOutbox.delete = (key) async => disk.remove(key);
+        // The queue mark goes to a map, not to the real chat store: this test
+        // has no Supabase and no SQLite behind it.
+        CoworkQueuedMarks.readRows = (_) => null;
+        CoworkQueuedMarks.writeRows = (_, _) async {};
+        OfflineRetryManager.instance.debugReset();
+      });
+
+      tearDown(() {
+        CoworkTaskOutbox.read = null;
+        CoworkTaskOutbox.write = null;
+        CoworkTaskOutbox.delete = null;
+        CoworkQueuedMarks.readRows = null;
+        CoworkQueuedMarks.writeRows = null;
+        OfflineRetryManager.instance.debugReset();
+      });
+
+      testWidgets('pairing sends what was typed while the host was away', (
+        tester,
+      ) async {
+        await CoworkTaskOutbox.enqueue(
+          sessionKey: 'thread-1',
+          prompt: 'im flugmodus getippt',
+        );
+
+        final controller = await pumpPaired(tester);
+        await tester.pumpAndSettle();
+
+        expect(controller.tasks, contains('im flugmodus getippt'));
+        expect(await CoworkTaskOutbox.pendingFor('thread-1'), isEmpty);
+      });
+
+      testWidgets('Retry with a host on the line flushes instead of '
+          'reconnecting', (tester) async {
+        final controller = await pumpPaired(tester);
+        await tester.pumpAndSettle();
+        final int reconnectsBefore = controller.reconnectCalls;
+
+        // Typed after pairing, and the socket refused it.
+        await CoworkTaskOutbox.enqueue(
+          sessionKey: 'thread-1',
+          prompt: 'nochmal bitte',
+        );
+        // Not awaited: a bare await inside a widget test does not pump, and
+        // the flush needs frames to settle.
+        unawaited(OfflineRetryManager.instance.retryNow());
+        await tester.pumpAndSettle();
+
+        expect(controller.tasks, contains('nochmal bitte'));
+        expect(controller.reconnectCalls, reconnectsBefore);
+      });
+
+      testWidgets('an app resume sends the backlog too, not only a pairing', (
+        tester,
+      ) async {
+        final controller = await pumpPaired(tester);
+        await tester.pumpAndSettle();
+        await CoworkTaskOutbox.enqueue(
+          sessionKey: 'thread-1',
+          prompt: 'waehrend der pause getippt',
+        );
+
+        final state = tester.state<CoworkThreadViewState>(
+          find.byType(CoworkThreadView),
+        );
+        state.didChangeAppLifecycleState(AppLifecycleState.paused);
+        state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+
+        expect(controller.tasks, contains('waehrend der pause getippt'));
+      });
+    });
+
     testWidgets('pairing asks the host to replay this thread from the cursor', (
       tester,
     ) async {
@@ -600,6 +922,7 @@ void main() {
     testWidgets('a stored cursor rides the replay request', (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{
         '${kReplayCursorPrefix}thread-1': 42,
+        '${kReplayTimestampCursorPrefix}thread-1': true,
       });
       await CoworkReplayLoader.instance.load();
 

@@ -124,7 +124,8 @@ class ChatStorageSidebar {
     // its instant sidebar and the prefs file shrinks on this launch.
     var raw = await LocalChatCacheService.kvGet(cacheKey);
     if (raw == null) {
-      final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance();
+      final prefs =
+          sharedPrefsInstance ?? await SharedPreferences.getInstance();
       final old = prefs.getString(cacheKey);
       if (old != null) {
         await LocalChatCacheService.kvSet(cacheKey, old);

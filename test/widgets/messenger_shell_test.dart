@@ -5,9 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cowork/pages/messenger_shell.dart';
+import 'package:cowork/pages/mobile_cowork_settings_page.dart';
+import 'package:cowork/pages/agent_profile_edit_page.dart';
+import 'package:cowork/pages/automations_page.dart';
+import 'package:cowork/widgets/chat_documents_panel.dart';
 import 'package:cowork/models/stored_chat.dart';
 import 'package:cowork/services/chat_storage_state.dart';
 import 'package:cowork/widgets/room_create_sheet.dart';
@@ -31,6 +37,7 @@ import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/cowork_run_ledger.dart';
 
 import '../support/test_app.dart';
+import '../platform_specific/mobile/mobile_support.dart' show findId;
 
 class _MemoryStore implements CoworkSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
@@ -232,7 +239,13 @@ Future<void> settle(WidgetTester tester) async {
 void main() {
   // The relay link, the run ledger and the replay loader are process-wide
   // singletons; a test must not inherit the previous one's run.
+  //
+  // Preferences are process-wide too, and the roster is cached in them now
+  // (`cowork_agent_roster_v1`, bead cowork-91pn): without this reset a shell
+  // would start with the coworkers an earlier test created, which is exactly
+  // the cold start the cache is for — and exactly what a test must not inherit.
   setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     CoworkRelayLink.instance.reset();
     CoworkRunLedger.instance.reset();
   });
@@ -280,7 +293,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     if (openSidebar && size.width >= 600) {
-      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.tap(findIcon(Icons.menu_rounded));
       await tester.pumpAndSettle();
     }
     return (controller, roster);
@@ -314,7 +327,7 @@ void main() {
       expect(find.byType(AgentRosterView), findsNothing);
       expect(find.byTooltip('New agent'), findsOneWidget);
       expect(find.byType(CoworkThreadView), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.menu_rounded));
+      await tester.tap(findIcon(Icons.menu_rounded));
       await tester.pumpAndSettle();
 
       expect(find.byType(AgentRosterView), findsOneWidget);
@@ -325,11 +338,11 @@ void main() {
       // chuk's chrome, not an app bar: the hamburger at the top left and the
       // floating row at the top right.
       expect(find.byType(AppBar), findsNothing);
-      expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
+      expect(findIcon(Icons.menu_rounded), findsOneWidget);
       expect(find.byTooltip('Copy Debug Chat'), findsOneWidget);
       // Nothing sits on top of the chat: the connection is not the user's job.
       expect(find.textContaining('Connected to'), findsNothing);
-      expect(find.byIcon(Icons.link_off), findsNothing);
+      expect(findIcon(Icons.link_off), findsNothing);
     },
   );
 
@@ -370,7 +383,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // The roster is off screen; chuk's mini rail carries the two slots. The
@@ -384,7 +397,7 @@ void main() {
     expect(find.byTooltip("Agent's screen"), findsNothing);
     expect(threadOffstage(tester), isFalse);
 
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
     expect(find.byTooltip('New agent'), findsNothing);
@@ -399,7 +412,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsNothing);
 
-      // History must not expose a stale browser. A live navigation does.
+      // History must not expose a stale browser. Explicit VNC capability does.
       controller.emit(
         const CoworkRelayTool(
           'mcp__playwright__browser_navigate',
@@ -410,10 +423,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsNothing);
       controller.emit(
-        const CoworkRelayTool(
-          'mcp__playwright__browser_navigate',
-          status: 'completed',
-        ),
+        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsOneWidget);
@@ -440,8 +450,22 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(BrowserViewPage), findsNothing);
 
-      // Finishing the run hides the entry even if Chromium stays open.
+      // Finishing the run leaves the screen there: the coworker ends its turn
+      // with "the browser is open, you can take it over", and that is the
+      // moment the user reaches for it (bead cowork-tf1u).
       controller.emit(const CoworkRelayDone());
+      await tester.pumpAndSettle();
+      expect(find.byTooltip("Agent's screen"), findsOneWidget);
+
+      // The host closing the browser is what takes it away.
+      controller.emit(
+        const CoworkRelayRunState(
+          sessionKey: 'default',
+          state: 'idle',
+          browserOpen: false,
+          vncAvailable: false,
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsNothing);
       expect(find.byTooltip('No screen open right now'), findsOneWidget);
@@ -589,7 +613,7 @@ void main() {
       'tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
-    await tester.tap(find.byIcon(Icons.person_add_alt));
+    await tester.tap(findIcon(Icons.person_add_alt));
     await tester.pumpAndSettle();
     // chuk's rename-dialog shape: an AlertDialog with one TextField.
     expect(find.byType(AlertDialog), findsOneWidget);
@@ -625,7 +649,7 @@ void main() {
   testWidgets('Cancel in the New agent dialog adds nothing', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
-    await tester.tap(find.byIcon(Icons.person_add_alt));
+    await tester.tap(findIcon(Icons.person_add_alt));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
@@ -680,16 +704,21 @@ void main() {
     final agent = roster.agents.single;
     await tester.tap(find.byKey(ValueKey<String>('mobile-agent-${agent.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('More'));
+    expect(find.byTooltip('More'), findsNothing);
+    await tester.tap(findId('mobile_chat_bot_pill'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename agent'));
+    expect(find.byType(MobileCoworkSettingsPage), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit coworker'));
     await tester.pumpAndSettle();
-    final field = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    );
+    final field = find
+        .descendant(
+          of: find.byType(AgentProfileEditPage),
+          matching: find.byType(TextField),
+        )
+        .first;
+    await tester.ensureVisible(field);
     await tester.enterText(field, '  Research Assistant  ');
-    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
     await tester.pumpAndSettle();
     expect(roster.byId(agent.id)!.name, 'Research Assistant');
     expect(controller.renamedAgents, [(agent.id, 'Research Assistant')]);
@@ -744,6 +773,100 @@ void main() {
     expect(find.text('From Phone'), findsWidgets);
   });
 
+  testWidgets(
+    'phone screen requires live presence and files use selected chat',
+    (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final agent = roster.agents.single;
+      await tester.tap(
+        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
+      );
+      await tester.pumpAndSettle();
+      final chat = tester.widget<MobileChatScreen>(
+        find.byType(MobileChatScreen),
+      );
+      // No screen yet: the target is parked, not dead. Tapping it says why
+      // (bead cowork-egrg).
+      expect(chat.browserAvailable, isFalse);
+      expect(chat.onOpenBrowser, isNotNull);
+      expect(findId('mobile_chat_browser'), findsOneWidget);
+      expect(chat.onOpenFiles, isNotNull);
+      chat.onOpenBrowser!();
+      // The shell already has an "offline" snack up; ours is queued behind it.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(BrowserViewPage), findsNothing);
+      expect(find.textContaining('No screen yet'), findsOneWidget);
+
+      controller.emit(
+        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+      );
+      await tester.pumpAndSettle();
+      final activeChat = tester.widget<MobileChatScreen>(
+        find.byType(MobileChatScreen),
+      );
+      // The lit target IS the announcement; nothing interrupts the reader.
+      expect(activeChat.browserAvailable, isTrue);
+      expect(activeChat.onOpenBrowser, isNotNull);
+      expect(find.textContaining('You can take over'), findsNothing);
+
+      controller.emit(const CoworkRelayBrowserView(status: 'closed'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<MobileChatScreen>(find.byType(MobileChatScreen))
+            .browserAvailable,
+        isFalse,
+      );
+      expect(findId('mobile_chat_browser'), findsOneWidget);
+      // A callback captured before closure must not enter a dead VNC route.
+      activeChat.onOpenBrowser!();
+      await tester.pumpAndSettle();
+      expect(find.byType(BrowserViewPage), findsNothing);
+      await tester.tap(findId('mobile_chat_files'));
+      await tester.pumpAndSettle();
+      final explorer = tester.widget<ChatDocumentsPanel>(
+        find.byType(ChatDocumentsPanel),
+      );
+      expect(explorer.fullPage, isTrue);
+      expect(explorer.sessionKey, agent.threads.single.key);
+      expect(explorer.coworkerName, agent.name);
+    },
+  );
+
+  testWidgets(
+    'phone profile scopes model settings and automations to its own chat',
+    (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final agent = roster.agents.single;
+      await tester.tap(
+        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(findId('mobile_chat_bot_pill'));
+      await tester.pumpAndSettle();
+      final profile = tester.widget<MobileCoworkSettingsPage>(
+        find.byType(MobileCoworkSettingsPage),
+      );
+      expect(profile.chatId, agent.threads.single.key);
+      profile.onAutomations();
+      await tester.pumpAndSettle();
+      final page = tester.widget<AutomationsPage>(find.byType(AutomationsPage));
+      expect(page.sessionKey, agent.threads.single.key);
+      expect(page.chatName, agent.name);
+    },
+  );
+
   testWidgets('an agent has one permanent thread and no way to open a second', (
     tester,
   ) async {
@@ -752,7 +875,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The "new thread" affordance is gone: one permanent session per bot.
-    expect(find.byIcon(Icons.add_comment_outlined), findsNothing);
+    expect(findIcon(Icons.add_comment_outlined), findsNothing);
     expect(roster.agents.single.threads, hasLength(1));
     final stableKey = roster.agents.single.id;
     expect(roster.agents.single.threads.single.key, stableKey);
@@ -805,7 +928,7 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.tune));
+      await tester.tap(findIcon(Icons.tune));
       await tester.pumpAndSettle();
 
       // Every block the host can fill has a heading; the schedule field and the
@@ -838,11 +961,11 @@ void main() {
     expect(threadView, findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     expect(find.byType(AppBar), findsNothing);
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Chuk Chat').hitTestable(), findsNothing);
     expect(threadOffstage(tester), isFalse);
@@ -864,7 +987,7 @@ void main() {
     expect(find.byType(MobileAgentList), findsOneWidget);
     // The inbox is a messenger home: its own title bar, and the All / Unread
     // filter under it.
-    expect(find.text('Coworkers'), findsOneWidget);
+    expect(find.text('Agents'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey<String>('mobile-agent-$agentId')));
@@ -876,10 +999,24 @@ void main() {
     // is which one the reader can touch.
     expect(find.byType(MobileChatScreen), findsOneWidget);
     expect(find.byType(MobileChatChrome), findsOneWidget);
-    expect(find.text('Coworkers').hitTestable(), findsNothing);
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded).first);
+    expect(findId('mobile_chat_more'), findsNothing);
+    final shellScaffold = tester.widget<Scaffold>(
+      find
+          .ancestor(
+            of: find.byType(MobileChatScreen),
+            matching: find.byType(Scaffold),
+          )
+          .first,
+    );
+    expect(shellScaffold.endDrawer, isNull);
+    expect(shellScaffold.endDrawerEnableOpenDragGesture, isFalse);
+    await tester.flingFrom(const Offset(416, 400), const Offset(-230, 0), 1200);
     await tester.pumpAndSettle();
-    expect(find.text('Coworkers').hitTestable(), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing);
+    expect(find.text('Agents').hitTestable(), findsNothing);
+    await tester.tap(findIcon(Icons.arrow_back_rounded).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Agents').hitTestable(), findsOneWidget);
   });
 
   testWidgets('the Rooms button opens the rooms screen and lists rooms', (
@@ -954,7 +1091,7 @@ void main() {
 
     // The composer routes to sendRoomTask with the room id.
     await tester.enterText(find.byType(TextField).last, 'kick off');
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(findIcon(Icons.send));
     await tester.pump();
     expect(controller.roomTasks, [(room.id, 'kick off')]);
   });
@@ -1058,7 +1195,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // Delete amber via its roster row menu. The row is scoped by the agent's
@@ -1067,7 +1204,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(ValueKey<String>('agent-tile-$amberId')),
-        matching: find.byIcon(Icons.more_vert),
+        matching: findIcon(Icons.more_vert),
       ),
     );
     await tester.pumpAndSettle();
@@ -1117,13 +1254,13 @@ void main() {
 
     await tester.tap(find.byTooltip('Control Rooms').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.tap(findIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Manage members'));
     await tester.pumpAndSettle();
 
     // Remove the first member: the room survives (3 -> 2), host told to drop it.
-    await tester.tap(find.byIcon(Icons.remove_circle_outline).first);
+    await tester.tap(findIcon(Icons.remove_circle_outline).first);
     await tester.pumpAndSettle();
 
     expect(rooms.byId(room.id)!.members.length, 2);
@@ -1170,7 +1307,7 @@ void main() {
       // its ticker.
       await tester.tap(find.byTooltip('Control Rooms').first);
       await settle(tester);
-      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.tap(findIcon(Icons.more_vert));
       await settle(tester);
       await tester.tap(find.text('Delete room'));
       await settle(tester);
@@ -1213,7 +1350,11 @@ void main() {
     await tester.tap(find.byTooltip('Copy Debug Chat'));
     await tester.pumpAndSettle();
 
-    expect(exported, ['default']);
+    // Nothing is selected: no pairing, no stored roster, no remembered pick,
+    // so this shell has no conversation. The export names no thread rather
+    // than a made-up one — a placeholder key would mint a replay cursor and a
+    // cache row for a conversation that does not exist (bead cowork-91pn).
+    expect(exported, ['']);
     expect(find.text('debug chat copied'), findsOneWidget);
   });
 
@@ -1257,7 +1398,8 @@ void main() {
     expect(clipboardText, isNotNull);
     final payload = jsonDecode(clipboardText!) as Map<String, dynamic>;
     expect(payload['kind'], 'cowork_full_chat_debug');
-    expect(payload['thread_key'], 'default');
+    // No coworker, so no thread — see the note on the test above.
+    expect(payload['thread_key'], '');
     expect(find.text('debug chat copied'), findsOneWidget);
     expect(find.text('could not copy the chat'), findsNothing);
   });
@@ -1371,12 +1513,9 @@ void main() {
     final String fallback = roster.visibleAgents.first.threads.single.key;
     expect(tester.widget<CoworkThreadView>(threadView).threadKey, fallback);
 
-    roster.applyHostNames(
-      const <CoworkHostAgentName>[
-        CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
-      ],
-      peerDeviceId: null,
-    );
+    roster.applyHostNames(const <CoworkHostAgentName>[
+      CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+    ], peerDeviceId: null);
     await tester.pumpAndSettle();
 
     expect(
@@ -1396,19 +1535,16 @@ void main() {
       ..addAgent(name: 'amber')
       ..addAgent(name: 'cobalt');
     await pumpShellOver(tester, roster);
-    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.text('cobalt'));
     await tester.pumpAndSettle();
     final picked = roster.agents.last.threads.single.key;
     expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
 
-    roster.applyHostNames(
-      const <CoworkHostAgentName>[
-        CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
-      ],
-      peerDeviceId: null,
-    );
+    roster.applyHostNames(const <CoworkHostAgentName>[
+      CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+    ], peerDeviceId: null);
     await tester.pumpAndSettle();
 
     // The user's own pick is never moved out from under them.

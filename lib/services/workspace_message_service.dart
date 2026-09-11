@@ -27,9 +27,11 @@ class WorkspaceMessageService {
 
   static int? getModelContextWindow(String? modelId) => null;
 
-  static double? contextUsageRatio(Workspace workspace, String? modelId) => null;
+  static double? contextUsageRatio(Workspace workspace, String? modelId) =>
+      null;
 
   static double? fileContextRatio(WorkspaceFile file, String? modelId) => null;
 
-  static int remainingFileTokenBudget(Workspace workspace, String? modelId) => 0;
+  static int remainingFileTokenBudget(Workspace workspace, String? modelId) =>
+      0;
 }

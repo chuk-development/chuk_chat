@@ -72,22 +72,22 @@ class McpSecrets {
   }
 
   McpSecrets withTokens(McpTokens next) => McpSecrets(
-        credentials: credentials,
-        tokens: next,
-        issuer: issuer,
-        authorizationEndpoint: authorizationEndpoint,
-        tokenEndpoint: tokenEndpoint,
-        scope: scope,
-      );
+    credentials: credentials,
+    tokens: next,
+    issuer: issuer,
+    authorizationEndpoint: authorizationEndpoint,
+    tokenEndpoint: tokenEndpoint,
+    scope: scope,
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'credentials': credentials.toJson(),
-        'tokens': _tokensJson(),
-        'issuer': issuer,
-        'authorization_endpoint': authorizationEndpoint,
-        'token_endpoint': tokenEndpoint,
-        'scope': scope,
-      };
+    'credentials': credentials.toJson(),
+    'tokens': _tokensJson(),
+    'issuer': issuer,
+    'authorization_endpoint': authorizationEndpoint,
+    'token_endpoint': tokenEndpoint,
+    'scope': scope,
+  };
 
   /// The tokens, with the expiry written in UTC.
   ///
@@ -107,23 +107,23 @@ class McpSecrets {
   }
 
   static McpSecrets fromJson(Map<String, dynamic> json) => McpSecrets(
-        credentials: McpClientCredentials.fromJson(
-          Map<String, dynamic>.from(json['credentials'] as Map? ?? const {}),
-        ),
-        tokens: McpTokens.fromJson(
-          Map<String, dynamic>.from(json['tokens'] as Map? ?? const {}),
-        ),
-        issuer: json['issuer']?.toString(),
-        authorizationEndpoint: json['authorization_endpoint']?.toString(),
-        tokenEndpoint: json['token_endpoint']?.toString(),
-        scope: json['scope']?.toString(),
-      );
+    credentials: McpClientCredentials.fromJson(
+      Map<String, dynamic>.from(json['credentials'] as Map? ?? const {}),
+    ),
+    tokens: McpTokens.fromJson(
+      Map<String, dynamic>.from(json['tokens'] as Map? ?? const {}),
+    ),
+    issuer: json['issuer']?.toString(),
+    authorizationEndpoint: json['authorization_endpoint']?.toString(),
+    tokenEndpoint: json['token_endpoint']?.toString(),
+    scope: json['scope']?.toString(),
+  );
 }
 
 class McpStore {
   McpStore({CoworkSecureKeyValueStore? secrets, McpOAuth? oauth})
-      : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
-        _oauth = oauth ?? McpOAuth();
+    : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
+      _oauth = oauth ?? McpOAuth();
 
   /// Non-secret connection config.
   static const String prefsKey = 'mcp_connections_v1';
@@ -351,9 +351,7 @@ class McpStore {
         continue;
       }
       final secrets = await _refreshedSecrets(c);
-      final payload = c.toForwardJson(
-        accessToken: secrets?.tokens.accessToken,
-      );
+      final payload = c.toForwardJson(accessToken: secrets?.tokens.accessToken);
       final block = _oauthBlock(c, secrets);
       if (block != null) payload['oauth'] = block;
       payloads.add(payload);
@@ -451,10 +449,7 @@ class McpStore {
     if (base == null) return url;
     return base
         .replace(
-          queryParameters: <String, String>{
-            ...base.queryParameters,
-            ...creds,
-          },
+          queryParameters: <String, String>{...base.queryParameters, ...creds},
         )
         .toString();
   }

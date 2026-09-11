@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/services/image_storage_service.dart';
 
 /// Widget that downloads, decrypts, and displays an encrypted image from storage
@@ -140,7 +142,7 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              AppIcon(
                 Icons.image_not_supported_outlined,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 32,
@@ -168,7 +170,7 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              AppIcon(
                 Icons.error_outline,
                 color: Theme.of(context).colorScheme.error,
                 size: 32,

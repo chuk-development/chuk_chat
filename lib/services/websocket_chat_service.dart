@@ -17,7 +17,10 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/cowork/cowork_replay_loader.dart';
 import 'package:cowork/services/cowork/cowork_run_ledger.dart';
+import 'package:cowork/services/cowork/cowork_queued_marks.dart';
+import 'package:cowork/services/cowork/cowork_task_outbox.dart';
 import 'package:cowork/services/settings/verbose_service.dart';
+import 'package:cowork/services/chat_model_selection_service.dart';
 
 /// Service for handling streaming chat responses.
 ///
@@ -68,12 +71,23 @@ class WebSocketChatService {
     String? chatId,
     List<Map<String, dynamic>>? tools,
     bool regenerate = false,
+    bool modelSelectionCaptured = false,
   }) {
     final link = CoworkRelayLink.instance;
     final ledger = CoworkRunLedger.instance;
-    final sessionKey =
-        (chatId != null && chatId.isNotEmpty) ? chatId : link.sessionKey.value;
+    final sessionKey = (chatId != null && chatId.isNotEmpty)
+        ? chatId
+        : link.sessionKey.value;
     final verbose = VerboseService.instance.enabled;
+    final selectedRoute = modelSelectionCaptured
+        ? Future.value(
+            ChatModelSelection(modelId: modelId, providerSlug: providerSlug),
+          )
+        : ChatModelSelectionService.instance.resolveForSend(
+            sessionKey,
+            modelId: modelId,
+            providerSlug: providerSlug,
+          );
 
     if (images != null && images.isNotEmpty) {
       // No image channel on `sendTask` yet: the frame carries a prompt, not
@@ -135,6 +149,9 @@ class WebSocketChatService {
         firstMid: firstMid,
         lastMid: lastMid,
       );
+      // Token delivery is provisional: the host's terminal answer is the
+      // complete canonical response, even after missing/filtered tail deltas.
+      if (finalAnswer != null) emit(FinalContentEvent(finalAnswer));
       emit(DoneEvent());
       closeOut();
     }
@@ -159,7 +176,8 @@ class WebSocketChatService {
           // cowork's relay emits ONE tool event per completed command, so this
           // is an open and a close in one step. A host that grows real start
           // events lands here with `status == 'running'` and only opens.
-          final started = event.status == 'running' ||
+          final started =
+              event.status == 'running' ||
               event.status == 'started' ||
               event.status == 'pending';
           if (verbose) {
@@ -199,7 +217,7 @@ class WebSocketChatService {
 
         case CoworkRelayAutomationList():
         case CoworkRelayDocuments():
-      case CoworkRelaySkillsList():
+        case CoworkRelaySkillsList():
         case CoworkRelayAgentList():
           break;
 
@@ -248,10 +266,10 @@ class WebSocketChatService {
             firstMid: event.firstMid,
             lastMid: event.lastMid,
           );
-          // The `run_ack` is the thread view's (its `_onInbound`, WS-7): it
-          // sees every live terminal for the thread, including a run adopted
-          // after a reconnect that never streamed through here, and it dedups
-          // by run id. Acking here as well sent two frames per run (review F14).
+        // The `run_ack` is the thread view's (its `_onInbound`, WS-7): it
+        // sees every live terminal for the thread, including a run adopted
+        // after a reconnect that never streamed through here, and it dedups
+        // by run id. Acking here as well sent two frames per run (review F14).
 
         case CoworkRelayDebugContext():
           ledger.debugContext(
@@ -306,9 +324,7 @@ class WebSocketChatService {
             if (terminated) return;
             terminated = true;
             ledger.finish(sessionKey, reason: 'error');
-            emit(
-              ErrorEvent('$error', code: StreamErrorCodes.streamFailure),
-            );
+            emit(ErrorEvent('$error', code: StreamErrorCodes.streamFailure));
             emit(DoneEvent());
             closeOut();
           });
@@ -320,9 +336,21 @@ class WebSocketChatService {
       if (controller == null) {
         terminated = true;
         ledger.finish(sessionKey, reason: 'error');
+        // The prompt is not lost because the socket is down: it waits in the
+        // outbox and goes out on the next pairing (bead cowork-i7sd). The row
+        // on screen is marked so the user can see it and ask for it again.
+        unawaited(
+          _queueAndMark(
+            message,
+            sessionKey,
+            selectedRoute,
+            reasoningEffort: reasoningEffort,
+          ),
+        );
         emit(
           const ErrorEvent(
-            'Not connected to your CoWork host.',
+            'Your host is not reachable. The message is queued and goes out '
+            'as soon as it is back.',
             code: StreamErrorCodes.connectionLost,
           ),
         );
@@ -333,11 +361,12 @@ class WebSocketChatService {
 
       chain = chain.then((_) async {
         try {
+          final route = await selectedRoute;
           await controller.sendTask(
             message,
             sessionKey: sessionKey,
-            modelId: modelId,
-            providerSlug: providerSlug,
+            modelId: route.modelId,
+            providerSlug: route.providerSlug,
             reasoningEffort: reasoningEffort,
             // Ask the executor to echo the raw model context only in the full
             // log view; the quiet default leaves the frame unchanged.
@@ -354,8 +383,22 @@ class WebSocketChatService {
           if (terminated) return;
           terminated = true;
           ledger.finish(sessionKey, reason: 'error');
+          // Same as the no-controller case: a socket that refused the frame
+          // has not lost the prompt, it has only delayed it.
+          unawaited(
+            _queueAndMark(
+              message,
+              sessionKey,
+              selectedRoute,
+              reasoningEffort: reasoningEffort,
+            ),
+          );
           emit(
-            ErrorEvent('$error', code: StreamErrorCodes.connectionLost),
+            ErrorEvent(
+              'Your host did not take the message ($error). It is queued and '
+              'goes out as soon as it is back.',
+              code: StreamErrorCodes.connectionLost,
+            ),
           );
           emit(const DoneEvent());
           closeOut();
@@ -385,17 +428,17 @@ class WebSocketChatService {
   /// True for anything the replay loader owns: a replayed frame of any kind,
   /// and every `user` turn (which only ever exists in a replay).
   static bool _isReplay(CoworkRelayInbound event) => switch (event) {
-        CoworkRelayUser() => true,
-        CoworkRelayDelta(:final replay) => replay,
-        CoworkRelayReasoning(:final replay) => replay,
-        CoworkRelayTool(:final replay) => replay,
-        CoworkRelaySubagent(:final replay) => replay,
-        CoworkRelayFile(:final replay) => replay,
-        CoworkRelayApprovalRequest(:final replay) => replay,
-        CoworkRelayAutomation(:final replay) => replay,
-        CoworkRelayDone(:final isReplay) => isReplay,
-        _ => false,
-      };
+    CoworkRelayUser() => true,
+    CoworkRelayDelta(:final replay) => replay,
+    CoworkRelayReasoning(:final replay) => replay,
+    CoworkRelayTool(:final replay) => replay,
+    CoworkRelaySubagent(:final replay) => replay,
+    CoworkRelayFile(:final replay) => replay,
+    CoworkRelayApprovalRequest(:final replay) => replay,
+    CoworkRelayAutomation(:final replay) => replay,
+    CoworkRelayDone(:final isReplay) => isReplay,
+    _ => false,
+  };
 
   /// " ✓ exit 0" / " ✗ exit 2" / " ✗ timed out" — the one-line outcome the
   /// verbose view narrates on the reasoning channel.
@@ -407,4 +450,66 @@ class WebSocketChatService {
     }
     return exit != null ? ' ✓ exit $exit\n' : ' ✓ done\n';
   }
+}
+
+/// Puts a prompt the socket would not take into the per-thread outbox.
+///
+/// Never throws and never blocks the caller: the stream has already told the
+/// reader what happened, and a queue that cannot be written is not a reason to
+/// lose the turn twice.
+Future<OutboxTask?> _queueForLater(
+  String message,
+  String sessionKey,
+  Future<ChatModelSelection> selectedRoute, {
+  String? reasoningEffort,
+}) async {
+  try {
+    ChatModelSelection? route;
+    try {
+      route = await selectedRoute;
+    } catch (_) {
+      // No route resolved: the prompt still queues, and the flush sends it
+      // with whatever the thread's model is by then.
+    }
+    return await CoworkTaskOutbox.enqueue(
+      sessionKey: sessionKey,
+      prompt: message,
+      modelId: route?.modelId,
+      providerSlug: route?.providerSlug,
+      reasoningEffort: reasoningEffort,
+    );
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('[cowork-outbox] could not queue the prompt: $error');
+    }
+    return null;
+  }
+}
+
+/// Queues the prompt, then marks the bubble it came from.
+///
+/// The mark is `failed`, not `pending`, and that is deliberate: the imported
+/// bubble offers **Retry** only for `failed`
+/// (`widgets/message_bubble/chrome.dart`, imported — not ours to change), and
+/// a queued prompt is exactly the case where the user must be able to ask
+/// again. The `queueId` is the outbox entry's own id, so the flush can find
+/// the row later and take the mark off.
+Future<void> _queueAndMark(
+  String message,
+  String sessionKey,
+  Future<ChatModelSelection> selectedRoute, {
+  String? reasoningEffort,
+}) async {
+  final OutboxTask? task = await _queueForLater(
+    message,
+    sessionKey,
+    selectedRoute,
+    reasoningEffort: reasoningEffort,
+  );
+  if (task == null) return;
+  await CoworkQueuedMarks.markQueued(
+    sessionKey: sessionKey,
+    prompt: message,
+    queueId: task.localId,
+  );
 }

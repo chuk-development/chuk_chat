@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/services/cowork/cowork_pairing_uri.dart';
 
 /// Builds the live camera view. Injected so a widget test can drive the screen
@@ -139,9 +140,9 @@ class _CoworkPairingPageState extends State<CoworkPairingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add your computer')),
-      body: SafeArea(
+    return ExpressiveScreen(
+      title: 'Add your computer',
+      builder: (BuildContext context) => SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[

@@ -188,7 +188,8 @@ class ToolTurnSignals {
       _toolUseReasons.contains(finishReason);
 
   bool get indicatesFinalStop =>
-      _finalReasons.contains(stopReason) || _finalReasons.contains(finishReason);
+      _finalReasons.contains(stopReason) ||
+      _finalReasons.contains(finishReason);
 
   bool get indicatesTruncated =>
       _truncatedReasons.contains(stopReason) ||
@@ -291,18 +292,18 @@ class ToolCallHandler {
     // The host's own `final_answer` wins over the streamed deltas when it sent
     // one; an empty one never overwrites a real reply.
     final hostAnswer = run?.finalAnswer;
-    final resolvedContent =
-        (hostAnswer != null && hostAnswer.trim().isNotEmpty)
-            ? hostAnswer
-            : content;
+    final resolvedContent = (hostAnswer != null && hostAnswer.trim().isNotEmpty)
+        ? hostAnswer
+        : content;
 
     // Both the model's thinking and (in the full-log view) the tool narration
     // ride the same reasoning channel, so the streamed buffer is a superset of
     // the ledger's copy. The ledger is the fallback for a turn whose buffer was
     // lost — a reconnect mid-run, a background completion.
     final ledgerReasoning = run?.modelReasoning ?? '';
-    final resolvedReasoning =
-        reasoning.length >= ledgerReasoning.length ? reasoning : ledgerReasoning;
+    final resolvedReasoning = reasoning.length >= ledgerReasoning.length
+        ? reasoning
+        : ledgerReasoning;
 
     return ToolLoopResult.finalAnswer(
       content: resolvedContent,

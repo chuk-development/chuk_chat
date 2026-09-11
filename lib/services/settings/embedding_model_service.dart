@@ -30,11 +30,7 @@ class EmbeddingModelService {
       name: 'Qwen3 Embedding 4B',
       dimensions: 1024,
     ),
-    EmbeddingModelOption(
-      id: 'bge-m3',
-      name: 'BGE-M3',
-      dimensions: 1024,
-    ),
+    EmbeddingModelOption(id: 'bge-m3', name: 'BGE-M3', dimensions: 1024),
     EmbeddingModelOption(
       id: 'text-embedding-3-large',
       name: 'OpenAI text-embedding-3-large',
