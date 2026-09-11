@@ -44,6 +44,7 @@ The confirmed ``/v2/ws`` protocol (source of truth: chuk_chat Dart client):
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
 import time
@@ -133,6 +134,28 @@ def _gotrue(
     return resp.json()
 
 
+def _access_token_expiry(access_token: str | None) -> float | None:
+    """The ``exp`` claim of a JWT, as a POSIX timestamp, or None when the token
+    is absent or does not carry one.
+
+    The payload is read, not verified: this decides only when to refresh, and
+    the relay and PostgREST still verify the signature. A token this cannot read
+    is treated as one without a deadline.
+    """
+    if not isinstance(access_token, str) or access_token.count(".") != 2:
+        return None
+    payload = access_token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except Exception:  # noqa: BLE001 — an unreadable token simply has no deadline
+        return None
+    exp = claims.get("exp") if isinstance(claims, dict) else None
+    if isinstance(exp, (int, float)) and not isinstance(exp, bool):
+        return float(exp)
+    return None
+
+
 @dataclass
 class SupabaseSession:
     """The authentication the executor holds: a token pair, refreshable directly
@@ -191,11 +214,22 @@ class SupabaseSession:
 
     def is_expired(self, *, skew: float = 30.0) -> bool:
         """True when the access token is expired (or within ``skew`` seconds of
-        it). No ``expires_at`` -> assume valid; an ``auth_error`` frame is the
-        backstop."""
+        it).
+
+        A caller that builds this session from a token frame may not pass
+        ``expires_at`` — and a session that believes it never expires never
+        refreshes. That is how a host ended up redialling the relay for a day
+        with a dead JWT (bead cowork-fm8w): nothing was attached to tell it
+        otherwise. So the deadline is read from the access token itself when the
+        caller left it out. Only then, with neither, is the token assumed valid
+        and the ``auth_error`` frame the backstop.
+        """
+        if self.expires_at is None:
+            self.expires_at = _access_token_expiry(self.access_token)
         if self.expires_at is None:
             return False
         return time.time() >= (self.expires_at - skew)
+
 
     def refresh(
         self, *, reason: str = "token_expired", seen_token: str | None = None

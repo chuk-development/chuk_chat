@@ -870,11 +870,19 @@ class LocalHost:
                 "no Supabase URL / anon key: set --supabase-url and --anon-key "
                 "(or SUPABASE_URL / SUPABASE_ANON_KEY) or provide them in the token"
             )
+        expires_at = token.get("expires_at")
         session = SupabaseSession(
             access_token=token.get("access_token", ""),
             refresh_token=token.get("refresh_token", ""),
             supabase_url=supabase_url,
             anon_key=anon_key,
+            # Without the deadline the session believes it never expires and the
+            # relay handshake keeps offering a dead JWT (bead cowork-fm8w).
+            expires_at=(
+                float(expires_at)
+                if isinstance(expires_at, (int, float)) and not isinstance(expires_at, bool)
+                else None
+            ),
         )
         # Keep the live session so the task server can hand its (refreshable)
         # access token to the executor for appSession MCP connectors.
