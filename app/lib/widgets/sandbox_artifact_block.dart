@@ -7,8 +7,10 @@
 //
 //  * image/*                 → inline image (tap to open full-screen viewer)
 //  * application/pdf         → embedded PDF viewer (pdfrx)
-//  * text/*, application/json, application/xml → preview in a code-style card
-//    (capped at 16 KB; "Save full file" exposes the rest via FileSaveService)
+//  * text/*, application/json, application/xml → a compact file card; "Open"
+//    renders it in the built-in document viewer (markdown as prose, everything
+//    else as text). The content is NOT dumped into the bubble: a document the
+//    agent wrote is often longer than the whole conversation around it.
 //  * everything else         → file chip with download button
 
 import 'dart:convert';
@@ -29,10 +31,6 @@ import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 
-/// Maximum number of characters of text content we inline. Anything larger
-/// gets a "Save full file" affordance instead.
-const int _kInlineTextCharCap = 16 * 1024;
-
 class SandboxArtifactBlock extends StatefulWidget {
   const SandboxArtifactBlock({super.key, required this.payload});
 
@@ -47,15 +45,14 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   bool _loading = true;
   String? _error;
 
-  /// We only auto-decrypt previewable mimes (image/pdf/text). For "other"
-  /// artifacts we render a file chip without downloading until the user
-  /// hits the Download button — saves the round-trip + decrypt cost when
-  /// the user never actually wants the file.
+  /// We only auto-decrypt what the bubble itself shows: an image and a PDF are
+  /// rendered in place, everything else waits for Open or Download. A text
+  /// document is no longer fetched on arrival — it is not shown until asked
+  /// for, and fetching it would spend the round-trip and the decrypt for a card
+  /// that says three lines.
   bool get _shouldEagerLoad {
     final mime = widget.payload.mime;
-    return mime.startsWith('image/') ||
-        mime == 'application/pdf' ||
-        _isTextLike(mime);
+    return mime.startsWith('image/') || mime == 'application/pdf';
   }
 
   bool _isTextLike(String mime) {
@@ -172,6 +169,52 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   bool get _canOpenInPanel =>
       kFeatureArtifacts && _panelArtifactType(widget.payload.mime) != null;
 
+  /// What "Open" does for this file, or null when the file cannot be read.
+  ///
+  /// Text — markdown above all — opens in the app's own document viewer: a
+  /// full-size sheet that renders the prose. HTML and SVG want a browser
+  /// surface, so they keep the artifact panel. This is the difference between
+  /// the button doing something and the button doing nothing on a phone, where
+  /// there is no side panel to open into.
+  Future<void> Function()? _openAction(BuildContext context) {
+    if (_isTextLike(widget.payload.mime)) {
+      return () => _openInViewer(context);
+    }
+    if (_canOpenInPanel) return () => _openInPanel(context);
+    return null;
+  }
+
+  /// Reads the file and shows it in [ChatDocumentView], the same viewer a
+  /// document the agent saved opens in.
+  Future<void> _openInViewer(BuildContext context) async {
+    var bytes = _bytes;
+    if (bytes == null) {
+      try {
+        bytes = await PdfAttachmentService.download(widget.payload.storagePath);
+      } catch (e) {
+        if (context.mounted) {
+          NiceSnackBar.showError(context, 'Could not open file: $e');
+        }
+        return;
+      }
+      if (mounted) setState(() => _bytes = bytes);
+    }
+    String text;
+    try {
+      text = utf8.decode(bytes);
+    } catch (_) {
+      if (context.mounted) {
+        NiceSnackBar.showError(context, 'File is not valid UTF-8 text.');
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    await ChatDocumentView.open(context, <String, dynamic>{
+      'title': widget.payload.filename,
+      'text': text,
+    });
+  }
+
   /// Opens the file in the shared artifact side panel as an ephemeral
   /// (non-persisted) artifact, so it renders identically to artifact_manager
   /// output. Version history simply comes back empty for these.
@@ -221,8 +264,13 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget build(BuildContext context) {
     final document = widget.payload.document;
     if (document != null) {
-      return Card(
+      return Material(
+        color: Colors.transparent,
         child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 2,
+          ),
           leading: Icon(
             document['kind'] == 'table'
                 ? Icons.table_chart_outlined
@@ -232,13 +280,18 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
             (document['title'] as String?)?.trim().isNotEmpty == true
                 ? document['title'] as String
                 : widget.payload.filename,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
             document['version'] == null
                 ? 'Saved document'
                 : 'Version ${document['version']} · Saved document',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-          trailing: const Icon(Icons.open_in_new),
+          trailing: const Icon(Icons.chevron_right_rounded, size: 22),
           onTap: () => ChatDocumentView.open(context, document),
         ),
       );
@@ -250,9 +303,6 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     if (mime == 'application/pdf') {
       return _buildPdf(context);
     }
-    if (_isTextLike(mime)) {
-      return _buildTextPreview(context);
-    }
     return _buildFileChip(context);
   }
 
@@ -260,7 +310,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
-      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
+      onOpen: _openAction(context),
       child: _content(
         builder: (bytes) {
           return GestureDetector(
@@ -290,7 +340,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
-      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
+      onOpen: _openAction(context),
       child: _content(
         builder: (bytes) => SizedBox(
           height: 480,
@@ -311,83 +361,11 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
     );
   }
 
-  Widget _buildTextPreview(BuildContext context) {
-    return _ArtifactCard(
-      payload: widget.payload,
-      onSave: _save,
-      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
-      child: _content(
-        builder: (bytes) {
-          String preview;
-          var truncated = false;
-          try {
-            final decoded = utf8.decode(bytes);
-            if (decoded.length > _kInlineTextCharCap) {
-              preview = decoded.substring(0, _kInlineTextCharCap);
-              truncated = true;
-            } else {
-              preview = decoded;
-            }
-          } catch (e) {
-            return _ArtifactErrorRow(
-              message: 'File is not valid UTF-8 text.',
-              onSave: _save,
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                constraints: const BoxConstraints(maxHeight: 320),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Scrollbar(
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      preview,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (truncated)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, size: 14),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Preview truncated. Save the file to view the rest.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildFileChip(BuildContext context) {
     return _ArtifactCard(
       payload: widget.payload,
       onSave: _save,
-      onOpen: _canOpenInPanel ? () => _openInPanel(context) : null,
+      onOpen: _openAction(context),
       child: null,
     );
   }
