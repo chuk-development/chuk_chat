@@ -121,6 +121,10 @@ class ChatModeSelector extends StatelessWidget {
     }
   }
 
+  /// The mode glyph, sized from the pill instead of pinned: the composer
+  /// runs a short pill, and a 19px glyph in a 36px pill leaves no ring.
+  double get _glyphSize => (height * 0.42).clamp(15.0, 20.0);
+
   /// The label for the third point (Custom). When Custom is active it names
   /// the running model; otherwise it names the model Custom last ran; only when
   /// Custom has never been used does it fall back to "Choose model".
@@ -165,7 +169,9 @@ class ChatModeSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(height / 2),
         child: Container(
           height: height,
-          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: showLabel ? height * 0.25 : height * 0.30,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(height / 2),
             border: Border.all(
@@ -176,7 +182,7 @@ class ChatModeSelector extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppIcon(pillIcon, size: 19, color: iconFg),
+              AppIcon(pillIcon, size: _glyphSize, color: iconFg),
               if (showLabel) ...[
                 const SizedBox(width: 5),
                 Text(
@@ -190,7 +196,7 @@ class ChatModeSelector extends StatelessWidget {
               const SizedBox(width: 2),
               AppIcon(
                 Icons.keyboard_arrow_down,
-                size: 16,
+                size: _glyphSize - 3,
                 color: iconFg.withValues(alpha: 0.7),
               ),
             ],
