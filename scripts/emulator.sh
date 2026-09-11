@@ -26,7 +26,8 @@ RAM_MB="${COWORK_AVD_RAM:-4096}"
 DATA_GB="${COWORK_AVD_DATA:-8}"
 GPU_MODE="${COWORK_AVD_GPU:-host}"
 LOG="${COWORK_AVD_LOG:-/tmp/cowork-emulator.log}"
-GBOARD="com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME"
+GBOARD_PKG="com.google.android.inputmethod.latin"
+GBOARD="$GBOARD_PKG/com.android.inputmethod.latin.LatinIME"
 
 avd_dir() { echo "${ANDROID_AVD_HOME:-$HOME/.android/avd}/$AVD.avd"; }
 
@@ -96,11 +97,16 @@ tune_input() {
   [ -n "$s" ] || return 0
   "$ADB" -s "$s" shell settings put secure show_ime_with_hard_keyboard 0 >/dev/null 2>&1 || true
   if [ "${COWORK_AVD_SOFT_KEYBOARD:-0}" = "1" ]; then
+    "$ADB" -s "$s" shell pm enable "$GBOARD_PKG" >/dev/null 2>&1 || true
     "$ADB" -s "$s" shell ime enable "$GBOARD" >/dev/null 2>&1 || true
     "$ADB" -s "$s" shell ime set "$GBOARD" >/dev/null 2>&1 || true
     return 0
   fi
-  "$ADB" -s "$s" shell ime disable "$GBOARD" >/dev/null 2>&1 || true
+  # `ime disable` does not hold: with no other typing IME installed, Android
+  # picks Gboard again on the next focus and the strip is back. Disabling the
+  # package for this user does hold, and the voice IME stays as the system's
+  # nominal default without drawing anything.
+  "$ADB" -s "$s" shell pm disable-user --user 0 "$GBOARD_PKG" >/dev/null 2>&1 || true
 }
 
 wait_boot() {
