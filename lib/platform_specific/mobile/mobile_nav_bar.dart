@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/pill_geometry.dart';
 
 /// One destination of [MobileNavBar].
 @immutable
@@ -42,8 +43,12 @@ class MobileNavBar extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
 
-  /// The height the content has to keep free at the bottom.
-  static const double height = 64;
+  /// The height the content has to keep free at the bottom: the pill itself
+  /// plus the air under it.
+  static const double height = PillGeometry.height + _lift;
+
+  /// How far the pill floats above the safe area.
+  static const double _lift = 10;
 
   @override
   Widget build(BuildContext context) {
@@ -52,21 +57,20 @@ class MobileNavBar extends StatelessWidget {
     // frame across the bottom of the screen.
     return Padding(
       padding: EdgeInsets.only(
-        bottom: 10 + MediaQuery.paddingOf(context).bottom,
+        bottom: MobileNavBar._lift + MediaQuery.paddingOf(context).bottom,
       ),
       child: Center(
         child: Container(
-          height: MobileNavBar.height - 12,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: PillGeometry.shellPadding,
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(PillGeometry.radius),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               for (int i = 0; i < destinations.length; i++) ...<Widget>[
-                if (i > 0) const SizedBox(width: 4),
+                if (i > 0) const SizedBox(width: PillGeometry.inset),
                 _NavTarget(
                   destination: destinations[i],
                   selected: i == index,
@@ -92,6 +96,9 @@ class _NavTarget extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Sized so the icon plus its air is exactly one segment tall.
+  static const double _iconSize = 24;
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
@@ -104,20 +111,29 @@ class _NavTarget extends StatelessWidget {
         message: destination.label,
         child: MorphTap(
           onTap: onTap,
+          // The destination changes on pointer down. A bar that floats over a
+          // scrolling list loses a recognised tap to that list far too often.
+          instant: true,
+          // The tap reaches into the ring around the capsule, so the target
+          // is bigger than what the capsule paints.
+          hitPadding: const EdgeInsets.symmetric(
+            vertical: PillGeometry.tapSlop,
+          ),
           color: selected ? scheme.primary : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+          // A stadium at rest and a stadium while held: the press springs, it
+          // does not turn the capsule into a rounded box.
+          shape: const StadiumBorder(),
+          pressedShape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: (PillGeometry.segmentHeight - _iconSize) / 2,
           ),
-          pressedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
               HugeIcon(
                 destination.icon,
-                size: 24,
+                size: _iconSize,
                 color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
               ),
               if (destination.badge > 0)

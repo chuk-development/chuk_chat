@@ -1,17 +1,21 @@
-/// The Material 3 Expressive connected button group — the filter row above the
-/// inbox ("All" / "Unread").
+/// The Material 3 Expressive connected button group — the switch that sits
+/// above a list ("All" / "Unread", "Pictures" / "Files").
 ///
-/// The shape is the bottom navigation's: ONE rounded container that holds the
-/// segments, centred and only as wide as its labels, never a bar stretched
-/// across the screen. The selected segment is a filled capsule inside that
-/// container; the others are bare text. A pressed segment springs and morphs
-/// blockier, the same press the whole app uses.
+/// The shape is the bottom navigation's, down to the numbers: both controls
+/// read [PillGeometry], so one capsule holds the segments, the selected
+/// segment is a filled capsule inside it, and the ring of background around
+/// that capsule is the same thickness everywhere — at the ends, between the
+/// segments, above and below. A press springs and lands the fill at once, on
+/// pointer down, so no scroll can take the tap away and nothing has to hint
+/// at a selection that has not happened. It does NOT square off: an oval
+/// stays an oval while the finger is down.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/pill_geometry.dart';
 
 class ConnectedGroup extends StatelessWidget {
   const ConnectedGroup({
@@ -20,6 +24,7 @@ class ConnectedGroup extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.badges = const <int, int>{},
+    this.margin = const EdgeInsets.symmetric(horizontal: 16),
   });
 
   final List<String> labels;
@@ -30,30 +35,33 @@ class ConnectedGroup extends StatelessWidget {
   /// missing entry shows nothing.
   final Map<int, int> badges;
 
+  /// The room left around the pill. Edge to edge, unlike the navigation pill:
+  /// this control belongs to the list under it and sits over its whole width.
+  final EdgeInsetsGeometry margin;
+
   /// The corner of the container that holds the segments.
-  static const double outerRadius = 30;
+  static const double outerRadius = PillGeometry.radius;
 
   /// The corner of the filled capsule under the selected segment.
-  static const double selectedRadius = 22;
+  static const double selectedRadius = PillGeometry.segmentRadius;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      // Edge to edge, unlike the navigation pill: this control belongs to the
-      // list under it and sits over its whole width, and the segments split
-      // that width evenly so neither label is cramped.
+      padding: margin,
+      // The segments split the width evenly, so neither label is cramped and
+      // the first and the last capsule end at the same distance from the pill.
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: PillGeometry.shellPadding,
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(outerRadius),
+          borderRadius: BorderRadius.circular(PillGeometry.radius),
         ),
         child: Row(
           children: <Widget>[
             for (int i = 0; i < labels.length; i++) ...<Widget>[
-              if (i > 0) const SizedBox(width: 4),
+              if (i > 0) const SizedBox(width: PillGeometry.inset),
               Expanded(
                 child: _Segment(
                   label: labels[i],
@@ -93,16 +101,20 @@ class _Segment extends StatelessWidget {
       label: label,
       child: MorphTap(
         onTap: onTap,
+        // The selection commits on pointer down: the switch is the one
+        // control that must never lose its tap to the list it sits above.
+        instant: true,
+        // The tap reaches into the ring, so the capsule may paint short of a
+        // touch target while the finger still gets one.
+        hitPadding: const EdgeInsets.symmetric(vertical: PillGeometry.tapSlop),
         color: selected ? scheme.primary : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(ConnectedGroup.selectedRadius),
-        ),
-        pressedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        // A stadium at rest and a stadium while held: the press springs, it
+        // does not turn the capsule into a rounded box.
+        shape: const StadiumBorder(),
+        pressedShape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: SizedBox(
-          height: 48,
+          height: PillGeometry.segmentHeight,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,

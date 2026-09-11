@@ -111,7 +111,7 @@ presentation, zip, database, image, video, book.
 |---|---|
 | Icon action (back, close, share, save, screen, files) | `ExpressiveIconButton`, 48 px, corner ≈ size × 0.34 |
 | Labelled action | `ExpressiveButton`, same corner family |
-| Navigation pill / filter pill | 30, selected capsule 22 |
+| Navigation pill / filter pill | `PillGeometry` — outer 30, segment capsule 22, inset 8, segment height 44, whole pill 60. Both controls read those numbers from `lib/ui/expressive/pill_geometry.dart`; the outer radius is half the outer height, so the curves are concentric and the end segments follow the shell. A segment takes 4 of the ring above and below as tap slop, so what a finger hits is 52 even though the capsule paints 44. A pill segment SELECTS ON POINTER DOWN (`MorphTap(instant: true)`) — a recognised tap is lost to the list the pill sits over — so a press springs and fills at once and never draws an outline for a selection that has not happened. |
 | Card, sheet, attachment row, panel | 14–18 |
 | File message row | 18, full lane width |
 | Dialog | `kRadiusDialog` |
