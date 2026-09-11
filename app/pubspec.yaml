@@ -149,6 +149,9 @@ flutter:
 
   assets:
     - assets/icons/
+    # The HugeIcons free set, generated to plain SVG and checked in (MIT, see
+    # assets/icons/hugeicons/LICENSE). Shipped, never fetched.
+    - assets/icons/hugeicons/
 
   # The three selectable chat fonts, bundled locally (chuk_chat's block,
   # imported verbatim). Arimo and JetBrains Mono are variable fonts (the wght
