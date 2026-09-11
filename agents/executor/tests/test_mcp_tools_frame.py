@@ -109,3 +109,57 @@ def test_no_manager_and_no_connectors_send_nothing(tmp_path, monkeypatch):
     executor._send_mcp_tools("sess", "req-1", _FakeManager({}))
 
     assert sent == []
+
+
+def test_a_probe_answers_with_a_terminal_and_never_blocks_the_loop(tmp_path, monkeypatch):
+    """The app asks, the host dials, the answer is one terminal frame.
+
+    The dial happens on its own thread, so the assertion waits for it instead of
+    assuming the handler is done when it returns — that thread is the whole
+    point: a server that is down costs a connect timeout.
+    """
+    import threading
+
+    executor = _executor(tmp_path)
+    terminals: list[tuple[str, dict]] = []
+    done = threading.Event()
+
+    def terminal(rid, payload):
+        terminals.append((rid, payload))
+        done.set()
+
+    monkeypatch.setattr(executor, "_terminal", terminal)
+    manager = _FakeManager({"GitHub": _connection([("list_issues", "")])})
+    monkeypatch.setattr(
+        executor, "_session_mcp_manager", lambda session_key, servers: manager
+    )
+    executor._mcp_entry_meta["sess"] = {
+        "GitHub": {"id": "conn-1", "name": "GitHub", "url": "https://mcp.example/"}
+    }
+
+    executor._handle_mcp_probe(
+        "req-9",
+        {
+            "type": "mcp_probe",
+            "session_key": "sess",
+            "mcp_servers": [{"id": "conn-1", "name": "GitHub", "url": "https://mcp.example/"}],
+        },
+    )
+
+    assert done.wait(5), "the probe never answered"
+    request_id, payload = terminals[0]
+    assert request_id == "req-9"
+    assert payload["type"] == "mcp_tools"
+    assert payload["servers"][0]["tools"][0]["name"] == "list_issues"
+
+
+def test_a_probe_without_servers_answers_at_once(tmp_path, monkeypatch):
+    executor = _executor(tmp_path)
+    terminals: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        executor, "_terminal", lambda rid, payload: terminals.append((rid, payload))
+    )
+
+    executor._handle_mcp_probe("req-10", {"type": "mcp_probe"})
+
+    assert terminals[0][1] == {"type": "mcp_tools", "session_key": "", "servers": []}

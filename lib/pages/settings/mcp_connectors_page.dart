@@ -11,6 +11,8 @@
 // discovery when a task runs — the device does not open a browser or dial the
 // server itself. See McpService.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
@@ -48,12 +50,28 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   void initState() {
     super.initState();
     McpService.load();
+    // Ask the host what the connectors hold. The device cannot know — it signs
+    // them in, the host speaks to them — and without asking, this list can only
+    // show what the last task happened to report.
+    unawaited(McpService.probe());
   }
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  /// The right-hand line of a connected row.
+  ///
+  /// Three states, and they must not look alike: nobody has asked the host yet,
+  /// the host asked and the server refused, the host asked and got a list. The
+  /// old row printed "0 tools" for all three.
+  static String _statusOf(McpConnection connection) {
+    if (connection.lastError != null) return 'not reachable';
+    if (connection.checkedAt == null) return 'not checked';
+    final int count = connection.tools.length;
+    return count == 1 ? '1 tool' : '$count tools';
   }
 
   String get _query => _search.text.trim().toLowerCase();
@@ -138,7 +156,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                         assetPath: bundledIconAsset(connection.id),
                         name: connection.name,
                         subtitle: subtitleFor(connection),
-                        trailing: '${connection.tools.length} tools',
+                        trailing: _statusOf(connection),
                         onTap: () => _open(connection.id, null),
                       ),
                   ],
@@ -368,9 +386,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              Center(
-                child: Text(name, style: theme.textTheme.titleLarge),
-              ),
+              Center(child: Text(name, style: theme.textTheme.titleLarge)),
               if (description.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -559,9 +575,9 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       opened = false;
     }
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $url')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open $url')));
     }
   }
 
@@ -644,73 +660,71 @@ Future<Map<String, String>?> showMcpCredentialDialog(
   List<McpCredentialField> fields,
   String name,
 ) {
-  final controllers = {
-    for (final f in fields) f.key: TextEditingController(),
-  };
+  final controllers = {for (final f in fields) f.key: TextEditingController()};
   return showDialog<Map<String, String>>(
     context: context,
     builder: (dialogContext) {
-        String? error;
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: Text('Connect $name'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final field in fields)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: TextField(
-                      controller: controllers[field.key],
-                      autofocus: field == fields.first,
-                      obscureText: field.secret,
-                      enableSuggestions: !field.secret,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText:
-                            field.label + (field.required ? '' : ' (optional)'),
-                        hintText: field.hint,
-                      ),
+      String? error;
+      return StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Connect $name'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final field in fields)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextField(
+                    controller: controllers[field.key],
+                    autofocus: field == fields.first,
+                    obscureText: field.secret,
+                    enableSuggestions: !field.secret,
+                    autocorrect: false,
+                    decoration: InputDecoration(
+                      labelText:
+                          field.label + (field.required ? '' : ' (optional)'),
+                      hintText: field.hint,
                     ),
                   ),
-                if (error != null)
-                  Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(dialogContext).colorScheme.error,
-                    ),
+                ),
+              if (error != null)
+                Text(
+                  error!,
+                  style: TextStyle(
+                    color: Theme.of(dialogContext).colorScheme.error,
                   ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final values = <String, String>{};
-                  for (final field in fields) {
-                    final value = controllers[field.key]!.text.trim();
-                    if (field.required && value.isEmpty) {
-                      setDialogState(() => error = '${field.label} is required.');
-                      return;
-                    }
-                    if (value.isNotEmpty) values[field.key] = value;
-                  }
-                  Navigator.pop(dialogContext, values);
-                },
-                child: const Text('Connect'),
-              ),
+                ),
             ],
           ),
-        );
-      },
-    ).whenComplete(() {
-      for (final c in controllers.values) {
-        c.dispose();
-      }
-    });
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final values = <String, String>{};
+                for (final field in fields) {
+                  final value = controllers[field.key]!.text.trim();
+                  if (field.required && value.isEmpty) {
+                    setDialogState(() => error = '${field.label} is required.');
+                    return;
+                  }
+                  if (value.isNotEmpty) values[field.key] = value;
+                }
+                Navigator.pop(dialogContext, values);
+              },
+              child: const Text('Connect'),
+            ),
+          ],
+        ),
+      );
+    },
+  ).whenComplete(() {
+    for (final c in controllers.values) {
+      c.dispose();
+    }
+  });
 }
 
 /// A connector logo. The bundled brand logo first (shipped in the binary for
