@@ -43,6 +43,7 @@ from cowork_crypto import (
     ReconnectError,
     ReconnectHandshake,
 )
+from .cloud_relay import RelayAuthRejected
 from .protocol import (
     STEP_COMMIT,
     STEP_CONFIRM_C,
@@ -117,6 +118,10 @@ class HostParty:
         reconnect_factory: ReconnectFactory | None = None,
         on_pair_established: PairEstablished | None = None,
         on_reprovision: Callable[[dict], None] | None = None,
+        # Called with the access token the relay just refused. Returns True when
+        # a different one is now in hand, which means redial at once instead of
+        # waiting out a backoff with the same dead credential.
+        on_auth_rejected: Callable[[str], bool] | None = None,
     ) -> None:
         self._transport = transport
         self._reconnect_pipe = reconnect
@@ -125,9 +130,12 @@ class HostParty:
         # so the host refreshes its session in place (the task server outlives
         # the socket, so it is never rebuilt for a new token).
         self._on_reprovision = on_reprovision
+        self._on_auth_rejected = on_auth_rejected
         # Result frames sent while no controller was attached are dropped, not
         # buffered. Counted for diagnostics.
         self.frames_dropped_while_away = 0
+        # Set when a refused credential was replaced: redial without backoff.
+        self._retry_now = False
         self._channel_id = channel_id
         self._pairing_factory = pairing_factory
         self._reconnect_factory = reconnect_factory
@@ -323,9 +331,16 @@ class HostParty:
         process and not to the socket."""
         attempt = 0
         while not self._stop.is_set():
+            self._retry_now = False
             connected = self._run_once()
             if not self._reconnect_pipe or self._stop.is_set():
                 return
+            if self._retry_now:
+                # The credential was replaced, not the network. Backing off here
+                # would only age the new token for nothing.
+                attempt = 0
+                self._log("credential refreshed; redialling now")
+                continue
             attempt = 0 if connected else attempt + 1
             delay = self._backoff[min(attempt, len(self._backoff) - 1)]
             self._log(f"pipe down; redialling in {delay:g}s")
@@ -338,6 +353,18 @@ class HostParty:
         connected = False
         try:
             link = self._transport.open()
+        except RelayAuthRejected as exc:
+            # The relay rejected the account token itself. Refresh that exact
+            # token once; a replaced one earns an immediate redial.
+            self._log(f"could not open the pipe: {type(exc).__name__}: {exc}")
+            if self._on_auth_rejected is not None:
+                try:
+                    self._retry_now = bool(self._on_auth_rejected(exc.token))
+                except Exception as inner:  # noqa: BLE001 - a failed refresh is not fatal
+                    self._log(
+                        f"could not refresh the refused token: {type(inner).__name__}: {inner}"
+                    )
+            return False
         except Exception as exc:  # noqa: BLE001 - a refused dial is ordinary
             self._log(f"could not open the pipe: {type(exc).__name__}: {exc}")
             return False
