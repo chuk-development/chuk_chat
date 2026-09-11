@@ -10,6 +10,7 @@
 #   scripts/emulator.sh wait     # block until sys.boot_completed=1
 #   scripts/emulator.sh status   # AVD, serial, boot state, GPU mode
 #   scripts/emulator.sh shot [out.png]
+#   scripts/emulator.sh keyboard 1  # bring the on-screen keyboard back
 #   scripts/emulator.sh stop     # graceful shutdown
 set -euo pipefail
 
@@ -25,6 +26,7 @@ RAM_MB="${COWORK_AVD_RAM:-4096}"
 DATA_GB="${COWORK_AVD_DATA:-8}"
 GPU_MODE="${COWORK_AVD_GPU:-host}"
 LOG="${COWORK_AVD_LOG:-/tmp/cowork-emulator.log}"
+GBOARD="com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME"
 
 avd_dir() { echo "${ANDROID_AVD_HOME:-$HOME/.android/avd}/$AVD.avd"; }
 
@@ -84,12 +86,30 @@ start() {
   wait_boot
 }
 
+tune_input() {
+  # This AVD is driven from a real keyboard and a mouse, so the on-screen
+  # keyboard is only in the way: Gboard keeps a suggestion strip on screen even
+  # with `show_ime_with_hard_keyboard=0`, and it covers the app. Disabling the
+  # IME removes the strip; physical key events still reach the app, because they
+  # arrive as ordinary key events and never went through the IME.
+  local s; s="$(serial)"
+  [ -n "$s" ] || return 0
+  "$ADB" -s "$s" shell settings put secure show_ime_with_hard_keyboard 0 >/dev/null 2>&1 || true
+  if [ "${COWORK_AVD_SOFT_KEYBOARD:-0}" = "1" ]; then
+    "$ADB" -s "$s" shell ime enable "$GBOARD" >/dev/null 2>&1 || true
+    "$ADB" -s "$s" shell ime set "$GBOARD" >/dev/null 2>&1 || true
+    return 0
+  fi
+  "$ADB" -s "$s" shell ime disable "$GBOARD" >/dev/null 2>&1 || true
+}
+
 wait_boot() {
   local deadline=$(( $(date +%s) + ${1:-300} ))
   "$ADB" start-server >/dev/null 2>&1 || true
   while [ "$(date +%s)" -lt "$deadline" ]; do
     local s; s="$(serial)"
     if [ -n "$s" ] && [ "$("$ADB" -s "$s" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+      tune_input
       echo "booted: $s"
       return 0
     fi
@@ -129,9 +149,10 @@ stop() {
 
 case "${1:-start}" in
   start) start ;;
+  keyboard) shift; COWORK_AVD_SOFT_KEYBOARD="${1:-0}" tune_input ;;
   wait) shift; wait_boot "${1:-300}" ;;
   status) status ;;
   shot) shift; shot "${1:-}" ;;
   stop) stop ;;
-  *) echo "usage: $0 {start|wait|status|shot [out.png]|stop}" >&2; exit 2 ;;
+  *) echo "usage: $0 {start|wait|status|shot [out.png]|keyboard [0|1]|stop}" >&2; exit 2 ;;
 esac
