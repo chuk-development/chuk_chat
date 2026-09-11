@@ -55,9 +55,16 @@ class MorphTap extends StatefulWidget {
     this.pressedColor,
     this.shape = const StadiumBorder(),
     this.pressedShape,
+    this.pressedOutline,
+    this.pressedOutlineWidth = 1.5,
     this.padding = EdgeInsets.zero,
     this.pressedScale = 0.93,
-  });
+    this.instant = false,
+    this.hitPadding = EdgeInsets.zero,
+  }) : assert(
+         hitPadding == EdgeInsets.zero || instant,
+         'hitPadding is the area the Listener covers; only instant taps use it',
+       );
 
   final Widget child;
   final VoidCallback? onTap;
@@ -71,8 +78,36 @@ class MorphTap extends StatefulWidget {
   /// The shape the surface morphs toward while held. Defaults to a blockier
   /// version of [shape].
   final ShapeBorder? pressedShape;
+
+  /// An outline drawn in the current shape while the surface is held. A
+  /// surface with no fill of its own needs it: without it a press on such a
+  /// surface shows nothing but a scale, and the user cannot see which shape
+  /// the target is about to take. It fades in with the press and out with it.
+  final Color? pressedOutline;
+  final double pressedOutlineWidth;
   final EdgeInsetsGeometry padding;
   final double pressedScale;
+
+  /// Commit the tap on pointer DOWN instead of on a recognised tap.
+  ///
+  /// An [InkWell] hands its tap to the gesture arena, and the arena gives the
+  /// gesture to the scroll view the moment the finger travels a few pixels.
+  /// On a segment inside a scrolling page that reads as a control that does
+  /// nothing: the press shows, the selection never happens. A control whose
+  /// whole job is to switch — the navigation pill, the filter pill — cannot
+  /// afford that, so it takes the press itself, from a [Listener], and no
+  /// arena can take it back. There is no ink splash in this mode; the spring
+  /// and the fill that lands at once are the feedback.
+  ///
+  /// One physical press calls [onTap] exactly once, whether it ends as a tap,
+  /// a drag or a cancel. The screen-reader tap is a semantics action, not a
+  /// pointer, so it does not go through the [Listener] and cannot double up.
+  final bool instant;
+
+  /// Transparent room around the surface that still takes the press. Only an
+  /// [instant] tap has it, because only there does the whole box hit-test.
+  /// It lets a capsule paint smaller than the target a finger has to hit.
+  final EdgeInsets hitPadding;
 
   @override
   State<MorphTap> createState() => _MorphTapState();
@@ -96,6 +131,29 @@ class _MorphTapState extends State<MorphTap>
 
   /// Reduced motion: the press still happens, it just does not travel.
   bool _reducedMotion = false;
+
+  /// The pointer that owns the press in [MorphTap.instant] mode. A second
+  /// finger landing on the same segment is not a second selection.
+  int? _pointer;
+
+  void _instantDown(PointerDownEvent event) {
+    if (_pointer != null) {
+      return;
+    }
+    _pointer = event.pointer;
+    _press(true);
+    // The selection is committed here, before any arena can claim the
+    // gesture. Nothing later in this pointer's life calls it again.
+    widget.onTap?.call();
+  }
+
+  void _instantRelease(PointerEvent event) {
+    if (_pointer != event.pointer) {
+      return;
+    }
+    _pointer = null;
+    _press(false);
+  }
 
   @override
   void didChangeDependencies() {
@@ -141,28 +199,95 @@ class _MorphTapState extends State<MorphTap>
         final Color fill = widget.pressedColor == null
             ? resting
             : Color.lerp(resting, widget.pressedColor, t)!;
-        return Transform.scale(
-          scale: scale,
-          child: PhysicalShape(
-            clipper: ShapeBorderClipper(shape: shape),
-            color: fill,
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                customBorder: shape,
-                onTap: widget.onTap,
-                onLongPress: widget.onLongPress,
-                onHighlightChanged: _press,
-                child: Padding(padding: widget.padding, child: widget.child),
-              ),
-            ),
-          ),
+        Widget surface = PhysicalShape(
+          clipper: ShapeBorderClipper(shape: shape),
+          color: fill,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          child: widget.instant
+              // No ink well: its tap is exactly what this mode replaces, and
+              // an arena that cannot claim the gesture cannot splash either.
+              ? Padding(padding: widget.padding, child: widget.child)
+              : Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    customBorder: shape,
+                    onTap: widget.onTap,
+                    onLongPress: widget.onLongPress,
+                    onHighlightChanged: _press,
+                    child: Padding(
+                      padding: widget.padding,
+                      child: widget.child,
+                    ),
+                  ),
+                ),
         );
+        final Color? outline = widget.pressedOutline;
+        if (outline != null && t > 0) {
+          surface = CustomPaint(
+            foregroundPainter: _PressOutlinePainter(
+              shape: shape,
+              color: outline.withValues(alpha: outline.a * t),
+              width: widget.pressedOutlineWidth,
+            ),
+            child: surface,
+          );
+        }
+        if (widget.instant) {
+          surface = Semantics(
+            button: true,
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            child: Listener(
+              // Opaque so the transparent hit padding takes the press too.
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: _instantDown,
+              onPointerUp: _instantRelease,
+              onPointerCancel: _instantRelease,
+              child: Padding(padding: widget.hitPadding, child: surface),
+            ),
+          );
+        }
+        return Transform.scale(scale: scale, child: surface);
       },
     );
   }
+}
+
+/// Draws [MorphTap.pressedOutline] along the shape the surface currently has.
+///
+/// The stroke straddles the path, so the path is taken from a rect deflated by
+/// half the stroke: the outline then sits inside the surface and keeps the
+/// capsule exactly as wide as the capsule a selection fills.
+class _PressOutlinePainter extends CustomPainter {
+  const _PressOutlinePainter({
+    required this.shape,
+    required this.color,
+    required this.width,
+  });
+
+  final ShapeBorder shape;
+  final Color color;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = (Offset.zero & size).deflate(width / 2);
+    if (rect.isEmpty) {
+      return;
+    }
+    canvas.drawPath(
+      shape.getOuterPath(rect),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PressOutlinePainter old) =>
+      old.color != color || old.width != width || old.shape != shape;
 }
 
 /// A fully rounded button that springs and morphs on press.
