@@ -70,6 +70,8 @@ class McpConnection {
     this.tools = const <McpTool>[],
     this.addedByHand = false,
     this.auth = McpAuth.oauth,
+    this.checkedAt,
+    this.lastError,
   });
 
   final String id;
@@ -80,9 +82,18 @@ class McpConnection {
   /// An icon the catalogue entry named, if any. Falls back to a favicon.
   final String? iconUrl;
 
-  /// The tools the server offered. On CoWork the host discovers these when a
-  /// task runs, so the list is usually empty on the device.
+  /// The tools the server offered, as the host reported them (`mcp_tools`).
+  /// This device never dials the server itself.
   final List<McpTool> tools;
+
+  /// When the host last answered about this connector. Null means nobody has
+  /// asked yet — which is NOT the same as a server with no tools, and the list
+  /// must not show those two the same way.
+  final DateTime? checkedAt;
+
+  /// Why the host could not use this connector, as it reported it. Null when
+  /// the last check succeeded.
+  final String? lastError;
 
   /// True when the user typed the URL instead of picking a connector.
   final bool addedByHand;
@@ -100,6 +111,11 @@ class McpConnection {
     String? iconUrl,
     List<McpTool>? tools,
     McpAuth? auth,
+    DateTime? checkedAt,
+    // Explicit, because "no error any more" is a value and `null` cannot say
+    // it through the usual `?? this.lastError`.
+    bool clearError = false,
+    String? lastError,
   }) =>
       McpConnection(
         id: id,
@@ -110,6 +126,8 @@ class McpConnection {
         tools: tools ?? this.tools,
         addedByHand: addedByHand,
         auth: auth ?? this.auth,
+        checkedAt: checkedAt ?? this.checkedAt,
+        lastError: clearError ? null : (lastError ?? this.lastError),
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -121,6 +139,8 @@ class McpConnection {
         'added_by_hand': addedByHand,
         'auth': auth.name,
         'tools': <Map<String, dynamic>>[for (final t in tools) t.toJson()],
+        if (checkedAt != null) 'checked_at': checkedAt!.toIso8601String(),
+        if (lastError != null) 'last_error': lastError,
       };
 
   static McpConnection fromJson(Map<String, dynamic> json) => McpConnection(
@@ -135,6 +155,10 @@ class McpConnection {
           for (final tool in (json['tools'] as List? ?? const []))
             if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
         ],
+        checkedAt: DateTime.tryParse('${json['checked_at'] ?? ''}'),
+        lastError: (json['last_error'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : json['last_error'] as String,
       );
 
   /// The name a model sees for [tool] on this server. Prefixed, because two
