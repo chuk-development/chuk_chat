@@ -197,7 +197,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
     return Padding(
       padding: EdgeInsets.only(top: widget.messengerMode ? 0 : 3),
-      child: widget.messengerMode && !_isPlainMessengerText
+      child: widget.messengerMode && !_stampRidesInText
           ? Align(alignment: Alignment.centerRight, child: stamp)
           : stamp,
     );
@@ -366,7 +366,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             hasVisibleToolCalls: false,
           ),
           // Time + ticks, in the corner of the bubble itself.
-          if (!_isPlainMessengerText)
+          if (!_stampRidesInText)
             ?_buildBubbleFooter(
               context: context,
               isUser: true,
@@ -463,8 +463,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     final bool hasActions = widget.actions.isNotEmpty;
 
+    // A turn whose blocks are nothing but its own plain text has no interleaved
+    // structure to render, and going through the blocks layout would send the
+    // text to the Markdown renderer — which cannot carry the stamp on its last
+    // line. The flat layout draws exactly the same thing and can.
     final bool useContentBlocks =
         !_isPlainMessengerText &&
+        !_isPlainAgentText &&
         widget.contentBlocks != null &&
         widget.contentBlocks!.isNotEmpty;
 
@@ -589,7 +594,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           // cowork-wsev). The failure stays in the tool list, which the user
           // opens when they want it.
           // The time only: a coworker's bubble carries no ticks.
-          if (!_isPlainMessengerText)
+          if (!_stampRidesInText)
             ?_buildBubbleFooter(
               context: context,
               isUser: false,
@@ -1158,47 +1163,99 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     return text.isEmpty || text == widget.message.trim();
   }
 
-  Widget _buildMessengerText(String text, Color foreground, Color background) {
-    final style = TextStyle(
+  /// Whether this bubble's body carries the stamp itself, at the end of its
+  /// last line, instead of hanging it under the body as its own row.
+  bool get _stampRidesInText => _isPlainMessengerText || _isPlainAgentText;
+
+  /// A coworker's turn that is one plain line of prose and nothing else.
+  ///
+  /// Assistant output normally goes through the Markdown renderer, because a
+  /// regex cannot recognise the whole Markdown grammar and guessing wrong
+  /// would drop a heading or a link out of an answer. So the test below is
+  /// strict in the other direction: anything that even looks like markup, a
+  /// link, a second paragraph, a tool run, an image, a file or a live stream
+  /// answers false and keeps today's renderer and today's stamp. What is left
+  /// is the short reply — "Hey! What can I do for you?" — where a stamp on its
+  /// own line costs the bubble a whole line for nothing.
+  bool get _isPlainAgentText {
+    if (widget.isUser || !widget.messengerMode) return false;
+    if (widget.message.trim().isEmpty || widget.message == 'Thinking...') {
+      return false;
+    }
+    // A body that is still growing would swap renderers mid-word the first
+    // time the model emits a backtick. It settles when the turn is done.
+    if (widget.isStreamingMessage || widget.isReasoningStreaming) return false;
+    if (_hasReasoning || _hasModelInfo || _shouldShowTps) return false;
+    if (widget.status == ChatMessageStatus.interrupted) return false;
+    if (widget.toolCalls?.isNotEmpty ?? false) return false;
+    if (widget.images?.isNotEmpty ?? false) return false;
+    if (widget.attachments?.isNotEmpty ?? false) return false;
+    if (widget.onAskUserAnswer != null) return false;
+    if (widget.onConnectMcpServer != null) return false;
+    final List<ContentBlock>? blocks = widget.contentBlocks;
+    if (blocks != null && blocks.isNotEmpty) {
+      // Only text blocks, and only the text this bubble already shows — a
+      // reasoning, tool or artifact block is structure the flat layout drops.
+      if (blocks.any(
+        (ContentBlock block) => block.type != ContentBlockType.text,
+      )) {
+        return false;
+      }
+      final String joined = blocks
+          .map((ContentBlock block) => block.text?.trim() ?? '')
+          .where((String text) => text.isNotEmpty)
+          .join('\n\n');
+      if (joined.isNotEmpty && joined != _strippedMessage.trim()) return false;
+    }
+    return isPlainStampableText(_strippedMessage);
+  }
+
+  /// The prose style the Markdown renderer gives a paragraph, so a plain line
+  /// reads identically whichever of the two draws it.
+  TextStyle _agentProseStyle(Color foreground) {
+    final TextStyle base = TextStyle(
       color: foreground,
+      height: 1.45,
       fontSize: _chatFontSize,
       fontFamily: _chatFontFamily,
-      fontWeight: FontWeight.w400,
-      height: 1.38,
     );
-    final footer = _buildBubbleFooter(
-      context: context,
-      isUser: widget.isUser,
-      fill: background,
-      onFill: foreground,
-    );
-    if (footer == null) return Text(text, style: style);
-    // The invisible trailing span reserves exactly the time's footprint on
-    // the final line. The visible footer is pinned inside the lower corner.
-    return Stack(
-      children: [
-        Text.rich(
-          TextSpan(
-            style: style,
-            children: [
-              TextSpan(text: text),
-              WidgetSpan(
-                alignment: PlaceholderAlignment.bottom,
-                child: ExcludeSemantics(
-                  child: Opacity(
-                    opacity: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: footer,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Positioned(right: 0, bottom: 0, child: footer),
-      ],
+    return Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: foreground,
+          height: 1.45,
+          fontSize: _chatFontSize,
+          fontFamily: _chatFontFamily,
+        ) ??
+        base;
+  }
+
+  Widget _buildMessengerText(
+    String text,
+    Color foreground,
+    Color background, {
+    TextStyle? style,
+    bool fillWidth = false,
+  }) {
+    final TextStyle resolved =
+        style ??
+        TextStyle(
+          color: foreground,
+          fontSize: _chatFontSize,
+          fontFamily: _chatFontFamily,
+          fontWeight: FontWeight.w400,
+          height: 1.38,
+        );
+    // The stamp is reserved at the end of the text and painted over that
+    // reserved space — see stamped_text.dart for why it is done that way.
+    return StampedText(
+      text: text,
+      style: resolved,
+      fillWidth: fillWidth,
+      stamp: _buildBubbleFooter(
+        context: context,
+        isUser: widget.isUser,
+        fill: background,
+        onFill: foreground,
+      ),
     );
   }
 
@@ -1270,6 +1327,20 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     }
     if (_isPlainMessengerText) {
       return _buildMessengerText(displayText, iconFgColor, bgColor);
+    }
+    if (_isPlainAgentText) {
+      // The 4-px breathing room is the Markdown renderer's `linesMargin`, kept
+      // so a plain line sits exactly where a rendered paragraph sat.
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: _buildMessengerText(
+          displayText.trim(),
+          iconFgColor,
+          bgColor,
+          style: _agentProseStyle(iconFgColor),
+          fillWidth: true,
+        ),
+      );
     }
 
     if (isUserMessage) {
