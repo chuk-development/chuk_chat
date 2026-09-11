@@ -60,43 +60,82 @@ class WaveformPainter extends CustomPainter {
 /// The live level meter of an open microphone, in the waveform shape.
 ///
 /// [levels] is the rolling buffer the recorder writes (0..1, oldest first); the
-/// last [barCount] entries are drawn. Quiet speech is lifted with a square root
-/// so a normal voice fills the shape instead of hugging the baseline.
+/// newest level is the bar at the trailing edge, so the row scrolls to the left
+/// while the microphone is open. Quiet speech is lifted with a square root so a
+/// normal voice fills the shape instead of hugging the baseline. Silence still
+/// reads as a line, never as nothing.
+///
+/// [barCount] is optional: without it the bar count follows the width, so the
+/// bars keep the same spacing on a narrow phone and on a wide composer.
 class LiveWaveform extends StatelessWidget {
   const LiveWaveform({
     super.key,
     required this.levels,
     required this.color,
-    this.barCount = 24,
+    this.barCount,
     this.height = 26,
+    this.barWidth = 3.0,
+    this.barSpacing = 6.0,
   });
 
   final List<double> levels;
   final Color color;
-  final int barCount;
+  final int? barCount;
   final double height;
+  final double barWidth;
+
+  /// Distance from one bar to the next when [barCount] is not given.
+  final double barSpacing;
+
+  /// The last [count] levels, right-aligned: the newest level is always the
+  /// bar at the trailing edge, so the row scrolls even before the buffer is
+  /// full. A left-aligned buffer left the last third of the row dead.
+  List<double> _bars(int count) {
+    final int offset = levels.length - count;
+    return <double>[
+      for (int i = 0; i < count; i++)
+        () {
+          final int index = offset + i;
+          final double raw = (index >= 0 && index < levels.length)
+              ? levels[index]
+              : 0.0;
+          // The floor is a short tick, not a dot: silence has to read as a
+          // line across the row.
+          if (raw < 0.01) return 0.22;
+          return (math.sqrt(raw) * 0.95).clamp(0.22, 1.0);
+        }(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final int start = levels.length > barCount ? levels.length - barCount : 0;
-    final List<double> bars = <double>[
-      for (int i = 0; i < barCount; i++)
-        () {
-          final int index = start + i;
-          final double raw = index < levels.length ? levels[index] : 0.0;
-          if (raw < 0.01) return 0.08;
-          return (math.sqrt(raw) * 0.95).clamp(0.08, 1.0);
-        }(),
-    ];
     return SizedBox(
       height: height,
-      child: CustomPaint(
-        painter: WaveformPainter(
-          bars: bars,
-          progress: 1,
-          playedColor: color,
-          restColor: color.withValues(alpha: 0.32),
-        ),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double width = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : 0;
+          // Never more bars than the recorder has levels: extra bars would
+          // only pad the row with silence and the shape would stop reading as
+          // a waveform.
+          final int count =
+              barCount ??
+              math.min(
+                math.max(levels.length, 12),
+                width <= 0 ? 24 : (width / barSpacing).floor().clamp(12, 64),
+              );
+          return CustomPaint(
+            size: Size(width, height),
+            painter: WaveformPainter(
+              bars: _bars(count),
+              progress: 1,
+              playedColor: color,
+              restColor: color.withValues(alpha: 0.32),
+              barWidth: barWidth,
+            ),
+          );
+        },
       ),
     );
   }
