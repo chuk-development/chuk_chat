@@ -66,14 +66,15 @@ jobs:
           flutter-version: '3.47.0'
           cache: true
 
+      # Gemfile.lock is committed, so bundler-cache restores exactly those
+      # versions. BUNDLE_FROZEN makes a lock that drifted fail the job instead
+      # of quietly resolving something else. fastlane wants Ruby >= 3.3.
       - uses: ruby/setup-ruby@e5517072e87f198d9533967ae13d97c11b604005 # v1.99.0
         with:
-          ruby-version: '3.2'
-
-      # No Gemfile.lock is committed (fastlane resolves cleanly from the
-      # `~> 2.220` constraint), so install rather than restore a cache.
-      - name: bundle install
-        run: bundle install --jobs 4
+          ruby-version: '3.3'
+          bundler-cache: true
+        env:
+          BUNDLE_FROZEN: 'true'
 
       # Secrets go through the environment, never through `${{ }}` inside the
       # script: an interpolated value is pasted into the shell verbatim, so a

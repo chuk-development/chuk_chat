@@ -50,15 +50,23 @@ Fastlane is a gem, so it needs Ruby with headers (a native extension in the
 dependency chain does not ship a prebuilt binary):
 
 ```bash
-sudo apt install -y ruby-dev build-essential
-gem install bundler
-bundle install          # from the repository root, reads ./Gemfile
+sudo apt install -y ruby-dev build-essential   # a native extension needs them
+gem install --user-install bundler             # no sudo, no system gem dir
+export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"
+bundle install                                 # from the repository root
 ```
 
-No `Gemfile.lock` is committed yet, so each `bundle install` resolves the newest
-gem the `~> 2.220` constraint allows. Run `bundle install` once on a machine
-that has the Ruby headers and commit the lock if a release ever has to be
-reproducible down to the fastlane build.
+Both of the first two lines earn their flags. Without `ruby-dev` the native
+extension in fastlane's dependency chain cannot compile. Without
+`--user-install`, `gem install` fails with `Gem::FilePermissionError` on
+`/var/lib/gems`, which needs root. RubyGems does not put the user gem
+directory on `PATH` by itself, so the export has to come before `bundle`
+is called for the first time — put it in your shell profile.
+
+There is **one** `Gemfile`, at the repository root. Bundler walks up from the
+working directory, so `bundle exec fastlane` finds it from `android/`, `linux/`
+and `macos/` alike. `Gemfile.lock` is committed and CI runs with
+`BUNDLE_FROZEN`, so a local run and a CI run use the same fastlane.
 
 ### `.env`, not JSON
 
