@@ -4,8 +4,9 @@
 /// The shape is the one the reference messenger uses for its chat list, and the
 /// content is CoWork's own roster ([AgentRosterSource]):
 ///
-///  * a compact title bar — the account face on the left, "Coworkers", and a
-///    search target that swaps the title for an inline field;
+///  * a title bar — the page headline on the left, a search target and the
+///    accent "+"; the search fades the headline through into a rounded field
+///    that carries its own glyph and its own clear target;
 ///  * the connected filter group, All / Unread, with the unread count on the
 ///    second segment ([AgentReadMarks] answers what is unread);
 ///  * one row per coworker: its blob face with the presence dot, the name, the
@@ -22,6 +23,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/platform_specific/mobile/mobile_container_transform.dart';
 import 'package:cowork/ui/expressive/icon_map.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
@@ -69,6 +71,8 @@ class MobileAgentList extends StatefulWidget {
     this.readMarks,
     this.profiles,
     this.title = 'Agents',
+    this.onOpenFrom,
+    this.hiddenAgentId,
   });
 
   final AgentRosterSource source;
@@ -109,6 +113,17 @@ class MobileAgentList extends StatefulWidget {
   /// coworker for the Artefacts and Files tabs, and a list headed "Coworkers"
   /// there would not say what tapping a row does.
   final String title;
+
+  /// Where the tapped row is, and a copy of it — everything the chat-open
+  /// container transform needs to grow out of that row
+  /// (`mobile_container_transform.dart`). Called just before [onSelect]. Null
+  /// where the list is only a picker and nothing grows out of it.
+  final void Function(ContainerTransformSource source)? onOpenFrom;
+
+  /// The coworker whose row is currently inside the growing container. Its row
+  /// keeps its space in the list but is not drawn, so the copy in the container
+  /// is the only one on screen — the package's `_Hideable`.
+  final String? hiddenAgentId;
 
   @override
   State<MobileAgentList> createState() => _MobileAgentListState();
@@ -282,81 +297,93 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // header and fade out in the veil, the same way the chat does. A pinned
     // SliverAppBar could not do this — the list inside it is its own scroller,
     // so nothing ever passed under the bar.
+    // The two faces of the same row. They do not swap hard: one fades through
+    // the other, so opening the search reads as the row changing its mind and
+    // not as a screen replacing another.
+    final Widget titleRow = Row(
+      key: const ValueKey<bool>(false),
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            widget.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            // The headline of the page, and it should read like one: a step
+            // above the screen titles, because this is where the app opens.
+            style: text.headlineMedium?.copyWith(
+              fontSize: 34,
+              height: 1.05,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1.1,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ExpressiveIconButton(
+          hugeIcon: HugeIcons.search01,
+          onTap: _openSearch,
+          size: kMinInteractiveDimension,
+          color: scheme.surfaceContainerHighest,
+          tooltip: 'Search coworkers',
+          semanticsId: 'mobile_home_search',
+        ),
+        if (widget.onAddAgent != null) ...<Widget>[
+          const SizedBox(width: 8),
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.plusSign,
+            onTap: widget.onAddAgent,
+            size: kMinInteractiveDimension,
+            color: scheme.primary,
+            onColor: scheme.onPrimary,
+            tooltip: 'Add a coworker',
+            semanticsId: 'mobile_home_add',
+          ),
+        ],
+      ],
+    );
+
+    final Widget searchRow = Row(
+      key: const ValueKey<bool>(true),
+      children: <Widget>[
+        // Only the search back target lives on the left. The account used to
+        // sit here and opened settings — the navigation bar has that now, and
+        // one way in is enough.
+        ExpressiveIconButton(
+          hugeIcon: HugeIcons.arrowLeft02,
+          onTap: _closeSearch,
+          size: kMinInteractiveDimension,
+          tooltip: 'Close search',
+          semanticsId: 'mobile_home_search_close',
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SearchField(
+            controller: _query,
+            focusNode: _searchFocus,
+            onClear: () => setState(_query.clear),
+          ),
+        ),
+      ],
+    );
+
     final Widget header = Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: SizedBox(
         height: 58,
-        child: Row(
-          children: <Widget>[
-            // Only the search back target lives on the left. The account used
-            // to sit here and opened settings — the navigation bar has that
-            // now, and one way in is enough.
-            if (_searching) ...<Widget>[
-              ExpressiveIconButton(
-                hugeIcon: HugeIcons.arrowLeft02,
-                onTap: _closeSearch,
-                size: kMinInteractiveDimension,
-                tooltip: 'Close search',
-                semanticsId: 'mobile_home_search_close',
+        child: PageTransitionSwitcher(
+          duration: const Duration(milliseconds: 280),
+          transitionBuilder:
+              (
+                Widget child,
+                Animation<double> primary,
+                Animation<double> secondary,
+              ) => FadeThroughTransition(
+                animation: primary,
+                secondaryAnimation: secondary,
+                fillColor: Colors.transparent,
+                child: child,
               ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: _searching
-                  ? TextField(
-                      controller: _query,
-                      focusNode: _searchFocus,
-                      textInputAction: TextInputAction.search,
-                      cursorColor: scheme.primary,
-                      style: text.titleLarge,
-                      decoration: InputDecoration(
-                        isCollapsed: true,
-                        hintText: 'Search coworkers',
-                        hintStyle: text.titleLarge?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        border: InputBorder.none,
-                      ),
-                    )
-                  : Text(
-                      widget.title,
-                      style: text.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-            ),
-            if (_searching) ...<Widget>[
-              if (_query.text.isNotEmpty)
-                ExpressiveIconButton(
-                  hugeIcon: HugeIcons.cancel01,
-                  onTap: () => setState(_query.clear),
-                  size: kMinInteractiveDimension,
-                  tooltip: 'Clear',
-                ),
-            ] else ...<Widget>[
-              ExpressiveIconButton(
-                hugeIcon: HugeIcons.search01,
-                onTap: _openSearch,
-                size: kMinInteractiveDimension,
-                color: scheme.surfaceContainerHighest,
-                tooltip: 'Search coworkers',
-                semanticsId: 'mobile_home_search',
-              ),
-              if (widget.onAddAgent != null) ...<Widget>[
-                const SizedBox(width: 8),
-                ExpressiveIconButton(
-                  hugeIcon: HugeIcons.plusSign,
-                  onTap: widget.onAddAgent,
-                  size: kMinInteractiveDimension,
-                  color: scheme.primary,
-                  onColor: scheme.onPrimary,
-                  tooltip: 'Add a coworker',
-                  semanticsId: 'mobile_home_add',
-                ),
-              ],
-            ],
-          ],
+          child: _searching ? searchRow : titleRow,
         ),
       ),
     );
@@ -415,23 +442,49 @@ class _MobileAgentListState extends State<MobileAgentList> {
                       itemCount: agents.length,
                       itemBuilder: (BuildContext context, int index) {
                         final CoworkAgent agent = agents[index];
-                        final Widget row = MobileAgentRow(
-                          key: ValueKey<String>('mobile-agent-${agent.id}'),
-                          agent: agent,
-                          selected: agent.id == widget.selectedAgentId,
-                          unread: _marks.isUnread(agent),
-                          unreadThreads: _marks.unreadThreads(agent),
-                          role: _roleOf(agent),
-                          now: _now(),
-                          profiles: _profiles,
-                          onTap: agent.threads.isEmpty
-                              ? null
-                              : () => widget.onSelect(
-                                  agent.id,
-                                  agent.threads.first.key,
-                                ),
-                          onLongPress: (BuildContext rowContext) =>
-                              _openRowMenu(rowContext, agent),
+                        // One description, built twice: the row in the list,
+                        // and — when the chat grows out of it — the copy that
+                        // rides inside the container while this one is hidden.
+                        MobileAgentRow buildRow({required bool padded}) =>
+                            MobileAgentRow(
+                              key: padded
+                                  ? ValueKey<String>('mobile-agent-${agent.id}')
+                                  : null,
+                              agent: agent,
+                              selected: agent.id == widget.selectedAgentId,
+                              unread: _marks.isUnread(agent),
+                              unreadThreads: _marks.unreadThreads(agent),
+                              role: _roleOf(agent),
+                              now: _now(),
+                              profiles: _profiles,
+                              padded: padded,
+                              onTap: !padded || agent.threads.isEmpty
+                                  ? null
+                                  : (Rect rect) {
+                                      widget.onOpenFrom?.call(
+                                        ContainerTransformSource(
+                                          rect: rect,
+                                          child: buildRow(padded: false),
+                                        ),
+                                      );
+                                      widget.onSelect(
+                                        agent.id,
+                                        agent.threads.first.key,
+                                      );
+                                    },
+                              onLongPress: !padded
+                                  ? null
+                                  : (BuildContext rowContext) =>
+                                        _openRowMenu(rowContext, agent),
+                            );
+                        final Widget row = Visibility(
+                          // Hidden, not removed: the list must not reflow
+                          // under the growing container.
+                          visible: agent.id != widget.hiddenAgentId,
+                          maintainSize: true,
+                          maintainAnimation: true,
+                          maintainState: true,
+                          child: buildRow(padded: true),
                         );
                         if (_searching || !_animate) return row;
                         return StaggeredItem(
@@ -461,6 +514,101 @@ class _MobileAgentListState extends State<MobileAgentList> {
   }
 }
 
+/// The roster's search input: one rounded, filled field that carries its own
+/// glyph and its own clear target.
+///
+/// It is a field and it looks like one. A bare [TextField] on the header's
+/// background had no shape at all, so the row simply lost its title and gained
+/// a caret. The corner is the navigation pill's ([ConnectedGroup.outerRadius]),
+/// because the filter group right under it is the same corner — three
+/// different roundnesses stacked in 100 px is what made the header read as
+/// three different apps.
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+    final bool hasText = controller.text.isNotEmpty;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(ConnectedGroup.outerRadius),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 5, 7, 5),
+        child: Row(
+          children: <Widget>[
+            HugeIcon(
+              HugeIcons.search01,
+              size: 20,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                textInputAction: TextInputAction.search,
+                cursorColor: scheme.primary,
+                style: text.titleMedium,
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  hintText: 'Search coworkers',
+                  hintStyle: text.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                ),
+              ),
+            ),
+            // The clear target appears only when there is something to clear,
+            // and it grows in rather than popping into the field.
+            AnimatedSwitcher(
+              duration: kExpressiveShort,
+              switchInCurve: kExpressiveDecelerate,
+              transitionBuilder: (Widget child, Animation<double> t) =>
+                  ScaleTransition(
+                    scale: t,
+                    child: FadeTransition(opacity: t, child: child),
+                  ),
+              child: hasText
+                  ? ExpressiveIconButton(
+                      key: const ValueKey<bool>(true),
+                      hugeIcon: HugeIcons.cancel01,
+                      onTap: onClear,
+                      size: 40,
+                      color: scheme.surfaceContainerHigh,
+                      tooltip: 'Clear',
+                      semanticsId: 'mobile_home_search_clear',
+                    )
+                  : const SizedBox(
+                      key: ValueKey<bool>(false),
+                      width: 8,
+                      height: 40,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MobileAgentRow extends StatelessWidget {
   const MobileAgentRow({
     super.key,
@@ -473,6 +621,7 @@ class MobileAgentRow extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.profiles,
+    this.padded = true,
   });
 
   final CoworkAgent agent;
@@ -487,12 +636,19 @@ class MobileAgentRow extends StatelessWidget {
   /// The role line to show; null hides the tag.
   final String? role;
 
-  final VoidCallback? onTap;
+  /// Opens the coworker's thread. It is handed the row's own rounded rect, in
+  /// global coordinates: the chat grows out of exactly that rect
+  /// (`mobile_container_transform.dart`).
+  final void Function(Rect globalRect)? onTap;
 
   /// Long press, with the row's own context so a menu can anchor to it.
   final void Function(BuildContext rowContext)? onLongPress;
 
   final AgentProfileStore? profiles;
+
+  /// False builds the row without the list's outer padding, so it fills the
+  /// rect [onTap] reported. That is the copy the container transform draws.
+  final bool padded;
 
   /// One row's minimum height. Tight enough that a screen holds the roster,
   /// loose enough for a 52 px face plus two lines of text.
@@ -545,10 +701,21 @@ class MobileAgentRow extends StatelessWidget {
       button: onTap != null,
       selected: selected,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+        padding: padded
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 1)
+            : EdgeInsets.zero,
         child: Builder(
           builder: (BuildContext rowContext) => MorphTap(
-            onTap: onTap,
+            onTap: onTap == null
+                ? null
+                : () {
+                    // The box under this Builder is the MorphTap's own: the
+                    // rounded rect the user actually tapped, without the
+                    // list's padding around it.
+                    final RenderObject? box = rowContext.findRenderObject();
+                    if (box is! RenderBox || !box.hasSize) return;
+                    onTap!(box.localToGlobal(Offset.zero) & box.size);
+                  },
             onLongPress: onLongPress == null
                 ? null
                 : () => onLongPress!(rowContext),

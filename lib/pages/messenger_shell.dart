@@ -52,7 +52,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/ui/expressive/motion.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -74,6 +73,7 @@ import 'package:cowork/pages/settings/mcp_connectors_page.dart';
 import 'package:cowork/pages/secrets_settings_page.dart';
 import 'package:cowork/widgets/chat_documents_panel.dart';
 import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:cowork/platform_specific/mobile/mobile_container_transform.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/auth_service.dart';
@@ -230,25 +230,36 @@ class _MessengerShellState extends State<MessengerShell>
   bool _isCompact = false;
   double _lastWidth = 0;
 
-  /// The phone push (see [_buildPhoneBody]). One explicit controller, because
-  /// an implicit tween starts in the very frame that mounts the thread view —
-  /// and that frame costs over 100 ms, so by the time anything reached the
-  /// screen the app's front-loaded curve had already spent four fifths of the
-  /// travel. The controller is started from a post-frame callback instead, so
-  /// the expensive frame is frame zero of the travel and every millimetre of
-  /// it is painted.
+  /// The chat-open travel (see [_buildPhoneBody]). One explicit controller,
+  /// because an implicit tween starts in the very frame that mounts the thread
+  /// view — and that frame costs over 100 ms, so by the time anything reached
+  /// the screen the curve had already spent most of the travel. The controller
+  /// is started from a post-frame callback instead, so the expensive frame is
+  /// frame zero of the travel and every millimetre of it is painted.
+  ///
+  /// It runs LINEARLY and for the reference messenger's 300 ms.
+  /// [MobileContainerTransform] curves it itself, because the container
+  /// transform reads a curved value for the rect and the shape and the raw one
+  /// for the colour and the opacity.
   late final AnimationController _push = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 340),
+    duration: MobileContainerTransform.duration,
   );
 
-  /// The app's curve for what cannot take a spring: it leaves fast and settles
-  /// slowly (ui/expressive/motion.dart). Back plays it backwards, which is the
-  /// mirror — slow to let go, fast to clear the screen.
-  late final Animation<double> _pushed = CurvedAnimation(
-    parent: _push,
-    curve: kExpressiveDecelerate,
-  );
+  /// The row the open travel starts from, captured on the tap that opened the
+  /// thread. Null until a row has been tapped — a restored selection or a
+  /// notification has no row to grow out of.
+  ContainerTransformSource? _openFrom;
+
+  /// Which coworker's row [_openFrom] is a copy of, so the list can hide the
+  /// original while the copy is on screen.
+  String? _openFromAgentId;
+
+  /// The row handed up by the list on THIS tap, claimed by the [_select] that
+  /// follows it. A selection that arrives any other way (a notification, the
+  /// restored selection, the desktop sidebar) finds it empty and clears the
+  /// source, so the travel does not grow out of a row nobody touched.
+  ContainerTransformSource? _pendingOpenFrom;
 
   /// Where [_push] has been told to go, so a rebuild does not re-fire it.
   /// Null until the phone layout has been built once: the first phone frame
@@ -260,11 +271,25 @@ class _MessengerShellState extends State<MessengerShell>
   void initState() {
     super.initState();
     _hostInit();
+    _push.addStatusListener(_onPushStatus);
     _controller.addListener(_onControllerForBrowser);
+  }
+
+  /// The travel is fully back: the row the chat grew out of belongs to the list
+  /// again. Held until now so the row is not drawn twice — once in the list and
+  /// once inside the shrinking container — on the way out.
+  void _onPushStatus(AnimationStatus status) {
+    if (status != AnimationStatus.dismissed) return;
+    if (!mounted || _openFromAgentId == null) return;
+    setState(() {
+      _openFrom = null;
+      _openFromAgentId = null;
+    });
   }
 
   @override
   void dispose() {
+    _push.removeStatusListener(_onPushStatus);
     _push.dispose();
     _controller.removeListener(_onControllerForBrowser);
     _browserPresence?.dispose();
@@ -328,6 +353,11 @@ class _MessengerShellState extends State<MessengerShell>
     // next frame happens to arrive.
     unawaited(_readMarks.markRead(threadKey));
     setState(() {
+      // The row this selection came from, if it came from one. Claimed here so
+      // every other way in clears it (see [_pendingOpenFrom]).
+      _openFrom = _pendingOpenFrom;
+      _openFromAgentId = _pendingOpenFrom == null ? null : agentId;
+      _pendingOpenFrom = null;
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;
       _showThreadOnNarrow = true;
@@ -887,12 +917,88 @@ class _MessengerShellState extends State<MessengerShell>
 
   Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
     final bool showChat = _showThreadOnNarrow && agent != null;
-    final double width = MediaQuery.sizeOf(context).width;
+    final Size screen = MediaQuery.sizeOf(context);
     _drivePush(showChat, MediaQuery.disableAnimationsOf(context));
+
+    // Both layers are built HERE, not inside the animated builder: the travel
+    // must re-run nothing but the container's own geometry. Building the roster
+    // and the thread once per frame is what made a 300 ms transform land in
+    // three frames.
+    final Color surface = Theme.of(context).scaffoldBackgroundColor;
+    final Widget thread = agent == null
+        ? const SizedBox.shrink()
+        : RepaintBoundary(
+            child: ColoredBox(
+              color: surface,
+              child: MobileChatScreen(
+                active: showChat,
+                agent: agent,
+                onBack: () => setState(() => _showThreadOnNarrow = false),
+                // The pill opens the coworker's profile, like a messenger
+                // contact header. The controls moved into the profile and the
+                // "more" sheet.
+                onOpenProfile: () => _openAgentProfile(agent),
+                // The target is always there. Lit when a screen is open,
+                // parked when none is — and a parked tap says why instead of
+                // doing nothing (bead cowork-egrg).
+                onOpenBrowser: _browserOpen
+                    ? _openBrowserView
+                    : _explainNoScreen,
+                browserAvailable: _browserOpen,
+                onReconnect: () {
+                  final view = _threadViewKey.currentState;
+                  if (view is CoworkThreadViewState) {
+                    unawaited(view.reconnect());
+                  }
+                },
+                onOpenFiles: () => _openChatFiles(_selectedThreadKey, agent.name),
+                bodyBuilder: (BuildContext context, double topInset) =>
+                    _buildThread(topInset: topInset, phone: true),
+              ),
+            ),
+          );
+
+    // The home is four places now, not one list (docs/DESIGN.md): chats,
+    // artefacts, files, settings.
+    final Widget home = RepaintBoundary(
+      child: MobileHome(
+        roster: _roster,
+        controller: _controller.value,
+        readMarks: _readMarks,
+        profiles: _agentProfiles,
+        chats: MobileAgentList(
+          source: _roster,
+          selectedAgentId: _selectedAgentId,
+          onSelect: _select,
+          onOpenFrom: (ContainerTransformSource source) =>
+              _pendingOpenFrom = source,
+          // The row the copy was taken from is not drawn while the copy is
+          // inside the container. Cleared when the travel is fully back
+          // (the status listener in [initState]), not when it starts, so the
+          // row does not appear twice on the way out.
+          hiddenAgentId: _openFromAgentId,
+          selectedThreadKey: _selectedThreadKey,
+          onAddAgent: _openOnboarding,
+          onOpenAccount: _openSettings,
+          onOpenProfile: _openAgentProfile,
+          onRenameAgent: _openAgentRename,
+          onDeleteAgent: (CoworkAgent target) => _deleteAgent(target.id),
+          readMarks: _readMarks,
+          profiles: _agentProfiles,
+          accountLabel: null,
+        ),
+        settings: widget.shellConfig == null
+            ? const SizedBox.shrink()
+            : SettingsPage(config: widget.shellConfig!),
+      ),
+    );
+
     return AnimatedBuilder(
-      animation: _pushed,
+      animation: _push,
       builder: (BuildContext context, Widget? _) {
-        final double p = _pushed.value.clamp(0.0, 1.0);
+        final double p = _push.value.clamp(0.0, 1.0);
+        final bool reverse = _push.status == AnimationStatus.reverse;
+
         final Widget chatLayer = agent == null
             // No coworker selected: the thread view still has to exist, because
             // it is what builds the transport.
@@ -900,105 +1006,28 @@ class _MessengerShellState extends State<MessengerShell>
             : Offstage(
                 // Onstage from the frame the thread is asked for, not from the
                 // first frame of the travel: that way the one expensive build
-                // and its first paint happen while the page is still parked off
-                // the right edge, and the travel itself is cheap re-paints of a
-                // layer that is already rastered.
+                // and its first paint happen while the container is still the
+                // size of the row, and the travel itself is cheap re-paints.
                 offstage: !showChat && p == 0,
-                child: Transform.translate(
-                  offset: Offset((1 - p) * width, 0),
-                  child: RepaintBoundary(
-                    child: ColoredBox(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                      child: MobileChatScreen(
-                        active: showChat,
-                        agent: agent,
-                        onBack: () =>
-                            setState(() => _showThreadOnNarrow = false),
-                        // The pill opens the coworker's profile, like a messenger
-                        // contact header. The controls moved into the profile and
-                        // the "more" sheet.
-                        onOpenProfile: () => _openAgentProfile(agent),
-                        // The target is always there. Lit when a screen is
-                        // open, parked when none is — and a parked tap says why
-                        // instead of doing nothing (bead cowork-egrg).
-                        onOpenBrowser: _browserOpen
-                            ? _openBrowserView
-                            : _explainNoScreen,
-                        browserAvailable: _browserOpen,
-                        onReconnect: () {
-                          final view = _threadViewKey.currentState;
-                          if (view is CoworkThreadViewState) {
-                            unawaited(view.reconnect());
-                          }
-                        },
-                        onOpenFiles: () =>
-                            _openChatFiles(_selectedThreadKey, agent.name),
-                        bodyBuilder: (BuildContext context, double topInset) =>
-                            _buildThread(topInset: topInset, phone: true),
-                      ),
-                    ),
-                  ),
+                child: MobileContainerTransform(
+                  progress: p,
+                  reverse: reverse,
+                  openSize: screen,
+                  openColor: surface,
+                  closed: _openFrom,
+                  open: thread,
                 ),
               );
 
         return Stack(
-          children: [
-            // The inbox is underneath: the thread travels over it, the way a
-            // pushed page covers the page it came from.
+          children: <Widget>[
+            // The inbox stays exactly where it is: a container transform does
+            // not push the page it came from, it dims it and lets the chat grow
+            // over it. The dim is the transform's own scrim.
             Positioned.fill(
               child: Offstage(
                 offstage: p == 1,
-                child: IgnorePointer(
-                  ignoring: p > 0.5,
-                  child: Transform.translate(
-                    offset: Offset(-p * width * 0.3, 0),
-                    child: Stack(
-                      // The inbox keeps the tight constraints it had before the
-                      // scrim was stacked on top of it.
-                      fit: StackFit.expand,
-                      children: <Widget>[
-                        // The home is four places now, not one list
-                        // (docs/DESIGN.md): chats, artefacts, files, settings.
-                        MobileHome(
-                          roster: _roster,
-                          controller: _controller.value,
-                          readMarks: _readMarks,
-                          profiles: _agentProfiles,
-                          chats: MobileAgentList(
-                            source: _roster,
-                            selectedAgentId: _selectedAgentId,
-                            onSelect: _select,
-                            selectedThreadKey: _selectedThreadKey,
-                            onAddAgent: _openOnboarding,
-                            onOpenAccount: _openSettings,
-                            onOpenProfile: _openAgentProfile,
-                            onRenameAgent: _openAgentRename,
-                            onDeleteAgent: (CoworkAgent target) =>
-                                _deleteAgent(target.id),
-                            readMarks: _readMarks,
-                            profiles: _agentProfiles,
-                            accountLabel: null,
-                          ),
-                          settings: widget.shellConfig == null
-                              ? const SizedBox.shrink()
-                              : SettingsPage(config: widget.shellConfig!),
-                        ),
-                        // The scrim of a page that has been covered. It is a
-                        // neutral dim, it belongs to the travel, and it is
-                        // gone the moment the thread closes — not a tint on a
-                        // surface (docs/DESIGN.md).
-                        if (p > 0)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.32 * p),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: IgnorePointer(ignoring: p > 0, child: home),
               ),
             ),
             Positioned.fill(child: chatLayer),

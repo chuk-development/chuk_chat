@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cowork/models/content_block.dart' show SandboxArtifactPayload;
 import 'package:cowork/services/cowork/media_index.dart';
+import 'package:cowork/ui/expressive/connected_group.dart';
 import 'package:cowork/ui/expressive/top_veil.dart';
 import 'package:cowork/widgets/encrypted_image_widget.dart';
 import 'package:cowork/widgets/image_viewer.dart';
@@ -54,7 +55,6 @@ class _MobileMediaPageState extends State<MobileMediaPage> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
     return AnimatedBuilder(
       animation: _index,
       builder: (BuildContext context, Widget? _) {
@@ -130,26 +130,18 @@ class _MobileMediaPageState extends State<MobileMediaPage> {
                         ),
                       ),
                     ),
+                    // The one switch component the app has, the same one the
+                    // roster uses above its list.
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                      child: Row(
-                        children: <Widget>[
-                          _FilterChip(
-                            label: 'Pictures',
-                            count: images.length,
-                            selected: _filter == 0,
-                            onTap: () => setState(() => _filter = 0),
-                            scheme: scheme,
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Files',
-                            count: files.length,
-                            selected: _filter == 1,
-                            onTap: () => setState(() => _filter = 1),
-                            scheme: scheme,
-                          ),
-                        ],
+                      padding: const EdgeInsets.only(top: 6, bottom: 10),
+                      child: ConnectedGroup(
+                        labels: const <String>['Pictures', 'Files'],
+                        selected: _filter,
+                        badges: <int, int>{
+                          0: images.length,
+                          1: files.length,
+                        },
+                        onSelected: (int i) => setState(() => _filter = i),
                       ),
                     ),
                   ],
@@ -191,47 +183,6 @@ class _Thumbnail extends StatelessWidget {
         child: EncryptedImageWidget(
           storagePath: entry.reference,
           fit: BoxFit.cover,
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-    required this.scheme,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: selected ? scheme.primary : scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              count > 0 ? '$label  $count' : label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         ),
       ),
     );
