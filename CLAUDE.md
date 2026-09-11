@@ -126,6 +126,29 @@ scripts/build_apk.sh          # arm64 release + adb install + launch
   The daemon keeps about 4 GB after a build; kill it when RAM gets tight.
 - Other commands: `scripts/emulator.sh status|wait|shot [out.png]|stop`.
 
+## Arbeitsweise: Subagenten machen die Arbeit, ich pruefe das Bild
+
+Anweisung des Nutzers (2026-09-11): **Wo eine Aufgabe sich abgrenzen laesst, wird
+sie an einen Subagenten gegeben, nicht selbst getippt.** Der Koordinator
+beschreibt genau, was zu tun ist, welche Dateien tabu sind (mehrere Agenten
+arbeiten im selben Working Tree) und welche Tests gruen sein muessen.
+
+- Mehrere Subagenten parallel, wenn die Dateimengen sich nicht ueberschneiden.
+  Jedem Agenten die Liste der fremden Dateien mitgeben, die er nicht anfassen
+  darf.
+- **Der Koordinator prueft das Ergebnis am Bild**, nicht am Bericht: bauen
+  (`scripts/build_apk.sh --emulator`), `scripts/emulator.sh shot` und den
+  Screenshot wirklich ansehen. Sieht es nicht gut aus, geht die naechste Runde
+  an den naechsten Subagenten - so oft wie noetig. Dauer ist egal, das Ergebnis
+  zaehlt.
+- Der Koordinator committet; die Subagenten committen nicht.
+
+## Design
+
+All UI follows `docs/DESIGN.md` — Material 3 Expressive, one button family, no
+glows, files as their own messages. Read it before adding or changing a screen,
+and run its checklist before calling one done.
+
 ## Architecture Overview
 
 _Add a brief overview of your project architecture_
