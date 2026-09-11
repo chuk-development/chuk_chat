@@ -28,6 +28,7 @@ import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/ui/expressive/bubble_kind.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
@@ -413,23 +414,93 @@ class _ArtifactCard extends StatelessWidget {
   /// the artifact side panel (in addition to Download).
   final Future<void> Function()? onOpen;
 
-  IconData get _icon {
-    final mime = payload.mime;
-    if (mime.startsWith('image/')) return Icons.image_outlined;
-    if (mime == 'application/pdf') return Icons.picture_as_pdf_outlined;
-    if (mime.startsWith('video/')) return Icons.movie_outlined;
-    if (mime.startsWith('audio/')) return Icons.audiotrack_outlined;
-    if (mime.startsWith('text/') ||
-        mime == 'application/json' ||
-        mime == 'application/xml') {
-      return Icons.description_outlined;
+  /// The badge glyph for this file, from the app's own set.
+  ///
+  /// A list where every file wears the same sheet of paper tells the reader
+  /// nothing: the kind is what they scan for. Read from the extension first — a
+  /// sandbox writes `report.xlsx` with a generic octet-stream type often enough
+  /// — and from the mime when the name says nothing.
+  HugeIconData get _icon {
+    final String mime = payload.mime.toLowerCase().split(';').first.trim();
+    final String name = payload.filename.toLowerCase();
+    final int dot = name.lastIndexOf('.');
+    final String extension = dot > 0 ? name.substring(dot + 1) : '';
+
+    const Map<String, HugeIconData> byExtension = <String, HugeIconData>{
+      'csv': HugeIcons.sheet,
+      'tsv': HugeIcons.sheet,
+      'xls': HugeIcons.sheet,
+      'xlsx': HugeIcons.sheet,
+      'ods': HugeIcons.sheet,
+      'numbers': HugeIcons.sheet,
+      'md': HugeIcons.text,
+      'markdown': HugeIcons.text,
+      'rst': HugeIcons.text,
+      'txt': HugeIcons.file01,
+      'log': HugeIcons.file01,
+      'pdf': HugeIcons.pdf01,
+      'doc': HugeIcons.file01,
+      'docx': HugeIcons.file01,
+      'odt': HugeIcons.file01,
+      'rtf': HugeIcons.file01,
+      'ppt': HugeIcons.presentation01,
+      'pptx': HugeIcons.presentation01,
+      'key': HugeIcons.presentation01,
+      'json': HugeIcons.braces,
+      'yaml': HugeIcons.braces,
+      'yml': HugeIcons.braces,
+      'toml': HugeIcons.braces,
+      'xml': HugeIcons.sourceCode,
+      'html': HugeIcons.sourceCode,
+      'css': HugeIcons.sourceCode,
+      'js': HugeIcons.sourceCode,
+      'ts': HugeIcons.sourceCode,
+      'dart': HugeIcons.sourceCode,
+      'py': HugeIcons.sourceCode,
+      'rs': HugeIcons.sourceCode,
+      'go': HugeIcons.sourceCode,
+      'sh': HugeIcons.terminal,
+      'bash': HugeIcons.terminal,
+      'sql': HugeIcons.database01,
+      'db': HugeIcons.database01,
+      'sqlite': HugeIcons.database01,
+      'zip': HugeIcons.zip01,
+      'tar': HugeIcons.zip01,
+      'gz': HugeIcons.zip01,
+      'tgz': HugeIcons.zip01,
+      'rar': HugeIcons.zip01,
+      '7z': HugeIcons.zip01,
+      'svg': HugeIcons.image01,
+      'epub': HugeIcons.bookOpen01,
+    };
+    final HugeIconData? known = byExtension[extension];
+    if (known != null) return known;
+
+    if (mime.startsWith('image/')) return HugeIcons.image01;
+    if (mime.startsWith('video/')) return HugeIcons.video01;
+    if (mime.startsWith('audio/')) return HugeIcons.file01;
+    if (mime == 'application/pdf') return HugeIcons.pdf01;
+    if (mime == 'text/markdown' || mime == 'text/x-markdown') {
+      return HugeIcons.text;
+    }
+    if (mime == 'text/csv' ||
+        mime.contains('spreadsheet') ||
+        mime.contains('excel')) {
+      return HugeIcons.sheet;
+    }
+    if (mime.contains('presentation') || mime.contains('powerpoint')) {
+      return HugeIcons.presentation01;
+    }
+    if (mime == 'application/json') return HugeIcons.braces;
+    if (mime == 'application/xml' || mime == 'text/html') {
+      return HugeIcons.sourceCode;
     }
     if (mime.contains('zip') ||
         mime.contains('tar') ||
         mime.contains('compressed')) {
-      return Icons.folder_zip_outlined;
+      return HugeIcons.zip01;
     }
-    return Icons.insert_drive_file_outlined;
+    return HugeIcons.file01;
   }
 
   @override
@@ -473,7 +544,7 @@ class _ArtifactCard extends StatelessWidget {
                         color: scheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(11),
                       ),
-                      child: Icon(_icon, size: 21, color: scheme.primary),
+                      child: HugeIcon(_icon, size: 21, color: scheme.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -494,10 +565,13 @@ class _ArtifactCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     IconButton(
                       onPressed: onSave,
-                      icon: const Icon(Icons.download, size: 20),
+                      icon: HugeIcon(
+                        HugeIcons.download01,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
                       tooltip: 'Download',
                       visualDensity: VisualDensity.compact,
-                      color: scheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -527,7 +601,7 @@ class _ArtifactCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(_icon, size: 22, color: scheme.primary),
+                    HugeIcon(_icon, size: 22, color: scheme.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -548,10 +622,13 @@ class _ArtifactCard extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onSave,
-                      icon: const Icon(Icons.download, size: 20),
+                      icon: HugeIcon(
+                        HugeIcons.download01,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
                       tooltip: 'Download',
                       visualDensity: VisualDensity.compact,
-                      color: scheme.onSurfaceVariant,
                     ),
                   ],
                 ),

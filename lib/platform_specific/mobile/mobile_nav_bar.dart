@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 
 /// One destination of [MobileNavBar].
@@ -19,7 +20,7 @@ class MobileNavDestination {
     this.badge = 0,
   });
 
-  final IconData icon;
+  final HugeIconData icon;
 
   /// Read out by screen readers and used as the tooltip. The bar itself shows
   /// icons only — four labels do not fit a phone without shrinking the targets.
@@ -114,7 +115,7 @@ class _NavTarget extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
-              Icon(
+              HugeIcon(
                 destination.icon,
                 size: 24,
                 color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
