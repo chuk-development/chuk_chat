@@ -4212,10 +4212,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         child: ChatModeSelector(
           mode: _chatMode,
           showLabel: false,
-          // Shorter than the touch target: the composer row is already full of
-          // round targets, and this one is a label, not a primary action. The
-          // tap area stays big enough because the row around it is 48 tall.
-          height: 36,
+          // The same height as every other target of the composer row (see
+          // [_composerTargetSize]); a label that is two pixels shorter than
+          // the buttons beside it reads as a mistake.
+          height: _composerTargetSize,
           selectedModelId: _selectedModelId,
           modelLabel:
               _selectedModelName ??
@@ -4502,6 +4502,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     await _refreshPickedModels();
   }
 
+  /// One size for every target in the composer action row: the plus, the mode
+  /// pill, the microphone and send. The row reads as one family only if they
+  /// share a number — a 36 here and a 38 there is visible, and the microphone
+  /// turning into the stop target must not resize anything. Change this one
+  /// constant, never a single call site.
+  static const double _composerTargetSize = 38;
+
+  /// The gap between two targets of that row. One number, so the spacing is
+  /// even from the plus to send.
+  static const double _composerTargetGap = 6;
+
   // NOTE: this is the pre-aef13a5 composer, restored deliberately.
   //
   // The 'one tall desktop-style box' redesign made the composer's height
@@ -4589,24 +4600,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
 
           // ── Row one: what you are saying ──
-          if (isRecording)
-            SizedBox(
-              height: 40,
-              child: Row(
-                children: [
-                  buildRecordingIndicator(),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: buildAudioVisualizer(
-                      audioLevels: _audioHandler.audioLevels,
-                      accentColor: Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            buildKeyboardListener(
+          //
+          // The waveform is drawn over the text field, not above it: the field
+          // keeps its place in the layout, so the composer is exactly as tall
+          // while recording as it is at rest and the thread does not jump.
+          ComposerInputRow(
+            isRecording: isRecording,
+            audioLevels: _audioHandler.audioLevels,
+            accentColor: Colors.red,
+            timeColor: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            child: buildKeyboardListener(
               focusNode: _rawKeyboardListenerFocusNode,
               controller: _controller,
               onSend: _sendOrSubmitEdit,
@@ -4680,6 +4683,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
             ),
+          ),
 
           const SizedBox(height: 4),
 
@@ -4695,20 +4699,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   builder: (anchorContext) => buildTinyIconButton(
                     icon: Icons.add_rounded,
                     iconSize: 22,
-                    buttonSize: 38,
+                    buttonSize: _composerTargetSize,
                     // Round, so the tap ink is a circle and not a square
                     // patch behind a round icon.
-                    cornerRadius: 19,
+                    cornerRadius: _composerTargetSize / 2,
                     onTap: () => _handleAddAttachmentTap(anchorContext),
                     isActive: hasAttachments,
                     color: iconFg,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: _composerTargetGap),
               _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
               if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
@@ -4716,26 +4720,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
                   iconSize: 20,
-                  buttonSize: 36,
-                  cornerRadius: 18,
+                  buttonSize: _composerTargetSize,
+                  cornerRadius: _composerTargetSize / 2,
                   onTap: _handleMicTap,
                   isActive: true,
                   color: Colors.red,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
               ] else if (!hasTypedText && !showStopAction) ...[
                 buildTinyIconButton(
                   icon: Icons.mic,
                   iconSize: 20,
-                  buttonSize: 36,
-                  cornerRadius: 18,
+                  buttonSize: _composerTargetSize,
+                  cornerRadius: _composerTargetSize / 2,
                   onTap: _handleMicTap,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
               ],
               buildTinyActionButton(
                 icon: isRecording
@@ -4745,8 +4749,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           : (showVoiceModeAction
                                 ? Icons.graphic_eq_rounded
                                 : Icons.north_rounded)),
-                buttonSize: 38,
-                iconSize: 17,
+                buttonSize: _composerTargetSize,
+                iconSize: 18,
                 onTap: isRecording
                     ? _handleAudioSend
                     : (showStopAction
