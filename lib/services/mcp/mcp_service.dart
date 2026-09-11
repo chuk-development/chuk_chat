@@ -854,6 +854,66 @@ class McpService {
     return applied;
   }
 
+  // ─── What the connectors answered with ─────────────────────────────────
+
+  /// Take an `mcp_tools` frame from the host and record what each connector
+  /// offers. Returns how many connectors changed.
+  ///
+  /// This device never dials an MCP server — the host does, when a task runs —
+  /// so the tool list is not something the app can discover. Without this frame
+  /// the connector list could only say "0 tools" about a server that is
+  /// connected and working, which is exactly what it said (bead cowork-mcp0).
+  ///
+  /// Matched on the device's own connector id when the host echoed one, else on
+  /// the name. A server the device does not know is ignored: the frame reports,
+  /// it never creates a connector.
+  static Future<int> applyToolsFrame(Map<String, dynamic> payload) async {
+    final Object? raw = payload['servers'];
+    final List<Object?> entries = raw is List ? raw : <Object?>[payload];
+    final List<McpConnection> stored = await store.load();
+    var changed = 0;
+    for (final Object? entry in entries) {
+      if (entry is! Map) continue;
+      final Map<String, dynamic> row = Map<String, dynamic>.from(entry);
+      final String id = '${row['id'] ?? ''}';
+      final String name = '${row['name'] ?? ''}';
+      McpConnection? target;
+      for (final McpConnection candidate in stored) {
+        if (id.isNotEmpty && candidate.id == id) {
+          target = candidate;
+          break;
+        }
+        if (id.isEmpty && name.isNotEmpty && candidate.name == name) {
+          target = candidate;
+        }
+      }
+      if (target == null) continue;
+      final Object? toolsRaw = row['tools'];
+      final List<McpTool> tools = <McpTool>[
+        if (toolsRaw is List)
+          for (final Object? tool in toolsRaw)
+            if (tool is Map)
+              McpTool.fromJson(Map<String, dynamic>.from(tool)),
+      ];
+      final List<String> before = target.tools
+          .map((McpTool tool) => tool.name)
+          .toList();
+      final List<String> after = tools.map((McpTool tool) => tool.name).toList();
+      if (before.length == after.length &&
+          List<String>.generate(
+            before.length,
+            (int i) => before[i],
+          ).join('\u0000') ==
+              after.join('\u0000')) {
+        continue;
+      }
+      await store.upsert(target.copyWith(tools: tools));
+      changed++;
+    }
+    if (changed > 0) connections.value = await store.load();
+    return changed;
+  }
+
   /// One connector out of an `mcp_credentials` frame. True when it was written.
   static Future<bool> _applyOneCredential(Map<String, dynamic> payload) async {
     try {
