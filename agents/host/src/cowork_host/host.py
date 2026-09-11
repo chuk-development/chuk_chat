@@ -551,6 +551,7 @@ class LocalHost:
             reconnect_factory=self._reconnect_factory,
             on_pair_established=self._persist_pairing,
             on_reprovision=self._on_reprovision,
+            on_auth_rejected=self._refresh_rejected_token,
         )
         self._party.start()
 
@@ -1085,6 +1086,26 @@ class LocalHost:
         self._session = session
         self._user_id = str(token.get("user_id") or getattr(self, "_user_id", "") or "")
         return session
+
+    def _refresh_rejected_token(self, token: str) -> bool:
+        """The relay refused this access token. Refresh that exact token once and
+        report whether a different one is now in hand.
+
+        True means redial immediately: the credential changed, so the next dial
+        is a new attempt and not a repeat of the one that just failed. False
+        leaves the ordinary backoff in place, so a relay that is down (or a
+        refresh token that is truly dead) is not hammered.
+        """
+        session = self._account_session()
+        if session is None:
+            return False
+        try:
+            session.refresh(reason="relay_rejected", seen_token=token)
+        except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the pipe
+            self._log(f"could not refresh the refused account token: {type(exc).__name__}: {exc}")
+            return False
+        fresh = session.access_token or ""
+        return bool(fresh and fresh != token)
 
     def _relay_access_token(self) -> str | None:
         """A CURRENT access token for the relay handshake, or ``None`` while this
