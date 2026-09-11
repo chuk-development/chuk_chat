@@ -13,9 +13,10 @@ import 'package:cowork/services/mcp/mcp_service.dart';
 /// entry, so the model cannot name one it has not already seen.
 List<McpCatalogueEntry> unconnectedCatalogueEntries() {
   final connectedIds = McpService.connections.value.map((c) => c.id).toSet();
-  return [...firstPartyConnectors(), ...kMcpCatalogue]
-      .where((e) => !connectedIds.contains(e.id))
-      .toList();
+  return [
+    ...firstPartyConnectors(),
+    ...kMcpCatalogue,
+  ].where((e) => !connectedIds.contains(e.id)).toList();
 }
 
 /// The catalogue entry with this [id]. Null when no catalogue entry uses the

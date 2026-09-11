@@ -5,17 +5,22 @@ const Map<String, String> stringsEs = {
   // ── Settings page ──────────────────────────────────────────
   'settings': 'Ajustes',
   'themeSettings': 'Ajustes de tema',
-  'themeSettingsSubtitle': 'Ajusta el tema, los colores y la apariencia de la app',
+  'themeSettingsSubtitle':
+      'Ajusta el tema, los colores y la apariencia de la app',
   'customization': 'Personalización',
-  'customizationSubtitle': 'Configura el comportamiento y las preferencias de la app',
+  'customizationSubtitle':
+      'Configura el comportamiento y las preferencias de la app',
   'toolCalling': 'Llamada de herramientas',
-  'toolCallingSubtitle': 'Controla el uso, descubrimiento y visualización de herramientas',
+  'toolCallingSubtitle':
+      'Controla el uso, descubrimiento y visualización de herramientas',
   'developerOptions': 'Opciones de desarrollador',
-  'developerOptionsSubtitle': 'Registros de diagnóstico y herramientas de depuración',
+  'developerOptionsSubtitle':
+      'Registros de diagnóstico y herramientas de depuración',
   'modelSelection': 'Selección de modelo',
   'modelSelectionSubtitle': 'Elige y configura tus modelos de IA',
   'aiIdentityMemory': 'Identidad y memoria de la IA',
-  'aiIdentityMemorySubtitle': 'Alma, perfil de usuario, memoria y prompt del sistema',
+  'aiIdentityMemorySubtitle':
+      'Alma, perfil de usuario, memoria y prompt del sistema',
   'pricingPlans': 'Planes de precios',
   'pricingPlansSubtitle': 'Consulta nuestros planes de suscripción y precios',
   'accountSettings': 'Ajustes de cuenta',
@@ -52,7 +57,8 @@ const Map<String, String> stringsEs = {
   'showModelInfoSubtitle':
       'Mostrar el nombre y la información del modelo en los mensajes del chat',
   'showTps': 'Mostrar tokens por segundo',
-  'showTpsSubtitle': 'Mostrar la velocidad de generación de respuestas de la IA (TPS)',
+  'showTpsSubtitle':
+      'Mostrar la velocidad de generación de respuestas de la IA (TPS)',
   'aiContext': 'Contexto de la IA',
   'recentImagesInContext': 'Imágenes recientes en el contexto',
   'recentImagesInContextSubtitle':
@@ -75,7 +81,8 @@ const Map<String, String> stringsEs = {
   'titleGenInfo':
       'Cuando está activado, se generará automáticamente un título corto para los chats nuevos basado en tu primer mensaje. Usa un modelo de IA rápido y ligero (qwen3-8b).',
   'systemPromptSaved': 'Prompt del sistema guardado',
-  'systemPromptResetToDefault': 'Prompt del sistema restablecido a los valores predeterminados',
+  'systemPromptResetToDefault':
+      'Prompt del sistema restablecido a los valores predeterminados',
   'reset': 'Restablecer',
   'save': 'Guardar',
 
@@ -131,17 +138,16 @@ const Map<String, String> stringsEs = {
       'Calculadora, reloj, notas, códigos QR y otras utilidades',
   'catMapsLocationDesc':
       'Buscar lugares, geocodificar direcciones y calcular rutas',
-  'catDeviceDesc': 'Acceder a funciones del dispositivo como GPS, calendario y recordatorios',
-  'catBashTerminalDesc': 'Ejecutar comandos de shell en un entorno aislado en el escritorio',
-  'catGitHubDesc':
-      'Acceder a repositorios, issues, PRs y commits de GitHub',
-  'catSlackDesc':
-      'Enviar mensajes, buscar canales y obtener datos de Slack',
+  'catDeviceDesc':
+      'Acceder a funciones del dispositivo como GPS, calendario y recordatorios',
+  'catBashTerminalDesc':
+      'Ejecutar comandos de shell en un entorno aislado en el escritorio',
+  'catGitHubDesc': 'Acceder a repositorios, issues, PRs y commits de GitHub',
+  'catSlackDesc': 'Enviar mensajes, buscar canales y obtener datos de Slack',
   'catGoogleCalGmailDesc':
       'Gestionar tu agenda y correo electrónico con Google Calendar y Gmail',
   'catEmailImapSmtpDesc': 'Enviar y recibir correo electrónico por IMAP y SMTP',
-  'catNextcloudDesc':
-      'Explorar archivos, calendario y contactos en Nextcloud',
+  'catNextcloudDesc': 'Explorar archivos, calendario y contactos en Nextcloud',
   'catSandboxDesc':
       'Ejecutar código Python o shell en un sandbox aislado y leer/escribir archivos',
   'connect': 'Conectar',
@@ -202,8 +208,7 @@ const Map<String, String> stringsEs = {
   'lockedChatsPlural': '{count} chats cifrados con una contraseña anterior.',
   'recoverChats': 'Recuperar chats',
   'dangerZone': 'Zona de peligro',
-  'dangerZoneSubtitle':
-      'Acciones irreversibles que afectan a toda tu cuenta.',
+  'dangerZoneSubtitle': 'Acciones irreversibles que afectan a toda tu cuenta.',
   'deleteAccountWarning':
       'Eliminar tu cuenta cancelará todas las suscripciones, eliminará tus datos y no se puede deshacer.',
   'deleteAccount': 'Eliminar cuenta',
@@ -273,15 +278,16 @@ const Map<String, String> stringsEs = {
   'termsOfService': 'Términos de servicio',
   'privacyPolicy': 'Política de privacidad',
   'versionText': 'Versión {version}',
-  'updateAvailable': 'Actualización disponible: v{version} \u2014 toca para descargar',
+  'updateAvailable':
+      'Actualización disponible: v{version} \u2014 toca para descargar',
   'versionUnavailable': 'Información de versión no disponible.',
-  'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nTodos los derechos reservados.',
+  'copyrightYear': '\u00a9 {year} Chuk Chat\nTodos los derechos reservados.',
   'licenses': 'Licencias',
   'unableToLoadLicenses': 'No se pueden cargar las licencias.',
   'tapToViewLicense': 'Toca para ver el texto completo de la licencia',
   'devOptionsEnabled': 'Opciones de desarrollador activadas',
-  'devOptionsAlreadyEnabled': 'Las opciones de desarrollador ya están activadas',
+  'devOptionsAlreadyEnabled':
+      'Las opciones de desarrollador ya están activadas',
   'devOptionsTapSingular': '{taps} toque más para Opciones de desarrollador',
   'devOptionsTapsPlural': '{taps} toques más para Opciones de desarrollador',
 
@@ -323,7 +329,8 @@ const Map<String, String> stringsEs = {
   // ── Login page ─────────────────────────────────────────────
   'welcomeToChukChat': 'Bienvenido a Chuk Chat',
   'signInWithEmail': 'Inicia sesión con tu correo electrónico',
-  'createAccountWithEmail': 'Crea una cuenta con correo electrónico y contraseña',
+  'createAccountWithEmail':
+      'Crea una cuenta con correo electrónico y contraseña',
   'supabaseNotConfigured':
       'Las credenciales de Supabase no están configuradas. Actualízalas antes de ejecutar una compilación de producción.',
   'confirmEmailToContinue': 'Confirma tu correo electrónico para continuar',
@@ -387,7 +394,8 @@ const Map<String, String> stringsEs = {
   'setNewPasswordInfo':
       'Elige una contraseña segura para tu cuenta. Tus chats antiguos seguirán siendo accesibles si recuerdas tu contraseña anterior.',
   'setNewPasswordButton': 'Establecer nueva contraseña',
-  'noAuthenticatedUser': 'No hay usuario autenticado después de actualizar la contraseña.',
+  'noAuthenticatedUser':
+      'No hay usuario autenticado después de actualizar la contraseña.',
   'failedToPreserveEncryption':
       'Error al preservar los datos de cifrado antiguos. Por favor, verifica tu conexión e inténtalo de nuevo.',
   'failedToSetNewPassword':
@@ -411,7 +419,8 @@ const Map<String, String> stringsEs = {
   'clear': 'Limpiar',
   'copiedRecentLogs': 'Registros recientes copiados al portapapeles',
   'noFocusedDebugData': 'Aún no hay datos de depuración enfocada disponibles',
-  'copiedFocusedDebug': 'Informe de depuración enfocada del menú de modelos copiado',
+  'copiedFocusedDebug':
+      'Informe de depuración enfocada del menú de modelos copiado',
   'failedFocusedDebug':
       'Error al crear el informe de depuración enfocada: {error}',
   'noDiagnosticsLog': 'No hay registro de diagnósticos disponible',
@@ -437,7 +446,8 @@ const Map<String, String> stringsEs = {
 
   // ── Usage details page ─────────────────────────────────────
   'usageDetails': 'Detalles de uso',
-  'unableToLoadUsage': 'No se pueden cargar los detalles de uso en este momento.',
+  'unableToLoadUsage':
+      'No se pueden cargar los detalles de uso en este momento.',
   'usageAndBilling': 'Uso y facturación',
   'usageReadOnly':
       'Esta pantalla es de solo lectura y se obtiene de tus registros de uso.',
@@ -467,8 +477,7 @@ const Map<String, String> stringsEs = {
   'unableToSaveImage': 'No se puede guardar la imagen',
   'image': 'Imagen',
   'openLink': 'Abrir enlace',
-  'openLinkConfirm':
-      '¿Realmente quieres salir de la app y abrir {url}?',
+  'openLinkConfirm': '¿Realmente quieres salir de la app y abrir {url}?',
   'open': 'Abrir',
 
   // ── Misc / shared ─────────────────────────────────────────
@@ -491,7 +500,8 @@ const Map<String, String> stringsEs = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '¡Pregúntame lo que quieras!',
-  'aiDisclaimer': 'Estás chateando con una IA: puede equivocarse. Verifica lo importante.',
+  'aiDisclaimer':
+      'Estás chateando con una IA: puede equivocarse. Verifica lo importante.',
   'queuedLabel': 'En cola',
   'editYourMessage': 'Edita tu mensaje...',
   'addMessageOrDocs': 'Añade un mensaje o envía documentos',
@@ -536,12 +546,10 @@ const Map<String, String> stringsEs = {
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gestor de medios',
   'imageUsedInChats': 'Imagen usada en chats',
-  'imageUsedInChatsBody':
-      'Esta imagen se usa en los siguientes chats:',
+  'imageUsedInChatsBody': 'Esta imagen se usa en los siguientes chats:',
   'deleteImageShowDeleted':
       'Si eliminas esta imagen, aparecerá como "Imagen eliminada" en esos chats.',
-  'deleteImageConfirm':
-      '¿Estás seguro de que quieres eliminar esta imagen?',
+  'deleteImageConfirm': '¿Estás seguro de que quieres eliminar esta imagen?',
   'deleteAnyway': 'Eliminar de todos modos',
   'deleteImageTitle': 'Eliminar imagen',
   'deleteImageBody':

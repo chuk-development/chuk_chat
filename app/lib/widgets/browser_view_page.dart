@@ -4,8 +4,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/motion.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
+import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/vnc_trackpad_overlay.dart';
 
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
@@ -229,10 +234,13 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     final Widget frame = _buildFrame();
     if (_fullscreen) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        // The darkest ground the scheme has, not a hard black: the stream sits
+        // on it and the scheme still owns the colour.
+        backgroundColor: cs.surfaceContainerLowest,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -252,20 +260,23 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
               top: 8,
               left: 8,
               child: Material(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: cs.scrim.withValues(alpha: 0.45),
                 shape: const CircleBorder(),
-                child: CloseButton(color: Colors.white),
+                child: CloseButton(color: cs.onInverseSurface),
               ),
             ),
             Positioned(
               top: 8,
               right: 8,
               child: Material(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: cs.scrim.withValues(alpha: 0.45),
                 shape: const CircleBorder(),
                 child: IconButton(
                   key: const Key('browser_view_exit_fullscreen'),
-                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                  icon: AppIcon(
+                    Icons.fullscreen_exit,
+                    color: cs.onInverseSurface,
+                  ),
                   tooltip: 'Exit full screen',
                   onPressed: _toggleFullscreen,
                 ),
@@ -275,26 +286,41 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         ),
       );
     }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agent browser'),
-        actions: [
-          IconButton(
-            key: const Key('browser_view_enter_fullscreen'),
-            icon: const Icon(Icons.fullscreen),
-            tooltip: 'Full screen',
-            onPressed: _toggleFullscreen,
+    return ExpressiveScreen(
+      title: 'Agent browser',
+      actions: <Widget>[
+        ExpressiveIconButton(
+          key: const Key('browser_view_enter_fullscreen'),
+          // The set has no full-screen glyph, so this one stays Material.
+          icon: Icons.fullscreen,
+          tooltip: 'Full screen',
+          onTap: _toggleFullscreen,
+        ),
+      ],
+      builder: (BuildContext context) => Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Padding(
+            // The banner sits under the floating bar, and the stream under
+            // the banner.
+            padding: EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + 28,
+              bottom: MediaQuery.paddingOf(context).bottom,
+            ),
+            child: frame,
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            // Tall enough for one line of the banner at any text scale; the
+            // banner itself clamps to a single ellipsised line so a long
+            // status message can never overflow (was a 30px RenderFlex
+            // overflow).
+            top: MediaQuery.paddingOf(context).top,
+            child: _StatusBanner(status: _status, message: _message),
           ),
         ],
-        bottom: PreferredSize(
-          // Tall enough for one line of the banner at any text scale; the banner
-          // itself clamps to a single ellipsised line so a long status message
-          // can never overflow the bar (was a 30px RenderFlex overflow).
-          preferredSize: const Size.fromHeight(28),
-          child: _StatusBanner(status: _status, message: _message),
-        ),
       ),
-      body: frame,
     );
   }
 
@@ -376,17 +402,20 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final MaterialYouTokens m3 = theme.m3;
     final (Color color, String label) = switch (status) {
       // A started stream with a message means it is live but has nothing to show
       // yet (no browser window on the display) — surface that instead of the
       // usual "you are in control", so a black screen is never a mystery.
       'started' || 'live' =>
         message.isEmpty
-            ? (Colors.green, 'live — you are in control')
-            : (Colors.orange, message),
-      'stopped' => (Colors.grey, 'stopped'),
-      'error' => (Colors.red, message.isEmpty ? 'error' : message),
-      _ => (Colors.orange, 'connecting…'),
+            ? (m3.success, 'live — you are in control')
+            : (m3.warning, message),
+      'stopped' => (cs.outline, 'stopped'),
+      'error' => (cs.error, message.isEmpty ? 'error' : message),
+      _ => (m3.warning, 'connecting…'),
     };
     return Container(
       width: double.infinity,

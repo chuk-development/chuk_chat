@@ -14,6 +14,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -100,155 +103,163 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Connectors')),
-      body: ValueListenableBuilder<List<McpConnection>>(
-        valueListenable: McpService.connections,
-        builder: (context, connections, _) {
-          final connectedIds = {for (final c in connections) c.id};
-          // The connectors our own server fronts come first: they are the
-          // ones that need no browser sign-in.
-          final catalogue = [...firstPartyConnectors(), ...kMcpCatalogue]
-              .where(
-                (entry) =>
-                    !connectedIds.contains(entry.id) &&
-                    (_query.isEmpty ||
-                        entry.name.toLowerCase().contains(_query) ||
-                        entry.description.toLowerCase().contains(_query)),
-              )
-              .toList();
+    return ExpressiveScreen(
+      title: 'Connectors',
+      builder: (BuildContext context) =>
+          ValueListenableBuilder<List<McpConnection>>(
+            valueListenable: McpService.connections,
+            builder: (context, connections, _) {
+              final connectedIds = {for (final c in connections) c.id};
+              // The connectors our own server fronts come first: they are the
+              // ones that need no browser sign-in.
+              final catalogue = [...firstPartyConnectors(), ...kMcpCatalogue]
+                  .where(
+                    (entry) =>
+                        !connectedIds.contains(entry.id) &&
+                        (_query.isEmpty ||
+                            entry.name.toLowerCase().contains(_query) ||
+                            entry.description.toLowerCase().contains(_query)),
+                  )
+                  .toList();
 
-          // Catalogue descriptions keyed by id, so a connected connector can
-          // show the same subtitle line the recommended ones do (its stored
-          // description is often empty).
-          final descriptions = <String, String>{
-            for (final e in [...firstPartyConnectors(), ...kMcpCatalogue])
-              e.id: e.description,
-          };
-          String? subtitleFor(McpConnection c) {
-            if (c.description.isNotEmpty) return c.description;
-            final d = descriptions[c.id];
-            return (d != null && d.isNotEmpty) ? d : null;
-          }
+              // Catalogue descriptions keyed by id, so a connected connector can
+              // show the same subtitle line the recommended ones do (its stored
+              // description is often empty).
+              final descriptions = <String, String>{
+                for (final e in [...firstPartyConnectors(), ...kMcpCatalogue])
+                  e.id: e.description,
+              };
+              String? subtitleFor(McpConnection c) {
+                if (c.description.isNotEmpty) return c.description;
+                final d = descriptions[c.id];
+                return (d != null && d.isNotEmpty) ? d : null;
+              }
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              Text(
-                'Connectors let the assistant use tools and data from other '
-                'services.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.resolvedIconColor.withValues(alpha: 0.7),
+              return ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  MediaQuery.paddingOf(context).top + 8,
+                  16,
+                  MediaQuery.paddingOf(context).bottom + 32,
                 ),
-              ),
-              const SizedBox(height: 16),
-              _searchField(theme),
-              const SizedBox(height: 20),
+                children: [
+                  Text(
+                    'Connectors let the assistant use tools and data from other '
+                    'services.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.resolvedIconColor.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _searchField(theme),
+                  const SizedBox(height: 20),
 
-              if (connections.isNotEmpty) ...[
-                const ExpressiveSectionHeader('Connected'),
-                ExpressiveGroup(
-                  children: [
-                    for (final connection in connections)
-                      _row(
-                        url: connection.url,
-                        icon: connection.iconUrl,
-                        assetPath: bundledIconAsset(connection.id),
-                        name: connection.name,
-                        subtitle: subtitleFor(connection),
-                        trailing: _statusOf(connection),
-                        onTap: () => _open(connection.id, null),
+                  if (connections.isNotEmpty) ...[
+                    const ExpressiveSectionHeader('Connected'),
+                    ExpressiveGroup(
+                      children: [
+                        for (final connection in connections)
+                          _row(
+                            url: connection.url,
+                            icon: connection.iconUrl,
+                            assetPath: bundledIconAsset(connection.id),
+                            name: connection.name,
+                            subtitle: subtitleFor(connection),
+                            trailing: _statusOf(connection),
+                            onTap: () => _open(connection.id, null),
+                          ),
+                      ],
+                    ),
+                  ],
+
+                  for (final category in kMcpCategories)
+                    if (catalogue.any((e) => e.category == category)) ...[
+                      ExpressiveSectionHeader(category),
+                      ExpressiveGroup(
+                        children: [
+                          for (final entry in catalogue.where(
+                            (e) => e.category == category,
+                          ))
+                            _row(
+                              url: entry.url,
+                              icon: entry.iconUrl,
+                              assetPath: bundledIconAsset(entry.id),
+                              name: entry.name,
+                              subtitle: entry.description,
+                              trailing: 'Connect',
+                              onTap: () => _open(entry.id, entry),
+                            ),
+                        ],
+                      ),
+                    ],
+
+                  if (_query.length >= 3) ...[
+                    const ExpressiveSectionHeader(
+                      'Verified in the MCP registry',
+                    ),
+                    if (_searchingRegistry)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_registryHits.isEmpty)
+                      _searchedQuery == _query
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                              child: Text(
+                                'No server whose own publisher serves it. Only '
+                                'servers hosted by the domain that published '
+                                'them are offered here; anything else can be '
+                                'added under "Add by URL".',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.resolvedIconColor.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : TextButton(
+                              onPressed: _searchRegistry,
+                              child: const Text('Search the registry'),
+                            )
+                    else
+                      ExpressiveGroup(
+                        children: [
+                          for (final entry in _registryHits)
+                            if (!connectedIds.contains(entry.id))
+                              _row(
+                                url: entry.url,
+                                name: entry.name,
+                                // The publisher leads the line: the reader is
+                                // about to sign in to whoever runs that domain,
+                                // and the name alone does not say who that is.
+                                subtitle: [
+                                  if (entry.publisher != null) entry.publisher!,
+                                  if (entry.description.isNotEmpty)
+                                    entry.description,
+                                ].join(' · '),
+                                trailing: 'Connect',
+                                onTap: () => _open(entry.id, entry),
+                              ),
+                        ],
                       ),
                   ],
-                ),
-              ],
 
-              for (final category in kMcpCategories)
-                if (catalogue.any((e) => e.category == category)) ...[
-                  ExpressiveSectionHeader(category),
+                  const ExpressiveSectionHeader('Own server'),
                   ExpressiveGroup(
                     children: [
-                      for (final entry in catalogue.where(
-                        (e) => e.category == category,
-                      ))
-                        _row(
-                          url: entry.url,
-                          icon: entry.iconUrl,
-                          assetPath: bundledIconAsset(entry.id),
-                          name: entry.name,
-                          subtitle: entry.description,
-                          trailing: 'Connect',
-                          onTap: () => _open(entry.id, entry),
-                        ),
+                      ExpressiveRow(
+                        icon: Icons.add_link,
+                        title: 'Add by URL',
+                        subtitle: 'Any server that speaks MCP',
+                        onTap: _addByUrl,
+                      ),
                     ],
                   ),
                 ],
-
-              if (_query.length >= 3) ...[
-                const ExpressiveSectionHeader('Verified in the MCP registry'),
-                if (_searchingRegistry)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_registryHits.isEmpty)
-                  _searchedQuery == _query
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                          child: Text(
-                            'No server whose own publisher serves it. Only '
-                            'servers hosted by the domain that published '
-                            'them are offered here; anything else can be '
-                            'added under "Add by URL".',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.resolvedIconColor.withValues(
-                                alpha: 0.7,
-                              ),
-                            ),
-                          ),
-                        )
-                      : TextButton(
-                          onPressed: _searchRegistry,
-                          child: const Text('Search the registry'),
-                        )
-                else
-                  ExpressiveGroup(
-                    children: [
-                      for (final entry in _registryHits)
-                        if (!connectedIds.contains(entry.id))
-                          _row(
-                            url: entry.url,
-                            name: entry.name,
-                            // The publisher leads the line: the reader is
-                            // about to sign in to whoever runs that domain,
-                            // and the name alone does not say who that is.
-                            subtitle: [
-                              if (entry.publisher != null) entry.publisher!,
-                              if (entry.description.isNotEmpty)
-                                entry.description,
-                            ].join(' · '),
-                            trailing: 'Connect',
-                            onTap: () => _open(entry.id, entry),
-                          ),
-                    ],
-                  ),
-              ],
-
-              const ExpressiveSectionHeader('Own server'),
-              ExpressiveGroup(
-                children: [
-                  ExpressiveRow(
-                    icon: Icons.add_link,
-                    title: 'Add by URL',
-                    subtitle: 'Any server that speaks MCP',
-                    onTap: _addByUrl,
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
     );
   }
 
@@ -264,7 +275,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       onSubmitted: (_) => _searchRegistry(),
       decoration: InputDecoration(
         hintText: 'Search connectors…',
-        prefixIcon: const Icon(Icons.search),
+        prefixIcon: const AppIcon(Icons.search),
         filled: true,
         fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
           alpha: 0.4,
@@ -371,10 +382,15 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
         final description =
             connection?.description ?? widget.entry?.description ?? '';
 
-        return Scaffold(
-          appBar: AppBar(title: Text(name)),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        return ExpressiveScreen(
+          title: name,
+          builder: (BuildContext context) => ListView(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              MediaQuery.paddingOf(context).top + 24,
+              16,
+              MediaQuery.paddingOf(context).bottom + 32,
+            ),
             children: [
               Center(
                 child: McpConnectorIcon(
@@ -856,7 +872,7 @@ class _McpConnectorIconState extends State<McpConnectorIcon> {
       ),
       alignment: Alignment.center,
       child: widget.fallback != null || initial.isEmpty
-          ? Icon(
+          ? AppIcon(
               widget.fallback ?? Icons.extension_outlined,
               size: widget.size * 0.5,
               color: theme.colorScheme.onPrimaryContainer,

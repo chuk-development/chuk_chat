@@ -110,22 +110,22 @@ enum CoworkRoomStop {
 
   /// Parse the wire string, or null for one this build does not know.
   static CoworkRoomStop? fromWire(String? reason) => switch (reason) {
-        'no_more_mentions' => CoworkRoomStop.noMoreMentions,
-        'rounds_exhausted' => CoworkRoomStop.roundsExhausted,
-        'messages_exhausted' => CoworkRoomStop.messagesExhausted,
-        'stopped' => CoworkRoomStop.stopped,
-        'turn_failed' => CoworkRoomStop.turnFailed,
-        'no_such_room' => CoworkRoomStop.noSuchRoom,
-        _ => null,
-      };
+    'no_more_mentions' => CoworkRoomStop.noMoreMentions,
+    'rounds_exhausted' => CoworkRoomStop.roundsExhausted,
+    'messages_exhausted' => CoworkRoomStop.messagesExhausted,
+    'stopped' => CoworkRoomStop.stopped,
+    'turn_failed' => CoworkRoomStop.turnFailed,
+    'no_such_room' => CoworkRoomStop.noSuchRoom,
+    _ => null,
+  };
 
   /// A short human line for the thread footer.
   String get label => switch (this) {
-        CoworkRoomStop.noMoreMentions => 'Everyone has weighed in',
-        CoworkRoomStop.roundsExhausted => 'Reached the round limit',
-        CoworkRoomStop.messagesExhausted => 'Reached the message limit',
-        CoworkRoomStop.stopped => 'Stopped',
-        CoworkRoomStop.turnFailed => 'A coworker\'s turn failed',
-        CoworkRoomStop.noSuchRoom => 'This room is not on your host yet',
-      };
+    CoworkRoomStop.noMoreMentions => 'Everyone has weighed in',
+    CoworkRoomStop.roundsExhausted => 'Reached the round limit',
+    CoworkRoomStop.messagesExhausted => 'Reached the message limit',
+    CoworkRoomStop.stopped => 'Stopped',
+    CoworkRoomStop.turnFailed => 'A coworker\'s turn failed',
+    CoworkRoomStop.noSuchRoom => 'This room is not on your host yet',
+  };
 }

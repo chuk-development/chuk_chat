@@ -4,19 +4,23 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:cowork/utils/io_helper.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:cowork/constants.dart';
 import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
 import 'package:cowork/services/user_preferences_service.dart';
 import 'package:cowork/services/api_config_service.dart';
 import 'package:cowork/services/api_status_service.dart';
 import 'package:cowork/services/network_status_service.dart';
 import 'package:cowork/services/per_model_system_prompt_service.dart';
 import 'package:cowork/services/chat_mode_service.dart';
+import 'package:cowork/services/chat_model_selection_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/chat_mode_selector.dart'
     show ChatModeSelector, prettyModelId;
@@ -149,13 +153,18 @@ enum _ModelListFilter {
 }
 
 class ModelSelectorPage extends StatefulWidget {
-  const ModelSelectorPage({super.key});
+  const ModelSelectorPage({super.key, this.chatId});
+
+  /// When set, picking a model/provider affects this chat only. The legacy
+  /// unscoped page remains the account-wide catalogue/preferences editor.
+  final String? chatId;
 
   @override
   State<ModelSelectorPage> createState() => _ModelSelectorPageState();
 }
 
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
+  bool get _chatScoped => widget.chatId?.isNotEmpty == true;
   final String _baseUrl = ApiConfigService.apiBaseUrl;
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
@@ -201,6 +210,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   }
 
   Future<void> _loadModeConfigs() async {
+    if (_chatScoped) return;
     var fast = await ChatModeService.loadConfig(ChatMode.fast);
     final thinking = await ChatModeService.loadConfig(ChatMode.thinking);
 
@@ -241,7 +251,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       return null;
     }();
     if (target == null) return null;
-    final provider = _selectedProviders[target.id]?.slug ??
+    final provider =
+        _selectedProviders[target.id]?.slug ??
         _cheapestProvider(target)?.slug ??
         '';
     return ChatModeService.setModelForMode(
@@ -270,7 +281,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
         break;
       }
     }
-    final String providerSlug = _selectedProviders[modelId]?.slug ??
+    final String providerSlug =
+        _selectedProviders[modelId]?.slug ??
         (model != null ? _cheapestProvider(model)?.slug ?? '' : '');
     final updated = await ChatModeService.setModelForMode(
       mode,
@@ -299,7 +311,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   /// Pin [mode] to a new provider, keeping its model. The service re-clamps the
   /// mode's reasoning level to the new provider's allowed set.
   Future<void> _setProviderForMode(ChatMode mode, String providerSlug) async {
-    final updated = await ChatModeService.setProviderForMode(mode, providerSlug);
+    final updated = await ChatModeService.setProviderForMode(
+      mode,
+      providerSlug,
+    );
     if (!mounted) return;
     setState(() {
       if (mode == ChatMode.fast) {
@@ -314,10 +329,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   /// provider for). These are the recommended set. Falls back to the whole
   /// catalogue when nothing is enabled yet.
   List<CustomModelInfo> get _enabledModels {
-    final enabled =
-        _models.where((m) => _selectedProviders[m.id] != null).toList();
-    final list =
-        enabled.isNotEmpty ? enabled : List<CustomModelInfo>.from(_models);
+    final enabled = _models
+        .where((m) => _selectedProviders[m.id] != null)
+        .toList();
+    final list = enabled.isNotEmpty
+        ? enabled
+        : List<CustomModelInfo>.from(_models);
     list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return list;
   }
@@ -335,8 +352,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   }
 
   Future<void> _setReasoningForMode(ChatMode mode, String level) async {
-    final current =
-        (mode == ChatMode.fast ? _fastConfig : _thinkingConfig)?.reasoningEffort;
+    final current = (mode == ChatMode.fast ? _fastConfig : _thinkingConfig)
+        ?.reasoningEffort;
     if (level == current) return;
     final updated = await ChatModeService.setReasoningForMode(mode, level);
     if (!mounted) return;
@@ -449,8 +466,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       }
       final String accessToken = session.accessToken;
 
-      _lastSavedPreferences =
-          await UserPreferencesService.loadAllProviderPreferences();
+      if (_chatScoped) {
+        final choice = await ChatModelSelectionService.instance.load(
+          widget.chatId!,
+        );
+        _lastSavedPreferences = choice == null
+            ? {}
+            : {choice.modelId: choice.providerSlug};
+      } else {
+        _lastSavedPreferences =
+            await UserPreferencesService.loadAllProviderPreferences();
+      }
       final response = await http.get(
         Uri.parse('$_baseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
@@ -483,9 +509,11 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
               );
             } on StateError {
               selectedProvider = null;
-              cleanupFutures.add(
-                UserPreferencesService.clearSelectedProvider(model.id),
-              );
+              if (!_chatScoped) {
+                cleanupFutures.add(
+                  UserPreferencesService.clearSelectedProvider(model.id),
+                );
+              }
             }
           }
 
@@ -631,9 +659,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     _apiAvailabilityTimer = null;
   }
 
-  Future<void> _onEditModelPrompt(
-    CustomModelInfo model,
-  ) async {
+  Future<void> _onEditModelPrompt(CustomModelInfo model) async {
     final existing = _modelPromptConfigs[model.id];
     final changed = await showPerModelSystemPromptSheet(
       context: context,
@@ -662,6 +688,23 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     String modelId,
     ModelProviderInfo? provider,
   ) async {
+    if (_chatScoped) {
+      if (provider == null) return;
+      final choice = ChatModelSelection(
+        modelId: modelId,
+        providerSlug: provider.slug,
+      );
+      try {
+        await ChatModelSelectionService.instance.save(widget.chatId!, choice);
+      } catch (_) {
+        if (mounted) {
+          _showSnackBar('Could not save this chat model. Please try again.');
+        }
+        return;
+      }
+      if (mounted) Navigator.of(context).pop(choice);
+      return;
+    }
     setState(() {
       _selectedProviders[modelId] = provider;
       _autoSelected.remove(modelId);
@@ -681,6 +724,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   Future<void> _onAutoSelect(CustomModelInfo model) async {
     final cheapest = _cheapestProvider(model);
     if (cheapest == null) return;
+    if (_chatScoped) {
+      await _onProviderSelect(model.id, cheapest);
+      return;
+    }
     setState(() {
       _selectedProviders[model.id] = cheapest;
       _autoSelected[model.id] = cheapest;
@@ -730,11 +777,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             width: size,
             height: size,
             child: Center(
-              child: Icon(
-                Icons.downloading,
-                color: tint,
-                size: size / 2,
-              ),
+              child: AppIcon(Icons.downloading, color: tint, size: size / 2),
             ),
           ),
         );
@@ -750,12 +793,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             if (kDebugMode) {
               debugPrint('Error loading image from $imageUrl: $error');
             }
-            return Icon(fallbackIcon, color: tint, size: size);
+            return AppIcon(fallbackIcon, color: tint, size: size);
           },
         );
       }
     } else {
-      return Icon(fallbackIcon, color: tint, size: size);
+      return AppIcon(fallbackIcon, color: tint, size: size);
     }
   }
 
@@ -766,178 +809,197 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(l.models),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: _isLoading
+      title: _chatScoped ? 'Model for this chat' : l.models,
+      builder: (BuildContext context) => _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: colorScheme.error,
-                          size: 48,
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon(
+                      Icons.error_outline,
+                      color: colorScheme.error,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l.modelError(_error ?? ''),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: _initializeModelSelections,
+                      icon: const AppIcon(Icons.refresh),
+                      label: Text(l.retry),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l.modelError(_error ?? ''),
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyLarge?.copyWith(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ScrollConfiguration(
+              // Hide the desktop scrollbar; it read as noise over the
+              // rounded model cards.
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                // +3 header slots: search field, mode picker, section header.
+                itemCount: _displayModels.length + 3,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _SearchField(
+                        controller: _searchController,
+                        hintText: l.searchModels,
+                        hasQuery: _searchQuery.isNotEmpty,
+                      ),
+                    );
+                  }
+                  if (index == 1) {
+                    if (_chatScoped) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: Text(
+                          'Choose a model and provider for this chat.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: m3.onSurfaceVariant,
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        FilledButton.icon(
-                          onPressed: _initializeModelSelections,
-                          icon: const Icon(Icons.refresh),
-                          label: Text(l.retry),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 14,
+                      );
+                    }
+                    return Padding(
+                      // No bottom gap here: the "Available" section header
+                      // below carries its own top spacing, so 16 on top of
+                      // that left an oversized gap above the model list.
+                      padding: EdgeInsets.zero,
+                      child: _ModePickerPanel(
+                        buildIconWidget: _buildIconWidget,
+                        models: _enabledModels,
+                        fast: _ModeRowData(
+                          icon: Icons.bolt,
+                          title: 'Fast mode',
+                          modelId: _fastConfig?.modelId ?? '',
+                          modelName: _fastConfig == null
+                              ? null
+                              : _modelNameFor(_fastConfig!.modelId),
+                          reasoningEffort:
+                              _fastConfig?.reasoningEffort ??
+                              ChatModeService.reasoningOff,
+                          reasoningLevels: _reasoningLevelsForMode(
+                            ChatMode.fast,
+                          ),
+                          providerSlug: _fastConfig?.providerSlug ?? '',
+                          providers:
+                              _modelById(_fastConfig?.modelId)?.providers ??
+                              const <ModelProviderInfo>[],
+                          onPickModel: (id) =>
+                              _pickModelForMode(ChatMode.fast, id),
+                          onPickReasoning: (lvl) =>
+                              _setReasoningForMode(ChatMode.fast, lvl),
+                          onPickProvider: (slug) =>
+                              _setProviderForMode(ChatMode.fast, slug),
+                        ),
+                        thinking: _ModeRowData(
+                          icon: Icons.psychology_outlined,
+                          title: 'Thinking mode',
+                          modelId: _thinkingConfig?.modelId ?? '',
+                          modelName: _thinkingConfig == null
+                              ? null
+                              : _modelNameFor(_thinkingConfig!.modelId),
+                          reasoningEffort:
+                              _thinkingConfig?.reasoningEffort ??
+                              ChatModeService.reasoningOff,
+                          reasoningLevels: _reasoningLevelsForMode(
+                            ChatMode.thinking,
+                          ),
+                          providerSlug: _thinkingConfig?.providerSlug ?? '',
+                          providers:
+                              _modelById(_thinkingConfig?.modelId)?.providers ??
+                              const <ModelProviderInfo>[],
+                          onPickModel: (id) =>
+                              _pickModelForMode(ChatMode.thinking, id),
+                          onPickReasoning: (lvl) =>
+                              _setReasoningForMode(ChatMode.thinking, lvl),
+                          onPickProvider: (slug) =>
+                              _setProviderForMode(ChatMode.thinking, slug),
+                        ),
+                      ),
+                    );
+                  }
+                  if (index == 2) {
+                    final int count = _displayModels.length;
+                    final label = _searchQuery.isEmpty
+                        ? 'Available · $count models'
+                        : '$count model${count == 1 ? '' : 's'} found';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 20, 8, 10),
+                          child: Text(
+                            label.toUpperCase(),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ListFilterBar(
+                            value: _listFilter,
+                            onChanged: (f) => setState(() => _listFilter = f),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                )
-              : ScrollConfiguration(
-                  // Hide the desktop scrollbar; it read as noise over the
-                  // rounded model cards.
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(scrollbars: false),
-                  child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  // +3 header slots: search field, mode picker, section header.
-                  itemCount: _displayModels.length + 3,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _SearchField(
-                          controller: _searchController,
-                          hintText: l.searchModels,
-                          hasQuery: _searchQuery.isNotEmpty,
-                        ),
-                      );
-                    }
-                    if (index == 1) {
-                      return Padding(
-                        // No bottom gap here: the "Available" section header
-                        // below carries its own top spacing, so 16 on top of
-                        // that left an oversized gap above the model list.
-                        padding: EdgeInsets.zero,
-                        child: _ModePickerPanel(
-                          buildIconWidget: _buildIconWidget,
-                          models: _enabledModels,
-                          fast: _ModeRowData(
-                            icon: Icons.bolt,
-                            title: 'Fast mode',
-                            modelId: _fastConfig?.modelId ?? '',
-                            modelName: _fastConfig == null
-                                ? null
-                                : _modelNameFor(_fastConfig!.modelId),
-                            reasoningEffort: _fastConfig?.reasoningEffort ??
-                                ChatModeService.reasoningOff,
-                            reasoningLevels:
-                                _reasoningLevelsForMode(ChatMode.fast),
-                            providerSlug: _fastConfig?.providerSlug ?? '',
-                            providers:
-                                _modelById(_fastConfig?.modelId)?.providers ??
-                                    const <ModelProviderInfo>[],
-                            onPickModel: (id) =>
-                                _pickModelForMode(ChatMode.fast, id),
-                            onPickReasoning: (lvl) =>
-                                _setReasoningForMode(ChatMode.fast, lvl),
-                            onPickProvider: (slug) =>
-                                _setProviderForMode(ChatMode.fast, slug),
-                          ),
-                          thinking: _ModeRowData(
-                            icon: Icons.psychology_outlined,
-                            title: 'Thinking mode',
-                            modelId: _thinkingConfig?.modelId ?? '',
-                            modelName: _thinkingConfig == null
-                                ? null
-                                : _modelNameFor(_thinkingConfig!.modelId),
-                            reasoningEffort: _thinkingConfig?.reasoningEffort ??
-                                ChatModeService.reasoningOff,
-                            reasoningLevels:
-                                _reasoningLevelsForMode(ChatMode.thinking),
-                            providerSlug: _thinkingConfig?.providerSlug ?? '',
-                            providers: _modelById(_thinkingConfig?.modelId)
-                                    ?.providers ??
-                                const <ModelProviderInfo>[],
-                            onPickModel: (id) =>
-                                _pickModelForMode(ChatMode.thinking, id),
-                            onPickReasoning: (lvl) =>
-                                _setReasoningForMode(ChatMode.thinking, lvl),
-                            onPickProvider: (slug) =>
-                                _setProviderForMode(ChatMode.thinking, slug),
-                          ),
-                        ),
-                      );
-                    }
-                    if (index == 2) {
-                      final int count = _displayModels.length;
-                      final label = _searchQuery.isEmpty
-                          ? 'Available · $count models'
-                          : '$count model${count == 1 ? '' : 's'} found';
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ExpressiveSectionHeader(label),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _ListFilterBar(
-                              value: _listFilter,
-                              onChanged: (f) =>
-                                  setState(() => _listFilter = f),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    final model = _displayModels[index - 3];
-                    final ModelProviderInfo? selectedProviderForModel =
-                        _selectedProviders[model.id];
-                    final ModelPromptConfig? promptConfigForModel =
-                        _modelPromptConfigs[model.id];
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: ModelSelectionRow(
-                        key: ValueKey(model.id),
-                        model: model,
-                        selectedProvider: selectedProviderForModel,
-                        promptConfig: promptConfigForModel,
-                        isAutoSelected: _autoSelected.containsKey(model.id),
-                        isFirstRow: index == 3,
-                        onProviderChanged: (provider) =>
-                            _onProviderSelect(model.id, provider),
-                        onAutoSelected: () => _onAutoSelect(model),
-                        onEditPrompt: () => _onEditModelPrompt(model),
-                        formatContextLength: _formatContextLength,
-                        buildIconWidget: _buildIconWidget,
-                      ),
                     );
-                  },
-                  ),
-                ),
+                  }
+                  final model = _displayModels[index - 3];
+                  final ModelProviderInfo? selectedProviderForModel =
+                      _selectedProviders[model.id];
+                  final ModelPromptConfig? promptConfigForModel =
+                      _modelPromptConfigs[model.id];
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ModelSelectionRow(
+                      key: ValueKey(model.id),
+                      model: model,
+                      selectedProvider: selectedProviderForModel,
+                      promptConfig: promptConfigForModel,
+                      isAutoSelected: _autoSelected.containsKey(model.id),
+                      isFirstRow: index == 3,
+                      onProviderChanged: (provider) =>
+                          _onProviderSelect(model.id, provider),
+                      onAutoSelected: () => _onAutoSelect(model),
+                      onEditPrompt: () => _onEditModelPrompt(model),
+                      formatContextLength: _formatContextLength,
+                      buildIconWidget: _buildIconWidget,
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 
@@ -994,7 +1056,6 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
-    final bool isActive = widget.selectedProvider != null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1011,7 +1072,7 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         // both the settings pane and the full model screen. Its width is
         // capped so the model name keeps at least half the row.
         final Widget pill = _ProviderPill(
-          maxWidth: math.max(120.0, math.min(280.0, availableWidth * 0.5)),
+          maxWidth: availableWidth - 32,
           model: widget.model,
           selectedProvider: widget.selectedProvider,
           isAutoSelected: widget.isAutoSelected,
@@ -1021,8 +1082,9 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         );
         final Widget keyedPill = widget.isFirstRow
             ? KeyedSubtree(
-                key: TourKeyRegistry.instance
-                    .keyFor(TourSlots.modelProviderPill),
+                key: TourKeyRegistry.instance.keyFor(
+                  TourSlots.modelProviderPill,
+                ),
                 child: pill,
               )
             : pill;
@@ -1030,9 +1092,13 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         final Widget nameRow = _NameRow(
           model: widget.model,
           buildIconWidget: widget.buildIconWidget,
-          promptConfig: widget.promptConfig,
-          onEditPrompt: widget.onEditPrompt,
-          trailing: keyedPill,
+          trailing: widget.selectedProvider != null
+              ? AppIcon(
+                  Icons.check_circle_rounded,
+                  size: 21,
+                  color: colorScheme.primary,
+                )
+              : const SizedBox.shrink(),
         );
 
         final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
@@ -1040,11 +1106,8 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
 
         return Container(
           decoration: BoxDecoration(
-            color: m3.surfaceContainer,
-            borderRadius: BorderRadius.circular(20),
-            border: isActive
-                ? Border.all(color: colorScheme.primary, width: 2)
-                : Border.all(color: Colors.transparent, width: 2),
+            color: m3.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(28),
           ),
           padding: EdgeInsets.all(isWide ? 20 : 16),
           child: Column(
@@ -1054,6 +1117,56 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
               if (descriptionBlock != null) ...[
                 const SizedBox(height: 10),
                 descriptionBlock,
+              ],
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: colorScheme.outlineVariant.withValues(alpha: .45),
+              ),
+              keyedPill,
+              if (widget.onEditPrompt != null) ...[
+                Divider(
+                  height: 1,
+                  color: colorScheme.outlineVariant.withValues(alpha: .45),
+                ),
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: widget.onEditPrompt,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(
+                      children: [
+                        AppIcon(
+                          Icons.notes_rounded,
+                          size: 21,
+                          color: m3.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'System prompt',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                        if (widget.promptConfig?.isActive == true)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              'Custom',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: m3.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        AppIcon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: m3.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
               if (statsBlock != null) ...[
                 const SizedBox(height: 14),
@@ -1071,8 +1184,10 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     if (description == null || description.isEmpty) return null;
     final Color descColor = m3.onSurfaceVariant as Color;
     final Color primary = theme.colorScheme.primary;
-    final TextStyle? descStyle =
-        theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4);
+    final TextStyle? descStyle = theme.textTheme.bodySmall?.copyWith(
+      color: descColor,
+      height: 1.4,
+    );
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -1123,7 +1238,7 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         _descriptionExpanded
                             ? Icons.keyboard_arrow_up
                             : Icons.keyboard_arrow_down,
@@ -1190,27 +1305,18 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
 class _NameRow extends StatelessWidget {
   final CustomModelInfo model;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
-  final ModelPromptConfig? promptConfig;
-  final VoidCallback? onEditPrompt;
   final Widget trailing;
 
   const _NameRow({
     required this.model,
     required this.buildIconWidget,
     required this.trailing,
-    this.promptConfig,
-    this.onEditPrompt,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final l = AppLocalizations.of(context);
-    final bool hasPromptConfig =
-        promptConfig != null && promptConfig!.isActive;
-    final Color promptIconColor =
-        hasPromptConfig ? colorScheme.primary : theme.m3.onSurfaceVariant;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1229,33 +1335,8 @@ class _NameRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        // Flexible so the provider pill shrinks (and its label ellipsizes)
-        // instead of overflowing the row in a narrow settings pane.
-        // Push the provider pill hard against the right edge. Without the
-        // Align it sits at the LEFT of its flex box (name Expanded + pill
-        // Flexible split the row), leaving a gap to the right.
-        Flexible(
-          child: Align(alignment: Alignment.centerRight, child: trailing),
-        ),
-        // The set-system-prompt button is the very last element — to the
-        // right of the provider pill, at the far right of the row.
-        if (onEditPrompt != null) ...[
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: hasPromptConfig
-                ? (l?.perModelPromptEditConfigured ?? 'Edit system prompt')
-                : (l?.perModelPromptEdit ?? 'Set system prompt'),
-            visualDensity: VisualDensity.compact,
-            icon: Icon(
-              hasPromptConfig
-                  ? Icons.edit_note
-                  : Icons.note_alt_outlined,
-              color: promptIconColor,
-              size: 20,
-            ),
-            onPressed: onEditPrompt,
-          ),
-        ],
+        const SizedBox(width: 12),
+        trailing,
       ],
     );
   }
@@ -1297,10 +1378,13 @@ class _ProviderPill extends StatelessWidget {
     // full provider names + prices stay readable — a plain DropdownButton
     // can't do that since its closed face and menu share one width.
     final double screenWidth = MediaQuery.of(context).size.width;
-    final double pillMaxWidth = maxWidth ??
+    final double pillMaxWidth =
+        maxWidth ??
         (screenWidth < 400 ? math.max(140.0, screenWidth - 200.0) : 280.0);
-    final double menuWidth =
-        math.min(340.0, screenWidth - 48.0).clamp(220.0, 340.0).toDouble();
+    final double menuWidth = math
+        .min(340.0, screenWidth - 48.0)
+        .clamp(220.0, 340.0)
+        .toDouble();
 
     return Theme(
       data: theme.copyWith(
@@ -1309,9 +1393,7 @@ class _ProviderPill extends StatelessWidget {
       child: PopupMenuButton<String>(
         color: m3.surfaceContainerHigh,
         constraints: BoxConstraints.tightFor(width: menuWidth),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: (value) {
           if (value == _kDisabledValue) {
             onProviderChanged(null);
@@ -1362,17 +1444,27 @@ class _ProviderPill extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: pillMaxWidth),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: m3.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(999),
-            ),
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.symmetric(vertical: 14),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
+                AppIcon(
+                  Icons.dns_outlined,
+                  size: 21,
+                  color: m3.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Provider', style: theme.textTheme.bodyMedium),
+                ),
+                const SizedBox(width: 8),
                 _buildCollapsedFace(context),
-                const SizedBox(width: 2),
-                Icon(Icons.arrow_drop_down, color: m3.onSurfaceVariant),
+                const SizedBox(width: 8),
+                AppIcon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: m3.onSurfaceVariant,
+                ),
               ],
             ),
           ),
@@ -1395,23 +1487,28 @@ class _ProviderPill extends StatelessWidget {
     final Widget iconWidget;
     final String label;
     if (isAutoSelected) {
-      iconWidget = Icon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
+      iconWidget = AppIcon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
       label = 'Auto';
     } else if (selectedProvider != null) {
-      iconWidget =
-          buildIconWidget(selectedProvider!.iconUrl, Icons.business, size: 16);
+      iconWidget = buildIconWidget(
+        selectedProvider!.iconUrl,
+        Icons.business,
+        size: 16,
+      );
       label = selectedProvider!.name;
     } else {
-      iconWidget = Icon(Icons.block, color: m3.onSurfaceVariant, size: 16);
-      label = 'Disabled';
+      iconWidget = const SizedBox.shrink();
+      label = 'Choose';
     }
 
     return Flexible(
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          iconWidget,
-          const SizedBox(width: 6),
+          if (selectedProvider != null || isAutoSelected) ...[
+            iconWidget,
+            const SizedBox(width: 6),
+          ],
           Flexible(
             child: Text(
               label,
@@ -1439,14 +1536,14 @@ class _ProviderPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.block, color: m3.onSurfaceVariant, size: 16),
+        AppIcon(Icons.block, color: m3.onSurfaceVariant, size: 16),
         const SizedBox(width: 6),
         Text(
           'Disabled',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: m3.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
+            color: m3.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
@@ -1462,8 +1559,9 @@ class _ProviderPill extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
-    final Color textColor =
-        isSelected ? colorScheme.primary : colorScheme.onSurface;
+    final Color textColor = isSelected
+        ? colorScheme.primary
+        : colorScheme.onSurface;
 
     // Fix B.2: shorten the selected (collapsed) pill label so the model
     // name in the surrounding row stays visible on narrow phones. The
@@ -1481,7 +1579,7 @@ class _ProviderPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.bolt, color: textColor, size: 16),
+        AppIcon(Icons.bolt, color: textColor, size: 16),
         const SizedBox(width: 6),
         Flexible(
           child: Column(
@@ -1523,8 +1621,9 @@ class _ProviderPill extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
-    final Color textColor =
-        isSelected ? colorScheme.primary : colorScheme.onSurface;
+    final Color textColor = isSelected
+        ? colorScheme.primary
+        : colorScheme.onSurface;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1563,8 +1662,9 @@ class _ProviderPill extends StatelessWidget {
 
   String _formatInOutPrice(ModelProviderInfo provider) {
     final inPrice = provider.pricing.formatTokenPrice(provider.pricing.prompt);
-    final outPrice =
-        provider.pricing.formatTokenPrice(provider.pricing.completion);
+    final outPrice = provider.pricing.formatTokenPrice(
+      provider.pricing.completion,
+    );
     return '$inPrice in · $outPrice out';
   }
 }
@@ -1593,22 +1693,16 @@ class _SearchField extends StatelessWidget {
     final m3 = theme.m3;
     return TextField(
       controller: controller,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: colorScheme.onSurface,
-      ),
+      style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           color: m3.onSurfaceVariant,
         ),
-        prefixIcon: Icon(
-          Icons.search,
-          color: m3.onSurfaceVariant,
-          size: 20,
-        ),
+        prefixIcon: AppIcon(Icons.search, color: m3.onSurfaceVariant, size: 20),
         suffixIcon: hasQuery
             ? IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   Icons.clear,
                   color: m3.onSurfaceVariant,
                   size: 20,
@@ -1617,7 +1711,19 @@ class _SearchField extends StatelessWidget {
               )
             : null,
         filled: true,
-        fillColor: m3.surfaceContainer,
+        fillColor: m3.surfaceContainerLow,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide(color: colorScheme.primary),
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
@@ -1708,11 +1814,7 @@ class _ModePickerPanel extends StatelessWidget {
           );
         }
         return Column(
-          children: [
-            fastCard,
-            const SizedBox(height: 12),
-            thinkingCard,
-          ],
+          children: [fastCard, const SizedBox(height: 12), thinkingCard],
         );
       },
     );
@@ -1736,7 +1838,7 @@ class _ModePickerPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(data.icon, size: 20, color: m3.onSurfaceVariant),
+              AppIcon(data.icon, size: 20, color: m3.onSurfaceVariant),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -1792,10 +1894,7 @@ class _ModePickerPanel extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: control,
-            ),
+            child: Align(alignment: Alignment.centerRight, child: control),
           ),
         ],
       ),
@@ -1912,14 +2011,15 @@ class _ModePickerPanel extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color:
-                    selected ? theme.colorScheme.primary : m3.onSurfaceVariant,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : m3.onSurfaceVariant,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ),
           if (selected)
-            Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+            AppIcon(Icons.check, size: 18, color: theme.colorScheme.primary),
         ],
       ),
     );
@@ -1941,9 +2041,7 @@ class _ModePickerPanel extends StatelessWidget {
       child: PopupMenuButton<T>(
         color: m3.surfaceContainerHigh,
         constraints: const BoxConstraints(minWidth: 220, maxWidth: 340),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: onSelected,
         itemBuilder: itemBuilder,
         child: ConstrainedBox(
@@ -1969,7 +2067,7 @@ class _ModePickerPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 2),
-                Icon(
+                AppIcon(
                   Icons.arrow_drop_down,
                   color: m3.onSurfaceVariant,
                   size: 20,
@@ -2035,7 +2133,7 @@ class _ListFilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          color: selected ? theme.colorScheme.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -2044,9 +2142,7 @@ class _ListFilterBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
-            color: selected
-                ? theme.colorScheme.onPrimary
-                : m3.onSurfaceVariant,
+            color: selected ? theme.colorScheme.onSurface : m3.onSurfaceVariant,
           ),
         ),
       ),
@@ -2063,16 +2159,12 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 6, bottom: 2),
       child: RichText(
         text: TextSpan(
           style: theme.textTheme.labelSmall?.copyWith(
-            fontSize: 11.5,
+            fontSize: 12,
             color: m3.onSurfaceVariant,
             letterSpacing: 0.1,
           ),
@@ -2082,9 +2174,9 @@ class _StatChip extends StatelessWidget {
             TextSpan(
               text: value,
               style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 11.5,
+                fontSize: 12,
                 color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],

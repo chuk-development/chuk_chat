@@ -15,7 +15,8 @@ ToolCall automationCallFromRelay(
   DateTime? now,
 }) {
   final automation = event.automation;
-  final call = existing ??
+  final call =
+      existing ??
       ToolCall(
         name: 'automation',
         arguments: <String, dynamic>{

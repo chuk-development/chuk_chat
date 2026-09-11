@@ -39,6 +39,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/models/tool_call.dart';
 import 'package:cowork/services/chat_storage_service.dart';
+import 'package:cowork/services/cowork/media_index.dart';
+import 'package:cowork/services/cowork/thread_preview_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/services/automations/automation_ledger.dart';
@@ -47,6 +49,14 @@ import 'package:cowork/services/image_storage_service.dart';
 
 /// Prefix of the per-session replay cursor key in SharedPreferences.
 const String kReplayCursorPrefix = 'cowork.replay_cursor.';
+const String kReplayTimestampCursorPrefix = 'cowork.replay_timestamp_cursor.';
+
+/// One-time repair flag (bead cowork-4rpt). Caches written before the repeat
+/// guard existed already hold turns twice, and no later delta can heal a
+/// duplicate that sits in the middle of the history. Dropping every cursor
+/// once makes the next replay a full one, and a full replay REPLACES the
+/// cache with the host's transcript — which has each turn exactly once.
+const String kReplayRepeatRepairKey = 'cowork.replay_repeat_repair.v1';
 
 /// One session's in-progress replay fold.
 class _Draft {
@@ -171,8 +181,25 @@ class CoworkReplayLoader extends ChangeNotifier {
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(kReplayRepeatRepairKey) != true) {
+        // Keep no cursor this once: every thread replays whole and the host's
+        // copy replaces a cache that may show turns twice. The flag is written
+        // first, so a crash mid-replay costs one extra full replay, never a
+        // repair loop.
+        await prefs.setBool(kReplayRepeatRepairKey, true);
+        if (kDebugMode) {
+          debugPrint('[cowork-replay] repeat repair: replaying every thread');
+        }
+        return;
+      }
       for (final key in prefs.getKeys()) {
         if (!key.startsWith(kReplayCursorPrefix)) continue;
+        final session = key.substring(kReplayCursorPrefix.length);
+        // Old caches predate message clocks. Re-fetch once without deleting
+        // their visible history; only the completed replay replaces the cache.
+        if (prefs.getBool('$kReplayTimestampCursorPrefix$session') != true) {
+          continue;
+        }
         final value = prefs.getInt(key);
         if (value != null && value > 0) {
           _cursors[key.substring(kReplayCursorPrefix.length)] = value;
@@ -284,6 +311,7 @@ class CoworkReplayLoader extends ChangeNotifier {
         } else {
           _hostRunning.remove(event.sessionKey);
           _hostPrompts.remove(event.sessionKey);
+          CoworkRunLedger.instance.reconcileIdle(event.sessionKey);
         }
         notifyListeners();
 
@@ -297,6 +325,7 @@ class CoworkReplayLoader extends ChangeNotifier {
           'sender': 'user',
           'text': text,
           'reasoning': '',
+          if (event.sentAt != null) 'sentAt': event.sentAt!.toIso8601String(),
         });
         _noteMid(draft, mid);
 
@@ -304,12 +333,21 @@ class CoworkReplayLoader extends ChangeNotifier {
         if (!replay) return;
         final draft = _draftFor();
         _openAiRow(draft).aiText.write(text);
+        if (event.sentAt != null) {
+          draft.aiRow!['sentAt'] = event.sentAt!.toIso8601String();
+        }
         _noteMid(draft, mid);
 
       case CoworkRelayReasoning(:final replay, :final text, :final mid):
         if (!replay) return;
         final draft = _draftFor();
         _openAiRow(draft).aiReasoning.write(text);
+        if (event.sentAt != null) {
+          draft.aiRow!.putIfAbsent(
+            'sentAt',
+            () => event.sentAt!.toIso8601String(),
+          );
+        }
         _noteMid(draft, mid);
 
       case CoworkRelayTool(:final replay):
@@ -362,9 +400,9 @@ class CoworkReplayLoader extends ChangeNotifier {
         // prompts for it as it does live.
         final draft = _draftFor();
         final decided = event.isDecided || !hostRunning(draft.sessionKey);
-        _openAiRow(draft)
-            .aiToolCalls
-            .add(approvalCallFromRelay(event, decided: decided));
+        _openAiRow(
+          draft,
+        ).aiToolCalls.add(approvalCallFromRelay(event, decided: decided));
         _noteMid(draft, event.mid);
 
       case CoworkRelayAutomation(:final replay):
@@ -464,8 +502,9 @@ class CoworkReplayLoader extends ChangeNotifier {
     final reasoning = draft.aiReasoning.toString();
     if (reasoning.isNotEmpty) row['reasoning'] = reasoning;
     if (draft.aiToolCalls.isNotEmpty) {
-      row['toolCalls'] =
-          jsonEncode(draft.aiToolCalls.map((c) => c.toJson()).toList());
+      row['toolCalls'] = jsonEncode(
+        draft.aiToolCalls.map((c) => c.toJson()).toList(),
+      );
     }
     if (draft.aiBlocks.isNotEmpty) {
       // A row that carries blocks renders as blocks, so the answer text has to
@@ -474,8 +513,7 @@ class CoworkReplayLoader extends ChangeNotifier {
         if (text.trim().isNotEmpty) ContentBlock.text(text),
         ...draft.aiBlocks,
       ];
-      row['contentBlocks'] =
-          jsonEncode(blocks.map((b) => b.toJson()).toList());
+      row['contentBlocks'] = jsonEncode(blocks.map((b) => b.toJson()).toList());
     }
     draft.aiRow = null;
     draft.aiText.clear();
@@ -489,6 +527,130 @@ class CoworkReplayLoader extends ChangeNotifier {
     if (mid > draft.maxMid) draft.maxMid = mid;
     final min = draft.minMid;
     if (min == null || mid < min) draft.minMid = mid;
+  }
+
+  /// How far back a repeat is looked for. A delta only ever carries turns the
+  /// app may have painted itself since the last replay, so the window is about
+  /// "recent", not about the whole thread.
+  @visibleForTesting
+  static const int repeatWindow = 60;
+
+  /// The host's delta appended to the cache, with the turns the app already
+  /// painted itself removed.
+  ///
+  /// The app paints an outgoing message the moment it is sent, and the answer
+  /// as it streams; neither row carries a `mid`, because the host had not
+  /// stored them yet. The host stores the same turn, and on the next replay it
+  /// sends it back above the cursor. A plain append therefore shows the turn
+  /// twice — the bug the reader sees as "the same message, twice" (bead
+  /// cowork-4rpt).
+  ///
+  /// The overlap is found by content, and the host's copy wins: it carries the
+  /// tool calls, the reasoning and the server clock the local copy never had.
+  /// Two guards keep this from eating history:
+  ///
+  ///  * only the last [repeatWindow] cached rows are searched, and
+  ///  * the delta must be at least as long as the tail it replaces, so a short
+  ///    delta can never shrink the thread.
+  @visibleForTesting
+  static List<Map<String, String>> appendWithoutRepeats(
+    List<Map<String, String>> existing,
+    List<Map<String, String>> delta,
+  ) {
+    if (existing.isEmpty || delta.isEmpty) {
+      return <Map<String, String>>[...existing, ...delta];
+    }
+    // 1. The clean case: a tail of the cache IS the head of the delta.
+    //
+    // Found in linear time, not by trying every length. The obvious loop —
+    // longest candidate first, compare row by row — is O(k²) in the size of
+    // the delta, and it reaches its worst case on real data: a thread of
+    // repeated identical turns ("ok", "ok", "ok") makes every candidate match
+    // on all but its last row, so every one is paid for in full. Measured at
+    // 97 ms on the UI thread for a 2000-row replay on a desktop, and a replay
+    // that large is exactly the reconnect-after-a-long-absence path (bead
+    // cowork-6i0m).
+    final int overlap = _longestOverlap(existing, delta);
+    if (overlap > 0) {
+      return <Map<String, String>>[
+        ...existing.take(existing.length - overlap),
+        ...delta,
+      ];
+    }
+    // 2. The streamed case: the answer the app painted is not byte-identical
+    //    to the stored one (it was cut off, or a tool card is missing), so the
+    //    tails do not line up. Align on the first row of the delta instead —
+    //    it is the start of the repeated turn.
+    final int floor = existing.length - repeatWindow < 0
+        ? 0
+        : existing.length - repeatWindow;
+    for (int j = existing.length - 1; j >= floor; j--) {
+      if (!_sameRow(existing[j], delta.first)) continue;
+      // A delta shorter than the tail it would replace must not shrink the
+      // thread: that is a coincidence, not the same turn.
+      if (existing.length - j > delta.length) {
+        break;
+      }
+      return <Map<String, String>>[...existing.take(j), ...delta];
+    }
+    return <Map<String, String>>[...existing, ...delta];
+  }
+
+  /// The length of the longest tail of [existing] that is also a head of
+  /// [delta], in O(n + m).
+  ///
+  /// This is "the longest prefix of B that is a suffix of A", which the KMP
+  /// prefix function answers directly: run it over `B + separator + A`, and the
+  /// last value is the answer. The separator is a key no row can produce, so a
+  /// match can never straddle the join.
+  static int _longestOverlap(
+    List<Map<String, String>> existing,
+    List<Map<String, String>> delta,
+  ) {
+    final int longest = existing.length < delta.length
+        ? existing.length
+        : delta.length;
+    if (longest == 0) return 0;
+    // Only the last `longest` rows of the cache can take part.
+    final List<int> keys = <int>[
+      for (int i = 0; i < longest; i++) _rowKey(delta[i]),
+      _separatorKey,
+      for (int i = existing.length - longest; i < existing.length; i++)
+        _rowKey(existing[i]),
+    ];
+    final List<int> failure = List<int>.filled(keys.length, 0);
+    for (int i = 1; i < keys.length; i++) {
+      int len = failure[i - 1];
+      while (len > 0 && keys[i] != keys[len]) {
+        len = failure[len - 1];
+      }
+      if (keys[i] == keys[len]) len++;
+      failure[i] = len;
+    }
+    final int match = failure[keys.length - 1];
+    // A hash collision would claim an overlap that is not there, and this
+    // decides what gets written over the thread. Confirm the answer against
+    // the rows themselves — once, over `match` rows, not once per candidate.
+    if (match == 0) return 0;
+    for (int i = 0; i < match; i++) {
+      if (!_sameRow(existing[existing.length - match + i], delta[i])) return 0;
+    }
+    return match;
+  }
+
+  /// A value no row can produce, so the two halves cannot match across it.
+  static const int _separatorKey = -1;
+
+  /// The identity [_sameRow] compares, as one integer.
+  static int _rowKey(Map<String, String> row) =>
+      Object.hash(row['sender'], (row['text'] ?? '').trim()) & 0x3fffffff;
+
+  /// Two cache rows that stand for the same turn: same side, same words. The
+  /// clocks differ by design (the app stamps its own send, the host stamps the
+  /// store), so they are not compared.
+  static bool _sameRow(Map<String, String> a, Map<String, String> b) {
+    if (a['sender'] != b['sender']) return false;
+    return (a['text'] ?? '').trim() == (b['text'] ?? '').trim();
   }
 
   /// Writes the replayed rows into the local cache and tells the UI.
@@ -516,7 +678,8 @@ class CoworkReplayLoader extends ChangeNotifier {
     // a full re-send starts at or below it. Reading it off the data is the only
     // way that is right against both an old host and a new one.
     final honouredCursor =
-        draft.afterId > 0 && (draft.minMid == null || draft.minMid! > draft.afterId);
+        draft.afterId > 0 &&
+        (draft.minMid == null || draft.minMid! > draft.afterId);
 
     if (draft.rows.isEmpty && honouredCursor) {
       // "Nothing new" is only good news when there is something to be new
@@ -530,8 +693,10 @@ class CoworkReplayLoader extends ChangeNotifier {
       // count, no payload decode, no cloud.
       if (!await ChatStorageService.hasLocalThread(session)) {
         if (kDebugMode) {
-          debugPrint('[cowork-replay] $session: cursor ${draft.afterId} with no '
-              'local thread, replaying from zero');
+          debugPrint(
+            '[cowork-replay] $session: cursor ${draft.afterId} with no '
+            'local thread, replaying from zero',
+          );
         }
         invalidateCursor(session);
         _replayWanted.add(session);
@@ -549,7 +714,10 @@ class CoworkReplayLoader extends ChangeNotifier {
       // pages already put in the cache. Nothing there yet (the cache was lost
       // between pages) is not an error — the page is then simply the thread.
       final existing = await _cachedRows(session);
-      rows = <Map<String, String>>[...draft.rows, ...existing];
+      // Same repeat guard as the append below, read the other way round: the
+      // older page comes first, and whatever of it the cache already holds is
+      // dropped from the cache side (bead cowork-4rpt).
+      rows = appendWithoutRepeats(draft.rows, existing);
     } else if (honouredCursor) {
       final existing = await _cachedRows(session);
       if (existing.isEmpty) {
@@ -561,28 +729,43 @@ class CoworkReplayLoader extends ChangeNotifier {
         // below the cursor. Forget the cursor instead and ask for the whole
         // thread again (review F2).
         if (kDebugMode) {
-          debugPrint('[cowork-replay] $session: local rows unreadable, '
-              'dropping the delta and replaying from zero');
+          debugPrint(
+            '[cowork-replay] $session: local rows unreadable, '
+            'dropping the delta and replaying from zero',
+          );
         }
         invalidateCursor(session);
         _replayWanted.add(session);
         notifyListeners();
         return;
       }
-      rows = <Map<String, String>>[...existing, ...draft.rows];
+      rows = appendWithoutRepeats(existing, draft.rows);
     }
 
     // `saveChat` updates the in-memory cache synchronously and only then goes
     // to disk, so the rows are readable the moment this returns a future. The
     // repaint must not wait on that disk write (nor on the cursor's
     // preferences write): both are about the NEXT launch, not this frame.
-    final saved = ChatStorageService.saveChat(
-      rows.map<Map<String, dynamic>>(Map<String, dynamic>.from).toList(),
-      chatId: session,
+    final List<Map<String, dynamic>> committed = rows
+        .map<Map<String, dynamic>>(Map<String, dynamic>.from)
+        .toList();
+    // The roster has no messages of its own (see ThreadPreviewStore). This is
+    // the one place the rows are already decrypted and in hand, so the last
+    // line is taken here and nowhere else.
+    ThreadPreviewStore.instance.noteRows(session, committed);
+    // The same rows carry every picture and every file the coworker handed
+    // over. The Media tab has no other way to find them (MediaIndex).
+    MediaIndex.instance.noteRows(session, committed);
+    final saved = ChatStorageService.saveChat(committed, chatId: session);
+    unawaited(
+      saved.then(
+        (_) {},
+        onError: (Object error) {
+          if (kDebugMode)
+            debugPrint('[cowork-replay] cache write failed: $error');
+        },
+      ),
     );
-    unawaited(saved.then((_) {}, onError: (Object error) {
-      if (kDebugMode) debugPrint('[cowork-replay] cache write failed: $error');
-    }));
     _advanceCursor(session, draft.maxMid);
     _revisions[session] = (_revisions[session] ?? 0) + 1;
     notifyListeners();
@@ -663,6 +846,7 @@ class CoworkReplayLoader extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('$kReplayCursorPrefix$session', mid);
+      await prefs.setBool('$kReplayTimestampCursorPrefix$session', true);
     } catch (error) {
       // A cursor that cannot be persisted only costs a full replay next time.
       if (kDebugMode) debugPrint('[cowork-replay] cursor save failed: $error');
@@ -674,8 +858,7 @@ class CoworkReplayLoader extends ChangeNotifier {
     final bytes = file.bytes;
     if (bytes == null || !file.isValid) return null;
     try {
-      final storagePath =
-          await ImageStorageService.uploadEncryptedImage(bytes);
+      final storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
       // The SAME block the live ledger builds (bead cowork-266).
       return artifactBlockFromFile(storagePath, file);
     } catch (error) {

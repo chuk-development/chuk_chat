@@ -72,8 +72,7 @@ class McpIconCache {
           .get(Uri.parse(url))
           .timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return null;
-      if (response.bodyBytes.isEmpty ||
-          response.bodyBytes.length > _maxBytes) {
+      if (response.bodyBytes.isEmpty || response.bodyBytes.length > _maxBytes) {
         return null;
       }
       return response.bodyBytes;

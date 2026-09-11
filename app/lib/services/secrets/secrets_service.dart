@@ -25,19 +25,17 @@ import 'package:cowork/services/secrets/secrets_store.dart';
 import 'package:cowork/services/secrets/secrets_sync.dart';
 
 /// Where a `secrets` frame goes. Defaults to the link's bound controller.
-typedef SecretsHostSink = Future<void> Function(
-  SecretsSet set, {
-  String? requestId,
-});
+typedef SecretsHostSink =
+    Future<void> Function(SecretsSet set, {String? requestId});
 
 class SecretsService {
   SecretsService._({
     SecretsStore? store,
     SecretsMirror? mirror,
     SecretsHostSink? hostSink,
-  })  : _store = store ?? SecretsStore(),
-        _mirror = mirror ?? const SecretsSync(),
-        _hostSink = hostSink ?? _defaultHostSink;
+  }) : _store = store ?? SecretsStore(),
+       _mirror = mirror ?? const SecretsSync(),
+       _hostSink = hostSink ?? _defaultHostSink;
 
   static SecretsService _instance = SecretsService._();
   static SecretsService get instance => _instance;
@@ -50,7 +48,11 @@ class SecretsService {
     SecretsMirror? mirror,
     SecretsHostSink? hostSink,
   }) {
-    _instance = SecretsService._(store: store, mirror: mirror, hostSink: hostSink);
+    _instance = SecretsService._(
+      store: store,
+      mirror: mirror,
+      hostSink: hostSink,
+    );
     return _instance;
   }
 
@@ -59,7 +61,9 @@ class SecretsService {
   final SecretsHostSink _hostSink;
 
   /// The names that are set, sorted. What every page renders.
-  final ValueNotifier<List<String>> names = ValueNotifier<List<String>>(const <String>[]);
+  final ValueNotifier<List<String>> names = ValueNotifier<List<String>>(
+    const <String>[],
+  );
 
   int _revision = 0;
   int get revision => _revision;
@@ -71,9 +75,13 @@ class SecretsService {
   /// Every `secrets` frame handed to the host, for diagnostics: `(revision,
   /// names, requestId)`. Never a value.
   @visibleForTesting
-  final List<(int, List<String>, String?)> forwarded = <(int, List<String>, String?)>[];
+  final List<(int, List<String>, String?)> forwarded =
+      <(int, List<String>, String?)>[];
 
-  static Future<void> _defaultHostSink(SecretsSet set, {String? requestId}) async {
+  static Future<void> _defaultHostSink(
+    SecretsSet set, {
+    String? requestId,
+  }) async {
     final controller = CoworkRelayLink.instance.controller.value;
     if (controller == null) return;
     await controller.sendSecrets(

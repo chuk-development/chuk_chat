@@ -188,7 +188,8 @@ const Map<String, String> stringsDe = {
   'searchWorkspacesHint': 'Arbeitsbereiche suchen...',
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
-  'aiDisclaimer': 'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
+  'aiDisclaimer':
+      'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -210,7 +211,8 @@ const Map<String, String> stringsDe = {
   'toolArtifacts': 'Artifacts',
   'toolArtifactsSubtitle': 'Bearbeitbarer Code, Dokumente und Zeichnungen',
   'toolCodeSandbox': 'Code-Sandbox',
-  'toolCodeSandboxSubtitle': 'Code ausführen und Dateien in einer Sandbox verwalten',
+  'toolCodeSandboxSubtitle':
+      'Code ausführen und Dateien in einer Sandbox verwalten',
   'toolGroupCodeArtifacts': 'Code & Artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
@@ -473,9 +475,12 @@ const Map<String, String> stringsDe = {
   'resendCodeIn': 'Erneut senden in {seconds}s',
   'codeResent': 'Ein neuer Code wurde gesendet.',
   'enterVerificationCode': 'Gib den 6-stelligen Code ein.',
-  'invalidCode': 'Dieser Code ist ungültig oder abgelaufen. Fordere einen neuen an.',
-  'tooManyAttempts': 'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
-  'otpVerificationFailed': 'Bestätigung fehlgeschlagen. Bitte versuche es erneut.',
+  'invalidCode':
+      'Dieser Code ist ungültig oder abgelaufen. Fordere einen neuen an.',
+  'tooManyAttempts':
+      'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
+  'otpVerificationFailed':
+      'Bestätigung fehlgeschlagen. Bitte versuche es erneut.',
   'changeEmailAddress': 'Andere E-Mail verwenden',
 
   // ── Recover chats page ─────────────────────────────────────

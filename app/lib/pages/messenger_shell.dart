@@ -48,9 +48,11 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -63,7 +65,14 @@ import 'package:cowork/pages/about_page.dart';
 import 'package:cowork/pages/desktop_settings_modal.dart';
 import 'package:cowork/pages/settings_page.dart';
 import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:cowork/platform_specific/mobile/mobile_home.dart';
+import 'package:cowork/pages/mobile_cowork_settings_page.dart';
+import 'package:cowork/pages/agent_profile_edit_page.dart';
+import 'package:cowork/pages/automations_page.dart';
+import 'package:cowork/pages/skills_settings_page.dart';
+import 'package:cowork/pages/settings/mcp_connectors_page.dart';
+import 'package:cowork/pages/secrets_settings_page.dart';
+import 'package:cowork/widgets/chat_documents_panel.dart';
 import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/account_session.dart';
@@ -72,6 +81,8 @@ import 'package:cowork/pages/agent_profile_page.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/services/cowork/agent_read_marks.dart';
+import 'package:cowork/services/cowork/media_index.dart';
+import 'package:cowork/services/cowork/thread_preview_store.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/browser_presence.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
@@ -84,6 +95,7 @@ import 'package:cowork/services/cowork/room_source.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';
+import 'package:cowork/services/session_recovery.dart';
 import 'package:cowork/services/notifications/cowork_notifications.dart';
 import 'package:cowork/services/notifications/notification_router.dart';
 import 'package:cowork/services/settings/theme_controller.dart';
@@ -247,7 +259,28 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   }
 
   void _onBrowserPresenceChanged() {
-    if (mounted) setState(() {});
+    // The screen target lights up on its own; that is the whole announcement.
+    // A banner over the thread interrupts the reader to say something the
+    // chrome already shows (bead cowork-egrg, reverted on request).
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  /// The screen target, tapped while the coworker has no screen. Says what has
+  /// to happen first instead of leaving the tap unanswered. It replaces
+  /// whatever snack is up, because it answers a tap the user just made.
+  void _explainNoScreen() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No screen yet. Ask the coworker to open a page, then take over '
+            'here.',
+          ),
+        ),
+      );
   }
 
   @override
@@ -316,7 +349,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// cowork-vzm), never a side panel. Nothing to show before the transport is
   /// paired.
   Future<void> _openBrowserView() async {
-    if (!_browserOpen || _browserViewVisible) return;
+    if (_browserViewVisible || !_browserOpen) return;
     final controller = _pairedControllerOrExplain();
     if (controller == null) return;
     _browserViewVisible = true;
@@ -352,6 +385,68 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// inbox row menu and the desktop roster row.
   @override
   void _openAgentProfile(CoworkAgent agent) {
+    if (_isPhone) {
+      final chatKey = agent.id == _selectedAgentId
+          ? _selectedThreadKey
+          : (agent.threads.isEmpty ? null : agent.threads.first.key);
+      void open(Widget page) => Navigator.of(
+        context,
+      ).push<void>(MaterialPageRoute<void>(builder: (_) => page));
+      open(
+        MobileCoworkSettingsPage(
+          agentId: agent.id,
+          chatId: chatKey,
+          source: _roster,
+          profiles: _agentProfiles,
+          onChat: () {
+            if (agent.threads.isNotEmpty) {
+              _select(
+                agent.id,
+                agent.id == _selectedAgentId
+                    ? _selectedThreadKey
+                    : agent.threads.first.key,
+              );
+            }
+          },
+          onEdit: () => AgentProfileEditPage.open(
+            context,
+            agent: _roster.byId(agent.id) ?? agent,
+            source: _roster,
+            profiles: _agentProfiles,
+            onRename: (updated) => _renameAgent(updated.id, updated.name),
+          ),
+          onControls: () => open(
+            Scaffold(
+              appBar: AppBar(title: const Text('Host & activity')),
+              body: SafeArea(
+                child: AgentControlPanel(agent: agent, source: _controlSource),
+              ),
+            ),
+          ),
+          onModel: () {
+            if (chatKey != null) _openChatModel(chatKey);
+          },
+          onAutomations: () {
+            if (chatKey == null) return;
+            open(AutomationsPage(sessionKey: chatKey, chatName: agent.name));
+          },
+          onSkills: () => open(const SkillsSettingsPage()),
+          onConnectors: () => open(const McpConnectorsPage()),
+          onSecrets: () => open(const SecretsSettingsPage()),
+          onRooms: _openRooms,
+          onSettings: _openSettings,
+          onDocuments: chatKey == null
+              ? null
+              : () => _openChatFiles(chatKey, agent.name),
+          onCopyChat: agent.id == _selectedAgentId ? _copyFullChat : null,
+          onBrowser: agent.id == _selectedAgentId && _browserOpen
+              ? _openBrowserView
+              : null,
+          onDelete: () => _deleteAgent(agent.id),
+        ),
+      );
+      return;
+    }
     unawaited(
       AgentProfilePage.open(
         context,
@@ -389,19 +484,27 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// config the desktop falls back to the page too, so the entry always opens.
   @override
   void _openModelScreen() {
-    final config = widget.shellConfig;
-    if (config != null && !_isPhone) {
-      unawaited(
-        showDesktopSettingsModal(
-          context,
-          config: config,
-          initialSectionId: 'model',
-        ),
-      );
-      return;
-    }
+    _openChatModel(_selectedThreadKey);
+  }
+
+  void _openChatModel(String chatKey) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (context) => const ModelSelectorPage()),
+      MaterialPageRoute<void>(
+        builder: (context) => ModelSelectorPage(chatId: chatKey),
+      ),
+    );
+  }
+
+  void _openChatFiles(String chatKey, String name) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatDocumentsPanel(
+          sessionKey: chatKey,
+          coworkerName: name,
+          controller: _controller.value,
+          fullPage: true,
+        ),
+      ),
     );
   }
 
@@ -424,7 +527,8 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
 
           return Scaffold(
             key: _scaffoldKey,
-            endDrawer: _buildControlDrawer(context),
+            endDrawer: phone ? null : _buildControlDrawer(context),
+            endDrawerEnableOpenDragGesture: !phone,
             body: phone
                 ? _buildPhoneBody(context, agent)
                 : _buildDesktopBody(context, width, agent),
@@ -544,7 +648,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
             width: kMenuButtonHeight,
             height: kButtonVisualHeight,
             child: IconButton(
-              icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
+              icon: AppIcon(Icons.menu_rounded, color: iconFg, size: 24),
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.standard,
               constraints: const BoxConstraints.tightFor(
@@ -587,7 +691,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
           width: kMenuButtonHeight,
           height: kButtonVisualHeight,
           child: IconButton(
-            icon: Icon(icon, color: iconFg, size: 24),
+            icon: AppIcon(icon, color: iconFg, size: 24),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.standard,
             constraints: const BoxConstraints.tightFor(
@@ -674,7 +778,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.groups_outlined, color: iconFg),
+                  AppIcon(Icons.groups_outlined, color: iconFg),
                   const SizedBox(width: 12),
                   Text(
                     'Control Rooms',
@@ -686,7 +790,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: Icon(Icons.close, color: iconFg),
+                    icon: AppIcon(Icons.close, color: iconFg),
                     onPressed: _closePanel,
                     tooltip: 'Close',
                   ),
@@ -709,49 +813,62 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// (see the library doc), so it may never be unmounted; and the inbox keeps
   /// its search and filter while a chat is open. Opening a chat therefore does
   /// not swap one widget for another — it drives ONE progress value, and the two
-  /// layers slide and fade past each other on it, which is the shared-axis
-  /// motion of the reference messenger without a second thread view.
+  /// layers slide past each other on it, which is the shared-axis motion of the
+  /// reference messenger without a second thread view.
+  ///
+  /// The motion is a messenger push: the thread travels the full width in from
+  /// the right over the inbox, and the inbox walks a third of that distance to
+  /// the left and darkens under it, so it reads as the page underneath rather
+  /// than as a second page leaving. Back plays the same thing backwards. The
+  /// thread carries the scaffold colour with it, because chuk's phone screen is
+  /// a transparent `Scaffold` and would otherwise let the inbox show through it
+  /// mid-travel.
   Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
     final bool showChat = _showThreadOnNarrow && agent != null;
     final double width = MediaQuery.sizeOf(context).width;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(end: showChat ? 1 : 0),
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
+      // The app's curve for what cannot take a spring: it leaves fast and
+      // settles slowly (ui/expressive/motion.dart).
+      curve: kExpressiveDecelerate,
       builder: (BuildContext context, double t, Widget? _) {
+        final double p = t.clamp(0.0, 1.0);
         final Widget chatLayer = agent == null
             // No coworker selected: the thread view still has to exist, because
             // it is what builds the transport.
             ? Offstage(child: _buildThread(phone: true))
             : Offstage(
-                offstage: t == 0,
-                child: Opacity(
-                  opacity: t.clamp(0.0, 1.0),
-                  child: Transform.translate(
-                    offset: Offset((1 - t) * width * 0.16, 0),
+                offstage: p == 0,
+                child: Transform.translate(
+                  offset: Offset((1 - p) * width, 0),
+                  child: ColoredBox(
+                    color: Theme.of(context).scaffoldBackgroundColor,
                     child: MobileChatScreen(
+                      active: showChat,
                       agent: agent,
                       onBack: () => setState(() => _showThreadOnNarrow = false),
                       // The pill opens the coworker's profile, like a messenger
                       // contact header. The controls moved into the profile and
                       // the "more" sheet.
                       onOpenProfile: () => _openAgentProfile(agent),
-                      // Same gate as the desktop row: no chip until the agent
-                      // has a browser.
-                      onOpenBrowser: _browserOpen ? _openBrowserView : null,
-                      onMore: () => MobileAgentSheet.show(
-                        context,
-                        agent: agent,
-                        onControls: _openControlDrawer,
-                        onProfile: () => _openAgentProfile(agent),
-                        onRename: () => _openAgentRename(agent),
-                        onRooms: _openRooms,
-                        onCopyChat: _copyFullChat,
-                        onSettings: _openSettings,
-                        onSignOut:
-                            widget.onSignOut ??
-                            () => const AuthService().signOut(),
-                      ),
+                      // The target is always there. Lit when a screen is
+                      // open, parked when none is — and a parked tap says why
+                      // instead of doing nothing (bead cowork-egrg).
+                      onOpenBrowser: _browserOpen
+                          ? _openBrowserView
+                          : _explainNoScreen,
+                      browserAvailable: _browserOpen,
+                      onReconnect: () {
+                        final view = _threadViewKey.currentState;
+                        if (view is CoworkThreadViewState) {
+                          unawaited(view.reconnect());
+                        }
+                      },
+                      onOpenFiles: () =>
+                          _openChatFiles(_selectedThreadKey, agent.name),
                       bodyBuilder: (BuildContext context, double topInset) =>
                           _buildThread(topInset: topInset, phone: true),
                     ),
@@ -761,36 +878,65 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
 
         return Stack(
           children: [
-            Positioned.fill(child: chatLayer),
+            // The inbox is underneath: the thread travels over it, the way a
+            // pushed page covers the page it came from.
             Positioned.fill(
               child: Offstage(
-                offstage: t == 1,
+                offstage: p == 1,
                 child: IgnorePointer(
-                  ignoring: t > 0.5,
-                  child: Opacity(
-                    opacity: (1 - t).clamp(0.0, 1.0),
-                    child: Transform.translate(
-                      offset: Offset(-t * width * 0.16, 0),
-                      child: MobileAgentList(
-                        source: _roster,
-                        selectedAgentId: _selectedAgentId,
-                        onSelect: _select,
-                        selectedThreadKey: _selectedThreadKey,
-                        onAddAgent: _openOnboarding,
-                        onOpenAccount: _openSettings,
-                        onOpenProfile: _openAgentProfile,
-                        onRenameAgent: _openAgentRename,
-                        onDeleteAgent: (CoworkAgent target) =>
-                            _deleteAgent(target.id),
-                        readMarks: _readMarks,
-                        profiles: _agentProfiles,
-                        accountLabel: null,
-                      ),
+                  ignoring: p > 0.5,
+                  child: Transform.translate(
+                    offset: Offset(-p * width * 0.3, 0),
+                    child: Stack(
+                      // The inbox keeps the tight constraints it had before the
+                      // scrim was stacked on top of it.
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        // The home is four places now, not one list
+                        // (docs/DESIGN.md): chats, artefacts, files, settings.
+                        MobileHome(
+                          roster: _roster,
+                          controller: _controller.value,
+                          readMarks: _readMarks,
+                          profiles: _agentProfiles,
+                          chats: MobileAgentList(
+                            source: _roster,
+                            selectedAgentId: _selectedAgentId,
+                            onSelect: _select,
+                            selectedThreadKey: _selectedThreadKey,
+                            onAddAgent: _openOnboarding,
+                            onOpenAccount: _openSettings,
+                            onOpenProfile: _openAgentProfile,
+                            onRenameAgent: _openAgentRename,
+                            onDeleteAgent: (CoworkAgent target) =>
+                                _deleteAgent(target.id),
+                            readMarks: _readMarks,
+                            profiles: _agentProfiles,
+                            accountLabel: null,
+                          ),
+                          settings: widget.shellConfig == null
+                              ? const SizedBox.shrink()
+                              : SettingsPage(config: widget.shellConfig!),
+                        ),
+                        // The scrim of a page that has been covered. It is a
+                        // neutral dim, it belongs to the travel, and it is
+                        // gone the moment the thread closes — not a tint on a
+                        // surface (docs/DESIGN.md).
+                        if (p > 0)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.32 * p),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
+            Positioned.fill(child: chatLayer),
           ],
         );
       },

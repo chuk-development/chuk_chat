@@ -17,6 +17,5 @@ class WorkspaceManagementPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) =>
-      const ComingSoonPage(title: 'Projects');
+  Widget build(BuildContext context) => const ComingSoonPage(title: 'Projects');
 }

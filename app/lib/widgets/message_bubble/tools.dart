@@ -82,7 +82,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
       padding: const EdgeInsets.only(top: 2, bottom: 2),
       child: Row(
         children: [
-          Icon(Icons.smart_toy_outlined, size: 13, color: muted),
+          AppIcon(Icons.smart_toy_outlined, size: 13, color: muted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -252,7 +252,13 @@ extension _MessageBubbleTools on _MessageBubbleState {
                   t.status == ToolCallStatus.pending,
             ));
 
-    final steps = contentBlockTimeline == null
+    final hideReasoning =
+        widget.messengerMode && widget.showReasoningTokens != true;
+    final steps = hideReasoning
+        ? <AgentActivityStep>[
+            for (final call in toolCalls) AgentActivityStep.tool(call),
+          ]
+        : contentBlockTimeline == null
         ? null
         : <AgentActivityStep>[
             for (final entry in contentBlockTimeline)
@@ -397,9 +403,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
         style: TextStyle(
           fontSize: 12,
           fontStyle: FontStyle.italic,
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.6),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       );
     }

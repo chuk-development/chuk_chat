@@ -46,9 +46,7 @@ class RoomThreadView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[
-      _userMessage(context),
-    ];
+    final children = <Widget>[_userMessage(context)];
 
     int? lastRound;
     for (final turn in turns) {
@@ -65,10 +63,7 @@ class RoomThreadView extends StatelessWidget {
       children.add(_stopFooter(context, stop!));
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: children,
-    );
+    return ListView(padding: const EdgeInsets.all(12), children: children);
   }
 
   Widget _userMessage(BuildContext context) {
@@ -133,7 +128,9 @@ class RoomThreadView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
               'Round $round',
-              style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.hintColor,
+              ),
             ),
           ),
           const Expanded(child: Divider()),

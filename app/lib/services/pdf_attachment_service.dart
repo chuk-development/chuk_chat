@@ -15,7 +15,8 @@ class PdfAttachmentService {
   /// Kept for signature compatibility. Nothing is uploaded anywhere.
   static const String bucketName = 'images';
 
-  static Uint8List? getCached(String path) => ImageStorageService.getCached(path);
+  static Uint8List? getCached(String path) =>
+      ImageStorageService.getCached(path);
 
   static void clearFromCache(String path) =>
       ImageStorageService.clearFromCache(path);

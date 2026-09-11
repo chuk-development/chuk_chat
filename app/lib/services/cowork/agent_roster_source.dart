@@ -8,6 +8,11 @@
 /// marks an app-created agent as not installed on the host ([CoworkAgent.onHost]
 /// false) rather than pretending it is live.
 ///
+/// It IS persisted, through [AgentRosterStore] — as a cache of host truth, not
+/// as a second truth. See that file for the rules; the short version is that a
+/// received `agent_list` rewrites the snapshot wholesale and a deleted coworker
+/// can never come back.
+///
 /// [AgentRosterSource] is the seam a later milestone points at the host's real
 /// roster; [LocalAgentRosterSource] is the implementation the app ships with
 /// today.
@@ -20,11 +25,22 @@ import 'package:flutter/foundation.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart'
     show CoworkHostAgentName;
+import 'package:cowork/services/cowork/agent_roster_store.dart';
 import 'package:cowork/services/cowork/schedule_spec.dart';
 
 /// Read/write access to the roster, as a [ChangeNotifier] the UI listens to.
 abstract class AgentRosterSource extends ChangeNotifier {
   List<CoworkAgent> get agents;
+
+  /// Reads whatever this device remembers of the roster, so the shell can land
+  /// on the remembered coworker before the socket exists. The default is a
+  /// no-op: a source that keeps nothing on disk is already loaded.
+  Future<void> load() async {}
+
+  /// The ids the user deleted on this device, across launches. Fed into
+  /// [applyHostNames]' `ignore` set, because delete is not on the wire yet and
+  /// the host keeps listing a coworker the user removed.
+  Set<String> get deletedIds => const <String>{};
 
   /// The ids the user has hidden from the roster (§16.1). Hiding is a view
   /// preference, not a delete: the agent, its threads and any live run stay
@@ -32,12 +48,16 @@ abstract class AgentRosterSource extends ChangeNotifier {
   Set<String> get hiddenIds;
 
   /// The agents that show in the roster — [agents] minus [hiddenIds].
-  List<CoworkAgent> get visibleAgents =>
-      <CoworkAgent>[for (final a in agents) if (!hiddenIds.contains(a.id)) a];
+  List<CoworkAgent> get visibleAgents => <CoworkAgent>[
+    for (final a in agents)
+      if (!hiddenIds.contains(a.id)) a,
+  ];
 
   /// The agents the user has hidden, in roster order.
-  List<CoworkAgent> get hiddenAgents =>
-      <CoworkAgent>[for (final a in agents) if (hiddenIds.contains(a.id)) a];
+  List<CoworkAgent> get hiddenAgents => <CoworkAgent>[
+    for (final a in agents)
+      if (hiddenIds.contains(a.id)) a,
+  ];
 
   /// Hides [id] from the roster. A no-op for an unknown or already-hidden id.
   void hideAgent(String id);
@@ -91,19 +111,62 @@ abstract class AgentRosterSource extends ChangeNotifier {
   void removeAgent(String id);
 }
 
-/// In-memory roster.
+/// The roster the app ships with, kept in memory and cached on disk.
 ///
-/// Deliberately not persisted: the durable roster lives on the host, and the
-/// host does not serve one yet. Writing a local copy to disk would only create a
-/// second truth to reconcile later.
+/// The durable roster lives on the host. What is written here is a CACHE of it
+/// ([AgentRosterStore]): it exists so the first frame of a cold start already
+/// has coworkers, and it is overwritten wholesale the moment the host sends its
+/// `agent_list`. It is never allowed to outvote the host, and a coworker the
+/// user deleted is remembered as deleted so a host list cannot bring it back.
 class LocalAgentRosterSource extends AgentRosterSource {
-  LocalAgentRosterSource({List<CoworkAgent> seed = const <CoworkAgent>[], Random? random})
-      : _agents = List<CoworkAgent>.of(seed),
-        _random = random ?? Random();
+  LocalAgentRosterSource({
+    List<CoworkAgent> seed = const <CoworkAgent>[],
+    Random? random,
+    AgentRosterStore? store,
+  }) : _agents = List<CoworkAgent>.of(seed),
+       _random = random ?? Random(),
+       _store = store ?? AgentRosterStore.instance;
 
   final List<CoworkAgent> _agents;
   final Random _random;
+  final AgentRosterStore _store;
   final Set<String> _hidden = <String>{};
+  final Set<String> _deleted = <String>{};
+  bool _loaded = false;
+
+  @override
+  Set<String> get deletedIds => Set<String>.unmodifiable(_deleted);
+
+  /// Reads the cached roster. Safe to call more than once; an agent already in
+  /// memory wins over its stored copy, so a load that lands after a pairing
+  /// cannot undo [ensureHostAgent].
+  @override
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    final AgentRosterSnapshot snapshot = await _store.load();
+    _deleted.addAll(snapshot.deleted);
+    var changed = false;
+    for (final CoworkAgent agent in snapshot.agents) {
+      if (_deleted.contains(agent.id)) continue;
+      if (_indexOf(agent.id, orNull: true) >= 0) continue;
+      _agents.add(agent);
+      changed = true;
+    }
+    for (final String id in snapshot.hidden) {
+      if (_indexOf(id, orNull: true) < 0) continue;
+      if (_hidden.add(id)) changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// Writes the roster back to the cache. Called after every change that alters
+  /// what a cold start should show. The write itself is coalesced and runs in
+  /// the background — nothing the user sees waits on it.
+  void _persist() {
+    _store.saveRoster(_agents, _hidden);
+    _store.saveDeleted(_deleted);
+  }
 
   @override
   List<CoworkAgent> get agents => List<CoworkAgent>.unmodifiable(_agents);
@@ -114,12 +177,16 @@ class LocalAgentRosterSource extends AgentRosterSource {
   @override
   void hideAgent(String id) {
     if (byId(id) == null) return;
-    if (_hidden.add(id)) notifyListeners();
+    if (!_hidden.add(id)) return;
+    _persist();
+    notifyListeners();
   }
 
   @override
   void unhideAgent(String id) {
-    if (_hidden.remove(id)) notifyListeners();
+    if (!_hidden.remove(id)) return;
+    _persist();
+    notifyListeners();
   }
 
   @override
@@ -151,6 +218,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       ],
     );
     _agents.insert(0, agent);
+    _persist();
     notifyListeners();
     return agent;
   }
@@ -163,7 +231,8 @@ class LocalAgentRosterSource extends AgentRosterSource {
     ScheduleSpec? schedule,
     List<String> attachmentNames = const <String>[],
   }) {
-    final id = 'local:${name.trim()}:${_agents.length}:${_random.nextInt(1 << 30)}';
+    final id =
+        'local:${name.trim()}:${_agents.length}:${_random.nextInt(1 << 30)}';
     final agent = CoworkAgent(
       id: id,
       name: name.trim(),
@@ -178,6 +247,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       ],
     );
     _agents.add(agent);
+    _persist();
     notifyListeners();
     return agent;
   }
@@ -189,6 +259,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
     final index = _indexOf(id, orNull: true);
     if (index < 0 || _agents[index].name == trimmed) return;
     _agents[index] = _agents[index].copyWith(name: trimmed);
+    _persist();
     notifyListeners();
   }
 
@@ -214,14 +285,22 @@ class LocalAgentRosterSource extends AgentRosterSource {
       // The host agent is created by [ensureHostAgent] on pairing, never from
       // a list: a name for a host that is not paired has nowhere to go.
       if (entry.host) continue;
-      _agents.add(CoworkAgent(
-        id: id,
-        name: entry.name,
-        threads: <CoworkThreadInfo>[CoworkThreadInfo(key: id, title: 'General')],
-      ));
+      _agents.add(
+        CoworkAgent(
+          id: id,
+          name: entry.name,
+          threads: <CoworkThreadInfo>[
+            CoworkThreadInfo(key: id, title: 'General'),
+          ],
+        ),
+      );
       changed = true;
     }
-    if (changed) notifyListeners();
+    if (!changed) return;
+    // The host has spoken: the cache is rewritten from what the roster holds
+    // now, so the snapshot can never outvote the next launch's `agent_list`.
+    _persist();
+    notifyListeners();
   }
 
   @override
@@ -241,7 +320,9 @@ class LocalAgentRosterSource extends AgentRosterSource {
       lastActivity: when,
       threads: <CoworkThreadInfo>[
         for (final thread in agent.threads)
-          thread.key == threadKey ? thread.copyWith(lastActivity: when) : thread,
+          thread.key == threadKey
+              ? thread.copyWith(lastActivity: when)
+              : thread,
       ],
     );
     notifyListeners();
@@ -262,7 +343,13 @@ class LocalAgentRosterSource extends AgentRosterSource {
     // Drop any hidden mark too: an id that returns later must not inherit a
     // stale "hidden" state from an agent that no longer exists.
     final wasHidden = _hidden.remove(id);
-    if (_agents.length != before || wasHidden) notifyListeners();
+    final existed = _agents.length != before;
+    // Remembered for good: delete has no wire frame yet, so the host keeps
+    // listing this coworker and every later `agent_list` has to skip it.
+    final newlyDeleted = existed && _deleted.add(id);
+    if (!existed && !wasHidden && !newlyDeleted) return;
+    _persist();
+    notifyListeners();
   }
 
   int _indexOf(String agentId, {bool orNull = false}) {
@@ -283,17 +370,57 @@ class AgentNameGenerator {
   final Random? _random;
 
   static const List<String> adjectives = <String>[
-    'amber', 'cobalt', 'crimson', 'azure', 'olive', 'violet', 'teal',
-    'scarlet', 'indigo', 'coral', 'jade', 'russet', 'slate', 'copper',
-    'ivory', 'onyx', 'saffron', 'sable', 'bronze', 'cerulean', 'sienna',
-    'pewter', 'lilac', 'ochre', 'brisk', 'quiet', 'swift', 'clever',
-    'steady', 'keen',
+    'amber',
+    'cobalt',
+    'crimson',
+    'azure',
+    'olive',
+    'violet',
+    'teal',
+    'scarlet',
+    'indigo',
+    'coral',
+    'jade',
+    'russet',
+    'slate',
+    'copper',
+    'ivory',
+    'onyx',
+    'saffron',
+    'sable',
+    'bronze',
+    'cerulean',
+    'sienna',
+    'pewter',
+    'lilac',
+    'ochre',
+    'brisk',
+    'quiet',
+    'swift',
+    'clever',
+    'steady',
+    'keen',
   ];
 
   static const List<String> nouns = <String>[
-    'otter', 'falcon', 'heron', 'lynx', 'marten', 'raven', 'badger',
-    'ferret', 'osprey', 'ibis', 'stoat', 'kestrel', 'weasel', 'plover',
-    'shrike', 'tern', 'vole', 'wren',
+    'otter',
+    'falcon',
+    'heron',
+    'lynx',
+    'marten',
+    'raven',
+    'badger',
+    'ferret',
+    'osprey',
+    'ibis',
+    'stoat',
+    'kestrel',
+    'weasel',
+    'plover',
+    'shrike',
+    'tern',
+    'vole',
+    'wren',
   ];
 
   /// A fresh name, avoiding any already in [taken] when it can.
@@ -301,7 +428,8 @@ class AgentNameGenerator {
     final random = _random ?? Random();
     final used = taken.toSet();
     for (var attempt = 0; attempt < 32; attempt++) {
-      final name = '${adjectives[random.nextInt(adjectives.length)]}-'
+      final name =
+          '${adjectives[random.nextInt(adjectives.length)]}-'
           '${nouns[random.nextInt(nouns.length)]}';
       if (!used.contains(name)) return name;
     }

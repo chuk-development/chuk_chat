@@ -41,9 +41,9 @@ class ChukMcpRow {
 
   /// chuk's blob shape, for the write-back.
   Map<String, dynamic> toBlob() => <String, dynamic>{
-        'connection': connection,
-        'secrets': secrets,
-      };
+    'connection': connection,
+    'secrets': secrets,
+  };
 
   /// Parses one decrypted blob. Null when it is not chuk's shape or the
   /// connection inside names a different id than the row (a foreign or
@@ -58,7 +58,9 @@ class ChukMcpRow {
     return ChukMcpRow(
       id: id,
       connection: connection,
-      secrets: rawSecrets is Map ? rawSecrets.map((k, v) => MapEntry('$k', v)) : null,
+      secrets: rawSecrets is Map
+          ? rawSecrets.map((k, v) => MapEntry('$k', v))
+          : null,
     );
   }
 }
@@ -148,16 +150,14 @@ class ChukMcpSync implements ChukMcpMirror {
       final user = SupabaseService.auth.currentUser;
       if (user == null) return;
       if (!await _ensureEncryptionKey()) return;
-      final ciphertext =
-          await EncryptionService.encrypt(jsonEncode(row.toBlob()));
-      await SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          columnUserId: user.id,
-          columnServiceName: serviceName(row.id),
-          columnEncryptedData: ciphertext,
-        },
-        onConflict: '$columnUserId,$columnServiceName',
+      final ciphertext = await EncryptionService.encrypt(
+        jsonEncode(row.toBlob()),
       );
+      await SupabaseService.client.from(table).upsert(<String, dynamic>{
+        columnUserId: user.id,
+        columnServiceName: serviceName(row.id),
+        columnEncryptedData: ciphertext,
+      }, onConflict: '$columnUserId,$columnServiceName');
     } catch (error) {
       if (kDebugMode) debugPrint('⚠️ [ChukMcpSync] save skipped: $error');
     }

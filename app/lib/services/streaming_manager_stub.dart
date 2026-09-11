@@ -201,7 +201,12 @@ class StreamingManager {
             : activeStream.phase,
     };
 
-    if (event is ContentEvent) {
+    if (event is FinalContentEvent) {
+      activeStream.contentBuffer
+        ..clear()
+        ..write(event.text);
+      onUpdate(event.text, activeStream.reasoningBuffer.toString());
+    } else if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
       final content = activeStream.contentBuffer.toString();
       onUpdate(content, activeStream.reasoningBuffer.toString());

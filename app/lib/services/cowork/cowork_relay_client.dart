@@ -45,6 +45,7 @@ import 'package:cowork/services/cowork/cowork_reconnect.dart';
 import 'package:cowork/services/cowork/cowork_controller_session.dart';
 import 'package:cowork/services/executor_provisioning.dart';
 import 'package:cowork/services/herenow/herenow_store.dart';
+import 'package:cowork/services/mcp/mcp_probe_control.dart';
 import 'package:cowork/services/mcp/mcp_service.dart';
 import 'package:cowork/services/mcp/mcp_store.dart';
 import 'package:cowork/services/session_refresh_scheduler.dart';
@@ -165,8 +166,14 @@ sealed class CoworkRelayInbound {
 
 /// An assistant text delta.
 class CoworkRelayDelta extends CoworkRelayInbound {
-  const CoworkRelayDelta(this.text, {this.replay = false, this.mid});
+  const CoworkRelayDelta(
+    this.text, {
+    this.replay = false,
+    this.mid,
+    this.sentAt,
+  });
   final String text;
+  final DateTime? sentAt;
 
   /// True when this delta is part of a transcript replay, not a live run. The
   /// UI renders it as history: no streaming caret, no running spinner.
@@ -185,8 +192,9 @@ class CoworkRelayDelta extends CoworkRelayInbound {
 /// live client wrote it locally; a reconnecting or reinstalled client did not,
 /// so replay must carry both sides of the thread. [replay] is always true here.
 class CoworkRelayUser extends CoworkRelayInbound {
-  const CoworkRelayUser(this.text, {this.replay = true, this.mid});
+  const CoworkRelayUser(this.text, {this.replay = true, this.mid, this.sentAt});
   final String text;
+  final DateTime? sentAt;
 
   /// Always true: a user event exists only in a replay stream.
   final bool replay;
@@ -203,8 +211,14 @@ class CoworkRelayUser extends CoworkRelayInbound {
 /// WIRE_CONTRACT.md; landed by session b5, HANDOVER_2026-09-05_REASONING_
 /// TOOLFRAMES.md) whenever the model's reasoning effort is on.
 class CoworkRelayReasoning extends CoworkRelayInbound {
-  const CoworkRelayReasoning(this.text, {this.replay = false, this.mid});
+  const CoworkRelayReasoning(
+    this.text, {
+    this.replay = false,
+    this.mid,
+    this.sentAt,
+  });
   final String text;
+  final DateTime? sentAt;
 
   /// True when this is a stored turn re-streamed by a replay, not the model
   /// thinking right now. Without it the adapter cannot tell the two apart and
@@ -517,6 +531,7 @@ class CoworkRelayRunState extends CoworkRelayInbound {
     this.startedAt,
     this.prompt,
     this.browserOpen,
+    this.vncAvailable = false,
   });
 
   /// Builds a run state from a decoded `run_state` payload, or null when the
@@ -537,6 +552,7 @@ class CoworkRelayRunState extends CoworkRelayInbound {
       startedAt: startedAt is num ? startedAt.toDouble() : null,
       prompt: prompt is String ? prompt : null,
       browserOpen: browserOpen is bool ? browserOpen : null,
+      vncAvailable: payload['vnc_available'] == true,
     );
   }
 
@@ -560,6 +576,7 @@ class CoworkRelayRunState extends CoworkRelayInbound {
   /// Whether the agent has a browser open, as the host sees it (Bead
   /// cowork-vzm, `browser_open`). Null on a host that does not send it.
   final bool? browserOpen;
+  final bool vncAvailable;
 
   /// True when a run for [sessionKey] is in flight on the host.
   bool get isRunning => state == 'running';
@@ -925,12 +942,14 @@ class CoworkRelayBrowserView extends CoworkRelayInbound {
     required this.status,
     this.message = '',
     this.password,
+    this.vncAvailable = false,
   });
   final String status;
   final String message;
 
   /// Per-view VNC secret, only on `started` (§9.1 hardening). Never log it.
   final String? password;
+  final bool vncAvailable;
 }
 
 /// The executor is asking the user to approve one here.now publish before it
@@ -1310,7 +1329,8 @@ class CoworkRelayClient
         CoworkAutomationControl,
         CoworkDocumentsControl,
         CoworkAgentStatusControl,
-        CoworkSkillsControl {
+        CoworkSkillsControl,
+        McpProbeControl {
   CoworkRelayClient({
     required String deviceId,
     required SimpleKeyPair signingKeyPair,
@@ -1368,6 +1388,13 @@ class CoworkRelayClient
   @visibleForTesting
   static Future<int> Function(Map<String, dynamic> payload) mcpCredentialsSink =
       McpService.applyRotatedCredentials;
+
+  /// Where an `mcp_tools` frame is applied. Same seam as the credentials sink,
+  /// for the same reason: the app cannot discover an MCP server's tools itself,
+  /// the host reports them, and a test must be able to assert the frame without
+  /// the app-wide store.
+  static Future<int> Function(Map<String, dynamic> payload) mcpToolsSink =
+      McpService.applyToolsFrame;
 
   /// The user's here.now publishing setting. When the connector is enabled, each
   /// task frame carries `{enabled, approval}` under `herenow`, so the executor
@@ -2233,6 +2260,15 @@ class CoworkRelayClient
       _sendFramePayload(<String, dynamic>{'type': 'skills_list'});
 
   @override
+  Future<void> probeMcpServers(List<Map<String, dynamic>> servers) =>
+      // Answered with one terminal `mcp_tools` frame, like a skills list
+      // (docs/WIRE_CONTRACT.md, "mcp_probe").
+      _sendFramePayload(<String, dynamic>{
+        'type': 'mcp_probe',
+        'mcp_servers': servers,
+      });
+
+  @override
   Future<void> requestAgentStatus(String sessionKey) =>
       // Answered with one terminal `agent_status` frame, like a skills list
       // (docs/WIRE_CONTRACT.md, "Agent status").
@@ -2483,16 +2519,37 @@ class CoworkRelayClient
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
-        _inbound.add(CoworkRelayDelta('$text', replay: replay, mid: mid));
+        _inbound.add(
+          CoworkRelayDelta(
+            '$text',
+            replay: replay,
+            mid: mid,
+            sentAt: epochSecondsToDateTime(payload['created_at']),
+          ),
+        );
       case 'user':
         // Only a replay carries the user's own turn back (the live client wrote
         // it locally). Surfaced so a reconnected/reinstalled client rebuilds both
         // sides of the thread.
         final text = payload['text'] ?? payload['content'] ?? '';
-        _inbound.add(CoworkRelayUser('$text', replay: replay, mid: mid));
+        _inbound.add(
+          CoworkRelayUser(
+            '$text',
+            replay: replay,
+            mid: mid,
+            sentAt: epochSecondsToDateTime(payload['created_at']),
+          ),
+        );
       case 'reasoning':
         final text = payload['text'] ?? payload['reasoning'] ?? '';
-        _inbound.add(CoworkRelayReasoning('$text', replay: replay, mid: mid));
+        _inbound.add(
+          CoworkRelayReasoning(
+            '$text',
+            replay: replay,
+            mid: mid,
+            sentAt: epochSecondsToDateTime(payload['created_at']),
+          ),
+        );
       case 'tool':
         _inbound.add(CoworkRelayTool.fromPayload(payload));
       case 'file':
@@ -2512,6 +2569,7 @@ class CoworkRelayClient
             status: '${payload['status'] ?? 'error'}',
             message: '${payload['message'] ?? ''}',
             password: payload['password'] as String?,
+            vncAvailable: payload['vnc_available'] == true,
           ),
         );
       case 'approval_request':
@@ -2578,6 +2636,10 @@ class CoworkRelayClient
       case 'account_session_rotated':
         // The host rotated the session while the app was away: adopt and ack.
         unawaited(_adoptRotatedSession(payload));
+      case 'mcp_tools':
+        // What the host's connectors answered with. Not surfaced either: the
+        // list simply stops claiming a working server has no tools.
+        unawaited(mcpToolsSink(payload));
       case 'mcp_credentials':
         // Not rendered and not surfaced: the user did nothing and has nothing
         // to decide. It only has to land in the keychain and the mirror before

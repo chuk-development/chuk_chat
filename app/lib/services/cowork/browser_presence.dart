@@ -4,36 +4,29 @@ import 'package:flutter/foundation.dart';
 
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 
-/// Whether the current live run is using the agent's browser.
+/// Whether the host explicitly offers a viewable sandbox browser.
 ///
-/// The agent's browser is the Playwright MCP server inside its sandbox
-/// (`cowork-browser-mcp`): Chromium comes up on the first `browser_*` tool and
-/// goes away on `browser_close`. Every one of those calls reaches the app as a
-/// `tool` frame (docs/WIRE_CONTRACT.md, "Tool events and timestamps") — so
-/// the app can follow live browser use without polling:
+/// An active relay and `vnc_available: true` on a live browser-view event or a
+/// replay header are required. Browser tool names are insufficient: the user's
+/// extension browser uses those same names but has no VNC display. Missing
+/// capability (including old hosts) fails closed.
 ///
-/// * a live `mcp__playwright__browser_<x>` tool (or a `tool_call` wrapper
-///   naming one) means a page is open;
-/// * a completed `browser_close` means it is gone;
-/// * the executor's own `browser_view` verdicts refine that: `started` with an
-///   empty message = a window is on the display, `started` with the "no page
-///   open yet" message or the "no browser open yet" error = nothing to show;
-/// * a current host says it outright: `browser_view` `opened` / `closed`
-///   pushed on every change, and `browser_open` in every `run_state` (the
-///   replay header), which wins over anything derived here.
-///
-/// Historical tools never make the browser available. A reconnect uses the
-/// current run-state header, and a live run ending hides the entry point even
-/// when Chromium remains open in the sandbox. Opening the viewer stays an
-/// explicit user action, so a tool call cannot interrupt reading the chat.
+/// The state follows the BROWSER, not the run (bead cowork-tf1u). A coworker
+/// that finishes its turn leaves its Chromium open and says so — "the browser
+/// is open, you can take it over" — and that is exactly the moment the user
+/// reaches for the screen target. Treating the run's `done` as "the screen is
+/// gone" made the target die one second after the coworker offered it. Only
+/// the host revokes: a completed `browser_close`, a `browser_view: closed`, a
+/// header that no longer advertises the browser, or the transport going away.
+/// VNC itself starts only when the user opens the viewer.
 class BrowserPresence extends ValueNotifier<bool> {
   BrowserPresence(this.controller) : super(false) {
     _sub = controller.inbound.listen(_onInbound);
+    controller.state.addListener(_onConnectionChanged);
   }
 
   final CoworkRelayController controller;
   StreamSubscription<CoworkRelayInbound>? _sub;
-  bool _runEnded = false;
 
   /// The tool-name prefix the agent's MCP client gives the Playwright server
   /// (`mcp__<server>__<tool>`, `cowork_agent.mcp_client.tool_name`).
@@ -76,10 +69,7 @@ class BrowserPresence extends ValueNotifier<bool> {
   static bool? stateFromTool(CoworkRelayTool tool) {
     final String name = effectiveName(tool);
     if (!isBrowserTool(name)) return null;
-    if (tool.replay ||
-        tool.failed ||
-        tool.status == 'error' ||
-        tool.status == 'failed') {
+    if (tool.replay || tool.failed || tool.status != 'completed') {
       return null;
     }
     return toolPart(name) != closeTool;
@@ -91,12 +81,12 @@ class BrowserPresence extends ValueNotifier<bool> {
     final String message = view.message.toLowerCase();
     switch (view.status) {
       case 'opened':
-        return true;
+        return view.vncAvailable;
       case 'closed':
         return false;
       case 'started':
       case 'live':
-        return !message.contains('no page open');
+        return view.vncAvailable && !message.contains('no page open');
       case 'error':
         if (message.contains('no browser open')) return false;
         return null;
@@ -106,34 +96,39 @@ class BrowserPresence extends ValueNotifier<bool> {
   }
 
   void _onInbound(CoworkRelayInbound event) {
-    if (event is CoworkRelayRunState) {
-      _runEnded = event.state != 'running';
-    } else if (event is CoworkRelayDone && !event.isReplay) {
-      _runEnded = true;
-    } else if (event is CoworkRelayTool && stateFromTool(event) == true) {
-      _runEnded = false;
-    }
+    // A retained socket/controller is not evidence of a reachable screen.
+    // Reconnection must obtain fresh presence from the host's replay header.
+    if (!controller.state.value.isPaired) return;
     final bool? next = switch (event) {
-      CoworkRelayTool() => stateFromTool(event),
-      CoworkRelayBrowserView() => _runEnded ? false : stateFromView(event),
-      // The host's word in the replay header (a current host; null on an old
-      // one, which leaves the derived state alone).
-      CoworkRelayRunState() =>
-        event.state == 'running' ? event.browserOpen : false,
-      CoworkRelayDone() => event.isReplay ? null : false,
+      // Tool names cannot distinguish a sandbox browser from user_browser.
+      // Only the host's explicit capability may enable the viewer, so a tool
+      // frame may close the screen but never open it.
+      CoworkRelayTool() => stateFromTool(event) == false ? false : null,
+      CoworkRelayBrowserView() => stateFromView(event),
+      // The header is the host's standing word on the browser, whether or not
+      // a run happens to be in flight. Old hosts, which advertise neither
+      // field, fail closed.
+      CoworkRelayRunState() => event.browserOpen == true && event.vncAvailable,
+      // A finished run says nothing about the browser: the coworker leaves the
+      // page open on purpose, so the user can take it over (bead cowork-tf1u).
+      CoworkRelayDone() => null,
       _ => null,
     };
     if (next != null && next != value) value = next;
   }
 
+  void _onConnectionChanged() {
+    if (!controller.state.value.isPaired) reset();
+  }
+
   /// Forget the state (a new pairing, a different coworker).
   void reset() {
-    _runEnded = false;
     if (value) value = false;
   }
 
   @override
   void dispose() {
+    controller.state.removeListener(_onConnectionChanged);
     _sub?.cancel();
     _sub = null;
     super.dispose();

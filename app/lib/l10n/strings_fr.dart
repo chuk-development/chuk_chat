@@ -14,22 +14,18 @@ const Map<String, String> stringsFr = {
   'toolCallingSubtitle':
       'Contrôler l\'utilisation, la découverte et l\'affichage des appels d\'outils',
   'developerOptions': 'Options développeur',
-  'developerOptionsSubtitle':
-      'Journaux de diagnostic et outils de débogage',
+  'developerOptionsSubtitle': 'Journaux de diagnostic et outils de débogage',
   'modelSelection': 'Sélection du modèle',
-  'modelSelectionSubtitle':
-      'Choisir et configurer vos modèles d\'IA',
+  'modelSelectionSubtitle': 'Choisir et configurer vos modèles d\'IA',
   'aiIdentityMemory': 'Identité et mémoire de l\'IA',
   'aiIdentityMemorySubtitle':
       'Âme, profil utilisateur, mémoire et prompt système',
   'pricingPlans': 'Tarifs',
-  'pricingPlansSubtitle':
-      'Consulter nos abonnements et nos tarifs',
+  'pricingPlansSubtitle': 'Consulter nos abonnements et nos tarifs',
   'accountSettings': 'Paramètres du compte',
   'accountSettingsSubtitle': 'Gérer votre profil et votre compte',
   'exportChats': 'Exporter les conversations',
-  'exportChatsSubtitle':
-      'Télécharger vos conversations au format JSON',
+  'exportChatsSubtitle': 'Télécharger vos conversations au format JSON',
   'about': 'À propos',
   'aboutSubtitle': 'Détails de version et licences open source',
   'logout': 'Déconnexion',
@@ -75,8 +71,7 @@ const Map<String, String> stringsFr = {
   'aiContextInfo':
       'Images récentes envoie les images des 6 derniers messages. Toutes les images envoie chaque image de la conversation. Raisonnement inclut le processus de réflexion de l\'IA comme contexte pour les messages suivants.',
   'chatTitles': 'Titres des conversations',
-  'autoGenerateTitles':
-      'Générer automatiquement les titres des conversations',
+  'autoGenerateTitles': 'Générer automatiquement les titres des conversations',
   'autoGenerateTitlesSubtitle':
       'Utiliser l\'IA pour générer des titres pour les nouvelles conversations',
   'titleGenerationPrompt': 'Prompt de génération de titre',
@@ -94,11 +89,9 @@ const Map<String, String> stringsFr = {
   'darkMode': 'Mode sombre',
   'darkModeSubtitle': 'Basculer entre le thème sombre et clair',
   'accentColor': 'Couleur d\'accentuation',
-  'accentColorSubtitle':
-      'Choisir votre couleur d\'accentuation principale',
+  'accentColorSubtitle': 'Choisir votre couleur d\'accentuation principale',
   'iconFgColor': 'Couleur des icônes/premier plan',
-  'iconFgColorSubtitle':
-      'Choisir la couleur des icônes et du texte principal',
+  'iconFgColorSubtitle': 'Choisir la couleur des icônes et du texte principal',
   'backgroundColor': 'Couleur de fond',
   'backgroundColorSubtitle':
       'Choisir la couleur de fond principale de l\'application',
@@ -123,11 +116,11 @@ const Map<String, String> stringsFr = {
   'toolArtifacts': 'Artéfacts',
   'toolArtifactsSubtitle': 'Code, documents et dessins modifiables',
   'toolCodeSandbox': 'Bac à sable de code',
-  'toolCodeSandboxSubtitle': 'Exécute du code et gère des fichiers dans un bac à sable',
+  'toolCodeSandboxSubtitle':
+      'Exécute du code et gère des fichiers dans un bac à sable',
   'toolGroupCodeArtifacts': 'Code et artéfacts',
   'connectors': 'Connecteurs',
-  'loadingToolSettings':
-      'Chargement des paramètres des outils...',
+  'loadingToolSettings': 'Chargement des paramètres des outils...',
   'noToolsRegistered': 'Aucun outil n\'est encore enregistré.',
   'catSearchWeb': 'Recherche et Web',
   'catUtilities': 'Utilitaires',
@@ -150,14 +143,12 @@ const Map<String, String> stringsFr = {
       'Accéder aux fonctionnalités de l\'appareil comme le GPS, le calendrier et les rappels',
   'catBashTerminalDesc':
       'Exécuter des commandes shell en bac à sable sur le bureau',
-  'catGitHubDesc':
-      'Accéder aux dépôts, issues, PRs et commits depuis GitHub',
+  'catGitHubDesc': 'Accéder aux dépôts, issues, PRs et commits depuis GitHub',
   'catSlackDesc':
       'Envoyer des messages, rechercher des canaux et récupérer des données Slack',
   'catGoogleCalGmailDesc':
       'Gérer votre emploi du temps et vos e-mails via Google Agenda et Gmail',
-  'catEmailImapSmtpDesc':
-      'Envoyer et recevoir des e-mails via IMAP et SMTP',
+  'catEmailImapSmtpDesc': 'Envoyer et recevoir des e-mails via IMAP et SMTP',
   'catNextcloudDesc':
       'Parcourir les fichiers, le calendrier et les contacts sur Nextcloud',
   'catSandboxDesc':
@@ -165,13 +156,11 @@ const Map<String, String> stringsFr = {
   'connect': 'Connecter',
   'disconnect': 'Déconnecter',
   'disconnectCategory': 'Déconnecter {label} ?',
-  'removeCredentialsWarning':
-      'Cela supprimera vos identifiants enregistrés.',
+  'removeCredentialsWarning': 'Cela supprimera vos identifiants enregistrés.',
   'cancel': 'Annuler',
   'categoryConnected': '{label} connecté',
   'failedToConnect': 'Échec de la connexion à {label}',
-  'unableToConnect':
-      'Impossible de connecter {label}. Veuillez réessayer.',
+  'unableToConnect': 'Impossible de connecter {label}. Veuillez réessayer.',
   'toolWebSearch': 'Recherche Web',
   'toolWebCrawl': 'Exploration Web',
   'toolImageGen': 'Génération d\'images',
@@ -193,12 +182,10 @@ const Map<String, String> stringsFr = {
   'toolUuidGen': 'Générateur d\'UUID',
   'toolNotes': 'Notes',
   'toolQrGen': 'Générateur de QR',
-  'resetToolSettingsTitle':
-      'Réinitialiser les paramètres des outils ?',
+  'resetToolSettingsTitle': 'Réinitialiser les paramètres des outils ?',
   'resetToolSettingsBody':
       'Cela réactivera tous les outils et réinitialisera tous les prompts d\'outils personnalisés.',
-  'resetAllToolPrefs':
-      'Réinitialiser toutes les préférences d\'outils',
+  'resetAllToolPrefs': 'Réinitialiser toutes les préférences d\'outils',
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Profil',
@@ -209,8 +196,7 @@ const Map<String, String> stringsFr = {
   'emailAddress': 'Adresse e-mail',
   'emailAddressHint': 'Où nous envoyons les notifications',
   'security': 'Sécurité',
-  'securitySubtitle':
-      'Assurez-vous que tout est bien protégé.',
+  'securitySubtitle': 'Assurez-vous que tout est bien protégé.',
   'changePassword': 'Changer le mot de passe',
   'changePasswordSubtitle':
       'Mettre à jour votre mot de passe Supabase et re-chiffrer vos conversations enregistrées.',
@@ -219,8 +205,7 @@ const Map<String, String> stringsFr = {
   'minCharsPassword': 'Minimum 8 caractères.',
   'confirmNewPassword': 'Confirmer le nouveau mot de passe',
   'updatePassword': 'Mettre à jour le mot de passe',
-  'encryptedChatRecovery':
-      'Récupération des conversations chiffrées',
+  'encryptedChatRecovery': 'Récupération des conversations chiffrées',
   'lockedChatsSingular':
       '{count} conversation chiffrée avec un ancien mot de passe.',
   'lockedChatsPlural':
@@ -232,21 +217,16 @@ const Map<String, String> stringsFr = {
   'deleteAccountWarning':
       'La suppression de votre compte annulera tous les abonnements, supprimera vos données et ne pourra pas être annulée.',
   'deleteAccount': 'Supprimer le compte',
-  'unableToLoadProfile':
-      'Impossible de charger votre profil pour le moment.',
+  'unableToLoadProfile': 'Impossible de charger votre profil pour le moment.',
   'retry': 'Réessayer',
   'saved': 'Enregistré',
   'emailUpdated':
       'E-mail mis à jour. Confirmez le changement en utilisant le lien envoyé par Supabase à {email}.',
-  'failedToLoadProfile':
-      'Échec du chargement du profil : {error}',
-  'failedToSaveProfile':
-      'Échec de l\'enregistrement du profil : {error}',
+  'failedToLoadProfile': 'Échec du chargement du profil : {error}',
+  'failedToSaveProfile': 'Échec de l\'enregistrement du profil : {error}',
   'emailCannotBeEmpty': 'L\'adresse e-mail ne peut pas être vide.',
-  'passwordsDoNotMatch':
-      'Les nouveaux mots de passe ne correspondent pas.',
-  'failedToChangePassword':
-      'Échec du changement de mot de passe : {error}',
+  'passwordsDoNotMatch': 'Les nouveaux mots de passe ne correspondent pas.',
+  'failedToChangePassword': 'Échec du changement de mot de passe : {error}',
   'deleteAccountQuestion': 'Supprimer le compte ?',
   'deleteAccountConfirmBody':
       'Êtes-vous sûr de vouloir supprimer votre compte ?\n\nCela supprimera définitivement :\n  \u2022 Toutes vos conversations et messages\n  \u2022 Toutes les mémoires enregistrées\n  \u2022 Votre profil et vos paramètres\n  \u2022 Tous les abonnements actifs\n\nCette action est irréversible. Vos données ne pourront pas être récupérées.',
@@ -261,17 +241,14 @@ const Map<String, String> stringsFr = {
       'Pour confirmer la suppression du compte, veuillez entrer votre mot de passe.',
   'password': 'Mot de passe',
   'passwordRequired': 'Le mot de passe est requis',
-  'verificationFailed':
-      'Échec de la vérification : {error}',
+  'verificationFailed': 'Échec de la vérification : {error}',
   'verifyAndDelete': 'Vérifier et supprimer',
-  'failedToDeleteAccount':
-      'Échec de la suppression du compte : {error}',
+  'failedToDeleteAccount': 'Échec de la suppression du compte : {error}',
 
   // ── System prompt / Identity page ──────────────────────────
   'identitySystem': 'Système d\'identité',
   'identityActive': 'Âme, utilisateur et mémoire sont actifs',
-  'identityDisabled':
-      'Désactivé \u2014 l\'IA n\'a pas d\'identité persistante',
+  'identityDisabled': 'Désactivé \u2014 l\'IA n\'a pas d\'identité persistante',
   'soul': 'Âme',
   'soulHint':
       'Définir la personnalité, le ton et les limites de l\'IA. Cela façonne sa façon de communiquer dans toutes les conversations.',
@@ -308,22 +285,15 @@ const Map<String, String> stringsFr = {
   'versionText': 'Version {version}',
   'updateAvailable':
       'Mise à jour disponible : v{version} \u2014 appuyez pour télécharger',
-  'versionUnavailable':
-      'Informations de version indisponibles.',
-  'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nTous droits réservés.',
+  'versionUnavailable': 'Informations de version indisponibles.',
+  'copyrightYear': '\u00a9 {year} Chuk Chat\nTous droits réservés.',
   'licenses': 'Licences',
-  'unableToLoadLicenses':
-      'Impossible de charger les licences.',
-  'tapToViewLicense':
-      'Appuyez pour voir le texte complet de la licence',
+  'unableToLoadLicenses': 'Impossible de charger les licences.',
+  'tapToViewLicense': 'Appuyez pour voir le texte complet de la licence',
   'devOptionsEnabled': 'Options développeur activées',
-  'devOptionsAlreadyEnabled':
-      'Options développeur déjà activées',
-  'devOptionsTapSingular':
-      'Encore {taps} appui pour les options développeur',
-  'devOptionsTapsPlural':
-      'Encore {taps} appuis pour les options développeur',
+  'devOptionsAlreadyEnabled': 'Options développeur déjà activées',
+  'devOptionsTapSingular': 'Encore {taps} appui pour les options développeur',
+  'devOptionsTapsPlural': 'Encore {taps} appuis pour les options développeur',
 
   // ── Pricing page ───────────────────────────────────────────
   'subscription': 'Abonnement',
@@ -339,13 +309,11 @@ const Map<String, String> stringsFr = {
   'manageBilling': 'Gérer la facturation',
   'manageBillingSubtitle':
       'Utilisez le portail de facturation pour annuler votre abonnement ou mettre à jour vos moyens de paiement.',
-  'subscribeToGetCredits':
-      'Abonnez-vous pour obtenir des crédits IA',
+  'subscribeToGetCredits': 'Abonnez-vous pour obtenir des crédits IA',
   'subscriptionDesktopOnly':
       'La gestion de l\'abonnement n\'est disponible que sur ordinateur.',
   'active': 'ACTIF',
-  'getCreditsMonthly':
-      'Obtenez 16\u00a0\u20ac de crédits IA par mois',
+  'getCreditsMonthly': 'Obtenez 16\u00a0\u20ac de crédits IA par mois',
   'accessAllModels': 'Accès à tous les modèles d\'IA',
   'imageGeneration': 'Génération d\'images',
   'voiceMode': 'Mode vocal',
@@ -355,11 +323,9 @@ const Map<String, String> stringsFr = {
   'immediateAccessAck':
       'Je souhaite un accès immédiat à Chuk Chat et reconnais perdre mon ',
   'rightOfWithdrawal': 'droit de rétractation',
-  'onceServiceBegins':
-      ' dès le début du service. J\'accepte les ',
+  'onceServiceBegins': ' dès le début du service. J\'accepte les ',
   'subscribeNow': 'S\'abonner maintenant',
-  'alreadySubscribed':
-      'Vous avez déjà un abonnement actif.',
+  'alreadySubscribed': 'Vous avez déjà un abonnement actif.',
   'opening': 'Ouverture...',
   'agreeToTermsFirst':
       'Veuillez accepter les conditions et reconnaître la perte du droit de rétractation.',
@@ -367,12 +333,10 @@ const Map<String, String> stringsFr = {
   // ── Login page ─────────────────────────────────────────────
   'welcomeToChukChat': 'Bienvenue sur Chuk Chat',
   'signInWithEmail': 'Connectez-vous avec votre e-mail',
-  'createAccountWithEmail':
-      'Créez un compte avec un e-mail et un mot de passe',
+  'createAccountWithEmail': 'Créez un compte avec un e-mail et un mot de passe',
   'supabaseNotConfigured':
       'Les identifiants Supabase ne sont pas configurés. Mettez-les à jour avant de lancer une version de production.',
-  'confirmEmailToContinue':
-      'Confirmez votre e-mail pour continuer',
+  'confirmEmailToContinue': 'Confirmez votre e-mail pour continuer',
   'confirmEmailBody':
       'Nous avons envoyé un lien de confirmation à votre adresse e-mail. Veuillez l\'ouvrir et cliquer sur le lien avant de vous connecter.',
   'howOthersSeeYou': 'Comment les autres vous verront',
@@ -381,43 +345,31 @@ const Map<String, String> stringsFr = {
   'confirmPassword': 'Confirmer le mot de passe',
   'forgotPassword': 'Mot de passe oublié ?',
   'enterYourPassword': 'Entrez votre mot de passe.',
-  'pleaseConfirmPassword':
-      'Veuillez confirmer votre mot de passe.',
+  'pleaseConfirmPassword': 'Veuillez confirmer votre mot de passe.',
   'signIn': 'Se connecter',
   'createAccount': 'Créer un compte',
-  'noAccountSignUp':
-      'Vous n\'avez pas de compte ? Inscrivez-vous',
-  'haveAccountSignIn':
-      'Vous avez déjà un compte ? Connectez-vous',
+  'noAccountSignUp': 'Vous n\'avez pas de compte ? Inscrivez-vous',
+  'haveAccountSignIn': 'Vous avez déjà un compte ? Connectez-vous',
   'agreeToTerms': 'J\'accepte les ',
   'andText': ' et ',
-  'confirmAge16':
-      'Je confirme avoir au moins 16 ans',
+  'confirmAge16': 'Je confirme avoir au moins 16 ans',
   'mustAgreeToTerms':
       'Vous devez accepter les conditions d\'utilisation et la politique de confidentialité pour créer un compte.',
-  'mustBe16':
-      'Vous devez avoir au moins 16 ans pour utiliser ce service.',
+  'mustBe16': 'Vous devez avoir au moins 16 ans pour utiliser ce service.',
   'unexpectedError': 'Erreur inattendue : {error}',
 
   // ── Recover chats page ─────────────────────────────────────
-  'recoverEncryptedChats':
-      'Récupérer les conversations chiffrées',
+  'recoverEncryptedChats': 'Récupérer les conversations chiffrées',
   'noLockedChats': 'Aucune conversation verrouillée',
-  'allChatsAccessible':
-      'Toutes vos conversations sont accessibles.',
+  'allChatsAccessible': 'Toutes vos conversations sont accessibles.',
   'recoverChatsInfo':
       'Certaines conversations sont chiffrées avec un ancien mot de passe. Entrez votre ancien mot de passe pour les récupérer, ou supprimez-les définitivement.',
-  'encryptedWithVersion':
-      'Chiffré avec la version de mot de passe {version}',
+  'encryptedWithVersion': 'Chiffré avec la version de mot de passe {version}',
   'oldPassword': 'Ancien mot de passe',
-  'enterOldPassword':
-      'Entrez le mot de passe que vous utilisiez auparavant',
-  'lockedChatCountSingular':
-      '{count} conversation verrouillée',
-  'lockedChatCountPlural':
-      '{count} conversations verrouillées',
-  'deleteLockedChatsTitle':
-      'Supprimer les conversations verrouillées ?',
+  'enterOldPassword': 'Entrez le mot de passe que vous utilisiez auparavant',
+  'lockedChatCountSingular': '{count} conversation verrouillée',
+  'lockedChatCountPlural': '{count} conversations verrouillées',
+  'deleteLockedChatsTitle': 'Supprimer les conversations verrouillées ?',
   'deleteLockedChatsBodySingular':
       'Cela supprimera définitivement {count} conversation chiffrée avec votre ancien mot de passe.\n\nCette conversation ne pourra pas être récupérée après suppression. Vous perdrez tous les messages, images et pièces jointes.',
   'deleteLockedChatsBodyPlural':
@@ -428,19 +380,14 @@ const Map<String, String> stringsFr = {
       'Vous êtes sur le point de supprimer {count} conversations. Tapez SUPPRIMER pour confirmer.',
   'typeDelete': 'Tapez SUPPRIMER',
   'confirmDelete': 'Confirmer la suppression',
-  'pleaseEnterOldPassword':
-      'Veuillez entrer votre ancien mot de passe.',
+  'pleaseEnterOldPassword': 'Veuillez entrer votre ancien mot de passe.',
   'derivingKey': 'Dérivation de la clé de chiffrement...',
-  'recoveredChatsSingular':
-      '{count} conversation récupérée avec succès.',
-  'recoveredChatsPlural':
-      '{count} conversations récupérées avec succès.',
-  'recoveryFailed':
-      'Échec de la récupération. Veuillez réessayer.',
+  'recoveredChatsSingular': '{count} conversation récupérée avec succès.',
+  'recoveredChatsPlural': '{count} conversations récupérées avec succès.',
+  'recoveryFailed': 'Échec de la récupération. Veuillez réessayer.',
   'deletedChatsSingular': '{count} conversation supprimée.',
   'deletedChatsPlural': '{count} conversations supprimées.',
-  'deletionFailed':
-      'Échec de la suppression. Veuillez réessayer.',
+  'deletionFailed': 'Échec de la suppression. Veuillez réessayer.',
   'recover': 'Récupérer',
   'delete': 'Supprimer',
   'deleting': 'Suppression...',
@@ -449,8 +396,7 @@ const Map<String, String> stringsFr = {
   'setNewPassword': 'Définir un nouveau mot de passe',
   'setNewPasswordInfo':
       'Choisissez un mot de passe fort pour votre compte. Vos anciennes conversations resteront accessibles si vous vous souvenez de votre ancien mot de passe.',
-  'setNewPasswordButton':
-      'Définir le nouveau mot de passe',
+  'setNewPasswordButton': 'Définir le nouveau mot de passe',
   'noAuthenticatedUser':
       'Aucun utilisateur authentifié après la mise à jour du mot de passe.',
   'failedToPreserveEncryption':
@@ -462,14 +408,11 @@ const Map<String, String> stringsFr = {
   'devOptionsToggle': 'Options développeur',
   'devOptionsToggleSubtitle':
       'Déverrouiller les diagnostics et les outils de débogage. Désactivez pour masquer tous les paramètres réservés aux développeurs.',
-  'enableDiagnosticsLogging':
-      'Activer la journalisation des diagnostics',
+  'enableDiagnosticsLogging': 'Activer la journalisation des diagnostics',
   'enableDiagnosticsSubtitle':
       'Fonctionne en version release. Journalise les métadonnées de l\'application et du runtime pour diagnostiquer les ralentissements et les problèmes de barre système.',
-  'diagnosticsEnabled':
-      'Journalisation des diagnostics activée',
-  'diagnosticsDisabled':
-      'Journalisation des diagnostics désactivée',
+  'diagnosticsEnabled': 'Journalisation des diagnostics activée',
+  'diagnosticsDisabled': 'Journalisation des diagnostics désactivée',
   'logFile': 'Fichier journal',
   'notInitializedYet': 'Pas encore initialisé',
   'refresh': 'Actualiser',
@@ -477,27 +420,20 @@ const Map<String, String> stringsFr = {
   'copyFocusedDebug': 'Copier le débogage ciblé',
   'shareFile': 'Partager le fichier',
   'clear': 'Effacer',
-  'copiedRecentLogs':
-      'Journaux récents copiés dans le presse-papiers',
+  'copiedRecentLogs': 'Journaux récents copiés dans le presse-papiers',
   'noFocusedDebugData':
       'Aucune donnée de débogage ciblé disponible pour le moment',
-  'copiedFocusedDebug':
-      'Rapport de débogage ciblé du menu des modèles copié',
+  'copiedFocusedDebug': 'Rapport de débogage ciblé du menu des modèles copié',
   'failedFocusedDebug':
       'Échec de la création du rapport de débogage ciblé : {error}',
-  'noDiagnosticsLog':
-      'Aucun journal de diagnostics disponible',
-  'diagnosticsLogNotFound':
-      'Fichier journal de diagnostics introuvable',
-  'failedToShareLog':
-      'Échec du partage du journal de diagnostics : {error}',
-  'diagnosticsLogCleared':
-      'Journal de diagnostics effacé',
+  'noDiagnosticsLog': 'Aucun journal de diagnostics disponible',
+  'diagnosticsLogNotFound': 'Fichier journal de diagnostics introuvable',
+  'failedToShareLog': 'Échec du partage du journal de diagnostics : {error}',
+  'diagnosticsLogCleared': 'Journal de diagnostics effacé',
   'failedToClearLog':
       'Échec de l\'effacement du journal de diagnostics : {error}',
   'recentLogLines': 'Lignes de journal récentes',
-  'devOptionsDisabledMsg':
-      'Options développeur désactivées.',
+  'devOptionsDisabledMsg': 'Options développeur désactivées.',
   'noLogsYet':
       'Aucun journal pour le moment. Activez la journalisation des diagnostics et utilisez l\'application pour collecter des données.',
 
@@ -523,16 +459,13 @@ const Map<String, String> stringsFr = {
   'totals': 'Totaux',
   'mediaRequestsNote':
       'Les requêtes d\'images et audio sont traitées comme des requêtes média et exclues des totaux de tokens texte.',
-  'noRequestsFound':
-      'Aucune requête trouvée pour cette période.',
+  'noRequestsFound': 'Aucune requête trouvée pour cette période.',
 
   // ── Model selector page ────────────────────────────────────
-  'sessionExpired':
-      'Session expirée. Veuillez vous reconnecter.',
+  'sessionExpired': 'Session expirée. Veuillez vous reconnecter.',
   'offlineMessage':
       'Vous semblez être hors ligne. Veuillez vérifier votre connexion internet.',
-  'cannotReachApi':
-      'Impossible de joindre le serveur API.',
+  'cannotReachApi': 'Impossible de joindre le serveur API.',
   'maintenanceMessage':
       'Nous effectuons actuellement une maintenance et serons de retour très bientôt.',
   'free': 'Gratuit',
@@ -545,8 +478,7 @@ const Map<String, String> stringsFr = {
   'costLabel': 'Coût : {cost}',
   'generatedLabel': 'Généré : {label}',
   'unableToCopyImage': 'Impossible de copier l\'image',
-  'unableToSaveImage':
-      'Impossible d\'enregistrer l\'image',
+  'unableToSaveImage': 'Impossible d\'enregistrer l\'image',
   'image': 'Image',
   'openLink': 'Ouvrir le lien',
   'openLinkConfirm':
@@ -557,10 +489,8 @@ const Map<String, String> stringsFr = {
   'contentCopied': 'Contenu copié dans le presse-papiers',
   'artifactCopied': 'Artefact copié dans le presse-papiers',
   'fileSaved': 'Fichier enregistré',
-  'failedToExportArtifact':
-      'Échec de l\'export de l\'artefact : {error}',
-  'failedToSave':
-      'Échec de l\'enregistrement : {error}',
+  'failedToExportArtifact': 'Échec de l\'export de l\'artefact : {error}',
+  'failedToSave': 'Échec de l\'enregistrement : {error}',
   'markdownSaved': 'Markdown enregistré',
   'original': 'Original',
   'markdown': 'Markdown',
@@ -575,11 +505,11 @@ const Map<String, String> stringsFr = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Posez-moi n\'importe quelle question !',
-  'aiDisclaimer': 'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
+  'aiDisclaimer':
+      'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
   'queuedLabel': 'En file d\'attente',
   'editYourMessage': 'Modifier votre message...',
-  'addMessageOrDocs':
-      'Ajouter un message ou envoyer des documents',
+  'addMessageOrDocs': 'Ajouter un message ou envoyer des documents',
   'micAccessFailed': 'Échec de l\'accès au microphone',
   'transcriptionFailed': 'Échec de la transcription',
   'replyTargetSelected': 'Cible de réponse sélectionnée',
@@ -606,8 +536,7 @@ const Map<String, String> stringsFr = {
   'freeMessages': 'Messages gratuits',
   'freeUsed': 'Utilisés : {count}',
   'freeTotal': 'Total : {count}',
-  'subscribeToContinue':
-      'Abonnez-vous pour continuer à discuter',
+  'subscribeToContinue': 'Abonnez-vous pour continuer à discuter',
   'freeRemaining': 'Gratuit : {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -621,39 +550,32 @@ const Map<String, String> stringsFr = {
 
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gestionnaire de médias',
-  'imageUsedInChats':
-      'Image utilisée dans des conversations',
+  'imageUsedInChats': 'Image utilisée dans des conversations',
   'imageUsedInChatsBody':
       'Cette image est utilisée dans les conversations suivantes :',
   'deleteImageShowDeleted':
       'Si vous supprimez cette image, elle apparaîtra comme « Image supprimée » dans ces conversations.',
-  'deleteImageConfirm':
-      'Êtes-vous sûr de vouloir supprimer cette image ?',
+  'deleteImageConfirm': 'Êtes-vous sûr de vouloir supprimer cette image ?',
   'deleteAnyway': 'Supprimer quand même',
   'deleteImageTitle': 'Supprimer l\'image',
   'deleteImageBody':
       'Êtes-vous sûr de vouloir supprimer cette image ? Cette action est irréversible.',
   'imageDeleted': 'Image supprimée',
-  'failedToDeleteImage':
-      'Échec de la suppression de l\'image : {error}',
+  'failedToDeleteImage': 'Échec de la suppression de l\'image : {error}',
   'someImagesUsedInChats':
       'Certaines images sont utilisées dans des conversations',
   'deletedImagesWarning':
       'Les images supprimées apparaîtront comme « Image supprimée » dans ces conversations.',
-  'deleteAllCount':
-      'Supprimer les {count} images sélectionnées ?',
+  'deleteAllCount': 'Supprimer les {count} images sélectionnées ?',
   'deleteAll': 'Tout supprimer',
-  'deleteSelectedImages':
-      'Supprimer les images sélectionnées',
+  'deleteSelectedImages': 'Supprimer les images sélectionnées',
   'deleteSelectedCount':
       'Supprimer {count} images sélectionnées ? Cette action est irréversible.',
-  'deletedImagesResult':
-      '{deleted} images supprimées, {failed} échecs',
+  'deletedImagesResult': '{deleted} images supprimées, {failed} échecs',
   'deletedImagesSuccess': '{deleted} images supprimées',
   'downloadSelected': 'Télécharger la sélection',
   'deleteSelected': 'Supprimer la sélection',
-  'errorLoadingImages':
-      'Erreur lors du chargement des images',
+  'errorLoadingImages': 'Erreur lors du chargement des images',
   'noImagesStored': 'Aucune image stockée',
   'imagesAppearHere':
       'Les images que vous envoyez dans les conversations apparaîtront ici',

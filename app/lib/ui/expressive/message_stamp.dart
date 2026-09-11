@@ -14,6 +14,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
 
 /// What the stamp adds next to the time.
@@ -94,7 +96,7 @@ class MessageStamp extends StatelessWidget {
           if (time.isNotEmpty) const SizedBox(width: 5),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
-            child: Icon(
+            child: AppIcon(
               key: ValueKey<QueueMark>(mark),
               mark == QueueMark.waiting
                   ? Icons.schedule_rounded

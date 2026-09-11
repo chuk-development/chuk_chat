@@ -161,17 +161,19 @@ class ChatStorageMutations {
         );
 
         // Update local cache with plaintext row
-        unawaited(LocalChatCacheService.upsert(
-          user.id,
-          LocalChatCacheService.buildPlaintextRow(
-            id: chat.id,
-            payload: payload,
-            createdAt: updatedRow['created_at'] as String,
-            isStarred: (updatedRow['is_starred'] as bool?) ?? false,
-            updatedAt: updatedRow['updated_at'] as String?,
-            title: chat.title,
+        unawaited(
+          LocalChatCacheService.upsert(
+            user.id,
+            LocalChatCacheService.buildPlaintextRow(
+              id: chat.id,
+              payload: payload,
+              createdAt: updatedRow['created_at'] as String,
+              isStarred: (updatedRow['is_starred'] as bool?) ?? false,
+              updatedAt: updatedRow['updated_at'] as String?,
+              title: chat.title,
+            ),
           ),
-        ));
+        );
       }
     }
     ChatStorageState.notifyChanges();

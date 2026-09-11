@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 /// A round, accent-filled icon button — one shared widget so the "new chat"
 /// control looks identical wherever it appears (the mobile sidebar row and
 /// the floating top bar). Icon only, no label.
@@ -38,8 +40,8 @@ class AccentIconButton extends StatelessWidget {
     final Color fill = accent ?? Theme.of(context).colorScheme.primary;
     final Color on =
         ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
-            ? Colors.white
-            : Colors.black;
+        ? Colors.white
+        : Colors.black;
     final double pad = (diameter - iconSize) / 2;
 
     final Widget button = Material(
@@ -54,7 +56,7 @@ class AccentIconButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: EdgeInsets.all(pad),
-          child: Icon(icon, size: iconSize, color: on),
+          child: AppIcon(icon, size: iconSize, color: on),
         ),
       ),
     );

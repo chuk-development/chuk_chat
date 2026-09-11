@@ -137,10 +137,8 @@ const Map<String, String> stringsPt = {
       'Acessar recursos do dispositivo como GPS, calendário e lembretes',
   'catBashTerminalDesc':
       'Executar comandos shell em ambiente isolado no desktop',
-  'catGitHubDesc':
-      'Acessar repositórios, issues, PRs e commits do GitHub',
-  'catSlackDesc':
-      'Enviar mensagens, pesquisar canais e buscar dados do Slack',
+  'catGitHubDesc': 'Acessar repositórios, issues, PRs e commits do GitHub',
+  'catSlackDesc': 'Enviar mensagens, pesquisar canais e buscar dados do Slack',
   'catGoogleCalGmailDesc':
       'Gerenciar sua agenda e email via Google Agenda e Gmail',
   'catEmailImapSmtpDesc': 'Enviar e receber email via IMAP e SMTP',
@@ -185,8 +183,7 @@ const Map<String, String> stringsPt = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Perfil',
-  'profileSubtitle':
-      'Atualize como seu nome e email aparecem no Chuk Chat.',
+  'profileSubtitle': 'Atualize como seu nome e email aparecem no Chuk Chat.',
   'displayName': 'Nome de exibição',
   'displayNameHint': 'Como outras pessoas veem você',
   'emailAddress': 'Endereço de email',
@@ -208,13 +205,11 @@ const Map<String, String> stringsPt = {
       '{count} conversas criptografadas com uma senha anterior.',
   'recoverChats': 'Recuperar conversas',
   'dangerZone': 'Zona de Perigo',
-  'dangerZoneSubtitle':
-      'Ações irreversíveis que afetam toda a sua conta.',
+  'dangerZoneSubtitle': 'Ações irreversíveis que afetam toda a sua conta.',
   'deleteAccountWarning':
       'Excluir sua conta cancelará todas as assinaturas, removerá seus dados e não pode ser desfeito.',
   'deleteAccount': 'Excluir Conta',
-  'unableToLoadProfile':
-      'Não foi possível carregar seu perfil no momento.',
+  'unableToLoadProfile': 'Não foi possível carregar seu perfil no momento.',
   'retry': 'Tentar novamente',
   'saved': 'Salvo',
   'emailUpdated':
@@ -283,8 +278,7 @@ const Map<String, String> stringsPt = {
   'updateAvailable':
       'Atualização disponível: v{version} \u2014 toque para baixar',
   'versionUnavailable': 'Informações da versão indisponíveis.',
-  'copyrightYear':
-      '\u00a9 {year} Chuk Chat\nTodos os direitos reservados.',
+  'copyrightYear': '\u00a9 {year} Chuk Chat\nTodos os direitos reservados.',
   'licenses': 'Licenças',
   'unableToLoadLicenses': 'Não foi possível carregar as licenças.',
   'tapToViewLicense': 'Toque para ver o texto completo da licença',
@@ -321,8 +315,7 @@ const Map<String, String> stringsPt = {
   'immediateAccessAck':
       'Quero acesso imediato ao Chuk Chat e reconheço que perco meu ',
   'rightOfWithdrawal': 'direito de desistência',
-  'onceServiceBegins':
-      ' assim que o serviço começar. Concordo com os ',
+  'onceServiceBegins': ' assim que o serviço começar. Concordo com os ',
   'subscribeNow': 'Assinar Agora',
   'alreadySubscribed': 'Você já possui uma assinatura ativa.',
   'opening': 'Abrindo...',
@@ -423,12 +416,10 @@ const Map<String, String> stringsPt = {
   'copiedRecentLogs': 'Logs recentes copiados para a área de transferência',
   'noFocusedDebugData': 'Nenhum dado de debug focado disponível ainda',
   'copiedFocusedDebug': 'Relatório de debug focado do menu de modelos copiado',
-  'failedFocusedDebug':
-      'Falha ao criar relatório de debug focado: {error}',
+  'failedFocusedDebug': 'Falha ao criar relatório de debug focado: {error}',
   'noDiagnosticsLog': 'Nenhum log de diagnóstico disponível',
   'diagnosticsLogNotFound': 'Arquivo de log de diagnóstico não encontrado',
-  'failedToShareLog':
-      'Falha ao compartilhar log de diagnóstico: {error}',
+  'failedToShareLog': 'Falha ao compartilhar log de diagnóstico: {error}',
   'diagnosticsLogCleared': 'Log de diagnóstico limpo',
   'failedToClearLog': 'Falha ao limpar log de diagnóstico: {error}',
   'recentLogLines': 'Linhas de log recentes',
@@ -452,8 +443,7 @@ const Map<String, String> stringsPt = {
   'unableToLoadUsage':
       'Não foi possível carregar os detalhes de uso no momento.',
   'usageAndBilling': 'Uso e Cobrança',
-  'usageReadOnly':
-      'Esta tela é somente leitura e obtida dos seus logs de uso.',
+  'usageReadOnly': 'Esta tela é somente leitura e obtida dos seus logs de uso.',
   'period': 'Período',
   'totals': 'Totais',
   'mediaRequestsNote':
@@ -480,8 +470,7 @@ const Map<String, String> stringsPt = {
   'unableToSaveImage': 'Não foi possível salvar a imagem',
   'image': 'Imagem',
   'openLink': 'Abrir Link',
-  'openLinkConfirm':
-      'Você realmente deseja sair do app e abrir {url}?',
+  'openLinkConfirm': 'Você realmente deseja sair do app e abrir {url}?',
   'open': 'Abrir',
 
   // ── Misc / shared ─────────────────────────────────────────
@@ -504,7 +493,8 @@ const Map<String, String> stringsPt = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
-  'aiDisclaimer': 'Você está conversando com uma IA — ela pode errar. Confira o importante.',
+  'aiDisclaimer':
+      'Você está conversando com uma IA — ela pode errar. Confira o importante.',
   'queuedLabel': 'Na fila',
   'editYourMessage': 'Edite sua mensagem...',
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',
@@ -549,12 +539,10 @@ const Map<String, String> stringsPt = {
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gerenciador de Mídia',
   'imageUsedInChats': 'Imagem Usada em Conversas',
-  'imageUsedInChatsBody':
-      'Esta imagem é usada nas seguintes conversas:',
+  'imageUsedInChatsBody': 'Esta imagem é usada nas seguintes conversas:',
   'deleteImageShowDeleted':
       'Se você excluir esta imagem, ela aparecerá como "Imagem excluída" nessas conversas.',
-  'deleteImageConfirm':
-      'Tem certeza de que deseja excluir esta imagem?',
+  'deleteImageConfirm': 'Tem certeza de que deseja excluir esta imagem?',
   'deleteAnyway': 'Excluir Mesmo Assim',
   'deleteImageTitle': 'Excluir Imagem',
   'deleteImageBody':
@@ -569,15 +557,13 @@ const Map<String, String> stringsPt = {
   'deleteSelectedImages': 'Excluir Imagens Selecionadas',
   'deleteSelectedCount':
       'Excluir {count} imagens selecionadas? Esta ação não pode ser desfeita.',
-  'deletedImagesResult':
-      '{deleted} imagens excluídas, {failed} falharam',
+  'deletedImagesResult': '{deleted} imagens excluídas, {failed} falharam',
   'deletedImagesSuccess': '{deleted} imagens excluídas',
   'downloadSelected': 'Baixar selecionadas',
   'deleteSelected': 'Excluir selecionadas',
   'errorLoadingImages': 'Erro ao carregar imagens',
   'noImagesStored': 'Nenhuma imagem armazenada',
-  'imagesAppearHere':
-      'Imagens que você enviar nas conversas aparecerão aqui',
+  'imagesAppearHere': 'Imagens que você enviar nas conversas aparecerão aqui',
   'download': 'Baixar',
 
   // ── Attachment preview bar ─────────────────────────────────

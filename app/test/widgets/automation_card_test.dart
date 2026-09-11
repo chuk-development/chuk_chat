@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/icon_finder.dart';
+
 import 'package:cowork/services/automations/cowork_automation.dart';
 import 'package:cowork/widgets/automation_card.dart';
 
@@ -79,7 +81,7 @@ void main() {
     )));
     expect(find.text('exit code 3'), findsOneWidget);
     expect(find.textContaining('watch poll.py'), findsOneWidget);
-    expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    expect(findIcon(Icons.visibility_outlined), findsOneWidget);
     // Compact hides the prompt line.
     expect(find.text('check the inbox'), findsNothing);
   });

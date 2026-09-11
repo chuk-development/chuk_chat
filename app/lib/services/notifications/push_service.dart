@@ -25,7 +25,8 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent, AuthState;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthChangeEvent, AuthState;
 
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/notifications/notification_router.dart';
@@ -130,13 +131,10 @@ class PushService {
     } catch (_) {}
     _openedSub = t.onMessageOpenedApp.listen(_route, onError: (Object _) {});
 
-    _tokenSub = t.onTokenRefresh.listen(
-      (String token) {
-        _token = token;
-        unawaited(_syncToken());
-      },
-      onError: (Object _) {},
-    );
+    _tokenSub = t.onTokenRefresh.listen((String token) {
+      _token = token;
+      unawaited(_syncToken());
+    }, onError: (Object _) {});
 
     final String? Function() userIdOf = currentUserId ?? _defaultUserId;
     _userId = userIdOf();
@@ -227,7 +225,9 @@ class PushService {
   }
 
   static Stream<AuthState>? _defaultAuthStates() =>
-      SupabaseService.isInitialized ? SupabaseService.auth.onAuthStateChange : null;
+      SupabaseService.isInitialized
+      ? SupabaseService.auth.onAuthStateChange
+      : null;
 
   static String _defaultPlatform() {
     switch (defaultTargetPlatform) {
@@ -277,17 +277,13 @@ class SupabaseDeviceTokenStore implements DeviceTokenStore {
     required String deviceId,
     required String token,
     required String platform,
-  }) =>
-      SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          'user_id': userId,
-          'device_id': deviceId,
-          'token': token,
-          'platform': platform,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: 'user_id,device_id',
-      );
+  }) => SupabaseService.client.from(table).upsert(<String, dynamic>{
+    'user_id': userId,
+    'device_id': deviceId,
+    'token': token,
+    'platform': platform,
+    'updated_at': DateTime.now().toUtc().toIso8601String(),
+  }, onConflict: 'user_id,device_id');
 
   @override
   Future<void> delete({required String userId, required String deviceId}) =>

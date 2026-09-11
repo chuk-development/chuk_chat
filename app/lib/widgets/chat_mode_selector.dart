@@ -11,6 +11,9 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/chat_mode_service.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/anchored_menu.dart';
@@ -30,7 +33,7 @@ class ChatModeSelector extends StatelessWidget {
     this.reasoningEffort = ChatModeService.reasoningOff,
     this.reasoningLevels = const <String>[ChatModeService.reasoningOff],
     this.onReasoningEffortChanged,
-    this.height = 40,
+    this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
   });
 
@@ -149,8 +152,8 @@ class ChatModeSelector extends StatelessWidget {
     // rather than the bare word "Custom".
     final String pillLabel = mode == ChatMode.custom
         ? (modelLabel == null || modelLabel!.isEmpty
-            ? labelFor(mode)
-            : stripLabPrefix(modelLabel!))
+              ? labelFor(mode)
+              : stripLabPrefix(modelLabel!))
         : labelFor(mode);
     final IconData pillIcon = iconFor(mode);
 
@@ -173,7 +176,7 @@ class ChatModeSelector extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(pillIcon, size: 19, color: iconFg),
+              AppIcon(pillIcon, size: 19, color: iconFg),
               if (showLabel) ...[
                 const SizedBox(width: 5),
                 Text(
@@ -185,7 +188,7 @@ class ChatModeSelector extends StatelessWidget {
                 ),
               ],
               const SizedBox(width: 2),
-              Icon(
+              AppIcon(
                 Icons.keyboard_arrow_down,
                 size: 16,
                 color: iconFg.withValues(alpha: 0.7),
@@ -228,7 +231,7 @@ class ChatModeSelector extends StatelessWidget {
             // has ever been used. Fast/Thinking models are never surfaced here.
             label: _customPointLabel,
             isSelected: mode == ChatMode.custom,
-            trailing: Icon(
+            trailing: AppIcon(
               Icons.chevron_right,
               size: 18,
               color: iconFg.withValues(alpha: 0.8),
@@ -283,7 +286,7 @@ class ChatModeSelector extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(
+                  AppIcon(
                     Icons.chevron_right,
                     size: 18,
                     color: iconFg.withValues(alpha: 0.8),
@@ -309,7 +312,7 @@ class ChatModeSelector extends StatelessWidget {
           iconFg: iconFg,
           icon: Icons.add,
           label: 'More models',
-          trailing: Icon(
+          trailing: AppIcon(
             Icons.chevron_right,
             size: 18,
             color: iconFg.withValues(alpha: 0.8),
@@ -373,7 +376,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: 30,
+      height: MobileLayout.minTouchTarget,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         label.toUpperCase(),
@@ -387,7 +390,8 @@ class ChatModeSelector extends StatelessWidget {
     );
   }
 
-  /// One row, matching the model dropdown: 40 high, 16 of side padding,
+  /// One row, matching the model dropdown: one touch target high, 16 of side
+  /// padding,
   /// bold label, a tick on the right when it is the current choice.
   PopupMenuItem<T> _menuRow<T>({
     required T value,
@@ -399,7 +403,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       value: value,
-      height: 40,
+      height: MobileLayout.minTouchTarget,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,
@@ -423,7 +427,7 @@ class ChatModeSelector extends StatelessWidget {
     return Row(
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 18, color: iconFg),
+          AppIcon(icon, size: 18, color: iconFg),
           const SizedBox(width: 10),
         ],
         Expanded(
@@ -438,7 +442,7 @@ class ChatModeSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
+        if (isSelected) AppIcon(Icons.check, color: iconFg, size: 18),
         ?trailing,
       ],
     );

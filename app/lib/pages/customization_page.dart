@@ -1,6 +1,7 @@
 // lib/pages/customization_page.dart
 import 'package:flutter/material.dart';
 import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/models/app_shell_config.dart';
 import 'package:cowork/l10n/app_localizations.dart';
@@ -50,10 +51,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
         kSupportedChatFontFamilies.contains(widget.config.chatFontFamily)
         ? widget.config.chatFontFamily
         : kDefaultChatFontFamily;
-    _selectedUiScale = widget.config.uiScale.clamp(
-      kMinUiScale,
-      kMaxUiScale,
-    );
+    _selectedUiScale = widget.config.uiScale.clamp(kMinUiScale, kMaxUiScale);
     _selectedIncludeRecentImagesInHistory =
         widget.config.includeRecentImagesInHistory;
     _selectedIncludeAllImagesInHistory =
@@ -63,9 +61,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedIncludeToolResultsInHistory =
         widget.config.includeToolResultsInHistory;
     // Fall back to English if a previously stored locale is no longer offered.
-    _selectedLocale = AppLocalizations.supportedLocales.any(
-      (l) => l.languageCode == widget.config.uiLocale,
-    )
+    _selectedLocale =
+        AppLocalizations.supportedLocales.any(
+          (l) => l.languageCode == widget.config.uiLocale,
+        )
         ? widget.config.uiLocale
         : 'en';
   }
@@ -77,17 +76,16 @@ class _CustomizationPageState extends State<CustomizationPage> {
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: Text(l.customization),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      title: l.customization,
+      builder: (BuildContext context) => SettingsListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 8,
+          16,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
         children: [
           // Language.
           ExpressiveSectionHeader(l.language),
@@ -208,8 +206,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
                             value: _selectedChatFontSize,
                             min: kMinChatFontSize,
                             max: kMaxChatFontSize,
-                            divisions:
-                                (kMaxChatFontSize - kMinChatFontSize).round(),
+                            divisions: (kMaxChatFontSize - kMinChatFontSize)
+                                .round(),
                             label:
                                 '${_selectedChatFontSize.toStringAsFixed(0)} pt',
                             onChanged: (double value) {
@@ -261,10 +259,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
                           // container already carries the shape.
                           focusColor: Colors.transparent,
                           items: kSupportedChatFontFamilies
-                              .map((id) => DropdownMenuItem<String>(
-                                    value: id,
-                                    child: Text(_fontFamilyLabel(id, l)),
-                                  ))
+                              .map(
+                                (id) => DropdownMenuItem<String>(
+                                  value: id,
+                                  child: Text(_fontFamilyLabel(id, l)),
+                                ),
+                              )
                               .toList(),
                           onChanged: (String? value) {
                             if (value == null ||
@@ -289,8 +289,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: _selectedChatFontSize,
-                            fontFamily:
-                                resolveChatFontFamily(_selectedChatFontFamily),
+                            fontFamily: resolveChatFontFamily(
+                              _selectedChatFontFamily,
+                            ),
                             height: 1.38,
                           ),
                         ),
@@ -477,7 +478,6 @@ class _CustomizationPageState extends State<CustomizationPage> {
         return l.fontFamilyArimo;
     }
   }
-
 }
 
 /// Title and explanation at the top of a card that is not a row.

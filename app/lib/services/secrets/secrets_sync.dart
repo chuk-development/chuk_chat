@@ -58,15 +58,12 @@ class SecretsSync implements SecretsMirror {
       if (user == null) return;
       if (!await _ensureEncryptionKey()) return;
       final ciphertext = await EncryptionService.encrypt(value);
-      await SupabaseService.client.from(table).upsert(
-        <String, dynamic>{
-          columnUserId: user.id,
-          columnName: name,
-          columnCiphertext: ciphertext,
-          columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: '$columnUserId,$columnName',
-      );
+      await SupabaseService.client.from(table).upsert(<String, dynamic>{
+        columnUserId: user.id,
+        columnName: name,
+        columnCiphertext: ciphertext,
+        columnUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: '$columnUserId,$columnName');
     } catch (error) {
       if (kDebugMode) debugPrint('⚠️ [SecretsSync] save skipped: $error');
     }

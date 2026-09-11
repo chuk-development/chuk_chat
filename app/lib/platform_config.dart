@@ -104,7 +104,6 @@ const bool kFeaturePaymentsDirect = bool.fromEnvironment(
   defaultValue: true,
 );
 
-
 // ============================================================================
 // COWORK-ONLY FEATURE FLAGS
 // ============================================================================

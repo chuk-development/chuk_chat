@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
+import 'package:cowork/services/cowork/thread_preview_store.dart';
 
 import 'mobile_support.dart';
 
@@ -34,12 +35,51 @@ void main() {
         ),
       ];
 
+  /// Writes one stored line for [threadKey], the way the replay loader does.
+  void storeLine(String threadKey, String text, {required bool fromUser}) =>
+      ThreadPreviewStore.instance.noteRows(threadKey, <Map<String, dynamic>>[
+        <String, dynamic>{'role': fromUser ? 'user' : 'assistant', 'text': text},
+      ]);
+
   testWidgets('renders one row per visible coworker with preview and time',
       (tester) async {
+    // Thread keys of this test alone: the preview store is a process-wide
+    // singleton, so a key shared with another test would make the result
+    // depend on the order the tests run in.
+    final List<CoworkAgent> roster = <CoworkAgent>[
+      agent(
+        id: 'chief',
+        name: 'Chief of Staff',
+        role: 'ops',
+        running: true,
+        lastActivity: now.subtract(const Duration(minutes: 3)),
+        threads: <CoworkThreadInfo>[
+          CoworkThreadInfo(key: 'render-chief', title: 'Morning digest'),
+        ],
+      ),
+      agent(
+        id: 'design',
+        name: 'Design',
+        brief: 'Proposes UI directions',
+        lastActivity: now.subtract(const Duration(days: 1)),
+        threads: <CoworkThreadInfo>[
+          CoworkThreadInfo(key: 'render-design', title: 'default'),
+        ],
+      ),
+      agent(
+        id: 'inbox',
+        name: 'Inbox Triage',
+        threads: const <CoworkThreadInfo>[],
+      ),
+    ];
+    // The working coworker has a stored line too — a live run has to outrank
+    // it, or the row would report what was said before the run started.
+    storeLine('render-chief', 'Digest sent', fromUser: false);
+
     await pumpPhone(
       tester,
       MobileAgentList(
-        source: rosterWith(sample()),
+        source: rosterWith(roster),
         onSelect: (_, _) {},
         onAddAgent: () {},
         onOpenAccount: () {},
@@ -49,14 +89,45 @@ void main() {
     );
     expect(find.text('Chief of Staff'), findsOneWidget);
     expect(find.text('Working…'), findsOneWidget);
+    expect(find.text('Digest sent'), findsNothing);
     expect(find.text('2:27 PM'), findsOneWidget);
+    // No stored line, and 'default' is a placeholder rather than a title, so
+    // the brief carries this row.
     expect(find.text('Design'), findsOneWidget);
     expect(find.text('Proposes UI directions'), findsOneWidget);
     expect(find.text('Yesterday'), findsOneWidget);
+    // Nothing ever happened here: the line stays empty. "No activity yet"
+    // under every row of a fresh install said nothing and read as an error.
     expect(find.text('Inbox Triage'), findsOneWidget);
-    expect(find.text('No activity yet'), findsOneWidget);
-    expect(find.text('SL'), findsOneWidget, reason: 'account monogram');
+    expect(find.text('No activity yet'), findsNothing);
+    expect(
+      find.descendant(
+        of: findId('mobile-agent-row-inbox'),
+        matching: find.text(''),
+      ),
+      findsOneWidget,
+      reason: 'the preview line of a silent coworker is empty',
+    );
+    // No account target up here any more: settings has one way in, the
+    // navigation bar.
+    expect(find.text('SL'), findsNothing, reason: 'no account monogram');
     expect(find.text('ops'), findsOneWidget, reason: 'role tag');
+    // The unread mark is a count, not a dot: one thread with something new.
+    expect(
+      find.descendant(
+        of: findId('mobile-agent-row-chief'),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+      reason: 'unread badge counts the threads with something new',
+    );
+
+    // A line arrives for the idle coworker: it beats the brief, and the list
+    // follows the store without being rebuilt by its caller.
+    storeLine('render-design', 'Ship the palette', fromUser: true);
+    await tester.pump();
+    expect(find.text('You: Ship the palette'), findsOneWidget);
+    expect(find.text('Proposes UI directions'), findsNothing);
   });
 
   testWidgets('rows are a real touch target and start under the bar and filters',
@@ -74,7 +145,7 @@ void main() {
     // Title bar (58) plus the connected All / Unread group: the first row can
     // only start below both, and never under the status bar.
     expect(first.top, greaterThan(kPhonePadding.top + 58));
-    expect(find.text('Coworkers'), findsOneWidget);
+    expect(find.text('Agents'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
   });
 
@@ -167,18 +238,70 @@ void main() {
   });
 
   test('MobileAgentRow.previewOf', () {
-    expect(MobileAgentRow.previewOf(agent(id: 'a', name: 'A', running: true)),
-        'Working…');
+    CoworkAgent withThread(String key, String title) => agent(
+          id: 'a',
+          name: 'A',
+          threads: <CoworkThreadInfo>[CoworkThreadInfo(key: key, title: title)],
+        );
+
+    // A live run outranks everything, including a stored line.
+    storeLine('preview-run', 'Said earlier', fromUser: false);
     expect(
       MobileAgentRow.previewOf(agent(
         id: 'a',
         name: 'A',
-        threads: <CoworkThreadInfo>[CoworkThreadInfo(key: 'k', title: 'Digest')],
+        running: true,
+        threads: <CoworkThreadInfo>[
+          CoworkThreadInfo(key: 'preview-run', title: 'Digest'),
+        ],
       )),
-      'Digest',
+      'Working…',
     );
-    expect(MobileAgentRow.previewOf(agent(id: 'a', name: 'A', brief: 'Do X')),
-        'Do X');
-    expect(MobileAgentRow.previewOf(agent(id: 'a', name: 'A')), 'No activity yet');
+
+    // What was actually said last beats the thread title, and the row says
+    // who said it.
+    storeLine('preview-them', 'Digest sent', fromUser: false);
+    expect(MobileAgentRow.previewOf(withThread('preview-them', 'Digest')),
+        'Digest sent');
+    storeLine('preview-you', 'Ship the palette', fromUser: true);
+    expect(MobileAgentRow.previewOf(withThread('preview-you', 'Digest')),
+        'You: Ship the palette');
+
+    // No stored line: the thread title.
+    expect(MobileAgentRow.previewOf(withThread('preview-title', 'Digest')),
+        'Digest');
+
+    // 'default' and 'General' are placeholders, not titles, so they fall
+    // through to the brief.
+    expect(
+      MobileAgentRow.previewOf(agent(
+        id: 'a',
+        name: 'A',
+        brief: 'Do X',
+        threads: <CoworkThreadInfo>[
+          CoworkThreadInfo(key: 'preview-brief', title: 'default'),
+        ],
+      )),
+      'Do X',
+    );
+    expect(
+      MobileAgentRow.previewOf(agent(
+        id: 'a',
+        name: 'A',
+        brief: 'Do X',
+        threads: <CoworkThreadInfo>[
+          CoworkThreadInfo(key: 'preview-brief2', title: 'General'),
+        ],
+      )),
+      'Do X',
+    );
+
+    // Nothing to say: an empty line, not "No activity yet".
+    expect(
+      MobileAgentRow.previewOf(
+        agent(id: 'a', name: 'A', threads: const <CoworkThreadInfo>[]),
+      ),
+      '',
+    );
   });
 }

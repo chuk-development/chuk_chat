@@ -17,6 +17,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'package:cowork/models/artifact.dart';
@@ -273,7 +275,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
             horizontal: 4,
             vertical: 2,
           ),
-          leading: Icon(
+          leading: AppIcon(
             document['kind'] == 'table'
                 ? Icons.table_chart_outlined
                 : Icons.description_outlined,
@@ -293,7 +295,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 22),
+          trailing: const AppIcon(Icons.chevron_right_rounded, size: 22),
           onTap: () => ChatDocumentView.open(context, document),
         ),
       );
@@ -715,7 +717,7 @@ class _ArtifactErrorRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.error_outline, size: 18, color: Colors.redAccent),
+        const AppIcon(Icons.error_outline, size: 18, color: Colors.redAccent),
         const SizedBox(width: 8),
         Expanded(
           child: Text(message, style: Theme.of(context).textTheme.bodySmall),

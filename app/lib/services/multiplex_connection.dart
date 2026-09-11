@@ -157,8 +157,7 @@ class MultiplexConnection {
                 }
                 if (type == 'auth_error') {
                   authTimer?.cancel();
-                  final detail =
-                      decoded['detail']?.toString() ?? 'auth_error';
+                  final detail = decoded['detail']?.toString() ?? 'auth_error';
                   authCompleter.completeError(
                     MultiplexException(detail, code: 'auth_error'),
                   );
@@ -185,8 +184,10 @@ class MultiplexConnection {
         if (!authCompleter.isCompleted) {
           authTimer?.cancel();
           authCompleter.completeError(
-            MultiplexException('socket error during auth: $error',
-                code: 'ws_error'),
+            MultiplexException(
+              'socket error during auth: $error',
+              code: 'ws_error',
+            ),
           );
         }
         _handleTransportFailure('socket error: $error');
@@ -195,8 +196,7 @@ class MultiplexConnection {
         if (!authCompleter.isCompleted) {
           authTimer?.cancel();
           authCompleter.completeError(
-            MultiplexException('socket closed during auth',
-                code: 'ws_closed'),
+            MultiplexException('socket closed during auth', code: 'ws_closed'),
           );
         }
         _handleTransportFailure('socket closed');
@@ -404,9 +404,7 @@ class MultiplexConnection {
         if (!completer.isCompleted) {
           final detail = data['detail']?.toString() ?? 'tool error';
           final code = data['code']?.toString();
-          completer.completeError(
-            MultiplexException(detail, code: code),
-          );
+          completer.completeError(MultiplexException(detail, code: code));
         }
         break;
       case 'done':
@@ -439,11 +437,13 @@ class MultiplexConnection {
 
     // Fire off the request. ensureReady is awaited inside so the caller
     // can subscribe synchronously.
-    unawaited(_send({
-      'req_id': reqId,
-      'type': 'chat',
-      'payload': payload,
-    }, controller: controller));
+    unawaited(
+      _send({
+        'req_id': reqId,
+        'type': 'chat',
+        'payload': payload,
+      }, controller: controller),
+    );
 
     return controller.stream;
   }
@@ -458,12 +458,14 @@ class MultiplexConnection {
     final completer = Completer<Map<String, dynamic>>();
     _toolCompleters[reqId] = completer;
 
-    unawaited(_send({
-      'req_id': reqId,
-      'type': 'tool',
-      'tool': tool,
-      'payload': payload,
-    }, toolCompleter: completer));
+    unawaited(
+      _send({
+        'req_id': reqId,
+        'type': 'tool',
+        'tool': tool,
+        'payload': payload,
+      }, toolCompleter: completer),
+    );
 
     return completer.future;
   }
@@ -512,7 +514,8 @@ class MultiplexConnection {
             e is MultiplexException ? e.detail : e.toString(),
             // Handshake failure before the request went out — nothing was
             // consumed upstream, so re-issuing the pass is exactly right.
-            code: (e is MultiplexException ? e.code : null) ??
+            code:
+                (e is MultiplexException ? e.code : null) ??
                 StreamErrorCodes.connectionLost,
           ),
         );
@@ -578,7 +581,8 @@ class MultiplexConnection {
   }
 
   void _handleTransportFailure(String reason) {
-    if (_channel == null && _chatControllers.isEmpty &&
+    if (_channel == null &&
+        _chatControllers.isEmpty &&
         _toolCompleters.isEmpty) {
       return;
     }
@@ -591,10 +595,7 @@ class MultiplexConnection {
     for (final ctrl in controllers) {
       try {
         ctrl.add(
-          ChatStreamEvent.error(
-            detail,
-            code: StreamErrorCodes.connectionLost,
-          ),
+          ChatStreamEvent.error(detail, code: StreamErrorCodes.connectionLost),
         );
         ctrl.add(const ChatStreamEvent.done());
       } catch (_) {}

@@ -11,6 +11,9 @@
 library;
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
@@ -80,6 +83,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
 
   /// The colour picked in this session; null means "keep what is stored".
   int? _color;
+  AgentAvatarShape? _shape;
   bool _clearColor = false;
   bool _busy = false;
 
@@ -150,7 +154,9 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
     final String brief = _brief.text.trim();
 
     // The name first: it is the one field with a host behind it.
-    if (widget.onRename != null && name.isNotEmpty && name != widget.agent.name) {
+    if (widget.onRename != null &&
+        name.isNotEmpty &&
+        name != widget.agent.name) {
       widget.onRename!(widget.agent.copyWith(name: name));
     }
 
@@ -162,6 +168,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
       clearBrief: brief.isEmpty,
       colorValue: _color,
       clearColor: _clearColor,
+      shape: _shape,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -180,25 +187,19 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
             widget.source.byId(widget.agent.id) ?? widget.agent;
         final int? storedColor = _store.profileOf(agent.id).colorValue;
         final int? shownColor = _clearColor ? null : (_color ?? storedColor);
-        return Scaffold(
+        return ExpressiveScreen(
           backgroundColor: scheme.surface,
-          appBar: AppBar(
-            backgroundColor: scheme.surface,
-            title: const Text('Edit profile'),
-            actions: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: TextButton(
-                  onPressed: _busy ? null : _save,
-                  child: const Text('Save'),
-                ),
-              ),
-            ],
-          ),
-          body: ListView(
+          title: 'Edit profile',
+          actions: <Widget>[
+            TextButton(
+              onPressed: _busy ? null : _save,
+              child: const Text('Save'),
+            ),
+          ],
+          builder: (BuildContext context) => ListView(
             padding: EdgeInsets.fromLTRB(
               20,
-              12,
+              MediaQuery.paddingOf(context).top + 12,
               20,
               24 + MediaQuery.paddingOf(context).bottom,
             ),
@@ -212,6 +213,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                       agent: agent,
                       store: _store,
                       overrideColor: shownColor,
+                      shape: _shape ?? _store.profileOf(agent.id).shape,
                     ),
                     const SizedBox(height: 14),
                     Row(
@@ -238,18 +240,75 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                 ),
               ),
               const SizedBox(height: 26),
-              _SectionLabel('Colour'),
+              _SectionLabel('Figure'),
               const SizedBox(height: 8),
-              _ColorRow(
-                selected: shownColor,
-                onPick: (int value) => setState(() {
-                  _color = value;
-                  _clearColor = false;
-                }),
-                onReset: () => setState(() {
-                  _color = null;
-                  _clearColor = true;
-                }),
+              // Colour and silhouette are one decision — what this coworker
+              // looks like everywhere — so they sit in one card with one reset,
+              // instead of two labelled sections the user has to connect.
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _ColorRow(
+                      selected: shownColor,
+                      onPick: (int value) => setState(() {
+                        _color = value;
+                        _clearColor = false;
+                      }),
+                      onReset: () => setState(() {
+                        _color = null;
+                        _clearColor = true;
+                      }),
+                    ),
+                    const SizedBox(height: 14),
+                    Divider(
+                      height: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 14),
+                    _ShapeRow(
+                      agentId: agent.id,
+                      colour: shownColor == null
+                          ? agentAccent(context, agent.id, store: _store)
+                          : Color(shownColor),
+                      selected: _shape ?? _store.profileOf(agent.id).shape,
+                      onPick: (AgentAvatarShape? shape) =>
+                          setState(() => _shape = shape),
+                    ),
+                    const SizedBox(height: 6),
+                    Divider(
+                      height: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        key: const ValueKey('avatar_reset_default'),
+                        onPressed: () => setState(() {
+                          _color = null;
+                          _clearColor = true;
+                          _shape = AgentAvatarShape.expressive;
+                        }),
+                        child: const Text('Reset to default'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "How this coworker's mark looks everywhere",
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
               if (widget.onRename != null) ...<Widget>[
@@ -313,7 +372,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                 ),
                 child: Row(
                   children: <Widget>[
-                    Icon(
+                    AppIcon(
                       Icons.info_outline_rounded,
                       size: 18,
                       color: scheme.onSurfaceVariant,
@@ -321,7 +380,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Picture, colour, role and brief are kept on this '
+                        'Picture, shape, colour, role and brief are kept on this '
                         'device. The relay carries names only.',
                         style: text.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
@@ -345,30 +404,30 @@ class _FacePreview extends StatelessWidget {
     required this.agent,
     required this.store,
     required this.overrideColor,
+    required this.shape,
   });
 
   final CoworkAgent agent;
   final AgentProfileStore store;
   final int? overrideColor;
+  final AgentAvatarShape? shape;
 
   @override
   Widget build(BuildContext context) {
-    // AgentFace reads the stored colour; a colour picked but not saved yet is
-    // painted as a ring around it, so the choice is visible before Save.
-    final Color ring = overrideColor != null
-        ? Color(overrideColor!)
-        : agentAccent(context, agent.id, store: store);
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: ring, width: 3),
-      ),
       child: AgentFace(
         agent: agent,
         size: 104,
         store: store,
         showPresence: false,
+        profileOverride: store
+            .profileOf(agent.id)
+            .copyWith(
+              colorValue: overrideColor,
+              clearColor: overrideColor == null,
+              shape: shape,
+            ),
       ),
     );
   }
@@ -414,10 +473,11 @@ class _ColorRow extends StatelessWidget {
       children: <Widget>[
         for (final Color color in kAgentAccents)
           GestureDetector(
+            key: ValueKey('avatar_color_${color.toARGB32()}'),
             onTap: () => onPick(color.toARGB32()),
             child: Container(
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
@@ -426,15 +486,20 @@ class _ColorRow extends StatelessWidget {
                     : null,
               ),
               child: selected == color.toARGB32()
-                  ? const Icon(Icons.check_rounded, size: 20, color: Colors.white)
+                  ? const AppIcon(
+                      Icons.check_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    )
                   : null,
             ),
           ),
         GestureDetector(
+          key: const ValueKey('avatar_color_default'),
           onTap: onReset,
           child: Container(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
               shape: BoxShape.circle,
@@ -442,7 +507,7 @@ class _ColorRow extends StatelessWidget {
                   ? Border.all(color: scheme.onSurface, width: 3)
                   : null,
             ),
-            child: Icon(
+            child: AppIcon(
               Icons.auto_awesome_rounded,
               size: 18,
               color: scheme.onSurfaceVariant,
@@ -450,6 +515,89 @@ class _ColorRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The silhouettes a coworker can be given, drawn as themselves.
+///
+/// A row of shapes says what it offers; a row of chips labelled "Rounded
+/// square" makes the reader translate a word back into a picture. The first
+/// entry is the automatic one — the silhouette derived from the agent id,
+/// which is what a coworker wears until somebody picks.
+class _ShapeRow extends StatelessWidget {
+  const _ShapeRow({
+    required this.agentId,
+    required this.colour,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final String agentId;
+  final Color colour;
+  final AgentAvatarShape? selected;
+  final ValueChanged<AgentAvatarShape?> onPick;
+
+  static const List<AgentAvatarShape> _offered = <AgentAvatarShape>[
+    AgentAvatarShape.expressive,
+    AgentAvatarShape.round,
+    AgentAvatarShape.roundedSquare,
+    AgentAvatarShape.oval,
+    AgentAvatarShape.triangle,
+    AgentAvatarShape.gem,
+    AgentAvatarShape.clover,
+    AgentAvatarShape.flower,
+    AgentAvatarShape.cookie,
+    AgentAvatarShape.diamond,
+    AgentAvatarShape.burst,
+    AgentAvatarShape.square,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final AgentAvatarShape current = selected ?? AgentAvatarShape.expressive;
+    return SizedBox(
+      height: 56,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _offered.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (BuildContext context, int i) {
+          final AgentAvatarShape shape = _offered[i];
+          final bool isSelected = shape == current;
+          return GestureDetector(
+            key: ValueKey('avatar_shape_${shape.name}'),
+            onTap: () => onPick(shape),
+            child: Container(
+              width: 52,
+              height: 52,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: isSelected
+                    ? Border.all(color: scheme.onSurface, width: 2)
+                    : null,
+              ),
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: ShapeDecoration(
+                  color: colour,
+                  shape: agentAvatarShape(agentId, shape, 34),
+                ),
+                child: shape == AgentAvatarShape.expressive
+                    ? AppIcon(
+                        Icons.auto_awesome_rounded,
+                        size: 16,
+                        color: scheme.surface,
+                      )
+                    : null,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

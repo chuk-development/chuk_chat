@@ -18,6 +18,7 @@ import 'package:cowork/services/session_recovery.dart';
 import 'package:cowork/services/settings/verbose_service.dart';
 import 'package:cowork/services/storage/cowork_chat_storage_bootstrap.dart';
 import 'package:cowork/services/supabase_service.dart';
+import 'package:cowork/widgets/app_lifecycle_observer.dart';
 import 'package:cowork/widgets/auth_gate.dart';
 
 Future<void> main() async {
@@ -154,50 +155,57 @@ class _CoworkAppState extends State<CoworkApp> {
     // available) and rebuilds automatically when the system colours change,
     // so the app follows wallpaper/accent changes live when the user has
     // enabled dynamic colour.
-    return DynamicColorBuilder(
-      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        // chuk_chat hands its shell config straight to the shell
-        // (`RootWrapper(config: …)`); so does CoWork, through AuthGate's shell
-        // builder (bead cowork-8y2). Rebuilt with the app, so a theme change
-        // reaches the shell like any other rebuild.
-        final AppShellConfig shellConfig = _buildShellConfig();
-        return MaterialApp(
-          title: 'Chuk Chat',
-          debugShowCheckedModeBanner: false,
-          theme: _themeService.buildTheme(
-            lightDynamic: lightDynamic,
-            darkDynamic: darkDynamic,
-          ),
-          locale: Locale(_themeService.uiLocale),
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          builder: (context, child) {
-            if (child == null) return const SizedBox.shrink();
-
-            // Apply user-chosen UI scale to all text in the app via MediaQuery.
-            // This is the safest scaling approach — it doesn't break layout
-            // calculations the way Transform.scale would.
-            return MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(_themeService.uiScale)),
-              child: child,
-            );
-          },
-          home: AuthGate(
-            themeController: _theme,
-            buildShell: (_) => MessengerShell(
-              themeController: _theme,
-              shellConfig: shellConfig,
+    // The app-level lifecycle wire. The imported chat UI registers resume and
+    // pause callbacks on `AppLifecycleService`, and nothing in CoWork ever
+    // called `handleLifecycleState` — no widget observed the binding at app
+    // level, so those callbacks never fired. chuk_chat does this from its own
+    // `main.dart`; CoWork does it here.
+    return AppLifecycleObserver(
+      child: DynamicColorBuilder(
+        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+          // chuk_chat hands its shell config straight to the shell
+          // (`RootWrapper(config: …)`); so does CoWork, through AuthGate's shell
+          // builder (bead cowork-8y2). Rebuilt with the app, so a theme change
+          // reaches the shell like any other rebuild.
+          final AppShellConfig shellConfig = _buildShellConfig();
+          return MaterialApp(
+            title: 'Chuk Chat',
+            debugShowCheckedModeBanner: false,
+            theme: _themeService.buildTheme(
+              lightDynamic: lightDynamic,
+              darkDynamic: darkDynamic,
             ),
-          ),
-        );
-      },
+            locale: Locale(_themeService.uiLocale),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            builder: (context, child) {
+              if (child == null) return const SizedBox.shrink();
+
+              // Apply user-chosen UI scale to all text in the app via MediaQuery.
+              // This is the safest scaling approach — it doesn't break layout
+              // calculations the way Transform.scale would.
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(_themeService.uiScale),
+                ),
+                child: child,
+              );
+            },
+            home: AuthGate(
+              themeController: _theme,
+              buildShell: (_) => MessengerShell(
+                themeController: _theme,
+                shellConfig: shellConfig,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 

@@ -28,7 +28,8 @@ class DownloadsAgentFileSaver implements AgentFileSaver {
       target = null;
     }
     target ??= await getApplicationDocumentsDirectory();
-    final path = '${target.path}${Platform.pathSeparator}'
+    final path =
+        '${target.path}${Platform.pathSeparator}'
         '${sanitizeAgentFileName(file.name)}';
     await File(path).writeAsBytes(bytes, flush: true);
     return path;

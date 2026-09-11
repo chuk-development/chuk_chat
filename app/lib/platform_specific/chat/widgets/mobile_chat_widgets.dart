@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/widgets/mobile_chat_widgets.dart
 
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cowork/ui/expressive/waveform.dart';
@@ -43,7 +45,7 @@ Widget buildTinyIconButton({
                 height: iconSize,
                 colorFilter: ColorFilter.mode(effectiveColor, BlendMode.srcIn),
               )
-            : Icon(icon!, size: iconSize, color: effectiveColor),
+            : AppIcon(icon!, size: iconSize, color: effectiveColor),
       ),
     ),
   );
@@ -80,21 +82,9 @@ Widget buildTinyActionButton({
       child: Container(
         width: buttonSize,
         height: buttonSize,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color, color.withValues(alpha: 0.85)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+        // Flat fill, no coloured shadow: a button that glows in its own colour
+        // is the one effect this app does not use (docs/DESIGN.md).
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: isLoading
             ? Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -110,7 +100,7 @@ Widget buildTinyActionButton({
                 height: iconSize,
                 colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
               )
-            : Icon(icon!, size: iconSize, color: foregroundColor),
+            : AppIcon(icon!, size: iconSize, color: foregroundColor),
       ),
     ),
   );
@@ -156,7 +146,7 @@ Widget buildAttachmentSheetOption({
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: foreground, size: 22),
+              AppIcon(icon, color: foreground, size: 22),
               const SizedBox(height: 6),
               Text(
                 label,
@@ -267,13 +257,6 @@ class _PulsatingRecordingIndicatorState
           decoration: BoxDecoration(
             color: Colors.red.withValues(alpha: _animation.value),
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withValues(alpha: _animation.value * 0.6),
-                blurRadius: 6 * _animation.value,
-                spreadRadius: 1.5 * _animation.value,
-              ),
-            ],
           ),
         );
       },

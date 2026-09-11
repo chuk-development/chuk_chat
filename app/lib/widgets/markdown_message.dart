@@ -5,6 +5,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
@@ -16,6 +18,94 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cowork/utils/input_validator.dart';
 import 'package:cowork/utils/phone_linkify.dart';
 import 'package:cowork/widgets/chuk_table.dart';
+
+/// Lays [overlay] on top of [base] field by field.
+///
+/// `TextStyle.merge` cannot be used for this. Every style that comes from a
+/// `TextTheme` entry carries `inherit: false`, and `merge` returns its argument
+/// unchanged in that case. `markdown_widget` merges inline styles as
+/// `inlineStyle.merge(parentStyle)`, so with a theme-derived paragraph style the
+/// inline style is thrown away whole — that is why inline code lost its
+/// monospace font and its background, and why a link inside a heading dropped
+/// back to body size. This helper keeps the surrounding style and applies only
+/// the fields the inline element really wants to change.
+TextStyle _overlayStyle(TextStyle? base, TextStyle overlay) {
+  if (base == null) return overlay;
+  return base.copyWith(
+    color: overlay.color,
+    backgroundColor: overlay.backgroundColor,
+    fontFamily: overlay.fontFamily,
+    fontSize: overlay.fontSize,
+    fontWeight: overlay.fontWeight,
+    fontStyle: overlay.fontStyle,
+    letterSpacing: overlay.letterSpacing,
+    height: overlay.height,
+    decoration: overlay.decoration,
+    decorationColor: overlay.decorationColor,
+    decorationStyle: overlay.decorationStyle,
+    decorationThickness: overlay.decorationThickness,
+  );
+}
+
+/// Inline `` `code` `` that keeps its monospace font, its own colour and its
+/// background chip in every context — paragraph, heading, list item and block
+/// quote. The size follows the surrounding text so code inside a heading stays
+/// heading-sized.
+class InlineCodeNode extends SpanNode {
+  InlineCodeNode(this.text, this.codeStyle);
+
+  final String text;
+  final TextStyle codeStyle;
+
+  @override
+  InlineSpan build() => TextSpan(text: text, style: style);
+
+  @override
+  TextStyle get style {
+    final TextStyle merged = _overlayStyle(parentStyle, codeStyle);
+    final double? parentSize = parentStyle?.fontSize;
+    if (parentSize == null) return merged;
+    return merged.copyWith(fontSize: parentSize * 0.92);
+  }
+}
+
+/// A link that reads as a link: the accent colour plus an underline in that
+/// same colour, without losing the size or the weight of the text around it.
+class AccentLinkNode extends LinkNode {
+  AccentLinkNode(super.attributes, super.linkConfig, this.accentColor);
+
+  final Color accentColor;
+
+  @override
+  TextStyle get style => _overlayStyle(
+    parentStyle,
+    TextStyle(
+      color: accentColor,
+      decoration: TextDecoration.underline,
+      decorationColor: accentColor,
+      decorationThickness: 1.2,
+    ),
+  );
+}
+
+/// Diameter of an unordered-list bullet.
+const double _kBulletSize = 6;
+
+/// Bullet shape per nesting level: filled disc, hollow disc, then square —
+/// the convention readers already know from HTML lists.
+BoxDecoration _bulletDecoration(int depth, Color color) {
+  switch (depth % 3) {
+    case 0:
+      return BoxDecoration(shape: BoxShape.circle, color: color);
+    case 1:
+      return BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 1.2),
+      );
+    default:
+      return BoxDecoration(color: color);
+  }
+}
 
 /// One slice of a message: either plain markdown or a GFM table block.
 class _MdSegment {
@@ -52,7 +142,8 @@ List<_MdSegment> _splitMarkdownTables(String text) {
       continue;
     }
 
-    final bool couldBeHeader = !inFence &&
+    final bool couldBeHeader =
+        !inFence &&
         line.contains('|') &&
         i + 1 < lines.length &&
         isTableDelimiterRow(lines[i + 1]) &&
@@ -127,6 +218,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     if (widget.text != oldWidget.text ||
         widget.textColor != oldWidget.textColor ||
         widget.backgroundColor != oldWidget.backgroundColor ||
+        widget.paragraphFontSize != oldWidget.paragraphFontSize ||
         widget.fontFamily != oldWidget.fontFamily) {
       _rebuildCache();
     }
@@ -268,11 +360,27 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       fontFamily: 'monospace',
       fontSize: 13,
       height: 1.4,
+      letterSpacing: 0,
       color: defaultCodeColor,
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
     final Color accentColor = theme.colorScheme.primary;
     final String? proseFontFamily = widget.fontFamily;
+    final double baseFontSize = widget.paragraphFontSize ?? 14;
+    final double baseLineHeight = widget.paragraphHeight ?? 1.45;
+
+    // Inline code keeps its own font and colour; the size is decided per
+    // context by [InlineCodeNode].
+    final TextStyle inlineCodeStyle = codeTextStyle.copyWith(
+      backgroundColor: codeBackground,
+    );
+
+    // Heading sizes are derived from the reading size instead of taken from
+    // the text theme. The theme sizes are not monotonic — `titleSmall` (h4) is
+    // smaller than `bodyLarge` (h5) — so `#### x` used to render smaller than
+    // `##### x`. Deriving them also lets the headings follow the chat font
+    // size the user picked.
+    double headingSize(double factor) => baseFontSize * factor;
 
     final MarkdownConfig config = MarkdownConfig(
       configs: [
@@ -296,12 +404,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.headlineSmall?.copyWith(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.72),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.72),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               ),
@@ -311,12 +421,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.titleLarge?.copyWith(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.46),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.46),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               ),
@@ -326,12 +438,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.titleMedium?.copyWith(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.26),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
+                fontSize: headingSize(1.26),
                 fontWeight: FontWeight.w700,
                 fontFamily: proseFontFamily,
               ),
@@ -341,12 +455,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.titleSmall?.copyWith(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(1.12),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(1.12),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               ),
@@ -356,12 +472,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.bodyLarge?.copyWith(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(1.0),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(1.0),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               ),
@@ -371,19 +489,19 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.bodyMedium?.copyWith(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(0.92),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
+                fontSize: headingSize(0.92),
                 fontWeight: FontWeight.w600,
                 fontFamily: proseFontFamily,
               ),
         ),
-        CodeConfig(
-          style: codeTextStyle.copyWith(backgroundColor: codeBackground),
-        ),
+        CodeConfig(style: inlineCodeStyle),
         PreConfig(
           padding: EdgeInsets.zero,
           margin: EdgeInsets.zero,
@@ -400,18 +518,19 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
             textColor: widget.textColor,
           ),
         ),
+        // The style here is only the fallback for a link with no surrounding
+        // style; [AccentLinkNode] is what actually paints a link, so that the
+        // underline and the accent colour survive inside a heading or bold
+        // text instead of resetting the text to body size.
         LinkConfig(
-          style:
-              (theme.textTheme.bodyMedium?.copyWith(
-                color: accentColor,
-                decoration: TextDecoration.underline,
-                fontFamily: proseFontFamily,
-              )) ??
-              TextStyle(
-                color: accentColor,
-                decoration: TextDecoration.underline,
-                fontFamily: proseFontFamily,
-              ),
+          style: TextStyle(
+            color: accentColor,
+            decoration: TextDecoration.underline,
+            decorationColor: accentColor,
+            decorationThickness: 1.2,
+            fontFamily: proseFontFamily,
+            fontSize: baseFontSize,
+          ),
           onTap: (url) {
             _onTapLink(url);
           },
@@ -447,10 +566,53 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               )) ??
               TextStyle(color: widget.textColor, fontFamily: proseFontFamily),
         ),
-        ListConfig(),
+        // The package's own markers colour themselves from the global text
+        // theme, not from the bubble. On a coloured bubble that made the
+        // bullets nearly invisible. These markers use the bubble text colour
+        // and the reading size.
+        ListConfig(
+          marginLeft: 28,
+          marginBottom: 4,
+          marker: (bool isOrdered, int depth, int index) {
+            if (isOrdered) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: SelectionContainer.disabled(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Text(
+                      '${index + 1}.',
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: widget.textColor,
+                        fontSize: baseFontSize,
+                        height: baseLineHeight,
+                        fontFamily: proseFontFamily,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            final double dotTop =
+                ((baseFontSize * baseLineHeight) - _kBulletSize) / 2;
+            return Padding(
+              padding: EdgeInsets.only(top: dotTop < 0 ? 0 : dotTop, right: 8),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  width: _kBulletSize,
+                  height: _kBulletSize,
+                  decoration: _bulletDecoration(depth, widget.textColor),
+                ),
+              ),
+            );
+          },
+        ),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
         CheckBoxConfig(
-          builder: (checked) => Icon(
+          builder: (checked) => AppIcon(
             checked ? Icons.check_box : Icons.check_box_outline_blank,
             size: 16,
             color: widget.textColor.withValues(alpha: 0.85),
@@ -471,6 +633,16 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           tag: MarkdownTag.pre.name,
           generator: (e, config, visitor) =>
               _SafeCodeBlockNode(e, config.pre, visitor),
+        ),
+        SpanNodeGeneratorWithTag(
+          tag: MarkdownTag.a.name,
+          generator: (e, config, visitor) =>
+              AccentLinkNode(e.attributes, config.a, accentColor),
+        ),
+        SpanNodeGeneratorWithTag(
+          tag: MarkdownTag.code.name,
+          generator: (e, config, visitor) =>
+              InlineCodeNode(e.textContent, inlineCodeStyle),
         ),
         SpanNodeGeneratorWithTag(
           tag: _latexTag,
@@ -503,6 +675,9 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
             textColor: widget.textColor,
             accentColor: accentColor,
             fontFamily: proseFontFamily,
+            // A link in a table cell goes through the same confirm-then-open
+            // path as a link in prose (bead cowork-94s9).
+            onTapLink: _onTapLink,
           ),
         );
         continue;
@@ -1504,7 +1679,7 @@ class _CopyButtonState extends State<_CopyButton> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            AppIcon(
               _copied ? Icons.check : Icons.content_copy,
               size: 14,
               color: widget.textColor.withValues(alpha: 0.8),
@@ -1695,7 +1870,7 @@ class _MarkdownImage extends StatelessWidget {
       height: 140,
       color: colorScheme.surfaceContainerHighest,
       alignment: Alignment.center,
-      child: Icon(
+      child: AppIcon(
         Icons.broken_image_outlined,
         color: colorScheme.onSurfaceVariant,
         size: 36,
@@ -1734,7 +1909,7 @@ class _NetworkImageViewer extends StatelessWidget {
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(
+                  errorBuilder: (_, _, _) => const AppIcon(
                     Icons.broken_image_outlined,
                     color: Colors.white70,
                     size: 64,
@@ -1747,7 +1922,7 @@ class _NetworkImageViewer extends StatelessWidget {
               right: 16,
               child: SafeArea(
                 child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: const AppIcon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),

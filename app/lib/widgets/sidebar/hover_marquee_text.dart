@@ -67,8 +67,7 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
     await Future<void>.delayed(_startDelay);
     if (!_stillRunning(token)) return;
 
-    final int ms =
-        (overflow / widget.velocity * 1000).clamp(600, 6000).round();
+    final int ms = (overflow / widget.velocity * 1000).clamp(600, 6000).round();
     _controller.duration = Duration(milliseconds: ms);
 
     // One direction only: show the start, scroll left to reveal the end, hold,
@@ -91,8 +90,7 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
   }
 
   /// True while the loop started under [token] is still the active one.
-  bool _stillRunning(int token) =>
-      mounted && _active && token == _cycleToken;
+  bool _stillRunning(int token) => mounted && _active && token == _cycleToken;
 
   void _stop() {
     if (!_active) return;
@@ -169,10 +167,7 @@ class _HoverMarqueeTextState extends State<HoverMarqueeText>
             animation: _controller,
             builder: (context, _) {
               if (!_active && _controller.value == 0) {
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: resting,
-                );
+                return Align(alignment: Alignment.centerLeft, child: resting);
               }
               final double dx = -overflow * _controller.value;
               return ClipRect(

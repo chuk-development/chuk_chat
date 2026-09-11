@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 import 'package:cowork/constants.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 
@@ -57,9 +59,7 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
     final double sheetHeight = MediaQuery.sizeOf(context).height * 0.75;
 
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Container(
         height: sheetHeight,
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -82,7 +82,7 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
               child: Row(
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.edit_note_rounded,
                     size: 18,
                     color: iconFg.withValues(alpha: 0.6),
@@ -98,7 +98,7 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: Icon(
+                    icon: AppIcon(
                       Icons.close_fullscreen_rounded,
                       size: 18,
                       color: iconFg.withValues(alpha: 0.5),

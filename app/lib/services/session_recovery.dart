@@ -67,18 +67,18 @@ class SessionStash {
   }
 
   AccountSession toAccountSession() => AccountSession(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        userId: userId,
-        expiresAt: expiresAt,
-      );
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+    userId: userId,
+    expiresAt: expiresAt,
+  );
 
   Map<String, dynamic> toJson() => {
-        'access_token': accessToken,
-        'refresh_token': refreshToken,
-        'user_id': userId,
-        if (expiresAt != null) 'expires_at': expiresAt,
-      };
+    'access_token': accessToken,
+    'refresh_token': refreshToken,
+    'user_id': userId,
+    if (expiresAt != null) 'expires_at': expiresAt,
+  };
 
   static SessionStash? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -118,7 +118,9 @@ class SessionStash {
     final parts = token.split('.');
     if (parts.length < 2) return null;
     try {
-      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
       final claims = jsonDecode(payload);
       final exp = claims is Map ? claims['exp'] : null;
       return exp is num ? exp.toInt() : null;
@@ -219,8 +221,8 @@ class CoworkRelayRecoveryLink implements RecoveryLink {
   CoworkRelayRecoveryLink({
     required CoworkPairingStore store,
     required CoworkStoredPairing pairing,
-  })  : _store = store,
-        _pairing = pairing;
+  }) : _store = store,
+       _pairing = pairing;
 
   final CoworkPairingStore _store;
   final CoworkStoredPairing _pairing;
@@ -268,6 +270,20 @@ class CoworkRelayRecoveryLink implements RecoveryLink {
 
 /// Runs one recovery: host first, own refresh token second, login page last.
 class SessionRecovery {
+  /// The recovery running right now, or null.
+  ///
+  /// The recovery link dials the SAME relay with the SAME device id the shell's
+  /// transport uses. Two controller sockets for one device is how a recovered
+  /// session gets lost: the second connection displaces the first, and the
+  /// `account_session_rotated` frame the recovery is waiting for never lands.
+  ///
+  /// So the gate no longer holds the whole app behind the recovery (the roster
+  /// and the transcript are on this device and paint at once) — it publishes
+  /// the recovery here instead, and the shell waits for THIS before it opens
+  /// its own socket. The user sees their conversation immediately; only the
+  /// reconnect waits, which it was going to do anyway.
+  static Future<void>? inFlight;
+
   SessionRecovery({
     required this.stash,
     required RecoveryLink? link,
@@ -276,12 +292,12 @@ class SessionRecovery {
     Duration hostTimeout = const Duration(seconds: 15),
     Duration adoptionGrace = const Duration(seconds: 5),
     Duration pollInterval = const Duration(milliseconds: 100),
-  })  : _link = link,
-        _currentSession = currentSession,
-        _refreshFromToken = refreshFromToken,
-        _hostTimeout = hostTimeout,
-        _adoptionGrace = adoptionGrace,
-        _poll = pollInterval;
+  }) : _link = link,
+       _currentSession = currentSession,
+       _refreshFromToken = refreshFromToken,
+       _hostTimeout = hostTimeout,
+       _adoptionGrace = adoptionGrace,
+       _poll = pollInterval;
 
   final SessionStash stash;
 

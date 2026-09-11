@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/automations/cowork_automation.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
@@ -57,15 +60,17 @@ class _AutomationCardState extends State<AutomationCard> {
       'failed' => scheme.errorContainer,
       _ => m3.surfaceContainerHighest,
     };
-    final IconData icon =
-        a.isWatcher ? Icons.visibility_outlined : Icons.schedule;
+    final IconData icon = a.isWatcher
+        ? Icons.visibility_outlined
+        : Icons.schedule;
 
     // The kind first, then the schedule or the script, then the clock facts.
     // One term per thing: a schedule has a next time, a watcher has reports.
     final facts = <String>[
       a.isWatcher ? 'Watcher' : 'Schedule',
       a.specLabel,
-      if (a.isActive && a.nextFireAt != null) 'next ${_relative(a.nextFireAt!)}',
+      if (a.isActive && a.nextFireAt != null)
+        'next ${_relative(a.nextFireAt!)}',
       if (a.lastFiredAt != null) 'last ${_relative(a.lastFiredAt!)}',
       if (a.fireCount > 0)
         a.fireCount == 1 ? 'fired once' : 'fired ${a.fireCount}×',
@@ -83,7 +88,11 @@ class _AutomationCardState extends State<AutomationCard> {
       children: [
         // The icon tile is the same box on every row, so the text column
         // starts at the same x down the whole list.
-        ExpressiveIconTile(icon: icon, tone: tone, size: widget.compact ? 34 : 40),
+        ExpressiveIconTile(
+          icon: icon,
+          tone: tone,
+          size: widget.compact ? 34 : 40,
+        ),
         SizedBox(width: widget.compact ? 10 : 14),
         Expanded(
           child: Column(
@@ -118,8 +127,9 @@ class _AutomationCardState extends State<AutomationCard> {
                 facts.join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: m3.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
               ),
               if (hasDetail) ...[
                 const SizedBox(height: 6),
@@ -139,8 +149,9 @@ class _AutomationCardState extends State<AutomationCard> {
                     a.lastError!,
                     maxLines: _open ? 20 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.error),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.error,
+                    ),
                   ),
                 ],
               ],
@@ -185,11 +196,14 @@ class _AutomationCardState extends State<AutomationCard> {
   Widget _action(IconData icon, String tooltip, VoidCallback onPressed) =>
       IconButton(
         tooltip: tooltip,
-        icon: Icon(icon, size: 20),
+        icon: AppIcon(icon, size: 20),
         onPressed: onPressed,
-        visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
-        constraints: const BoxConstraints.tightFor(width: 32, height: 24),
+        // Material's minimum: the row is dense, the target is not.
+        constraints: const BoxConstraints.tightFor(
+          width: MobileLayout.minTouchTarget,
+          height: MobileLayout.minTouchTarget,
+        ),
       );
 
   static String _relative(DateTime when) {
