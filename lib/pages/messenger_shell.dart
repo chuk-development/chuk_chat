@@ -193,7 +193,8 @@ class MessengerShell extends StatefulWidget {
   State<MessengerShell> createState() => _MessengerShellState();
 }
 
-class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
+class _MessengerShellState extends State<MessengerShell>
+    with CoworkShellHost, SingleTickerProviderStateMixin {
   /// Keep the upstream desktop breakpoint; smaller windows use the phone UI.
   static const double _compactBreakpoint = 600;
 
@@ -229,6 +230,32 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   bool _isCompact = false;
   double _lastWidth = 0;
 
+  /// The phone push (see [_buildPhoneBody]). One explicit controller, because
+  /// an implicit tween starts in the very frame that mounts the thread view —
+  /// and that frame costs over 100 ms, so by the time anything reached the
+  /// screen the app's front-loaded curve had already spent four fifths of the
+  /// travel. The controller is started from a post-frame callback instead, so
+  /// the expensive frame is frame zero of the travel and every millimetre of
+  /// it is painted.
+  late final AnimationController _push = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+
+  /// The app's curve for what cannot take a spring: it leaves fast and settles
+  /// slowly (ui/expressive/motion.dart). Back plays it backwards, which is the
+  /// mirror — slow to let go, fast to clear the screen.
+  late final Animation<double> _pushed = CurvedAnimation(
+    parent: _push,
+    curve: kExpressiveDecelerate,
+  );
+
+  /// Where [_push] has been told to go, so a rebuild does not re-fire it.
+  /// Null until the phone layout has been built once: the first phone frame
+  /// (a cold start, or a window that just narrowed past the breakpoint) shows
+  /// the layout it is in, it does not travel into it.
+  double? _pushTarget;
+
   @override
   void initState() {
     super.initState();
@@ -238,6 +265,7 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
 
   @override
   void dispose() {
+    _push.dispose();
     _controller.removeListener(_onControllerForBrowser);
     _browserPresence?.dispose();
     _browserPresence = null;
@@ -823,54 +851,91 @@ class _MessengerShellState extends State<MessengerShell> with CoworkShellHost {
   /// thread carries the scaffold colour with it, because chuk's phone screen is
   /// a transparent `Scaffold` and would otherwise let the inbox show through it
   /// mid-travel.
+  /// Aim [_push] at the layout the shell is in now.
+  ///
+  /// Called from build, so it may not call `setState` and it may not start the
+  /// controller inline either: the frame that flips the flag is the frame that
+  /// builds and paints the whole thread, and a ticker started there loses that
+  /// frame and every frame the build overran. Starting it after the frame costs
+  /// one frame of delay and buys the entire travel.
+  void _drivePush(bool open, bool reducedMotion) {
+    final double target = open ? 1 : 0;
+    if (_pushTarget == null) {
+      _pushTarget = target;
+      _push.value = target;
+      return;
+    }
+    if (reducedMotion) {
+      _pushTarget = target;
+      if (_push.value != target) {
+        _push.stop();
+        _push.value = target;
+      }
+      return;
+    }
+    if (_pushTarget == target) return;
+    _pushTarget = target;
+    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+      if (!mounted || _pushTarget != target) return;
+      if (target == 1) {
+        _push.forward();
+      } else {
+        _push.reverse();
+      }
+    });
+  }
+
   Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
     final bool showChat = _showThreadOnNarrow && agent != null;
     final double width = MediaQuery.sizeOf(context).width;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: showChat ? 1 : 0),
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 320),
-      // The app's curve for what cannot take a spring: it leaves fast and
-      // settles slowly (ui/expressive/motion.dart).
-      curve: kExpressiveDecelerate,
-      builder: (BuildContext context, double t, Widget? _) {
-        final double p = t.clamp(0.0, 1.0);
+    _drivePush(showChat, MediaQuery.disableAnimationsOf(context));
+    return AnimatedBuilder(
+      animation: _pushed,
+      builder: (BuildContext context, Widget? _) {
+        final double p = _pushed.value.clamp(0.0, 1.0);
         final Widget chatLayer = agent == null
             // No coworker selected: the thread view still has to exist, because
             // it is what builds the transport.
             ? Offstage(child: _buildThread(phone: true))
             : Offstage(
-                offstage: p == 0,
+                // Onstage from the frame the thread is asked for, not from the
+                // first frame of the travel: that way the one expensive build
+                // and its first paint happen while the page is still parked off
+                // the right edge, and the travel itself is cheap re-paints of a
+                // layer that is already rastered.
+                offstage: !showChat && p == 0,
                 child: Transform.translate(
                   offset: Offset((1 - p) * width, 0),
-                  child: ColoredBox(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    child: MobileChatScreen(
-                      active: showChat,
-                      agent: agent,
-                      onBack: () => setState(() => _showThreadOnNarrow = false),
-                      // The pill opens the coworker's profile, like a messenger
-                      // contact header. The controls moved into the profile and
-                      // the "more" sheet.
-                      onOpenProfile: () => _openAgentProfile(agent),
-                      // The target is always there. Lit when a screen is
-                      // open, parked when none is — and a parked tap says why
-                      // instead of doing nothing (bead cowork-egrg).
-                      onOpenBrowser: _browserOpen
-                          ? _openBrowserView
-                          : _explainNoScreen,
-                      browserAvailable: _browserOpen,
-                      onReconnect: () {
-                        final view = _threadViewKey.currentState;
-                        if (view is CoworkThreadViewState) {
-                          unawaited(view.reconnect());
-                        }
-                      },
-                      onOpenFiles: () =>
-                          _openChatFiles(_selectedThreadKey, agent.name),
-                      bodyBuilder: (BuildContext context, double topInset) =>
-                          _buildThread(topInset: topInset, phone: true),
+                  child: RepaintBoundary(
+                    child: ColoredBox(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      child: MobileChatScreen(
+                        active: showChat,
+                        agent: agent,
+                        onBack: () =>
+                            setState(() => _showThreadOnNarrow = false),
+                        // The pill opens the coworker's profile, like a messenger
+                        // contact header. The controls moved into the profile and
+                        // the "more" sheet.
+                        onOpenProfile: () => _openAgentProfile(agent),
+                        // The target is always there. Lit when a screen is
+                        // open, parked when none is — and a parked tap says why
+                        // instead of doing nothing (bead cowork-egrg).
+                        onOpenBrowser: _browserOpen
+                            ? _openBrowserView
+                            : _explainNoScreen,
+                        browserAvailable: _browserOpen,
+                        onReconnect: () {
+                          final view = _threadViewKey.currentState;
+                          if (view is CoworkThreadViewState) {
+                            unawaited(view.reconnect());
+                          }
+                        },
+                        onOpenFiles: () =>
+                            _openChatFiles(_selectedThreadKey, agent.name),
+                        bodyBuilder: (BuildContext context, double topInset) =>
+                            _buildThread(topInset: topInset, phone: true),
+                      ),
                     ),
                   ),
                 ),
