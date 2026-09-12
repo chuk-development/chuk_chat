@@ -176,6 +176,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                 index: i,
                 isFirst: i == 0,
                 isLast: i == entries.length - 1 && widget.footer == null,
+                soleStep: entries.length == 1,
               ),
             if (widget.footer != null)
               Padding(
@@ -211,7 +212,12 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     } else {
       verb = widget.toolCalls.isEmpty ? 'Thought' : 'Worked';
     }
-    final label = duration == null
+    // A finished turn that took under a second has no duration worth
+    // printing: "Thought for 0s" is noise, and it is the most common case of
+    // all — a one-word answer. Name what happened and stop there.
+    final bool hasDuration =
+        duration != null && (widget.isRunning || duration.inSeconds >= 1);
+    final label = !hasDuration
         ? verb
         : '$verb for ${widget.isRunning ? formatAgentDurationLive(duration) : formatAgentDuration(duration)}';
 
@@ -258,8 +264,17 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     required int index,
     required bool isFirst,
     required bool isLast,
+    bool soleStep = false,
   }) {
-    final bool bodyOpen = _openBodies.contains(index);
+    // A turn whose only step is the model thinking has nothing to choose
+    // between: opening the bar is already the request to read the thinking,
+    // and asking for a second tap to get past a clipped first sentence is
+    // how the reasoning ends up looking like it is never shown at all. A
+    // turn with several steps keeps them collapsed — there the rail is a
+    // list to scan, and one opened body would bury the rest.
+    final bool bodyOpen =
+        _openBodies.contains(index) ||
+        (soleStep && entry.toolCall == null && entry.hasBody);
     final Color color = entry.hasError
         ? theme.colorScheme.error.withValues(alpha: 0.85)
         : muted;

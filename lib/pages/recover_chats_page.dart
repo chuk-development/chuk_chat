@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -219,7 +221,9 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.recoverEncryptedChats)),
+      appBar: FloatingAppBar(
+        title: Text(l.recoverEncryptedChats),
+      ),
       body: _lockedInfo.isEmpty
           ? Center(
               child: Column(

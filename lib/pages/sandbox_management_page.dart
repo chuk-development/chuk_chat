@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -177,14 +179,10 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
     final String? login = _github.githubLogin;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: const Text('Sandboxes'),
         actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const AppIcon(Icons.refresh),
-            onPressed: _loading ? null : _refresh,
-          ),
+          FloatingHeaderButton(icon: Icons.refresh, onPressed: _loading ? null : _refresh, tooltip: 'Refresh'),
         ],
       ),
       body: RefreshIndicator(

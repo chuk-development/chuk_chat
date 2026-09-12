@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:http/http.dart' as http;
@@ -682,9 +684,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.accountSettings),
-        centerTitle: false,
       ),
       body: bodyContent,
     );

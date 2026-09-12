@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 
 import 'package:chuk_chat/assistant/assistant_bridge.dart';
@@ -164,7 +166,9 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
 
     if (!AssistantPlatform.isSupported) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Assistent setzen')),
+        appBar: FloatingAppBar(
+          title: const Text('Assistent setzen'),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -183,14 +187,12 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
     final missing = _grants.where((grant) => !_granted(grant)).toList();
 
     return Scaffold(
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: const Text('Assistent setzen'),
         actions: [
-          IconButton(
-            tooltip: 'Status aktualisieren',
-            onPressed: _loading ? null : () => unawaited(_refresh()),
-            icon: const AppIcon(Icons.refresh),
-          ),
+          FloatingHeaderButton(icon: Icons.refresh, onPressed: _loading ? null : () => unawaited(_refresh()), tooltip: 'Status aktualisieren'),
         ],
       ),
       body: SettingsListView(

@@ -12,6 +12,8 @@ import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -206,14 +208,18 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Loading...')),
+        appBar: FloatingAppBar(
+          title: const Text('Loading...'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_project == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Workspace Not Found')),
+        appBar: FloatingAppBar(
+          title: const Text('Workspace Not Found'),
+        ),
         body: const Center(child: Text('Workspace not found')),
       );
     }
@@ -222,7 +228,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -189,9 +189,17 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final bool isWaitingForFirstTokens =
         widget.isReasoningStreaming &&
         (widget.message == 'Thinking...' || widget.message.isEmpty);
+    // The bar also carries the "took 4s" line on a turn with neither
+    // reasoning nor a model line, which is why a known duration counts as a
+    // reason to build it.
+    final bool hasWorkedFor =
+        widget.workedFor != null && widget.workedFor!.inSeconds >= 1;
     final bool hasInfoStatusBar =
         !useContentBlocks &&
-        (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
+        (_hasReasoning ||
+            _hasModelInfo ||
+            hasWorkedFor ||
+            isWaitingForFirstTokens) &&
         !hasVisibleToolCalls;
 
     final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
@@ -366,9 +374,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           width: double.infinity,
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
-        // Match the legacy 6-px gap that used to live inside the
-        // info status bar's bottom margin. Caller owns the gap now.
-        const SizedBox(height: _kCardStackGap),
+        const SizedBox(height: _kInfoBarGap),
       ],
       if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),

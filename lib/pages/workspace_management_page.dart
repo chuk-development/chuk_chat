@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -118,14 +120,18 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Loading...')),
+        appBar: FloatingAppBar(
+          title: const Text('Loading...'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_project == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Workspace Not Found')),
+        appBar: FloatingAppBar(
+          title: const Text('Workspace Not Found'),
+        ),
         body: const Center(child: Text('Workspace not found')),
       );
     }
@@ -138,7 +144,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -162,11 +168,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: AppIcon(Icons.edit, color: iconFg),
-            onPressed: _showEditProjectDialog,
-            tooltip: 'Edit workspace',
-          ),
+          FloatingHeaderButton(icon: Icons.edit, onPressed: _showEditProjectDialog, tooltip: 'Edit workspace', color: iconFg),
         ],
         bottom: TabBar(
           controller: _tabController,

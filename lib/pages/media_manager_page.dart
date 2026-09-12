@@ -3,6 +3,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -539,7 +541,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(
           _isSelectionMode
               ? '${_selectedImages.length} selected'

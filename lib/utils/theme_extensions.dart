@@ -6,36 +6,61 @@ extension ThemeDataIconColorX on ThemeData {
   /// The glyph colour for a button that is filled with the accent — the send
   /// button, the new-chat button, every round accent circle.
   ///
-  /// Every other icon in the app is the reader's own icon colour, so these
-  /// buttons take that colour too rather than flipping to a flat black or
-  /// white picked purely for contrast: a black glyph on the one accent-filled
-  /// control looks pasted in from another app.
+  /// Every other icon in the app is the reader's own icon colour: a white
+  /// that carries a little of the chosen accent in it. A flat black or white
+  /// glyph picked purely for contrast makes these buttons look pasted in
+  /// from a different app, so they take that colour too.
   ///
   /// The icon colour is often a muted tone, though, and muted-on-accent can
-  /// be unreadable — the default tan sits at a contrast of 1.2 against the
-  /// default orange. So the glyph keeps that hue and is lightened towards
-  /// white until it reads: near-white with a trace of the accent in it, which
-  /// is what the rest of the app looks like anyway. Only an accent too pale
-  /// for any light glyph sends it the other way, towards black.
+  /// be unreadable — the shipped defaults are a tan at a contrast of 1.2
+  /// against the orange. So the glyph is lightened until it reads. It is
+  /// lightened in HSL, keeping hue and saturation: mixing towards white
+  /// washes the accent out of it, and the accent in it is the whole point.
+  /// Only a fill too pale for any light glyph sends it the other way.
   Color accentButtonForeground(Color fill) {
     const double target = 2.0;
     final Color tint = resolvedIconColor;
     if (_contrastRatio(tint, fill) >= target) return tint;
 
-    final Color? lightened = _blendUntilReadable(tint, Colors.white, fill);
+    final Color? lightened = _shadeUntilReadable(tint, fill, up: true);
     if (lightened != null) return lightened;
-
-    // Not even white reads on this fill, so the fill is pale. Same walk the
-    // other way.
-    return _blendUntilReadable(tint, Colors.black, fill) ?? Colors.black;
+    return _shadeUntilReadable(tint, fill, up: false) ?? Colors.black;
   }
 }
 
-/// Walks [from] towards [towards] in tenths and returns the first blend that
-/// reaches a contrast of 2.0 against [on]. Null when the far end never does.
-Color? _blendUntilReadable(Color from, Color towards, Color on) {
-  for (int step = 1; step <= 10; step++) {
-    final Color candidate = Color.lerp(from, towards, step / 10)!;
+/// The least saturation a lightened glyph keeps, so the tint survives.
+///
+/// Saturation loses its effect as lightness approaches white: the default
+/// tan is only 14% saturated, and raised to a readable lightness that lands
+/// on a colour indistinguishable from plain white. Holding it here keeps the
+/// glyph a *tinted* white, which is what the rest of the app's icons are.
+/// A genuinely neutral icon colour is left neutral — see [_saturationFloor].
+const double _kGlyphSaturationFloor = 0.35;
+
+double _saturationFloor(double base) =>
+    // Below this the reader picked grey, not a tint, and inventing a hue for
+    // them would pull a colour out of nowhere.
+    base <= 0.02 ? base : (base < _kGlyphSaturationFloor
+        ? _kGlyphSaturationFloor
+        : base);
+
+/// Walks [from]'s lightness towards white (or towards black) in HSL and
+/// returns the first shade that reaches a contrast of 2.0 against [on]. The
+/// hue never changes and the saturation only ever rises, so the result is
+/// the same colour brighter — not a step towards grey. Null when the far end
+/// never reads.
+Color? _shadeUntilReadable(Color from, Color on, {required bool up}) {
+  final HSLColor base = HSLColor.fromColor(from);
+  final HSLColor tinted = base.withSaturation(
+    _saturationFloor(base.saturation),
+  );
+  for (int step = 1; step <= 20; step++) {
+    final double lightness = up
+        ? base.lightness + (1 - base.lightness) * (step / 20)
+        : base.lightness * (1 - step / 20);
+    final Color candidate = tinted
+        .withLightness(lightness.clamp(0.0, 1.0))
+        .toColor();
     if (_contrastRatio(candidate, on) >= 2.0) return candidate;
   }
   return null;

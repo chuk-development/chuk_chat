@@ -50,6 +50,16 @@ class _SettingsListViewState extends State<SettingsListView> {
     super.dispose();
   }
 
+  EdgeInsetsGeometry _withHeaderInset(
+    BuildContext context,
+    EdgeInsetsGeometry? padding,
+  ) {
+    final double inset = MediaQuery.paddingOf(context).top;
+    final EdgeInsetsGeometry base = padding ?? EdgeInsets.zero;
+    if (inset <= 0) return base;
+    return base.add(EdgeInsets.only(top: inset));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -65,7 +75,13 @@ class _SettingsListViewState extends State<SettingsListView> {
         thumbColor: theme.colorScheme.onSurface.withValues(alpha: 0.35),
         child: SingleChildScrollView(
           controller: _controller,
-          padding: widget.padding,
+          // The header floats over the page, so the list runs underneath it
+          // and the inset it needs is *inside* the scroll view: padding put
+          // outside would stop the content at the header instead of letting
+          // it pass behind. A Scaffold that extends its body behind the app
+          // bar reports the bar's height here; one that does not reports
+          // zero, so this is a no-op on a page with a solid bar.
+          padding: _withHeaderInset(context, widget.padding),
           physics: widget.physics,
           child: Column(
             crossAxisAlignment: widget.crossAxisAlignment,

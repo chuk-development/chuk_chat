@@ -1,5 +1,7 @@
 // lib/pages/coming_soon_page.dart
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ComingSoonPage extends StatelessWidget {
@@ -24,11 +26,8 @@ class ComingSoonPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: scaffoldBg,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(title, style: titleStyle),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
       ),
       body: Center(
         child: Column(

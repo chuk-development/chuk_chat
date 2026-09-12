@@ -49,7 +49,7 @@ void main() {
     // All four rounds land in ONE timeline, whose folded header is the only
     // thing visible.
     expect(find.byType(AgentActivityTimeline), findsOneWidget);
-    expect(find.textContaining('Worked for'), findsOneWidget);
+    expect(find.textContaining('Worked'), findsOneWidget);
     // The junk `<` blocks never render as text.
     expect(find.text('<'), findsNothing);
   });
@@ -88,6 +88,6 @@ void main() {
     // Two single-call bars, not one merged `web_search (2×)`.
     // Real prose between the rounds keeps them as two separate timelines.
     expect(find.byType(AgentActivityTimeline), findsNWidgets(2));
-    expect(find.textContaining('Worked for'), findsNWidgets(2));
+    expect(find.textContaining('Worked'), findsNWidgets(2));
   });
 }

@@ -13,7 +13,9 @@ void main() {
   // stacked boxes. Consecutive tool-call rounds must instead merge into ONE
   // activity timeline, and ALL reasoning — including the final-pass reasoning
   // that trails the last tool — folds INTO that timeline as steps, so the
-  // collapsed turn reads as a single "Worked for …" line plus the answer.
+  // collapsed turn reads as a single "Worked" line plus the answer. The
+  // duration is only appended once the turn took a second or more, so the
+  // assertions here match the verb, not the number.
   ToolCall tool(String id, String name) => ToolCall(
     id: id,
     name: name,
@@ -49,7 +51,7 @@ void main() {
 
     // Both rounds collapse into a SINGLE timeline, not one per round.
     expect(find.byType(AgentActivityTimeline), findsOneWidget);
-    expect(find.textContaining('Worked for'), findsOneWidget);
+    expect(find.textContaining('Worked'), findsOneWidget);
 
     // Collapsed: the steps and the reasoning are hidden, the answer is not.
     expect(find.textContaining('Synthesizing the findings'), findsNothing);
@@ -57,7 +59,7 @@ void main() {
 
     // Expanded: all three reasoning notes and both tool steps sit inside
     // that one timeline, in the order they happened.
-    await tester.tap(find.textContaining('Worked for'));
+    await tester.tap(find.textContaining('Worked'));
     await tester.pumpAndSettle();
     expect(find.text('I should search the web'), findsOneWidget);
     expect(find.text('Now I need my notes'), findsOneWidget);

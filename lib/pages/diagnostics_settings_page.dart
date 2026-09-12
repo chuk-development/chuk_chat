@@ -1,5 +1,7 @@
 // lib/pages/diagnostics_settings_page.dart
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
@@ -186,9 +188,8 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.developerOptions),
-        centerTitle: false,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

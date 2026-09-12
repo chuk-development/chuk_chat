@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
@@ -733,7 +735,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.aiIdentityMemory)),
+      appBar: FloatingAppBar(
+        title: Text(l.aiIdentityMemory),
+      ),
       body: bodyContent,
     );
   }
