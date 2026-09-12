@@ -62,9 +62,9 @@ Future<void> _pumpInsideAScrollView(
 void main() {
   group('the numbers', () {
     test('the capsule, the ring and the target agree', () {
-      expect(PillGeometry.inset, 8);
-      expect(PillGeometry.segmentHeight, 44);
-      expect(PillGeometry.segmentRadius, 22);
+      expect(PillGeometry.inset, 4);
+      expect(PillGeometry.segmentHeight, 52);
+      expect(PillGeometry.segmentRadius, 26);
       expect(PillGeometry.radius, 30);
       expect(PillGeometry.height, 60);
       // The ring is the same thickness everywhere: what the shell does not pad
