@@ -632,7 +632,6 @@ const Map<String, String> stringsDe = {
   'askMeAnything': 'Frag mich alles!',
   'queuedLabel': 'In Warteschlange',
   'queuedMessagesCount': '{count} Nachrichten in der Warteschlange',
-  'workingLabel': 'arbeitet',
   'editYourMessage': 'Nachricht bearbeiten...',
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
   'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',

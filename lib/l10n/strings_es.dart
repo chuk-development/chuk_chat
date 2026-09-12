@@ -504,7 +504,6 @@ const Map<String, String> stringsEs = {
       'Estás chateando con una IA: puede equivocarse. Verifica lo importante.',
   'queuedLabel': 'En cola',
   'queuedMessagesCount': '{count} mensajes en cola',
-  'workingLabel': 'trabajando',
   'editYourMessage': 'Edita tu mensaje...',
   'addMessageOrDocs': 'Añade un mensaje o envía documentos',
   'micAccessFailed': 'Error de acceso al micrófono',

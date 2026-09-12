@@ -509,7 +509,6 @@ const Map<String, String> stringsFr = {
       'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
   'queuedLabel': 'En file d\'attente',
   'queuedMessagesCount': '{count} messages en file d\'attente',
-  'workingLabel': 'en cours',
   'editYourMessage': 'Modifier votre message...',
   'addMessageOrDocs': 'Ajouter un message ou envoyer des documents',
   'micAccessFailed': 'Échec de l\'accès au microphone',
