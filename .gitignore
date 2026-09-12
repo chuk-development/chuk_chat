@@ -150,4 +150,6 @@ session.txt
 .beads/proxieddb/
 
 # pseudomap: Index wird lokal gebaut, Karten selbst werden committet
+.pseudomap/.lock
+.pseudomap/cache.json
 .pseudomap/index.json

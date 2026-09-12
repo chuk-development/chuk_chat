@@ -11,5 +11,5 @@ class SystemTrayService {
 
   Future<void> hideWindow() async {}
 
-  Future<void> dispose() async {}
+  Future<void> dispose({bool resetQuitFlag = true}) async {}
 }
