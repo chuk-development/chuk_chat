@@ -383,8 +383,17 @@ void main() {
       find.byKey(const ValueKey('context_message_actions')),
       findsOneWidget,
     );
-    // One divider now: Reply and Copy, with Edit gone (bead cowork-9edt).
-    expect(find.byType(Divider), findsOneWidget);
+    // No divider any more: the menu is a run of separate tiles, the same
+    // surface every dropdown uses (MenuTileGroup). Reply and Copy, with Edit
+    // gone (bead cowork-9edt).
+    expect(find.byType(Divider), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('context_message_actions')),
+        matching: find.byType(Material),
+      ),
+      findsNWidgets(2),
+    );
     expect(find.byTooltip('Nachricht kopieren'), findsNothing);
     // The entry is not there, and the callback behind it is never reached.
     expect(find.text('Edit'), findsNothing);
