@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ChatModeSelector extends StatelessWidget {
   const ChatModeSelector({
@@ -118,6 +119,10 @@ class ChatModeSelector extends StatelessWidget {
     }
   }
 
+  /// The mode glyph, sized from the pill instead of pinned: the composer
+  /// runs a short pill, and a 19px glyph in a 36px pill leaves no ring.
+  double get _glyphSize => (height * 0.42).clamp(15.0, 20.0);
+
   /// The label for the third point (Custom). When Custom is active it names
   /// the running model; otherwise it names the model Custom last ran; only when
   /// Custom has never been used does it fall back to "Choose model".
@@ -162,7 +167,9 @@ class ChatModeSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(height / 2),
         child: Container(
           height: height,
-          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: showLabel ? height * 0.25 : height * 0.30,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(height / 2),
             border: Border.all(
@@ -173,7 +180,7 @@ class ChatModeSelector extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(pillIcon, size: 19, color: iconFg),
+              AppIcon(pillIcon, size: _glyphSize, color: iconFg),
               if (showLabel) ...[
                 const SizedBox(width: 5),
                 Text(
@@ -185,9 +192,9 @@ class ChatModeSelector extends StatelessWidget {
                 ),
               ],
               const SizedBox(width: 2),
-              Icon(
+              AppIcon(
                 Icons.keyboard_arrow_down,
-                size: 16,
+                size: _glyphSize - 3,
                 color: iconFg.withValues(alpha: 0.7),
               ),
             ],
@@ -228,7 +235,7 @@ class ChatModeSelector extends StatelessWidget {
             // has ever been used. Fast/Thinking models are never surfaced here.
             label: _customPointLabel,
             isSelected: mode == ChatMode.custom,
-            trailing: Icon(
+            trailing: AppIcon(
               Icons.chevron_right,
               size: 18,
               color: iconFg.withValues(alpha: 0.8),
@@ -283,7 +290,7 @@ class ChatModeSelector extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(
+                  AppIcon(
                     Icons.chevron_right,
                     size: 18,
                     color: iconFg.withValues(alpha: 0.8),
@@ -309,7 +316,7 @@ class ChatModeSelector extends StatelessWidget {
           iconFg: iconFg,
           icon: Icons.add,
           label: 'More models',
-          trailing: Icon(
+          trailing: AppIcon(
             Icons.chevron_right,
             size: 18,
             color: iconFg.withValues(alpha: 0.8),
@@ -423,7 +430,7 @@ class ChatModeSelector extends StatelessWidget {
     return Row(
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 18, color: iconFg),
+          AppIcon(icon, size: 18, color: iconFg),
           const SizedBox(width: 10),
         ],
         Expanded(
@@ -438,7 +445,7 @@ class ChatModeSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        if (isSelected) Icon(Icons.check, color: iconFg, size: 18),
+        if (isSelected) AppIcon(Icons.check, color: iconFg, size: 18),
         ?trailing,
       ],
     );
