@@ -54,6 +54,12 @@ String accountMonogram(String? label) {
   return parts.first.characters.first.toUpperCase();
 }
 
+/// The height every control in the home header row takes: the search target,
+/// the All/Unread switch, the "+", and the search field that replaces the
+/// first two. One number, because a row of controls that do not agree on their
+/// height reads as three controls borrowed from three screens.
+const double kHomeBarHeight = 52;
+
 class MobileAgentList extends StatefulWidget {
   const MobileAgentList({
     super.key,
@@ -303,7 +309,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.search01,
           onTap: _openSearch,
-          size: kMinInteractiveDimension,
+          size: kHomeBarHeight,
           color: scheme.surfaceContainerHighest,
           tooltip: 'Search coworkers',
           semanticsId: 'mobile_home_search',
@@ -317,6 +323,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             selected: _filter,
             badges: <int, int>{1: unread},
             margin: EdgeInsets.zero,
+            height: kHomeBarHeight,
             onSelected: (int i) => setState(() {
               _reverse = i < _filter;
               _filter = i;
@@ -329,7 +336,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           ExpressiveIconButton(
             hugeIcon: HugeIcons.plusSign,
             onTap: widget.onAddAgent,
-            size: kMinInteractiveDimension,
+            size: kHomeBarHeight,
             color: scheme.primary,
             onColor: scheme.onPrimary,
             tooltip: 'Add a coworker',
@@ -347,7 +354,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.arrowLeft02,
           onTap: _closeSearch,
-          size: kMinInteractiveDimension,
+          size: kHomeBarHeight,
           tooltip: 'Close search',
           semanticsId: 'mobile_home_search_close',
         ),
@@ -499,10 +506,10 @@ class _MobileAgentListState extends State<MobileAgentList> {
 ///
 /// It is a field and it looks like one. A bare [TextField] on the header's
 /// background had no shape at all, so the row simply lost its title and gained
-/// a caret. The corner is the navigation pill's ([ConnectedGroup.outerRadius]),
-/// because the filter group right under it is the same corner — three
-/// different roundnesses stacked in 100 px is what made the header read as
-/// three different apps.
+/// a caret. It takes [kHomeBarHeight], the height of the switch it replaces
+/// and of the target beside it, and its corner is that switch's corner — a
+/// field that grew taller than the button next to it was the one thing in the
+/// row that looked borrowed from another screen.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -519,13 +526,14 @@ class _SearchField extends StatelessWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
     final bool hasText = controller.text.isNotEmpty;
-    return DecoratedBox(
+    return Container(
+      height: kHomeBarHeight,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(ConnectedGroup.outerRadius),
+        borderRadius: BorderRadius.circular(kHomeBarHeight / 2),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 5, 7, 5),
+        padding: const EdgeInsets.fromLTRB(16, 0, 7, 0),
         child: Row(
           children: <Widget>[
             HugeIcon(
@@ -543,7 +551,9 @@ class _SearchField extends StatelessWidget {
                 style: text.titleMedium,
                 decoration: InputDecoration(
                   isCollapsed: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  // The field's height comes from the box around it now, so
+                  // the input takes only the room its own line needs.
+                  contentPadding: EdgeInsets.zero,
                   hintText: 'Search coworkers',
                   hintStyle: text.titleMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
