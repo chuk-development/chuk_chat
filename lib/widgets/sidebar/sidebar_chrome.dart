@@ -572,40 +572,36 @@ class SbGroupHeader extends StatelessWidget {
           child: SbCard(
             onTap: onToggle,
             minHeight: 38,
-            padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+            // The right inset puts the 20 px chevron on the same axis as the
+            // 18 px three-dot glyph of a chat row: that one sits in a 48 px
+            // box behind a 4 px inset, so its centre is 28 px from the edge.
+            padding: const EdgeInsets.fromLTRB(14, 6, 18, 6),
             child: Row(
               children: [
-                // Label and count share ONE flexible slot. With a Spacer
-                // beside a Flexible label both take a share of the free
-                // space, and the chevron then sits at a different x on every
-                // row — the longer the label, the further right it drifts.
+                // The label takes the free space, so the count and the
+                // chevron both end at the right edge on every row. With a
+                // Spacer beside a Flexible label the two split that space
+                // and the chevron drifts with the label's length.
                 Expanded(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: fg,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (count != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '$count',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: fg.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+                if (count != null) ...[
+                  Text(
+                    '$count',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: fg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 AnimatedRotation(
                   // Shut points down (there is more to open), open points up.
                   turns: collapsed ? 0 : 0.5,
@@ -830,12 +826,13 @@ class SbAccountLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // No fill and no corners of its own. The bar is not a card: it sits on
-    // the panel's own ground, and the list scrolls through underneath it. A
-    // rounded box here reads as one more row of the list instead of as the
-    // chrome under it.
+    // A floating, outlined box — and nothing around it. The list runs
+    // straight past it on every side, so the card reads as an object above
+    // the panel rather than as a band closing it off.
     return Material(
-      type: MaterialType.transparency,
+      color: theme.m3.surfaceContainer,
+      borderRadius: BorderRadius.circular(kSbCardRadius),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -1179,6 +1176,25 @@ class SbOfflineNotice extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A card that floats over the scrolling list — the top bar and the bottom
+/// bar of the phone sidebar. No outline: the fill and the shape are what
+/// lift it off the panel, and the list runs past it on every side.
+class SbFloatingBar extends StatelessWidget {
+  const SbFloatingBar({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).m3.surfaceContainer,
+      borderRadius: BorderRadius.circular(kSbCardRadius),
+      clipBehavior: Clip.antiAlias,
+      child: child,
     );
   }
 }
