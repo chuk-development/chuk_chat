@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
@@ -746,12 +748,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.models),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

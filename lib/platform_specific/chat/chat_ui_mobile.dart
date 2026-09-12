@@ -1,16 +1,14 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
-import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
-import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
-import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -24,7 +22,6 @@ import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
-import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
@@ -57,6 +54,7 @@ import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
@@ -148,29 +146,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
         RegenVariantSeedMixin<ChukChatUIMobile>
-    implements
-        ChatDebugSnapshot {
+    implements ChatDebugSnapshot {
   // Controllers and basic state
   @override
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
 
-  // Per-payload decode caches keyed by the raw JSON string. The list
-  // itemBuilder previously re-ran jsonDecode + model construction for images,
-  // attachments, tool calls and content blocks on every build — i.e. every
-  // frame a bubble scrolled into view. Caching by the exact JSON string makes
-  // scrolling a static chat allocation-free. Cleared on chat switch.
-  // Keyed by message index; each entry holds the last-seen JSON string and its
-  // decoded value. A payload rewritten during a turn (tool call
-  // pending→running→completed, streamed content-block updates) overwrites the
-  // one prior entry instead of accumulating a permanent copy per intermediate
-  // JSON value, so a long tool-heavy chat can hold at most one stale entry per
-  // message per type.
-  final Map<int, (String, List<String>?)> _decodedImagesCache = {};
-  final Map<int, (String, List<DocumentAttachment>?)> _decodedAttachmentsCache =
-      {};
-  final Map<int, (String, List<ToolCall>?)> _decodedToolCallsCache = {};
-  final Map<int, (String, List<ContentBlock>?)> _decodedContentBlocksCache = {};
+  final MessageRenderCache _messageRenderCache = MessageRenderCache();
   String? _activeChatId;
 
   // Answer-version pager plumbing (seed stash/restore/fold) lives in
@@ -338,11 +320,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           setState(() {
             _activeChatId = chatId;
           });
-          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-            }
-          }));
+          unawaited(
+            MultiplexSession.openForChat(chatId).catchError((e) {
+              if (kDebugMode) {
+                debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+              }
+            }),
+          );
         }
       };
 
@@ -745,7 +729,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
       setState(() {
         _messages.clear();
-        _clearMessageDecodeCaches();
+        _messageRenderCache.clear();
         _fileHandler.clearAll();
         composerController.clear();
         messageActionsHandler.cancelEdit();
@@ -865,11 +849,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // Returning to a chat whose regenerate was still running in the
         // background: re-arm its seed so the now-foreground answer folds.
         restoreVariantSeedForChat(cached.id);
-        unawaited(MultiplexSession.openForChat(cached.id).catchError((e) {
-          if (kDebugMode) {
-            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-          }
-        }));
+        unawaited(
+          MultiplexSession.openForChat(cached.id).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }),
+        );
         _applyLoadedChat(cached, sidebarWasExpanded);
         return;
       }
@@ -919,8 +905,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Splice buffered streaming content (if any) into the freshly-built list
     // before it lands in _messages, so the user never sees a stale snapshot.
     final bool chatIsStreaming =
-        activeChatId != null &&
-        _streamingHandler.isChatStreaming(activeChatId);
+        activeChatId != null && _streamingHandler.isChatStreaming(activeChatId);
     final bool chatHasCompletedStream =
         activeChatId != null &&
         _streamingHandler.hasCompletedStream(activeChatId);
@@ -1029,7 +1014,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       setState(() {
         _messages.clear();
-        _clearMessageDecodeCaches();
+        _messageRenderCache.clear();
         _fileHandler.clearAll();
         messageActionsHandler.cancelEdit();
         _activeChatId = null;
@@ -1075,11 +1060,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // Returning to a chat whose regenerate was still running in the
         // background: re-arm its seed so the now-foreground answer folds.
         restoreVariantSeedForChat(storedChat.id);
-        unawaited(MultiplexSession.openForChat(storedChat.id).catchError((e) {
-          if (kDebugMode) {
-            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-          }
-        }));
+        unawaited(
+          MultiplexSession.openForChat(storedChat.id).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+            }
+          }),
+        );
         _applyLoadedChat(storedChat, sidebarWasExpanded);
         return;
       }
@@ -1108,7 +1095,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted) return;
     setState(() {
       _messages.clear();
-      _clearMessageDecodeCaches();
+      _messageRenderCache.clear();
       _fileHandler.clearAll();
       messageActionsHandler.cancelEdit();
       _activeChatId = null;
@@ -1142,7 +1129,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the active mode. Debug only.
-  bool get debugReasoningEnabled => reasoningEffort != ChatModeService.reasoningOff;
+  bool get debugReasoningEnabled =>
+      reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
@@ -1181,7 +1169,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
-      _clearMessageDecodeCaches();
+      _messageRenderCache.clear();
       _activeChatId = null;
       _fileHandler.clearAll();
       composerController.clear();
@@ -1414,9 +1402,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     bool isEnabled = true,
     bool isSelected = false,
   }) {
-    final Color color = isEnabled
-        ? iconFg
-        : iconFg.withValues(alpha: 0.35);
+    final Color color = isEnabled ? iconFg : iconFg.withValues(alpha: 0.35);
 
     return PopupMenuItem<T>(
       value: value,
@@ -1467,8 +1453,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       items: items,
       color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
+      // The attach and workspace menus are read against the chat behind
+      // them, the same as the model picker, so they keep the frame that says
+      // where the list ends.
+      outlined: true,
     );
   }
+
   /// The workspace in use, shown beside the mode pill — not floating over
   /// the middle of the chat, where it covered the conversation. Tapping it
   /// opens the same workspace menu the plus button does.
@@ -1591,7 +1582,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _activeChatId = null;
       _messages.clear();
-      _clearMessageDecodeCaches();
+      _messageRenderCache.clear();
       messageActionsHandler.cancelEdit();
       _selectedWorkspaceId = workspaceId;
       composerController.clear();
@@ -1629,112 +1620,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   // --- MESSAGE HANDLERS ---
 
-  /// Drop all per-payload decode caches. Called when the visible chat's
-  /// message list is replaced so stale entries from other chats don't linger.
-  void _clearMessageDecodeCaches() {
-    _decodedImagesCache.clear();
-    _decodedAttachmentsCache.clear();
-    _decodedToolCallsCache.clear();
-    _decodedContentBlocksCache.clear();
-  }
-
-  List<String>? _decodeImages(int index, String? json) {
-    if (json == null || json.isEmpty) {
-      _decodedImagesCache.remove(index);
-      return null;
-    }
-    final cached = _decodedImagesCache[index];
-    if (cached != null && cached.$1 == json) return cached.$2;
-    List<String>? decoded;
-    try {
-      final raw = jsonDecode(json);
-      if (raw is List) decoded = raw.cast<String>();
-    } catch (_) {}
-    _decodedImagesCache[index] = (json, decoded);
-    return decoded;
-  }
-
-  List<DocumentAttachment>? _decodeAttachments(int index, String? json) {
-    if (json == null || json.isEmpty) {
-      _decodedAttachmentsCache.remove(index);
-      return null;
-    }
-    final cached = _decodedAttachmentsCache[index];
-    if (cached != null && cached.$1 == json) return cached.$2;
-    List<DocumentAttachment>? decoded;
-    try {
-      final raw = jsonDecode(json);
-      if (raw is List) {
-        decoded = raw
-            .map(
-              (item) => DocumentAttachment.fromJson(item as Map<String, dynamic>),
-            )
-            .toList();
-      }
-    } catch (_) {}
-    _decodedAttachmentsCache[index] = (json, decoded);
-    return decoded;
-  }
-
-  List<ToolCall>? _decodeToolCalls(int index, String? json) {
-    if (json == null || json.isEmpty) {
-      _decodedToolCallsCache.remove(index);
-      return null;
-    }
-    final cached = _decodedToolCallsCache[index];
-    if (cached != null && cached.$1 == json) return cached.$2;
-    List<ToolCall>? decoded;
-    try {
-      final raw = jsonDecode(json);
-      if (raw is List) {
-        decoded = raw
-            .whereType<Map>()
-            .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
-      }
-    } catch (_) {}
-    _decodedToolCallsCache[index] = (json, decoded);
-    return decoded;
-  }
-
-  List<ContentBlock>? _decodeContentBlocks(int index, String? json) {
-    if (json == null || json.isEmpty) {
-      _decodedContentBlocksCache.remove(index);
-      return null;
-    }
-    final cached = _decodedContentBlocksCache[index];
-    if (cached != null && cached.$1 == json) return cached.$2;
-    List<ContentBlock>? decoded;
-    try {
-      final raw = jsonDecode(json);
-      if (raw is List) {
-        decoded = raw
-            .whereType<Map>()
-            .map(
-              (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
-            )
-            .toList();
-      }
-    } catch (_) {}
-    _decodedContentBlocksCache[index] = (json, decoded);
-    return decoded;
-  }
-
   void _updateToolCallsForMessage(
     int index,
     List<ToolCall> toolCalls,
     String chatId,
   ) {
-    final String toolCallsJson = jsonEncode(
-      toolCalls.map((call) => call.toJson()).toList(),
-    );
+    final String toolCallsJson = ChatUiHelpers.encodeToolCalls(toolCalls);
 
     final bool isActiveChat = _activeChatId == chatId;
     if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
       setState(() {
-        final message = Map<String, String>.from(_messages[index]);
-        message['toolCalls'] = toolCallsJson;
-        _messages[index] = message;
+        ChatUiHelpers.replaceMessageField(
+          _messages,
+          index,
+          'toolCalls',
+          toolCallsJson,
+        );
       });
       unawaited(persistChat());
       return;
@@ -1861,27 +1762,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     setState(() {
-      final message = Map<String, String>.from(_messages[index]);
-      final passPayloads = <dynamic>[];
-
-      final existing = message['debugRequests'];
-      if (existing != null && existing.trim().isNotEmpty) {
-        try {
-          final decoded = jsonDecode(existing);
-          if (decoded is List) {
-            passPayloads.addAll(decoded);
-          }
-        } catch (_) {}
-      }
-
-      try {
-        passPayloads.add(jsonDecode(requestPayloadJson));
-      } catch (_) {
-        passPayloads.add({'raw': requestPayloadJson});
-      }
-
-      message['debugRequests'] = jsonEncode(passPayloads);
-      _messages[index] = message;
+      ChatUiHelpers.replaceMessageField(
+        _messages,
+        index,
+        'debugRequests',
+        ChatUiHelpers.appendDebugRequest(
+          _messages[index]['debugRequests'],
+          requestPayloadJson,
+        ),
+      );
     });
   }
 
@@ -2080,7 +1969,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _pendingMessageText = null;
       composerController.text = pending;
-      composerController.selection = TextSelection.collapsed(offset: pending.length);
+      composerController.selection = TextSelection.collapsed(
+        offset: pending.length,
+      );
     });
     unawaited(sendMessage());
   }
@@ -2717,8 +2608,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Answer-version pager: on a regenerate, archive the answer being
     // discarded so the fresh answer can be appended as a new variant. Must run
     // BEFORE the tail is removed below.
-    final List<Map<String, dynamic>>? regenVariantSeed =
-        isRegenerate ? captureRegenSeed(index) : null;
+    final List<Map<String, dynamic>>? regenVariantSeed = isRegenerate
+        ? captureRegenSeed(index)
+        : null;
 
     // Before removing AI messages, collect:
     //   * artifact ids they created (legacy fallback for chats whose
@@ -2863,41 +2755,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Returns a callback for the ask_user interactive buttons if [index] is
   /// the last AI message, is not streaming, and contains a completed
   /// ask_user tool call. Otherwise returns null.
-  ValueChanged<String>? _askUserCallbackForMessage({
-    required int index,
-    required bool isUser,
-    required bool isStreaming,
-    required List<ToolCall>? toolCalls,
-    required List<ContentBlock>? contentBlocks,
-  }) {
-    if (isUser || isStreaming || _isCurrentChatStreaming || _isSendingMessage) {
+  ValueChanged<String>? _askUserCallbackForMessage(
+    int index,
+    MessageRenderData data,
+  ) {
+    if (data.isUser ||
+        data.isStreamingMessage ||
+        _isCurrentChatStreaming ||
+        _isSendingMessage) {
       return null;
     }
     if (index != _messages.length - 1) {
       return null;
     }
 
-    bool hasAskUser = false;
-    if (contentBlocks != null) {
-      for (final block in contentBlocks) {
-        if (block.type == ContentBlockType.toolCalls &&
-            block.toolCalls != null) {
-          hasAskUser = block.toolCalls!.any(
-            (tc) =>
-                tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
-          );
-          if (hasAskUser) break;
-        }
-      }
-    }
-    if (!hasAskUser && toolCalls != null) {
-      hasAskUser = toolCalls.any(
-        (tc) => tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
-      );
-    }
-    if (!hasAskUser) {
-      return null;
-    }
+    if (!ChatUiHelpers.hasCompletedTool(data, 'ask_user')) return null;
 
     return (String answer) {
       composerController.text = answer;
@@ -2908,42 +2780,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Returns a callback for the inline MCP Connect card if [index] is the last
   /// AI message, is idle, and contains a completed request_mcp_server call.
   /// Resumes the same conversation with a fresh send once the server is live.
-  ValueChanged<String>? _connectMcpCallbackForMessage({
-    required int index,
-    required bool isUser,
-    required bool isStreaming,
-    required List<ToolCall>? toolCalls,
-    required List<ContentBlock>? contentBlocks,
-  }) {
-    if (isUser || isStreaming || _isCurrentChatStreaming || _isSendingMessage) {
+  ValueChanged<String>? _connectMcpCallbackForMessage(
+    int index,
+    MessageRenderData data,
+  ) {
+    if (data.isUser ||
+        data.isStreamingMessage ||
+        _isCurrentChatStreaming ||
+        _isSendingMessage) {
       return null;
     }
     if (index != _messages.length - 1) {
       return null;
     }
 
-    bool hasRequest = false;
-    if (contentBlocks != null) {
-      for (final block in contentBlocks) {
-        if (block.type == ContentBlockType.toolCalls &&
-            block.toolCalls != null) {
-          hasRequest = block.toolCalls!.any(
-            (tc) =>
-                tc.name == 'request_mcp_server' &&
-                tc.status == ToolCallStatus.completed,
-          );
-          if (hasRequest) break;
-        }
-      }
-    }
-    if (!hasRequest && toolCalls != null) {
-      hasRequest = toolCalls.any(
-        (tc) =>
-            tc.name == 'request_mcp_server' &&
-            tc.status == ToolCallStatus.completed,
-      );
-    }
-    if (!hasRequest) {
+    if (!ChatUiHelpers.hasCompletedTool(data, 'request_mcp_server')) {
       return null;
     }
 
@@ -2971,7 +2822,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final String priorText = (_messages[aiIndex]['text'] ?? '').trim();
     final String? priorContentBlocks = _messages[aiIndex]['contentBlocks'];
-    if (priorText.isEmpty && (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+    if (priorText.isEmpty &&
+        (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
       showSnackBar('Nothing to continue from');
       return;
     }
@@ -3005,12 +2857,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final String modelIdToUse =
         _messages[aiIndex]['modelId']?.trim().isNotEmpty == true
-            ? _messages[aiIndex]['modelId']!
-            : selectedModelId;
+        ? _messages[aiIndex]['modelId']!
+        : selectedModelId;
     final String? providerToUse =
         _messages[aiIndex]['provider']?.trim().isNotEmpty == true
-            ? _messages[aiIndex]['provider']
-            : selectedProviderSlug;
+        ? _messages[aiIndex]['provider']
+        : selectedProviderSlug;
 
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
@@ -3096,18 +2948,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       waitForCompletion: waitForCompletion,
       isOffline: _isOffline,
     );
-  }
-
-  String? _formatModelInfo(String? modelId, String? provider) =>
-      ChatUiHelpers.formatModelInfo(modelId, provider);
-
-  /// The turn's recorded length, or null on a message saved before it was
-  /// written down — the header then counts from the tool stamps as before.
-  static Duration? _workedForOf(Map<String, String> raw, bool isAiMessage) {
-    if (!isAiMessage) return null;
-    final ms = int.tryParse(raw['generationMs'] ?? '');
-    if (ms == null || ms < 0) return null;
-    return Duration(milliseconds: ms);
   }
 
   // --- BUILD METHOD ---
@@ -3232,309 +3072,67 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // bubbles off each end of the viewport, and
                                 // the viewport resizes while the keyboard
                                 // animates.
-                                cacheExtent: 400.0,
+                                scrollCacheExtent:
+                                    const ScrollCacheExtent.pixels(400.0),
                                 itemBuilder: (_, int i) {
-                                  final Map<String, String> raw = _messages[i];
-                                  final String sender = raw['sender'] ?? 'ai';
-                                  final bool isAiMessage = sender != 'user';
-                                  final bool isStreamingMessage =
-                                      _isCurrentChatStreaming &&
-                                      i == _messages.length - 1 &&
-                                      isAiMessage;
-                                  final String displayText = (raw['text'] ?? '')
-                                      .trimRight();
-                                  final String reasoning =
-                                      raw['reasoning'] ?? '';
-                                  final String? modelLabel = isAiMessage
-                                      ? _formatModelInfo(
-                                          raw['modelId'],
-                                          raw['provider'],
-                                        )
-                                      : null;
-                                  final String? modelProvider = isAiMessage
-                                      ? (raw['provider'] ?? '').trim()
-                                      : null;
-                                  final String? reasoningText =
-                                      reasoning.trim().isEmpty
-                                      ? null
-                                      : reasoning;
-                                  final bool isBeingEdited =
-                                      messageActionsHandler
-                                          .editingMessageIndex ==
-                                      i;
-                                  final bool isUser = sender == 'user';
-                                  final bool startsNewGroup =
-                                      i == 0 ||
-                                      ((_messages[i - 1]['sender'] ?? 'ai') !=
-                                          sender);
-                                  final bool endsGroup =
-                                      i == _messages.length - 1 ||
-                                      ((_messages[i + 1]['sender'] ?? 'ai') !=
-                                          sender);
-
-                                  // Decode payloads via per-JSON-string caches
-                                  // so scrolling a static chat doesn't re-parse
-                                  // (see _decode* helpers).
-                                  final List<String>? images = _decodeImages(
-                                    i,
-                                    raw['images'],
+                                  final data = _messageRenderCache.build(
+                                    messages: _messages,
+                                    index: i,
+                                    isStreaming: _isCurrentChatStreaming,
                                   );
-                                  final List<DocumentAttachment>? attachments =
-                                      _decodeAttachments(i, raw['attachments']);
-
-                                  // Parse TPS value from message
-                                  final tpsStr = raw['tps'];
-                                  double? tps;
-                                  if (tpsStr != null && tpsStr.isNotEmpty) {
-                                    tps = double.tryParse(tpsStr);
-                                  }
-
-                                  final List<ToolCall>? toolCalls =
-                                      _decodeToolCalls(i, raw['toolCalls']);
-
-                                  // Content blocks for interleaved tool
-                                  // call / text display.
-                                  final List<ContentBlock>? parsedContentBlocks =
-                                      _decodeContentBlocks(
-                                        i,
-                                        raw['contentBlocks'],
+                                  final actions = messageActionsHandler
+                                      .buildActionsForMessage(
+                                        index: i,
+                                        messageText: data.displayText,
+                                        isUser: data.isUser,
+                                        isStreaming: data.isStreamingMessage,
+                                        onEdit: editMessageAt,
+                                        onResendMessage: resendMessageAt,
+                                        onBranch: branchFromIndex,
                                       );
-
-                                  final String? imageCostStr =
-                                      raw['imageCostEur'];
-                                  final double? imageCostEur =
-                                      imageCostStr != null &&
-                                          imageCostStr.isNotEmpty
-                                      ? double.tryParse(imageCostStr)
-                                      : null;
-                                  final String? imageGeneratedAtStr =
-                                      raw['imageGeneratedAt'];
-                                  final DateTime? imageGeneratedAt =
-                                      imageGeneratedAtStr != null &&
-                                          imageGeneratedAtStr.isNotEmpty
-                                      ? DateTime.tryParse(imageGeneratedAtStr)
-                                      : null;
-                                  final List<ImageMeta>? imageMetas =
-                                      ImageMeta.decode(raw['imageMetas']);
-
-                                  final statusRaw = raw['status'];
-                                  ChatMessageStatus? status;
-                                  if (statusRaw == 'pending') {
-                                    status = ChatMessageStatus.pending;
-                                  } else if (statusRaw == 'failed') {
-                                    status = ChatMessageStatus.failed;
-                                  } else if (statusRaw == 'sent') {
-                                    status = ChatMessageStatus.sent;
-                                  } else if (statusRaw == 'interrupted') {
-                                    status = ChatMessageStatus.interrupted;
-                                  }
-                                  final lastError = raw['lastError'];
-
-                                  // Answer-version pager: how many variants
-                                  // this regenerated answer has and which is
-                                  // shown.
-                                  int variantCount = 0;
-                                  int variantIndex = 0;
-                                  if (isAiMessage) {
-                                    final variants = ChatUiHelpers.decodeVariants(
-                                      raw['variants'],
-                                    );
-                                    variantCount = variants.length;
-                                    if (variantCount > 0) {
-                                      variantIndex =
-                                          (int.tryParse(
-                                                    raw['activeVariant'] ?? '',
-                                                  ) ??
-                                                  0)
-                                              .clamp(0, variantCount - 1);
-                                    }
-                                  }
-
-                                  // Build the bubble from a (text, reasoning)
-                                  // pair so the streaming bubble can be fed live
-                                  // values from the runtime notifier without a
-                                  // screen-wide rebuild. All other props are
-                                  // stable for the duration of a stream.
-                                  MessageBubble buildBubble(
-                                    String msgText,
-                                    String? msgReasoning,
-                                  ) => MessageBubble(
-                                    key: ValueKey(
-                                      ChatUiHelpers.stableUiKey(
-                                        _messages[i],
-                                        _uuid,
-                                      ),
-                                    ),
-                                    message: msgText,
-                                    reasoning: msgReasoning,
-                                    isUser: isUser,
-                                    startsNewGroup: startsNewGroup,
-                                    endsGroup: endsGroup,
-                                    maxWidth: isUser
-                                        ? expandedInputWidth * 0.8
-                                        : expandedInputWidth,
-                                    isReasoningStreaming: isStreamingMessage,
-                                    modelLabel: modelLabel,
-                                    modelProvider: modelProvider,
-                                    tps: tps,
-                                    toolCalls: toolCalls,
+                                  final userActions = data.isUser
+                                      ? messageActionsHandler
+                                            .buildUserMessageActions(
+                                              index: i,
+                                              messageText: data.displayText,
+                                              onEdit: editMessageAt,
+                                              onResendMessage: resendMessageAt,
+                                            )
+                                      : const <MessageBubbleAction>[];
+                                  return ChatMessageListItem(
+                                    messages: _messages,
+                                    index: i,
+                                    data: data,
+                                    uuid: _uuid,
+                                    maxWidth: expandedInputWidth,
+                                    activeChatId: _activeChatId,
+                                    flyInKey: _flyInKey,
                                     showToolCalls: widget.showToolCalls,
-                                    contentBlocks: parsedContentBlocks,
-                                    isStreamingMessage: isStreamingMessage,
-                                    turnStartedAt: isAiMessage
-                                        ? DateTime.tryParse(
-                                            raw['startedAt'] ?? '',
-                                          )
-                                        : null,
-                                    workedFor: _workedForOf(raw, isAiMessage),
-                                    images: images,
-                                    imageMetas: imageMetas,
-                                    attachments: attachments,
-                                    imageCostEur: imageCostEur,
-                                    imageGeneratedAt: imageGeneratedAt,
-                                    actions: messageActionsHandler
-                                        .buildActionsForMessage(
-                                          index: i,
-                                          messageText: msgText,
-                                          isUser: isUser,
-                                          isStreaming: isStreamingMessage,
-                                          onEdit: editMessageAt,
-                                          onResendMessage: resendMessageAt,
-                                          onBranch: branchFromIndex,
-                                        ),
-                                    userMessageActions: isUser
-                                        ? messageActionsHandler
-                                              .buildUserMessageActions(
-                                                index: i,
-                                                messageText: msgText,
-                                                onEdit: editMessageAt,
-                                                onResendMessage:
-                                                    resendMessageAt,
-                                              )
-                                        : const [],
-                                    isEditing: isBeingEdited,
                                     showReasoningTokens:
                                         widget.showReasoningTokens,
                                     showModelInfo: widget.showModelInfo,
                                     showTps: widget.showTps,
+                                    isEditing:
+                                        messageActionsHandler
+                                            .editingMessageIndex ==
+                                        i,
+                                    actions: actions,
+                                    userMessageActions: userActions,
                                     onAskUserAnswer: _askUserCallbackForMessage(
-                                      index: i,
-                                      isUser: isUser,
-                                      isStreaming: isStreamingMessage,
-                                      toolCalls: toolCalls,
-                                      contentBlocks: parsedContentBlocks,
+                                      i,
+                                      data,
                                     ),
                                     onConnectMcpServer:
-                                        _connectMcpCallbackForMessage(
-                                          index: i,
-                                          isUser: isUser,
-                                          isStreaming: isStreamingMessage,
-                                          toolCalls: toolCalls,
-                                          contentBlocks: parsedContentBlocks,
-                                        ),
-                                    useSharedSelectionArea: true,
-                                    variantIndex: variantIndex,
-                                    variantCount: variantCount,
-                                    onPrevVariant: variantCount > 1
-                                        ? () => switchVariantAt(
-                                            i,
-                                            variantIndex - 1,
-                                          )
-                                        : null,
-                                    onNextVariant: variantCount > 1
-                                        ? () => switchVariantAt(
-                                            i,
-                                            variantIndex + 1,
-                                          )
-                                        : null,
-                                    status: status,
-                                    lastError: lastError,
-                                    onRetryPending: isUser &&
-                                            (status ==
-                                                    ChatMessageStatus.pending ||
-                                                status ==
-                                                    ChatMessageStatus.failed)
-                                        ? () => OfflineRetryManager.instance
-                                            .retryNow()
-                                        : null,
-                                    onContinueGeneration: !isUser &&
-                                            status ==
+                                        _connectMcpCallbackForMessage(i, data),
+                                    onSwitchVariant: (variant) =>
+                                        switchVariantAt(i, variant),
+                                    onContinueGeneration:
+                                        !data.isUser &&
+                                            data.status ==
                                                 ChatMessageStatus.interrupted &&
                                             !_isCurrentChatStreaming
                                         ? () => _continueGenerationAt(i)
                                         : null,
-                                  );
-
-                                  // The streaming bubble rebuilds itself per
-                                  // token via the runtime's streamingLive
-                                  // notifier — the rest of the screen stays put.
-                                  final ChatRuntime? runtime =
-                                      _activeChatId == null
-                                      ? null
-                                      : ChatRuntimeRegistry.instance.lookup(
-                                          _activeChatId!,
-                                        );
-                                  // Wrap the last AI bubble in the live notifier
-                                  // for the whole turn (isSending), not just
-                                  // while a stream is mid-flight: isStreaming
-                                  // briefly flips false between tool-loop passes,
-                                  // and we must not lose the live wrapper (and
-                                  // its per-token updates) during that gap.
-                                  final bool wrapForStream =
-                                      runtime != null &&
-                                      isAiMessage &&
-                                      i == _messages.length - 1 &&
-                                      (isStreamingMessage ||
-                                          runtime.isSending.value);
-                                  if (wrapForStream) {
-                                    return RepaintBoundary(
-                                      child:
-                                          ValueListenableBuilder<StreamingLive?>(
-                                            valueListenable:
-                                                runtime.streamingLive,
-                                            builder: (context, live, _) {
-                                              final bool match =
-                                                  live != null &&
-                                                  live.index == i;
-                                              final String msgText = match
-                                                  ? live.text.trimRight()
-                                                  : displayText;
-                                              final String reasoningRaw = match
-                                                  ? live.reasoning
-                                                  : reasoning;
-                                              final String? msgReasoning =
-                                                  reasoningRaw.trim().isEmpty
-                                                  ? null
-                                                  : reasoningRaw;
-                                              return buildBubble(
-                                                msgText,
-                                                msgReasoning,
-                                              );
-                                            },
-                                          ),
-                                    );
-                                  }
-                                  final String uiKey =
-                                      ChatUiHelpers.stableUiKey(
-                                    _messages[i],
-                                    _uuid,
-                                  );
-                                  if (isUser && uiKey == _flyInKey) {
-                                    return RepaintBoundary(
-                                      child: MessageFlyIn(
-                                        key: ValueKey('flyin_$uiKey'),
-                                        child: buildBubble(
-                                          displayText,
-                                          reasoningText,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return RepaintBoundary(
-                                    child: buildBubble(
-                                      displayText,
-                                      reasoningText,
-                                    ),
                                   );
                                 },
                               ),
@@ -3667,27 +3265,28 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           // The same height as the round buttons beside it in the composer
           // row; a pill that stands two pixels taller reads as a mistake.
           height: _composerTargetSize,
-        selectedModelId: selectedModelId,
-        modelLabel: selectedModelName ??
-            (selectedModelId.isEmpty ? null : selectedModelId),
-        customModelLabel: customModelName,
-        pickedModels: pickedModels,
-        reasoningEffort: ChatModeService.sanitizeReasoningForModel(
-          reasoningEffort,
-          modelId: selectedModelId,
-          providerSlug: selectedProviderSlug ?? '',
-        ),
-        // The picker options come straight from the server's per-model
-        // `supported_efforts` (derived list only as a cold-start fallback),
-        // so a level the model does not support can never be offered.
-        reasoningLevels: ChatModeService.reasoningLevelsForModel(
-          modelId: selectedModelId,
-          // Before the provider resolves, use the mode's own default provider
-          // so the derived fallback never briefly offers a wrong ladder.
-          providerSlug: (selectedProviderSlug?.isNotEmpty ?? false)
-              ? selectedProviderSlug!
-              : ChatModeService.defaultConfig(chatMode).providerSlug,
-        ),
+          selectedModelId: selectedModelId,
+          modelLabel:
+              selectedModelName ??
+              (selectedModelId.isEmpty ? null : selectedModelId),
+          customModelLabel: customModelName,
+          pickedModels: pickedModels,
+          reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+            reasoningEffort,
+            modelId: selectedModelId,
+            providerSlug: selectedProviderSlug ?? '',
+          ),
+          // The picker options come straight from the server's per-model
+          // `supported_efforts` (derived list only as a cold-start fallback),
+          // so a level the model does not support can never be offered.
+          reasoningLevels: ChatModeService.reasoningLevelsForModel(
+            modelId: selectedModelId,
+            // Before the provider resolves, use the mode's own default provider
+            // so the derived fallback never briefly offers a wrong ladder.
+            providerSlug: (selectedProviderSlug?.isNotEmpty ?? false)
+                ? selectedProviderSlug!
+                : ChatModeService.defaultConfig(chatMode).providerSlug,
+          ),
           onReasoningEffortChanged: setReasoningEffort,
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
@@ -3878,10 +3477,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
               const SizedBox(width: _composerTargetGap),
-              _buildModelControl(
-                isCompactMode: isCompactMode,
-                iconFg: iconFg,
-              ),
+              _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
               if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
                 const SizedBox(width: _composerTargetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),

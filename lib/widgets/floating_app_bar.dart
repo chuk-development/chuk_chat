@@ -104,6 +104,38 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
     kFloatingAppBarHeight + (bottom?.preferredSize.height ?? 0),
   );
 
+  /// The title, in the one size every page uses.
+  ///
+  /// A page that passes a plain [Text] gets rebuilt with the shared style,
+  /// its own `style:` dropped. Pages had each picked their own size, and a
+  /// title two points larger on one page makes the back chip beside it look
+  /// like a different size too — the chip is unchanged, the eye compares it
+  /// to the text. Anything that is not a [Text] only inherits the style, so
+  /// a caller that really needs its own layout still can.
+  Widget _styledTitle(BuildContext context, ThemeData theme) {
+    final TextStyle style = TextStyle(
+      color: theme.resolvedIconColor.withValues(alpha: 0.92),
+      fontSize: 15,
+      fontWeight: FontWeight.w800,
+    );
+    final Widget self = title;
+    if (self is Text && self.data != null) {
+      return Text(
+        self.data!,
+        style: style,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        semanticsLabel: self.semanticsLabel,
+      );
+    }
+    return DefaultTextStyle.merge(
+      style: style,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      child: self,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -141,19 +173,10 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: FloatingChromeSurface(
           radius: _kTitleRadius,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: DefaultTextStyle.merge(
-            // The chat's title pill, to the pixel: same radius, padding,
-            // size and weight. A settings page and the chat must not read as
-            // two different apps.
-            style: TextStyle(
-              color: theme.resolvedIconColor.withValues(alpha: 0.92),
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            child: title,
-          ),
+          // The chat's title pill, to the pixel: same radius, padding, size
+          // and weight. A settings page and the chat must not read as two
+          // different apps.
+          child: _styledTitle(context, theme),
         ),
       ),
       actions: actions == null
