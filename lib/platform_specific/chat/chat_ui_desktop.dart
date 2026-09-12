@@ -2117,23 +2117,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 data.reasoning.trim().isEmpty
                                                 ? null
                                                 : data.reasoning;
-                                            final bool previousIsUser = i == 0
-                                                ? data.isUser
-                                                : (_messages[i - 1]['sender'] ??
-                                                          'ai') ==
-                                                      'user';
-                                            final bool nextIsUser =
-                                                i == _messages.length - 1
-                                                ? data.isUser
-                                                : (_messages[i + 1]['sender'] ??
-                                                          'ai') ==
-                                                      'user';
+                                            // Sender, day break and pause all
+                                            // break a run; the divider below
+                                            // reads the same rule (see
+                                            // chat_ui_helpers).
                                             final bool startsNewGroup =
-                                                i == 0 ||
-                                                previousIsUser != data.isUser;
+                                                messageStartsRun(_messages, i);
                                             final bool endsGroup =
-                                                i == _messages.length - 1 ||
-                                                nextIsUser != data.isUser;
+                                                messageEndsRun(_messages, i);
                                             final bool isBeingEdited =
                                                 _messageActionsHandler
                                                     .editingMessageIndex ==
@@ -2142,26 +2133,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             // one date chip where the day changes.
                                             // A row with no timestamp gets none.
                                             final DateTime? rowDay =
-                                                DateTime.tryParse(
-                                                  _messages[i]['startedAt'] ??
-                                                      '',
-                                                );
-                                            final DateTime? previousDay = i == 0
-                                                ? null
-                                                : DateTime.tryParse(
-                                                    _messages[i -
-                                                            1]['startedAt'] ??
-                                                        '',
-                                                  );
+                                                messageRowTime(_messages[i]);
                                             final bool opensDay =
-                                                rowDay != null &&
-                                                (previousDay == null ||
-                                                    !sameCalendarDay(
-                                                      previousDay.toLocal(),
-                                                      rowDay.toLocal(),
-                                                    ));
+                                                messageOpensDay(
+                                                  i == 0
+                                                      ? null
+                                                      : _messages[i - 1],
+                                                  _messages[i],
+                                                );
                                             Widget withDay(Widget bubble) =>
-                                                opensDay
+                                                opensDay && rowDay != null
                                                 ? Column(
                                                     crossAxisAlignment:
                                                         CrossAxisAlignment

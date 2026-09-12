@@ -30,6 +30,7 @@ import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/services/pdf_attachment_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/ui/expressive/bubble_kind.dart';
+import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
@@ -37,9 +38,19 @@ import 'package:cowork/widgets/chat_document_inline.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 
 class SandboxArtifactBlock extends StatefulWidget {
-  const SandboxArtifactBlock({super.key, required this.payload});
+  const SandboxArtifactBlock({
+    super.key,
+    required this.payload,
+    this.borderRadius,
+  });
 
   final SandboxArtifactPayload payload;
+
+  /// The corners this block draws. A file that follows an answer from the same
+  /// coworker is one more block of that run, so the thread hands it the run's
+  /// geometry: small radii where it touches the block above, full radii on the
+  /// outside. Null keeps the standalone shape.
+  final BorderRadius? borderRadius;
 
   @override
   State<SandboxArtifactBlock> createState() => _SandboxArtifactBlockState();
@@ -275,7 +286,10 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
       // keeps the compact row, because a block with nothing in it is worse
       // than a line that opens the reader.
       if (inlineDocumentHasContent(document)) {
-        return InlineChatDocument(document: document);
+        return InlineChatDocument(
+          document: document,
+          borderRadius: widget.borderRadius,
+        );
       }
       return _documentRow(context, document);
     }
@@ -325,6 +339,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget _buildImage(BuildContext context) {
     return _ArtifactCard(
       payload: widget.payload,
+      borderRadius: widget.borderRadius,
       onSave: _save,
       onOpen: _openAction(context),
       child: _content(
@@ -355,6 +370,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget _buildPdf(BuildContext context) {
     return _ArtifactCard(
       payload: widget.payload,
+      borderRadius: widget.borderRadius,
       onSave: _save,
       onOpen: _openAction(context),
       child: _content(
@@ -380,6 +396,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget _buildFileChip(BuildContext context) {
     return _ArtifactCard(
       payload: widget.payload,
+      borderRadius: widget.borderRadius,
       onSave: _save,
       onOpen: _openAction(context),
       child: null,
@@ -418,9 +435,14 @@ class _ArtifactCard extends StatelessWidget {
     required this.onSave,
     required this.child,
     this.onOpen,
+    this.borderRadius,
   });
 
   final SandboxArtifactPayload payload;
+
+  /// The run's corners, when this card is one block of a run. See
+  /// [SandboxArtifactBlock.borderRadius].
+  final BorderRadius? borderRadius;
   final Future<void> Function() onSave;
   final Widget? child;
 
@@ -537,10 +559,10 @@ class _ArtifactCard extends StatelessWidget {
       return SizedBox(
         width: double.infinity,
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 2),
           decoration: BoxDecoration(
             color: bubble.fill,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius:
+                borderRadius ?? BorderRadius.circular(kBubbleRadiusBig),
           ),
           clipBehavior: Clip.antiAlias,
           child: Material(
@@ -596,10 +618,9 @@ class _ArtifactCard extends StatelessWidget {
       );
     }
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: borderRadius ?? BorderRadius.circular(10),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,

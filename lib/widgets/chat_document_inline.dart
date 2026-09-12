@@ -26,6 +26,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:cowork/ui/expressive/bubble_kind.dart';
+import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/utils/theme_extensions.dart';
@@ -284,9 +285,20 @@ class DocumentBarList extends StatelessWidget {
 
 /// A document, drawn in the thread in the coworker's bubble.
 class InlineChatDocument extends StatefulWidget {
-  const InlineChatDocument({super.key, required this.document, this.onOpen});
+  const InlineChatDocument({
+    super.key,
+    required this.document,
+    this.onOpen,
+    this.borderRadius,
+  });
 
   final Map<String, dynamic> document;
+
+  /// The corners this block draws. A document that follows an answer from the
+  /// same coworker is one more block of that run, so the run hands it its
+  /// geometry — small radii where it touches the answer above it. Null keeps
+  /// the standalone shape.
+  final BorderRadius? borderRadius;
 
   /// What a tap does. Defaults to the full-screen reader the row opened
   /// before — the inline render is the content, the tap is for reading it big,
@@ -440,10 +452,10 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
     return SizedBox(
       width: double.infinity,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
         decoration: BoxDecoration(
           color: bubble.fill,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius:
+              widget.borderRadius ?? BorderRadius.circular(kBubbleRadiusBig),
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(

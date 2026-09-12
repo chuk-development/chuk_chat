@@ -18,6 +18,8 @@ import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/model_capabilities_service.dart';
 import 'package:cowork/services/workspace_message_service.dart';
 import 'package:cowork/services/user_preferences_service.dart';
+import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleGroupPause;
+import 'package:cowork/ui/expressive/day_divider.dart' show sameCalendarDay;
 import 'package:cowork/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
 import 'package:cowork/widgets/model_selection_dropdown.dart';
@@ -1062,3 +1064,47 @@ class ChatUiHelpers {
     );
   }
 }
+
+/// Message grouping — the one place that decides which rows form a run.
+///
+/// A messenger draws a run of consecutive messages from one sender as ONE
+/// group: the touching corners go small, the gap inside the run goes tight.
+/// Both chat screens used to derive that from the sender alone, so a run kept
+/// running across a day divider and across a two-hour pause, and the divider
+/// ended up inside a connected group. The divider and the flags now read the
+/// same rules from here.
+///
+/// The clock of a row: what the day divider and the bubble stamp show. A row
+/// carries `sentAt` when the client wrote it and `startedAt` when the turn
+/// began; a replayed row can carry neither.
+DateTime? messageRowTime(Map<String, String> raw) =>
+    DateTime.tryParse(raw['sentAt'] ?? raw['startedAt'] ?? '');
+
+/// Whether a day divider is drawn above [row]. An undated row gets none — an
+/// undated message is no evidence of a day.
+bool messageOpensDay(Map<String, String>? previous, Map<String, String> row) {
+  final DateTime? day = messageRowTime(row);
+  if (day == null) return false;
+  final DateTime? before = previous == null ? null : messageRowTime(previous);
+  return before == null || !sameCalendarDay(before.toLocal(), day.toLocal());
+}
+
+/// Whether the row at [index] opens a new run: it is the first row, the sender
+/// changed, a day divider sits above it, or the sender paused for longer than
+/// [kBubbleGroupPause].
+bool messageStartsRun(List<Map<String, String>> messages, int index) {
+  if (index <= 0) return true;
+  final Map<String, String> previous = messages[index - 1];
+  final Map<String, String> row = messages[index];
+  if ((previous['sender'] ?? 'ai') != (row['sender'] ?? 'ai')) return true;
+  if (messageOpensDay(previous, row)) return true;
+  final DateTime? before = messageRowTime(previous);
+  final DateTime? now = messageRowTime(row);
+  if (before == null || now == null) return false;
+  return now.difference(before).abs() > kBubbleGroupPause;
+}
+
+/// Whether the row at [index] closes its run: the last row, or the next row
+/// opens a new one.
+bool messageEndsRun(List<Map<String, String>> messages, int index) =>
+    index >= messages.length - 1 || messageStartsRun(messages, index + 1);
