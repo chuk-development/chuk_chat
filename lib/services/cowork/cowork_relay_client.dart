@@ -943,9 +943,19 @@ class CoworkRelayBrowserView extends CoworkRelayInbound {
     this.message = '',
     this.password,
     this.vncAvailable = false,
+    this.reason = '',
   });
   final String status;
   final String message;
+
+  /// The machine-readable half of [message] (`docs/WIRE_CONTRACT.md`,
+  /// bead cowork-qp5i): `opening` / `no_browser` on `started`, and
+  /// `no_sandbox` / `no_display` / `vnc_start_failed` / `exec_failed` /
+  /// `bridge_failed` on `error`. Empty when there is nothing to explain, and
+  /// empty from a host too old to send it — so a reader falls back to the
+  /// text only when this is empty, and fails closed when it is a code it does
+  /// not know.
+  final String reason;
 
   /// Per-view VNC secret, only on `started` (§9.1 hardening). Never log it.
   final String? password;
@@ -2570,6 +2580,9 @@ class CoworkRelayClient
             message: '${payload['message'] ?? ''}',
             password: payload['password'] as String?,
             vncAvailable: payload['vnc_available'] == true,
+            reason: payload['reason'] is String
+                ? payload['reason'] as String
+                : '',
           ),
         );
       case 'approval_request':

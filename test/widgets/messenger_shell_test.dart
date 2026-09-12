@@ -22,6 +22,7 @@ import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/agent_control_source.dart';
 import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
+import 'package:cowork/services/cowork/browser_presence.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
 import 'package:cowork/ui/expressive/motion.dart';
@@ -773,6 +774,76 @@ void main() {
     expect(find.text('Laptop Bot'), findsWidgets);
     expect(find.text('From Phone'), findsWidgets);
   });
+
+  testWidgets(
+    'a screen nobody confirms goes back to parked before the user taps it',
+    (tester) async {
+      // Bead cowork-8ptj. The host pushes `opened` / `closed` once per change,
+      // so a container, an MCP server or a Chromium that goes away leaves the
+      // last `true` standing. The target has to tell the truth BEFORE the tap,
+      // not through the error page behind it.
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey<String>('mobile-agent-${roster.agents.single.id}')),
+      );
+      await tester.pumpAndSettle();
+      controller.emit(
+        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<MobileChatScreen>(find.byType(MobileChatScreen))
+            .browserAvailable,
+        isTrue,
+      );
+
+      await tester.pump(kBrowserPresenceFreshness + const Duration(minutes: 1));
+      await tester.pumpAndSettle();
+      final MobileChatScreen stale = tester.widget<MobileChatScreen>(
+        find.byType(MobileChatScreen),
+      );
+      expect(stale.browserAvailable, isFalse);
+      // Parked, not dead: the tap says what happened to the screen it offered.
+      expect(stale.onOpenBrowser, isNotNull);
+      stale.onOpenBrowser!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(BrowserViewPage), findsNothing);
+      expect(find.textContaining('No word about the screen'), findsOneWidget);
+
+      // And when the host is the one that says no, the tap repeats ITS reason
+      // (bead cowork-qp5i) instead of telling the user to ask for a page.
+      controller.emit(
+        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+      );
+      await tester.pumpAndSettle();
+      controller.emit(
+        const CoworkRelayBrowserView(
+          status: 'error',
+          message: 'could not start the VNC server',
+          reason: 'vnc_start_failed',
+        ),
+      );
+      await tester.pumpAndSettle();
+      final MobileChatScreen failed = tester.widget<MobileChatScreen>(
+        find.byType(MobileChatScreen),
+      );
+      expect(failed.browserAvailable, isFalse);
+      failed.onOpenBrowser!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.textContaining('screen server would not start'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'phone screen requires live presence and files use selected chat',
