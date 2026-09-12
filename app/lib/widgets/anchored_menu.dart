@@ -41,6 +41,9 @@ Future<T?> showAnchoredMenu<T>(
   // Kept so the call sites read the same; the menu no longer draws a frame.
   Color? borderColor,
   double minWidth = 200,
+  // Caps how wide a long row may push the menu; without it a very long
+  // model name makes the menu as wide as the screen.
+  double? maxWidth,
   double borderRadius = kMenuOuterRadius,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
@@ -84,6 +87,7 @@ Future<T?> showAnchoredMenu<T>(
       items: items,
       color: color,
       minWidth: minWidth,
+      maxWidth: maxWidth,
       borderRadius: borderRadius,
       preferAbove: preferAbove,
       alignRight: alignRight,
@@ -105,6 +109,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.items,
     required this.color,
     required this.minWidth,
+    required this.maxWidth,
     required this.borderRadius,
     required this.preferAbove,
     required this.alignRight,
@@ -122,6 +127,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final List<PopupMenuEntry<T>> items;
   final Color color;
   final double minWidth;
+  final double? maxWidth;
   final double borderRadius;
   final bool preferAbove;
   final bool? alignRight;
@@ -148,6 +154,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
       CustomSingleChildLayout(
         delegate: _AnchoredMenuLayout(
           anchor: anchor,
+          maxWidth: maxWidth,
           usableTop: usableTop,
           usableBottom: usableBottom,
           preferAbove: preferAbove,
@@ -222,6 +229,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
 class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   const _AnchoredMenuLayout({
     required this.anchor,
+    this.maxWidth,
     required this.usableTop,
     required this.usableBottom,
     this.preferAbove = false,
@@ -230,6 +238,10 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   });
 
   final Rect anchor;
+
+  /// Widest the menu may get, whatever its rows ask for.
+  final double? maxWidth;
+
   final double usableTop;
   final double usableBottom;
 
@@ -256,7 +268,10 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     return BoxConstraints.loose(
       Size(
-        constraints.maxWidth - _kEdgeMargin * 2,
+        math.min(
+          constraints.maxWidth - _kEdgeMargin * 2,
+          maxWidth ?? double.infinity,
+        ),
         _forceAbove
             ? _roomAbove
             : math.max(48, math.max(_roomAbove, _roomBelow)),
@@ -317,6 +332,7 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       anchor != old.anchor ||
       usableTop != old.usableTop ||
       usableBottom != old.usableBottom ||
+      maxWidth != old.maxWidth ||
       preferAbove != old.preferAbove ||
       alignRight != old.alignRight ||
       besideAnchor != old.besideAnchor;

@@ -8,7 +8,9 @@ import 'package:cowork/l10n/app_localizations.dart';
 import 'package:cowork/utils/chat_font_resolver.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/services/settings/verbose_service.dart';
+import 'package:cowork/widgets/anchored_menu.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -34,6 +36,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedIncludeToolResultsInHistory;
   // Language selection state
   late String _selectedLocale;
+
+  /// The languages the picker offers, in the order it shows them.
+  static const Map<String, String> _localeNames = <String, String>{
+    'en': 'English',
+    'de': 'Deutsch',
+    'es': 'Español',
+    'fr': 'Français',
+    'pt': 'Português',
+  };
 
   @override
   void initState() {
@@ -73,7 +84,6 @@ class _CustomizationPageState extends State<CustomizationPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
     return ExpressiveScreen(
@@ -95,28 +105,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 icon: Icons.language,
                 title: l.language,
                 subtitle: l.languageSubtitle,
-                trailing: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedLocale,
-                    dropdownColor: m3.surfaceContainerHigh,
-                    borderRadius: kBorderRadiusMenu,
-                    focusColor: Colors.transparent,
-                    items: const [
-                      DropdownMenuItem(value: 'en', child: Text('English')),
-                      DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                      DropdownMenuItem(value: 'es', child: Text('Español')),
-                      DropdownMenuItem(value: 'fr', child: Text('Français')),
-                      DropdownMenuItem(value: 'pt', child: Text('Português')),
-                    ],
-                    onChanged: (String? value) {
-                      if (value != null && value != _selectedLocale) {
-                        setState(() {
-                          _selectedLocale = value;
-                        });
-                        widget.config.setUiLocale(value);
-                      }
-                    },
-                  ),
+                trailing: MenuAnchorButton(
+                  label: _localeNames[_selectedLocale] ?? _selectedLocale,
+                  onTap: _pickLocale,
                 ),
               ),
             ],
@@ -247,36 +238,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     ),
                     const SizedBox(height: 10),
                     ExpressiveField(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedChatFontFamily,
-                          isExpanded: true,
-                          dropdownColor: m3.surfaceContainerHigh,
-                          borderRadius: kBorderRadiusMenu,
-                          // The default focus tint is a full-bleed rectangle
-                          // drawn behind the rounded container — it is what
-                          // makes a focused dropdown look square. The
-                          // container already carries the shape.
-                          focusColor: Colors.transparent,
-                          items: kSupportedChatFontFamilies
-                              .map(
-                                (id) => DropdownMenuItem<String>(
-                                  value: id,
-                                  child: Text(_fontFamilyLabel(id, l)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (String? value) {
-                            if (value == null ||
-                                value == _selectedChatFontFamily) {
-                              return;
-                            }
-                            setState(() {
-                              _selectedChatFontFamily = value;
-                            });
-                            widget.config.setChatFontFamily(value);
-                          },
-                        ),
+                      child: MenuAnchorButton(
+                        label: _fontFamilyLabel(_selectedChatFontFamily, l),
+                        expand: true,
+                        onTap: _pickChatFontFamily,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -465,6 +430,56 @@ class _CustomizationPageState extends State<CustomizationPage> {
     );
   }
 
+  /// Opens the house menu on the language anchor. The answer goes through
+  /// the same body the dropdown's `onChanged` had.
+  Future<void> _pickLocale(BuildContext anchorContext) async {
+    final String? value = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<String>>[
+        for (final MapEntry<String, String> entry in _localeNames.entries)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: entry.key,
+            child: MenuActionRow(
+              label: entry.value,
+              selected: entry.key == _selectedLocale,
+            ),
+          ),
+      ],
+    );
+    if (!mounted || value == null || value == _selectedLocale) return;
+    setState(() {
+      _selectedLocale = value;
+    });
+    widget.config.setUiLocale(value);
+  }
+
+  Future<void> _pickChatFontFamily(BuildContext anchorContext) async {
+    final AppLocalizations l = AppLocalizations.of(anchorContext)!;
+    final String? value = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<String>>[
+        for (final String id in kSupportedChatFontFamilies)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: id,
+            child: MenuActionRow(
+              label: _fontFamilyLabel(id, l),
+              selected: id == _selectedChatFontFamily,
+            ),
+          ),
+      ],
+    );
+    if (!mounted || value == null || value == _selectedChatFontFamily) return;
+    setState(() {
+      _selectedChatFontFamily = value;
+    });
+    widget.config.setChatFontFamily(value);
+  }
+
   String _fontFamilyLabel(String id, AppLocalizations l) {
     switch (id) {
       case kChatFontFamilySystem:
@@ -513,3 +528,8 @@ class _CardLabel extends StatelessWidget {
     );
   }
 }
+
+/// The visible half of a dropdown: the current value and the arrow.
+///
+/// A tap opens the house menu ([showAnchoredMenu]) instead of the Material
+/// popup, so a settings picker reads like every other menu in the app.

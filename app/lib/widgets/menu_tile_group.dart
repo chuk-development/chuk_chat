@@ -111,6 +111,7 @@ class MenuActionRow extends StatelessWidget {
     this.tone,
     this.selected = false,
     this.enabled = true,
+    this.maxLines,
   });
 
   final String label;
@@ -131,6 +132,9 @@ class MenuActionRow extends StatelessWidget {
 
   /// A parked row: it still reads, it just does not answer.
   final bool enabled;
+
+  /// Cuts a long label after so many lines. Null lets it wrap freely.
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +161,8 @@ class MenuActionRow extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     label,
+                    maxLines: maxLines,
+                    overflow: maxLines == null ? null : TextOverflow.ellipsis,
                     style: text.bodyLarge?.copyWith(
                       color: fg,
                       fontWeight: FontWeight.w500,
@@ -200,6 +206,11 @@ Future<T?> showMenuSheet<T>(
   final ColorScheme scheme = Theme.of(context).colorScheme;
   return showModalBottomSheet<T>(
     context: context,
+    // A long list scrolls inside the sheet instead of pushing it to the top
+    // of the screen.
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.8,
+    ),
     backgroundColor: scheme.surfaceContainerLow,
     showDragHandle: false,
     shape: const RoundedRectangleBorder(
@@ -238,4 +249,77 @@ Future<T?> showMenuSheet<T>(
       ),
     ),
   );
+}
+
+/// The control a menu hangs off: the current value, an arrow, and the tap
+/// that opens the menu. It replaces `DropdownButton` — the house menu needs
+/// a plain anchor, not a control that brings its own popup.
+///
+/// [onTap] gets the anchor's own context, because that is what
+/// `showAnchoredMenu` measures the menu against.
+class MenuAnchorButton extends StatelessWidget {
+  const MenuAnchorButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.leading,
+    this.labelStyle,
+    this.expand = false,
+  });
+
+  final String label;
+  final ValueChanged<BuildContext> onTap;
+
+  /// Sits before the label — a swatch, a dot row, an icon.
+  final Widget? leading;
+
+  /// Merged over the house style, for a preview in the chosen font.
+  final TextStyle? labelStyle;
+
+  /// Fills the width, the way `isExpanded` did.
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Widget text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: (theme.textTheme.titleMedium ?? const TextStyle())
+          .copyWith(color: theme.colorScheme.onSurface)
+          .merge(labelStyle),
+    );
+    // What this sits in is usually a plain Container, so the ink needs a
+    // Material of its own or the splash lands behind the fill.
+    return Material(
+      type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: Builder(
+        builder: (BuildContext anchorContext) => InkWell(
+          onTap: () => onTap(anchorContext),
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 48,
+            child: Row(
+              mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+              children: <Widget>[
+                if (leading != null) ...<Widget>[
+                  leading!,
+                  const SizedBox(width: 12),
+                ],
+                if (expand) Expanded(child: text) else Flexible(child: text),
+                const SizedBox(width: 4),
+                AppIcon(
+                  Icons.arrow_drop_down,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
