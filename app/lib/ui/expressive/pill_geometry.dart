@@ -67,11 +67,25 @@ abstract final class PillGeometry {
   // it, with a hairline of background left around the capsule.
 
   /// The hairline of background around the switch's capsule.
-  static const double filterInset = 4;
+  static const double filterInset = 3;
 
-  /// The height of one switch segment, and so of its filled capsule. At the
-  /// touch minimum on its own, so nothing has to reach into the hairline.
-  static const double filterSegmentHeight = 48;
+  /// The height of one switch segment, and so of its filled capsule. Short of
+  /// the touch minimum on purpose — the switch is a strip over a list, not a
+  /// bar — so a segment takes the hairline around it as tap slop and a finger
+  /// still gets its 48.
+  static const double filterSegmentHeight = 32;
+
+  /// How far a switch segment's tap area reaches past the capsule, into the
+  /// hairline and the air above and below the strip. Transparent: it takes
+  /// presses, it paints nothing, and it is what keeps a 32 tall capsule at a
+  /// 48 target.
+  /// 8, which is what a 32 tall capsule needs to reach the 48 the layout
+  /// suite enforces.
+  static const double filterTapSlop = 8;
+
+  /// What a finger hits on the switch: the whole strip.
+  static const double filterTapHeight =
+      filterSegmentHeight + filterTapSlop * 2;
 
   /// The height of the whole switch.
   static const double filterHeight = filterSegmentHeight + filterInset * 2;
