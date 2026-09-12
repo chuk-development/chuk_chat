@@ -917,7 +917,6 @@ class _MessengerShellState extends State<MessengerShell>
 
   Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
     final bool showChat = _showThreadOnNarrow && agent != null;
-    final Size screen = MediaQuery.sizeOf(context);
     _drivePush(showChat, MediaQuery.disableAnimationsOf(context));
 
     // Both layers are built HERE, not inside the animated builder: the travel
@@ -930,30 +929,39 @@ class _MessengerShellState extends State<MessengerShell>
         : RepaintBoundary(
             child: ColoredBox(
               color: surface,
-              child: MobileChatScreen(
-                active: showChat,
-                agent: agent,
-                onBack: () => setState(() => _showThreadOnNarrow = false),
-                // The pill opens the coworker's profile, like a messenger
-                // contact header. The controls moved into the profile and the
-                // "more" sheet.
-                onOpenProfile: () => _openAgentProfile(agent),
-                // The target is always there. Lit when a screen is open,
-                // parked when none is — and a parked tap says why instead of
-                // doing nothing (bead cowork-egrg).
-                onOpenBrowser: _browserOpen
-                    ? _openBrowserView
-                    : _explainNoScreen,
-                browserAvailable: _browserOpen,
-                onReconnect: () {
-                  final view = _threadViewKey.currentState;
-                  if (view is CoworkThreadViewState) {
-                    unawaited(view.reconnect());
-                  }
-                },
-                onOpenFiles: () => _openChatFiles(_selectedThreadKey, agent.name),
-                bodyBuilder: (BuildContext context, double topInset) =>
-                    _buildThread(topInset: topInset, phone: true),
+              // Behind the inbox this layer is mounted but not on screen (it
+              // owns the socket). Nothing in it may hold the focus then, or
+              // the composer opens the soft keyboard over the coworker list.
+              // Flipping this to true also drops the focus the composer has,
+              // so walking back closes the keyboard with the thread.
+              child: ExcludeFocus(
+                excluding: !showChat,
+                child: MobileChatScreen(
+                  active: showChat,
+                  agent: agent,
+                  onBack: () => setState(() => _showThreadOnNarrow = false),
+                  // The pill opens the coworker's profile, like a messenger
+                  // contact header. The controls moved into the profile and the
+                  // "more" sheet.
+                  onOpenProfile: () => _openAgentProfile(agent),
+                  // The target is always there. Lit when a screen is open,
+                  // parked when none is — and a parked tap says why instead of
+                  // doing nothing (bead cowork-egrg).
+                  onOpenBrowser: _browserOpen
+                      ? _openBrowserView
+                      : _explainNoScreen,
+                  browserAvailable: _browserOpen,
+                  onReconnect: () {
+                    final view = _threadViewKey.currentState;
+                    if (view is CoworkThreadViewState) {
+                      unawaited(view.reconnect());
+                    }
+                  },
+                  onOpenFiles: () =>
+                      _openChatFiles(_selectedThreadKey, agent.name),
+                  bodyBuilder: (BuildContext context, double topInset) =>
+                      _buildThread(topInset: topInset, phone: true),
+                ),
               ),
             ),
           );
@@ -993,45 +1001,60 @@ class _MessengerShellState extends State<MessengerShell>
       ),
     );
 
-    return AnimatedBuilder(
-      animation: _push,
-      builder: (BuildContext context, Widget? _) {
-        final double p = _push.value.clamp(0.0, 1.0);
-        final bool reverse = _push.status == AnimationStatus.reverse;
+    // The size the chat layer is LAID OUT at is the size of the shell's body,
+    // NOT the size of the screen. The shell's `Scaffold` resizes its body for
+    // the keyboard and strips `viewInsets` from it (that is the contract
+    // chuk's phone screen builds on: it runs `resizeToAvoidBottomInset: false`
+    // and lets the host do the work). A layer pinned to the screen height
+    // would therefore keep its composer and its last messages under the
+    // keyboard, and nothing inside it could react, because the inset it reads
+    // is already zero.
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Size openSize = Size(constraints.maxWidth, constraints.maxHeight);
+        return AnimatedBuilder(
+          animation: _push,
+          builder: (BuildContext context, Widget? _) {
+            final double p = _push.value.clamp(0.0, 1.0);
+            final bool reverse = _push.status == AnimationStatus.reverse;
 
-        final Widget chatLayer = agent == null
-            // No coworker selected: the thread view still has to exist, because
-            // it is what builds the transport.
-            ? Offstage(child: _buildThread(phone: true))
-            : Offstage(
-                // Onstage from the frame the thread is asked for, not from the
-                // first frame of the travel: that way the one expensive build
-                // and its first paint happen while the container is still the
-                // size of the row, and the travel itself is cheap re-paints.
-                offstage: !showChat && p == 0,
-                child: MobileContainerTransform(
-                  progress: p,
-                  reverse: reverse,
-                  openSize: screen,
-                  openColor: surface,
-                  closed: _openFrom,
-                  open: thread,
+            final Widget chatLayer = agent == null
+                // No coworker selected: the thread view still has to exist, because
+                // it is what builds the transport.
+                ? Offstage(
+                    child: ExcludeFocus(child: _buildThread(phone: true)),
+                  )
+                : Offstage(
+                    // Onstage from the frame the thread is asked for, not from the
+                    // first frame of the travel: that way the one expensive build
+                    // and its first paint happen while the container is still the
+                    // size of the row, and the travel itself is cheap re-paints.
+                    offstage: !showChat && p == 0,
+                    child: MobileContainerTransform(
+                      progress: p,
+                      reverse: reverse,
+                      openSize: openSize,
+                      openColor: surface,
+                      closed: _openFrom,
+                      open: thread,
+                    ),
+                  );
+
+            return Stack(
+              children: <Widget>[
+                // The inbox stays exactly where it is: a container transform does
+                // not push the page it came from, it dims it and lets the chat grow
+                // over it. The dim is the transform's own scrim.
+                Positioned.fill(
+                  child: Offstage(
+                    offstage: p == 1,
+                    child: IgnorePointer(ignoring: p > 0, child: home),
+                  ),
                 ),
-              );
-
-        return Stack(
-          children: <Widget>[
-            // The inbox stays exactly where it is: a container transform does
-            // not push the page it came from, it dims it and lets the chat grow
-            // over it. The dim is the transform's own scrim.
-            Positioned.fill(
-              child: Offstage(
-                offstage: p == 1,
-                child: IgnorePointer(ignoring: p > 0, child: home),
-              ),
-            ),
-            Positioned.fill(child: chatLayer),
-          ],
+                Positioned.fill(child: chatLayer),
+              ],
+            );
+          },
         );
       },
     );
