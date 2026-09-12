@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.Cursor
+import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.media.AudioManager
@@ -212,13 +213,16 @@ open class AssistantHostActivity : FlutterActivity() {
           }
 
           "openMaps" -> {
-            result.success(
-              openMaps(
-                call.argument<String>("query").orEmpty(),
-                call.argument<Double>("latitude"),
-                call.argument<Double>("longitude"),
-              ),
-            )
+            // Geocoding hits the network, so it never runs on the platform
+            // thread. The reply goes back on the main thread.
+            val query = call.argument<String>("query").orEmpty()
+            val latitude = call.argument<Double>("latitude")
+            val longitude = call.argument<Double>("longitude")
+            val navigate = call.argument<Boolean>("navigate") ?: false
+            Thread {
+              val outcome = openMaps(query, latitude, longitude, navigate)
+              runOnUiThread { result.success(outcome) }
+            }.start()
           }
 
           "listInstalledApps" -> {
@@ -1086,30 +1090,104 @@ open class AssistantHostActivity : FlutterActivity() {
   /// The intent names no package, so Android picks the default maps app. Many
   /// devices have no Google Maps at all, so a hard coded package would fail
   /// there.
-  private fun openMaps(query: String, latitude: Double?, longitude: Double?): Map<String, Any?> {
+  /**
+   * Shows a place in the device maps app, or starts navigation to it.
+   *
+   * An address is resolved to coordinates first, because `geo:0,0?q=<text>`
+   * only hands the text to the maps app as a *search*: the user then lands on
+   * a result list instead of on the place. With coordinates the pin is exact
+   * and, for [navigate], the route is already computed.
+   *
+   * Runs off the platform thread — [Geocoder] does network work.
+   */
+  private fun openMaps(
+    query: String,
+    latitude: Double?,
+    longitude: Double?,
+    navigate: Boolean,
+  ): Map<String, Any?> {
     val place = query.trim()
+    var lat = latitude
+    var lon = longitude
+    var resolved = false
+
+    if ((lat == null || lon == null) && place.isNotEmpty()) {
+      val point = geocode(place)
+      if (point != null) {
+        lat = point.first
+        lon = point.second
+        resolved = true
+      }
+    }
+
+    val hasPoint = lat != null && lon != null
     val uri = when {
-      latitude != null && longitude != null && place.isNotEmpty() ->
-        Uri.parse("geo:$latitude,$longitude?q=${Uri.encode(place)}")
-      latitude != null && longitude != null ->
-        Uri.parse("geo:$latitude,$longitude")
+      // Navigation: Google Maps and most forks take `google.navigation:`,
+      // which opens the route screen instead of a place card.
+      navigate && hasPoint -> Uri.parse("google.navigation:q=$lat,$lon")
+      navigate && place.isNotEmpty() ->
+        Uri.parse("google.navigation:q=${Uri.encode(place)}")
+      // `geo:lat,lon?q=lat,lon(Label)` pins the exact point and labels it.
+      // `geo:lat,lon?q=<text>` would search for the text near the point.
+      hasPoint && place.isNotEmpty() ->
+        Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(place)})")
+      hasPoint -> Uri.parse("geo:$lat,$lon?q=$lat,$lon")
       place.isNotEmpty() -> Uri.parse("geo:0,0?q=${Uri.encode(place)}")
       else -> return mapOf("launched" to false, "reason" to "empty_query")
     }
 
-    val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    val handler = packageManager.resolveActivity(intent, 0)
-    if (handler == null) {
-      Log.d("ChukAssistant", "openMaps: no app handles $uri")
-      return mapOf("launched" to false, "reason" to "no_maps_app")
+    val launched = launchMapsUri(uri)
+    if (launched != null) {
+      return launched + mapOf(
+        "navigating" to navigate,
+        "geocoded" to resolved,
+        "latitude" to lat,
+        "longitude" to lon,
+      )
     }
 
+    // No app took the navigation scheme (a device without Google Maps).
+    // Fall back to a plain pin, which every maps app handles.
+    if (navigate) {
+      val fallback = when {
+        hasPoint -> Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(place)})")
+        else -> Uri.parse("geo:0,0?q=${Uri.encode(place)}")
+      }
+      val second = launchMapsUri(fallback)
+      if (second != null) {
+        return second + mapOf(
+          "navigating" to false,
+          "geocoded" to resolved,
+          "note" to "no_navigation_app",
+        )
+      }
+    }
+    return mapOf("launched" to false, "reason" to "no_maps_app")
+  }
+
+  /** Starts [uri], or null when nothing on the device handles it. */
+  private fun launchMapsUri(uri: Uri): Map<String, Any?>? {
+    val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val handler = packageManager.resolveActivity(intent, 0) ?: return null
     val label = handler.loadLabel(packageManager).toString()
     return try {
       startActivity(intent)
       mapOf("launched" to true, "app" to label, "uri" to uri.toString())
     } catch (e: Exception) {
       mapOf("launched" to false, "app" to label, "reason" to (e.message ?: "launch_failed"))
+    }
+  }
+
+  /** Address to coordinates, or null when the platform cannot resolve it. */
+  private fun geocode(address: String): Pair<Double, Double>? {
+    return try {
+      @Suppress("DEPRECATION")
+      val matches = Geocoder(this).getFromLocationName(address, 1)
+      val first = matches?.firstOrNull() ?: return null
+      Pair(first.latitude, first.longitude)
+    } catch (e: Exception) {
+      Log.w("ChukAssistant", "geocode failed", e)
+      null
     }
   }
 

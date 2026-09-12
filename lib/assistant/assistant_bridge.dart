@@ -134,17 +134,22 @@ class AssistantBridge {
     return Map<String, dynamic>.from(value as Map? ?? <String, dynamic>{});
   }
 
-  /// Shows a place in the maps app of the device. The Android side names no
-  /// package, so the default maps app of the user handles it.
+  /// Shows a place in the maps app of the device, or starts navigation to it.
+  ///
+  /// The Android side names no package, so the user's own maps app handles it.
+  /// It also resolves an address to coordinates first — a bare text query only
+  /// lands the user on a search result list.
   static Future<Map<String, dynamic>> openMaps({
     required String query,
     double? latitude,
     double? longitude,
+    bool navigate = false,
   }) async {
     final value = await _channel.invokeMethod<dynamic>('openMaps', {
       'query': query,
       'latitude': latitude,
       'longitude': longitude,
+      'navigate': navigate,
     });
     return Map<String, dynamic>.from(value as Map? ?? <String, dynamic>{});
   }

@@ -175,6 +175,15 @@ class AssistantOverlayView extends StatelessWidget {
 
   bool get _hasError => errorText.trim().isNotEmpty;
 
+  /// While the surface only listens there is nothing worth saying, so the
+  /// panel stays away and the waveform alone carries the state. It appears
+  /// once the turn produces something: a tool call, an answer, an error.
+  bool get _showPanel =>
+      busy ||
+      _hasError ||
+      transcript.trim().isNotEmpty ||
+      caption.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -214,75 +223,76 @@ class AssistantOverlayView extends StatelessWidget {
                         AssistantSurface(child: AssistantCardView(card: card!)),
                         const SizedBox(height: 10),
                       ],
-                      AssistantSurface(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CHUK CHAT',
-                              style: TextStyle(
-                                color: scheme.onSurfaceVariant,
-                                fontSize: 11,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              status,
-                              style: TextStyle(
-                                fontSize: 20,
-                                height: 1.2,
-                                color: scheme.onSurface,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            // The quoted request and the answer appear
-                            // together, and only once the answer stands.
-                            // While the turn runs the panel shows the state
-                            // and the waveform, nothing half written.
-                            if (!busy && transcript.trim().isNotEmpty) ...[
-                              const SizedBox(height: 8),
+                      if (_showPanel)
+                        AssistantSurface(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                '„${transcript.trim()}"',
+                                'CHUK CHAT',
                                 style: TextStyle(
-                                  color: scheme.primary,
-                                  fontSize: 14,
-                                  height: 1.35,
+                                  color: scheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                  letterSpacing: 1.2,
                                 ),
                               ),
-                            ],
-                            if (_hasError) ...[
                               const SizedBox(height: 8),
                               Text(
-                                errorText.trim(),
+                                status,
                                 style: TextStyle(
-                                  color: scheme.error,
-                                  fontSize: 14,
-                                  height: 1.4,
+                                  fontSize: 20,
+                                  height: 1.2,
+                                  color: scheme.onSurface,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ] else if (!busy && caption.trim().isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              // The answer is read, not heard, so it is
-                              // rendered: a bold number, a short list, inline
-                              // code. No inner height cap and no inner
-                              // scroller — the answer grows the panel upward
-                              // and the outer scroll view takes over at the
-                              // top.
-                              MarkdownMessage(
-                                text: caption.trim(),
-                                textColor: scheme.onSurfaceVariant,
-                                backgroundColor: scheme.surface,
-                                wrapWithSelectionArea: false,
-                                paragraphFontSize: 14,
-                                paragraphHeight: 1.4,
-                              ),
+                              // The quoted request and the answer appear
+                              // together, and only once the answer stands.
+                              // While the turn runs the panel shows the state
+                              // and the waveform, nothing half written.
+                              if (!busy && transcript.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  '„${transcript.trim()}"',
+                                  style: TextStyle(
+                                    color: scheme.primary,
+                                    fontSize: 14,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                              if (_hasError) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  errorText.trim(),
+                                  style: TextStyle(
+                                    color: scheme.error,
+                                    fontSize: 14,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ] else if (!busy && caption.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                // The answer is read, not heard, so it is
+                                // rendered: a bold number, a short list, inline
+                                // code. No inner height cap and no inner
+                                // scroller — the answer grows the panel upward
+                                // and the outer scroll view takes over at the
+                                // top.
+                                MarkdownMessage(
+                                  text: caption.trim(),
+                                  textColor: scheme.onSurfaceVariant,
+                                  backgroundColor: scheme.surface,
+                                  wrapWithSelectionArea: false,
+                                  paragraphFontSize: 14,
+                                  paragraphHeight: 1.4,
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
                       if (tools.isNotEmpty) ...[
-                        const SizedBox(height: 10),
+                        if (_showPanel) const SizedBox(height: 10),
                         AssistantSurface(
                           padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                           child: Column(
@@ -294,7 +304,8 @@ class AssistantOverlayView extends StatelessWidget {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 10),
+                      if (_showPanel || tools.isNotEmpty)
+                        const SizedBox(height: 10),
                       AssistantSurface(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 20,

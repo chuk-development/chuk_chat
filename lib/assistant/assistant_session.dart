@@ -423,8 +423,10 @@ Regeln:
 - Wenn der Nutzer sich auf "das hier", "diese Seite" oder den Bildschirm bezieht,
   rufe zuerst read_screen auf.
 - Für Bilder, Karten oder Layout-Fragen nutze look_at_screen.
-- Soll irgendwo hin navigiert werden, nutze open_maps. Das öffnet die Karten-App
-  des Geräts. Nenne den Ort danach nicht noch einmal vor.
+- Will der Nutzer irgendwo hin, rufe sofort open_maps mit navigate=true auf.
+  Nicht nachfragen, nicht die Adresse vorlesen, nicht erst bestätigen lassen.
+  Danach ein Satz, wohin es geht — mehr nicht.
+- Soll ein Ort nur gezeigt werden, dasselbe Werkzeug mit navigate=false.
 - Für Orte und Lokale in der Nähe zuerst get_location, dann search_places oder
   search_restaurants. Die Liste sieht der Nutzer, zähle sie nicht auf: sage, wie
   viele es sind und nenne höchstens den besten Treffer.
