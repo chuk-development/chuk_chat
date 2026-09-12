@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
+import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/agent_status.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/top_veil.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
@@ -193,6 +196,107 @@ void main() {
     expect(find.text('Offline'), findsOneWidget);
     await controller.dispose();
   });
+  testWidgets('the presence dot rides the status line, not the face', (
+    tester,
+  ) async {
+    for (final double scale in <double>[1.0, 1.15, 1.3]) {
+      final controller = FakeRelayController();
+      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+      CoworkRelayLink.instance.bind(controller);
+      await pumpPhone(
+        tester,
+        MediaQuery(
+          data: MediaQueryData(
+            size: kPhoneSize,
+            padding: kPhonePadding,
+            textScaler: TextScaler.linear(scale),
+          ),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: MobileChatChrome(
+              agent: agent(id: 'a1', name: 'Wahlradar', onHost: true),
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final Rect dot = tester.getRect(find.byType(StatusDot));
+      final Finder words = find.text('Active now');
+      // The baseline of the line as it is really painted. (A RenderBox only
+      // answers a baseline query during layout, so the same span is measured
+      // again here, with the paragraph's own resolved style and scaler.)
+      final RenderParagraph paragraph = tester.renderObject<RenderParagraph>(
+        words,
+      );
+      final TextPainter painter = TextPainter(
+        text: paragraph.text,
+        textDirection: TextDirection.ltr,
+        textScaler: paragraph.textScaler,
+      )..layout();
+      final double baseline =
+          tester.getTopLeft(words).dy +
+          painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+
+      // The dot is the x-height of the words next to it, and its bottom rides
+      // their baseline — so its centre is the middle of the lower-case
+      // letters. Both halves scale with the text, so nothing drifts.
+      expect(
+        dot.height,
+        closeTo(11 * scale * kStatusDotSizeFactor, 0.01),
+        reason: 'dot diameter at $scale',
+      );
+      expect(dot.width, dot.height);
+      expect(
+        dot.bottom,
+        closeTo(baseline, 0.5),
+        reason: 'dot bottom on the baseline at $scale',
+      );
+      // One even gap, and the dot leads the line.
+      expect(
+        tester.getTopLeft(words).dx - dot.right,
+        closeTo(kStatusDotGap, 0.01),
+        reason: 'gap at $scale',
+      );
+      // It is part of the line, not a badge on the face.
+      final Rect face = tester.getRect(find.byType(AgentFace));
+      expect(dot.left, greaterThan(face.right));
+
+      CoworkRelayLink.instance.unbind();
+      await controller.dispose();
+    }
+  });
+
+  testWidgets('the face sits inside the pill with even air', (tester) async {
+    await pumpPhone(
+      tester,
+      Align(
+        alignment: Alignment.topCenter,
+        child: MobileChatChrome(
+          agent: agent(id: 'a1', name: 'Wahlradar'),
+          onBack: () {},
+        ),
+      ),
+    );
+    final Rect face = tester.getRect(find.byType(AgentFace));
+    final Rect pill = tester.getRect(
+      find.byKey(const ValueKey('mobile_contact_surface')),
+    );
+    expect(face.height, 32, reason: 'the app small-face size');
+    expect(face.width, face.height, reason: 'the silhouette is never squashed');
+    // The two text lines, not the picture, are what the pill is built around:
+    // the face is smaller than the text column and floats in the capsule.
+    expect(face.height, lessThan(16 * 1.5 + 11 * 1.45));
+    expect(
+      face.top - pill.top,
+      closeTo(pill.bottom - face.bottom, 0.01),
+      reason: 'even air above and below',
+    );
+    // And the header row keeps its height: the pill is what it always was.
+    expect(pill.height, closeTo(54.4, 0.01));
+  });
+
   testWidgets('every chip is at least a 48 dp touch target', (tester) async {
     await pumpPhone(
       tester,

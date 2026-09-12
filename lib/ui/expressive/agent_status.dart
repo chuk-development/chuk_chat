@@ -20,6 +20,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
 import 'package:cowork/models/tool_call.dart';
@@ -69,6 +70,79 @@ String? workInProgressLabel(CoworkAgent agent, CoworkRun? run) {
     }
   }
   return 'working';
+}
+
+/// The dot's diameter as a fraction of the font size it sits next to.
+///
+/// 0.55 em is the x-height of the app's text face: the dot is exactly as tall
+/// as a lower-case letter, so it reads as a bullet ON the line and not as a
+/// badge parked beside it.
+const double kStatusDotSizeFactor = 0.55;
+
+/// The single gap between the dot and its words.
+const double kStatusDotGap = 6;
+
+/// The presence dot of a status line, on ONE optical line with its words.
+///
+/// Two rules do the whole job, and they are what keeps the line from drifting
+/// when the text scaler grows:
+///
+///  * the diameter is the text's x-height ([kStatusDotSizeFactor] of the
+///    SCALED font size), so the dot grows with the words;
+///  * its bottom edge sits ON the alphabetic baseline, which leaves its centre
+///    half an x-height above the baseline — the middle of the lower-case
+///    letters, which is where the eye reads the line.
+///
+/// The second rule needs the parent to be a `Row` with
+/// [CrossAxisAlignment.baseline] and [TextBaseline.alphabetic]. A circle has no
+/// baseline of its own and Flutter then drops it at the top of the row, so
+/// [_BaselinedBox] lends it one at its bottom edge and the row does the rest.
+/// Centring the dot in the row instead (the old way) centres it on the LINE
+/// BOX, which sits about a tenth of the font size above the middle of the
+/// letters: visible at 11 px, and it drifts further as the text grows.
+class StatusDot extends StatelessWidget {
+  const StatusDot({super.key, required this.color, required this.fontSize});
+
+  final Color color;
+
+  /// The unscaled font size of the words beside it.
+  final double fontSize;
+
+  /// The painted diameter in [context].
+  static double sizeIn(BuildContext context, double fontSize) =>
+      MediaQuery.textScalerOf(context).scale(fontSize) * kStatusDotSizeFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    final double size = sizeIn(context, fontSize);
+    return _BaselinedBox(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+/// A box whose baseline is its own bottom edge.
+class _BaselinedBox extends SingleChildRenderObjectWidget {
+  const _BaselinedBox({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderBaselinedBox();
+}
+
+class _RenderBaselinedBox extends RenderProxyBox {
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) => size.height;
+
+  @override
+  double? computeDryBaseline(
+    covariant BoxConstraints constraints,
+    TextBaseline baseline,
+  ) => child?.getDryLayout(constraints).height;
 }
 
 /// The line itself: the dot, and the words next to it.
@@ -149,13 +223,11 @@ class AgentStatusLine extends StatelessWidget {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: <Widget>[
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
+        StatusDot(color: dotColor, fontSize: fontSize),
+        const SizedBox(width: kStatusDotGap),
         Flexible(
           child: Text(
             label,
