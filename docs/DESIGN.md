@@ -187,6 +187,33 @@ group. The thread does the same, and all of it comes from
 - Files are real files: the coworker writes one in its sandbox and sends it
   (`send_file_to_user`). There is no "artifact" tier with nothing behind it.
 
+### Chart documents
+
+A chart document (`kind: bar_chart`) draws with `ChukChart`, the app's own card:
+vertical bars from a baseline, the value over each bar, the category under it,
+the unit once over the axis, and a reference line where the agent asked for one.
+Never a picture the agent drew, never a second bar widget.
+
+- **One mapping, two sizes.** `documentChart(...)` in
+  `chat_document_inline.dart` turns a document into a `ChartSpec`, and the
+  thread and the reader both draw that. The thread cannot show a different
+  chart from the one behind the tap.
+- **The thread caps a chart at six bars** (`kInlineDocumentRows`), then offers
+  the "Open all N bars" pill — the same cut a long table gets. The cut happens
+  after the sort, so it is the six biggest, not the six written first. A line
+  chart is never cut: it is one stroke, and six days of a week is a different
+  week.
+- **The block carries the title, the card does not repeat it.** A chart whose
+  spec names a DIFFERENT title keeps it; the caption is the chart's subtitle.
+- **The source is a footer in the thread and a block in the reader.** A painted
+  footer cannot be tapped, so the reader prints the URL with copy and open, and
+  the card leaves its source line out there.
+- **Documents written before the renderer still draw.** Their percentage rows
+  map onto the same spec (see `docs/WIRE_CONTRACT.md`); nothing had to be
+  migrated, and there is one renderer to keep right.
+- Goldens: `test/widgets/charts/document_chart_golden_test.dart`, 360 dp, dark
+  and light, thread and reader.
+
 ## 10. Lists
 
 - A roster row is 64 px: face 48, name, the last line that was actually said,

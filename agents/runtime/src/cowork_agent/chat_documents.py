@@ -14,6 +14,119 @@ from .registry import ToolRegistry
 MAX_DOCUMENT_BYTES = 256 * 1024
 _ID = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$')
 
+# --- the chart the app draws -------------------------------------------------
+#
+# The contract is written down once, in app/lib/widgets/charts/chart_spec.dart,
+# and this module is written against that comment. A chart document says what
+# the chart IS; the app decides how it looks. Validation here is strict on
+# purpose: the app never throws on bad input, so a silent fallback would hide a
+# malformed chart from the model instead of telling it what was wrong.
+_CHART_KINDS = ('bar', 'column_delta', 'line', 'grouped', 'stacked')
+_CHART_SORTS = ('given', 'desc', 'asc')
+_CHART_DIRECTIONS = ('up', 'down', 'auto', 'neutral')
+_CHART_KEYS = ('kind', 'title', 'subtitle', 'unit', 'sort', 'decimals', 'decimal_separator',
+               'axis', 'reference_line', 'source', 'retrieved_at', 'show_values', 'points', 'series')
+_POINT_KEYS = ('label', 'value', 'color', 'note')
+_SERIES_KEYS = ('name', 'direction', 'color', 'points')
+_COLOR = re.compile(r'#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$')
+MAX_CHART_POINTS = 60
+MAX_CHART_SERIES = 8
+
+
+def _chart_number(value, where: str) -> float:
+    """A finite number, and never a bool: True is an int in Python, not a bar."""
+    if type(value) not in (int, float) or value != value or value in (float('inf'), float('-inf')):
+        raise ValueError(f'{where} must be a finite number')
+    return float(value)
+
+
+def _chart_text(value, where: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f'{where} must be text')
+    return value
+
+
+def _chart_color(value, where: str) -> str:
+    if not isinstance(value, str) or not _COLOR.fullmatch(value):
+        raise ValueError(f'{where} must be a hex color like #009EE0')
+    return value
+
+
+def _chart_keys(obj, allowed: tuple, where: str) -> None:
+    if not isinstance(obj, dict):
+        raise ValueError(f'{where} must be an object')
+    unknown = sorted(set(obj) - set(allowed))
+    if unknown:
+        raise ValueError(f'{where} has unknown keys {unknown}; use {", ".join(allowed)}')
+
+
+def _chart_points(raw, where: str) -> None:
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_CHART_POINTS:
+        raise ValueError(f'{where} needs a points array with 1-{MAX_CHART_POINTS} entries')
+    for index, point in enumerate(raw, 1):
+        at = f'{where} point {index}'
+        _chart_keys(point, _POINT_KEYS, at)
+        if not isinstance(point.get('label'), str) or not point['label'].strip():
+            raise ValueError(f'{at} needs a label')
+        _chart_number(point.get('value'), f'{at} value')
+        if 'color' in point:
+            _chart_color(point['color'], f'{at} color')
+        if 'note' in point:
+            _chart_text(point['note'], f'{at} note')
+
+
+def validate_chart(chart) -> dict:
+    """The chart spec, checked against the app's contract. Raises ValueError."""
+    _chart_keys(chart, _CHART_KEYS, 'chart')
+    if chart.get('kind', 'bar') not in _CHART_KINDS:
+        raise ValueError('chart kind must be one of ' + ', '.join(_CHART_KINDS))
+    for key in ('title', 'subtitle', 'unit', 'source', 'retrieved_at', 'decimal_separator'):
+        if key in chart:
+            _chart_text(chart[key], f'chart {key}')
+    if chart.get('decimal_separator', '.') not in ('.', ','):
+        raise ValueError("chart decimal_separator must be '.' or ','")
+    if chart.get('sort', 'given') not in _CHART_SORTS:
+        raise ValueError('chart sort must be one of ' + ', '.join(_CHART_SORTS))
+    if 'decimals' in chart and (type(chart['decimals']) is not int or not 0 <= chart['decimals'] <= 4):
+        raise ValueError('chart decimals must be a whole number from 0 to 4')
+    if 'show_values' in chart and not isinstance(chart['show_values'], bool):
+        raise ValueError('chart show_values must be true or false')
+    if 'axis' in chart:
+        _chart_keys(chart['axis'], ('min', 'max'), 'chart axis')
+        bounds = {k: _chart_number(v, f'chart axis {k}') for k, v in chart['axis'].items()}
+        if len(bounds) == 2 and bounds['min'] >= bounds['max']:
+            raise ValueError('chart axis min must be below max')
+    if 'reference_line' in chart:
+        line = chart['reference_line']
+        if type(line) in (int, float) and not isinstance(line, bool):
+            pass
+        else:
+            _chart_keys(line, ('value', 'label', 'color'), 'chart reference_line')
+            _chart_number(line.get('value'), 'chart reference_line value')
+            if 'label' in line:
+                _chart_text(line['label'], 'chart reference_line label')
+            if 'color' in line:
+                _chart_color(line['color'], 'chart reference_line color')
+    if ('points' in chart) == ('series' in chart):
+        raise ValueError('a chart needs either points (one series) or series (several), not both')
+    if 'points' in chart:
+        _chart_points(chart['points'], 'chart')
+        return chart
+    series = chart['series']
+    if not isinstance(series, list) or not 1 <= len(series) <= MAX_CHART_SERIES:
+        raise ValueError(f'chart series needs 1-{MAX_CHART_SERIES} entries')
+    for index, one in enumerate(series, 1):
+        at = f'chart series {index}'
+        _chart_keys(one, _SERIES_KEYS, at)
+        if 'name' in one:
+            _chart_text(one['name'], f'{at} name')
+        if 'color' in one:
+            _chart_color(one['color'], f'{at} color')
+        if one.get('direction', 'auto') not in _CHART_DIRECTIONS:
+            raise ValueError(f'{at} direction must be one of ' + ', '.join(_CHART_DIRECTIONS))
+        _chart_points(one.get('points'), at)
+    return chart
+
 
 class DocumentStore:
     def __init__(self, db_path: str, session_key: str):
@@ -50,7 +163,7 @@ class DocumentStore:
               columns: list | None = None, rows: list | None = None,
               expected_version: int | None = None, append: bool = False,
               row_key: str | None = None, source_url: str = '',
-              retrieved_at: str = '', caption: str = '') -> dict:
+              retrieved_at: str = '', caption: str = '', chart: dict | None = None) -> dict:
         if not _ID.fullmatch(document_id):
             raise ValueError('Use a short document id with letters, numbers, dots, underscores or hyphens.')
         with self._connect() as db:
@@ -63,6 +176,8 @@ class DocumentStore:
                 raise ValueError('kind must be table, markdown, text or bar_chart')
             if kind in ('markdown', 'text') and (rows is not None or columns is not None):
                 raise ValueError('rows/columns require kind=table or kind=bar_chart; no data was saved')
+            if chart is not None and kind != 'bar_chart':
+                raise ValueError('chart requires kind=bar_chart; no data was saved')
             title = title or (old['title'] if old else document_id)
             if old and columns is None and kind == old['kind'] == 'table':
                 columns = old['columns']
@@ -96,9 +211,18 @@ class DocumentStore:
                        for r in rows):
                     raise ValueError('Rows must map column names to text, numbers, booleans or null')
             if kind == 'bar_chart':
-                if not isinstance(rows, list) or not 1 <= len(rows) <= 20:
+                # A chart document says what the chart is, one of two ways. The
+                # spec in `chart` is the one the app draws from; `rows` is the
+                # percentage shorthand every stored document was written with,
+                # kept working so nothing in a store goes blank. An update that
+                # names neither keeps what the document already had.
+                if chart is None and rows is None and old and old['kind'] == 'bar_chart':
+                    chart, rows = old.get('chart'), old.get('rows')
+                if chart is not None:
+                    validate_chart(chart)
+                elif not isinstance(rows, list) or not 1 <= len(rows) <= 20:
                     raise ValueError('Chart needs 1-20 rows: label, value (percent), color (#RRGGBB)')
-                for row in rows:
+                for row in rows if chart is None else ():
                     if (not isinstance(row, dict) or not isinstance(row.get('label'), str)
                             or not row['label'].strip()
                             or type(row.get('value')) not in (int, float)
@@ -114,7 +238,10 @@ class DocumentStore:
                 doc.update(columns=columns, rows=rows, source_url=source_url,
                            retrieved_at=retrieved_at, caption=caption)
             elif kind == 'bar_chart':
-                doc.update(rows=rows, source_url=source_url, retrieved_at=retrieved_at, caption=caption)
+                doc.update(rows=rows or [], source_url=source_url,
+                           retrieved_at=retrieved_at, caption=caption)
+                if chart is not None:
+                    doc['chart'] = chart
             else:
                 doc['text'] = text
             raw = json.dumps(doc, ensure_ascii=False, allow_nan=False)
@@ -136,7 +263,8 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
     def chat_document(action: str, id: str = '', title: str = '', kind: str | None = None,
                       text: str = '', columns: list | None = None, rows: list | None = None,
                       expected_version: int | None = None, row_key: str | None = None,
-                      source_url: str = '', retrieved_at: str = '', caption: str = ''):
+                      source_url: str = '', retrieved_at: str = '', caption: str = '',
+                      chart: dict | None = None):
         if action == 'list':
             return [{k: d[k] for k in ('id', 'title', 'kind', 'version')} for d in store.list()]
         if action == 'read':
@@ -145,7 +273,7 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
             raise ValueError('action must be list, read, write or append')
         doc = store.write(id, title=title, kind=kind, text=text, columns=columns, rows=rows,
                           expected_version=expected_version, append=action == 'append', row_key=row_key,
-                          source_url=source_url, retrieved_at=retrieved_at, caption=caption)
+                          source_url=source_url, retrieved_at=retrieved_at, caption=caption, chart=chart)
         # Persistence precedes UI delivery: a reconnect can always recover it.
         try:
             sink(document_file(doc))
@@ -168,7 +296,19 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
                        'For a result tracked over time (an election night, a running count), keep ONE document: '
                        'rows with label, value (actual percentage, never renormalize), color (#RRGGBB), distinct '
                        'party colors, exact source_url and retrieved_at. Say in the caption if it holds only the '
-                       'largest parties, and put the complete numbers in the message.',
+                       'largest parties, and put the complete numbers in the message. '
+                       'CHARTS: kind=bar_chart with a `chart` object. DESCRIBE the chart, do not draw it: no ASCII '
+                       'bars, no image, no SVG, no plotting script - the app draws it. One chart is ONE document; '
+                       'never split one result over several documents, and the numbers still belong in the chat '
+                       'message itself. Example: chart={"kind":"bar","title":"Landtagswahl Sachsen-Anhalt",'
+                       '"subtitle":"Zweitstimmen","unit":"%","decimals":1,"decimal_separator":",",'
+                       '"reference_line":{"value":5,"label":"5 % threshold"},"source":"Landeswahlleiter",'
+                       '"retrieved_at":"2026-09-12T20:15:00Z","points":[{"label":"AfD","value":43.8,'
+                       '"color":"#009EE0"},{"label":"CDU","value":17.2,"color":"#32302E"}]}. '
+                       'kind is bar | column_delta (a negative value hangs below the baseline) | line | grouped | '
+                       'stacked; for several series write series=[{"name":"BTC","direction":"up","points":[...]}] '
+                       'instead of points. Optional: sort (given|desc|asc), axis {min,max}, show_values, '
+                       'per-point note.',
         'properties': {
             'action': {'type': 'string', 'enum': ['list', 'read', 'write', 'append']},
             'id': {'type': 'string'}, 'title': {'type': 'string'},
@@ -177,6 +317,11 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
             'text': {'type': 'string'},
             'columns': {'type': 'array', 'items': {'type': 'string'}},
             'rows': {'type': 'array', 'items': {'type': 'object'}},
+            'chart': {'type': 'object',
+                      'description': 'The chart spec for kind=bar_chart: kind, title, subtitle, unit, decimals, '
+                                     'decimal_separator, axis, reference_line, sort, show_values, source, '
+                                     'retrieved_at, and either points[{label,value,color,note}] or '
+                                     'series[{name,direction,color,points}]. Replaces rows; the app draws it.'},
             'expected_version': {'type': 'integer'}, 'row_key': {'type': 'string'},
             'source_url': {'type': 'string'}, 'retrieved_at': {'type': 'string'},
             'caption': {'type': 'string'},
