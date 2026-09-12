@@ -153,6 +153,19 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     final session = state.session;
     if (session != null) _lastSession = session;
 
+    // The startup line: it says the app began with a session and how much life
+    // that access token had, which is the first thing to know about a sign-out
+    // that follows seconds later.
+    if (state.event == AuthChangeEvent.initialSession ||
+        state.event == AuthChangeEvent.tokenRefreshed) {
+      AuthTrace.note(state.event.name, detail: <String, Object?>{
+        'session': session != null,
+        if (session?.expiresAt != null)
+          'seconds_left':
+              session!.expiresAt! - DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+    }
+
     if (state.event == AuthChangeEvent.signedOut) {
       AuthTrace.note('signed-out', detail: <String, Object?>{
         'reason': state.signOutReason?.name ?? 'unknown',
