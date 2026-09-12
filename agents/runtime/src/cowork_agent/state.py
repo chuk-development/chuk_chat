@@ -596,6 +596,7 @@ class StateStore:
                         "text": _as_text(content.get("content")),
                         "replay": True,
                         "mid": mid,
+                        "created_at": message.created_at,
                     }
                 )
                 continue
@@ -606,11 +607,13 @@ class StateStore:
             reasoning = content.get("reasoning")
             if isinstance(reasoning, str) and reasoning.strip():
                 events.append(
-                    {"type": "reasoning", "text": reasoning, "replay": True, "mid": mid}
+                    {"type": "reasoning", "text": reasoning, "replay": True, "mid": mid,
+                     "created_at": message.created_at}
                 )
             text = content.get("content")
             if isinstance(text, str) and text.strip():
-                events.append({"type": "delta", "text": text, "replay": True, "mid": mid})
+                events.append({"type": "delta", "text": text, "replay": True, "mid": mid,
+                               "created_at": message.created_at})
             # The result rows of this turn are the ``tool`` rows right after it
             # (the loop writes one per call, in call order). Matched by call id
             # within that group, else by position — a model (or the mock) that

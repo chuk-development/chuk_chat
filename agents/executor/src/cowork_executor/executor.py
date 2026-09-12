@@ -131,6 +131,7 @@ from .protocol import (
     file_payload,
     frame_to_b64,
     mcp_credentials_payload,
+    mcp_tools_payload,
     reasoning_payload,
     run_state_payload,
     secret_request_payload,
@@ -852,6 +853,8 @@ class Executor:
         # opened/closed on every change and carried in every `run_state`, so the
         # app shows its browser button only while there is something to see.
         self._browser_open = False
+        #: ``(checked_at, present)`` of the last browser-window probe.
+        self._browser_window_probe: tuple[float, bool] | None = None
 
     @property
     def name(self) -> str:
@@ -1177,6 +1180,12 @@ class Executor:
             # been at it (docs/WIRE_CONTRACT.md, "Agent status"). Answered with
             # one terminal frame, like a skills list: every figure measured.
             self._handle_agent_status(request_id, payload)
+            return
+        if kind == "mcp_probe":
+            # The app just connected a server (or opened the connector list) and
+            # wants to know what it holds. Answered with one terminal
+            # ``mcp_tools`` frame; the dial itself runs on its own thread.
+            self._handle_mcp_probe(request_id, payload)
             return
         if kind in ("skills_list", "skill_control"):
             # The user manages the skills of this host (docs/WIRE_CONTRACT.md,
@@ -1732,6 +1741,7 @@ class Executor:
                 started_at=live.started_at,
                 prompt=live.prompt,
                 browser_open=self._browser_open,
+                vnc_available=self._vnc_available(session_key),
             )
         latest = store.latest_run(session_key)
         if latest is not None and latest.get("state") == "running":
@@ -1742,18 +1752,87 @@ class Executor:
                 started_at=latest.get("started_at"),
                 prompt=latest.get("prompt"),
                 browser_open=self._browser_open,
+                vnc_available=self._vnc_available(session_key),
             )
-        return run_state_payload(session_key, "idle", browser_open=self._browser_open)
+        return run_state_payload(
+            session_key, "idle", browser_open=self._browser_open,
+            vnc_available=self._vnc_available(session_key),
+        )
 
-    def _set_browser_open(self, open_: bool, request_id: str) -> None:
+    def _vnc_available(self, session_key: str | None = None) -> bool:
+        """A current sandbox browser can be viewed; VNC is started on demand.
+
+        Never advertise the user's extension browser or a local/headless host.
+        This does not start a container, browser, or VNC process.
+
+        The last question is asked of the display itself: is a browser window
+        ON it right now? The MCP server owns the Chromium and takes it down
+        with its own session, so ``_browser_open`` — which is derived from the
+        agent's tool calls — outlives the window it describes. Advertising a
+        screen that is not there is what made "take over" open a black page
+        (bead cowork-tf1u).
+        """
+        if not self._browser_open or not self._browser_mcp or browser_target() == USER_BROWSER:
+            return False
+        env = self._environment_for(session_key)
+        binary = getattr(getattr(env, "_cli", None), "binary", None)
+        container = getattr(env, "container_id", None)
+        if not binary or not container:
+            return False
+        return self._browser_window_present(str(binary), str(container))
+
+    #: How long a window probe is trusted. A run asks for the header on every
+    #: replay and every state change; the display does not move that fast.
+    BROWSER_WINDOW_TTL_S = 3.0
+
+    def _browser_window_present(self, binary: str, container: str) -> bool:
+        """Is a browser window mapped on the sandbox display right now?
+
+        One ``xwininfo`` per :data:`BROWSER_WINDOW_TTL_S`, so a burst of
+        headers costs one probe. A probe that cannot run at all (no xwininfo in
+        the image, docker refusing) answers with what the tool calls said, so an
+        older image is no worse off than before.
+        """
+        now = time.time()
+        cached = self._browser_window_probe
+        if cached is not None and now - cached[0] < self.BROWSER_WINDOW_TTL_S:
+            return cached[1]
+        # The script always exits 0 and always prints a count, so "docker said
+        # no" is told apart from "the display has no browser": anything but a
+        # clean run with a number on stdout is an unknown, and an unknown must
+        # not take a working screen away.
+        argv = [
+            binary, "exec", container, "sh", "-lc",
+            'DISPLAY=${COWORK_BROWSER_DISPLAY:-:99} xwininfo -root -children '
+            '2>/dev/null | grep -ci chrom; exit 0',
+        ]
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=8)
+        except Exception:  # noqa: BLE001 — a probe that cannot run proves nothing
+            return True
+        out = (proc.stdout or "").strip()
+        if proc.returncode != 0 or not out.isdigit():
+            return True
+        present = out != "0"
+        self._browser_window_probe = (now, present)
+        return present
+
+    def _set_browser_open(
+        self, open_: bool, request_id: str, session_key: str | None = None
+    ) -> None:
         """Record the browser state; on a change, tell the app once
         (``browser_view`` ``opened`` / ``closed`` on the stream that learned it)."""
         with self._vnc_lock:
             if self._browser_open == open_:
                 return
             self._browser_open = open_
+            # The window came or went; the cached probe is about the old world.
+            self._browser_window_probe = None
         if request_id:
-            self._event(request_id, browser_view_payload("opened" if open_ else "closed"))
+            self._event(request_id, browser_view_payload(
+                "opened" if open_ else "closed",
+                vnc_available=self._vnc_available(session_key),
+            ))
 
     # -- live browser view (§9.1) ----------------------------------------
     def _handle_browser_kind(self, kind: str, request_id: str, payload: dict) -> bool:
@@ -1985,10 +2064,13 @@ class Executor:
         # not tell): flip the browser state before `started`, so the app has
         # the verdict by the time it decides whether to show the view.
         if windows is not None and windows >= 0:
-            self._set_browser_open(windows > 0, request_id)
+            self._set_browser_open(windows > 0, request_id, payload.get("session_key"))
         self._event(
             request_id,
-            browser_view_payload("started", message=message, password=secret),
+            browser_view_payload(
+                "started", message=message, password=secret,
+                vnc_available=self._vnc_available(payload.get("session_key")),
+            ),
         )
 
     def _vnc_feed(self, payload: dict) -> None:
@@ -2469,6 +2551,9 @@ class Executor:
         # Anything the device has not acknowledged yet (a rotated refresh token
         # from an earlier task) goes out again on this task's stream.
         self._flush_pending_mcp_credentials(session_key, request_id)
+        # What those connectors answered with, so the app's list can stop saying
+        # "0 tools" about servers that are up (docs/WIRE_CONTRACT.md mcp_tools).
+        self._send_mcp_tools(session_key, request_id, mcp_manager)
 
         # here.now publish connector (§10-style consent): off unless the app
         # forwarded an enabled setting. ``ask`` mode binds the approval gate so a
@@ -2704,7 +2789,7 @@ class Executor:
             fields.get("name"), fields.get("arguments"), fields.get("status")
         )
         if state is not None:
-            self._set_browser_open(state, request_id)
+            self._set_browser_open(state, request_id, session_key)
         self._event(request_id, tool_payload(**fields))
         self._export_transcript(session_key)
 
@@ -3060,6 +3145,129 @@ class Executor:
                 pass
 
         return listener
+
+    def _send_mcp_tools(
+        self, session_key: str, request_id: str, manager: object | None
+    ) -> None:
+        """Tell the app what each connector answered with.
+
+        The device cannot know: it forwards the connectors and the host dials
+        them. Without this the connector list shows "0 tools" next to a server
+        that is connected and working (and the user has no way to tell that
+        apart from one that is broken). Sent once per task, after the manager is
+        up — that is the moment the answer exists.
+
+        Best-effort in every direction: no manager, no frame; a server that
+        failed is reported with its error instead of being left out, because
+        "tried and refused" is the thing worth showing.
+        """
+        servers = self._mcp_tools_servers(session_key, manager)
+        if not servers:
+            return
+        try:
+            self._event(
+                request_id,
+                mcp_tools_payload(session_key=session_key, servers=servers),
+            )
+        except Exception:  # noqa: BLE001 — a relay problem must not kill the task
+            pass
+
+    def _mcp_tools_servers(self, session_key: str, manager: object | None) -> list[dict]:
+        """One entry per connector of [manager]: what it answered with.
+
+        Shared by the task path (an event on the running stream) and the probe
+        path (a terminal on its own request), so the two can never describe the
+        same connector differently.
+        """
+        if manager is None:
+            return []
+        try:
+            connections = dict(getattr(manager, "connections", {}) or {})
+        except Exception:  # noqa: BLE001
+            return []
+        if not connections:
+            return []
+        with self._mcp_lock:
+            meta = dict(self._mcp_entry_meta.get(session_key, {}))
+        servers: list[dict] = []
+        for name, connection in connections.items():
+            entry = meta.get(name, {})
+            try:
+                tools = list(getattr(connection, "tools", []) or [])
+            except Exception:  # noqa: BLE001
+                tools = []
+            error = getattr(connection, "error", None)
+            servers.append(
+                {
+                    "id": entry.get("id"),
+                    "name": str(entry.get("name") or name),
+                    "url": str(entry.get("url") or ""),
+                    "connected": not error and bool(tools),
+                    "tools": [
+                        {
+                            "name": str(getattr(tool, "name", "") or ""),
+                            "description": str(getattr(tool, "description", "") or ""),
+                        }
+                        for tool in tools
+                    ],
+                    **({"error": str(error)} if error else {}),
+                }
+            )
+        return servers
+
+    def _handle_mcp_probe(self, request_id: str, payload: dict) -> None:
+        """Dial the forwarded connectors now and answer with what they hold.
+
+        The app signs in to an MCP server itself (an OAuth consent screen needs
+        a person), but it never speaks MCP: this host does. Without this frame
+        the app could only learn a connector's tools as a side effect of running
+        a task, so a freshly connected server sat in the list saying "0 tools"
+        until the user happened to ask the coworker something.
+
+        Answered with one terminal ``mcp_tools`` frame, the way a skills list is.
+        The dial runs on its own thread: a server that is down costs a full
+        connect timeout, and the frame loop must not wait for it.
+        """
+        servers = payload.get("mcp_servers")
+        if not isinstance(servers, list) or not servers:
+            self._terminal(
+                request_id, mcp_tools_payload(session_key="", servers=[])
+            )
+            return
+        session_key = str(payload.get("session_key") or "") or "mcp-probe"
+
+        def work() -> None:
+            try:
+                manager = self._session_mcp_manager(session_key, servers)
+                if manager is None:
+                    self._terminal(
+                        request_id,
+                        mcp_tools_payload(session_key=session_key, servers=[]),
+                    )
+                    return
+                try:
+                    manager.start()
+                except Exception:  # noqa: BLE001 — report what did answer
+                    pass
+                self._terminal(
+                    request_id,
+                    mcp_tools_payload(
+                        session_key=session_key,
+                        servers=self._mcp_tools_servers(session_key, manager),
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001 — never kill the serve loop
+                try:
+                    self._terminal(
+                        request_id,
+                        error_payload(f"mcp probe failed: {type(exc).__name__}"),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+
+        threading.Thread(
+            target=work, name=f"mcp-probe-{request_id[:8]}", daemon=True
+        ).start()
 
     def _flush_pending_mcp_credentials(self, session_key: str, request_id: str) -> None:
         """Re-send every unacknowledged ``mcp_credentials`` frame of this session

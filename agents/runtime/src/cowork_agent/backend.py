@@ -230,7 +230,6 @@ class SupabaseSession:
             return False
         return time.time() >= (self.expires_at - skew)
 
-
     def refresh(
         self, *, reason: str = "token_expired", seen_token: str | None = None
     ) -> None:
@@ -694,10 +693,17 @@ class BackendModelClient:
         # A cancel only applies to the call it interrupted. Clearing it here is
         # what lets one client serve the next task after a stopped one.
         self._cancelled = False
+        self._received_output = False
         seen_token = self._session.access_token
         try:
             response = self._chat_once(payload)
         except _AuthRejected:
+            if self._received_output:
+                self._close()
+                raise BackendModelError(
+                    "Model stream interrupted after output; retry the turn explicitly",
+                    code="stream_interrupted",
+                ) from None
             # Token expired or the socket was rejected: get a fresh pair (from
             # the app while it is attached, from GoTrue otherwise — see
             # SupabaseSession.refresh), reconnect, retry once. ``seen_token``
@@ -710,6 +716,12 @@ class BackendModelClient:
                 # We closed this socket on purpose (§7.1 Stop). Retrying would
                 # spend the account's credits on an answer nobody is waiting for.
                 raise BackendModelError("cancelled", code="cancelled") from None
+            if self._received_output:
+                self._close()
+                raise BackendModelError(
+                    "Model stream interrupted after output; retry the turn explicitly",
+                    code="stream_interrupted",
+                ) from None
             # Idle socket dropped by an LB: reconnect and retry once.
             self._close()
             response = self._chat_once(payload)
@@ -906,6 +918,12 @@ class BackendModelClient:
             if frame.get("req_id") != req_id:
                 continue
             kind = frame.get("kind")
+            # Once generation has reached us it is no longer safe to replay
+            # the prompt transparently: UI deltas cannot be rolled back and
+            # the first request may already have incurred usage. Keep idle
+            # socket recovery only for a connection with no model output.
+            if kind in ("content", "reasoning", "tool_calls") and frame.get("data"):
+                self._received_output = True
             timing.setdefault(f"first_{kind}_ms", (time.monotonic() - sent) * 1000)
             if kind == "content":
                 data = frame.get("data")
