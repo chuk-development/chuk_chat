@@ -5,6 +5,7 @@ import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
+import 'package:flutter_rfb/flutter_rfb.dart';
 
 import '../support/fake_relay_controller.dart';
 
@@ -138,6 +139,32 @@ void main() {
       tester.getTopLeft(find.text('stream died')).dy,
       greaterThanOrEqualTo(statusInset + MobileLayout.controlHeight),
     );
+  });
+
+  testWidgets('the full-screen toggle keeps the live stream alive', (
+    tester,
+  ) async {
+    await pumpPage(tester);
+    controller.emit(const CoworkRelayBrowserView(status: 'started'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final Finder stream = find.byType(RemoteFrameBufferWidget);
+    expect(stream, findsOneWidget);
+    // The element, not the widget: it owns the RFB isolate and the loopback
+    // socket. Rebuilding it used to kill the isolate, close the bridge and
+    // latch it shut, so one tap on "full screen" killed the view for good.
+    final Element before = tester.element(stream);
+
+    await tester.tap(find.byKey(const Key('browser_view_exit_fullscreen')));
+    await tester.pump();
+    expect(find.byType(ExpressiveScreen), findsOneWidget);
+    expect(identical(tester.element(stream), before), isTrue);
+
+    await tester.tap(find.byKey(const Key('browser_view_enter_fullscreen')));
+    await tester.pump();
+    expect(find.byType(ExpressiveScreen), findsNothing);
+    expect(identical(tester.element(stream), before), isTrue);
   });
 
   testWidgets(
