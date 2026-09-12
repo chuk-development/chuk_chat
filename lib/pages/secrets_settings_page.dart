@@ -8,9 +8,12 @@
 import 'package:flutter/material.dart';
 
 import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/services/secrets/secrets_service.dart';
 import 'package:cowork/services/secrets/secrets_store.dart';
+import 'package:cowork/widgets/anchored_menu.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 
 class SecretsSettingsPage extends StatefulWidget {
   const SecretsSettingsPage({super.key, SecretsService? service})
@@ -78,6 +81,34 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
     await _service.remove(name);
   }
 
+  /// The row menu, on the app's one menu surface.
+  Future<void> _openMenu(BuildContext anchor, String name) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final String? choice = await showAnchoredMenu<String>(
+      anchor,
+      color: scheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<String>>[
+        const PopupMenuItem<String>(
+          value: 'change',
+          padding: EdgeInsets.zero,
+          child: MenuActionRow(icon: Icons.edit_outlined, label: 'Change value'),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete',
+          padding: EdgeInsets.zero,
+          child: MenuActionRow(
+            icon: Icons.delete_outline,
+            label: 'Delete',
+            tone: scheme.error,
+          ),
+        ),
+      ],
+    );
+    if (!mounted) return;
+    if (choice == 'change') await _change(name);
+    if (choice == 'delete') await _delete(name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -120,22 +151,12 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const ExpressiveBadge('set', icon: Icons.check),
-                                PopupMenuButton<String>(
-                                  tooltip: 'Options for $name',
-                                  onSelected: (choice) {
-                                    if (choice == 'change') _change(name);
-                                    if (choice == 'delete') _delete(name);
-                                  },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem<String>(
-                                      value: 'change',
-                                      child: Text('Change value'),
-                                    ),
-                                    PopupMenuItem<String>(
-                                      value: 'delete',
-                                      child: Text('Delete'),
-                                    ),
-                                  ],
+                                Builder(
+                                  builder: (BuildContext anchor) => IconButton(
+                                    tooltip: 'Options for $name',
+                                    icon: const AppIcon(Icons.more_vert),
+                                    onPressed: () => _openMenu(anchor, name),
+                                  ),
                                 ),
                               ],
                             ),

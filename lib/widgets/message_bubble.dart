@@ -47,6 +47,7 @@ import 'package:cowork/utils/tool_detail_format.dart';
 import 'package:cowork/widgets/markdown_message.dart';
 import 'package:cowork/models/chat_reply.dart';
 import 'package:cowork/utils/incomplete_markdown_links.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 import 'package:cowork/widgets/messenger_context_menu.dart';
 import 'package:cowork/services/settings/mobile_chat_preferences.dart';
 import 'package:cowork/widgets/messenger_typing_indicator.dart';
