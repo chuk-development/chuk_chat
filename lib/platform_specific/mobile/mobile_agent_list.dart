@@ -24,6 +24,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:cowork/platform_specific/mobile/mobile_container_transform.dart';
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/ui/expressive/icon_map.dart';
 
 import 'package:cowork/models/cowork_agent.dart';
@@ -53,12 +54,6 @@ String accountMonogram(String? label) {
   }
   return parts.first.characters.first.toUpperCase();
 }
-
-/// The height every control in the home header row takes: the search target,
-/// the All/Unread switch, the "+", and the search field that replaces the
-/// first two. One number, because a row of controls that do not agree on their
-/// height reads as three controls borrowed from three screens.
-const double kHomeBarHeight = 52;
 
 class MobileAgentList extends StatefulWidget {
   const MobileAgentList({
@@ -309,7 +304,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.search01,
           onTap: _openSearch,
-          size: kHomeBarHeight,
+          size: MobileLayout.controlHeight,
           color: scheme.surfaceContainerHighest,
           tooltip: 'Search coworkers',
           semanticsId: 'mobile_home_search',
@@ -323,7 +318,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             selected: _filter,
             badges: <int, int>{1: unread},
             margin: EdgeInsets.zero,
-            height: kHomeBarHeight,
+            height: MobileLayout.controlHeight,
             onSelected: (int i) => setState(() {
               _reverse = i < _filter;
               _filter = i;
@@ -336,7 +331,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           ExpressiveIconButton(
             hugeIcon: HugeIcons.plusSign,
             onTap: widget.onAddAgent,
-            size: kHomeBarHeight,
+            size: MobileLayout.controlHeight,
             color: scheme.primary,
             onColor: scheme.onPrimary,
             tooltip: 'Add a coworker',
@@ -354,7 +349,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.arrowLeft02,
           onTap: _closeSearch,
-          size: kHomeBarHeight,
+          size: MobileLayout.controlHeight,
           tooltip: 'Close search',
           semanticsId: 'mobile_home_search_close',
         ),
@@ -506,7 +501,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
 ///
 /// It is a field and it looks like one. A bare [TextField] on the header's
 /// background had no shape at all, so the row simply lost its title and gained
-/// a caret. It takes [kHomeBarHeight], the height of the switch it replaces
+/// a caret. It takes [MobileLayout.controlHeight], the height of the switch it
+/// replaces
 /// and of the target beside it, and its corner is that switch's corner — a
 /// field that grew taller than the button next to it was the one thing in the
 /// row that looked borrowed from another screen.
@@ -527,10 +523,10 @@ class _SearchField extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final bool hasText = controller.text.isNotEmpty;
     return Container(
-      height: kHomeBarHeight,
+      height: MobileLayout.controlHeight,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(kHomeBarHeight / 2),
+        borderRadius: BorderRadius.circular(MobileLayout.controlHeight / 2),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 7, 0),

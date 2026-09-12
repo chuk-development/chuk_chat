@@ -986,9 +986,9 @@ void main() {
 
     final agentId = roster.agents.single.id;
     expect(find.byType(MobileAgentList), findsOneWidget);
-    // The inbox is a messenger home: its own title bar, and the All / Unread
-    // filter under it.
-    expect(find.text('Agents'), findsOneWidget);
+    // The inbox is a messenger home: one header row, with the All / Unread
+    // switch in the middle of it and no page headline.
+    expect(find.text('Agents'), findsNothing);
     expect(find.text('All'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey<String>('mobile-agent-$agentId')));
@@ -1014,10 +1014,12 @@ void main() {
     await tester.flingFrom(const Offset(416, 400), const Offset(-230, 0), 1200);
     await tester.pumpAndSettle();
     expect(find.byType(Drawer), findsNothing);
-    expect(find.text('Agents').hitTestable(), findsNothing);
+    // The inbox has no headline to look for any more; its search target is
+    // the thing only the inbox has.
+    expect(findId('mobile_home_search').hitTestable(), findsNothing);
     await tester.tap(findIcon(Icons.arrow_back_rounded).first);
     await tester.pumpAndSettle();
-    expect(find.text('Agents').hitTestable(), findsOneWidget);
+    expect(findId('mobile_home_search').hitTestable(), findsOneWidget);
   });
 
   testWidgets('the Rooms button opens the rooms screen and lists rooms', (

@@ -293,8 +293,9 @@ void main() {
       closeTo(pill.bottom - face.bottom, 0.01),
       reason: 'even air above and below',
     );
-    // And the header row keeps its height: the pill is what it always was.
-    expect(pill.height, closeTo(54.4, 0.01));
+    // The pill is exactly as tall as the buttons beside it — it used to stand
+    // 6 taller and overhang them.
+    expect(pill.height, closeTo(MobileLayout.controlHeight, 0.01));
   });
 
   testWidgets('every chip is at least a 48 dp touch target', (tester) async {
@@ -345,11 +346,12 @@ void main() {
       ),
     );
     final Rect back = tester.getRect(findId('mobile_chat_back'));
-    // 47 status bar + 8 padding.
-    expect(back.top, closeTo(kPhonePadding.top + 8 + (54.4 - 48) / 2, 0.01));
-    expect(back.height, MobileLayout.chipDiameter);
+    // 47 status bar + 8 padding. Nothing to centre any more: every control in
+    // the row is [MobileLayout.controlHeight] tall, so they all start there.
+    expect(back.top, closeTo(kPhonePadding.top + 8, 0.01));
+    expect(back.height, MobileLayout.controlHeight);
     // The whole bar (without its fade) is what the chat reserves.
-    expect(MobileLayout.barHeight, 8 + 54.4 + 10);
+    expect(MobileLayout.barHeight, 8 + MobileLayout.controlHeight + 10);
   });
 
   testWidgets('back, pill, browser and more fire their callbacks', (
@@ -489,12 +491,15 @@ void main() {
         ),
       );
       final pill = tester.getRect(findId('mobile_chat_bot_pill'));
-      expect(pill.right, kPhoneSize.width - 12 - 48 - 8);
+      expect(
+        pill.right,
+        kPhoneSize.width - 12 - MobileLayout.controlHeight - 8,
+      );
       expect(
         tester.getRect(findId('mobile_chat_browser')).right,
         kPhoneSize.width - 12,
       );
-      expect(pill.left, 12 + 48 + 10);
+      expect(pill.left, 12 + MobileLayout.controlHeight + 10);
       expect(find.text('Offline'), findsOneWidget);
       expect(find.text('Active now'), findsNothing);
     },
