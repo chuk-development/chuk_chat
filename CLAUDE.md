@@ -58,54 +58,51 @@ your personal kanban: nothing worked on without a bead, nothing left open once
 fixed. Do NOT use TodoWrite or ad-hoc markdown checklists for this. The same rule
 holds in the `api_server` repo, which has its own `bd` database.
 
-## Multi-Agent Worktrees
+## Git Workflow (default: no worktrees)
 
-**HARD RULE — a new feature branch always means a new local worktree.** Whenever
-you start a new feature branch, create it in its own `git worktree` (off `master`)
-and do the work there. NEVER check out a different branch inside the main checkout
-(`/home/user/git/chuk_chat`) or the main CoWork directory — each of those stays on
-its own branch (normally `master`) and is never switched to another task's branch.
-Do not commit an unrelated fix onto whatever branch the main checkout happens to be
-sitting on; branch it into a fresh worktree instead. This keeps every task's history
-isolated and stops one task's in-progress work from riding along with another's.
+**Default: work directly in `/home/user/git/chuk_chat` on `master`, commit and
+push straight to `master`.** No feature branch, no worktree. That is the normal
+case, because normally exactly one agent works this repo.
 
-When several agents work this repo at once, **each agent gets its own git worktree** so they never touch the same working directory. A worktree is a second checkout of the same repo on its own branch, sharing one `.git` — parallel-safe because `.dart_tool/` and `build/` are per-directory.
+A `git worktree` is the **exception, not the rule**. Create one only when there
+is a real conflict risk that cannot be solved otherwise:
 
-**Each agent, on start:**
+- another agent is already working in the main checkout at the same time, and
+- talking to that agent (`SendMessage` / `ListAgents`) does not resolve who owns
+  which files.
+
+Prefer coordination over isolation: ask the other agent what it touches, split
+the files, work sequentially. A worktree is the last resort.
+
+**If a worktree really is needed:**
 
 ```bash
-# 1. Create an isolated worktree + branch (name it after the task)
 git worktree add ../chuk_chat-<task> -b agent/<task> master
-
-# 2. Copy the gitignored .env — it is NOT carried into a fresh worktree
-cp .env ../chuk_chat-<task>/.env
-
-# 3. Work only inside that directory
+cp .env ../chuk_chat-<task>/.env    # gitignored, NOT carried into a fresh worktree
 cd ../chuk_chat-<task>
 ```
 
-**Each agent, on finish** (follow the normal Workflow Rules first — `flutter test`, CodeRabbit, commit):
+**When the work is finished — `flutter test` green, CodeRabbit findings all
+fixed — it is integrated, and then the worktree gets deleted; always, no
+leftovers:**
 
 ```bash
-# From inside the worktree: commit on the agent/<task> branch, then
-git push -u origin agent/<task>          # push branch, OR merge to master below
-```
-
-**Integrating branches** (one agent, or you, does this after all are done):
-
-```bash
-cd /home/user/git/chuk_chat              # main worktree on master
-git merge --no-ff agent/<task>           # merge each branch in turn, resolve conflicts
-git push
-git worktree remove ../chuk_chat-<task>  # clean up finished worktree
+git push origin agent/<task>:master      # integrate
+cd /home/user/git/chuk_chat
+git worktree remove ../chuk_chat-<task>
 git branch -d agent/<task>
+git worktree prune
 ```
+
+The directory must not survive the task. `git worktree list` shows leftovers.
 
 **Rules:**
-- One worktree per agent — never two agents in the same directory.
-- Always `cp .env` into a new worktree; a build without it shows "Supabase credentials are not configured".
-- `git worktree list` shows all active worktrees. `git worktree prune` removes stale entries.
-- Branch names: `agent/<short-task>`. Keep changes on the branch; integrate to master via merge, not by editing master directly while agents run.
+- Default is master in the main checkout. Do not create branches/worktrees "for
+  cleanliness".
+- Never two agents in the same directory.
+- A worktree without `.env` builds and shows "Supabase credentials are not
+  configured".
+- Every created worktree is removed after the push. Done means gone.
 
 ## Build Rules
 
