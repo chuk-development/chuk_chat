@@ -115,7 +115,7 @@ presentation, zip, database, image, video, book.
 | Card, sheet, attachment row, panel | 14–18 |
 | File message row | 18, full lane width |
 | Dialog | `kRadiusDialog` |
-| Chat bubble | the bubble radius helper, never a hand-rolled radius |
+| Chat bubble | the bubble radius helper, never a hand-rolled radius: outer 22, inner 7 (`ui/expressive/bubble_shape.dart`) |
 | Coworker face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
 
 Never a bare `IconButton`, `IconButton.filledTonal` or `CircleAvatar` in a new
@@ -145,6 +145,34 @@ surface: they are the old idiom and they do not match what sits next to them.
   and then stops.
 
 ## 9. Messages and files
+
+### Bubbles: a run is one group
+
+Every messenger draws a run of consecutive messages from one sender as ONE
+group. The thread does the same, and all of it comes from
+`lib/ui/expressive/bubble_shape.dart` — never from a number typed into a screen.
+
+- **Corners.** `bubbleRadius(isMine, position)`: outer corners
+  `kBubbleRadiusBig` = 22, the corners where two blocks of the run touch
+  `kBubbleRadiusSmall` = 7. The outer corner on the sender's own side stays
+  fully round, always.
+- **Gaps.** Inside a run `kBubbleGapInGroup` = **3**; between two runs
+  `kBubbleGapBetweenGroups` = **14**. Nearly five times as much air, so the eye
+  sorts the thread into groups before it reads a word. The gap is a TOP margin
+  only — a block never adds air below itself, or the two numbers stop being the
+  two numbers.
+- **What breaks a run** (`messageStartsRun` in `chat_ui_helpers.dart`, the one
+  place both chat screens read): a different sender, a day divider, or a pause
+  longer than `kBubbleGroupPause` = 15 minutes. The day divider reads the same
+  rule, so a divider can never land inside a connected group.
+- **A message can draw several blocks** — an answer, then the document it
+  wrote, then a file. They are all the same sender still talking, so they are
+  blocks of that run: `bubblePositionInStack` gives the first block the run's
+  top corners and the last one its bottom corners, and everything between is
+  square-ish on both ends.
+- **The clock shows once per run**, on the last block. A stamp under every line
+  of a burst is noise. When a document closes the run, its own version-and-time
+  line is the clock.
 
 - A file the coworker produced is **its own message**, hung under the text
   bubble — not a block inside it. A coworker may send several messages in a turn.

@@ -179,6 +179,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     required bool isUser,
     required Color fill,
     required Color onFill,
+    bool? endsRun,
   }) {
     final QueueMark mark = isUser
         ? queueMarkFor(widget.status)
@@ -186,7 +187,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Only the LAST bubble of a run carries the time, the way a messenger does
     // it: a stamp under every line of a burst is noise. A queue mark always
     // shows — it is about this one message.
-    final String? label = widget.endsGroup ? _clockLabel : null;
+    final String? label = (endsRun ?? widget.endsGroup) ? _clockLabel : null;
     if (label == null && mark == QueueMark.none) return null;
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final stamp = MessageStamp(
@@ -237,7 +238,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         );
     final DateTime? when = widget.turnStartedAt?.toLocal();
     return Padding(
-      padding: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 4, bottom: 4),
+      padding: EdgeInsets.only(
+        top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+        bottom: 4,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -288,7 +292,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         'Worked · $steps ${steps == 1 ? 'step' : 'steps'}'
         '${failed > 0 ? ' · $failed failed' : ''}';
     return Padding(
-      padding: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 4, bottom: 4),
+      padding: EdgeInsets.only(
+        top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+        bottom: 4,
+      ),
       child: Semantics(
         button: true,
         child: GestureDetector(
@@ -339,13 +346,35 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // the next bubble of the same sender is stacked against it.
     final Color fill = accentColor;
     final Color onFill = Theme.of(context).colorScheme.onPrimary;
+    // A user's images never render inside the bubble (see the classic
+    // layout): they hang above it, as their own block of the same run.
+    final bool hasImagesAbove =
+        widget.images != null &&
+        widget.images!.isNotEmpty &&
+        _stripAttachmentHeaderForUser(widget.message).trim().isNotEmpty;
     final BoxDecoration decoration = BoxDecoration(
       color: fill,
-      borderRadius: bubbleRadius(true, _bubblePosition),
+      borderRadius: bubbleRadius(
+        true,
+        // With an image above it the bubble closes the run but no longer
+        // opens it.
+        hasImagesAbove
+            ? bubblePositionFromFlags(
+                startsNewGroup: false,
+                endsGroup: widget.endsGroup,
+              )
+            : _bubblePosition,
+      ),
     );
 
     final Widget bubbleContent = Container(
-      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
+      margin: EdgeInsets.only(
+        // An image the user sent hangs directly above this bubble and is part
+        // of the same run, so only the image carries the run's gap then.
+        top: hasImagesAbove
+            ? kBubbleGapInGroup
+            : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+      ),
       padding: containerPadding,
       decoration: decoration,
       clipBehavior: Clip.antiAlias,
@@ -404,10 +433,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (hasUserImages) ...[
-              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-              const SizedBox(height: 2),
-            ],
+            if (hasUserImages)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+                ),
+                child: _buildFramedUserImageGrid(
+                  _buildImagesGrid(widget.images!),
+                ),
+              ),
             if (!hideEmptyUserBubble) userBubble,
             if (!widget.messengerMode && hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
@@ -507,7 +541,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // failed tool, an ask_user with no options and a reasoning row that also
     // carried content blocks all walked past it and drew the empty block the
     // reader sees. Now nothing rendered means no bubble, by construction.
-    _artifactMessages.clear();
+    _artifactPayloads.clear();
     final List<Widget> bodyChildren = useContentBlocks
         ? _buildContentBlocksLayout(
             iconFgColor: colors.onFill,
@@ -525,13 +559,12 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             hasVisibleToolCalls: hasVisibleToolCalls,
           );
 
-    if (working && bodyChildren.isEmpty && _artifactMessages.isEmpty) {
+    if (working && bodyChildren.isEmpty && _artifactPayloads.isEmpty) {
       return Align(
         alignment: Alignment.centerLeft,
         child: Padding(
           padding: EdgeInsets.only(
-            top: widget.startsNewGroup ? 10 : 2,
-            bottom: 2,
+            top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -554,7 +587,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // lifted out of `bodyChildren` on purpose and is drawn below the bubble.
     if (widget.messengerMode &&
         bodyChildren.isEmpty &&
-        _artifactMessages.isEmpty &&
+        _artifactPayloads.isEmpty &&
         !working &&
         widget.status != ChatMessageStatus.interrupted) {
       final List<ToolCall> calls = _collectAllToolCalls();
@@ -565,7 +598,25 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // With the files pulled out, an answer that was nothing but a file would
     // leave an empty bubble carrying a timestamp. Then the file is the message.
     final bool bubbleCarriesContent =
-        bodyChildren.isNotEmpty || _artifactMessages.isEmpty;
+        bodyChildren.isNotEmpty || _artifactPayloads.isEmpty;
+
+    // The blocks this one message draws: the bubble, then every file it
+    // produced. They belong to the same run as the message itself, so only the
+    // first block can carry the run's top corners and only the last its bottom
+    // ones — a document under an answer is the same coworker still talking.
+    final int blockCount =
+        (bubbleCarriesContent ? 1 : 0) + _artifactPayloads.length;
+    BubblePosition blockPosition(int index) => bubblePositionInStack(
+      index: index,
+      length: blockCount,
+      startsNewGroup: widget.startsNewGroup,
+      endsGroup: widget.endsGroup,
+    );
+    // The stamp belongs to the last block of the run. A file under the bubble
+    // pushes it off the bubble — and a document block carries its own version
+    // and time line, so the run keeps its clock.
+    final bool bubbleEndsRun = widget.endsGroup && _artifactPayloads.isEmpty;
+
     final Widget bubbleContent = Container(
       // Incoming messages use the readable lane; outgoing messages retain
       // their compact messenger silhouette.
@@ -573,14 +624,16 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           ? const ValueKey('messenger-answer-bubble')
           : null,
       width: widget.messengerMode ? double.infinity : null,
-      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
+      margin: EdgeInsets.only(
+        top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+      ),
       padding: EdgeInsets.symmetric(
         horizontal: widget.messengerMode ? 15 : 14,
         vertical: widget.messengerMode ? 9 : 10,
       ),
       decoration: BoxDecoration(
         color: colors.fill,
-        borderRadius: bubbleRadius(false, _bubblePosition),
+        borderRadius: bubbleRadius(false, blockPosition(0)),
       ),
       clipBehavior: Clip.none,
       child: Column(
@@ -600,6 +653,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               isUser: false,
               fill: colors.fill,
               onFill: colors.onFill,
+              endsRun: bubbleEndsRun,
             ),
         ],
       ),
@@ -623,13 +677,22 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               widget.messengerMode
                   ? _withMessengerMenu(bubbleContent)
                   : bubbleContent,
-            for (final Widget artifact in _artifactMessages)
+            for (int i = 0; i < _artifactPayloads.length; i++)
               Padding(
+                // Inside the run, so the document hangs on the answer instead
+                // of floating as an island under it.
                 padding: EdgeInsets.only(
-                  top: bubbleCarriesContent ? 4 : 2,
-                  bottom: 2,
+                  top: bubbleCarriesContent
+                      ? kBubbleGapInGroup
+                      : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
                 ),
-                child: artifact,
+                child: SandboxArtifactBlock(
+                  payload: _artifactPayloads[i],
+                  borderRadius: bubbleRadius(
+                    false,
+                    blockPosition((bubbleCarriesContent ? 1 : 0) + i),
+                  ),
+                ),
               ),
             // Dots mean "nothing to read yet". The moment the first token is
             // on screen the answer speaks for itself, and a second indicator
@@ -1088,9 +1151,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         // text, the way a messenger sends a file: inside the answer bubble it
         // read as a footnote to the prose, and a 20 KB document is not a
         // footnote. Collected here, rendered under the bubble by `build`.
-        _artifactMessages.add(
-          SandboxArtifactBlock(payload: seg.sandboxArtifact!),
-        );
+        _artifactPayloads.add(seg.sandboxArtifact!);
       } else {
         renderRound(
           seg,
