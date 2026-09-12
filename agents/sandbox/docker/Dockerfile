@@ -9,6 +9,14 @@
 # release and verified against its published checksum. Two builds of this file
 # therefore install the same tool versions.
 #
+# Size, measured on amd64 with `docker image inspect`, not guessed: the
+# document-authoring stack below (LibreOffice + qpdf + nine pinned wheels) takes
+# the image from 858 MB to 1.42 GB, so **+565 MB** — 379 MB of it apt
+# (LibreOffice is nearly all of that), 186 MB of it wheels (pandas and numpy are
+# nearly all of that), and 0 for WeasyPrint's system libraries, which ffmpeg
+# already pulled in. That is the price of an agent that can hand back a
+# spreadsheet at all, paid once at build time and never again per task.
+#
 # Deliberately NOT here: the browser stack (Chromium + its system libraries,
 # several hundred MB). It lands in a separate image built on top of this one —
 # `Dockerfile.browser`, tagged `cowork-browser:latest` — so an agent that never
@@ -41,6 +49,23 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Runtime dependencies the agent runtime and its tools assume are present.
 # tmux backs the interactive-terminal tool (§7.8); git backs the versioned
 # workspace (§7.7); the rest is what any shell session needs.
+#
+# The document block in the middle is the *writing* half of §9: the host can
+# already read any document (`read_document` / firecrawl-anydoc), so the gap was
+# that the agent could produce nothing. qpdf repairs and linearizes a PDF that a
+# generator left odd. libreoffice-writer/calc/impress is the only honest
+# docx/xlsx/pptx -> pdf converter; `soffice --headless --convert-to pdf` needs
+# no display. **No `default-jre-headless`**: it costs ~190 MB installed (11
+# packages, measured with apt-cache Installed-Size on this base) and
+# nothing in the convert-to-pdf path asks for it — Java in LibreOffice is for
+# Base, for macros and for a handful of Calc add-in functions, none of which an
+# agent script uses. Add it only when a real task proves it missing.
+# The pango/cairo/gdk-pixbuf/harfbuzz/jpeg/fontconfig set plus fonts-dejavu-core
+# is WeasyPrint's documented system side. On this image the whole set is already
+# pulled in as ffmpeg's dependency tree, so naming it costs **0 bytes** — but it
+# is named anyway, because "HTML report renders" must not depend on ffmpeg
+# staying in the list, and because without a font on disk every PDF comes out
+# blank.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -71,6 +96,20 @@ RUN set -eux; \
         tzdata \
         ripgrep \
         ffmpeg \
+        qpdf \
+        libreoffice-writer \
+        libreoffice-calc \
+        libreoffice-impress \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libpangocairo-1.0-0 \
+        libcairo2 \
+        libgdk-pixbuf-2.0-0 \
+        libharfbuzz0b \
+        libjpeg62-turbo \
+        libfontconfig1 \
+        fontconfig \
+        fonts-dejavu-core \
         libexpat1 \
         zlib1g \
         libsqlite3-0 \
@@ -113,6 +152,57 @@ RUN set -eux; \
     rm -f /tmp/pybin; \
     python3 --version; \
     chmod -R a+rX /opt/python
+
+# The document-authoring stack, installed into the pinned interpreter itself so
+# that `python3 make_report.py` in a plain agent shell just works — no venv, no
+# activation, no `pip install` round trip in the middle of a task. Reading a
+# document happens on the host (`read_document`); *creating* one happens here,
+# and an agent that has to install its own toolchain first spends a minute of
+# the user's time before it writes a single cell.
+#
+# One library per target, no overlap: openpyxl (xlsx), python-docx (docx),
+# python-pptx (pptx), reportlab (PDF drawn programmatically), weasyprint (PDF
+# from HTML+CSS, for anything that reads like a report), pypdf (fill an existing
+# AcroForm, merge, split, watermark), Pillow (images, and what weasyprint uses
+# to embed them), markdown (md -> HTML, the usual input to weasyprint) and
+# pandas (the table in the middle of all of it).
+#
+# Pinned exactly, like uv and the base digest above: two builds of this file
+# install the same versions. `--system --break-system-packages` because the uv
+# interpreter marks itself externally managed; the alternative is a venv the
+# agent would have to know to activate, which defeats the point.
+ARG DOC_OPENPYXL=3.1.5
+ARG DOC_PYTHON_DOCX=1.2.0
+ARG DOC_PYTHON_PPTX=1.0.2
+ARG DOC_PYPDF=6.18.1
+ARG DOC_REPORTLAB=5.0.1
+ARG DOC_WEASYPRINT=70.0
+ARG DOC_PILLOW=12.3.0
+ARG DOC_MARKDOWN=3.10.3
+ARG DOC_PANDAS=3.0.5
+RUN set -eux; \
+    uv pip install --no-cache --python /usr/local/bin/python3 --system --break-system-packages \
+        "openpyxl==${DOC_OPENPYXL}" \
+        "python-docx==${DOC_PYTHON_DOCX}" \
+        "python-pptx==${DOC_PYTHON_PPTX}" \
+        "pypdf==${DOC_PYPDF}" \
+        "reportlab==${DOC_REPORTLAB}" \
+        "weasyprint==${DOC_WEASYPRINT}" \
+        "Pillow==${DOC_PILLOW}" \
+        "markdown==${DOC_MARKDOWN}" \
+        "pandas==${DOC_PANDAS}" \
+    ; \
+    chmod -R a+rX "$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+
+# Verification, not decoration: a wheel that resolves is not the same as a
+# library that imports. weasyprint in particular fails at import time when its
+# system libraries are missing, and that is exactly the failure an agent would
+# otherwise hit mid-task.
+RUN set -eux; \
+    python3 -c "import openpyxl, docx, pptx, pypdf, reportlab, weasyprint, pandas"; \
+    python3 -c "import markdown, PIL"; \
+    soffice --version; \
+    qpdf --version
 
 # The agent's user: unprivileged, but with **passwordless sudo** — the plan's
 # "its own little Debian box it can apt-install into" (§6). Isolation here is
