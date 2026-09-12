@@ -531,6 +531,11 @@ class _VncBridge:
         self._chunk = chunk_size
         self._closed = threading.Event()
         self._write_lock = threading.Lock()
+        #: True once x11vnc has said ANYTHING down this pipe. It is the line
+        #: between "the view was live and the link dropped" — worth dialling
+        #: back in — and "socat never reached x11vnc", where a retry is just a
+        #: slower way to report the same failure (bead cowork-c0zd).
+        self.saw_bytes = False
         self._proc = subprocess.Popen(  # noqa: S603 — argv is built by us, not user input
             argv,
             stdin=subprocess.PIPE,
@@ -564,6 +569,7 @@ class _VncBridge:
                 chunk = read(self._chunk) if read is not None else b""
                 if not chunk:
                     break  # socat closed: x11vnc/container gone or view ended
+                self.saw_bytes = True
                 try:
                     self._emit(chunk)
                 except Exception:  # noqa: BLE001 — a send failure must not wedge the pump
@@ -610,6 +616,30 @@ class _VncBridge:
                 proc.kill()
             except OSError:
                 pass
+
+
+class _Stopwatch:
+    """Milliseconds per step of one code path, for a single log line.
+
+    Small on purpose: "where do the seconds go" is a question that has to be
+    answerable on the user's own machine, from the executor log, without a
+    profiler and without a rebuild.
+    """
+
+    def __init__(self) -> None:
+        self._t0 = time.monotonic()
+        self._last = self._t0
+        self._marks: list[tuple[str, float]] = []
+
+    def mark(self, label: str) -> None:
+        now = time.monotonic()
+        self._marks.append((label, (now - self._last) * 1000.0))
+        self._last = now
+
+    def report(self) -> str:
+        parts = [f"{label} {ms:.0f}ms" for label, ms in self._marks]
+        parts.append(f"total {(self._last - self._t0) * 1000.0:.0f}ms")
+        return ", ".join(parts)
 
 
 def _script_window_count(stdout: bytes | None) -> int | None:
@@ -866,6 +896,12 @@ class Executor:
         # bridge it only registers it if no newer start/stop happened meanwhile.
         self._vnc_generation = 0
         self._vnc_lock = threading.Lock()
+        #: What a dropped pipe needs to dial back in: ``(prefix, container,
+        #: request_id, session_key)`` of the live view, or None when no view is
+        #: meant to be running. A mobile link drops; the view must come back by
+        #: itself instead of staying dead until the user closes the page
+        #: (bead cowork-c0zd). Written under ``_vnc_lock`` next to ``_vnc``.
+        self._vnc_route: tuple[list[str], str, str, str | None] | None = None
         # Whether the agent has a browser window right now (Bead cowork-vzm):
         # derived from its Playwright tool calls and from what cowork-vnc-up
         # counts on the display. Pushed to the app as `browser_view`
@@ -2103,8 +2139,16 @@ class Executor:
         # Only ever one live view; replace any prior one silently.
         self._vnc_teardown(reason="stopped", notify=False)
 
+        # Where the wait before the first picture goes. The user's complaint was
+        # "it loads forever" and the only way to answer it is a number per step
+        # (bead cowork-c0zd). Measured on a live box the whole block below costs
+        # ~300 ms — the seconds were inside x11vnc, not here — so this log is
+        # what proves it is still true after a change.
+        watch = _Stopwatch()
+
         session_key = payload.get("session_key")
         prep = self._vnc_exec_prefix(session_key)
+        watch.mark("container")
         if prep is None:
             self._event(
                 request_id,
@@ -2128,6 +2172,7 @@ class Executor:
         ]
         if all(box != cid for _p, box, _m in attempts):
             attempts.append((prefix, cid, None))
+        watch.mark("targets")
 
         # Bring x11vnc up on the browser display (idempotent). Exit 3 = that box
         # has no browser display at all, so there is nothing to serve there.
@@ -2153,24 +2198,14 @@ class Executor:
             "no_display",
         )
         for candidate, box, manager in attempts:
-            vnc_up_argv = [
-                candidate[0], "exec", "-i", "-u", "root",
-                "-e", f"COWORK_VNC_PASSWD={secret}",
-                box, "cowork-vnc-up",
-            ]
-            try:
-                up = subprocess.run(  # noqa: S603 — argv built by us
-                    vnc_up_argv,
-                    capture_output=True,
-                    timeout=15,
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
+            up = self._vnc_up(candidate, box, secret)
+            if up is None:
                 failure = (
-                    f"no browser open: the sandbox could not be reached "
-                    f"({type(exc).__name__})",
+                    "no browser open: the sandbox could not be reached",
                     "exec_failed",
                 )
                 continue
+            watch.mark("vnc-up")
             if up.returncode == 3:
                 failure = (
                     "no browser open: no sandbox browser is running to watch",
@@ -2190,52 +2225,11 @@ class Executor:
             return
         prefix, cid, nudge, up = chosen
 
-        port = "5900"
-        argv = prefix + [cid, "socat", "STDIO", f"TCP:127.0.0.1:{port}"]
-
-        def emit(chunk: bytes) -> None:
-            self._event(request_id, browser_data_payload(chunk))
-
-        holder: list[_VncBridge] = []
-
-        def on_closed() -> None:
-            # The pipe died on its own (view closed, x11vnc/container gone).
-            # Only tear down if THIS bridge is still the registered one: a late
-            # close from a bridge that was already replaced must not kill its
-            # successor.
-            if not holder:
-                return
-            self._vnc_teardown(reason="stopped", expected=holder[0])
-
-        try:
-            bridge = _VncBridge(argv, emit=emit, on_closed=on_closed, autostart=False)
-        except (OSError, subprocess.SubprocessError) as exc:
-            self._event(
-                request_id,
-                browser_view_payload(
-                    "error",
-                    message=f"vnc bridge failed: {type(exc).__name__}",
-                    reason="bridge_failed",
-                ),
-            )
+        if self._vnc_open_bridge(
+            prefix, cid, request_id, session_key, generation
+        ) is None:
             return
-        holder.append(bridge)
-        # Register first, THEN start the pump, so an instantly-dying socat is
-        # torn down (and reported) instead of lingering as a dead "live" view.
-        # Stale start (a stop or a newer start won while x11vnc came up): drop
-        # this bridge quietly; whoever bumped the generation owns the view now.
-        with self._vnc_lock:
-            if generation != self._vnc_generation:
-                stale = True
-            else:
-                stale = False
-                self._vnc = bridge
-                self._vnc_stream_id = request_id
-                self._vnc_framer = _RfbClientFramer()
-        if stale:
-            bridge.close()
-            return
-        bridge.start()
+        watch.mark("bridge")
         # How many PAGES are on that display? Ask the box directly rather than
         # trust the script's count: `cowork-vnc-up` counts every mapped window,
         # so Chromium's 1x1 helper and its 10x10 clipboard window read as a
@@ -2245,6 +2239,7 @@ class Executor:
         windows = self._browser_windows(prefix[0], cid)
         if windows is None:
             windows = _script_window_count(up.stdout)
+        watch.mark("windows")
         message = ""
         reason = ""
         if windows == 0:
@@ -2272,11 +2267,217 @@ class Executor:
                 vnc_available=self._vnc_available(session_key),
             ),
         )
+        logger.info("live browser view start path: %s", watch.report())
         # After `started`, so the view is live before Chromium is asked for, and
         # so an "opened" from the nudge can never overtake the frame that opens
         # the view.
         if nudge is not None:
             self._nudge_browser_open(nudge, request_id, session_key)
+
+    #: The RFB port x11vnc binds inside every sandbox box.
+    VNC_PORT = "5900"
+    #: How often a dropped pipe is dialled back in before the view is given up,
+    #: and how long to wait between tries. A phone under a bridge is offline for
+    #: seconds, not milliseconds, so the first retry is immediate (the common
+    #: case is a pipe that died for a local reason) and the rest are spaced out.
+    VNC_RECONNECT_TRIES = 4
+    VNC_RECONNECT_BACKOFF_S = (0.0, 0.3, 1.0, 2.0)
+
+    def _vnc_open_bridge(
+        self,
+        prefix: list[str],
+        cid: str,
+        request_id: str,
+        session_key: str | None,
+        generation: int,
+    ) -> _VncBridge | None:
+        """Open the socat pipe to x11vnc and register it as THE live view.
+
+        Returns the bridge, or None when it could not be opened (an ``error``
+        frame is sent then) or when a newer start/stop won the race while we
+        were opening (nothing is sent then — whoever bumped the generation owns
+        the view now).
+        """
+        argv = prefix + [
+            cid, "socat", "STDIO", f"TCP:127.0.0.1:{self.VNC_PORT}",
+        ]
+
+        def emit(chunk: bytes) -> None:
+            self._event(request_id, browser_data_payload(chunk))
+
+        holder: list[_VncBridge] = []
+
+        def on_closed() -> None:
+            # The pipe died on its own. That is the user closing the view, the
+            # container going away — or the mobile link hiccuping, which is the
+            # case that must NOT end the view. Only act if THIS bridge is still
+            # the registered one: a late close from a bridge that was already
+            # replaced must not kill its successor.
+            if not holder:
+                return
+            self._vnc_recover(holder[0], generation)
+
+        try:
+            bridge = _VncBridge(argv, emit=emit, on_closed=on_closed, autostart=False)
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._event(
+                request_id,
+                browser_view_payload(
+                    "error",
+                    message=f"vnc bridge failed: {type(exc).__name__}",
+                    reason="bridge_failed",
+                ),
+            )
+            return None
+        holder.append(bridge)
+        # Register first, THEN start the pump, so an instantly-dying socat is
+        # torn down (and reported) instead of lingering as a dead "live" view.
+        # Stale start (a stop or a newer start won while x11vnc came up): drop
+        # this bridge quietly; whoever bumped the generation owns the view now.
+        with self._vnc_lock:
+            if generation != self._vnc_generation:
+                stale = True
+            else:
+                stale = False
+                self._vnc = bridge
+                self._vnc_stream_id = request_id
+                self._vnc_framer = _RfbClientFramer()
+                self._vnc_route = (list(prefix), cid, request_id, session_key)
+        if stale:
+            bridge.close()
+            return None
+        bridge.start()
+        return bridge
+
+    def _vnc_recover(self, dead: _VncBridge, generation: int) -> None:
+        """A live view's pipe dropped: dial back in instead of going dark.
+
+        "The connection is bad" was, measured, a pipe that died once and stayed
+        dead: the executor said ``stopped`` and the app latched its bridge shut,
+        so a five-second tunnel cost the whole view (bead cowork-c0zd). x11vnc
+        itself survives — it is ``-forever``, it keeps the screen, and the box
+        is still there — so the honest answer to a dropped pipe is another pipe.
+
+        The RFB SESSION cannot be resumed: the new x11vnc client starts at the
+        version string with fresh zlib streams, so the app has to hand the bytes
+        to a NEW RFB client. That is what ``started`` + ``reconnected`` says.
+        Until it arrives the app gets ``reconnecting``, whose whole point is
+        that nothing was torn down and the last picture still stands.
+
+        Runs on its own thread: it is called from the dying pump's close hook
+        and it does seconds of subprocess work.
+        """
+        with self._vnc_lock:
+            mine = self._vnc is dead and generation == self._vnc_generation
+            route = self._vnc_route
+        if not mine or route is None:
+            return
+        if not dead.saw_bytes:
+            # socat never reached x11vnc, so there was never a view to lose.
+            # Retrying would only make the same failure take five seconds
+            # longer to report.
+            self._vnc_teardown(reason="stopped", expected=dead)
+            return
+        threading.Thread(
+            target=self._vnc_recover_work,
+            args=(dead, generation, route),
+            name="vnc-recover",
+            daemon=True,
+        ).start()
+
+    def _vnc_recover_work(
+        self,
+        dead: _VncBridge,
+        generation: int,
+        route: tuple[list[str], str, str, str | None],
+    ) -> None:
+        prefix, cid, request_id, session_key = route
+        self._event(
+            request_id,
+            browser_view_payload(
+                "reconnecting",
+                message="the live view lost its connection — reconnecting",
+                reason="reconnecting",
+                vnc_available=self._vnc_available(session_key),
+            ),
+        )
+        for attempt in range(self.VNC_RECONNECT_TRIES):
+            delay = self.VNC_RECONNECT_BACKOFF_S[
+                min(attempt, len(self.VNC_RECONNECT_BACKOFF_S) - 1)
+            ]
+            if delay and not self._vnc_sleep(delay, generation):
+                return
+            with self._vnc_lock:
+                if self._vnc is not dead or generation != self._vnc_generation:
+                    return  # a stop or a newer start owns the view now
+            # Re-arm x11vnc with a FRESH secret. `cowork-vnc-up` is idempotent
+            # and rewrites the password file that x11vnc re-reads on every
+            # connect, so this costs one docker exec (~80 ms measured) and never
+            # restarts a healthy server. Exit 3 means the display itself is gone
+            # — the browser was closed — and no number of retries brings it back.
+            secret = secrets.token_urlsafe(6)[:8]
+            up = self._vnc_up(prefix, cid, secret)
+            if up is None or up.returncode == 3:
+                break
+            if up.returncode != 0:
+                continue
+            with self._vnc_lock:
+                if self._vnc is not dead or generation != self._vnc_generation:
+                    return
+                self._vnc = None  # release the slot for the replacement
+                self._vnc_framer = None
+            bridge = self._vnc_open_bridge(
+                prefix, cid, request_id, session_key, generation
+            )
+            if bridge is None:
+                # Either the slot was taken (nothing to do) or socat refused;
+                # put the dead bridge back so the next close hook still matches.
+                with self._vnc_lock:
+                    if self._vnc is None and generation == self._vnc_generation:
+                        self._vnc = dead
+                continue
+            logger.info("live browser view reconnected after %d attempt(s)", attempt + 1)
+            self._event(
+                request_id,
+                browser_view_payload(
+                    "started",
+                    message="",
+                    password=secret,
+                    reason="reconnected",
+                    vnc_available=self._vnc_available(session_key),
+                ),
+            )
+            return
+        self._vnc_teardown(reason="stopped", expected=dead)
+
+    def _vnc_sleep(self, seconds: float, generation: int) -> bool:
+        """Wait, but give up the moment a stop or a newer start takes the view."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            with self._vnc_lock:
+                if generation != self._vnc_generation:
+                    return False
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+        return True
+
+    def _vnc_up(
+        self, prefix: list[str], box: str, secret: str
+    ) -> subprocess.CompletedProcess | None:
+        """Run ``cowork-vnc-up`` on one box, or None when it could not run.
+
+        Always as ROOT and with the per-view secret: the script writes it to a
+        root-only file that x11vnc re-reads on every client connect, so a new
+        view (and a reconnect) rotates the secret without restarting x11vnc.
+        """
+        argv = [
+            prefix[0], "exec", "-i", "-u", "root",
+            "-e", f"COWORK_VNC_PASSWD={secret}",
+            box, "cowork-vnc-up",
+        ]
+        try:
+            return subprocess.run(argv, capture_output=True, timeout=15)  # noqa: S603
+        except (OSError, subprocess.SubprocessError):
+            return None
 
     def _vnc_feed(self, payload: dict) -> None:
         # One lock acquisition for both: a teardown between two separate reads
@@ -2329,6 +2530,9 @@ class Executor:
             self._vnc = None
             self._vnc_stream_id = ""
             self._vnc_framer = None
+            # No view is meant to be running any more, so a pipe that closes
+            # after this must not try to dial back in.
+            self._vnc_route = None
         if bridge is None:
             return
         bridge.close()
