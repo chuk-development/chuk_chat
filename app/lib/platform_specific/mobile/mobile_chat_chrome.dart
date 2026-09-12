@@ -24,6 +24,7 @@ import 'package:cowork/services/cowork/agent_profile_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/services/cowork/cowork_relay_link.dart';
 import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:cowork/ui/expressive/agent_status.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/top_veil.dart';
 import 'package:cowork/ui/expressive/working_dots.dart';
@@ -145,6 +146,19 @@ class MobileChatChrome extends StatelessWidget {
   }
 }
 
+/// The coworker's face inside the header pill.
+///
+/// The pill's height is set by its two lines of text — the name at 16 × 1.5 and
+/// the status at 11 × 1.45, so 40 px of inner height. 32 is the app's small
+/// face (the default of `ExpressiveFace`, and the nearest step below the 34 of
+/// the desktop roster): it leaves 4 px of air above and below inside that
+/// column, so the silhouette sits IN the capsule instead of filling it. At 38
+/// the face had a single pixel of air and read as an oversized square.
+const double _kPillFaceSize = 32;
+
+/// The status line's font size. The presence dot is derived from it.
+const double _kPillStatusFontSize = 11;
+
 /// The coworker pill: face, name, live state. As tall as a chip, so the whole
 /// row is one line of touch targets.
 class _AgentPill extends StatelessWidget {
@@ -201,7 +215,10 @@ class _AgentPill extends StatelessWidget {
           // Paint the reference's translucent surface AND border explicitly.
           child: Container(
             key: const ValueKey('mobile_contact_surface'),
-            padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+            // 9 on the left: the capsule's end is a half circle, so a face set
+            // at 6 read as pressed against the curve while it had 11 of air
+            // above and below it.
+            padding: const EdgeInsets.fromLTRB(9, 6, 14, 6),
             decoration: BoxDecoration(
               color: scheme.surface.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(30),
@@ -210,29 +227,17 @@ class _AgentPill extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.max,
               children: <Widget>[
-                Stack(
-                  children: [
-                    AgentFace(
-                      agent: agent,
-                      size: 38,
-                      store: store,
-                      showPresence: false,
-                    ),
-                    if (paired)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF34C759),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: scheme.surface, width: 1),
-                          ),
-                        ),
-                      ),
-                  ],
+                // The face is sized to the pill, not the other way round: the
+                // two text lines are 40 px of inner height, so a 32 px face
+                // (the app's small-face size, as in ExpressiveFace) keeps even
+                // air above and below and never drives the pill's height. The
+                // presence dot is NOT parked on its corner any more — it
+                // belongs to the status line, and sits on that line.
+                AgentFace(
+                  agent: agent,
+                  size: _kPillFaceSize,
+                  store: store,
+                  showPresence: false,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -259,15 +264,21 @@ class _AgentPill extends StatelessWidget {
                           child: Semantics(
                             button: true,
                             label: 'Offline. Reconnect',
-                            child: Text(
-                              'Offline · Reconnect',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: scheme.primary,
-                                fontSize: 11,
-                                height: 1.45,
-                                fontWeight: FontWeight.w700,
+                            child: _statusLine(
+                              context,
+                              paired: paired,
+                              child: Flexible(
+                                child: Text(
+                                  'Offline · Reconnect',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.primary,
+                                    fontSize: _kPillStatusFontSize,
+                                    height: 1.45,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -277,37 +288,49 @@ class _AgentPill extends StatelessWidget {
                           label: 'Working',
                           child: SizedBox(
                             height:
-                                MediaQuery.textScalerOf(context).scale(11) *
+                                MediaQuery.textScalerOf(
+                                  context,
+                                ).scale(_kPillStatusFontSize) *
                                 1.45,
                             child: ExcludeSemantics(
-                              child: MediaQuery.disableAnimationsOf(context)
-                                  ? Text(
-                                      '…',
-                                      style: TextStyle(
+                              child: _statusLine(
+                                context,
+                                paired: paired,
+                                child: MediaQuery.disableAnimationsOf(context)
+                                    ? Text(
+                                        '…',
+                                        style: TextStyle(
+                                          color: scheme.primary,
+                                          fontSize: _kPillStatusFontSize,
+                                          height: 1.45,
+                                        ),
+                                      )
+                                    : WorkingDots(
                                         color: scheme.primary,
-                                        fontSize: 11,
-                                        height: 1.45,
+                                        label: '',
                                       ),
-                                    )
-                                  : WorkingDots(
-                                      color: scheme.primary,
-                                      label: '',
-                                    ),
+                              ),
                             ),
                           ),
                         )
                       else
-                        Text(
-                          paired ? 'Active now' : 'Offline',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: paired
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
-                            fontSize: 11,
-                            height: 1.45,
-                            fontWeight: FontWeight.w700,
+                        _statusLine(
+                          context,
+                          paired: paired,
+                          child: Flexible(
+                            child: Text(
+                              paired ? 'Active now' : 'Offline',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: paired
+                                    ? scheme.primary
+                                    : scheme.onSurfaceVariant,
+                                fontSize: _kPillStatusFontSize,
+                                height: 1.45,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -318,6 +341,33 @@ class _AgentPill extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// The bottom line of the pill: the presence dot and whatever says what the
+  /// coworker is doing. The dot is the shared [StatusDot], so it is as tall as
+  /// the x-height of the words and its bottom rides the alphabetic baseline —
+  /// one optical line, at every text scale.
+  Widget _statusLine(
+    BuildContext context, {
+    required bool paired,
+    required Widget child,
+  }) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: <Widget>[
+        StatusDot(
+          color: paired
+              ? const Color(0xFF34C759)
+              : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+          fontSize: _kPillStatusFontSize,
+        ),
+        const SizedBox(width: kStatusDotGap),
+        child,
+      ],
     );
   }
 

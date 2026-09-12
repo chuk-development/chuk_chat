@@ -140,7 +140,7 @@ class PolygonShape extends ShapeBorder {
   Path _build(Rect rect) {
     final Offset centre = rect.center;
     final double radius = rect.shortestSide / 2;
-    final List<Offset> corners = <Offset>[
+    final List<Offset> raw = <Offset>[
       for (int i = 0; i < sides; i++)
         Offset(
           centre.dx +
@@ -150,6 +150,24 @@ class PolygonShape extends ShapeBorder {
               radius *
                   math.sin(rotation - math.pi / 2 + i * 2 * math.pi / sides),
         ),
+    ];
+    // Centre the silhouette on its own ink, not on the circle it is inscribed
+    // in. A polygon with an odd number of sides is lopsided in its box: a
+    // triangle's corners run from -r to +r/2, so it hangs from the top edge
+    // and leaves a quarter of the box empty underneath. Next to two lines of
+    // text that reads as a face that slipped upwards. An even-sided shape is
+    // symmetric, so this moves nothing for the squircle, the diamond or the
+    // gem. Nothing is scaled: the shape keeps its proportions.
+    final double top = raw.map((Offset c) => c.dy).reduce(math.min);
+    final double bottom = raw.map((Offset c) => c.dy).reduce(math.max);
+    final double left = raw.map((Offset c) => c.dx).reduce(math.min);
+    final double right = raw.map((Offset c) => c.dx).reduce(math.max);
+    final Offset shift = Offset(
+      centre.dx - (left + right) / 2,
+      centre.dy - (top + bottom) / 2,
+    );
+    final List<Offset> corners = <Offset>[
+      for (final Offset c in raw) c + shift,
     ];
     final double round = (radius * cornerFactor).clamp(0.0, radius);
     final Path path = Path();
