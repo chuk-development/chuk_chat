@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_palette.dart';
 import '../demo_data.dart';
 import '../shared_widgets.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class VariantPlayful extends StatelessWidget {
   final List<DemoChat> chats;
@@ -65,7 +66,7 @@ class VariantPlayful extends StatelessWidget {
                   tooltip: 'Settings',
                   onPressed: cb.onSettings,
                   splashRadius: 16,
-                  icon: Icon(Icons.settings_outlined,
+                  icon: AppIcon(Icons.settings_outlined,
                       size: 18, color: p.muted),
                 ),
               ],

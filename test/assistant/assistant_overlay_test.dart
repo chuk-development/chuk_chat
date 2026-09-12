@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/assistant/assistant_result.dart';
 import 'package:chuk_chat/constants.dart';
+import '../helpers/icon_finder.dart';
 
 const Color _accent = Color(0xFFFF7043);
 const Color _bg = Color(0xFF1A1113);
@@ -155,8 +156,8 @@ void main() {
     expect(find.text('Standort'), findsOneWidget);
     expect(find.text('Restaurants: Sushi'), findsOneWidget);
     expect(find.text('Karte: Kiel'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(findIcon(Icons.check_circle_outline), findsOneWidget);
+    expect(findIcon(Icons.error_outline), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -197,7 +198,7 @@ void main() {
     expect(find.text('4.6'), findsOneWidget);
     expect(find.text('(212)'), findsOneWidget);
     // Only the place that has coordinates gets the navigation affordance.
-    expect(find.byIcon(Icons.navigation_outlined), findsOneWidget);
+    expect(findIcon(Icons.navigation_outlined), findsOneWidget);
   });
 
   testWidgets('web results show title, snippet and host', (tester) async {

@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Corner radius at the outer edges of a group.
 const double kExpressiveOuterRadius = 26;
@@ -323,7 +324,7 @@ class ExpressiveInfoCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: foreground),
+          AppIcon(icon, size: 18, color: foreground),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -390,7 +391,7 @@ class ExpressiveIconTile extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(size * 0.38),
       ),
-      child: Icon(
+      child: AppIcon(
         icon,
         size: size * 0.5,
         color: tone == null
@@ -474,7 +475,7 @@ class ExpressiveBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: foreground),
+            AppIcon(icon, size: 15, color: foreground),
             const SizedBox(width: 6),
           ],
           Flexible(

@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/user_skills_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Lists built-in skills and lets the user author their own.
 ///
@@ -115,7 +116,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
       appBar: AppBar(title: Text(l.skills), centerTitle: false),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(),
-        icon: const Icon(Icons.add),
+        icon: const AppIcon(Icons.add),
         label: Text(l.skillNew),
       ),
       body: SettingsListView(
@@ -398,7 +399,7 @@ class _SkillsEmptyState extends StatelessWidget {
               color: m3.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: AppIcon(
               Icons.auto_awesome_outlined,
               size: 28,
               color: m3.onSurfaceVariant,
@@ -416,7 +417,7 @@ class _SkillsEmptyState extends StatelessWidget {
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: onCreate,
-            icon: const Icon(Icons.add, size: 18),
+            icon: const AppIcon(Icons.add, size: 18),
             label: Text(l.skillNew),
             style: FilledButton.styleFrom(
               backgroundColor: cs.primary,
@@ -457,7 +458,7 @@ class _SkillRow extends StatelessWidget {
           : (onDelete == null
                 ? null
                 : IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
+                    icon: const AppIcon(Icons.delete_outline, size: 20),
                     onPressed: onDelete,
                     color: cs.onSurfaceVariant,
                     tooltip: l.delete,

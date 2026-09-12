@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_palette.dart';
 import '../demo_data.dart';
 import '../shared_widgets.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class VariantBento extends StatelessWidget {
   final List<DemoChat> chats;
@@ -32,7 +33,7 @@ class VariantBento extends StatelessWidget {
               tooltip: 'Settings',
               onPressed: cb.onSettings,
               splashRadius: 16,
-              icon: Icon(Icons.tune, size: 18, color: p.muted),
+              icon: AppIcon(Icons.tune, size: 18, color: p.muted),
             ),
           ),
           Padding(

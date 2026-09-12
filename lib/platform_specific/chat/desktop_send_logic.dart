@@ -1091,7 +1091,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.chat_bubble_outline,
               color: theme.colorScheme.primary,
               size: 28,
@@ -1130,7 +1130,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             child: const Text('Maybe Later'),
           ),
           ElevatedButton.icon(
-            icon: const Icon(Icons.rocket_launch, size: 18),
+            icon: const AppIcon(Icons.rocket_launch, size: 18),
             label: const Text('Subscribe Now'),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,

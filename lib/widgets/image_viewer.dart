@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {
@@ -200,7 +201,7 @@ class _ImageViewerState extends State<ImageViewer> {
         appBar: AppBar(
           backgroundColor: Colors.black.withValues(alpha: 0.7),
           leading: IconButton(
-            icon: Icon(Icons.close, color: iconColor),
+            icon: AppIcon(Icons.close, color: iconColor),
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Close',
           ),
@@ -221,7 +222,7 @@ class _ImageViewerState extends State<ImageViewer> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.auto_awesome,
+                        AppIcon(Icons.auto_awesome,
                             size: 12, color: iconColor.withValues(alpha: 0.9)),
                         const SizedBox(width: 4),
                         Text(
@@ -238,14 +239,14 @@ class _ImageViewerState extends State<ImageViewer> {
                 ),
               ),
             IconButton(
-              icon: Icon(Icons.file_copy_outlined,
+              icon: AppIcon(Icons.file_copy_outlined,
                   color: iconColor, size: 20),
               onPressed: _copyCurrentImage,
               tooltip: 'Copy image',
             ),
             if (!kIsWeb)
               IconButton(
-                icon: Icon(Icons.file_download_outlined,
+                icon: AppIcon(Icons.file_download_outlined,
                     color: iconColor, size: 22),
                 onPressed: _downloadCurrentImage,
                 tooltip: 'Download image',
@@ -295,7 +296,7 @@ class _ImageViewerState extends State<ImageViewer> {
                             color: Colors.black.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: const AppIcon(
                             Icons.chevron_left,
                             color: Colors.white,
                             size: 32,
@@ -323,7 +324,7 @@ class _ImageViewerState extends State<ImageViewer> {
                             color: Colors.black.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: const AppIcon(
                             Icons.chevron_right,
                             color: Colors.white,
                             size: 32,
@@ -361,7 +362,7 @@ class _ImageViewerState extends State<ImageViewer> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                const AppIcon(Icons.broken_image, size: 64, color: Colors.grey),
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load image',
@@ -392,7 +393,7 @@ class _ImageViewerState extends State<ImageViewer> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          const AppIcon(
                             Icons.broken_image,
                             size: 64,
                             color: Colors.grey,

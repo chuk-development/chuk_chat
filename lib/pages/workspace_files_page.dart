@@ -25,6 +25,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceFilesPage extends StatefulWidget {
   final String workspaceId;
@@ -391,7 +392,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.folder_open_outlined,
                         size: 64,
                         color: m3.onSurfaceVariant.withValues(alpha: 0.4),
@@ -429,7 +430,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _uploading ? null : _showAddSheet,
-        icon: const Icon(Icons.add),
+        icon: const AppIcon(Icons.add),
         label: Text(l.projectAddContent),
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
@@ -479,7 +480,7 @@ class _SheetTile extends StatelessWidget {
                     color: cs.primaryContainer.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, size: 22, color: cs.onPrimaryContainer),
+                  child: AppIcon(icon, size: 22, color: cs.onPrimaryContainer),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -490,7 +491,7 @@ class _SheetTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
+                AppIcon(Icons.chevron_right, color: m3.onSurfaceVariant),
               ],
             ),
           ),
@@ -538,7 +539,7 @@ class _FileTile extends StatelessWidget {
                   color: color.withValues(alpha: isDark ? 0.18 : 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(file.fileIcon, color: color, size: 22),
+                child: AppIcon(file.fileIcon, color: color, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -564,7 +565,7 @@ class _FileTile extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.more_horiz, color: m3.onSurfaceVariant),
+                icon: AppIcon(Icons.more_horiz, color: m3.onSurfaceVariant),
                 onPressed: () async {
                   final l = AppLocalizations.of(context)!;
                   final choice = await showModalBottomSheet<String>(
@@ -580,12 +581,12 @@ class _FileTile extends StatelessWidget {
                         children: [
                           const SizedBox(height: 8),
                           ListTile(
-                            leading: const Icon(Icons.visibility_outlined),
+                            leading: const AppIcon(Icons.visibility_outlined),
                             title: Text(l.projectView),
                             onTap: () => Navigator.pop(ctx, 'view'),
                           ),
                           ListTile(
-                            leading: const Icon(
+                            leading: const AppIcon(
                               Icons.delete_outline,
                               color: Colors.red,
                             ),
@@ -645,7 +646,7 @@ class _UploadProgress extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.upload_file, color: color),
+              AppIcon(Icons.upload_file, color: color),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

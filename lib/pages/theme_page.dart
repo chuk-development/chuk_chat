@@ -14,6 +14,7 @@ import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ThemePage extends StatefulWidget {
   final AppShellConfig config;
@@ -423,7 +424,7 @@ class _ThemePageState extends State<ThemePage> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
+                        AppIcon(
                           Icons.contrast_outlined,
                           size: 20,
                           color: theme.m3.onSurfaceVariant,
@@ -596,12 +597,12 @@ class _ColorCard extends StatelessWidget {
               controller: hexController,
               decoration: InputDecoration(
                 border: InputBorder.none,
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.colorize_outlined,
                   color: m3.onSurfaceVariant,
                 ),
                 suffixIcon: IconButton(
-                  icon: Icon(Icons.check_circle, color: cs.primary),
+                  icon: AppIcon(Icons.check_circle, color: cs.primary),
                   onPressed: () => onHexChanged(hexController.text),
                 ),
                 hintText: '#RRGGBB',
@@ -626,7 +627,7 @@ class _ColorCard extends StatelessWidget {
                   onColorSelected(picked);
                 }
               },
-              icon: const Icon(Icons.palette_outlined, size: 18),
+              icon: const AppIcon(Icons.palette_outlined, size: 18),
               label: Text(AppLocalizations.of(context)!.pickCustomColor),
             ),
           ),
@@ -757,7 +758,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
             TextFormField(
               controller: _hexController,
               decoration: InputDecoration(
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.tag,
                   color: m3.onSurfaceVariant,
                   size: 18,
@@ -907,7 +908,7 @@ class _Swatch extends StatelessWidget {
               : null,
         ),
         child: selected
-            ? Icon(Icons.check, size: size * 0.5, color: checkColor)
+            ? AppIcon(Icons.check, size: size * 0.5, color: checkColor)
             : null,
       ),
     );

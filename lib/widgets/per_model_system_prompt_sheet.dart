@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Bottom sheet for editing a per-model system prompt and merge mode.
 ///
@@ -191,7 +192,7 @@ class _PerModelSystemPromptEditorState
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _saving ? null : _delete,
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: const AppIcon(Icons.delete_outline, size: 18),
                       label: Text(
                         l.perModelPromptRemove,
                         maxLines: 1,

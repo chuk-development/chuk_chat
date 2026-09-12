@@ -12,6 +12,7 @@ import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Small pill with a count, used in the workspace tab bars.
 class WorkspaceCountBadge extends StatelessWidget {
@@ -64,7 +65,7 @@ class WorkspaceEmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 56, color: iconFg.withValues(alpha: 0.2)),
+          AppIcon(icon, size: 56, color: iconFg.withValues(alpha: 0.2)),
           const SizedBox(height: 16),
           Text(
             title,
@@ -118,7 +119,7 @@ class WorkspaceUploadProgressCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.insert_drive_file, color: displayColor),
+                  AppIcon(Icons.insert_drive_file, color: displayColor),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -200,7 +201,7 @@ class WorkspaceFileTile extends StatelessWidget {
             color: displayColor.withValues(alpha: isDark ? 0.15 : 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(file.fileIcon, color: displayColor, size: 20),
+          child: AppIcon(file.fileIcon, color: displayColor, size: 20),
         ),
         title: Text(
           file.fileName,
@@ -217,7 +218,7 @@ class WorkspaceFileTile extends StatelessWidget {
             PopupMenuItem(
               child: const Row(
                 children: [
-                  Icon(Icons.visibility, size: 18),
+                  AppIcon(Icons.visibility, size: 18),
                   SizedBox(width: 10),
                   Text('View'),
                 ],
@@ -227,7 +228,7 @@ class WorkspaceFileTile extends StatelessWidget {
             PopupMenuItem(
               child: Row(
                 children: [
-                  Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                  AppIcon(Icons.delete_outline, color: Colors.red, size: 18),
                   const SizedBox(width: 10),
                   const Text('Delete', style: TextStyle(color: Colors.red)),
                 ],
@@ -278,7 +279,7 @@ class WorkspaceChatsTab extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onAddChat,
-              icon: const Icon(Icons.add),
+              icon: const AppIcon(Icons.add),
               label: const Text('Add Existing Chat'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -314,7 +315,7 @@ class WorkspaceChatsTab extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        leading: Icon(Icons.chat, color: iconFg),
+                        leading: AppIcon(Icons.chat, color: iconFg),
                         title: Text(
                           chat.customName ?? chat.previewText,
                           maxLines: 1,
@@ -327,7 +328,7 @@ class WorkspaceChatsTab extends StatelessWidget {
                           style: const TextStyle(fontSize: 12),
                         ),
                         trailing: IconButton(
-                          icon: Icon(
+                          icon: AppIcon(
                             Icons.remove_circle_outline,
                             color: Colors.red.withValues(alpha: 0.7),
                             size: removeIconSize,

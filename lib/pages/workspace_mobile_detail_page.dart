@@ -25,6 +25,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceMobileDetailPage extends StatefulWidget {
   final String workspaceId;
@@ -258,11 +259,11 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
           // instructions) are reachable from the AppBar.
           IconButton(
             tooltip: l.projectEditProject,
-            icon: const Icon(Icons.edit_outlined),
+            icon: const AppIcon(Icons.edit_outlined),
             onPressed: _editNameDescription,
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert),
+            icon: const AppIcon(Icons.more_vert),
             onPressed: () async {
               final theme = Theme.of(context);
               final choice = await showModalBottomSheet<String>(
@@ -277,17 +278,17 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
                     children: [
                       const SizedBox(height: 8),
                       ListTile(
-                        leading: const Icon(Icons.edit_outlined),
+                        leading: const AppIcon(Icons.edit_outlined),
                         title: Text(l.projectEditProject),
                         onTap: () => Navigator.pop(ctx, 'edit'),
                       ),
                       ListTile(
-                        leading: const Icon(Icons.notes_outlined),
+                        leading: const AppIcon(Icons.notes_outlined),
                         title: Text(l.projectInstructions),
                         onTap: () => Navigator.pop(ctx, 'instructions'),
                       ),
                       ListTile(
-                        leading: const Icon(
+                        leading: const AppIcon(
                           Icons.delete_outline,
                           color: Colors.red,
                         ),
@@ -407,7 +408,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
         },
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
-        icon: const Icon(Icons.add_comment_outlined),
+        icon: const AppIcon(Icons.add_comment_outlined),
         label: Text(l.projectNewChat),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
@@ -441,7 +442,7 @@ class _PrivacyChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: m3.onSurfaceVariant),
+            AppIcon(icon, size: 14, color: m3.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(
               label,

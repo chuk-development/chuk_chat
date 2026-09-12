@@ -9,6 +9,7 @@ import 'package:chuk_chat/assistant/assistant_cards.dart';
 import 'package:chuk_chat/assistant/assistant_result.dart';
 import 'package:chuk_chat/assistant/assistant_session.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Transparent, instant route for the assistant surface.
 ///
@@ -408,7 +409,7 @@ class AssistantToolRow extends StatelessWidget {
             width: 18,
             height: 18,
             child: tool.done
-                ? Icon(
+                ? AppIcon(
                     tool.failed
                         ? Icons.error_outline
                         : Icons.check_circle_outline,
@@ -511,12 +512,12 @@ class AssistantAction extends StatelessWidget {
           shape: const StadiumBorder(),
         ),
         child: iconOnly
-            ? Icon(icon, size: 22, semanticLabel: label)
+            ? AppIcon(icon, size: 22, semanticLabel: label)
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 20),
+                  AppIcon(icon, size: 20),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(

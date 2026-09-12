@@ -272,7 +272,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.play_arrow_outlined,
                     size: 16,
                     color: accentColor,

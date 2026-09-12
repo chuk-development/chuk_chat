@@ -18,6 +18,7 @@ import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SystemPromptPage extends StatefulWidget {
   const SystemPromptPage({super.key});
@@ -412,7 +413,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
             child: const Text('Cancel'),
           ),
           FilledButton.icon(
-            icon: const Icon(Icons.copy, size: 16),
+            icon: const AppIcon(Icons.copy, size: 16),
             label: const Text('Copy & continue'),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: _importPrompt));
@@ -476,7 +477,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
             child: const Text('Cancel'),
           ),
           FilledButton.icon(
-            icon: const Icon(Icons.download, size: 16),
+            icon: const AppIcon(Icons.download, size: 16),
             label: const Text('Import'),
             onPressed: () {
               final text = pasteCtrl.text.trim();
@@ -637,7 +638,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                       // instead of overflowing the row on a narrow pane.
                       Flexible(
                         child: OutlinedButton.icon(
-                          icon: const Icon(Icons.download_outlined, size: 18),
+                          icon: const AppIcon(Icons.download_outlined, size: 18),
                           label: Text(
                             l.importFromAnotherAi,
                             maxLines: 1,
@@ -711,7 +712,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.check, size: 20),
+                  : const AppIcon(Icons.check, size: 20),
               label: Text(_isSaving ? l.saving : l.saveChanges),
               onPressed: _isSaving || !_hasAnyChanges ? null : _saveAll,
               style: FilledButton.styleFrom(

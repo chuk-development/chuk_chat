@@ -29,6 +29,7 @@ import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SidebarDesktop extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
@@ -619,7 +620,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         width: 28,
         height: 28,
         child: IconButton(
-          icon: Icon(
+          icon: AppIcon(
             isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
             size: 16,
             color: isPinned
@@ -639,7 +640,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           width: 28,
           height: 28,
           child: IconButton(
-            icon: Icon(
+            icon: AppIcon(
               Icons.more_horiz_rounded,
               size: 18,
               color: iconFgColor.withValues(alpha: 0.75),
@@ -733,7 +734,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         value: 'pin',
         child: Row(
           children: [
-            Icon(
+            AppIcon(
               isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
               color: isPinned ? accentColor : iconFgColor,
               size: 20,
@@ -747,7 +748,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         value: 'edit',
         child: Row(
           children: [
-            Icon(Icons.edit_outlined, color: iconFgColor, size: 20),
+            AppIcon(Icons.edit_outlined, color: iconFgColor, size: 20),
             const SizedBox(width: 12),
             const Text('Rename'),
           ],
@@ -757,7 +758,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         value: 'delete',
         child: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.delete_outline,
               color: Colors.redAccent.withValues(alpha: 0.8),
               size: 20,
@@ -783,7 +784,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.lock, color: accentColor, size: 20),
+            AppIcon(Icons.lock, color: accentColor, size: 20),
             const SizedBox(width: 8),
             const Text('Locked Chat'),
           ],

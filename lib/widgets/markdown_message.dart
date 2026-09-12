@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// One slice of a message: either plain markdown or a GFM table block.
 class _MdSegment {
@@ -450,7 +451,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         ListConfig(),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
         CheckBoxConfig(
-          builder: (checked) => Icon(
+          builder: (checked) => AppIcon(
             checked ? Icons.check_box : Icons.check_box_outline_blank,
             size: 16,
             color: widget.textColor.withValues(alpha: 0.85),
@@ -1504,7 +1505,7 @@ class _CopyButtonState extends State<_CopyButton> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            AppIcon(
               _copied ? Icons.check : Icons.content_copy,
               size: 14,
               color: widget.textColor.withValues(alpha: 0.8),
@@ -1695,7 +1696,7 @@ class _MarkdownImage extends StatelessWidget {
       height: 140,
       color: colorScheme.surfaceContainerHighest,
       alignment: Alignment.center,
-      child: Icon(
+      child: AppIcon(
         Icons.broken_image_outlined,
         color: colorScheme.onSurfaceVariant,
         size: 36,
@@ -1734,7 +1735,7 @@ class _NetworkImageViewer extends StatelessWidget {
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(
+                  errorBuilder: (_, _, _) => const AppIcon(
                     Icons.broken_image_outlined,
                     color: Colors.white70,
                     size: 64,
@@ -1747,7 +1748,7 @@ class _NetworkImageViewer extends StatelessWidget {
               right: 16,
               child: SafeArea(
                 child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: const AppIcon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Document viewer for markdown-converted files
 class DocumentViewer extends StatefulWidget {
@@ -57,19 +58,19 @@ class _DocumentViewerState extends State<DocumentViewer> {
       appBar: AppBar(
         title: Text(widget.fileName, style: TextStyle(color: iconColor)),
         leading: IconButton(
-          icon: Icon(Icons.close, color: iconColor),
+          icon: AppIcon(Icons.close, color: iconColor),
           onPressed: () => Navigator.of(context).pop(),
           tooltip: 'Close',
         ),
         actions: [
           if (!_isEditing)
             IconButton(
-              icon: Icon(Icons.copy, color: iconColor),
+              icon: AppIcon(Icons.copy, color: iconColor),
               onPressed: _copyToClipboard,
               tooltip: 'Copy to clipboard',
             ),
           IconButton(
-            icon: Icon(
+            icon: AppIcon(
               _isEditing ? Icons.visibility : Icons.edit,
               color: iconColor,
             ),

@@ -242,7 +242,7 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                AppIcon(
                   _notFound ? Icons.image_not_supported_outlined : Icons.broken_image,
                   size: 32,
                   color: fg,
@@ -295,7 +295,7 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
                     color: Colors.grey.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(widget.borderRadius),
                   ),
-                  child: const Icon(Icons.broken_image, size: 32),
+                  child: const AppIcon(Icons.broken_image, size: 32),
                 );
               },
             ),
@@ -597,7 +597,7 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
+                child: AppIcon(
                   removed ? Icons.delete_outline : _icon,
                   size: 20,
                   color: removed ? theme.colorScheme.error : null,
@@ -667,7 +667,7 @@ class _ArtifactErrorCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, size: 18, color: scheme.error),
+          AppIcon(Icons.error_outline, size: 18, color: scheme.error),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -768,7 +768,7 @@ class _NewsCard extends StatelessWidget {
                       width: 96,
                       height: 96,
                       color: colorScheme.surfaceContainerHighest,
-                      child: Icon(
+                      child: AppIcon(
                         Icons.broken_image_outlined,
                         color: colorScheme.onSurfaceVariant,
                       ),
@@ -857,7 +857,7 @@ class _NewsCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(
+                          AppIcon(
                             Icons.open_in_new,
                             size: 12,
                             color: colorScheme.onSurfaceVariant.withValues(

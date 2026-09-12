@@ -7,6 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Displays a route map with OSRM polyline, start/end markers,
 /// summary bar, and optional turn-by-turn steps.
@@ -142,13 +143,13 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
             point: LatLng(widget.fromLat, widget.fromLon),
             width: 34,
             height: 34,
-            child: const Icon(Icons.trip_origin, color: Colors.green, size: 28),
+            child: const AppIcon(Icons.trip_origin, color: Colors.green, size: 28),
           ),
           Marker(
             point: LatLng(widget.toLat, widget.toLon),
             width: 34,
             height: 34,
-            child: const Icon(Icons.location_on, color: Colors.red, size: 32),
+            child: const AppIcon(Icons.location_on, color: Colors.red, size: 32),
           ),
         ],
       ),
@@ -207,7 +208,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Icon(
+                      child: const AppIcon(
                         Icons.fullscreen,
                         color: Colors.white70,
                         size: 20,
@@ -223,7 +224,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             child: Row(
               children: [
-                Icon(
+                AppIcon(
                   Icons.directions_car,
                   size: 18,
                   color: Colors.blue.shade300,
@@ -257,7 +258,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
             child: Row(
               children: [
-                Icon(
+                AppIcon(
                   Icons.touch_app,
                   size: 16,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -291,7 +292,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
+                        AppIcon(
                           Icons.subdirectory_arrow_right,
                           size: 14,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,

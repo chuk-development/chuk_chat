@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/widgets/settings_kit.dart';
+import '../helpers/icon_finder.dart';
 
 Widget _host(Widget child) {
   return MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
@@ -53,7 +54,7 @@ void main() {
     );
     expect(find.text('Theme'), findsOneWidget);
     expect(find.text('Dark'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(findIcon(Icons.chevron_right), findsOneWidget);
     await tester.tap(find.text('Theme'));
     expect(taps, 1);
   });
@@ -68,7 +69,7 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(Icons.chevron_right), findsNothing);
+    expect(findIcon(Icons.chevron_right), findsNothing);
     expect(find.byType(Text), findsOneWidget);
   });
 
@@ -84,9 +85,9 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(Icons.info_outline), findsOneWidget);
-    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(findIcon(Icons.info_outline), findsOneWidget);
+    expect(findIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(findIcon(Icons.error_outline), findsOneWidget);
   });
 
   testWidgets('info card keeps an explicit icon', (tester) async {
@@ -99,6 +100,6 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(Icons.cloud_done_outlined), findsOneWidget);
+    expect(findIcon(Icons.cloud_done_outlined), findsOneWidget);
   });
 }

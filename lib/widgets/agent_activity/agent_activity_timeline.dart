@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class AgentActivityTimeline extends StatefulWidget {
   const AgentActivityTimeline({
@@ -234,7 +235,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
+              AppIcon(
                 _isExpanded
                     ? Icons.keyboard_arrow_down
                     : Icons.keyboard_arrow_right,
@@ -380,7 +381,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             shape: BoxShape.circle,
             border: Border.all(color: railColor),
           ),
-          child: Icon(_iconFor(entry), size: 14, color: color),
+          child: AppIcon(_iconFor(entry), size: 14, color: color),
         ),
       ],
     );
@@ -454,7 +455,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
               'https://www.google.com/s2/favicons?domain=${source.host}&sz=32',
               width: 16,
               height: 16,
-              errorBuilder: (_, _, _) => Icon(
+              errorBuilder: (_, _, _) => AppIcon(
                 Icons.public,
                 size: 14,
                 color: onSurface.withValues(alpha: 0.5),

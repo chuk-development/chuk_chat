@@ -18,6 +18,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class LinuxWebView extends StatelessWidget {
   const LinuxWebView._html({
@@ -63,7 +64,7 @@ class LinuxWebView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.public, size: 48, color: Colors.grey),
+            const AppIcon(Icons.public, size: 48, color: Colors.grey),
             const SizedBox(height: 12),
             const Text(
               'Open this HTML in your browser',
@@ -81,7 +82,7 @@ class LinuxWebView extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () => _openInBrowser(context),
-              icon: const Icon(Icons.open_in_browser, size: 18),
+              icon: const AppIcon(Icons.open_in_browser, size: 18),
               label: const Text('Open in browser'),
             ),
           ],

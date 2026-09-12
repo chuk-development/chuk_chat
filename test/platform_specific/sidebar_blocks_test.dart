@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import '../helpers/icon_finder.dart';
 
 /// Midnight at the start of the current local day — the anchor every seeded
 /// chat is offset from. Anchoring on the same boundary the grouping uses is
@@ -188,10 +189,10 @@ void main() {
 
       // The field watches its own controller, so the clear button follows
       // the text rather than the host's rebuilds.
-      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.close_rounded));
+      expect(findIcon(Icons.close_rounded), findsOneWidget);
+      await tester.tap(findIcon(Icons.close_rounded));
       await tester.pump();
-      expect(find.byIcon(Icons.close_rounded), findsNothing);
+      expect(findIcon(Icons.close_rounded), findsNothing);
       expect(find.text('Alpha chat'), findsOneWidget);
 
       await _settleStartupWork(tester);

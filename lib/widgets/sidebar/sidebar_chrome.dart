@@ -15,8 +15,10 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
 /// cards stay separate objects, and the block still scans as one group.
@@ -85,8 +87,10 @@ class SbCard extends StatefulWidget {
     required this.child,
     this.onTap,
     this.onLongPress,
+    this.onLongPressAt,
     this.onSecondaryTap,
     this.selected = false,
+    this.outlined = false,
     this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     this.minHeight,
     this.radius,
@@ -96,10 +100,18 @@ class SbCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
+  /// Long press, reported in global coordinates so the caller can open a menu
+  /// where the finger was rather than at the card's corner.
+  final void Function(Offset globalPosition)? onLongPressAt;
+
   /// Right-click, reported in global coordinates so the caller can anchor a
   /// menu to the pointer.
   final void Function(Offset globalPosition)? onSecondaryTap;
   final bool selected;
+
+  /// Draws the accent ring without the accent fill — for the search field,
+  /// which has to look like an input, not like the chat you are in.
+  final bool outlined;
   final EdgeInsets padding;
   final double? minHeight;
 
@@ -113,6 +125,11 @@ class SbCard extends StatefulWidget {
 class _SbCardState extends State<SbCard> {
   bool _pressed = false;
   bool _hovered = false;
+
+  /// Where the finger went down. A long press is always preceded by a tap
+  /// down on the same card, and InkWell's long-press callback carries no
+  /// position of its own.
+  Offset? _lastDown;
 
   @override
   Widget build(BuildContext context) {
@@ -143,10 +160,13 @@ class _SbCardState extends State<SbCard> {
               ? BorderRadius.circular(widget.radius!)
               : SbCardShape.of(context) ??
                   BorderRadius.circular(kSbCardRadius),
-          // The border is always reserved, transparent when unselected, so
-          // selecting a card only changes its colour and never its size.
+          // The border is always reserved, transparent unless the card asks
+          // for it, so a state change only alters colour and never size.
+          // A selected chat is the accent fill alone — a ring around it as
+          // well made the row read as a control instead of as the chat the
+          // user is in.
           border: Border.all(
-            color: widget.selected
+            color: widget.outlined
                 ? accent.withValues(alpha: 0.55)
                 : Colors.transparent,
             width: 1.5,
@@ -157,8 +177,20 @@ class _SbCardState extends State<SbCard> {
           type: MaterialType.transparency,
           child: InkWell(
             onTap: widget.onTap,
-            onLongPress: widget.onLongPress,
-            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+            onLongPress: widget.onLongPress == null &&
+                    widget.onLongPressAt == null
+                ? null
+                : () {
+                    widget.onLongPress?.call();
+                    final at = _lastDown;
+                    if (at != null) widget.onLongPressAt?.call(at);
+                  },
+            onTapDown: enabled
+                ? (details) {
+                    _lastDown = details.globalPosition;
+                    setState(() => _pressed = true);
+                  }
+                : null,
             onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
             onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
             child: Padding(
@@ -308,7 +340,7 @@ class SbIconTile extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(size * 0.38),
       ),
-      child: Icon(
+      child: AppIcon(
         icon,
         size: size * 0.52,
         color: tone == null
@@ -524,7 +556,7 @@ class SbRoundAction extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
-            child: Icon(icon, size: iconSize, color: foreground),
+            child: AppIcon(icon, size: iconSize, color: foreground),
           ),
         ),
       ),
@@ -607,7 +639,7 @@ class SbGroupHeader extends StatelessWidget {
                   turns: collapsed ? 0 : 0.5,
                   duration: const Duration(milliseconds: 150),
                   curve: Curves.easeOutCubic,
-                  child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
+                  child: AppIcon(Icons.expand_more_rounded, size: 20, color: fg),
                 ),
               ],
             ),
@@ -705,7 +737,7 @@ class _SbSearchFieldState extends State<SbSearchField> {
               AppLocalizations.of(context)?.searchChatsHint ??
               'Search chats',
           hintStyle: TextStyle(color: muted, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, size: 19, color: muted),
+          prefixIcon: AppIcon(Icons.search_rounded, size: 19, color: muted),
           prefixIconConstraints:
               const BoxConstraints(minWidth: 40, minHeight: 44),
           isDense: true,
@@ -728,7 +760,7 @@ class _SbSearchFieldState extends State<SbSearchField> {
                   onTap: widget.onClear,
                   child: Padding(
                     padding: const EdgeInsets.only(right: 10),
-                    child: Icon(Icons.close_rounded, size: 17, color: muted),
+                    child: AppIcon(Icons.close_rounded, size: 17, color: muted),
                   ),
                 ),
           suffixIconConstraints:
@@ -829,10 +861,7 @@ class SbAccountLine extends StatelessWidget {
     // A floating, outlined box — and nothing around it. The list runs
     // straight past it on every side, so the card reads as an object above
     // the panel rather than as a band closing it off.
-    return Material(
-      color: theme.m3.surfaceContainer,
-      borderRadius: BorderRadius.circular(kSbCardRadius),
-      clipBehavior: Clip.antiAlias,
+    return SbFloatingBar(
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -857,7 +886,7 @@ class SbAccountLine extends StatelessWidget {
               if (onSettings != null)
                 IconButton(
                   onPressed: onSettings,
-                  icon: const Icon(Icons.settings_rounded, size: 20),
+                  icon: const AppIcon(Icons.settings_rounded, size: 20),
                   color: theme.m3.onSurfaceVariant,
                   tooltip: settingsTooltip ??
                       AppLocalizations.of(context)?.settings ??
@@ -887,6 +916,7 @@ class SbChatTile extends StatelessWidget {
     this.streaming = false,
     this.onTap,
     this.onLongPress,
+    this.onLongPressAt,
     this.onSecondaryTap,
     this.trailing,
     this.hoverTrailing,
@@ -899,6 +929,9 @@ class SbChatTile extends StatelessWidget {
   final bool streaming;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// Long press with the position of the finger, for a menu that opens there.
+  final void Function(Offset globalPosition)? onLongPressAt;
   final void Function(Offset globalPosition)? onSecondaryTap;
 
   /// Always visible — the three-dot menu.
@@ -914,6 +947,7 @@ class SbChatTile extends StatelessWidget {
       selected: selected,
       onTap: onTap,
       onLongPress: onLongPress,
+      onLongPressAt: onLongPressAt,
       onSecondaryTap: onSecondaryTap,
       padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
       child: _SbChatTileBody(
@@ -963,7 +997,7 @@ class _SbChatTileBody extends StatelessWidget {
         if (locked)
           Padding(
             padding: const EdgeInsets.only(right: 6),
-            child: Icon(
+            child: AppIcon(
               Icons.lock_rounded,
               size: 14,
               color: theme.m3.onSurfaceVariant,
@@ -1143,7 +1177,7 @@ class SbOfflineNotice extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.cloud_off_rounded,
               size: 16,
               color: theme.m3.onWarningContainer,
@@ -1159,7 +1193,7 @@ class SbOfflineNotice extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: Icon(
+              icon: AppIcon(
                 Icons.refresh_rounded,
                 size: 18,
                 color: theme.m3.onWarningContainer,
@@ -1180,9 +1214,12 @@ class SbOfflineNotice extends StatelessWidget {
   }
 }
 
-/// A card that floats over the scrolling list — the top bar and the bottom
-/// bar of the phone sidebar. No outline: the fill and the shape are what
-/// lift it off the panel, and the list runs past it on every side.
+/// A card that floats over the scrolling list — the app name at the top of
+/// the phone sidebar, the account row at the bottom.
+///
+/// No outline: the shape and a part-transparent fill are what lift it off the
+/// panel. The fill really is see-through — the chats underneath show as a
+/// blur, which is what keeps the text on top readable at this alpha.
 class SbFloatingBar extends StatelessWidget {
   const SbFloatingBar({super.key, required this.child});
 
@@ -1190,11 +1227,9 @@ class SbFloatingBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).m3.surfaceContainer,
-      borderRadius: BorderRadius.circular(kSbCardRadius),
-      clipBehavior: Clip.antiAlias,
-      child: child,
+    return FloatingChromeSurface(
+      radius: kSbCardRadius,
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }

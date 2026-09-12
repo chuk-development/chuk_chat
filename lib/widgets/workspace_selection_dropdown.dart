@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceSelectionDropdown extends StatefulWidget {
   final String? selectedWorkspaceId;
@@ -106,7 +107,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         selectedProject?.displayIcon ?? Icons.folder,
                         color: effectiveIconColor,
                         size: 18,
@@ -125,7 +126,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                         ),
                       ),
                       const SizedBox(width: 2),
-                      Icon(
+                      AppIcon(
                         Icons.keyboard_arrow_down,
                         color: effectiveIconColor.withValues(alpha: 0.7),
                         size: 16,
@@ -136,7 +137,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                 : SizedBox(
                     width: 44,
                     height: 36,
-                    child: Icon(
+                    child: AppIcon(
                       Icons.folder_outlined,
                       color: effectiveIconColor,
                       size: 20,
@@ -175,7 +176,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Icon(
+                AppIcon(
                   Icons.folder_off_outlined,
                   color: iconFgColor.withValues(alpha: 0.5),
                   size: 18,
@@ -193,7 +194,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                   ),
                 ),
                 if (!_hasProject)
-                  Icon(Icons.check, color: iconFgColor, size: 18),
+                  AppIcon(Icons.check, color: iconFgColor, size: 18),
               ],
             ),
           ),
@@ -221,7 +222,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                         color: pColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(7),
                       ),
-                      child: Icon(workspace.displayIcon, size: 14, color: pColor),
+                      child: AppIcon(workspace.displayIcon, size: 14, color: pColor),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -249,7 +250,7 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
                         ],
                       ),
                     ),
-                    if (isSelected) Icon(Icons.check, color: pColor, size: 18),
+                    if (isSelected) AppIcon(Icons.check, color: pColor, size: 18),
                   ],
                 ),
               ),

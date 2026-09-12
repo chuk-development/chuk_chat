@@ -73,6 +73,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -1826,7 +1827,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
+                                    AppIcon(
                                       Icons.cloud_upload,
                                       color: accent,
                                       size: 32,
@@ -2174,7 +2175,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         scrollChatToBottom(force: true),
                                     child: Padding(
                                       padding: const EdgeInsets.all(8),
-                                      child: Icon(
+                                      child: AppIcon(
                                         Icons.keyboard_arrow_down,
                                         size: 24,
                                         color: t.colorScheme.onSurface,
@@ -2282,7 +2283,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.edit,
                         size: 14,
                         color: iconFg.withValues(alpha: 0.6),
@@ -2319,7 +2320,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.schedule,
                         size: 14,
                         color: iconFg.withValues(alpha: 0.6),
@@ -2341,7 +2342,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: _cancelPendingMessage,
-                        child: Icon(
+                        child: AppIcon(
                           Icons.close,
                           size: 16,
                           color: accent.withValues(alpha: 0.8),
@@ -2548,7 +2549,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           color: accent,
                           borderRadius: BorderRadius.circular(buttonRadius),
                         ),
-                        child: const Icon(
+                        child: const AppIcon(
                           Icons.graphic_eq,
                           color: Colors.black,
                         ),
@@ -2599,7 +2600,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         ),
                       )
                     : (_isStreaming || _isSending)
-                    ? const Icon(
+                    ? const AppIcon(
                         Icons.stop_rounded,
                         color: Colors.black,
                         size: 22,
@@ -2607,7 +2608,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     : Transform(
                         transform: Matrix4.diagonal3Values(1, 0.95, 1),
                         alignment: Alignment.center,
-                        child: const Icon(
+                        child: const AppIcon(
                           Icons.arrow_upward_rounded,
                           color: Colors.black,
                           size: 26,
@@ -2755,7 +2756,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         BlendMode.srcIn,
                       ),
                     )
-                  : Icon(icon!, color: effectiveIconColor, size: iconSize),
+                  : AppIcon(icon!, color: effectiveIconColor, size: iconSize),
             );
           },
         ),

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Opens [initialText] in a fullscreen editor.
 ///
@@ -131,7 +132,7 @@ class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.close_rounded),
+            icon: const AppIcon(Icons.close_rounded),
             tooltip: 'Cancel',
             onPressed: _confirmDiscard,
           ),

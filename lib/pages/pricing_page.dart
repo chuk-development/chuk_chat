@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -339,7 +340,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonalIcon(
-                    icon: const Icon(Icons.query_stats, size: 18),
+                    icon: const AppIcon(Icons.query_stats, size: 18),
                     label: Text(l.openUsageDetails),
                     onPressed: _openUsageDetails,
                   ),
@@ -388,7 +389,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     ),
                                   ),
                                 )
-                              : const Icon(Icons.credit_card, size: 18),
+                              : const AppIcon(Icons.credit_card, size: 18),
                           label: Text(
                             _isProcessing ? l.opening : l.manageBilling,
                           ),
@@ -666,7 +667,7 @@ class _PlanCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle, size: 16, color: checkColor),
+                  AppIcon(Icons.check_circle, size: 16, color: checkColor),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

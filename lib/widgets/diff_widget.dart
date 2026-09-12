@@ -2,6 +2,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 enum _LineType { added, removed, context }
 
@@ -306,7 +307,7 @@ class _DiffWidgetState extends State<DiffWidget> {
                       ),
                     ),
                   const Spacer(),
-                  Icon(
+                  AppIcon(
                     _expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,

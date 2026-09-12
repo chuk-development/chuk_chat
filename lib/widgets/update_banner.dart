@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/update_check_service.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// A compact banner shown in the sidebar when a new app version is available.
 /// Tapping it downloads the platform-specific installer directly.
@@ -44,7 +45,7 @@ class UpdateBanner extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.system_update_outlined, size: 18, color: accent),
+                AppIcon(Icons.system_update_outlined, size: 18, color: accent),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -79,7 +80,7 @@ class UpdateBanner extends StatelessWidget {
                     constraints: const BoxConstraints(),
                     iconSize: 16,
                     onPressed: UpdateCheckService.dismiss,
-                    icon: Icon(
+                    icon: AppIcon(
                       Icons.close,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     ),

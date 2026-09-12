@@ -1,7 +1,6 @@
 // lib/platform_specific/root_wrapper_mobile.dart
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -26,9 +25,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -454,18 +455,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// action chips — each lifted off the background instead of sitting in one
   /// solid app bar.
   Widget _buildFloatingTopBar(Color iconFg) {
-    final ThemeData theme = Theme.of(context);
-    // Genuinely translucent so the chat shows through — no alpha-blend onto
-    // the opaque scaffold background (that baked the background colour in and
-    // made the chips read as solid). A BackdropFilter blur behind each chip
-    // keeps the icons and title legible over whatever scrolls underneath.
-    final Color chipBg = theme.colorScheme.surface.withValues(alpha: 0.55);
-    // The title pill is a flat, uniform translucent fill — no BackdropFilter.
-    // The blur bled a soft halo outside the pill's edge, which read as "more
-    // transparent around it"; a plain fill keeps the see-through even across
-    // the whole pill. Slightly more opaque than a frosted fill so the title
-    // stays legible without the blur.
-    final Color pillBg = theme.colorScheme.surface.withValues(alpha: 0.55);
+    // Chips and pill share the composer's surface through
+    // [FloatingChromeSurface], so the floating chrome of the chat and of the
+    // sidebar cannot drift apart.
     final String? title = _currentChatTitle();
 
     return SafeArea(
@@ -482,7 +474,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   icon: Icons.menu,
                   onTap: _toggleSidebar,
                   iconFg: iconFg,
-                  chipBg: chipBg,
                   tooltip: 'Open menu',
                   semanticsId: 'menu_button',
                 ),
@@ -497,28 +488,26 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     ? const SizedBox.shrink()
                     : Align(
                         alignment: Alignment.centerLeft,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: pillBg,
-                            borderRadius: BorderRadius.circular(18),
+                        child: FloatingChromeSurface(
+                          radius: 18,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 11,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 11),
-                            child: (title != null)
-                                ? Text(
-                                    title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: iconFg.withValues(alpha: 0.92),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  )
-                                : BrandWordmark(
-                                    color: iconFg.withValues(alpha: 0.92)),
-                          ),
+                          child: (title != null)
+                              ? Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: iconFg.withValues(alpha: 0.92),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                )
+                              : BrandWordmark(
+                                  color: iconFg.withValues(alpha: 0.92),
+                                ),
                         ),
                       ),
               ),
@@ -527,7 +516,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 icon: Icons.copy_all,
                 onTap: _copyDebugChat,
                 iconFg: iconFg,
-                chipBg: chipBg,
                 tooltip: 'Copy full chat',
                 semanticsId: 'copy_debug_chat_button',
               ),
@@ -553,7 +541,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     required IconData icon,
     required VoidCallback onTap,
     required Color iconFg,
-    required Color chipBg,
     required String tooltip,
     required String semanticsId,
   }) {
@@ -562,25 +549,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       button: true,
       child: Tooltip(
         message: tooltip,
-        // Blur behind the chip so it frosts the chat underneath instead of
-        // hiding it: ClipOval bounds the BackdropFilter to the circle, the
-        // Material on top carries the translucent tint and ripple. No
-        // elevation — the chip ends hard at its edge, no shadow bleeding out.
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Material(
-              color: chipBg,
-              shape: const CircleBorder(),
-              elevation: 0,
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onTap,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Icon(icon, size: 22, color: iconFg),
-                ),
+        child: FloatingChromeSurface(
+          shape: BoxShape.circle,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: AppIcon(icon, size: 22, color: iconFg),
               ),
             ),
           ),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Reusable page for entering a 6-digit email verification code.
 ///
@@ -184,7 +185,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
+                    AppIcon(
                       Icons.mark_email_read_outlined,
                       size: 48,
                       color: theme.colorScheme.primary,

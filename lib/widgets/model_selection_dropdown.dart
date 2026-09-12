@@ -20,6 +20,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -306,7 +307,7 @@ class ModelSelectionDropdown extends StatefulWidget {
                           ),
                         ),
                         trailing: selected
-                            ? Icon(Icons.check, color: iconFg, size: 18)
+                            ? AppIcon(Icons.check, color: iconFg, size: 18)
                             : null,
                         onTap: () async {
                           Navigator.of(sheetContext).pop();
@@ -1160,7 +1161,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
+              child: AppIcon(
                 Icons.tag_rounded,
                 size: 18,
                 color: iconFgColor.withValues(alpha: 0.6),
@@ -1222,7 +1223,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Icon(Icons.tag_rounded, color: iconFgColor, size: 20),
+                AppIcon(Icons.tag_rounded, color: iconFgColor, size: 20),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -1236,7 +1237,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
                     maxLines: 1,
                   ),
                 ),
-                Icon(
+                AppIcon(
                   Icons.keyboard_arrow_down,
                   color: iconFgColor.withValues(alpha: 0.8),
                   size: 16,
@@ -1384,7 +1385,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
                       ],
                       const SizedBox(width: 12),
                       if (!model.isToggle && selected)
-                        Icon(Icons.check, color: iconFgColor, size: 18),
+                        AppIcon(Icons.check, color: iconFgColor, size: 18),
                       if (model.badge != null)
                         Container(
                           margin: const EdgeInsets.only(left: 8),

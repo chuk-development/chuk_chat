@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SandboxManagementPage extends StatefulWidget {
   const SandboxManagementPage({super.key});
@@ -188,7 +189,7 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh),
+            icon: const AppIcon(Icons.refresh),
             onPressed: _loading ? null : _refresh,
           ),
         ],
@@ -313,7 +314,7 @@ class _SandboxRow extends StatelessWidget {
             )
           : IconButton(
               tooltip: 'Destroy sandbox',
-              icon: Icon(Icons.delete_outline, color: scheme.error),
+              icon: AppIcon(Icons.delete_outline, color: scheme.error),
               onPressed: onDestroy,
             ),
     );

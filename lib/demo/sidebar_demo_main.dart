@@ -8,6 +8,7 @@ import 'variants/variant_3_dense.dart';
 import 'variants/variant_4_playful.dart';
 import 'variants/variant_5_bento.dart';
 import 'variants/variant_6_final.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 const double kSidebarWidth = 320;
 
@@ -223,7 +224,7 @@ class _DemoHomeState extends State<DemoHome> {
           IconButton(
             tooltip: 'Toggle theme',
             onPressed: widget.onToggleTheme,
-            icon: Icon(
+            icon: AppIcon(
               p.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
               color: p.fg,
             ),
@@ -273,7 +274,7 @@ class _DemoHomeState extends State<DemoHome> {
           ),
           child: Row(
             children: [
-              Icon(icon,
+              AppIcon(icon,
                   size: 14,
                   color: active
                       ? (p.isDark ? Colors.black : Colors.white)
@@ -450,9 +451,9 @@ class _DemoHomeState extends State<DemoHome> {
                           color: p.accentText)),
                 ),
                 const Spacer(),
-                Icon(Icons.tune, color: p.muted, size: 18),
+                AppIcon(Icons.tune, color: p.muted, size: 18),
                 const SizedBox(width: 14),
-                Icon(Icons.more_horiz, color: p.muted, size: 20),
+                AppIcon(Icons.more_horiz, color: p.muted, size: 20),
               ],
             ),
           ),
@@ -507,7 +508,7 @@ class _DemoHomeState extends State<DemoHome> {
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
-          child: Icon(Icons.auto_awesome, size: 15, color: p.accent),
+          child: AppIcon(Icons.auto_awesome, size: 15, color: p.accent),
         ),
         const SizedBox(width: 10),
         Flexible(
@@ -530,7 +531,7 @@ class _DemoHomeState extends State<DemoHome> {
         padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
         child: Row(
           children: [
-            Icon(Icons.add_circle_outline, color: p.muted, size: 20),
+            AppIcon(Icons.add_circle_outline, color: p.muted, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Text('Ask anything…',
@@ -543,7 +544,7 @@ class _DemoHomeState extends State<DemoHome> {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(Icons.arrow_upward,
+              child: AppIcon(Icons.arrow_upward,
                   color: p.isDark ? Colors.black : Colors.white, size: 18),
             ),
           ],

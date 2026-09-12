@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// A round, accent-filled icon button — one shared widget so the "new chat"
 /// control looks identical wherever it appears (the mobile sidebar row and
@@ -54,7 +55,7 @@ class AccentIconButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: EdgeInsets.all(pad),
-          child: Icon(icon, size: iconSize, color: on),
+          child: AppIcon(icon, size: iconSize, color: on),
         ),
       ),
     );

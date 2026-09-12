@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class FullscreenMapPage extends StatefulWidget {
   final LatLng center;
@@ -134,14 +135,14 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         title: Text(widget.title, style: const TextStyle(fontSize: 16)),
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const AppIcon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
             tooltip: 'Open in external maps app',
             onPressed: _openCurrentViewInExternalMaps,
-            icon: const Icon(Icons.open_in_new),
+            icon: const AppIcon(Icons.open_in_new),
           ),
           if (hasLocationControls)
             IconButton(
@@ -155,7 +156,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.my_location),
+                  : const AppIcon(Icons.my_location),
             ),
         ],
       ),
@@ -229,7 +230,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               height: 28,
               child: GestureDetector(
                 onTap: () => unawaited(_animateTo(routeStart, zoom: 16.0)),
-                child: const Icon(
+                child: const AppIcon(
                   Icons.trip_origin,
                   color: Colors.green,
                   size: 24,
@@ -242,7 +243,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               height: 30,
               child: GestureDetector(
                 onTap: () => unawaited(_animateTo(routeEnd, zoom: 16.0)),
-                child: const Icon(
+                child: const AppIcon(
                   Icons.location_on,
                   color: Colors.red,
                   size: 28,
@@ -270,7 +271,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               height: isSelected ? 36 : 30,
               child: GestureDetector(
                 onTap: () => unawaited(_focusMarker(i)),
-                child: Icon(
+                child: AppIcon(
                   Icons.location_on,
                   color: isSelected ? Colors.orange.shade700 : Colors.redAccent,
                   size: isSelected ? 32 : 28,
@@ -756,7 +757,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+            AppIcon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 6),
             Text(
               text,
@@ -855,7 +856,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                     }),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
-                      child: Icon(
+                      child: AppIcon(
                         Icons.close,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         size: 20,
@@ -950,7 +951,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.place,
                         size: 14,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -975,7 +976,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.access_time,
                         size: 14,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1079,7 +1080,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: color),
+              AppIcon(icon, size: 16, color: color),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -1104,11 +1105,11 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < fullStars; i++)
-          Icon(Icons.star, size: size, color: Colors.amber.shade500),
+          AppIcon(Icons.star, size: size, color: Colors.amber.shade500),
         if (hasHalf)
-          Icon(Icons.star_half, size: size, color: Colors.amber.shade500),
+          AppIcon(Icons.star_half, size: size, color: Colors.amber.shade500),
         for (var i = 0; i < emptyStars; i++)
-          Icon(Icons.star_border, size: size, color: Colors.amber.shade700),
+          AppIcon(Icons.star_border, size: size, color: Colors.amber.shade700),
       ],
     );
   }

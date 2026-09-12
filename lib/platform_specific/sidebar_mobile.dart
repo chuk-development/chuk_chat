@@ -21,11 +21,14 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
+import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
@@ -563,7 +566,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     // Both bars are cards that float over the list, not bands that box it
     // in: the chats run past them on every side, and the panel keeps its
     // full height for content.
-    const double topChromeHeight = 54.0;
+    const double topChromeHeight = 58.0;
     const double bottomChromeHeight = 54.0;
     final double topInset = viewPadding.top + 8.0;
     final double bottomInset = 10.0 + viewPadding.bottom;
@@ -611,18 +614,19 @@ class _SidebarMobileState extends State<SidebarMobile> {
                           icon: Icons.keyboard_double_arrow_left_rounded,
                           tooltip: AppLocalizations.of(context)?.hideSidebar ??
                               'Hide sidebar',
-                          diameter: 34,
-                          iconSize: 19,
+                          diameter: 42,
+                          iconSize: 22,
                           onTap: widget.onCollapseTapped!,
                         ),
                       const SizedBox(width: 6),
-                      SbRoundAction(
+                      // The very same control as the new-chat button of the
+                      // chat top bar, so the two cannot end up different
+                      // sizes: 42 across, 22 glyph.
+                      AccentIconButton(
                         icon: Icons.edit_square,
                         tooltip:
                             AppLocalizations.of(context)?.newChat ?? 'New chat',
-                        diameter: 34,
-                        iconSize: 17,
-                        fill: accentColor,
+                        accent: accentColor,
                         onTap: widget.onNewChatTapped,
                       ),
                     ],
@@ -792,10 +796,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       // the panel was only a duplicate of this one.
       if (_searchActive)
         SbCard(
-          // `selected` is what paints the accent outline, and it follows the
-          // card's own corners — the field keeps the ring it used to have,
-          // in the shape of the row it replaced.
-          selected: true,
+          // The ring follows the card's own corners, so the field keeps the
+          // outline it used to have in the shape of the row it replaced.
+          outlined: true,
           padding: EdgeInsets.zero,
           minHeight: kSbNavCardHeight,
           child: SbSearchField(
@@ -888,8 +891,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final bool isStreaming = StreamingManager().isStreaming(chat.id);
     final String title =
         isLocked ? 'Locked encrypted chat' : _deriveChatTitle(chat);
-    void openSheet() => _showChatOptionsBottomSheet(
+    void openMenu([Offset? at]) => _showChatOptionsMenu(
           chat,
+          at: at,
           onDelete: onDelete,
           accentColor: accentColor,
           iconColor: theme.m3.onSurfaceVariant,
@@ -903,9 +907,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       onTap: isLocked
           ? () => _showLockedChatDialog(accentColor: accentColor)
           : onTap,
-      // Long press stays as it was; the button is only a second, visible way
-      // into the same sheet.
-      onLongPress: isLocked ? null : openSheet,
+      // The menu opens under the finger, not at the bottom of the screen.
+      // The three-dot button is the second, visible way into the same menu.
+      onLongPressAt: isLocked ? null : openMenu,
       trailing: isLocked
           ? null
           // The glyph stays small, but the box around it is Material's 48 px
@@ -916,7 +920,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
               width: 48,
               height: 48,
               child: IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   Icons.more_horiz_rounded,
                   size: 18,
                   color: theme.m3.onSurfaceVariant,
@@ -926,7 +930,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 tooltip: 'Chat options',
                 constraints:
                     const BoxConstraints.tightFor(width: 48, height: 48),
-                onPressed: openSheet,
+                onPressed: () => openMenu(),
               ),
             ),
     );
@@ -938,7 +942,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.lock, color: accentColor, size: 20),
+            AppIcon(Icons.lock, color: accentColor, size: 20),
             const SizedBox(width: 8),
             const Text('Locked Chat'),
           ],
@@ -958,63 +962,94 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
-  void _showChatOptionsBottomSheet(
+  /// The chat menu, opened where the finger was.
+  ///
+  /// A bottom sheet put it at the far end of the screen from the row it
+  /// belongs to; anchored, the menu comes out of the chat the user pressed.
+  void _showChatOptionsMenu(
     StoredChat chat, {
+    Offset? at,
     VoidCallback? onDelete,
     required Color accentColor,
     required Color iconColor,
   }) {
     final bool isPinned = chat.isStarred;
+    final theme = Theme.of(context);
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                  color: isPinned ? accentColor : iconColor,
-                ),
-                title: Text(isPinned ? 'Unpin chat' : 'Pin chat'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _toggleStarred(chat);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.edit_outlined, color: iconColor),
-                title: const Text('Rename'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _renameChatDialog(chat);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: Colors.redAccent.withValues(alpha: 0.8),
-                ),
-                title: Text(
-                  'Delete',
-                  style: TextStyle(
-                    color: Colors.redAccent.withValues(alpha: 0.8),
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  if (onDelete != null) onDelete();
-                },
-              ),
-            ],
+    unawaited(
+      showAnchoredMenu<void>(
+        context,
+        anchorPoint: at,
+        color: theme.m3.surfaceContainerHigh,
+        borderColor: Colors.transparent,
+        minWidth: 216,
+        items: [
+          _chatOptionRow(
+            icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+            iconColor: isPinned ? accentColor : iconColor,
+            label: isPinned ? 'Unpin chat' : 'Pin chat',
+            onTap: () {
+              Navigator.of(context).pop();
+              _toggleStarred(chat);
+            },
           ),
-        );
-      },
+          _chatOptionRow(
+            icon: Icons.edit_outlined,
+            iconColor: iconColor,
+            label: 'Rename',
+            onTap: () {
+              Navigator.of(context).pop();
+              _renameChatDialog(chat);
+            },
+          ),
+          const Divider(height: 0),
+          _chatOptionRow(
+            icon: Icons.delete_outline,
+            iconColor: Colors.redAccent.withValues(alpha: 0.8),
+            label: 'Delete',
+            labelColor: Colors.redAccent.withValues(alpha: 0.8),
+            onTap: () {
+              Navigator.of(context).pop();
+              if (onDelete != null) onDelete();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One row of the chat menu. A plain [InkWell] — the tile around it carries
+  /// the fill and the shape.
+  Widget _chatOptionRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required VoidCallback onTap,
+    Color? labelColor,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 52,
+        child: Row(
+          children: [
+            const SizedBox(width: 18),
+            AppIcon(icon, color: iconColor, size: 21),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: labelColor ?? theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+        ),
+      ),
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/icon_finder.dart';
 
 void main() {
   // Regression: a multi-pass turn emits reasoning→tool repeatedly with no text
@@ -61,8 +62,8 @@ void main() {
     expect(find.text('I should search the web'), findsOneWidget);
     expect(find.text('Now I need my notes'), findsOneWidget);
     expect(find.text('Synthesizing the findings'), findsOneWidget);
-    expect(find.byIcon(Icons.search), findsOneWidget);
-    expect(find.byIcon(Icons.bolt_outlined), findsOneWidget);
+    expect(findIcon(Icons.search), findsOneWidget);
+    expect(findIcon(Icons.bolt_outlined), findsOneWidget);
   });
 
   testWidgets('two tool rounds with no text after still merge into one', (

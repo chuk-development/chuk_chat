@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ToolCallingSettingsPage extends StatefulWidget {
   const ToolCallingSettingsPage({super.key, required this.config});
@@ -735,7 +736,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               onPressed: _isLoadingToolPreferences
                   ? null
                   : _resetAllToolPreferences,
-              icon: const Icon(Icons.restore),
+              icon: const AppIcon(Icons.restore),
               label: Text(l.resetAllToolPrefs),
             ),
           ),
@@ -791,7 +792,7 @@ class _ToolRow extends StatelessWidget {
           // Only a navigable row (one with a detail page) shows the chevron.
           if (onTap != null) ...[
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+            AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
           ],
         ],
       ),

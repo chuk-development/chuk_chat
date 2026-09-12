@@ -13,6 +13,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// Gap between the anchor and the menu.
 const double _kAnchorGap = 6;
@@ -31,7 +32,7 @@ const Duration _kMenuDuration = Duration(milliseconds: 140);
 /// Returns the chosen value, or null when the menu is dismissed.
 Future<T?> showAnchoredMenu<T>(
   BuildContext anchorContext, {
-  required List<PopupMenuEntry<T>> items,
+  required List<Widget> items,
   required Color color,
   required Color borderColor,
   double minWidth = 200,
@@ -42,6 +43,9 @@ Future<T?> showAnchoredMenu<T>(
   // (open leftwards). false → align left edges (open rightwards, for a
   // right-cascading submenu).
   bool? alignRight,
+  // Global position of the press. Given, the menu opens there instead of at
+  // the anchor widget.
+  Offset? anchorPoint,
   // A cascading submenu: open beside the anchor (to its right, or to its left
   // when the right would run off screen) with the top edges aligned, the way
   // a native submenu flies out of its parent row.
@@ -63,7 +67,18 @@ Future<T?> showAnchoredMenu<T>(
   final MediaQueryData overlayMedia = MediaQuery.of(navigator.context);
 
   final Offset topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-  final Rect anchor = topLeft & box.size;
+  final Offset overlayTopLeft = overlay.localToGlobal(Offset.zero);
+  // A press anchors the menu where the finger was, not to the whole row: a
+  // long press on a list tile should open under the thumb, not at the tile's
+  // corner or at the bottom of the screen.
+  final Rect anchor = anchorPoint == null
+      ? topLeft & box.size
+      : Rect.fromLTWH(
+          anchorPoint.dx - overlayTopLeft.dx,
+          anchorPoint.dy - overlayTopLeft.dy,
+          0,
+          0,
+        );
 
   final double bottomInset = <double>[
     media.viewInsets.bottom,
@@ -115,7 +130,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   }) : super(requestFocus: false);
 
   final Rect anchor;
-  final List<PopupMenuEntry<T>> items;
+  final List<Widget> items;
   final Color color;
   final Color borderColor;
   final double minWidth;
@@ -151,30 +166,26 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           alignRight: alignRight,
           besideAnchor: besideAnchor,
         ),
-        child: Material(
-          color: color,
-          // Without a clip the ink of a tapped row is a plain rectangle
-          // and its corners stick out of the rounded menu.
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            side: BorderSide(color: borderColor, width: 2),
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: minWidth),
-            child: IntrinsicWidth(
-              child: Semantics(
-                role: SemanticsRole.menu,
-                scopesRoute: true,
-                namesRoute: true,
-                explicitChildNodes: true,
-                child: ScrollConfiguration(
-                  // No scrollbar over the menu — it looked messy on desktop.
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(scrollbars: false),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListBody(children: items),
+        // No box around the menu: every row is its own filled tile, and a
+        // divider becomes the gap that starts the next run. See
+        // [MenuTileGroup].
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: IntrinsicWidth(
+            child: Semantics(
+              role: SemanticsRole.menu,
+              scopesRoute: true,
+              namesRoute: true,
+              explicitChildNodes: true,
+              child: ScrollConfiguration(
+                // No scrollbar over the menu — it looked messy on desktop.
+                behavior:
+                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                child: SingleChildScrollView(
+                  child: MenuTileGroup(
+                    groups: _splitOnDividers(items),
+                    color: color,
+                    outerRadius: borderRadius,
                   ),
                 ),
               ),
@@ -304,4 +315,18 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       preferAbove != old.preferAbove ||
       alignRight != old.alignRight ||
       besideAnchor != old.besideAnchor;
+}
+
+/// Splits a flat item list into runs at every divider, so a divider becomes
+/// a gap between two groups of tiles instead of a drawn line.
+List<List<Widget>> _splitOnDividers(List<Widget> items) {
+  final groups = <List<Widget>>[<Widget>[]];
+  for (final item in items) {
+    if (item is Divider || item is PopupMenuDivider) {
+      if (groups.last.isNotEmpty) groups.add(<Widget>[]);
+      continue;
+    }
+    groups.last.add(item);
+  }
+  return groups.where((run) => run.isNotEmpty).toList(growable: false);
 }
