@@ -13,7 +13,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:flutter/services.dart';
 
 /// One parsed markdown table plus the metadata needed to render it.
@@ -319,10 +320,12 @@ class _ChukTableState extends State<ChukTable> {
               );
             },
           ),
-          // Copy control sits below the table, right-aligned, instead of
-          // floating over the top-right corner where it covered header text.
+          // Copy control sits below the table, flush with the card's right
+          // edge, instead of floating over the top-right corner where it
+          // covered header text. The gap clears the horizontal scrollbar the
+          // wide layout draws under the card.
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 8),
             child: Align(
               alignment: Alignment.centerRight,
               child: _CopyButton(
@@ -638,6 +641,21 @@ class _ChukTableState extends State<ChukTable> {
   }
 }
 
+/// The copy control under a table.
+///
+/// It used to be a bare 15 px glyph with no container, no label and no target:
+/// under the card's bottom-right corner it read as a stray mark rather than a
+/// button. It is now a member of the one button family — [MorphTap], the same
+/// surface every expressive button wraps — at the smallest of the app's target
+/// heights (38; the 48 of the chrome is too heavy for a secondary action that
+/// hangs under a card, and 38 still clears the touch minimum). Corners follow
+/// [ExpressiveIconButton]'s formula, size × 0.34 at rest morphing to size ×
+/// 0.20 while held, so it sits in the same shape family as the 12-radius card
+/// above it. The press is the expressive spring; there is no glow and no
+/// gradient.
+///
+/// The confirmation says the word: the glyph becomes a tick, the label becomes
+/// "Copied" and the fill takes the accent for a moment, then it all goes back.
 class _CopyButton extends StatelessWidget {
   const _CopyButton({
     required this.copied,
@@ -646,6 +664,10 @@ class _CopyButton extends StatelessWidget {
     required this.onTap,
   });
 
+  /// The app's smallest labelled target. Big enough to hit, small enough that
+  /// it does not compete with the table it belongs to.
+  static const double _height = 38;
+
   final bool copied;
   final Color color;
   final Color accent;
@@ -653,20 +675,73 @@ class _CopyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: AppIcon(
-            copied ? Icons.check_rounded : Icons.copy_rounded,
-            size: 15,
-            color: copied ? accent : color.withValues(alpha: 0.55),
+    // The confirmation travels: fill and glyph move to the accent and back on
+    // the expressive decelerate, rather than snapping between two states.
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: copied ? 1 : 0),
+      duration: const Duration(milliseconds: 240),
+      curve: kExpressiveDecelerate,
+      builder: (BuildContext context, double t, Widget? _) {
+        final Color fill = Color.lerp(
+          color.withValues(alpha: 0.09),
+          accent.withValues(alpha: 0.16),
+          t,
+        )!;
+        final Color glyph = Color.lerp(
+          color.withValues(alpha: 0.72),
+          accent,
+          t,
+        )!;
+        return Semantics(
+          button: true,
+          label: copied ? 'Table copied' : 'Copy table',
+          child: Tooltip(
+            message: 'Copy the table as markdown',
+            child: MorphTap(
+              onTap: onTap,
+              color: fill,
+              pressedColor: accent.withValues(alpha: 0.22),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_height * 0.34),
+              ),
+              pressedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_height * 0.20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                height: _height,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    HugeIcon(
+                      copied ? HugeIcons.tick02 : HugeIcons.copy01,
+                      size: 16,
+                      color: glyph,
+                    ),
+                    const SizedBox(width: 6),
+                    // The label is wider when it says "Copied"; the button
+                    // grows into it instead of jumping.
+                    AnimatedSize(
+                      duration: kExpressiveShort,
+                      curve: kExpressiveDecelerate,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        copied ? 'Copied' : 'Copy',
+                        style: TextStyle(
+                          color: glyph,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
