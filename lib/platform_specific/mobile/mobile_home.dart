@@ -77,13 +77,15 @@ class _MobileHomeState extends State<MobileHome> {
     );
   }
 
-  Widget _picker(String purpose) {
+  /// The same roster, used to pick whose files to open. It carries no
+  /// headline of its own: the navigation bar under it already names the tab,
+  /// and the roster header is one row now.
+  Widget _picker() {
     return MobileAgentList(
       source: widget.roster,
       readMarks: widget.readMarks,
       profiles: widget.profiles,
       accountLabel: null,
-      title: purpose,
       onSelect: (String agentId, String threadKey) {
         final CoworkAgent? agent = widget.roster.visibleAgents
             .where((CoworkAgent candidate) => candidate.id == agentId)
@@ -132,7 +134,7 @@ class _MobileHomeState extends State<MobileHome> {
                             thread.key,
                       ],
                     ),
-                    _picker('Files'),
+                    _picker(),
                     widget.settings,
                   ],
                 ),
