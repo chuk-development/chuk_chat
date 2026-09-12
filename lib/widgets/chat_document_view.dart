@@ -12,6 +12,7 @@ import 'package:cowork/constants.dart';
 import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
+import 'package:cowork/widgets/chat_document_inline.dart';
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/top_veil.dart';
@@ -334,7 +335,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
                     rows.where((row) => row['value'] is num).toList(),
                   )
                 : isTable && columns.isNotEmpty
-                ? _table(context, columns, rows)
+                ? _table(context)
                 : _prose(context, '${document['text'] ?? ''}'),
           ),
         ),
@@ -365,87 +366,22 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
   /// pannable but with nothing to say they were there. [ChukTable] stacks a
   /// table that cannot fit below 560 pixels into one card per row, every field
   /// labelled, which is the answer the chat already shipped for this.
-  Widget _table(BuildContext context, List<String> columns, List<Map> rows) {
+  Widget _table(BuildContext context) {
     final theme = Theme.of(context);
-    // A column whose every filled cell is a number is read as a number
-    // column, and numbers line up on the right so their digits compare.
-    bool numeric(String column) {
-      var seen = false;
-      for (final row in rows) {
-        final value = row[column];
-        if (value == null || '$value'.trim().isEmpty) continue;
-        if (value is! num && num.tryParse('$value'.trim()) == null) {
-          return false;
-        }
-        seen = true;
-      }
-      return seen;
-    }
-
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),
         child: ChukTable(
-          table: ParsedTable(
-            header: columns,
-            rows: [
-              for (final row in rows)
-                [for (final column in columns) _cellText(row[column])],
-            ],
-            alignments: [
-              for (final column in columns)
-                numeric(column) ? TextAlign.right : TextAlign.left,
-            ],
-          ),
+          // The same shape the thread draws inline — one table, two sizes.
+          table: documentParsedTable(widget.document),
           textColor: theme.colorScheme.onSurface,
           accentColor: theme.colorScheme.primary,
           fontSize: 14,
-          onTapLink: (href) => _openLink(context, href),
+          onTapLink: (href) => openDocumentLink(context, href),
         ),
       ),
     );
-  }
-
-  /// One cell as [ChukTable] reads it. A bare URL becomes a markdown link
-  /// labelled with its host, so the cell says "wahlergebnisse.sachsen-anhalt.de"
-  /// and opens the page on a tap, instead of pushing a 78-character URL through
-  /// the column and taking every other column off screen with it.
-  static String _cellText(Object? raw) {
-    final value = '${raw ?? ''}'.trim();
-    if (value.isEmpty) return '';
-    final uri = Uri.tryParse(value);
-    if (uri != null &&
-        (uri.scheme == 'https' || uri.scheme == 'http') &&
-        uri.host.isNotEmpty &&
-        !value.contains(RegExp(r'[\s\]()]'))) {
-      return '[${uri.host.replaceFirst('www.', '')}]($value)';
-    }
-    return value;
-  }
-
-  Future<void> _openLink(BuildContext context, String href) async {
-    final uri = Uri.tryParse(href);
-    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) return;
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
-    }
-  }
-
-  /// A row's own colour, or the theme's. The value comes from a model, so
-  /// "blue", a truncated hex or nothing at all are ordinary inputs — none of
-  /// them may reach int.parse, which would throw while the panel is building.
-  Color _barColor(BuildContext context, Object? raw) {
-    if (raw is String) {
-      final hex = raw.trim().replaceFirst('#', '');
-      if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
-        return Color(int.parse('ff$hex', radix: 16));
-      }
-    }
-    return Theme.of(context).colorScheme.primary;
   }
 
   Widget _chart(BuildContext context, List<Map> rows) {
@@ -475,85 +411,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
                   ),
                 ),
               ),
-            for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${row['label']}',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${(row['value'] as num).toStringAsFixed(1)} %',
-                          // titleMedium, not titleLarge: at a 1.3 text scale
-                          // the larger size pushed the label down to one
-                          // ellipsised word on a phone column.
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // FractionallySizedBox measures the bar against the track
-                    // itself, so the fill stays right through a resize without
-                    // a LayoutBuilder rebuilding the whole row.
-                    Container(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: .5),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor:
-                              (row['value'] as num).clamp(0, 100) / 100,
-                          child: Container(
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: _barColor(context, row['color']),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: .25,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 20),
-              child: DefaultTextStyle.merge(
-                style: theme.textTheme.bodySmall!.copyWith(
-                  color: theme.m3.onSurfaceVariant,
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [Text('0 %'), Text('50 %'), Text('100 %')],
-                ),
-              ),
-            ),
+            DocumentBarList(rows: rows),
             // A rule under nothing is furniture: the footer only appears when
             // the document carries a source or a retrieval time.
             if (source.isNotEmpty || retrieved.isNotEmpty) ...[

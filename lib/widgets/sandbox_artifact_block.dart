@@ -33,6 +33,7 @@ import 'package:cowork/ui/expressive/bubble_kind.dart';
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/widgets/image_viewer.dart';
 import 'package:cowork/widgets/nice_snackbar.dart';
+import 'package:cowork/widgets/chat_document_inline.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
 
 class SandboxArtifactBlock extends StatefulWidget {
@@ -268,37 +269,15 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget build(BuildContext context) {
     final document = widget.payload.document;
     if (document != null) {
-      return Material(
-        color: Colors.transparent,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 2,
-          ),
-          leading: AppIcon(
-            document['kind'] == 'table'
-                ? Icons.table_chart_outlined
-                : Icons.description_outlined,
-          ),
-          title: Text(
-            (document['title'] as String?)?.trim().isNotEmpty == true
-                ? document['title'] as String
-                : widget.payload.filename,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            document['version'] == null
-                ? 'Saved document'
-                : 'Version ${document['version']} · Saved document',
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          trailing: const AppIcon(Icons.chevron_right_rounded, size: 22),
-          onTap: () => ChatDocumentView.open(context, document),
-        ),
-      );
+      // A document the coworker wrote IS the message: the thread draws its
+      // table, its prose or its bars, not a link to them. A payload that
+      // carries only a reference — an older row, a snapshot without its body —
+      // keeps the compact row, because a block with nothing in it is worse
+      // than a line that opens the reader.
+      if (inlineDocumentHasContent(document)) {
+        return InlineChatDocument(document: document);
+      }
+      return _documentRow(context, document);
     }
     final mime = widget.payload.mime;
     if (mime.startsWith('image/')) {
@@ -308,6 +287,39 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
       return _buildPdf(context);
     }
     return _buildFileChip(context);
+  }
+
+  /// The compact row a document falls back to when its payload carries no body
+  /// to draw: a title, what it is, and the tap that opens the reader.
+  Widget _documentRow(BuildContext context, Map<String, dynamic> document) {
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        leading: AppIcon(
+          document['kind'] == 'table'
+              ? Icons.table_chart_outlined
+              : Icons.description_outlined,
+        ),
+        title: Text(
+          (document['title'] as String?)?.trim().isNotEmpty == true
+              ? document['title'] as String
+              : widget.payload.filename,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          document['version'] == null
+              ? 'Saved document'
+              : 'Version ${document['version']} · Saved document',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        trailing: const AppIcon(Icons.chevron_right_rounded, size: 22),
+        onTap: () => ChatDocumentView.open(context, document),
+      ),
+    );
   }
 
   Widget _buildImage(BuildContext context) {
