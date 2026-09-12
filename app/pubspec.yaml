@@ -60,6 +60,14 @@ dependencies:
 
   # Where a file the agent produced is written when the user saves it.
   path_provider: ^2.1.6
+
+  # The agent's screen on phones and tablets: noVNC runs inside this WebView
+  # and decodes Tight/ZRLE, which the pure-Dart client cannot (bead
+  # cowork-dvsw). The official plugin, not an alternative: it needs nothing
+  # more than a page load, a JavaScript channel and a navigation guard, and it
+  # uses the system WebView, so it adds no engine to the APK. Desktop keeps
+  # the Dart client below — this plugin has no Linux implementation.
+  webview_flutter: ^4.14.1
   # Vendored fork of flutter_rfb 0.6.2 (third_party/flutter_rfb): the clipboard
   # sync is stripped out so the VNC tunnel carries strictly RFB derived from
   # user input + the render loop — no local-clipboard exfil into the sandbox and
@@ -152,6 +160,20 @@ flutter:
     # The HugeIcons free set, generated to plain SVG and checked in (MIT, see
     # assets/icons/hugeicons/LICENSE). Shipped, never fetched.
     - assets/icons/hugeicons/
+    # The agent's-screen viewer page and the noVNC client it drives. Served to
+    # the WebView by the loopback server in lib/widgets/vnc_local_server.dart,
+    # never fetched from the network. Asset folders are not recursive, so
+    # every subfolder of the vendored library is listed by hand.
+    - assets/vnc/
+    - assets/novnc/
+    - assets/novnc/core/
+    - assets/novnc/core/crypto/
+    - assets/novnc/core/decoders/
+    - assets/novnc/core/input/
+    - assets/novnc/core/util/
+    - assets/novnc/vendor/pako/
+    - assets/novnc/vendor/pako/lib/utils/
+    - assets/novnc/vendor/pako/lib/zlib/
 
   # The three selectable chat fonts, bundled locally (chuk_chat's block,
   # imported verbatim). Arimo and JetBrains Mono are variable fonts (the wght
