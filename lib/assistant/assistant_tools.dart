@@ -277,33 +277,59 @@ final List<AssistantTool> assistantTools = <AssistantTool>[
   AssistantTool(
     name: 'open_maps',
     description:
-        'Zeigt einen Ort, eine Adresse oder ein Ziel in der Karten-App des '
-        'Geraets und startet dort die Navigation. Immer dafuer benutzen und '
-        'nicht open_app: jedes Geraet hat eine andere Karten-App als Standard.',
+        'Oeffnet einen Ort, eine Adresse oder ein Ziel in der Karten-App des '
+        'Geraets. Immer dafuer benutzen und nicht open_app: jedes Geraet hat '
+        'eine andere Karten-App als Standard. Die Adresse wird auf dem Geraet '
+        'in Koordinaten aufgeloest, der Ort also direkt angezeigt und nicht '
+        'gesucht. Sobald der Nutzer irgendwohin WILL ("navigiere mich zu", '
+        '"bring mich nach", "Route nach", "wie komme ich zu"), '
+        'navigate=true setzen: dann oeffnet sich direkt die Routenansicht und '
+        'der Nutzer muss nur noch starten. Sofort aufrufen, sobald Ziel und '
+        'Absicht klar sind, und nicht vorher nachfragen.',
     parameters: _object(
       {
         'query': _string(
-          'Ort, Adresse oder Suchbegriff, zum Beispiel "Hauptbahnhof Kiel".',
+          'Ziel als Adresse, Ort oder Name, zum Beispiel '
+          '"Holstenstrasse 1, Kiel" oder "Hauptbahnhof Kiel". So vollstaendig '
+          'wie der Nutzer es gesagt hat.',
         ),
+        'navigate': {
+          'type': 'boolean',
+          'description':
+              'true startet die Navigation dorthin, false zeigt den Ort nur '
+              'auf der Karte.',
+        },
         'latitude': _number('Breitengrad, wenn die Koordinate bekannt ist.'),
         'longitude': _number('Laengengrad, wenn die Koordinate bekannt ist.'),
       },
       required: ['query'],
     ),
-    label: (args) => 'Karte: ${_text(args, 'query')}',
+    label: (args) => args['navigate'] == true
+        ? 'Navigation: ${_text(args, 'query')}'
+        : 'Karte: ${_text(args, 'query')}',
     handler: (args, runtime) async {
+      final navigate = args['navigate'] == true;
       final result = await AssistantBridge.openMaps(
         query: _text(args, 'query'),
         latitude: _toDouble(args['latitude']),
         longitude: _toDouble(args['longitude']),
+        navigate: navigate,
       );
+      final launched = result['launched'] == true;
+      final navigating = result['navigating'] == true;
       return AssistantToolOutcome(
         result,
-        card: AssistantActionCard(
-          icon: Icons.navigation_outlined,
-          label: 'Navigation gestartet',
-          detail: _text(args, 'query'),
-        ),
+        card: !launched
+            ? null
+            : AssistantActionCard(
+                icon: navigating
+                    ? Icons.navigation_rounded
+                    : Icons.place_outlined,
+                label: navigating
+                    ? 'Navigation gestartet'
+                    : 'Auf der Karte geöffnet',
+                detail: _text(args, 'query'),
+              ),
       );
     },
   ),

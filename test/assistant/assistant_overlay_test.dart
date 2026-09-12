@@ -19,6 +19,49 @@ Widget _host(Widget child) => MaterialApp(
 );
 
 void main() {
+  testWidgets('while only listening the surface shows no panel at all', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        AssistantOverlayView(
+          status: 'Ich höre zu',
+          listening: true,
+          onMic: () {},
+          onClose: () {},
+          onContext: () {},
+          onScreen: () {},
+        ),
+      ),
+    );
+
+    // No German status block over the app underneath — the waveform carries
+    // the state on its own.
+    expect(find.text('CHUK CHAT'), findsNothing);
+    expect(find.text('Ich höre zu'), findsNothing);
+    expect(find.byType(AssistantWaveform), findsOneWidget);
+  });
+
+  testWidgets('the panel appears as soon as the turn produces something', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        AssistantOverlayView(
+          status: 'Führe aus …',
+          busy: true,
+          onMic: () {},
+          onClose: () {},
+          onContext: () {},
+          onScreen: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('CHUK CHAT'), findsOneWidget);
+    expect(find.text('Führe aus …'), findsWidgets);
+  });
+
   testWidgets('while busy the surface shows state, not a half-written turn', (
     tester,
   ) async {
