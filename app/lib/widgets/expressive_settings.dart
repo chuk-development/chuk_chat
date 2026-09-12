@@ -410,9 +410,10 @@ class ExpressiveIconTile extends StatelessWidget {
       child: AppIcon(
         icon,
         // The icon's own box, before [HugeIcon]'s optical inset trims it to
-        // about 0.86 of that. 0.6 of the tile leaves the drawing the same
-        // weight a 24 px Material glyph had in a 40 px tile.
-        size: size * 0.6,
+        // about 0.86 of that. That lands a 42 px tile on a 25 px drawing —
+        // the 24-in-40 proportion a filled tile wants. The old 0.5 was set
+        // when the icon ignored it and filled the whole tile anyway.
+        size: size * 0.7,
         color: tone == null ? cs.onPrimaryContainer : cs.onColorFor(background),
       ),
     );

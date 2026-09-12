@@ -12,6 +12,14 @@
 # path does not exist upstream, so a file that moved in chuk_chat is reported
 # instead of being silently dropped.
 #
+# STOP before you run this. The widget entries in the manifest are NO LONGER
+# byte-identical to upstream: about two thousand lines of CoWork rendering work
+# live in them (tappable links in tables, the stacked narrow table, inline code
+# in headings, monotonic heading sizes, the trailing-comma parser fix, the
+# tolerant chart parser, 48 dp targets). A plain re-sync overwrites all of it in
+# silence. Read the "Allowed divergences" section of docs/CHAT_UI_IMPORT.md and
+# prune the manifest first (bead cowork-r6jy).
+#
 # Usage:
 #   scripts/import_chat_ui.sh [path-to-chuk_chat]
 #
