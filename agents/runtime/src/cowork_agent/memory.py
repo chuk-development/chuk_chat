@@ -111,6 +111,13 @@ _MEM_BY_ROOT: dict[str, Any] = {}
 # caller's client for the whole call. Re-entrant so a hook may call ``add``.
 _OP_LOCK = threading.RLock()
 
+# Automatic recall is optional context, not a prerequisite for answering.
+# Cold FastEmbed initialization / remote embedding retries can take minutes.
+# Admit only one background recall globally (Mem0 operations serialize anyway),
+# so repeated sends cannot accumulate blocked threads while the backend warms.
+_AUTO_RECALL_SLOT = threading.BoundedSemaphore(1)
+AUTO_RECALL_TIMEOUT = 0.25
+
 # The background turn extractions in flight (:meth:`MemoryStore.observe_turn`).
 # ``close_cached_memories`` waits for them before it closes the Qdrant handles:
 # a write that is still running when the executor stops would hold the storage
@@ -163,20 +170,28 @@ def close_cached_memories() -> int:
     # A turn extraction still writing would hold the storage lock past the
     # close; let it finish first (bounded).
     wait_for_extractions()
-    with _MEM_LOCK:
-        handles = list(_MEM_BY_ROOT.values())
-        _MEM_BY_ROOT.clear()
+    # A timed-out foreground recall may still be initializing/searching. Never
+    # close its vector store underneath it or wait minutes for a model download.
+    if not _OP_LOCK.acquire(timeout=AUTO_RECALL_TIMEOUT):
+        logger.info("memory backend still busy; retaining handles until shutdown")
+        return 0
     closed = 0
-    for handle in handles:
-        store = getattr(handle, "vector_store", None)
-        client = getattr(store, "client", None)
-        close = getattr(client, "close", None)
-        if callable(close):
-            try:
-                close()
-                closed += 1
-            except Exception:  # noqa: BLE001 — teardown must not raise
-                pass
+    try:
+        with _MEM_LOCK:
+            handles = list(_MEM_BY_ROOT.values())
+            _MEM_BY_ROOT.clear()
+        for handle in handles:
+            store = getattr(handle, "vector_store", None)
+            client = getattr(store, "client", None)
+            close = getattr(client, "close", None)
+            if callable(close):
+                try:
+                    close()
+                    closed += 1
+                except Exception:  # noqa: BLE001 — teardown must not raise
+                    pass
+    finally:
+        _OP_LOCK.release()
     return closed
 
 
@@ -572,6 +587,41 @@ class MemoryStore:
             return []
         body = "\n".join(f"- {_clip(n, 500)}" for n in clean)
         return [{"role_tag": "memory", "role": "user", "content": RECALL_PREFIX + body}]
+
+    def recall_messages_bounded(
+        self, query: str, *, limit: int = RECALL_LIMIT,
+        timeout: float = AUTO_RECALL_TIMEOUT,
+    ) -> list[dict]:
+        """Use recall only if ready within the foreground latency budget.
+
+        Late results are deliberately NOT appended to a running conversation.
+        The read may finish warming the shared store for the next turn; explicit
+        memory searches still retain their full (unbounded) tool semantics.
+        """
+        if not query.strip() or not _AUTO_RECALL_SLOT.acquire(blocking=False):
+            return []
+        done = threading.Event()
+        result: list[dict] = []
+
+        def recall() -> None:
+            try:
+                result.extend(self.recall_messages(query, limit=limit))
+            except Exception:  # best-effort context must never break a turn
+                logger.warning("automatic memory recall failed", exc_info=True)
+            finally:
+                done.set()
+                _AUTO_RECALL_SLOT.release()
+
+        worker = threading.Thread(target=recall, name="memory-recall", daemon=True)
+        try:
+            worker.start()
+        except Exception:
+            _AUTO_RECALL_SLOT.release()
+            raise
+        if not done.wait(max(0.0, timeout)):
+            logger.info("automatic memory recall exceeded %.0fms; proceeding without it", timeout * 1000)
+            return []
+        return result
 
     def remember_turn(
         self,
