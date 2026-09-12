@@ -62,6 +62,7 @@ import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, workspace }
@@ -484,7 +485,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.chat_bubble_outline,
               color: theme.colorScheme.primary,
               size: 28,
@@ -517,7 +518,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
               child: Row(
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.computer,
                     color: theme.colorScheme.primary,
                     size: 24,
@@ -1424,7 +1425,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: color),
+          AppIcon(icon, size: 18, color: color),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1436,7 +1437,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           ),
           if (isSelected) ...[
             const SizedBox(width: 12),
-            Icon(Icons.check, size: 18, color: color),
+            AppIcon(Icons.check, size: 18, color: color),
           ],
         ],
       ),
@@ -1483,7 +1484,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              AppIcon(
                 Icons.folder_outlined,
                 size: 17,
                 color: workspace.displayColor,
@@ -3567,7 +3568,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             onTap: () => scrollChatToBottom(force: true),
                             child: Padding(
                               padding: const EdgeInsets.all(8),
-                              child: Icon(
+                              child: AppIcon(
                                 Icons.keyboard_arrow_down,
                                 size: 24,
                                 color: theme.colorScheme.onSurface,
@@ -3652,6 +3653,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         child: ChatModeSelector(
           mode: chatMode,
           showLabel: false,
+          // The same height as the round buttons beside it in the composer
+          // row; a pill that stands two pixels taller reads as a mistake.
+          height: 38,
         selectedModelId: selectedModelId,
         modelLabel: selectedModelName ??
             (selectedModelId.isEmpty ? null : selectedModelId),
@@ -3840,7 +3844,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 onTap: _openFullscreenEditor,
                                 child: Padding(
                                   padding: const EdgeInsets.only(left: 4),
-                                  child: Icon(
+                                  child: AppIcon(
                                     Icons.open_in_full_rounded,
                                     size: 14,
                                     color: iconFg.withValues(alpha: 0.4),
@@ -3964,7 +3968,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       padding: const EdgeInsets.only(bottom: 4, right: 6),
       child: Row(
         children: [
-          Icon(icon, size: 12, color: color),
+          AppIcon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
