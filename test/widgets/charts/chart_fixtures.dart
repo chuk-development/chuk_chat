@@ -125,3 +125,20 @@ const Map<String, Object?> kGrouped = <String, Object?>{
     },
   ],
 };
+
+/// The same election with the rule high up: at 40 % only the winner's bar is
+/// anywhere near it, so the label has to find a corner it does not usually
+/// use.
+final Map<String, Object?> kHighReference = <String, Object?>{
+  ...kSachsenAnhalt,
+  'title': 'Landtagswahl Sachsen-Anhalt',
+  'subtitle': 'Zweitstimmen, mit der Marke für die absolute Mehrheit',
+  'reference_line': <String, Object?>{'value': 40, 'label': 'Regierungsmarke'},
+};
+
+/// Gains and losses with a rule BELOW zero: the label has the whole upper
+/// half free and the bottom half full of losing bars.
+final Map<String, Object?> kGainsAndLossesWithRule = <String, Object?>{
+  ...kGainsAndLosses,
+  'reference_line': <String, Object?>{'value': -2, 'label': '−2 Punkte'},
+};

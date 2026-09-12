@@ -230,6 +230,112 @@ void main() {
     });
   });
 
+  group('the reference label', () {
+    // The spec the thread block renders: the same election, capped at the six
+    // strongest parties, which is where the label used to land on the last
+    // bar.
+    final Map<String, Object?> topSix = <String, Object?>{
+      ...kSachsenAnhalt,
+      'points': (kSachsenAnhalt['points']! as List<Object?>).take(6).toList(),
+    };
+
+    final List<List<Object>> cases = <List<Object>>[
+      <Object>['election, 366 dp', kSachsenAnhalt, 366.0, 1.0],
+      <Object>['election, 360 dp at 1.3', kSachsenAnhalt, 312.0, 1.3],
+      <Object>['election, wide', kSachsenAnhalt, 680.0, 1.0],
+      <Object>['election, six bars', topSix, 312.0, 1.0],
+      <Object>['election, six bars at 1.3', topSix, 312.0, 1.3],
+      <Object>['a rule high in the plot', kHighReference, 366.0, 1.0],
+      <Object>['a rule high in the plot, narrow', kHighReference, 312.0, 1.3],
+      <Object>['a rule below zero', kGainsAndLossesWithRule, 366.0, 1.0],
+      <Object>[
+        'a rule below zero, narrow',
+        kGainsAndLossesWithRule,
+        312.0,
+        1.3,
+      ],
+    ];
+
+    testWidgets('never covers a bar, a number or a category', (
+      WidgetTester tester,
+    ) async {
+      for (final List<Object> c in cases) {
+        final String name = c[0] as String;
+        await pumpChart(
+          tester,
+          chukChartFromJson(c[1], animate: false, fontFamily: 'Roboto'),
+          width: c[2] as double,
+          textScale: c[3] as double,
+        );
+        final ChukChartPainter painter = _painterOf(tester);
+        final Rect? chip = painter.debugReferenceLabelBox;
+        expect(chip, isNotNull, reason: '$name: the rule lost its label');
+        expect(
+          painter.debugBoxes,
+          isNotEmpty,
+          reason: '$name: nothing was measured to dodge',
+        );
+        for (final ChartBox box in painter.debugBoxes) {
+          if (box.kind == ChartBoxKind.tick) continue;
+          expect(
+            box.rect.overlaps(chip!),
+            isFalse,
+            reason: '$name: the chip $chip covers $box',
+          );
+        }
+        // It keeps its plate, so it never ends up as bare words on the rule.
+        expect(
+          painter.debugReferenceLabelPlated,
+          isTrue,
+          reason: '$name: the label had to give up its plate',
+        );
+        expect(chip!.left, greaterThanOrEqualTo(0.0), reason: name);
+        expect(tester.takeException(), isNull, reason: name);
+      }
+    });
+
+    testWidgets('keeps its words where they fit and drops to the number '
+        'where they do not', (WidgetTester tester) async {
+      await pumpChart(
+        tester,
+        chukChartFromJson(kSachsenAnhalt, animate: false, fontFamily: 'Roboto'),
+        width: 680,
+      );
+      expect(_painterOf(tester).debugReferenceLabelText, '5 %-Hürde');
+
+      await pumpChart(
+        tester,
+        chukChartFromJson(kSachsenAnhalt, animate: false, fontFamily: 'Roboto'),
+        width: 312,
+        textScale: 1.3,
+      );
+      expect(_painterOf(tester).debugReferenceLabelText, '5 %');
+    });
+
+    testWidgets('stays where it is while the chart grows in', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: SizedBox(
+              width: 360,
+              child: ChukChart(
+                spec: ChartSpec.parse(kSachsenAnhalt),
+                fontFamily: 'Roboto',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final Rect? early = _painterOf(tester).debugReferenceLabelBox;
+      await tester.pump(kChukChartEntrance);
+      expect(_painterOf(tester).debugReferenceLabelBox, early);
+      await tester.pumpAndSettle();
+    });
+  });
+
   group('the entrance', () {
     testWidgets('plays once and does not replay on a rebuild', (
       WidgetTester tester,
