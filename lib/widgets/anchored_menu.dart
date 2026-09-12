@@ -50,6 +50,11 @@ Future<T?> showAnchoredMenu<T>(
   // when the right would run off screen) with the top edges aligned, the way
   // a native submenu flies out of its parent row.
   bool besideAnchor = false,
+  // Draw the frame around the whole menu. An action menu is a run of loose
+  // tiles and wants none; a picker — the model and mode menus — is a list
+  // being read against the chat behind it, and there the frame is what says
+  // where the list ends.
+  bool outlined = false,
 }) {
   final RenderBox? box = anchorContext.findRenderObject() as RenderBox?;
   final NavigatorState navigator = Navigator.of(anchorContext);
@@ -98,6 +103,7 @@ Future<T?> showAnchoredMenu<T>(
       preferAbove: preferAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,
+      outlined: outlined,
       usableTop:
           math.max(media.padding.top, overlayMedia.padding.top) + _kEdgeMargin,
       usableBottom: overlay.size.height - bottomInset - _kEdgeMargin,
@@ -120,6 +126,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.preferAbove,
     required this.alignRight,
     required this.besideAnchor,
+    required this.outlined,
     required this.usableTop,
     required this.usableBottom,
     required this.themes,
@@ -138,6 +145,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final bool preferAbove;
   final bool? alignRight;
   final bool besideAnchor;
+  final bool outlined;
   final double usableTop;
   final double usableBottom;
   final CapturedThemes themes;
@@ -182,10 +190,12 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
                 behavior:
                     ScrollConfiguration.of(context).copyWith(scrollbars: false),
                 child: SingleChildScrollView(
-                  child: MenuTileGroup(
-                    groups: _splitOnDividers(items),
-                    color: color,
-                    outerRadius: borderRadius,
+                  child: _frame(
+                    MenuTileGroup(
+                      groups: _splitOnDividers(items),
+                      color: color,
+                      outerRadius: borderRadius,
+                    ),
                   ),
                 ),
               ),
@@ -193,6 +203,24 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The frame, when the caller asked for one. The tiles keep their own
+  /// shape inside it; the border only closes the list off from the chat
+  /// behind it. Its radius clears the tiles by the padding, so the corners
+  /// run parallel instead of cutting across them.
+  Widget _frame(Widget child) {
+    if (!outlined) return child;
+    const double pad = 3;
+    return Container(
+      padding: const EdgeInsets.all(pad),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(borderRadius + pad),
+        border: Border.all(color: borderColor, width: 2),
+      ),
+      child: child,
     );
   }
 

@@ -471,6 +471,9 @@ class ChatModeSelector extends StatelessWidget {
       preferAbove: menuAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,
+      // This is the model picker, a list being read against the chat behind
+      // it — it keeps the frame that says where the list ends.
+      outlined: true,
     );
   }
 
