@@ -73,6 +73,25 @@ Sources: ``https://pypi.org/pypi/browser-use/json`` and the tagged sources at
   machine, so :func:`_configure_environment` sets both to ``false`` (plus
   ``BROWSER_USE_VERSION_CHECK=false``) before the library is imported.
 
+The browser is headful, always (bead cowork-bxvh)
+-------------------------------------------------
+
+A browser the user cannot see is worth very little here: the live view in the
+app (§9.1) streams the pixels of the display the browser paints on, and the
+login hand-off — the user typing a password the agent must never hold — needs a
+window on that display. So :class:`BrowserUseRunner` launches **headful**, and
+when the machine has no display it starts one (:func:`ensure_display`, Xvfb)
+rather than quietly going headless. ``COWORK_BROWSER_HEADLESS=1`` is the only
+way back, and it has to be set on purpose.
+
+Note which browser this is. The one the app's live view watches is normally the
+**Playwright MCP server inside the sandbox container**
+(``sandbox/docker/browser-mcp.sh``, headed on Xvfb ``:99``), not this module —
+this module's Chromium runs next to the runtime. Both must be headful for the
+same reason, and the MCP one is opened eagerly by
+:func:`cowork_agent.mcp_client.open_browser_gui` because that server launches no
+browser until its first tool call.
+
 Where this runs, and why
 ------------------------
 
@@ -163,11 +182,13 @@ number that maps to money is ``usage.model_rounds``.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import base64
 import glob
 import json
 import os
 import shutil
+import subprocess
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -207,6 +228,24 @@ MAX_SCREENSHOTS = 3
 CDP_ENV_VAR = "COWORK_BROWSER_CDP_URL"
 #: Point at a specific Chromium binary instead of searching.
 EXECUTABLE_ENV_VAR = "COWORK_BROWSER_EXECUTABLE"
+
+#: Put the browser back in headless mode. **Off by default** (bead cowork-bxvh):
+#: the live view in the app shows the pixels of the display the browser paints
+#: on, and a headless Chromium paints on no display at all — the user gets a
+#: black rectangle and no way to take over a login. A browser nobody can watch
+#: is the exception now, and it has to be asked for by name.
+HEADLESS_ENV_VAR = "COWORK_BROWSER_HEADLESS"
+#: The X display a headful browser paints on. When it is unset or dead,
+#: :func:`ensure_display` starts one rather than falling back to headless.
+DISPLAY_ENV_VAR = "DISPLAY"
+#: Geometry of a display we start ourselves. Same as the sandbox image's
+#: (``sandbox/docker/browser-mcp.sh``), so a window looks the same either way.
+XVFB_SCREEN = "1280x800x24"
+#: Display numbers tried when starting Xvfb. Deliberately far away from ``:0``:
+#: a number in this range is a virtual display, never the user's own session.
+XVFB_DISPLAYS = tuple(range(99, 110))
+#: How long Xvfb gets to accept connections before the next number is tried.
+XVFB_START_TIMEOUT_S = 10.0
 
 #: Names that must never be navigated to, on top of the IP-literal block.
 PROHIBITED_DOMAINS = (
@@ -349,6 +388,126 @@ def configured_cdp_url(cdp_url: str | None = None) -> str | None:
     """An externally hosted browser to attach to, or ``None``."""
     text = (cdp_url or os.environ.get(CDP_ENV_VAR, "")).strip()
     return text or None
+
+
+# -- the display a headful browser needs --------------------------------------
+
+
+_TRUE = {"1", "true", "yes", "on"}
+
+
+def headless_requested(value: str | None = None) -> bool:
+    """Did somebody explicitly ask for a browser nobody can watch?
+
+    The default is ``False``. This is the one switch that turns the GUI off, and
+    it has to be set on purpose — an unset or unreadable value means headful.
+    """
+    raw = value if value is not None else os.environ.get(HEADLESS_ENV_VAR, "")
+    return raw.strip().lower() in _TRUE
+
+
+def display_available(display: str | None = None) -> bool:
+    """Does an X server answer on that display?
+
+    ``xdpyinfo`` is the probe, the same one the sandbox launcher uses. Without
+    it installed a set ``DISPLAY`` is believed: starting a second X server next
+    to a working one is worse than trusting the variable.
+    """
+    name = (display if display is not None else os.environ.get(DISPLAY_ENV_VAR, "")).strip()
+    if not name:
+        return False
+    probe = shutil.which("xdpyinfo")
+    if probe is None:
+        return True
+    try:
+        done = subprocess.run(  # noqa: S603 — argv built by us
+            [probe, "-display", name], capture_output=True, timeout=5
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
+#: The Xvfb this process started, if any. Kept so it is stopped with the process
+#: instead of being orphaned for the lifetime of the machine.
+_xvfb: subprocess.Popen | None = None
+
+
+def _stop_xvfb() -> None:
+    global _xvfb
+    proc, _xvfb = _xvfb, None
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:  # pragma: no cover - a wedged X server
+        proc.kill()
+
+
+def start_xvfb(
+    *, screen: str = XVFB_SCREEN, displays: Sequence[int] = XVFB_DISPLAYS
+) -> str | None:
+    """Start a virtual display and return its name, or ``None``.
+
+    ``None`` means Xvfb is not installed or would not come up — the caller says
+    what to do about it. A display this process already started is reused, and a
+    number that already answers is taken as-is (in the sandbox image that is the
+    display the launcher put Chromium on, which is exactly the one to join).
+    """
+    global _xvfb
+    if _xvfb is not None and _xvfb.poll() is None:
+        return os.environ.get(DISPLAY_ENV_VAR, "").strip() or None
+    binary = shutil.which("Xvfb")
+    if binary is None:
+        return None
+    for number in displays:
+        name = f":{number}"
+        if display_available(name):
+            return name
+        try:
+            proc = subprocess.Popen(  # noqa: S603 — argv built by us
+                [binary, name, "-screen", "0", screen, "-nolisten", "tcp"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:  # pragma: no cover - install-dependent
+            return None
+        deadline = time.monotonic() + XVFB_START_TIMEOUT_S
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                break  # it died: the number is taken, try the next one
+            if display_available(name):
+                _xvfb = proc
+                atexit.register(_stop_xvfb)
+                return name
+            time.sleep(0.1)
+        else:
+            proc.terminate()
+    return None
+
+
+def ensure_display() -> str:
+    """The display a headful browser can paint on, starting one if need be.
+
+    Raises :class:`BrowserUnavailable` when there is no display and none can be
+    started. That is deliberate: the old behaviour — quietly launching a
+    headless browser — is what left the live view black with nothing to explain
+    it (bead cowork-bxvh). A caller who really wants an unwatchable browser sets
+    ``COWORK_BROWSER_HEADLESS=1``.
+    """
+    current = os.environ.get(DISPLAY_ENV_VAR, "").strip()
+    if current and display_available(current):
+        return current
+    started = start_xvfb()
+    if started:
+        os.environ[DISPLAY_ENV_VAR] = started
+        return started
+    raise BrowserUnavailable(
+        "a headful browser needs a display: DISPLAY is unset or dead and Xvfb "
+        f"is not installed. Install xvfb, or set {HEADLESS_ENV_VAR}=1 to accept "
+        "a browser nobody can watch."
+    )
 
 
 # -- cost accounting ----------------------------------------------------------
@@ -862,11 +1021,14 @@ class BrowserUseRunner:
         *,
         cdp_url: str | None = None,
         executable_path: str | None = None,
-        headless: bool = True,
+        headless: bool | None = None,
         user_data_dir: str | None = None,
     ) -> None:
         self._cdp_url = cdp_url
         self._executable_path = executable_path
+        #: ``None`` means "ask the environment at run time", and the environment
+        #: says headful unless ``COWORK_BROWSER_HEADLESS`` says otherwise. A
+        #: caller that passes a bool still wins — tests do.
         self._headless = headless
         self._user_data_dir = user_data_dir
         self._available: bool | None = None
@@ -895,8 +1057,17 @@ class BrowserUseRunner:
         if not cdp_url and not executable:  # pragma: no cover - guarded by check_fn
             raise BrowserUnavailable("no Chromium executable and no CDP endpoint")
 
+        headless = self._headless if self._headless is not None else headless_requested()
+        # A headful browser paints on a display; without one Chromium exits.
+        # Make sure there is one (Xvfb if the machine has no session) instead of
+        # silently going headless, which is what the live view showed as a black
+        # rectangle. With a CDP endpoint the browser is somebody else's process
+        # and our own display is irrelevant.
+        if not headless and not cdp_url:
+            ensure_display()
+
         profile_kwargs: dict[str, Any] = {
-            "headless": self._headless,
+            "headless": headless,
             # Navigation policy. The browser enforces these; see the module
             # docstring for what they do and do not cover.
             "allowed_domains": list(spec.allowed_domains),
@@ -936,19 +1107,22 @@ class BrowserUseRunner:
             max_failures=2,
             step_timeout=STEP_TIMEOUT_S,
         )
+        n_steps: int | None = None
         try:
             history = await asyncio.wait_for(
                 agent.run(max_steps=spec.max_steps), timeout=spec.timeout_s
             )
-        except asyncio.TimeoutError as exc:
-            raise TimeoutError(
-                f"browser task hit the {spec.timeout_s:.0f}s deadline"
-            ) from exc
             # Read before teardown: this is the counter the run loop compares
             # against ``max_steps`` (``while self.state.n_steps <= max_steps``,
             # agent/service.py), so it — and not the history length — is what
             # says whether the budget ran out. It ends one past the budget.
+            # It sat AFTER the ``raise`` below and was therefore unreachable,
+            # which left ``n_steps`` unbound on the success path.
             n_steps = _as_int(getattr(getattr(agent, "state", None), "n_steps", None))
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(
+                f"browser task hit the {spec.timeout_s:.0f}s deadline"
+            ) from exc
         finally:
             try:
                 await agent.close()
@@ -1244,7 +1418,10 @@ __all__ = [
     "CDP_ENV_VAR",
     "DEFAULT_MAX_STEPS",
     "DEFAULT_TASK_TIMEOUT_S",
+    "DISPLAY_ENV_VAR",
     "EXECUTABLE_ENV_VAR",
+    "HEADLESS_ENV_VAR",
+    "XVFB_SCREEN",
     "MAX_HISTORY_ITEMS",
     "MAX_MAX_STEPS",
     "MAX_SCREENSHOTS",
@@ -1262,7 +1439,11 @@ __all__ = [
     "browser_use_available",
     "browser_use_version",
     "configured_cdp_url",
+    "display_available",
     "domain_scope",
+    "ensure_display",
+    "headless_requested",
+    "start_xvfb",
     "extract_json_object",
     "find_chromium",
     "make_browser_task_handler",

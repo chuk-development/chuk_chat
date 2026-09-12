@@ -54,11 +54,12 @@ import asyncio
 import hashlib
 import inspect
 import json
+import os
 import re
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1174,6 +1175,121 @@ def _make_check(manager: "MCPManager", server: str):
         return manager.is_alive(server)
 
     return check
+
+
+# -- forcing the browser GUI open (bead cowork-bxvh) --------------------------
+#
+# ``@playwright/mcp`` starts **no browser** when it starts. It launches Chromium
+# on the first browser tool call and not a moment earlier — verified on a live
+# sandbox container: ``playwright-mcp`` and Xvfb running, x11vnc serving the
+# display, and not a single chrome process on it. The app's live view streams
+# that display, so a session where nobody has called a browser tool yet shows an
+# empty root window: the black rectangle the user reported.
+#
+# The fix is one harmless tool call, made when the server connects, off the
+# critical path. From then on there is a real window on the display for the
+# whole session.
+#
+# Which call: ``browser_tabs {"action": "list"}``. Listing the tabs needs a
+# browser, so the server launches one (measured in a container from
+# ``Dockerfile.browser``: 0 windows on ``:99`` before the call, 2 after), and
+# unlike a navigation it throws nothing away — the next task in the same
+# session finds the page the last one left open, which is the whole point of
+# the persistent profile. ``browser_navigate about:blank`` is the fallback for
+# a server without ``browser_tabs``.
+
+#: The side-effect-free call that launches the browser.
+BROWSER_OPEN_TOOL = "browser_tabs"
+BROWSER_OPEN_ARGS: dict[str, Any] = {"action": "list"}
+#: The fallback, for a Playwright-family server without ``browser_tabs``.
+BROWSER_LAUNCH_TOOL = "browser_navigate"
+#: Where that fallback navigation goes. ``about:blank`` is free and offline.
+BROWSER_HOME_ENV = "COWORK_BROWSER_HOME"
+DEFAULT_BROWSER_HOME = "about:blank"
+#: Set to 0/false to keep the old lazy behaviour (no window until the agent
+#: browses). The default is on: the user asked for the GUI to open every time.
+BROWSER_AUTO_OPEN_ENV = "COWORK_BROWSER_AUTO_OPEN"
+
+_FALSE = {"0", "false", "no", "off"}
+
+
+def browser_home(url: str | None = None) -> str:
+    """The URL the forced first navigation goes to."""
+    text = (url or os.environ.get(BROWSER_HOME_ENV, "")).strip()
+    return text or DEFAULT_BROWSER_HOME
+
+
+def auto_open_enabled(value: str | None = None) -> bool:
+    """Should a connected browser server be opened on sight? Default yes."""
+    raw = value if value is not None else os.environ.get(BROWSER_AUTO_OPEN_ENV, "")
+    return raw.strip().lower() not in _FALSE
+
+
+def open_call(tools: Sequence[str], *, url: str | None = None) -> tuple[str, dict] | None:
+    """The call that launches a browser on a server offering ``tools``.
+
+    ``None`` when the server is not a browser at all, which is every other MCP
+    server in the config and must cost nothing.
+    """
+    names = set(tools)
+    if BROWSER_OPEN_TOOL in names:
+        return BROWSER_OPEN_TOOL, dict(BROWSER_OPEN_ARGS)
+    if BROWSER_LAUNCH_TOOL in names:
+        return BROWSER_LAUNCH_TOOL, {"url": browser_home(url)}
+    return None
+
+
+def browser_servers(manager: MCPManager | None) -> list[str]:
+    """Names of the connected servers that can launch a browser."""
+    if manager is None:
+        return []
+    names: list[str] = []
+    for name, connection in manager.connections.items():
+        if not connection.alive():
+            continue
+        if open_call([info.name for info in connection.tools]) is not None:
+            names.append(name)
+    return names
+
+
+def open_browser_gui(manager: MCPManager | None, *, url: str | None = None) -> list[str]:
+    """Make every connected browser server put a window on its display.
+
+    Blocking, and never raises: :meth:`MCPManager.call` reports a failure as a
+    result, and a browser that refuses to open must not take the run down with
+    it. Returns the servers that answered ``ok``.
+    """
+    opened: list[str] = []
+    for name in browser_servers(manager):
+        connection = manager.connections[name]
+        call = open_call([info.name for info in connection.tools], url=url)
+        if call is None:  # pragma: no cover - browser_servers just said it has one
+            continue
+        tool, arguments = call
+        if manager.call(name, tool, arguments).get("ok"):
+            opened.append(name)
+    return opened
+
+
+def open_browser_gui_async(
+    manager: MCPManager | None, *, url: str | None = None
+) -> threading.Thread | None:
+    """:func:`open_browser_gui` on a daemon thread, or ``None`` when there is
+    nothing to open.
+
+    Off the critical path on purpose: launching Chromium costs a second or two
+    and the first model round must not wait for it. The window appears while the
+    agent is still reading its prompt.
+    """
+    if not auto_open_enabled() or not browser_servers(manager):
+        return None
+    thread = threading.Thread(
+        target=lambda: open_browser_gui(manager, url=url),
+        name="browser-gui-open",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 def register_mcp_tools(

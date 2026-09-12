@@ -30,7 +30,7 @@ from .chat_documents import DocumentStore, register_document_tool
 from .files_out import FileSink
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
-from .mcp_client import MCPManager, register_mcp_tools
+from .mcp_client import MCPManager, open_browser_gui_async, register_mcp_tools
 from .media import WorkspaceMount
 from .memory import MemoryStore, register_memory_tool
 from .model import ModelClient, ModelResponse
@@ -497,6 +497,14 @@ def build_runtime(
         manager = MCPManager.from_workspace(workspace, token_provider=stash.get)
     if manager is not None:
         register_mcp_tools(registry, manager)
+        # Open the browser's GUI now, not on the first tool call (bead
+        # cowork-bxvh). The Playwright MCP server in the sandbox launches
+        # Chromium lazily, so until the agent browses, the display the app's
+        # live view streams is empty — a black rectangle with nothing to
+        # explain it. One ``browser_navigate about:blank`` on a daemon thread
+        # puts a real window there for the rest of the session and costs the
+        # first model round nothing. No browser server, no thread.
+        open_browser_gui_async(manager)
         # One tool, for the servers that carry a §10 token EXCHANGE
         # (``oauth.token_url`` + ``client_id``: the bridge form
         # ``config_token_exchange`` reads). A device-forwarded oauth block
