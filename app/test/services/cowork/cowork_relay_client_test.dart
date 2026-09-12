@@ -1333,6 +1333,7 @@ void main() {
       'type': 'browser_view',
       'status': 'error',
       'message': 'no browser open yet',
+      'reason': 'no_display',
     });
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -1341,6 +1342,10 @@ void main() {
     expect(views.last.message, 'no browser open yet');
     expect(views.first.vncAvailable, isTrue);
     expect(views.last.vncAvailable, isFalse);
+    // The machine-readable half of the message (bead cowork-qp5i); a host too
+    // old to send it leaves it empty rather than absent.
+    expect(views.last.reason, 'no_display');
+    expect(views.first.reason, isEmpty);
 
     final data = events.whereType<CoworkRelayBrowserData>().single;
     expect(data.bytes, <int>[0, 1, 82, 70, 66, 255]);
