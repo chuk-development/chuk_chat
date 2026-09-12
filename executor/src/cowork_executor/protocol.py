@@ -229,6 +229,7 @@ def run_state_payload(
     started_at: float | None = None,
     prompt: str | None = None,
     browser_open: bool | None = None,
+    vnc_available: bool = False,
 ) -> dict[str, Any]:
     """Build the ``run_state`` event that opens every replay response (see
     ``docs/WIRE_CONTRACT.md``). ``state`` is ``running`` when a run for the
@@ -239,6 +240,7 @@ def run_state_payload(
         "type": "run_state",
         "session_key": session_key,
         "state": state,
+        "vnc_available": vnc_available,
     }
     if browser_open is not None:
         payload["browser_open"] = bool(browser_open)
@@ -658,6 +660,31 @@ def agent_status_payload(
     return body
 
 
+def mcp_tools_payload(
+    *,
+    session_key: str,
+    servers: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build an ``mcp_tools`` frame (docs/WIRE_CONTRACT.md, inbound to the app):
+    what each forwarded connector actually answered with when the host dialled
+    it.
+
+    The app never connects to an MCP server itself — the host does, at task time
+    — so without this frame the connector list can only say "0 tools" about a
+    server that is working perfectly. One frame carries every server of the
+    session, because they are discovered together.
+
+    Each entry is ``{id?, name, connected, tools: [{name, description}], error?}``.
+    ``id`` is the device's own connector id, echoed when the device sent one, so
+    the app can match without guessing on the name.
+    """
+    return {
+        "type": "mcp_tools",
+        "session_key": session_key,
+        "servers": list(servers),
+    }
+
+
 def mcp_credentials_payload(
     *,
     session_key: str,
@@ -808,7 +835,8 @@ def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> 
 
 
 def browser_view_payload(
-    status: str, *, message: str = "", password: str | None = None
+    status: str, *, message: str = "", password: str | None = None,
+    vnc_available: bool = False,
 ) -> dict[str, Any]:
     """Executor -> app status for the live browser view.
 
@@ -825,7 +853,10 @@ def browser_view_payload(
     ever sees it; inside the sandbox the secret sits in a root-only file, so the
     agent's own code cannot read the screen or inject input (§9.1 hardening).
     """
-    payload: dict[str, Any] = {"type": "browser_view", "status": status, "message": message}
+    payload: dict[str, Any] = {
+        "type": "browser_view", "status": status, "message": message,
+        "vnc_available": vnc_available,
+    }
     if password is not None:
         payload["password"] = password
     return payload

@@ -53,6 +53,7 @@ def test_browser_view_payload_shape():
         "type": "browser_view",
         "status": "started",
         "message": "",
+        "vnc_available": False,
     }
     assert browser_view_payload("error", message="nope")["message"] == "nope"
 

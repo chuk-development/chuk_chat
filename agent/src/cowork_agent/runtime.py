@@ -614,7 +614,7 @@ def build_runtime(
         # the background. The model still has memory_search / memory_add for
         # anything explicit.
         recall_provider=(
-            memory.recall_messages if memory is not None and memory.automatic else None
+            memory.recall_messages_bounded if memory is not None and memory.automatic else None
         ),
         turn_observer=(
             (

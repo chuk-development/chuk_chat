@@ -32,8 +32,9 @@ def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
     """The repository's ``skills/`` layout IS the built-in/workspace split.
 
     Built-in means the skill documents CoWork's own machinery: schedules,
-    the secrets vault, the sandbox terminal, the workspace itself. That set is
-    closed and is pinned here, so adding a skill to it is a deliberate act.
+    the secrets vault, the sandbox terminal, the workspace itself, and the
+    ``<chart>`` block the app renders. That set is closed and is pinned here,
+    so adding a skill to it is a deliberate act.
     ``youtube-transcript`` only ships in the box — it is an ordinary workspace
     skill the coworker owns, and it must never drift back into the built-ins.
     """
@@ -42,7 +43,13 @@ def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
     sources = seed_sources(src)
 
     builtin = {name for name, source in sources.items() if source == SOURCE_BUILTIN}
-    assert builtin == {"automations", "secrets", "terminal", "workspace"}
+    assert builtin == {
+        "automations",
+        "chart-authoring",
+        "secrets",
+        "terminal",
+        "workspace",
+    }
     assert sources["youtube-transcript"] == "workspace"
 
     # Nothing is left lying directly under skills/: every seed skill sits in a

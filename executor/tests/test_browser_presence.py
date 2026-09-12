@@ -10,6 +10,8 @@ seam and the replay header are exercised directly.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from cowork_agent import MockModelClient, StateStore
 from cowork_sandbox import LocalEnvironment
 
@@ -53,6 +55,35 @@ def test_run_state_payload_carries_browser_open_only_when_given():
     assert "browser_open" not in run_state_payload("s", "idle")
     assert run_state_payload("s", "idle", browser_open=False)["browser_open"] is False
     assert run_state_payload("s", "running", run_id="r", browser_open=True)["browser_open"] is True
+    assert run_state_payload("s", "running", browser_open=True)["vnc_available"] is False
+    assert run_state_payload("s", "running", vnc_available=True)["vnc_available"] is True
+
+
+def test_vnc_capability_requires_existing_sandbox_browser(tmp_path, monkeypatch):
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, str(tmp_path / "state.db"), channel, executor_ep)
+    events = _capture(executor)
+    executor._browser_open = True
+    executor._browser_mcp = True
+    assert executor._vnc_available("t") is False
+    sandbox = SimpleNamespace(_cli=SimpleNamespace(binary="docker"), container_id="live")
+    monkeypatch.setattr(executor, "_environment_for", lambda key: sandbox)
+    monkeypatch.delenv(protocol.BROWSER_TARGET_ENV, raising=False)
+    assert executor._vnc_available("t") is True
+    executor._browser_open = False
+    executor._on_tool_event("r", "t", _tool("mcp__playwright__browser_navigate"))
+    assert events[0][1]["vnc_available"] is True
+    monkeypatch.setenv(protocol.BROWSER_TARGET_ENV, "user_browser")
+    assert executor._vnc_available("t") is False
+    store = StateStore(str(tmp_path / "state.db"))
+    try:
+        assert executor._run_state_for(store, "t")["vnc_available"] is False
+    finally:
+        store.close()
+    monkeypatch.delenv(protocol.BROWSER_TARGET_ENV, raising=False)
+    sandbox.container_id = None
+    assert executor._vnc_available("t") is False
 
 
 # -- executor ----------------------------------------------------------------
@@ -192,3 +223,73 @@ def test_a_missing_extension_server_is_reported_as_none(monkeypatch, tmp_path):
     monkeypatch.setenv(protocol.EXTENSION_MCP_ENV, str(tmp_path / "nope.py"))
     assert protocol.extension_mcp_script() is None
     assert protocol.extension_mcp_entry() is None
+
+
+# -- the window probe (bead cowork-tf1u) --------------------------------------
+
+
+def _browser_executor(tmp_path, monkeypatch):
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, str(tmp_path / "state.db"), channel, executor_ep)
+    executor._browser_open = True
+    executor._browser_mcp = True
+    sandbox = SimpleNamespace(_cli=SimpleNamespace(binary="docker"), container_id="c1")
+    monkeypatch.setattr(executor, "_environment_for", lambda key: sandbox)
+    monkeypatch.delenv(protocol.BROWSER_TARGET_ENV, raising=False)
+    return executor
+
+
+def _probe(monkeypatch, *, code=0, out=""):
+    calls: list[list[str]] = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=code, stdout=out, stderr="")
+
+    monkeypatch.setattr("cowork_executor.executor.subprocess.run", run)
+    return calls
+
+
+def test_a_display_with_no_browser_is_not_a_screen(tmp_path, monkeypatch):
+    # The tool calls said the browser is open, but the MCP server took its
+    # Chromium down with its own session. Offering the screen anyway is what
+    # opened a black page.
+    executor = _browser_executor(tmp_path, monkeypatch)
+    _probe(monkeypatch, code=0, out="0\n")
+    assert executor._vnc_available("t") is False
+
+
+def test_a_browser_window_on_the_display_is_a_screen(tmp_path, monkeypatch):
+    executor = _browser_executor(tmp_path, monkeypatch)
+    _probe(monkeypatch, code=0, out="2\n")
+    assert executor._vnc_available("t") is True
+
+
+def test_a_probe_that_cannot_run_does_not_take_the_screen_away(tmp_path, monkeypatch):
+    executor = _browser_executor(tmp_path, monkeypatch)
+    _probe(monkeypatch, code=125, out="")
+    assert executor._vnc_available("t") is True
+    executor._browser_window_probe = None
+
+    def boom(argv, **kwargs):
+        raise OSError("docker gone")
+
+    monkeypatch.setattr("cowork_executor.executor.subprocess.run", boom)
+    assert executor._vnc_available("t") is True
+
+
+def test_the_probe_runs_once_per_ttl(tmp_path, monkeypatch):
+    executor = _browser_executor(tmp_path, monkeypatch)
+    calls = _probe(monkeypatch, code=0, out="1\n")
+    assert executor._vnc_available("t") is True
+    assert executor._vnc_available("t") is True
+    assert len(calls) == 1
+
+
+def test_a_state_change_drops_the_cached_probe(tmp_path, monkeypatch):
+    executor = _browser_executor(tmp_path, monkeypatch)
+    _probe(monkeypatch, code=0, out="1\n")
+    assert executor._vnc_available("t") is True
+    executor._set_browser_open(False, "", "t")
+    assert executor._browser_window_probe is None
