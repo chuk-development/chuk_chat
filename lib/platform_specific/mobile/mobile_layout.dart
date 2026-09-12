@@ -32,15 +32,24 @@ class MobileLayout {
   /// Diameter of the round chips in the floating bars.
   static const double chipDiameter = minTouchTarget;
 
-  /// Height at normal text size: 8 padding + 54.4 contact pill + 10 padding.
+  /// The height of one control in a header row: an icon button, the contact
+  /// pill, the roster's All/Unread switch, the search field. One number,
+  /// because a row whose controls do not agree on their height reads as
+  /// controls borrowed from three screens.
+  static const double controlHeight = 52;
+
+  /// Height at normal text size: 8 padding + the contact pill + 10 padding.
   /// [chromeInset] also accounts for accessible larger text sizes.
-  static const double barHeight = 8 + 54.4 + 10;
+  static const double barHeight = 8 + controlHeight + 10;
 
   /// Grow the contact bar with accessibility text sizing rather than clip it.
+  /// At normal size the two text lines and the border come to just under
+  /// [controlHeight], so the pill takes exactly the height of the buttons
+  /// beside it; larger text pushes past that and the whole row grows.
   static double headerContentHeight(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
-    return (scaler.scale(16) * 1.5 + scaler.scale(11) * 1.45 + 12 + 2.4).clamp(
-      54.4,
+    return (scaler.scale(16) * 1.5 + scaler.scale(11) * 1.45 + 8 + 2.4).clamp(
+      controlHeight,
       double.infinity,
     );
   }

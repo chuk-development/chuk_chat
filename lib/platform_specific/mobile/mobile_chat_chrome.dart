@@ -85,6 +85,7 @@ class MobileChatChrome extends StatelessWidget {
                 ExpressiveIconButton(
                   icon: Icons.arrow_back_rounded,
                   onTap: onBack,
+                  size: MobileLayout.controlHeight,
                   color: scheme.surfaceContainerHighest,
                   tooltip: 'Agents',
                   semanticsId: 'mobile_chat_back',
@@ -104,6 +105,7 @@ class MobileChatChrome extends StatelessWidget {
                   const SizedBox(width: 8),
                   ExpressiveIconButton(
                     icon: Icons.folder_open_rounded,
+                    size: MobileLayout.controlHeight,
                     color: scheme.surfaceContainerHighest,
                     onColor: scheme.onSurface,
                     tooltip: 'Shared files',
@@ -114,6 +116,7 @@ class MobileChatChrome extends StatelessWidget {
                 const SizedBox(width: 8),
                 ExpressiveIconButton(
                   icon: Icons.desktop_windows_rounded,
+                  size: MobileLayout.controlHeight,
                   color: browserAvailable
                       ? scheme.primaryContainer
                       : scheme.surfaceContainerHighest,
@@ -132,6 +135,7 @@ class MobileChatChrome extends StatelessWidget {
                   ExpressiveIconButton(
                     icon: Icons.more_horiz_rounded,
                     onTap: onMore,
+                    size: MobileLayout.controlHeight,
                     color: scheme.surface,
                     tooltip: 'More',
                     semanticsId: 'mobile_chat_more',
@@ -215,10 +219,15 @@ class _AgentPill extends StatelessWidget {
           // Paint the reference's translucent surface AND border explicitly.
           child: Container(
             key: const ValueKey('mobile_contact_surface'),
-            // 9 on the left: the capsule's end is a half circle, so a face set
-            // at 6 read as pressed against the curve while it had 11 of air
-            // above and below it.
-            padding: const EdgeInsets.fromLTRB(9, 6, 14, 6),
+            // The pill takes the row's height rather than growing one out of
+            // its own padding: it stood 6 taller than the buttons beside it,
+            // and a capsule that overhangs its neighbours is the first thing
+            // the eye picks out of a header. Its two lines are centred in
+            // whatever height the row has. 9 on the left: the capsule's end is
+            // a half circle, so a face set at 6 read as pressed against the
+            // curve.
+            height: MobileLayout.headerContentHeight(context),
+            padding: const EdgeInsets.fromLTRB(9, 0, 14, 0),
             decoration: BoxDecoration(
               color: scheme.surface.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(30),
@@ -243,6 +252,7 @@ class _AgentPill extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
