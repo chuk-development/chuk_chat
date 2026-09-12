@@ -7,6 +7,7 @@
 // off-thread search and a bottom sheet instead of a right-click menu.
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -562,87 +563,127 @@ class _SidebarMobileState extends State<SidebarMobile> {
     // status indicators, not flush against them.
     final EdgeInsets viewPadding = MediaQuery.paddingOf(context);
 
+    // Both bars float over the list instead of boxing it in: the chats
+    // scroll underneath them and stay readable through the blur, so the
+    // panel does not lose two solid bands of its height to chrome.
+    const double topChromeHeight = 54.0;
+    const double bottomChromeHeight = 54.0;
+    final double topInset = viewPadding.top + 8.0;
+    final double bottomInset = 10.0 + viewPadding.bottom;
+
     return Container(
       color: sidebarBg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          SizedBox(height: viewPadding.top + 8.0),
-
-          // The top of the sidebar names the app, not the person using it,
-          // and carries the one action that starts something: a new chat.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(kSbBlockInset + 8, 2, 8, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: BrandWordmark(color: theme.resolvedIconColor),
-                  ),
+          Positioned.fill(
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: <Widget>[
+                SliverToBoxAdapter(
+                  child: SizedBox(height: topInset + topChromeHeight),
                 ),
-                if (widget.onCollapseTapped != null)
-                  SbRoundAction(
-                    icon: Icons.keyboard_double_arrow_left_rounded,
-                    tooltip: AppLocalizations.of(context)?.hideSidebar ??
-                        'Hide sidebar',
-                    diameter: 38,
-                    iconSize: 20,
-                    onTap: widget.onCollapseTapped!,
-                  ),
-                const SizedBox(width: 6),
-                SbRoundAction(
-                  icon: Icons.edit_square,
-                  tooltip:
-                      AppLocalizations.of(context)?.newChat ?? 'New chat',
-                  diameter: 38,
-                  iconSize: 18,
-                  fill: accentColor,
-                  onTap: widget.onNewChatTapped,
+                ..._buildSlivers(accentColor),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: bottomChromeHeight + bottomInset),
                 ),
               ],
             ),
           ),
 
-          Expanded(
-            child: CustomScrollView(
-              controller: _scrollController,
-              slivers: _buildSlivers(accentColor),
+          // The top of the sidebar names the app, not the person using it,
+          // and carries the one action that starts something: a new chat.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _SbFloatingChrome(
+              tint: sidebarBg,
+              fadeFromTop: true,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(kSbBlockInset + 8, topInset, 8, 8),
+                child: SizedBox(
+                  height: topChromeHeight - 8,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: BrandWordmark(color: theme.resolvedIconColor),
+                        ),
+                      ),
+                      if (widget.onCollapseTapped != null)
+                        SbRoundAction(
+                          icon: Icons.keyboard_double_arrow_left_rounded,
+                          tooltip: AppLocalizations.of(context)?.hideSidebar ??
+                              'Hide sidebar',
+                          diameter: 38,
+                          iconSize: 20,
+                          onTap: widget.onCollapseTapped!,
+                        ),
+                      const SizedBox(width: 6),
+                      SbRoundAction(
+                        icon: Icons.edit_square,
+                        tooltip:
+                            AppLocalizations.of(context)?.newChat ?? 'New chat',
+                        diameter: 38,
+                        iconSize: 18,
+                        fill: accentColor,
+                        onTap: widget.onNewChatTapped,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
 
-          const UpdateBanner(),
-
-          KeyedSubtree(
-            key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
-            child: Padding(
-              // The home indicator sits below the bar, so the bar keeps its
-              // own 10 px and adds whatever the device reserves.
-              padding: EdgeInsets.fromLTRB(
-                kSbBlockInset,
-                6,
-                kSbBlockInset,
-                10 + viewPadding.bottom,
-              ),
-              // Account, balance and settings in one quiet card. Search lives
-              // at the top of the list, where it belongs; a second search
-              // field down here was only a duplicate of it.
-              child: SbAccountLine(
-                name: _displayNameFor(_profile),
-                onTap: widget.onSettingsTapped,
-                onSettings: widget.onSettingsTapped,
-                balance: BalanceBadge(
-                  textStyle: TextStyle(
-                    color: accentColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _SbFloatingChrome(
+              tint: sidebarBg,
+              fadeFromTop: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const UpdateBanner(),
+                  KeyedSubtree(
+                    key: TourKeyRegistry.instance
+                        .keyFor(TourSlots.settingsEntry),
+                    child: Padding(
+                      // The home indicator sits below the bar, so the bar
+                      // keeps its own 6 px and adds whatever the device
+                      // reserves.
+                      padding: EdgeInsets.fromLTRB(
+                        kSbBlockInset,
+                        6,
+                        kSbBlockInset,
+                        bottomInset,
+                      ),
+                      // Account, balance and settings in one quiet card.
+                      // Search lives at the top of the list, where it
+                      // belongs; a second field down here was a duplicate.
+                      child: SbAccountLine(
+                        name: _displayNameFor(_profile),
+                        onTap: widget.onSettingsTapped,
+                        onSettings: widget.onSettingsTapped,
+                        balance: BalanceBadge(
+                          textStyle: TextStyle(
+                            color: accentColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          placeholderStyle: TextStyle(
+                            color: theme.m3.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
                   ),
-                  placeholderStyle: TextStyle(
-                    color: theme.m3.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
+                ],
               ),
             ),
           ),
@@ -764,6 +805,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
       // the panel was only a duplicate of this one.
       if (_searchActive)
         SbCard(
+          // `selected` is what paints the accent outline, and it follows the
+          // card's own corners — the field keeps the ring it used to have,
+          // in the shape of the row it replaced.
+          selected: true,
           padding: EdgeInsets.zero,
           minHeight: kSbNavCardHeight,
           child: SbSearchField(
@@ -1074,4 +1119,45 @@ List<String> _filterChatsIsolate(Map<String, dynamic> params) {
   }
 
   return matches;
+}
+
+/// A bar that floats over the scrolling list: a blur, a partial tint, and a
+/// gradient that fades to nothing on the list side, so rows slide out of it
+/// instead of hitting an edge.
+class _SbFloatingChrome extends StatelessWidget {
+  const _SbFloatingChrome({
+    required this.child,
+    required this.tint,
+    required this.fadeFromTop,
+  });
+
+  final Widget child;
+  final Color tint;
+
+  /// True for the top bar, where the solid end is at the top.
+  final bool fadeFromTop;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: fadeFromTop ? Alignment.topCenter : Alignment.bottomCenter,
+              end: fadeFromTop ? Alignment.bottomCenter : Alignment.topCenter,
+              colors: [
+                tint.withValues(alpha: 0.86),
+                tint.withValues(alpha: 0.70),
+                tint.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 0.62, 1.0],
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
