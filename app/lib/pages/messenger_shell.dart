@@ -425,7 +425,13 @@ class _MessengerShellState extends State<MessengerShell>
     if (controller == null) return;
     _browserViewVisible = true;
     try {
-      await BrowserViewPage.open(context, controller);
+      // Which box to look in: the thread on screen. The executor guesses
+      // without it (bead cowork-5eo6).
+      await BrowserViewPage.open(
+        context,
+        controller,
+        sessionKey: _selectedThreadKey,
+      );
     } finally {
       _browserViewVisible = false;
     }

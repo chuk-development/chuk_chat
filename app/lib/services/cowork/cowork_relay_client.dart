@@ -1276,7 +1276,11 @@ abstract interface class CoworkRelayController {
   /// sealed channel (§9.1), so the user can watch and take control (e.g. to log
   /// in). Status comes back as [CoworkRelayBrowserView]; pixels as
   /// [CoworkRelayBrowserData].
-  Future<void> startBrowserView();
+  /// Opens the screen view. [sessionKey] names the thread whose box to look
+  /// in: with one container per coworker, a start without it makes the
+  /// executor guess, and it guesses the primary environment — almost never
+  /// the box the browser is in (bead cowork-5eo6).
+  Future<void> startBrowserView({String? sessionKey});
 
   /// Ask the executor to stop the live browser view and tear the stream down.
   Future<void> stopBrowserView();
@@ -2206,8 +2210,12 @@ class CoworkRelayClient
   }
 
   @override
-  Future<void> startBrowserView() =>
-      _sendFramePayload(<String, dynamic>{'type': 'browser_start'});
+  Future<void> startBrowserView({String? sessionKey}) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'browser_start',
+        if (sessionKey != null && sessionKey.isNotEmpty)
+          'session_key': sessionKey,
+      });
 
   @override
   Future<void> stopBrowserView() =>
