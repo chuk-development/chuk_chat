@@ -56,8 +56,13 @@ import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/services/profile_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
+import 'package:cowork/widgets/coworker_name_dialog.dart';
 import 'package:cowork/widgets/credit_display.dart';
 import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
+
+// The name dialog moved to its own file when it was rebuilt in the app's
+// language; it is exported here so every caller keeps one import.
+export 'package:cowork/widgets/coworker_name_dialog.dart';
 
 /// The brand row's sizing knob.
 ///
@@ -854,83 +859,4 @@ String lastActivityLabel(DateTime? when, {required DateTime now}) {
   if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
   if (delta.inHours < 24) return '${delta.inHours}h ago';
   return '${delta.inDays}d ago';
-}
-
-/// chuk's rename dialog (`sidebar_desktop.dart` `_renameChatDialog`), shared
-/// by Rename and New coworker so both inputs are the same chuk component:
-/// an `AlertDialog`, one autofocused `TextField` with label and hint, Cancel
-/// and a submit button. Returns the trimmed text, or null on Cancel.
-///
-/// The controller belongs to the dialog widget, not to the caller: chuk
-/// disposes it right after `showDialog` returns, which trips "used after
-/// dispose" while the route is still animating out under a widget test.
-Future<String?> showCoworkerNameDialog(
-  BuildContext context, {
-  required String title,
-  required String submitLabel,
-  String initialName = '',
-}) => showDialog<String>(
-  context: context,
-  builder: (_) => _CoworkerNameDialog(
-    title: title,
-    submitLabel: submitLabel,
-    initialName: initialName,
-  ),
-);
-
-class _CoworkerNameDialog extends StatefulWidget {
-  const _CoworkerNameDialog({
-    required this.title,
-    required this.submitLabel,
-    required this.initialName,
-  });
-
-  final String title;
-  final String submitLabel;
-  final String initialName;
-
-  @override
-  State<_CoworkerNameDialog> createState() => _CoworkerNameDialogState();
-}
-
-class _CoworkerNameDialogState extends State<_CoworkerNameDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialName,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Agent name',
-          hintText: 'Enter a name',
-        ),
-        onSubmitted: (value) {
-          Navigator.of(context).pop(value.trim());
-        },
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop(_controller.text.trim());
-          },
-          child: Text(widget.submitLabel),
-        ),
-      ],
-    );
-  }
 }

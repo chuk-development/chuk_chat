@@ -12,6 +12,7 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart'
 import 'package:cowork/services/cowork/schedule_spec.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
 
 void main() {
@@ -348,19 +349,19 @@ void main() {
       await tester.tap(find.text('Rename'));
       await tester.pumpAndSettle();
 
-      // chuk's `_renameChatDialog` shape: AlertDialog, one TextField
-      // pre-filled with the current name, Cancel + Rename.
-      expect(find.byType(AlertDialog), findsOneWidget);
+      // The app's own name dialog: one filled TextField pre-filled with the
+      // current name, a quiet Cancel and a filled Rename.
+      expect(find.byType(CoworkerNameDialog), findsOneWidget);
       final field = find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byType(CoworkerNameDialog),
         matching: find.byType(TextField),
       );
       expect(tester.widget<TextField>(field).controller!.text, host.name);
       await tester.enterText(field, '  Laptop Bot  ');
-      await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+      await tester.tap(find.widgetWithText(ExpressiveButton, 'Rename'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(CoworkerNameDialog), findsNothing);
       expect(renamed, [(host.id, 'Laptop Bot')]);
       // The view reports; the shell persists. The source is untouched here.
       expect(source.byId(host.id)!.name, host.name);
@@ -400,13 +401,13 @@ void main() {
       }
 
       final field = find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byType(CoworkerNameDialog),
         matching: find.byType(TextField),
       );
 
       // Unchanged: submit with the same name.
       await openDialog();
-      await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+      await tester.tap(find.widgetWithText(ExpressiveButton, 'Rename'));
       await tester.pumpAndSettle();
       // Empty.
       await openDialog();
@@ -416,11 +417,11 @@ void main() {
       // Cancel.
       await openDialog();
       await tester.enterText(field, 'Other');
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(ExpressiveButton, 'Cancel'));
       await tester.pumpAndSettle();
 
       expect(renamed, isEmpty);
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(CoworkerNameDialog), findsNothing);
     });
 
     testWidgets('without onRenameAgent the menu has no Rename item', (

@@ -3,8 +3,13 @@
     <!-- "Answer ready" notifications (local toast + FCM push), Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Pairing: the phone scans the QR code the computer prints. The
+         camera is never used for anything else, and a refusal falls back
+         to typing the code. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
-        android:label="Chuk Chat"
+        android:label="Temporär-Cowork"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

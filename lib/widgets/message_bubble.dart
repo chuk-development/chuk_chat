@@ -314,8 +314,11 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble> {
   /// Files this answer produced. They are pulled out of the bubble while the
   /// body is built and drawn under it as messages of their own, so a document
-  /// arrives the way a messenger delivers one.
-  final List<Widget> _artifactMessages = <Widget>[];
+  /// arrives the way a messenger delivers one. Payloads, not widgets: the
+  /// block only learns its corner radii once the whole stack is known, and
+  /// that is after the body is built.
+  final List<SandboxArtifactPayload> _artifactPayloads =
+      <SandboxArtifactPayload>[];
 
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;

@@ -125,8 +125,37 @@ emptied.
 
 ## Allowed divergences
 
-**Widget layer: none.** Every file under `platform_specific/chat/`, `widgets/`,
-`models/` and `utils/` is byte-identical to upstream modulo the package prefix.
+**Widget layer: NO LONGER NONE. Read this before you run the importer.**
+
+This section used to say every file under `platform_specific/chat/`,
+`widgets/`, `models/` and `utils/` was byte-identical to upstream modulo the
+package prefix. That stopped being true. 41 imported files have diverged, and
+eight of them are rendering widgets carrying roughly two thousand lines of
+CoWork work — none of it upstreamed, all of it visible to the user:
+
+* `widgets/markdown_message.dart` — inline code keeps its monospace and its chip
+  inside headings and quotes (upstream loses both, because a theme style with
+  `inherit: false` swallows the merge); heading sizes are monotonic and follow
+  the chat font size (upstream renders `####` SMALLER than `#####`); list
+  markers take the bubble's colour; links are underlined in the accent and keep
+  the surrounding size and weight.
+* `widgets/chuk_table.dart` — a link in a cell is underlined and opens; a table
+  wider than 560 px stacks into one card per row with every field labelled.
+  Upstream has neither, and the coworker puts its sources in tables.
+* `widgets/message_bubble/*` — the bubble is decided by its rendered body, so a
+  turn that is only internal work does not leave a blank bar; `rich_blocks.dart`
+  fixes a trailing-comma parser that upstream leaves writing a literal `$1` into
+  the JSON and rendering an error card.
+* `widgets/chart_widget.dart` — a tolerant parser with a provenance footer;
+  upstream throws the whole message away on a colour it cannot read.
+* Touch targets raised to 48 dp across the imported widgets, and the whole
+  `ui/expressive/` motion vocabulary, which upstream does not have at all.
+
+**Consequence:** `scripts/import_chat_ui.sh` would overwrite all of it in
+silence. Before any re-sync, diff the manifest's widget entries against
+upstream, decide file by file, and move anything worth keeping out of the
+manifest first. Bead cowork-r6jy tracks pruning the manifest so the importer is
+safe to run again.
 
 Service layer, deliberate and recorded:
 
@@ -135,7 +164,10 @@ Service layer, deliberate and recorded:
    imported; no imported file reads `session.enforcer`.
 2. `platform_config.dart` carries the appended CoWork-only flag block described
    above.
-3. `services/chat_storage_service.dart` (bead cowork-sha): `saveChat` and
+3. `services/streaming_manager_io.dart` — carries a `FinalContentEvent` branch
+   upstream does not have. An earlier version of this document claimed the file
+   was untouched; it is not.
+4. `services/chat_storage_service.dart` (bead cowork-sha): `saveChat` and
    `updateChat` delegate to `CoworkChatStore.replaceThread` (memory → SQLite →
    encrypted upsert on `cowork_chats`, best-effort) instead of upstream's
    INSERT/UPDATE, which refuse to run without a signed-in user and an unlocked
