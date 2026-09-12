@@ -36,6 +36,7 @@ from .protocol import (
 from .pairing_uri import pairing_uri, qr_lines, qr_text
 from .relay import LocalRelay
 from .serve import TaskServer
+from .room_agents import RoomAgentPool
 from .room_service import RoomService, dispatch_room_frame
 from .transport import LocalRelayTransport, PartyLink, PartyTransport
 
@@ -54,6 +55,7 @@ __all__ = [
     "qr_lines",
     "qr_text",
     "relay_ws_url",
+    "RoomAgentPool",
     "RoomService",
     "dispatch_room_frame",
     "HOST_DEVICE_ID",

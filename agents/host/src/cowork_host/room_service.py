@@ -24,6 +24,7 @@ from cowork_manager import (
     RoomCaps,
     RoomDriver,
     RoomError,
+    RoomMember,
     RoomStore,
     RoomTranscriptStore,
     RoomTurn,
@@ -39,13 +40,25 @@ from cowork_executor import (
 #: host binds this to seal-and-send; a test captures the dicts.
 RoomEmit = Callable[[dict], None]
 
+#: Brings a room's members online just before it runs: the host binds this to its
+#: :class:`~cowork_host.room_agents.RoomAgentPool`, which starts one executor per
+#: member and registers its sender in the binding. It is a seam, and an optional
+#: one — without it the service drives whatever the binding already holds, which
+#: is what every unit test wants. Members are started here rather than at startup
+#: so a room nobody opens costs nothing.
+RoomMembersReady = Callable[[str, "tuple[RoomMember, ...]"], None]
+
 
 class RoomService:
     """Runs ``room_task`` frames against the host's rooms.
 
     ``binding`` carries the per-member task senders (registered as members'
-    executors connect). ``caps`` overrides the stored per-room caps for every run
-    — leave it ``None`` to honour each room's own caps.
+    executors connect). ``members_ready`` is what registers them: it is called
+    with the room and its members just before an exchange runs, so the host can
+    start a member's executor on demand instead of holding one open for every
+    coworker that might one day be in a room. ``caps`` overrides the stored
+    per-room caps for every run — leave it ``None`` to honour each room's own
+    caps.
     """
 
     def __init__(
@@ -56,12 +69,14 @@ class RoomService:
         emit: RoomEmit,
         caps: RoomCaps | None = None,
         transcript: RoomTranscriptStore | None = None,
+        members_ready: RoomMembersReady | None = None,
     ) -> None:
         self._rooms = room_store
         self._binding = binding
         self._emit = emit
         self._caps = caps
         self._transcript = transcript
+        self._members_ready = members_ready
 
     def handle_room_create(
         self, room_id: str, name: str, members: list[dict]
@@ -165,6 +180,15 @@ class RoomService:
                 )
             )
             return
+
+        # Bring the members online before the first turn is routed. A member
+        # whose runtime cannot be started stays unregistered and the room shows
+        # its offline placeholder, so a failure here never costs the exchange.
+        if self._members_ready is not None:
+            try:
+                self._members_ready(room_id, tuple(room.members))
+            except Exception:  # noqa: BLE001 — an offline member, not a dead room
+                pass
 
         # A room is a persistent thread, but each user message starts a fresh
         # exchange — clear the last one so the stored history is the current

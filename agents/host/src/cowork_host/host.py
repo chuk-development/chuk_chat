@@ -66,6 +66,7 @@ from .cloud_party import CloudHostParty
 from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .transport import LocalRelayTransport
+from .room_agents import RoomAgentPool
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
 from .secrets_key import secrets_at_rest_key
@@ -198,6 +199,14 @@ class LocalHost:
         self._room_store_path = str(self._workspace / "rooms.db")
         self._room_transcript_path = str(self._workspace / "room-transcript.db")
         self._room_binding = RoomBinding()
+        # The multi-agent half of a room (docs/ROOMS_GOING_LIVE.md): one executor
+        # + ControllerSession per member, because the executor serving the room
+        # frame cannot also serve itself a turn. Built here and kept for the
+        # host's life — members come and go inside it, on demand — while the
+        # model wiring is read live, so the first room after a provision uses the
+        # account that provisioned it.
+        self._model_factory: ModelFactory | None = None
+        self._model_select: ModelSelect | None = None
 
         # The container lifecycle (§6) is only built for the docker backend: one
         # labelled container per agent, its workspace bind-mounted, reused across
@@ -233,6 +242,22 @@ class LocalHost:
         loaded = self._secrets_vault.load()
         if loaded:
             self._log(f"[cowork-host] loaded {loaded} secret name(s) at rest")
+
+        # Built here, after the secret set exists: a room turn is a normal agent
+        # run and gets the same secrets every other turn does.
+        self._room_agents = RoomAgentPool(
+            binding=self._room_binding,
+            model_wiring=lambda _agent_id: (self._model_factory, self._model_select),
+            environment_factory=self._environment_for,
+            db_dir=self._workspace / "room-agents",
+            system_prompt=lambda _agent_id: (
+                self._agent.persona or DEFAULT_SYSTEM_PROMPT
+            ),
+            workspace_for=self._workspace_for_agent,
+            estop_path=self._estop_path,
+            secrets=self._secrets_vault,
+            logger=self._log,
+        )
 
         # Persistent trust: after the first §15 pairing this file holds the stable
         # channel, the channel key and the app's approved device key, so every
@@ -632,6 +657,10 @@ class LocalHost:
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
+        # Room members first: each is an executor thread of its own, and stopping
+        # them unregisters their senders, so nothing is left registered as
+        # reachable once this host is down.
+        self._room_agents.shutdown()
         if self._party is not None:
             self._party.stop()
             self._party = None
@@ -919,6 +948,11 @@ class LocalHost:
         # restart with the app closed for weeks.
         self._persist_account_token(token)
         model_factory, model_select = self._make_model_wiring(token)
+        # Room members are built off the same wiring (docs/ROOMS_GOING_LIVE.md):
+        # the pool reads these live, so a member started for the next room runs
+        # on the account this connection provisioned.
+        self._model_factory = model_factory
+        self._model_select = model_select
         # A fresh controller connection: hand over any pair the host rotated
         # while nobody was attached (unless this provision already carried it).
         self._flush_pending_session_rotation()
@@ -941,6 +975,10 @@ class LocalHost:
             binding=self._room_binding,
             emit=emit,
             transcript=RoomTranscriptStore(self._room_transcript_path),
+            # The missing call of docs/ROOMS_GOING_LIVE.md: one executor per
+            # member, started on demand and registered in the binding, so a
+            # member answers instead of reporting offline.
+            members_ready=self._room_agents.ensure_room,
         )
 
         return TaskServer(
