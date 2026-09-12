@@ -1,5 +1,7 @@
 // lib/widgets/document_viewer.dart
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -39,13 +41,7 @@ class _DocumentViewerState extends State<DocumentViewer> {
   }
 
   void _copyToClipboard() {
-    Clipboard.setData(ClipboardData(text: widget.markdownContent));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Content copied to clipboard'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    Clipboard.setData(ClipboardData(text: widget.markdownContent));AppNotifications.show(context, 'Content copied to clipboard', duration: Duration(seconds: 2));
   }
 
   @override

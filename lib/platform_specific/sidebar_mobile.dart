@@ -10,6 +10,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -350,23 +352,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     if (!mounted) return;
     // Two failures in a row otherwise queue: the second message would wait out
     // the first one's two seconds before the user ever sees it.
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    messenger.hideCurrentSnackBar();AppNotifications.showOn(messenger, message, duration: Duration(seconds: 2));
   }
 
   void _showDebouncedDeleteNotification(String chatTitle) {

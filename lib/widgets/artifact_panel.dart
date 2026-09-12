@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -208,13 +210,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
   Future<void> _copyContent() async {
     await Clipboard.setData(ClipboardData(text: _effectiveContent));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Artifact copied to clipboard'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (!mounted) return;AppNotifications.show(context, 'Artifact copied to clipboard');
   }
 
   /// Formats offered for download based on artifact type.
@@ -357,13 +353,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     try {
       final bytes = await _bytesForFormat(ext);
       if (bytes == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Export failed: could not generate $ext'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, 'Export failed: could not generate $ext');
         }
         return;
       }
@@ -377,35 +367,17 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       if (!mounted) return;
       switch (result.outcome) {
         case SaveOutcome.savedToFolder:
-        case SaveOutcome.savedViaPicker:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Saved to ${result.path}'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        case SaveOutcome.savedViaPicker:AppNotifications.show(context, 'Saved to ${result.path}');
         case SaveOutcome.savedViaShare:
         case SaveOutcome.cancelled:
           break;
-        case SaveOutcome.failed:
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to save artifact'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        case SaveOutcome.failed:AppNotifications.show(context, 'Failed to save artifact');
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Artifact export failed: $error\n$stackTrace');
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to export artifact: $error'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (mounted) {AppNotifications.show(context, 'Failed to export artifact: $error');
       }
     } finally {
       if (mounted) {
@@ -1404,13 +1376,7 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
         setState(() {
           _busy = false;
           _saveError = 'Save failed: $error';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save edits: $error'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        });AppNotifications.show(context, 'Could not save edits: $error');
       }
     }
   }

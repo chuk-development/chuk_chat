@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -289,34 +291,14 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       if (!mounted) return;
       if (success) {
         setState(() {});
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${_categoryLabel(category)} connected'),
-              backgroundColor: Colors.green.shade700,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, '${_categoryLabel(category)} connected', kind: AppNotificationKind.error);
         }
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to connect ${_categoryLabel(category)}'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, 'Failed to connect ${_categoryLabel(category)}', kind: AppNotificationKind.error);
         }
       }
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to connect ${_categoryLabel(category)}. Please try again.',
-          ),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Unable to connect ${_categoryLabel(category)}. Please try again.', kind: AppNotificationKind.error);
     }
   }
 
@@ -350,15 +332,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       if (!mounted) return;
       setState(() {});
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to disconnect ${_categoryLabel(category)}. Please try again.',
-          ),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Unable to disconnect ${_categoryLabel(category)}. Please try again.', kind: AppNotificationKind.error);
     }
   }
 

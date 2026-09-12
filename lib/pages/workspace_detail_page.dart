@@ -11,6 +11,8 @@ import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -132,10 +134,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
   Future<void> _saveSettings() async {
     if (_project == null) return;
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workspace name cannot be empty')),
-      );
+    if (name.isEmpty) {AppNotifications.show(context, 'Workspace name cannot be empty');
       return;
     }
 
@@ -147,16 +146,10 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
         customSystemPrompt: _systemPromptController.text.trim(),
       );
       if (mounted) {
-        setState(() => _hasSettingsChanges = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Settings saved')));
+        setState(() => _hasSettingsChanges = false);AppNotifications.show(context, 'Settings saved');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
       }
     }
   }
@@ -784,12 +777,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                             );
                             if (mounted) Navigator.pop(context);
                           } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to delete workspace: $e'),
-                              ),
-                            );
+                            if (!mounted) return;AppNotifications.show(context, 'Failed to delete workspace: $e');
                           }
                         }
                       },

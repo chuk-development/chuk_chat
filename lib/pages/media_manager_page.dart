@@ -2,6 +2,8 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
@@ -249,16 +251,10 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         _selectedImages.remove(image.path);
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.imageDeleted)));
+      if (mounted) {AppNotifications.show(context, l.imageDeleted);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.failedToDeleteImage(e.toString()))));
+      if (mounted) {AppNotifications.show(context, l.failedToDeleteImage(e.toString()));
       }
     }
   }
@@ -367,16 +363,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     });
 
     if (mounted) {
-      if (failedCount > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l.deletedImagesResult(deletedCount, failedCount)),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.deletedImagesSuccess(deletedCount))));
+      if (failedCount > 0) {AppNotifications.show(context, l.deletedImagesResult(deletedCount, failedCount));
+      } else {AppNotifications.show(context, l.deletedImagesSuccess(deletedCount));
       }
     }
   }
@@ -423,23 +411,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       final l = AppLocalizations.of(context)!;
       switch (result.outcome) {
         case SaveOutcome.savedToFolder:
-        case SaveOutcome.savedViaPicker:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.savedToPath(result.path ?? ''))),
-          );
+        case SaveOutcome.savedViaPicker:AppNotifications.show(context, l.savedToPath(result.path ?? ''));
         case SaveOutcome.savedViaShare:
         case SaveOutcome.cancelled:
           break;
-        case SaveOutcome.failed:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.unableToSaveImage)),
-          );
+        case SaveOutcome.failed:AppNotifications.show(context, l.unableToSaveImage);
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.unableToSaveImage)),
-      );
+      if (!mounted) return;AppNotifications.show(context, AppLocalizations.of(context)!.unableToSaveImage);
     }
   }
 
@@ -484,10 +463,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     final parts = <String>['Saved $savedCount images'];
     if (failedCount > 0) parts.add('$failedCount failed');
-    if (cancelledCount > 0) parts.add('$cancelledCount cancelled');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(parts.join(', '))),
-    );
+    if (cancelledCount > 0) parts.add('$cancelledCount cancelled');AppNotifications.show(context, parts.join(', '));
   }
 
   String _formatFileSize(int? bytes) {

@@ -1,6 +1,8 @@
 // lib/platform_specific/root_wrapper_desktop.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -327,25 +329,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _copyDebugChat() {
     final state = _chatUIKey.currentState;
     final messages = state?.debugMessages;
-    if (messages == null || messages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
+    if (messages == null || messages.isEmpty) {AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(
       messages,
       context: chatDebugContext(state, platform: 'desktop'),
     );
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Copied ${messages.length} messages (debug, images redacted)',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    Clipboard.setData(ClipboardData(text: text));AppNotifications.show(context, 'Copied ${messages.length} messages (debug, images redacted)', duration: Duration(seconds: 2));
   }
 
   // Mini-rail icons. Visible only when sidebar is collapsed. Each row is

@@ -2,6 +2,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -636,15 +638,9 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
           name: nameController.text.trim(),
           description: descController.text.trim(),
         );
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Workspace updated')));
+        if (!mounted) return;AppNotifications.show(context, 'Workspace updated');
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
+        if (!mounted) return;AppNotifications.show(context, 'Failed to update: $e');
       }
     }
   }

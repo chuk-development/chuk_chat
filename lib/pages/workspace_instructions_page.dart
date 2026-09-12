@@ -5,6 +5,8 @@
 // aesthetic of settings_page / system_prompt_page.
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -66,10 +68,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.projectSaveFailed(e.toString()))),
-      );
+      final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectSaveFailed(e.toString()));
     }
   }
 

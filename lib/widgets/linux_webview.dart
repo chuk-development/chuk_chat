@@ -17,6 +17,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -42,16 +44,10 @@ class LinuxWebView extends StatelessWidget {
         Uri.file(file.path),
         mode: LaunchMode.externalApplication,
       );
-      if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open the system browser.')),
-        );
+      if (!launched && context.mounted) {AppNotifications.show(context, 'Could not open the system browser.');
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open failed: $e')),
-        );
+      if (context.mounted) {AppNotifications.show(context, 'Open failed: $e');
       }
     }
   }

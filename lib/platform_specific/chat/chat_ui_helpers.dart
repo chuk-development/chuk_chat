@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/chat_model.dart';
@@ -154,20 +156,8 @@ class ChatUiHelpers {
   /// Show a styled snack bar.
   static void showSnackBar(BuildContext context, String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    if (messenger == null) return;
+    AppNotifications.showOn(messenger, message);
   }
 
   /// Navigate to Coming Soon page.

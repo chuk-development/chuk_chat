@@ -282,6 +282,31 @@ ThemeData buildAppTheme({
     iconTheme: IconThemeData(color: iconFg),
     colorScheme: colorScheme,
     extensions: <ThemeExtension<dynamic>>[m3Tokens],
+    // Every message the app drops on the reader, in one place.
+    //
+    // Flutter's default is a full-bleed rectangle glued to the bottom edge,
+    // and there are over a hundred call sites that just call
+    // `showSnackBar` — styling them one by one is how half of them end up
+    // looking like the default again. So the shape lives here: a floating
+    // pill in the same fill and radius as the rest of the floating chrome,
+    // clear of the bottom edge, and swipeable away in either direction.
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: surface,
+      contentTextStyle: TextStyle(
+        color: iconFg,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      actionTextColor: accent,
+      // No shadow: the fill is a step off the page, which is what separates
+      // it. A shadow on a borderless pill only draws a dark halo.
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      dismissDirection: DismissDirection.horizontal,
+      closeIconColor: iconFg,
+    ),
     // Ink is rounded everywhere. A ListTile without a shape paints its
     // hover/press fill as a full-bleed rectangle, which is what makes a
     // rounded settings card turn square the moment you touch it.

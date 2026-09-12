@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
@@ -142,16 +144,10 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
       _textContent = newContent;
       if (mounted) setState(() => _isEditingContent = false);
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('File saved')));
+      if (mounted) {AppNotifications.show(context, 'File saved');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -175,16 +171,10 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
       _markdownSummary = newMarkdown.isEmpty ? null : newMarkdown;
       if (mounted) setState(() => _isEditingMarkdown = false);
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Markdown saved')));
+      if (mounted) {AppNotifications.show(context, 'Markdown saved');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

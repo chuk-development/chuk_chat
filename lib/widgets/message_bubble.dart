@@ -43,6 +43,7 @@ import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';

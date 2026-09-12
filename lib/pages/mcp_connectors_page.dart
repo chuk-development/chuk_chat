@@ -6,6 +6,8 @@
 // other MCP address into.
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
@@ -333,10 +335,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
         '${result.connection?.name ?? 'The server'} is connected.',
       McpConnectStatus.cancelled => 'Sign-in was cancelled.',
       McpConnectStatus.failed => result.message ?? 'Could not connect.',
-    };
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    };AppNotifications.show(context, message);
   }
 }
 
@@ -557,10 +556,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     // a deep link into another app, a dialler, a mail composer.
     final uri = Uri.tryParse(url);
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open legal information.')),
-        );
+      if (mounted) {AppNotifications.show(context, 'Could not open legal information.');
       }
       return;
     }
@@ -573,10 +569,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     } on PlatformException {
       opened = false;
     }
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $url')),
-      );
+    if (!opened && mounted) {AppNotifications.show(context, 'Could not open $url');
     }
   }
 
@@ -602,10 +595,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       );
       if (!mounted) return;
       setState(() => _busy = false);
-      if (result.status != McpConnectStatus.connected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message ?? 'Could not connect.')),
-        );
+      if (result.status != McpConnectStatus.connected) {AppNotifications.show(context, result.message ?? 'Could not connect.');
       }
       return;
     }
@@ -629,16 +619,9 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       _busy = false;
       _canceler = null;
     });
-    if (result.status != McpConnectStatus.connected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.status == McpConnectStatus.cancelled
+    if (result.status != McpConnectStatus.connected) {AppNotifications.show(context, result.status == McpConnectStatus.cancelled
                 ? 'Sign-in was cancelled.'
-                : result.message ?? 'Could not connect.',
-          ),
-        ),
-      );
+                : result.message ?? 'Could not connect.');
     }
   }
 
@@ -879,15 +862,13 @@ Future<T> _withProgress<T>(
   McpConnectCanceler? canceler,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(
-    SnackBar(
-      content: const Text('Opening the browser to sign in…'),
-      // Stay up for the whole sign-in so its Cancel stays reachable.
-      duration: const Duration(minutes: 5),
-      action: canceler == null
-          ? null
-          : SnackBarAction(label: 'Cancel', onPressed: canceler.cancel),
-    ),
+  AppNotifications.showOn(
+    messenger,
+    'Opening the browser to sign in…',
+    // Stay up for the whole sign-in so its Cancel stays reachable.
+    duration: const Duration(minutes: 5),
+    actionLabel: canceler == null ? null : 'Cancel',
+    onAction: canceler?.cancel,
   );
   try {
     return await work();

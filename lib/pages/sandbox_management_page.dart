@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/pages/github_connection_page.dart';
@@ -141,21 +143,12 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
       if (info.chatId != null && info.chatId!.isNotEmpty) {
         SandboxSessionCache.forgetChat(info.chatId!);
       }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sandbox destroyed.')),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Sandbox destroyed.');
       await _refresh();
     } on SandboxServiceException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: ${e.message}')),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Failed: ${e.message}');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Failed: $e');
     } finally {
       if (mounted) setState(() => _destroying.remove(info.sessionId));
     }

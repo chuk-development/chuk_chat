@@ -17,6 +17,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
@@ -780,16 +782,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     }
   }
 
-  SnackBar _snack(String text) => SnackBar(
-    content: Text(
-      text,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-    ),
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    duration: const Duration(seconds: 2),
-    dismissDirection: DismissDirection.horizontal,
-  );
+  /// The pill this page shows its messages in — the app's one notification
+  /// widget, nothing of its own. Kept as a helper only because the callers
+  /// here hold a messenger captured before an await.
+  SnackBar _snack(String text) => appNotificationSnackBar(message: text);
 }

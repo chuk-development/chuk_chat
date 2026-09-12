@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/chat_ui_desktop.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
