@@ -159,12 +159,16 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
         'description': 'Create/update persistent tables and Markdown documents visible in the chat Documents panel. '
                        'Separate from semantic memory: documents survive context compaction and task restarts. '
                        'Use list/read to recover earlier documents. Read before updating and pass expected_version. '
+                       'A document NEVER replaces the answer: the reader must see the result in the message itself, '
+                       'as a Markdown table when it is tabular. Write the document as well only when the numbers '
+                       'have to survive a restart or be updated again later; do not split one result over several '
+                       'documents, and do not answer with a document reference alone. '
                        'For song collections, keep Reel URL, Spotify search URL, song and artist in a table; '
                        'append with row_key to replace an existing row for the same Reel. '
-                       'For election results, automatically create/update a bar_chart: rows with label, value '
-                       '(actual percentage, never renormalize), color (#RRGGBB). Use appropriate distinct party '
-                       'colors, exact source_url and retrieved_at. If showing only four largest parties, say '
-                       'so in caption; keep the complete numbers in a separate table.',
+                       'For a result tracked over time (an election night, a running count), keep ONE document: '
+                       'rows with label, value (actual percentage, never renormalize), color (#RRGGBB), distinct '
+                       'party colors, exact source_url and retrieved_at. Say in the caption if it holds only the '
+                       'largest parties, and put the complete numbers in the message.',
         'properties': {
             'action': {'type': 'string', 'enum': ['list', 'read', 'write', 'append']},
             'id': {'type': 'string'}, 'title': {'type': 'string'},
