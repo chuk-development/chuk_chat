@@ -23,6 +23,7 @@ class TourSlots {
   static const String settingsAiIdentityTile = 'settings_ai_identity_tile';
   static const String settingsModelSelectionTile =
       'settings_model_selection_tile';
+  static const String kSettingsAssistantTile = 'settings_assistant_tile';
 
   const TourSlots._();
 }

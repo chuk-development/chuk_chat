@@ -12,6 +12,8 @@ import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/assistant/assistant_config.dart';
+import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
@@ -249,6 +251,27 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
+              if (AssistantPlatform.isSupported)
+                KeyedSubtree(
+                  key: TourKeyRegistry.instance.keyFor(
+                    TourSlots.kSettingsAssistantTile,
+                  ),
+                  child: _SettingsRow(
+                    icon: Icons.graphic_eq_rounded,
+                    title: 'Assistent',
+                    subtitle:
+                        'Chuk Chat als Assistent des Geräts: über jeder App, '
+                        'sieht den Bildschirm, startet Navigation',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AssistantSettingsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               // Fix C: the standalone GitHub entry was removed and the
               // GitHub connection now lives inside SandboxManagementPage —
               // the GitHub token is only ever used by `git`/`gh` inside the

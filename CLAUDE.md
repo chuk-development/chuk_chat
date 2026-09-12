@@ -448,6 +448,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/DATABASE.md` | Supabase tables, schema |
 | `docs/COMMON_TASKS.md` | Adding services, pages, features |
 | `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
+| `docs/ASSISTANT_SURFACE.md` | Android assistant surface: assist role, overlay, device tools, the pinned model |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |

@@ -15,4 +15,15 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+    <!-- Transparent window for the assistant surface the ASSIST gesture opens. -->
+    <style name="AssistOverlayTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowContentTransitions">false</item>
+    </style>
 </resources>

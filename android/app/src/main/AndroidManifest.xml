@@ -27,6 +27,11 @@
     <!-- Ask the user to exempt the app from battery optimization so multi-pass
          AI tool loops keep streaming when the screen is locked. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Assistant surface: system assist role, screen context, device actions -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <application
         android:label="Chuk Chat"
         android:name="${applicationName}"
@@ -57,6 +62,60 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- The assistant surface. Opened by the Android ASSIST gesture, on its
+             own task affinity so it never merges with the launcher task. -->
+        <activity
+            android:name="dev.chuk.chat.assist.AssistOverlayActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:autoRemoveFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTop"
+            android:noHistory="true"
+            android:taskAffinity="dev.chuk.chat.assist"
+            android:theme="@style/AssistOverlayTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/AssistOverlayTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name="dev.chuk.chat.assist.AssistAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false"
+            android:label="@string/assist_accessibility_label"
+            android:description="@string/assist_accessibility_description">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/assist_accessibility_service" />
+        </service>
+
+        <service
+            android:name="dev.chuk.chat.assist.AssistNotificationListenerService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Keeps the microphone session alive while the assistant is open. -->
+        <service
+            android:name="dev.chuk.chat.assist.VoiceForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -107,5 +166,44 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="geo" />
         </intent>
+        <!-- Device actions the assistant tools launch. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_TIMER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SHOW_TIMERS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DISMISS_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DISMISS_TIMER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="spotify" />
+        </intent>
+        <package android:name="com.spotify.music" />
     </queries>
 </manifest>

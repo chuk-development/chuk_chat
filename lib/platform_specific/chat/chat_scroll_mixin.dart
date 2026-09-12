@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/widgets.dart';
 
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -60,11 +61,29 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
       nextShowScrollButton = false;
     }
 
+    // Sticky-bottom follows the user's INTENT, not just the distance.
+    //
+    // Distance alone loses the argument against a streaming message. The list
+    // grows every frame, so `onScrollChanged` runs every frame; a reader who
+    // scrolls up 50px is still inside the 100px band, stays "sticky", and
+    // `pinToBottomDuringStream` yanks them back down on the next token. To
+    // escape they would have to out-drag the token stream by 100px in a single
+    // gesture. That is the jump people report.
+    //
+    // `userScrollDirection` says who moved the list. In a non-reversed list
+    // `forward` means the content moved down — the reader pulled towards
+    // earlier messages. One tick of it is enough to let go, at any distance;
+    // a growing message never reports it, because growth is not a scroll.
+    final pulledTowardsHistory =
+        position.userScrollDirection == ScrollDirection.forward;
+
     bool nextStickyBottom = isStickyBottom;
-    if (distanceToBottom > 100) {
-      nextStickyBottom = false;
-    } else if (distanceToBottom < 8) {
+    if (distanceToBottom < 8) {
+      // At the bottom, whatever brought us here (including a fling that ran
+      // all the way down): pin again, so new content keeps arriving in view.
       nextStickyBottom = true;
+    } else if (pulledTowardsHistory || distanceToBottom > 100) {
+      nextStickyBottom = false;
     }
 
     final buttonChanged = nextShowScrollButton != showScrollToBottom;
@@ -123,6 +142,11 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
       if (!isStickyBottom) return;
       final position = scrollController.position;
       if (position.isScrollingNotifier.value) return;
+      // Second guard, for the cases `isScrollingNotifier` misses: it is false
+      // between a drag ending and its ballistic starting, and a mouse-wheel
+      // tick moves the list without ever being an "activity". Both are moments
+      // where a jump would fight the reader.
+      if (position.userScrollDirection == ScrollDirection.forward) return;
       if ((position.maxScrollExtent - position.pixels).abs() > 0.5) {
         scrollController.jumpTo(position.maxScrollExtent);
       }
