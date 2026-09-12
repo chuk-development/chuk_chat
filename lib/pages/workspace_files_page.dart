@@ -13,6 +13,8 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -340,18 +342,17 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
     final ws = _workspace;
     if (ws == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(l.projectKnowledge)),
+        appBar: FloatingAppBar(
+          title: Text(l.projectKnowledge),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.projectKnowledge),
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: CustomScrollView(
         slivers: [
@@ -713,11 +714,8 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.projectNewDocument),
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
         actions: [
           TextButton(
             onPressed: canSave

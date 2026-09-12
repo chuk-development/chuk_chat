@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart';
 import '../helpers/icon_finder.dart';
 
 /// Midnight at the start of the current local day — the anchor every seeded
@@ -89,8 +90,9 @@ void main() {
   tearDown(ChatStorageState.chatsById.clear);
 
   group('SidebarDesktop', () {
-    testWidgets('navigation block holds one card per destination',
-        (tester) async {
+    testWidgets('navigation block holds one card per destination', (
+      tester,
+    ) async {
       _tallWindow(tester);
       await tester.pumpWidget(
         _host(
@@ -116,8 +118,9 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('every time group has a header and its own chats',
-        (tester) async {
+    testWidgets('every time group has a header and its own chats', (
+      tester,
+    ) async {
       _tallWindow(tester);
       await tester.pumpWidget(
         _host(
@@ -153,8 +156,9 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('bottom bar carries the search field and both actions',
-        (tester) async {
+    testWidgets('bottom bar carries the search field and both actions', (
+      tester,
+    ) async {
       _tallWindow(tester);
       var settings = 0;
       var newChat = 0;
@@ -198,8 +202,9 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('the collapse button reports back, and hides without a host',
-        (tester) async {
+    testWidgets('the collapse button reports back, and hides without a host', (
+      tester,
+    ) async {
       _tallWindow(tester);
       var collapsed = 0;
       await tester.pumpWidget(
@@ -243,8 +248,9 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('the workspaces flag drops its card, not the block',
-        (tester) async {
+    testWidgets('the workspaces flag drops its card, not the block', (
+      tester,
+    ) async {
       _tallWindow(tester);
       await tester.pumpWidget(
         _host(
@@ -268,21 +274,22 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('a folded group stays folded when the list rebuilds',
-        (tester) async {
+    testWidgets('a folded group stays folded when the list rebuilds', (
+      tester,
+    ) async {
       _tallWindow(tester);
       Widget sidebar({String? selected}) => _host(
-            SidebarDesktop(
-              onChatSelected: (_) {},
-              onSettingsTapped: () {},
-              onWorkspacesTapped: () {},
-              onMediaTapped: () {},
-              onNewChatTapped: () {},
-              selectedChatId: selected,
-              isCompactMode: false,
-              showWorkspacesButton: true,
-            ),
-          );
+        SidebarDesktop(
+          onChatSelected: (_) {},
+          onSettingsTapped: () {},
+          onWorkspacesTapped: () {},
+          onMediaTapped: () {},
+          onNewChatTapped: () {},
+          selectedChatId: selected,
+          isCompactMode: false,
+          showWorkspacesButton: true,
+        ),
+      );
 
       await tester.pumpWidget(sidebar());
       await tester.pump();
@@ -310,8 +317,7 @@ void main() {
   });
 
   group('SidebarMobile', () {
-    testWidgets('shows the same blocks as the desktop sidebar',
-        (tester) async {
+    testWidgets('shows the same blocks as the desktop sidebar', (tester) async {
       _tallWindow(tester);
       var settings = 0;
       var newChat = 0;
@@ -434,6 +440,27 @@ void main() {
       // not, and falls through to the month bucket.
       expect(labelsFor([DateTime(2026, 6, 9)]), ['This week']);
       expect(labelsFor([DateTime(2026, 6, 8)]), ['This month']);
+    });
+  });
+
+  group('shared sidebar titles', () {
+    test('removes generated title markers and nested markdown wrappers', () {
+      expect(
+        normalizeSidebarTitle('Title: ## **_Quarterly   plan_**'),
+        'Quarterly plan',
+      );
+    });
+
+    test('prefers a custom name over the stored title and preview', () {
+      final chat = StoredChat.forSidebar(
+        id: 'title-test',
+        createdAt: DateTime(2026),
+        isStarred: false,
+        title: 'Stored title',
+        customName: '**Custom title**',
+      );
+
+      expect(deriveSidebarChatTitle(chat), 'Custom title');
     });
   });
 }

@@ -47,13 +47,13 @@ void main() {
 
     // Collapsed: one folded activity line plus the answer. The trailing
     // reasoning is a step inside that timeline, so it is not in the tree yet.
-    expect(find.textContaining('Worked for'), findsOneWidget);
+    expect(find.textContaining('Worked'), findsOneWidget);
     expect(find.textContaining('Synthesizing the search findings'), findsNothing);
     expect(find.textContaining('Here is the final answer.'), findsOneWidget);
 
     // Expanded: the folded-in final reasoning shows as its own step, and it
     // is not a standalone card outside the timeline.
-    await tester.tap(find.textContaining('Worked for'));
+    await tester.tap(find.textContaining('Worked'));
     await tester.pumpAndSettle();
     expect(find.text('Synthesizing the search findings'), findsOneWidget);
   });

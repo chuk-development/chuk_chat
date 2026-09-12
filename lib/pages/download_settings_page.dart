@@ -1,6 +1,8 @@
 // lib/pages/download_settings_page.dart
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -73,12 +75,10 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(l.downloads),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

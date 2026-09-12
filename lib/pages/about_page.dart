@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -110,12 +112,8 @@ class _AboutPageState extends State<AboutPage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.about),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: FutureBuilder<PackageInfo>(
         future: _packageInfoFuture,
@@ -355,12 +353,8 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(l.licenses),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: FutureBuilder<List<_LicensePackage>>(
         future: _licensesFuture,
@@ -509,12 +503,8 @@ class _LicenseDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      appBar: FloatingAppBar(
         title: Text(package.name),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

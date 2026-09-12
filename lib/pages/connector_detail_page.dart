@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -71,20 +73,17 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
 
     return Scaffold(
       backgroundColor: scaffoldBg,
-      appBar: AppBar(
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
-        leading: IconButton(
-          icon: AppIcon(Icons.chevron_left, color: iconFg),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        leadingWidth: 40,
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(
           l.back,
           style: TextStyle(color: iconFg, fontSize: 14),
         ),
-        titleSpacing: 0,
+        leading: IconButton(
+          icon: AppIcon(Icons.chevron_left, color: iconFg),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

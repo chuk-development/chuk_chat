@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -634,9 +636,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(l.toolCalling),
-        centerTitle: false,
       ),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

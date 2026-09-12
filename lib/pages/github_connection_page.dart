@@ -9,6 +9,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
@@ -201,7 +203,9 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('GitHub')),
+      appBar: FloatingAppBar(
+        title: const Text('GitHub'),
+      ),
       body: RefreshIndicator(
         onRefresh: _refreshStatus,
         child: SettingsListView(

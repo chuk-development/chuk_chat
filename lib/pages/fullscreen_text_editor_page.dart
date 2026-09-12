@@ -11,6 +11,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -130,13 +132,13 @@ class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage> {
         if (!didPop) _confirmDiscard();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: FloatingAppBar(
+          title: Text(widget.title),
           leading: IconButton(
             icon: const AppIcon(Icons.close_rounded),
             tooltip: 'Cancel',
             onPressed: _confirmDiscard,
           ),
-          title: Text(widget.title),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),

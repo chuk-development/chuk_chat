@@ -10,6 +10,8 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -280,12 +282,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        appBar: AppBar(
+        appBar: FloatingAppBar(
           title: Text(l.subscription),
-          centerTitle: false,
-          backgroundColor: colorScheme.surface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -296,12 +294,10 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(l.subscription),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

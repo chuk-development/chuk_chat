@@ -36,7 +36,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
     // the collapsible "Thought for X" bar would open onto nothing. Show only
     // the quiet model footer when there is one, and otherwise render nothing.
     if (!isStreaming && reasoning.trim().isEmpty) {
-      return _hasModelInfo ? _buildModelFooter() : const SizedBox.shrink();
+      return _buildMetaFooter();
     }
 
     return AgentActivityTimeline(
@@ -51,7 +51,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
       phase: _currentPhase(isStreaming),
       startedAt: isStreaming ? widget.turnStartedAt : null,
       finalDuration: isStreaming ? null : widget.workedFor,
-      footer: _hasModelInfo ? _buildModelFooter() : null,
+      footer: _hasModelInfo ? _buildMetaFooter() : null,
     );
   }
 
@@ -67,22 +67,39 @@ extension _MessageBubbleTools on _MessageBubbleState {
     return StreamingManager().phaseOf(chatId);
   }
 
-  /// The model line: which model answered, on which provider, how fast.
-  /// A quiet footer under the steps, not a card of its own.
-  Widget _buildModelFooter() {
+  /// The quiet line under an answer.
+  ///
+  /// How long the answer took, and nothing else by default. Which model
+  /// answered and on which provider is not what anyone is reading an answer
+  /// for; it appears only when the reader has asked for it in settings, and
+  /// the tokens-per-second the same way.
+  Widget _buildMetaFooter() {
     final theme = Theme.of(context);
     final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final Duration? worked = widget.workedFor;
+    // Under a second is not worth a line — see the timeline header, which
+    // drops its own duration for the same reason.
+    final bool hasDuration = worked != null && worked.inSeconds >= 1;
+
     final parts = <String>[
-      widget.modelLabel ?? '',
-      if (widget.modelProvider?.isNotEmpty ?? false) widget.modelProvider!,
+      if (hasDuration) formatAgentDuration(worked),
+      if (_hasModelInfo) widget.modelLabel ?? '',
+      if (_hasModelInfo && (widget.modelProvider?.isNotEmpty ?? false))
+        widget.modelProvider!,
       if (_shouldShowTps) '${widget.tps!.toStringAsFixed(1)} tok/s',
-    ].where((part) => part.trim().isNotEmpty);
+    ].where((part) => part.trim().isNotEmpty).toList();
+
+    if (parts.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 2),
       child: Row(
         children: [
-          AppIcon(Icons.smart_toy_outlined, size: 13, color: muted),
+          AppIcon(
+            hasDuration ? Icons.schedule_rounded : Icons.smart_toy_outlined,
+            size: 13,
+            color: muted,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(

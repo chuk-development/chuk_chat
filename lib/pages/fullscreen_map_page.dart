@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -130,20 +132,14 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         (_hasPlaces || _hasRouteEndpoints) && _locationAvailable;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
+      appBar: FloatingAppBar(
         title: Text(widget.title, style: const TextStyle(fontSize: 16)),
         leading: IconButton(
           icon: const AppIcon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Open in external maps app',
-            onPressed: _openCurrentViewInExternalMaps,
-            icon: const AppIcon(Icons.open_in_new),
-          ),
+          FloatingHeaderButton(icon: Icons.open_in_new, onPressed: _openCurrentViewInExternalMaps, tooltip: 'Open in external maps app'),
           if (hasLocationControls)
             IconButton(
               tooltip: 'My location',

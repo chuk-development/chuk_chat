@@ -2,6 +2,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
@@ -259,12 +261,10 @@ class _ThemePageState extends State<ThemePage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(l.themeSettings),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
       ),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

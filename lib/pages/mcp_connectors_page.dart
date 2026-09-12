@@ -7,6 +7,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
@@ -81,7 +83,9 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Connectors')),
+      appBar: FloatingAppBar(
+        title: const Text('Connectors'),
+      ),
       body: ValueListenableBuilder<List<McpConnection>>(
         valueListenable: McpService.connections,
         builder: (context, connections, _) {
@@ -368,7 +372,11 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
             connection?.description ?? widget.entry?.description ?? '';
 
         return Scaffold(
-          appBar: AppBar(title: Text(name)),
+          // The list runs underneath the floating header.
+          extendBodyBehindAppBar: true,
+          appBar: FloatingAppBar(
+            title: Text(name),
+          ),
           body: SettingsListView(
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
             children: [

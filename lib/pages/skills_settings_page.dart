@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -112,7 +114,11 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
     final builtins = SkillRegistry.bySource(SkillSource.builtin);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.skills), centerTitle: false),
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
+        title: Text(l.skills),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(),
         icon: const AppIcon(Icons.add),
@@ -321,9 +327,10 @@ message.
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      // The list runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
         title: Text(widget.skill == null ? l.skillNew : l.skillEdit),
-        centerTitle: false,
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,

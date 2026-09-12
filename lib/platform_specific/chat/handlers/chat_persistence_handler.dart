@@ -70,6 +70,12 @@ class ChatPersistenceHandler {
   }) async {
     if (messages.isEmpty) return null;
 
+    // Stamp the live maps, before the copy. Stamping the copy instead wrote
+    // the number only into what went to storage, so the answer on screen had
+    // no duration until the chat was closed and reopened — which is exactly
+    // the "it is counted but never shown" the reader sees.
+    stampWorkedFor(messages);
+
     // Never persist "Thinking..." placeholders — they are UI-only
     final messagesCopy = messages
         .where((message) => message['text'] != 'Thinking...')
@@ -77,8 +83,6 @@ class ChatPersistenceHandler {
         .toList(growable: false);
 
     if (messagesCopy.isEmpty) return null;
-
-    stampWorkedFor(messagesCopy);
 
     // Land any pending per-message patch first. Otherwise a debounced patch
     // written afterwards can overwrite this full save with what it knew a
@@ -123,8 +127,15 @@ class ChatPersistenceHandler {
   @visibleForTesting
   static void stampWorkedFor(List<Map<String, String>> messages) {
     final now = DateTime.now();
+    // "Thinking..." is a placeholder the UI owns; it is not an answer and it
+    // must not count as the newest one, or the answer above it would be
+    // frozen at the number it already had.
+    final int newest = messages.lastIndexWhere(
+      (message) => message['text'] != 'Thinking...',
+    );
     for (var i = 0; i < messages.length; i++) {
       final message = messages[i];
+      if (message['text'] == 'Thinking...') continue;
       final isAssistant =
           message['sender'] == 'ai' || message['role'] == 'assistant';
       if (!isAssistant) continue;
@@ -132,7 +143,7 @@ class ChatPersistenceHandler {
       final startedAt = DateTime.tryParse(message['startedAt'] ?? '');
       if (startedAt == null) continue;
 
-      final isNewest = i == messages.length - 1;
+      final isNewest = i == newest;
       if (message['generationMs'] != null && !isNewest) continue;
 
       final elapsed = now.difference(startedAt).inMilliseconds;

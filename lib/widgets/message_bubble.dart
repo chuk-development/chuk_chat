@@ -100,6 +100,12 @@ const double _kArtifactGap = 6;
 /// is intra-bar list spacing, not block-to-block spacing).
 const double _kCardStackGap = 6;
 
+/// Air under the "Thought for 4s" bar, before the answer starts.
+///
+/// Tighter than a card stack: the bar is a label on the answer below it, not
+/// a block of its own, and at the card gap it read as detached.
+const double _kInfoBarGap = 2;
+
 /// AI action / user long-press action bars share this fixed height on mobile
 /// so the two button strips look the same size.
 const double _kMobileBottomBarHeight = 36.0;

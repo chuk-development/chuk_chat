@@ -6,6 +6,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -104,7 +106,9 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
 
     if (_workspace == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(l.projectInstructions)),
+        appBar: FloatingAppBar(
+          title: Text(l.projectInstructions),
+        ),
         body: Center(child: Text(l.projectWorkspaceNotFound)),
       );
     }
@@ -119,11 +123,10 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
       },
       child: Scaffold(
         backgroundColor: cs.surface,
-        appBar: AppBar(
+        // The list runs underneath the floating header.
+        extendBodyBehindAppBar: true,
+        appBar: FloatingAppBar(
           title: Text(l.projectInstructions),
-          backgroundColor: cs.surface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
         ),
         body: SettingsListView(
           padding: const EdgeInsets.all(16),
