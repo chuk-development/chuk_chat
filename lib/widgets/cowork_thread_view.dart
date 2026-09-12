@@ -17,6 +17,7 @@ import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/app_theme_service.dart';
 import 'package:cowork/services/chat_storage_service.dart';
 import 'package:cowork/services/chat_runtime_registry.dart';
+import 'package:cowork/services/streaming_manager.dart';
 import 'package:cowork/services/cowork/agent_file_saver.dart';
 import 'package:cowork/services/cowork/chat_debug_export.dart';
 import 'package:cowork/pages/cowork_pairing_page.dart';
@@ -321,6 +322,9 @@ class CoworkThreadViewState extends State<CoworkThreadView>
     _loader.attach();
     _running = _ledger.isRunning(widget.threadKey);
     _ledger.addListener(_onLedgerChanged);
+    // A run that goes quiet is asked about rather than animated for ever.
+    _ledger.onRunSilent = _onRunSilent;
+    _reconcileOnOpen();
     _loader.addListener(_onLoaderChanged);
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
@@ -354,6 +358,7 @@ class CoworkThreadViewState extends State<CoworkThreadView>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.threadKey != widget.threadKey) {
       _running = _ledger.isRunning(widget.threadKey);
+      _reconcileOnOpen();
       // A different conversation. Point the link and the cache at it and ask
       // the host for whatever this client is missing.
       if (widget.threadKey.isNotEmpty) {
@@ -381,6 +386,9 @@ class CoworkThreadViewState extends State<CoworkThreadView>
     AppThemeService.instance.removeListener(_onThemeChanged);
     MobileChatPreferences.instance.removeListener(_onThemeChanged);
     _ledger.removeListener(_onLedgerChanged);
+    // Tear-offs of the same method on the same state object compare equal,
+    // so this only clears the hook when it is still ours.
+    if (_ledger.onRunSilent == _onRunSilent) _ledger.onRunSilent = null;
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     _controller?.state.removeListener(_onStateChanged);
@@ -645,9 +653,14 @@ class CoworkThreadViewState extends State<CoworkThreadView>
   /// Cheap and idempotent: it does nothing while paired, connecting, or when a
   /// reconnect timer / in-flight attempt already exists.
   void _watchdogTick() {
-    if (!mounted || widget.pairingStore == null || _storedPairing == null) {
-      return;
-    }
+    if (!mounted) return;
+    // The run ceiling rides this tick rather than a timer of the ledger's own:
+    // the ledger is process-wide, and a timer it armed would go on firing long
+    // after the thread that cared about the run was gone. A run that has
+    // produced nothing for minutes is asked about here, and declared lost if
+    // nothing answers (bead cowork-gnr8).
+    _ledger.sweep();
+    if (widget.pairingStore == null || _storedPairing == null) return;
     if (_manuallyDisconnected || _busy || _autoReconnectTimer != null) return;
     final phase = _controller?.state.value.phase;
     final down =
@@ -934,9 +947,13 @@ class CoworkThreadViewState extends State<CoworkThreadView>
         final localStreamActive =
             runtime?.isStreaming.value == true ||
             runtime?.isSending.value == true;
-        if (!localStreamActive && _ledger.isRunning(widget.threadKey)) {
-          // A run adopted after reconnect has no request adapter subscription
-          // to consume its terminal. Close its activity and fetch durable text.
+        // A terminal ENDS the run, whatever else is going on. The adapter's
+        // own subscription is gone after a stop or a page teardown, so this is
+        // often the only listener left to see it; leaving the run open here is
+        // what left the thread typing for ever (bead cowork-gnr8). Finishing
+        // twice is harmless — the ledger's terminal is idempotent — and the
+        // replay is still only asked for when no local stream owns the turn.
+        if (_ledger.isRunning(widget.threadKey)) {
           _ledger.finish(
             widget.threadKey,
             finalAnswer: event.finalAnswer,
@@ -945,7 +962,7 @@ class CoworkThreadViewState extends State<CoworkThreadView>
             startedAt: event.startedAt,
             finishedAt: event.finishedAt,
           );
-          if (!event.hostNotified) _requestReplay();
+          if (!localStreamActive && !event.hostNotified) _requestReplay();
         }
         if (event.hostNotified) {
           // Background runs have no manual chat stream subscription.
@@ -1093,9 +1110,84 @@ class CoworkThreadViewState extends State<CoworkThreadView>
     if (running != _running) {
       setState(() => _running = running);
       widget.onRunStateChanged?.call(widget.threadKey, running);
+      if (!running) _onRunClosed();
     }
     widget.onActivity?.call(widget.threadKey, DateTime.now());
     _syncRevision();
+  }
+
+  /// A run just ended and left the thread with nothing to show. Never silence:
+  /// the reader must be able to tell "stopped" from "still thinking" (bead
+  /// cowork-gnr8), so the same line the replay loader writes for the host's
+  /// stored terminal is written here for the live one.
+  ///
+  /// It also puts the composer back to the send target. The wording of the
+  /// line is shared with the loader, so the host's copy of the same line folds
+  /// into this one on the next replay instead of doubling it
+  /// (`appendWithoutRepeats` compares sender and text).
+  void _onRunClosed() {
+    final key = widget.threadKey;
+    // After the frame, not on a timer: a timer would outlive the tree, and the
+    // work here is only ever a follow-up to a run that is already over.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.threadKey != key) return;
+      final run = _ledger.runFor(key);
+      if (run == null || run.running) return;
+      _releaseStaleComposer(key);
+      final outcome = run.outcome;
+      if (outcome == null || !run.endedWithoutAnswer) return;
+      final notice = coworkRunEndNotice(outcome);
+      if (notice == null) return;
+      // Appended to what is on disk. If the imported screen saves the turn it
+      // was drawing a moment later, its save wins and the line is simply not
+      // there — the host's own copy of it comes back with the next replay,
+      // where the loader writes the same wording (`coworkRunEndNotice`).
+      unawaited(_loader.appendNotice(key, notice));
+    });
+  }
+
+  /// The composer goes back to the send target when the run is over.
+  ///
+  /// The imported screen reads its send-in-flight flag from the thread's
+  /// [ChatRuntime], and clears it when the stream finalizes. A stream that was
+  /// cancelled instead — the page was disposed while the answer was still
+  /// coming — never finalizes, so the flag stays up and the next mount of the
+  /// screen shows the red stop target on a thread where nothing runs. The run
+  /// is over here, so the flag has nothing left to protect.
+  void _releaseStaleComposer(String key) {
+    final runtime = ChatRuntimeRegistry.instance.lookup(key);
+    if (runtime == null) return;
+    if (!runtime.isSending.value && !runtime.isStreaming.value) return;
+    // A local stream that is still live owns the turn; leave it alone.
+    if (StreamingManager().isStreaming(key)) return;
+    runtime.endStream();
+  }
+
+  /// The run for [sessionKey] has produced nothing for the ledger's ceiling.
+  /// Ask the host what happened to it: the `run_state` header of the answer
+  /// either revives the run (the host is still on it) or reconciles it away.
+  /// If nothing answers, the ledger's own grace declares it lost.
+  void _onRunSilent(String sessionKey) {
+    if (!mounted || sessionKey != widget.threadKey) return;
+    _requestReplay();
+  }
+
+  /// The thread is being opened. A run the ledger still draws as live is
+  /// checked against what the host says before the dots come back.
+  ///
+  /// While paired the check is the replay this view asks for anyway: its
+  /// `run_state` header either adopts the run or reconciles it away. With no
+  /// socket there is nobody to ask, so a run that has produced nothing for
+  /// longer than the ceiling is declared lost rather than animated again.
+  void _reconcileOnOpen() {
+    final key = widget.threadKey;
+    final run = _ledger.runFor(key);
+    if (run == null || !run.running) return;
+    if (_controller?.state.value.isPaired ?? false) return;
+    if (DateTime.now().difference(run.lastActivity) < CoworkRunLedger.ceiling) {
+      return;
+    }
+    _ledger.markLost(key);
   }
 
   void _onLoaderChanged() {

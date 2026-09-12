@@ -60,6 +60,59 @@ ToolCall toolCallFromRelay(CoworkRelayTool event, {DateTime? now}) {
   return call;
 }
 
+/// How a run ended, once it is over.
+///
+/// The thread needs to tell "stopped" from "still thinking" and from "it
+/// answered" — a run that ends with nothing to show must still say so
+/// (bead cowork-gnr8). [answered] is the ordinary end; the other three are the
+/// ends that leave the thread empty.
+enum CoworkRunOutcome {
+  /// The host sent a terminal and it carried an answer.
+  answered,
+
+  /// The user's stop, the ESTOP file, or the host's wall-clock guard.
+  stopped,
+
+  /// An error terminal, or a transport that failed under the run.
+  failed,
+
+  /// No terminal ever came and the run went quiet: the app lost it.
+  lost,
+}
+
+/// What a run terminal means for the thread, from the two fields that say it.
+///
+/// A terminal that carries an answer is an answer whatever its reason says; one
+/// that carries none is a stop (`estop` / `interrupted` / `timeout`, see
+/// [CoworkRelayDone.wasStopped]) or a failure, and either way the thread has to
+/// say so instead of leaving the reader with the working dots.
+CoworkRunOutcome coworkRunOutcomeFor({String? reason, String? finalAnswer}) {
+  if (finalAnswer != null && finalAnswer.trim().isNotEmpty) {
+    return CoworkRunOutcome.answered;
+  }
+  if (reason == 'estop' || reason == 'interrupted' || reason == 'timeout') {
+    return CoworkRunOutcome.stopped;
+  }
+  // A terminal that says the run finished IS the run finishing, even with an
+  // empty answer field: the answer was streamed, or there was nothing to say.
+  // `lost` is reserved for a run that produced no terminal at all.
+  if (reason == null || reason == 'finished') return CoworkRunOutcome.answered;
+  return CoworkRunOutcome.failed;
+}
+
+/// The one quiet line a run that produced nothing leaves in the thread. Null
+/// for a run that answered — that one speaks for itself.
+///
+/// ONE wording for both paths, like every other live/replay mapping in this
+/// file: the live thread writes it when the terminal lands, and the replay
+/// loader writes it when the same run comes back from the host's transcript.
+String? coworkRunEndNotice(CoworkRunOutcome outcome) => switch (outcome) {
+  CoworkRunOutcome.answered => null,
+  CoworkRunOutcome.stopped => 'Stopped. No answer was written.',
+  CoworkRunOutcome.failed => 'This run failed. No answer was written.',
+  CoworkRunOutcome.lost => 'Lost this run. No answer came back.',
+};
+
 /// Everything one run produced, in renderer shapes.
 class CoworkRun {
   CoworkRun(this.sessionKey);
@@ -125,6 +178,41 @@ class CoworkRun {
   /// The prompt the host says an already-in-flight run is working on, learned
   /// from a `run_state` header. Null for a run this client started itself.
   String? detachedPrompt;
+
+  /// How this run ended. Null while it runs.
+  CoworkRunOutcome? outcome;
+
+  /// When the user pressed Stop and the frame went out. The terminal is
+  /// expected; until it lands the thread already knows the run is on its way
+  /// out. Null while nobody asked.
+  DateTime? stopRequestedAt;
+
+  /// True once the user's stop for this run is on the wire.
+  bool get stopRequested => stopRequestedAt != null;
+
+  /// When the app last asked the host what happened to a silent run. Cleared
+  /// by any sign of life; [CoworkRunLedger.ceilingGrace] after it, with still
+  /// nothing, the run counts as lost.
+  DateTime? probedAt;
+
+  /// The last time this run produced anything at all — a token, a tool event,
+  /// a child agent, a host header. The ceiling is measured from here, so a run
+  /// that keeps working is never declared lost.
+  DateTime lastActivity = DateTime.now();
+
+  /// Anything at all arrived for this run — a token, a tool event, a child
+  /// agent. A run that produced something left a visible trace in the thread,
+  /// so it needs no line of its own even when it ended badly.
+  bool producedOutput = false;
+
+  /// True once the run is over and it left the thread with nothing: the reader
+  /// has to be told what happened instead of watching the dots for ever.
+  bool get endedWithoutAnswer =>
+      !running &&
+      outcome != null &&
+      outcome != CoworkRunOutcome.answered &&
+      !producedOutput &&
+      (finalAnswer == null || finalAnswer!.trim().isEmpty);
 }
 
 /// Process-wide ledger of host runs, keyed by session key.
@@ -244,6 +332,65 @@ class CoworkRunLedger extends ChangeNotifier {
   /// (docs/WIRE_CONTRACT.md, "Automations").
   final Map<String, ToolCall> _automationCalls = <String, ToolCall>{};
 
+  /// How long a run may produce nothing before the app asks the host what
+  /// happened to it. Tool frames only arrive when a command FINISHES, so this
+  /// has to be longer than an ordinary command, not shorter.
+  static Duration ceiling = const Duration(minutes: 3);
+
+  /// How long the host then has to say "still running" before the run counts
+  /// as lost. The probe is a replay request, which the host answers with a
+  /// `run_state` header within a round trip.
+  static Duration ceilingGrace = const Duration(seconds: 30);
+
+  /// How long a stop may stay unanswered before the run is ended anyway. The
+  /// executor acks a stop before it fires it, so the terminal is usually here
+  /// within a second; the thread must not keep spinning if it is not.
+  static Duration stopGrace = const Duration(seconds: 10);
+
+  /// A run this client started that the host has not confirmed yet is left
+  /// alone by an idle `run_state` header for this long — the header may have
+  /// been computed before the task reached the host (see [reconcileIdle]).
+  static Duration idleHeaderGrace = const Duration(seconds: 10);
+
+  /// Called when a run has produced nothing for [ceiling]. The thread view
+  /// hangs the probe here: it asks the host for a fresh `run_state`, which
+  /// either revives the run or reconciles it away.
+  void Function(String sessionKey)? onRunSilent;
+
+  /// The ceiling, applied. Called from the thread view's existing watchdog
+  /// tick — the ledger owns no timer of its own, because a process-wide
+  /// singleton that arms one would keep firing long after the thread that
+  /// cared about the run was gone.
+  ///
+  /// Three steps, in order:
+  ///  * a stop whose terminal never came ends the run once [stopGrace] passed;
+  ///  * a run that has produced nothing for [ceiling] is asked about ONCE
+  ///    (a long command sends no frame while it works, so the host's answer,
+  ///    not the silence, is what decides);
+  ///  * a run still silent [ceilingGrace] after that is declared lost.
+  void sweep({DateTime? now}) {
+    final clock = now ?? DateTime.now();
+    for (final run in _runs.values.toList(growable: false)) {
+      if (!run.running) continue;
+      final stoppedAt = run.stopRequestedAt;
+      if (stoppedAt != null && clock.difference(stoppedAt) >= stopGrace) {
+        _endWithoutAnswer(run.sessionKey, CoworkRunOutcome.stopped);
+        continue;
+      }
+      final silent = clock.difference(run.lastActivity);
+      if (run.probedAt != null) {
+        if (clock.difference(run.probedAt!) >= ceilingGrace) {
+          _endWithoutAnswer(run.sessionKey, CoworkRunOutcome.lost);
+        }
+        continue;
+      }
+      if (silent >= ceiling) {
+        run.probedAt = clock;
+        onRunSilent?.call(run.sessionKey);
+      }
+    }
+  }
+
   /// The run for [sessionKey], if one is on record.
   CoworkRun? runFor(String sessionKey) => _runs[sessionKey];
 
@@ -272,6 +419,58 @@ class CoworkRunLedger extends ChangeNotifier {
     return run;
   }
 
+  /// Records that something happened in [sessionKey]'s run, so the ceiling
+  /// starts again. Every frame that proves the run is alive lands here.
+  void touch(String sessionKey) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    run
+      ..lastActivity = DateTime.now()
+      ..producedOutput = true
+      ..probedAt = null;
+  }
+
+  /// The user pressed Stop and the frame went out. The terminal that follows
+  /// is what really ends the run; this only makes sure the thread stops
+  /// animating even when that terminal never arrives.
+  void stopRequested(String sessionKey) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    run.stopRequestedAt = DateTime.now();
+    notifyListeners();
+  }
+
+  /// Ends a run that produced no answer, with the reason the caller knows.
+  /// Idempotent: a terminal that arrives after the ceiling fired finds the run
+  /// already closed and changes nothing.
+  void _endWithoutAnswer(String sessionKey, CoworkRunOutcome outcome) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    run
+      ..running = false
+      ..outcome = outcome;
+    finalizeStaleToolCalls(run.toolCalls);
+    notifyListeners();
+  }
+
+  /// Test seam / explicit path: end [sessionKey]'s run as lost.
+  void markLost(String sessionKey) =>
+      _endWithoutAnswer(sessionKey, CoworkRunOutcome.lost);
+
+  /// Reconciles what this client believes against what the host says.
+  ///
+  /// Called on reconnect and on thread open. A run the app still draws as live
+  /// that the host no longer lists is over — it produced nothing, so the
+  /// thread says so instead of bringing the typing dots back (bead
+  /// cowork-gnr8).
+  void reconcile(String sessionKey, {required bool hostRunning}) {
+    if (hostRunning) {
+      touch(sessionKey);
+      return;
+    }
+    reconcileIdle(sessionKey);
+  }
+
   /// Marks the host as already busy with [sessionKey] — a run that started
   /// before this client attached (`run_state: running`). Idempotent: it never
   /// clobbers a run this client is already tracking.
@@ -284,6 +483,7 @@ class CoworkRunLedger extends ChangeNotifier {
     final existing = _runs[sessionKey];
     if (existing != null && existing.running) {
       existing.hostObserved = true;
+      touch(sessionKey);
       return;
     }
     final run = CoworkRun(sessionKey)
@@ -299,12 +499,25 @@ class CoworkRunLedger extends ChangeNotifier {
 
   /// A fresh host idle header reconciles a run whose terminal was missed
   /// while disconnected. Retain all collected content until replay lands.
+  ///
+  /// The host is the truth about its own runs, so an idle header closes a run
+  /// this client started as well — that is the run whose terminal was lost
+  /// when the socket, the page or the app went away, and leaving it open is
+  /// exactly the thread that types for ever (bead cowork-gnr8). The one
+  /// exception is the race the header cannot know about: a task submitted a
+  /// moment ago, whose header was computed before it reached the host. That
+  /// one is left alone for [idleHeaderGrace].
   void reconcileIdle(String sessionKey) {
     final run = _runs[sessionKey];
-    if (run == null || !run.running || !run.hostObserved) return;
-    run.running = false;
-    finalizeStaleToolCalls(run.toolCalls);
-    notifyListeners();
+    if (run == null || !run.running) return;
+    if (!run.hostObserved &&
+        DateTime.now().difference(run.startedAt) < idleHeaderGrace) {
+      return;
+    }
+    _endWithoutAnswer(
+      sessionKey,
+      run.stopRequested ? CoworkRunOutcome.stopped : CoworkRunOutcome.lost,
+    );
   }
 
   /// Opens a tool line. The relay reports one `tool` event per *completed*
@@ -316,7 +529,7 @@ class CoworkRunLedger extends ChangeNotifier {
     String? arguments,
     String? callId,
   }) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     // [callId] is the host's id for the call, so the frame that closes it
     // ([recordTool]) finds this line and not another one of the same name.
     final call = ToolCall(
@@ -339,7 +552,7 @@ class CoworkRunLedger extends ChangeNotifier {
   /// same card on both. A line the host opened earlier (`status: running`,
   /// same name or same call id) is filled in instead of duplicated.
   ToolCall recordTool(String sessionKey, CoworkRelayTool event) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     final mapped = toolCallFromRelay(event);
     for (var i = run.toolCalls.length - 1; i >= 0; i--) {
       final candidate = run.toolCalls[i];
@@ -374,7 +587,7 @@ class CoworkRunLedger extends ChangeNotifier {
     bool failed = false,
     Duration? duration,
   }) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     ToolCall? call;
     for (var i = run.toolCalls.length - 1; i >= 0; i--) {
       final candidate = run.toolCalls[i];
@@ -409,7 +622,7 @@ class CoworkRunLedger extends ChangeNotifier {
     String? result,
     String? error,
   }) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     final key = '$sessionKey\u0000$subagentId';
     final existing = _subagentCalls[key];
     final call = subagentCallFromRelay(
@@ -432,7 +645,7 @@ class CoworkRunLedger extends ChangeNotifier {
   /// id, updated on every later event (docs/WIRE_CONTRACT.md,
   /// "Automations"). The SAME mapping the replay loader uses.
   ToolCall automation(String sessionKey, CoworkRelayAutomation event) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     final key = '$sessionKey\u0000${event.automation.id}';
     final existing = _automationCalls[key];
     final call = automationCallFromRelay(existing, event);
@@ -454,7 +667,7 @@ class CoworkRunLedger extends ChangeNotifier {
   Future<ContentBlock?> file(String sessionKey, CoworkRelayFile file) async {
     final bytes = file.bytes;
     if (bytes == null || !file.isValid) return null;
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     final String storagePath;
     try {
       storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
@@ -473,7 +686,7 @@ class CoworkRunLedger extends ChangeNotifier {
   /// imported `AskUserCard` reads them from; the same payload is mirrored into
   /// [ToolCall.result] so the expanded tool line shows the whole request.
   ToolCall approval(String sessionKey, CoworkRelayApprovalRequest request) {
-    final run = _ensure(sessionKey);
+    final run = _live(sessionKey);
     final call = approvalCallFromRelay(request);
     run.toolCalls.add(call);
     notifyListeners();
@@ -483,7 +696,7 @@ class CoworkRunLedger extends ChangeNotifier {
   /// Accumulates the model's thinking for the run.
   void reasoning(String sessionKey, String text) {
     if (text.isEmpty) return;
-    _ensure(sessionKey).modelReasoning += text;
+    _live(sessionKey).modelReasoning += text;
   }
 
   /// Stashes the latest raw model context for the copy button. Never rendered.
@@ -508,6 +721,10 @@ class CoworkRunLedger extends ChangeNotifier {
     run.running = false;
     run.finalAnswer = finalAnswer;
     run.reason = reason;
+    run.outcome = coworkRunOutcomeFor(
+      reason: reason,
+      finalAnswer: finalAnswer,
+    );
     run.iterations = iterations;
     run.tokensSpent = tokensSpent;
     if (runId != null) run.runId = runId;
@@ -543,10 +760,26 @@ class CoworkRunLedger extends ChangeNotifier {
   /// Test seam: drop every run.
   @visibleForTesting
   void reset() {
+    onRunSilent = null;
     _runs.clear();
     _subagentCalls.clear();
+    _automationCalls.clear();
   }
 
   CoworkRun _ensure(String sessionKey) =>
       _runs[sessionKey] ??= CoworkRun(sessionKey);
+
+  /// [_ensure], plus the proof that the run is alive: every frame that folds
+  /// into the run restarts the ceiling, so only a run that truly produces
+  /// nothing can be declared lost.
+  CoworkRun _live(String sessionKey) {
+    final run = _ensure(sessionKey);
+    if (run.running) {
+      run
+        ..lastActivity = DateTime.now()
+        ..producedOutput = true
+        ..probedAt = null;
+    }
+    return run;
+  }
 }

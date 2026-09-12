@@ -963,6 +963,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       if (kDebugMode) {
         debugPrint('Cancelling stream for chat $_activeChatId...');
       }
+      // The user pressed Stop. The transport sends the `stop` frame on this
+      // declared intent only — a subscription that is merely cancelled (a page
+      // teardown, a reconnect, the next stream replacing this one) must leave
+      // the host's run alone (bead cowork-gnr8).
+      WebSocketChatService.declareStopIntent(_activeChatId!);
       await _streamingManager.cancelStream(_activeChatId!);
 
       if (!mounted) return;

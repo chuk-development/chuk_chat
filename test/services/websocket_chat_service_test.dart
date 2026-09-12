@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -498,8 +500,9 @@ void main() {
     expect(seen.whereType<ToolCallsEvent>(), isEmpty);
   });
 
-  test('cancelling the stream stops the run exactly once', () async {
-    final seen = <ChatStreamEvent>[];
+  /// A live run, listened to, one token in. The caller then decides how the
+  /// subscription goes away.
+  Future<StreamSubscription<ChatStreamEvent>> openRun() async {
     final stream = WebSocketChatService.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
@@ -507,16 +510,62 @@ void main() {
       providerSlug: 'openai',
       chatId: sessionKey,
     );
-    final sub = stream.listen(seen.add);
+    final sub = stream.listen((_) {});
     await _drain();
     controller.emit(const CoworkRelayDelta('half an answ'));
     await _drain();
+    return sub;
+  }
 
+  // A subscription is cancelled for many reasons that are not the user: the
+  // chat page is disposed by a rebuild, the reader leaves the thread, the app
+  // goes to the background, the manager replaces one stream with the next.
+  // Inferring a stop from any of them killed live runs on the executor — run
+  // d1d4ede1, `reason: interrupted`, no answer, nobody having pressed anything
+  // (bead cowork-gnr8). The host's rule is the opposite: a controller that
+  // disconnects leaves its runs going and the results wait in the store.
+  test('a cancelled subscription does NOT stop the host run', () async {
+    final sub = await openRun();
+    await sub.cancel();
+    await _drain();
+
+    expect(controller.stopCalls, 0);
+    expect(controller.stopSessionKeys, isEmpty);
+  });
+
+  test('the user pressing Stop sends exactly one stop frame', () async {
+    final sub = await openRun();
+    // What the composer's stop target declares before it cancels.
+    WebSocketChatService.declareStopIntent(sessionKey);
     await sub.cancel();
     await _drain();
 
     expect(controller.stopCalls, 1);
     expect(controller.stopSessionKeys, <String>[sessionKey]);
+    expect(WebSocketChatService.hasStopIntent(sessionKey), isFalse);
+  });
+
+  test('a withdrawn intent is a page teardown, not a stop', () async {
+    final sub = await openRun();
+    // The chat screen's dispose: it cancels its stream and then disposes the
+    // streaming handler in the same synchronous block.
+    WebSocketChatService.declareStopIntent(sessionKey);
+    final cancelled = sub.cancel();
+    WebSocketChatService.withdrawStopIntent();
+    await cancelled;
+    await _drain();
+
+    expect(controller.stopCalls, 0);
+  });
+
+  test('a stop declared for another thread never stops this one', () async {
+    final sub = await openRun();
+    WebSocketChatService.declareStopIntent('some-other-thread');
+    await sub.cancel();
+    await _drain();
+
+    expect(controller.stopCalls, 0);
+    WebSocketChatService.withdrawStopIntent();
   });
 
   test('a run that finished on its own is never stopped', () async {
