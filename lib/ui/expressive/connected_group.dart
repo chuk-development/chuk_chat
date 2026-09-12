@@ -39,10 +39,10 @@ class ConnectedGroup extends StatelessWidget {
   final EdgeInsetsGeometry margin;
 
   /// The corner of the container that holds the segments.
-  static const double outerRadius = PillGeometry.radius;
+  static const double outerRadius = PillGeometry.filterRadius;
 
   /// The corner of the filled capsule under the selected segment.
-  static const double selectedRadius = PillGeometry.segmentRadius;
+  static const double selectedRadius = PillGeometry.filterSegmentRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -52,15 +52,15 @@ class ConnectedGroup extends StatelessWidget {
       // The segments split the width evenly, so neither label is cramped and
       // the first and the last capsule end at the same distance from the pill.
       child: Container(
-        padding: PillGeometry.shellPadding,
+        padding: PillGeometry.filterShellPadding,
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(PillGeometry.radius),
+          borderRadius: BorderRadius.circular(PillGeometry.filterRadius),
         ),
         child: Row(
           children: <Widget>[
             for (int i = 0; i < labels.length; i++) ...<Widget>[
-              if (i > 0) const SizedBox(width: PillGeometry.inset),
+              if (i > 0) const SizedBox(width: PillGeometry.filterInset),
               Expanded(
                 child: _Segment(
                   label: labels[i],
@@ -103,9 +103,6 @@ class _Segment extends StatelessWidget {
         // The selection commits on pointer down: the switch is the one
         // control that must never lose its tap to the list it sits above.
         instant: true,
-        // The tap reaches into the ring, so the capsule may paint short of a
-        // touch target while the finger still gets one.
-        hitPadding: const EdgeInsets.symmetric(vertical: PillGeometry.tapSlop),
         color: selected ? scheme.primary : Colors.transparent,
         // A stadium at rest and a stadium while held: the press springs, it
         // does not turn the capsule into a rounded box.
@@ -113,7 +110,7 @@ class _Segment extends StatelessWidget {
         pressedShape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: SizedBox(
-          height: PillGeometry.segmentHeight,
+          height: PillGeometry.filterSegmentHeight,
           // No tick: the filled capsule already says which segment is on, and
           // a mark that appears on one side only pushes its label off centre.
           // Every label sits in the middle of its own segment.

@@ -29,18 +29,14 @@ abstract final class PillGeometry {
 
   /// The background that shows around the segments: above, below, at both ends
   /// and between two neighbours.
-  static const double inset = 4;
+  static const double inset = 8;
 
   /// The height of one segment, and so the height of the filled capsule.
-  /// The capsule carries the pill: the ring around it is a hairline of
-  /// background, not a margin, so the fill reads as the control and not as a
-  /// sticker inside it.
-  static const double segmentHeight = 52;
+  static const double segmentHeight = 44;
 
   /// How far a segment's tap area reaches into the ring, above and below.
-  /// Transparent: it takes presses, it paints nothing. Zero while the capsule
-  /// itself is over the touch minimum.
-  static const double tapSlop = 0;
+  /// Transparent: it takes presses, it paints nothing.
+  static const double tapSlop = 4;
 
   /// What a finger hits: the capsule plus the ring it reaches into. At or
   /// above the smallest touch target the layout suite accepts.
@@ -61,4 +57,31 @@ abstract final class PillGeometry {
 
   /// The corner of the pill that holds the segments.
   static const double radius = segmentRadius + inset;
+
+  // -- the switch above a list -------------------------------------------
+  //
+  // Not the same control as the navigation, and not the same shape. The
+  // navigation floats over content, so it keeps a ring of background around
+  // its capsule. The switch belongs to the list under it, sits over the whole
+  // width and is read at a glance: it is flatter, and its fill all but fills
+  // it, with a hairline of background left around the capsule.
+
+  /// The hairline of background around the switch's capsule.
+  static const double filterInset = 4;
+
+  /// The height of one switch segment, and so of its filled capsule. At the
+  /// touch minimum on its own, so nothing has to reach into the hairline.
+  static const double filterSegmentHeight = 48;
+
+  /// The height of the whole switch.
+  static const double filterHeight = filterSegmentHeight + filterInset * 2;
+
+  /// The corner of a switch segment: a stadium.
+  static const double filterSegmentRadius = filterSegmentHeight / 2;
+
+  /// The corner of the shell that holds them, concentric with the capsule.
+  static const double filterRadius = filterSegmentRadius + filterInset;
+
+  /// The padding of that shell.
+  static const EdgeInsets filterShellPadding = EdgeInsets.all(filterInset);
 }
