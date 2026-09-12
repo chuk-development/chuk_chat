@@ -270,7 +270,7 @@ def test_a_probe_that_cannot_run_does_not_take_the_screen_away(tmp_path, monkeyp
     executor = _browser_executor(tmp_path, monkeypatch)
     _probe(monkeypatch, code=125, out="")
     assert executor._vnc_available("t") is True
-    executor._browser_window_probe = None
+    executor._browser_window_probe.clear()
 
     def boom(argv, **kwargs):
         raise OSError("docker gone")
@@ -292,4 +292,4 @@ def test_a_state_change_drops_the_cached_probe(tmp_path, monkeypatch):
     _probe(monkeypatch, code=0, out="1\n")
     assert executor._vnc_available("t") is True
     executor._set_browser_open(False, "", "t")
-    assert executor._browser_window_probe is None
+    assert executor._browser_window_probe == {}

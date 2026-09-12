@@ -834,9 +834,31 @@ def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> 
     }
 
 
+#: Machine-readable ``browser_view.reason`` codes (bead cowork-qp5i). The app
+#: used to read the English ``message`` ("no page open", "no browser open") to
+#: decide whether a browser is there; these codes say the same thing without a
+#: substring match, and they say WHY when there is nothing to show.
+#:
+#: On ``started``:
+#:   ``""``          the view is live and a page is on the display
+#:   ``opening``     live, but empty: the browser is being opened right now and
+#:                   the picture grows into this same stream
+#:   ``no_browser``  live and empty, and nothing here can open a page
+#: On ``error``:
+#:   ``no_sandbox``        this executor has no docker sandbox to watch
+#:   ``no_display``        no box has a browser display (nothing is running)
+#:   ``vnc_start_failed``  x11vnc did not come up
+#:   ``exec_failed``       the sandbox could not be reached at all
+#:   ``bridge_failed``     the byte pipe to x11vnc could not be opened
+BROWSER_VIEW_REASONS = (
+    "opening", "no_browser", "no_sandbox", "no_display",
+    "vnc_start_failed", "exec_failed", "bridge_failed",
+)
+
+
 def browser_view_payload(
     status: str, *, message: str = "", password: str | None = None,
-    vnc_available: bool = False,
+    vnc_available: bool = False, reason: str = "",
 ) -> dict[str, Any]:
     """Executor -> app status for the live browser view.
 
@@ -848,6 +870,10 @@ def browser_view_payload(
     are sent once per change, so the app can show its button only while there
     is something to look at; see :func:`browser_state_from_tool`.
 
+    ``reason`` is the machine-readable half of ``message``
+    (:data:`BROWSER_VIEW_REASONS`): empty when there is nothing to explain, and
+    otherwise a stable code, so the app never has to match English text.
+
     ``password`` rides only on ``"started"``: the per-view VNC secret x11vnc was
     (re)armed with. It travels inside the sealed frame, so only the paired app
     ever sees it; inside the sandbox the secret sits in a root-only file, so the
@@ -855,7 +881,7 @@ def browser_view_payload(
     """
     payload: dict[str, Any] = {
         "type": "browser_view", "status": status, "message": message,
-        "vnc_available": vnc_available,
+        "vnc_available": vnc_available, "reason": reason,
     }
     if password is not None:
         payload["password"] = password

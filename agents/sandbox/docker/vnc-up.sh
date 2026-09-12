@@ -35,14 +35,24 @@ if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
     exit 3
 fi
 
-# How many visible top-level windows are on the display? A bare Xvfb with no
-# browser open has none, so the stream would be an all-black framebuffer — the
-# classic "VNC not transmitting" confusion. Report the count so the executor can
-# tell the user "no page open yet" instead of streaming a silent black screen.
-# Best-effort: if xdotool is missing or errors, report -1 (unknown), never fail.
+# How many browser PAGES are on the display? A bare Xvfb with no browser open
+# has none, so the stream would be an all-black framebuffer — the classic "VNC
+# not transmitting" confusion. Report the count so the executor can open the
+# browser instead of streaming a silent black screen.
+#
+# Count by WM_CLASS, not by "any mapped window": Chromium maps two helpers next
+# to every page — a 1x1 window and a 10x10 one named "Chromium clipboard" — and
+# neither carries a class. Counting them reported a browser on a display that
+# had none (measured in a live container: 2 windows by name, 1 by class, for
+# one open page), and the user was shown a black screen that claimed to work.
+# Best-effort: if nothing can count, report -1 (unknown), never fail.
 WINDOWS=-1
-if command -v xdotool >/dev/null 2>&1; then
-    WINDOWS=$(DISPLAY="${DISPLAY_NUM}" xdotool search --onlyvisible "" 2>/dev/null | wc -l | tr -d ' ')
+if command -v xwininfo >/dev/null 2>&1; then
+    WINDOWS=$(DISPLAY="${DISPLAY_NUM}" xwininfo -root -children 2>/dev/null \
+        | grep -Eci '\("[^"]*[Cc]hrom' || true)
+    [ -n "${WINDOWS}" ] || WINDOWS=-1
+elif command -v xdotool >/dev/null 2>&1; then
+    WINDOWS=$(DISPLAY="${DISPLAY_NUM}" xdotool search --onlyvisible --class '[Cc]hrom' 2>/dev/null | wc -l | tr -d ' ')
     [ -n "${WINDOWS}" ] || WINDOWS=-1
 fi
 

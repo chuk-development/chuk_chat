@@ -74,6 +74,7 @@ from cowork_agent import (
     KillSwitch,
     StopReason,
     MCPManager,
+    browser_servers,
     ModelClient,
     ModelResponse,
     PublishRequest,
@@ -87,10 +88,12 @@ from cowork_agent import (
     build_runtime,
     close_cached_memories,
     configs_from_entries,
+    open_browser_gui,
     redact_secrets,
     run_stamp_fields,
     skills_inventory,
 )
+from cowork_agent.mcp_client import auto_open_enabled
 from cowork_agent.runtime import SKILLS_DIRNAME
 from cowork_crypto import (
     CoworkFrameOpener,
@@ -609,6 +612,22 @@ class _VncBridge:
                 pass
 
 
+def _script_window_count(stdout: bytes | None) -> int | None:
+    """The ``WINDOWS=<n>`` line ``cowork-vnc-up`` prints, or ``None``.
+
+    The fallback for a box the executor cannot count on itself. ``-1`` is the
+    script's own "could not tell" and is passed through as the number it is, so
+    the caller can keep treating a negative count as unknown.
+    """
+    try:
+        for line in (stdout or b"").decode("utf-8", "replace").splitlines():
+            if line.startswith("WINDOWS="):
+                return int(line[len("WINDOWS=") :].strip())
+    except (AttributeError, ValueError):
+        return None
+    return None
+
+
 class Executor:
     """One executor bound to one transport endpoint and one sandbox.
 
@@ -853,8 +872,10 @@ class Executor:
         # opened/closed on every change and carried in every `run_state`, so the
         # app shows its browser button only while there is something to see.
         self._browser_open = False
-        #: ``(checked_at, present)`` of the last browser-window probe.
-        self._browser_window_probe: tuple[float, bool] | None = None
+        #: ``{container: (checked_at, present)}`` of the last window probes.
+        #: Per box, because one executor can watch several sandboxes and a
+        #: single slot would answer for the wrong one.
+        self._browser_window_probe: dict[str, tuple[float, bool]] = {}
 
     @property
     def name(self) -> str:
@@ -1777,45 +1798,75 @@ class Executor:
         env = self._environment_for(session_key)
         binary = getattr(getattr(env, "_cli", None), "binary", None)
         container = getattr(env, "container_id", None)
-        if not binary or not container:
-            return False
-        return self._browser_window_present(str(binary), str(container))
+        if binary and container and self._browser_window_present(
+            str(binary), str(container)
+        ):
+            return True
+        # The asking session's own box has nothing on it. That is not the end of
+        # the answer: with one container per agent, the browser the user means
+        # is usually in the box of whichever agent opened it, and the view
+        # follows it there (see :meth:`_browser_server_targets`). Advertising
+        # the screen only for the asking box is why the button stayed dark
+        # while browsers were open (bead cowork-qp5i).
+        for prefix, box, _manager in self._browser_server_targets(
+            session_key, str(container or "")
+        ):
+            if box == container:
+                continue  # already asked, and it said no
+            if self._browser_window_present(prefix[0], box):
+                return True
+        return False
 
     #: How long a window probe is trusted. A run asks for the header on every
     #: replay and every state change; the display does not move that fast.
     BROWSER_WINDOW_TTL_S = 3.0
 
-    def _browser_window_present(self, binary: str, container: str) -> bool:
-        """Is a browser window mapped on the sandbox display right now?
+    #: Count the PAGES on the sandbox display, not the windows. Chromium maps
+    #: two helpers next to every page — a 1x1 window and a 10x10 one called
+    #: "Chromium clipboard" — and neither carries a WM_CLASS. Matching the
+    #: class field (the quoted pair at the end of an ``xwininfo -children``
+    #: line) counts the real page and skips the helpers, which is why a display
+    #: with nothing on it no longer claims a browser (measured in a live
+    #: container: 2 windows by name, 1 by class, for one open page).
+    BROWSER_WINDOW_COUNT_SH = (
+        'DISPLAY=${COWORK_BROWSER_DISPLAY:-:99} xwininfo -root -children '
+        "2>/dev/null | grep -Eci '\\(\"[^\"]*[Cc]hrom'; exit 0"
+    )
 
-        One ``xwininfo`` per :data:`BROWSER_WINDOW_TTL_S`, so a burst of
-        headers costs one probe. A probe that cannot run at all (no xwininfo in
-        the image, docker refusing) answers with what the tool calls said, so an
-        older image is no worse off than before.
+    def _browser_windows(self, binary: str, container: str) -> int | None:
+        """How many browser pages are on that box's display, or ``None``.
+
+        ``None`` is "could not tell" (no xwininfo in the image, docker refusing,
+        container gone) and must never be read as "no browser": it is the
+        answer an older image gives, and it may not take a working screen away.
         """
-        now = time.time()
-        cached = self._browser_window_probe
-        if cached is not None and now - cached[0] < self.BROWSER_WINDOW_TTL_S:
-            return cached[1]
-        # The script always exits 0 and always prints a count, so "docker said
-        # no" is told apart from "the display has no browser": anything but a
-        # clean run with a number on stdout is an unknown, and an unknown must
-        # not take a working screen away.
         argv = [
-            binary, "exec", container, "sh", "-lc",
-            'DISPLAY=${COWORK_BROWSER_DISPLAY:-:99} xwininfo -root -children '
-            '2>/dev/null | grep -ci chrom; exit 0',
+            binary, "exec", container, "sh", "-lc", self.BROWSER_WINDOW_COUNT_SH,
         ]
         try:
             proc = subprocess.run(argv, capture_output=True, text=True, timeout=8)
         except Exception:  # noqa: BLE001 — a probe that cannot run proves nothing
-            return True
+            return None
         out = (proc.stdout or "").strip()
         if proc.returncode != 0 or not out.isdigit():
-            return True
-        present = out != "0"
-        self._browser_window_probe = (now, present)
-        return present
+            return None
+        count = int(out)
+        self._browser_window_probe[container] = (time.time(), count > 0)
+        return count
+
+    def _browser_window_present(self, binary: str, container: str) -> bool:
+        """Is a browser window mapped on that box's display right now?
+
+        One ``xwininfo`` per box per :data:`BROWSER_WINDOW_TTL_S`, so a burst of
+        headers costs one probe. A probe that cannot run at all answers with
+        what the tool calls said, so an older image is no worse off than before.
+        """
+        now = time.time()
+        cached = self._browser_window_probe.get(container)
+        if cached is not None and now - cached[0] < self.BROWSER_WINDOW_TTL_S:
+            return cached[1]
+        count = self._browser_windows(binary, container)
+        return True if count is None else count > 0
 
     def _set_browser_open(
         self, open_: bool, request_id: str, session_key: str | None = None
@@ -1826,8 +1877,8 @@ class Executor:
             if self._browser_open == open_:
                 return
             self._browser_open = open_
-            # The window came or went; the cached probe is about the old world.
-            self._browser_window_probe = None
+            # The window came or went; the cached probes are about the old world.
+            self._browser_window_probe.clear()
         if request_id:
             self._event(request_id, browser_view_payload(
                 "opened" if open_ else "closed",
@@ -1936,6 +1987,109 @@ class Executor:
             "args": [*prefix[1:], cid, "cowork-browser-mcp"],
         }
 
+    #: What the app is told while the nudge below brings the browser up. The
+    #: wording keeps the "no page open" phrase the app matches on today; the
+    #: machine-readable half is ``browser_view.reason`` (``opening``).
+    BROWSER_OPENING_MESSAGE = "no page open yet — opening the browser now"
+    #: ...and when nothing in this process can open one (``reason`` ``no_browser``).
+    BROWSER_CLOSED_MESSAGE = (
+        "no page open yet — no browser server is connected to open one"
+    )
+    #: The launcher every sandbox browser server is exec'd as. Its argv ends
+    #: ``<container> cowork-browser-mcp``, so a connected server states WHICH
+    #: box its Chromium draws in — the one fact that ties a live browser to a
+    #: display the view can serve.
+    BROWSER_MCP_LAUNCHER = "cowork-browser-mcp"
+
+    def _browser_server_targets(
+        self, session_key: str | None, container: str
+    ) -> list[tuple[list[str], str, MCPManager]]:
+        """Every connected sandbox browser server, as ``(prefix, box, manager)``.
+
+        A server that is connected has already brought its box's Xvfb up: the
+        launcher starts the display before it execs the MCP server. So this list
+        is also the list of boxes that HAVE a display worth serving — which is
+        what makes it the right search order for the view.
+
+        Ordered: the box the view asked for, then the asking session's own box,
+        then the rest. ``browser_start`` carries no ``session_key`` today, so
+        the requested box is always this executor's own one, while an agent's
+        browser lives in that agent's container. Watching only the requested box
+        is how a user with browsers open was told no browser was open.
+
+        Never raises, and never builds anything: two MCP servers on one profile
+        is not a thing (``browser-mcp-owner.py`` refuses the second with
+        "profile still has a live owner"), so a manager invented here would
+        break the next real task instead of helping it.
+        """
+        with self._mcp_lock:
+            exact = self._mcp_managers.get(str(session_key or ""))
+            managers = list(self._mcp_managers.values())
+        found: list[tuple[list[str], str, MCPManager]] = []
+        for manager in managers:
+            try:
+                names = set(browser_servers(manager))
+                if not names:
+                    continue
+                for config in manager.configs:
+                    args = list(config.args or [])
+                    if config.name not in names or not config.command:
+                        continue
+                    # `docker exec -i [-u <user>] <cid> cowork-browser-mcp`.
+                    # Anything else is the user's own browser over the
+                    # extension bridge: no container, nothing to serve.
+                    if len(args) < 2 or args[-1] != self.BROWSER_MCP_LAUNCHER:
+                        continue
+                    found.append(([config.command, *args[:-2]], args[-2], manager))
+            except Exception:  # noqa: BLE001 — an odd manager is simply no target
+                continue
+
+        def rank(target: tuple[list[str], str, MCPManager]) -> int:
+            _prefix, box, manager = target
+            if box == container:
+                return 0
+            return 1 if manager is exact else 2
+
+        found.sort(key=rank)
+        seen: set[str] = set()
+        unique: list[tuple[list[str], str, MCPManager]] = []
+        for prefix, box, manager in found:
+            if box in seen:
+                continue
+            seen.add(box)
+            unique.append((prefix, box, manager))
+        return unique
+
+    def _nudge_browser_open(
+        self, manager: MCPManager, request_id: str, session_key: str | None
+    ) -> None:
+        """Open the browser GUI on its own thread; never blocks, never raises.
+
+        Off the critical path on purpose: launching Chromium costs a second or
+        two and the view must come up now — the window grows into the stream
+        that is already running. When the server answers ``ok`` the browser
+        state flips, so the app stops saying the browser is closed.
+        """
+
+        def work() -> None:
+            try:
+                opened = open_browser_gui(manager)
+            except Exception:  # noqa: BLE001 — a browser that refuses is not an error
+                return
+            if opened:
+                self._set_browser_open(True, request_id, session_key)
+
+        threading.Thread(target=work, name="vnc-browser-open", daemon=True).start()
+
+    def _may_open_browser(self) -> bool:
+        """``COWORK_BROWSER_AUTO_OPEN=0`` is the documented way to keep the
+        browser lazy; then the view reports an empty display instead of
+        filling it."""
+        try:
+            return auto_open_enabled()
+        except Exception:  # noqa: BLE001 — a view must never die on a switch
+            return False
+
     def _vnc_start(
         self, request_id: str, payload: dict, generation: int | None = None
     ) -> None:
@@ -1949,17 +2103,34 @@ class Executor:
         # Only ever one live view; replace any prior one silently.
         self._vnc_teardown(reason="stopped", notify=False)
 
-        prep = self._vnc_exec_prefix(payload.get("session_key"))
+        session_key = payload.get("session_key")
+        prep = self._vnc_exec_prefix(session_key)
         if prep is None:
             self._event(
                 request_id,
-                browser_view_payload("error", message="live view needs the docker sandbox"),
+                browser_view_payload(
+                    "error",
+                    message="live view needs the docker sandbox",
+                    reason="no_sandbox",
+                ),
             )
             return
         prefix, cid = prep
 
-        # Bring x11vnc up on the browser display (idempotent). Exit 3 = the agent
-        # has not opened the browser yet, so there is no display to serve.
+        # WHICH box to watch. A box whose browser server is connected has a
+        # display; the box the frame asks for may well not, because the app
+        # sends no session_key and every agent has its own container. So try
+        # the boxes with a live browser first and keep the asked-for one as the
+        # fallback, instead of reporting "no browser" at the first closed door.
+        attempts: list[tuple[list[str], str, MCPManager | None]] = [
+            (p, box, manager)
+            for p, box, manager in self._browser_server_targets(session_key, cid)
+        ]
+        if all(box != cid for _p, box, _m in attempts):
+            attempts.append((prefix, cid, None))
+
+        # Bring x11vnc up on the browser display (idempotent). Exit 3 = that box
+        # has no browser display at all, so there is nothing to serve there.
         # Use the FULL prefix: it is [binary, "exec", "-i", ("-u", user)?] and the
         # `-u <user>` pair must stay intact. Slicing it (`prefix[:-1]`) to drop the
         # harmless `-i` also dropped the username when a user was set, producing
@@ -1974,34 +2145,50 @@ class Executor:
         # `started` frame and nowhere else. VNC auth keys are 8 bytes; 8
         # url-safe chars is what x11vnc/DES actually use.
         secret = secrets.token_urlsafe(6)[:8]
-        vnc_up_argv = [
-            prefix[0], "exec", "-i", "-u", "root",
-            "-e", f"COWORK_VNC_PASSWD={secret}",
-            cid, "cowork-vnc-up",
-        ]
-        try:
-            up = subprocess.run(  # noqa: S603 — argv built by us
-                vnc_up_argv,
-                capture_output=True,
-                timeout=15,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
+        chosen: tuple[list[str], str, MCPManager | None, Any] | None = None
+        # What to say if no box answers. The last failure wins, and every one of
+        # them names a cause instead of handing the user a chore.
+        failure = (
+            "no browser open: no sandbox browser is running to watch",
+            "no_display",
+        )
+        for candidate, box, manager in attempts:
+            vnc_up_argv = [
+                candidate[0], "exec", "-i", "-u", "root",
+                "-e", f"COWORK_VNC_PASSWD={secret}",
+                box, "cowork-vnc-up",
+            ]
+            try:
+                up = subprocess.run(  # noqa: S603 — argv built by us
+                    vnc_up_argv,
+                    capture_output=True,
+                    timeout=15,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                failure = (
+                    f"no browser open: the sandbox could not be reached "
+                    f"({type(exc).__name__})",
+                    "exec_failed",
+                )
+                continue
+            if up.returncode == 3:
+                failure = (
+                    "no browser open: no sandbox browser is running to watch",
+                    "no_display",
+                )
+                continue
+            if up.returncode != 0:
+                failure = ("could not start the VNC server", "vnc_start_failed")
+                continue
+            chosen = (candidate, box, manager, up)
+            break
+        if chosen is None:
             self._event(
                 request_id,
-                browser_view_payload("error", message=f"vnc start failed: {type(exc).__name__}"),
+                browser_view_payload("error", message=failure[0], reason=failure[1]),
             )
             return
-        if up.returncode == 3:
-            self._event(
-                request_id,
-                browser_view_payload("error", message="no browser open yet — ask the agent to open a page first"),
-            )
-            return
-        if up.returncode != 0:
-            self._event(
-                request_id, browser_view_payload("error", message="could not start the VNC server")
-            )
-            return
+        prefix, cid, nudge, up = chosen
 
         port = "5900"
         argv = prefix + [cid, "socat", "STDIO", f"TCP:127.0.0.1:{port}"]
@@ -2025,7 +2212,11 @@ class Executor:
         except (OSError, subprocess.SubprocessError) as exc:
             self._event(
                 request_id,
-                browser_view_payload("error", message=f"vnc bridge failed: {type(exc).__name__}"),
+                browser_view_payload(
+                    "error",
+                    message=f"vnc bridge failed: {type(exc).__name__}",
+                    reason="bridge_failed",
+                ),
             )
             return
         holder.append(bridge)
@@ -2045,33 +2236,47 @@ class Executor:
             bridge.close()
             return
         bridge.start()
-        # If the display has no browser window, the stream is an all-black frame.
-        # Say so, so the user knows to ask the agent to open a page rather than
-        # staring at a silent black screen. The bridge stays live: the moment the
-        # agent opens a browser the window appears in the same stream.
+        # How many PAGES are on that display? Ask the box directly rather than
+        # trust the script's count: `cowork-vnc-up` counts every mapped window,
+        # so Chromium's 1x1 helper and its 10x10 clipboard window read as a
+        # browser — and a script inside an image cannot be fixed for a container
+        # that is already running. The script's WINDOWS= line stays as the
+        # fallback for a box whose image has no xwininfo.
+        windows = self._browser_windows(prefix[0], cid)
+        if windows is None:
+            windows = _script_window_count(up.stdout)
         message = ""
-        windows: int | None = None
-        try:
-            for line in up.stdout.decode("utf-8", "replace").splitlines():
-                if line.startswith("WINDOWS="):
-                    windows = int(line[len("WINDOWS=") :].strip())
-                    if windows == 0:
-                        message = "no page open yet — ask the agent to open a browser"
-                    break
-        except (AttributeError, ValueError):
-            pass
-        # The display is the ground truth when we have it (-1 = xdotool could
+        reason = ""
+        if windows == 0:
+            # Empty display. Opening the browser is the answer, not a chore for
+            # the user: one `browser_tabs list` on the box's own server puts a
+            # page on the display, and it grows into the stream that is already
+            # running. Only when there is nothing to poke does the view say so
+            # — and then it says why.
+            if nudge is not None and self._may_open_browser():
+                message, reason = self.BROWSER_OPENING_MESSAGE, "opening"
+            else:
+                message, reason = self.BROWSER_CLOSED_MESSAGE, "no_browser"
+                nudge = None
+        else:
+            nudge = None
+        # The display is the ground truth when we have it (-1 = the script could
         # not tell): flip the browser state before `started`, so the app has
         # the verdict by the time it decides whether to show the view.
         if windows is not None and windows >= 0:
-            self._set_browser_open(windows > 0, request_id, payload.get("session_key"))
+            self._set_browser_open(windows > 0, request_id, session_key)
         self._event(
             request_id,
             browser_view_payload(
-                "started", message=message, password=secret,
-                vnc_available=self._vnc_available(payload.get("session_key")),
+                "started", message=message, password=secret, reason=reason,
+                vnc_available=self._vnc_available(session_key),
             ),
         )
+        # After `started`, so the view is live before Chromium is asked for, and
+        # so an "opened" from the nudge can never overtake the frame that opens
+        # the view.
+        if nudge is not None:
+            self._nudge_browser_open(nudge, request_id, session_key)
 
     def _vnc_feed(self, payload: dict) -> None:
         # One lock acquisition for both: a teardown between two separate reads
