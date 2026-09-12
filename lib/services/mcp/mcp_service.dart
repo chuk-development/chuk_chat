@@ -525,6 +525,7 @@ class McpService {
   /// both by [disconnect] and by the sync reconcile when the server dropped a
   /// connection another device had already deleted remotely.
   static Future<void> _forgetLocal(String id) async {
+    _recordReachable(id, true); // no connection, nothing to report as dead
     connections.value = [
       for (final c in connections.value)
         if (c.id != id) c,
@@ -538,6 +539,57 @@ class McpService {
   }
 
   /// Ask a connected server for its tools again.
+  /// Ids of connections whose server did not answer the last time it was
+  /// asked.
+  ///
+  /// A connection is a stored token and a stored URL, not a live socket, so
+  /// nothing notices when the server goes away: the list happily reports a
+  /// server as connected long after it stopped answering. This is what the
+  /// UI reads to say otherwise. It is a cache of the last check, never a
+  /// claim about right now — a server absent here has not been checked, not
+  /// been proven alive.
+  static final ValueNotifier<Set<String>> unreachable =
+      ValueNotifier<Set<String>>(<String>{});
+
+  /// Ask the server whether it is still there.
+  ///
+  /// One `initialize` round trip, which is the cheapest thing an MCP server
+  /// answers. The result lands in [unreachable] either way, so a check that
+  /// succeeds also clears a stale failure.
+  static Future<bool> verifyReachable(String id) async {
+    final connection = connectionFor(id);
+    if (connection == null) return false;
+    bool alive;
+    try {
+      final client = await _clientFor(connection);
+      if (client == null) {
+        alive = false;
+      } else {
+        await client.initialize();
+        alive = true;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [MCP] $id did not answer: $e');
+      alive = false;
+    }
+    _recordReachable(id, alive);
+    return alive;
+  }
+
+  /// Check every connection. Used when the connectors page opens, so the
+  /// list the reader is looking at is about the servers as they are now.
+  static Future<void> verifyAllReachable() async {
+    await Future.wait(
+      connections.value.map((c) => verifyReachable(c.id)),
+    );
+  }
+
+  static void _recordReachable(String id, bool alive) {
+    final next = Set<String>.from(unreachable.value);
+    final changed = alive ? next.remove(id) : next.add(id);
+    if (changed) unreachable.value = next;
+  }
+
   static Future<McpConnection?> refreshTools(String id) async {
     final connection = connectionFor(id);
     if (connection == null) return null;

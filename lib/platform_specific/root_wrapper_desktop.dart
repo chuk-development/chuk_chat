@@ -329,7 +329,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _copyDebugChat() {
     final state = _chatUIKey.currentState;
     final messages = state?.debugMessages;
-    if (messages == null || messages.isEmpty) {AppNotifications.show(context, 'No messages to copy');
+    if (messages == null || messages.isEmpty) {
+        AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(

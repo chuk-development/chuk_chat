@@ -136,7 +136,8 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
   Future<void> _saveSettings() async {
     if (_project == null) return;
     final name = _nameController.text.trim();
-    if (name.isEmpty) {AppNotifications.show(context, 'Workspace name cannot be empty');
+    if (name.isEmpty) {
+        AppNotifications.show(context, 'Workspace name cannot be empty');
       return;
     }
 
@@ -151,7 +152,8 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
         setState(() => _hasSettingsChanges = false);AppNotifications.show(context, 'Settings saved');
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to save: $e');
       }
     }
   }

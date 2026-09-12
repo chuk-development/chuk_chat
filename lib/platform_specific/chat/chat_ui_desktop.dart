@@ -1448,28 +1448,52 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     };
   }
 
-  /// Starts a follow-up turn with the interrupted answer in API history.
+  /// Continues an interrupted assistant row without adding a synthetic user
+  /// bubble. The partial answer stays in history and seeds the new stream.
   Future<void> _continueGenerationAt(int aiIndex) async {
     if (aiIndex < 0 || aiIndex >= _messages.length) return;
+    if (aiIndex != _messages.length - 1) return;
     if (_isStreaming || _isSending) {
       showSnackBar('Please wait');
       return;
     }
     final message = _messages[aiIndex];
     if (message['sender'] != 'ai') return;
+
     final priorText = (message['text'] ?? '').trim();
-    final priorContentBlocks = message['contentBlocks'];
+    final priorContentBlocksJson = message['contentBlocks'];
     if (priorText.isEmpty &&
-        (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+        (priorContentBlocksJson == null || priorContentBlocksJson.isEmpty)) {
       showSnackBar('Nothing to continue from');
       return;
     }
 
-    composerController.text = ChatUiHelpers.continueGenerationPrompt;
-    composerController.selection = TextSelection.collapsed(
-      offset: composerController.text.length,
+    final historyMessages = _messages
+        .sublist(0, aiIndex + 1)
+        .map((entry) => Map<String, String>.from(entry))
+        .toList();
+
+    final priorContentBlocks = priorContentBlocksJson == null
+        ? null
+        : ChatUiHelpers.decodeContentBlocks(
+            priorContentBlocksJson,
+            <String, List<ContentBlock>?>{},
+          );
+    final modelId = message['modelId']?.trim().isNotEmpty == true
+        ? message['modelId']!
+        : selectedModelId;
+    final provider = message['provider']?.trim().isNotEmpty == true
+        ? message['provider']
+        : selectedProviderSlug;
+
+    await _sendMessage(
+      continuationIndex: aiIndex,
+      continuationHistoryMessages: historyMessages,
+      continuePriorText: priorText,
+      continuePriorContentBlocks: priorContentBlocks,
+      modelIdOverride: modelId,
+      providerOverride: provider,
     );
-    await _sendMessage();
   }
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
@@ -1958,6 +1982,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   switchVariantAt(i, variant),
                                               onContinueGeneration:
                                                   !data.isUser &&
+                                                      i ==
+                                                          _messages.length -
+                                                              1 &&
                                                       data.status ==
                                                           ChatMessageStatus
                                                               .interrupted &&

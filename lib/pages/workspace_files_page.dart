@@ -140,7 +140,8 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
         final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectUploaded(fileName));
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, e is StateError ? e.message : e.toString(), kind: AppNotificationKind.error);
+      if (mounted) {
+        AppNotifications.show(context, e is StateError ? e.message : e.toString(), kind: AppNotificationKind.error);
       }
     } finally {
       if (mounted) {

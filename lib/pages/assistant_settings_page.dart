@@ -145,7 +145,8 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
       claimed = false;
     }
     if (!mounted) return;
-    if (!claimed) {AppNotifications.show(context, 'Wähle in der geöffneten Liste Chuk Chat aus.');
+    if (!claimed) {
+        AppNotifications.show(context, 'Wähle in der geöffneten Liste Chuk Chat aus.');
     }
   }
 

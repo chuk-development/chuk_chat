@@ -565,10 +565,12 @@ extension _MessageBubbleImages on _MessageBubbleState {
 
     try {
       await ImageStorageService.deleteEncryptedImage(path);
-      if (mounted) {AppNotifications.show(context, l.imageDeleted);
+      if (mounted) {
+        AppNotifications.show(context, l.imageDeleted);
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, l.deleteFailed(e.toString()));
+      if (mounted) {
+        AppNotifications.show(context, l.deleteFailed(e.toString()));
       }
     }
   }

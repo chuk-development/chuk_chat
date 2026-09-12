@@ -353,7 +353,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     try {
       final bytes = await _bytesForFormat(ext);
       if (bytes == null) {
-        if (mounted) {AppNotifications.show(context, 'Export failed: could not generate $ext');
+        if (mounted) {
+        AppNotifications.show(context, 'Export failed: could not generate $ext');
         }
         return;
       }
@@ -377,7 +378,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       if (kDebugMode) {
         debugPrint('Artifact export failed: $error\n$stackTrace');
       }
-      if (mounted) {AppNotifications.show(context, 'Failed to export artifact: $error');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to export artifact: $error');
       }
     } finally {
       if (mounted) {

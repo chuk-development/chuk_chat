@@ -402,8 +402,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (navigator.canPop()) {
                     navigator.pop();
                   }
-                } on AuthServiceException catch (error) {AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
-                } catch (error) {AppNotifications.showOn(messenger, 'Error: $error', duration: Duration(seconds: 2));
+                } on AuthServiceException catch (error) {
+        AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
+                } catch (error) {
+        AppNotifications.showOn(messenger, 'Error: $error', duration: Duration(seconds: 2));
                 }
               },
               child: Text(
@@ -450,7 +452,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
-      if (ChatStorageService.savedChats.isEmpty) {AppNotifications.showOn(messenger, l.noChatsToExport, duration: Duration(seconds: 2));
+      if (ChatStorageService.savedChats.isEmpty) {
+        AppNotifications.showOn(messenger, l.noChatsToExport, duration: Duration(seconds: 2));
         return;
       }
       final jsonPayload = await ChatStorageService.exportChatsAsJson();
@@ -465,8 +468,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (Platform.isLinux) {
         final savedPath = await _saveExportToLinux(data, fileName);
-        if (savedPath != null) {AppNotifications.showOn(messenger, l.savedToPath(savedPath), duration: Duration(seconds: 2));
-        } else {AppNotifications.showOn(messenger, l.exportCancelled, duration: Duration(seconds: 1));
+        if (savedPath != null) {
+        AppNotifications.showOn(messenger, l.savedToPath(savedPath), duration: Duration(seconds: 2));
+        } else {
+        AppNotifications.showOn(messenger, l.exportCancelled, duration: Duration(seconds: 1));
         }
         return;
       }
@@ -487,8 +492,10 @@ class _SettingsPageState extends State<SettingsPage> {
       } on Exception {
         await Clipboard.setData(ClipboardData(text: jsonPayload));AppNotifications.showOn(messenger, l.copiedToClipboard, duration: Duration(seconds: 2));
       }
-    } on StateError catch (error) {AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
-    } catch (error) {AppNotifications.showOn(messenger, l.exportFailed(error.toString()), duration: Duration(seconds: 2));
+    } on StateError catch (error) {
+        AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
+    } catch (error) {
+        AppNotifications.showOn(messenger, l.exportFailed(error.toString()), duration: Duration(seconds: 2));
     }
   }
 

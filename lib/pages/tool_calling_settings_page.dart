@@ -293,10 +293,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       if (!mounted) return;
       if (success) {
         setState(() {});
-        if (mounted) {AppNotifications.show(context, '${_categoryLabel(category)} connected', kind: AppNotificationKind.error);
+        if (mounted) {
+        AppNotifications.show(context, '${_categoryLabel(category)} connected', kind: AppNotificationKind.error);
         }
       } else {
-        if (mounted) {AppNotifications.show(context, 'Failed to connect ${_categoryLabel(category)}', kind: AppNotificationKind.error);
+        if (mounted) {
+        AppNotifications.show(context, 'Failed to connect ${_categoryLabel(category)}', kind: AppNotificationKind.error);
         }
       }
     } catch (_) {
