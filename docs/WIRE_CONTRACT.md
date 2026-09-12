@@ -1312,3 +1312,63 @@ Sandbox names are collision-free by construction: `DockerEnvironment`'s
 container name ends in a digest of the whole agent id, and a per-coworker
 workspace directory is `<name>-<digest>`. Two coworkers can carry the same name
 and two ids can slug alike; neither can end up in one box.
+
+## Chart documents (`chat_document`, kind `bar_chart`)
+
+### The idea
+
+The agent DESCRIBES a chart; the app draws it. Nothing on the wire is a picture,
+an SVG or a plotting script, and one result is one document — never a chart
+split over several.
+
+### The kind did not change
+
+A chart document is a `bar_chart`, the kind the tool has written since the first
+election night. It carries the spec in a new `chart` object. A new kind would
+have gone dark everywhere that already knows `bar_chart` — the Documents panel's
+label and glyph, the `.json` file name, the reader, the persistence tests — so
+the kind was widened instead.
+
+### The payload
+
+```json
+{
+  "id": "lt26", "title": "Landtagswahl Sachsen-Anhalt", "kind": "bar_chart",
+  "version": 4, "caption": "Vorläufiges Endergebnis, Zweitstimmen",
+  "source_url": "https://wahlergebnisse.sachsen-anhalt.de/wahlen/lt26/",
+  "retrieved_at": "2026-09-12T20:15:00Z",
+  "rows": [],
+  "chart": {
+    "kind": "bar", "unit": "%", "decimals": 1, "decimal_separator": ",",
+    "reference_line": {"value": 5, "label": "5 %-Hürde"},
+    "source": "Landeswahlleiter Sachsen-Anhalt",
+    "points": [
+      {"label": "AfD", "value": 43.8, "color": "#009EE0"},
+      {"label": "CDU", "value": 17.2, "color": "#32302E"}
+    ]
+  }
+}
+```
+
+`chart.kind` is `bar | column_delta | line | grouped | stacked`. Several series
+replace `points` with `series: [{name, direction, color, points: [...]}]`.
+The whole contract is written down in `app/lib/widgets/charts/chart_spec.dart`;
+`agent/src/cowork_agent/chat_documents.py` validates against that comment and
+names what is wrong (`chart point 2 color must be a hex color like #009EE0`)
+rather than trimming it away.
+
+### Documents already in a store
+
+Every chart document written before this carries `rows` of
+`{label, value, color}` where the value is a percentage, plus `caption`,
+`source_url` and `retrieved_at`. The app maps those onto the same spec —
+rows become points, `unit` becomes `%`, the caption becomes the subtitle, the
+source URL becomes the host under the card — so nothing in a store goes blank
+and there is one renderer, not two. A document written with `chart` carries
+`rows: []`: the spec is the numbers, and a second copy of them would drift.
+
+### Versioning
+
+Unchanged. `expected_version` must match the version last read, and an update
+that names neither `chart` nor `rows` keeps the chart the document already had,
+so a caption-only rewrite does not have to resend every point.

@@ -7,7 +7,7 @@
 // result, the price list, the plan — sat behind a tap, so the answer in the
 // thread said nothing. A document is content, not a link to content, so the
 // thread carries it: a table draws as the app's table, a markdown document
-// through the app's markdown renderer, a bar chart as its bars.
+// through the app's markdown renderer, a chart as the app's chart.
 //
 // A real file stays a file: `sandbox_artifact_block.dart` keeps the full-width
 // attachment row for anything the coworker sent as bytes. Only the documents
@@ -32,6 +32,7 @@ import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:cowork/widgets/charts/chuk_chart.dart';
 import 'package:cowork/widgets/chuk_table.dart';
 
 /// How much of a document the thread shows before it defers to the reader.
@@ -62,10 +63,21 @@ bool inlineDocumentHasContent(Map<String, dynamic> document) {
       final List<String> columns = documentColumns(document);
       return columns.isNotEmpty && documentRows(document).isNotEmpty;
     case 'bar_chart':
-      return documentChartRows(document).isNotEmpty;
+    case 'chart':
+      return !documentChart(document).spec.unusable;
     default:
       return '${document['text'] ?? ''}'.trim().isNotEmpty;
   }
+}
+
+/// Whether [document] draws as a chart.
+///
+/// `bar_chart` is the kind the `chat_document` tool writes and the kind every
+/// document already in a store carries. `chart` is accepted as well, so a
+/// document from another producer draws instead of falling back to prose.
+bool documentIsChart(Map<String, dynamic> document) {
+  final String kind = '${document['kind'] ?? ''}';
+  return kind == 'bar_chart' || kind == 'chart';
 }
 
 /// The column names of a table document.
@@ -83,6 +95,139 @@ List<Map> documentRows(Map<String, dynamic> document) =>
 /// view down over one row.
 List<Map> documentChartRows(Map<String, dynamic> document) =>
     documentRows(document).where((Map row) => row['value'] is num).toList();
+
+/// The chart JSON of [document], in the contract `chart_spec.dart` documents.
+///
+/// Two shapes arrive here and exactly one leaves.
+///
+/// A document written since the renderer landed carries the spec itself under
+/// `chart` — kind, unit, axis, reference_line, points or series.
+///
+/// Every document written before it carries `rows` of {label, value, color}
+/// where the value is a percentage, plus `caption`, `source_url` and
+/// `retrieved_at`. Those are mapped onto the same contract rather than drawn
+/// by a second widget: what is already in a store keeps working, and there is
+/// one renderer to keep right.
+Map<String, Object?> documentChartJson(Map<String, dynamic> document) {
+  final Object? raw = document['chart'];
+  final Map<String, Object?> json = <String, Object?>{
+    if (raw is Map)
+      for (final MapEntry<Object?, Object?> e in raw.entries) '${e.key}': e.value,
+  };
+  if (json['points'] == null && json['series'] == null) {
+    json['points'] = documentChartRows(document);
+    // The tool validates a legacy row as a percentage, so the axis is one.
+    json['unit'] ??= '%';
+    json['kind'] ??= 'bar';
+  }
+  json['title'] ??= document['title'];
+  json['subtitle'] ??= document['caption'];
+  json['source'] ??= documentSourceName(document['source_url']);
+  json['retrieved_at'] ??= document['retrieved_at'];
+  return json;
+}
+
+/// A source URL as a chart footer says it: the host, not the whole path.
+///
+/// `source_url` is a link, and the card's footer is painted text nobody can
+/// tap. A 78-character URL under a chart is noise; the host is the fact the
+/// footer is for. The reader keeps the full URL in a block that opens it.
+String documentSourceName(Object? raw) {
+  final String value = '${raw ?? ''}'.trim();
+  final Uri? uri = Uri.tryParse(value);
+  if (uri == null ||
+      (uri.scheme != 'https' && uri.scheme != 'http') ||
+      uri.host.isEmpty) {
+    return value;
+  }
+  return uri.host.replaceFirst('www.', '');
+}
+
+/// A document's chart, ready to draw, with what had to be left out of it.
+@immutable
+class DocumentChart {
+  const DocumentChart({
+    required this.spec,
+    required this.total,
+    required this.shown,
+  });
+
+  /// The spec as drawn — already sorted, already cut to [shown] categories.
+  final ChartSpec spec;
+
+  /// How many categories the document holds.
+  final int total;
+
+  /// How many of them this spec draws.
+  final int shown;
+
+  /// True when the reader has to open the document to see the rest.
+  bool get isCut => shown < total;
+
+  /// "6 bars", "30 points" — what the block says it is holding.
+  String get countLabel {
+    final String noun = spec.kind == ChartKind.line ? 'point' : 'bar';
+    return '$total ${total == 1 ? noun : '${noun}s'}';
+  }
+}
+
+/// Reads the chart out of [document].
+///
+/// ONE parse for the thread and for the reader, so the preview and the full
+/// screen cannot drift into two different charts.
+///
+/// [maxPoints] caps how many categories are drawn — the thread's six-bar rule.
+/// A line is one stroke rather than a stack of rows, so it is never cut: a
+/// week of prices says nothing when six days of it are missing.
+///
+/// [withSource] false leaves the source line out of the card, for a caller
+/// that prints the source itself with a link the reader can open.
+DocumentChart documentChart(
+  Map<String, dynamic> document, {
+  int? maxPoints,
+  bool withSource = true,
+}) {
+  final Map<String, Object?> json = documentChartJson(document);
+  if (!withSource) {
+    json.remove('source');
+    json.remove('retrieved_at');
+  }
+  // The card sits under the block's own title; printing it twice is the block
+  // saying the same thing to itself. A chart that carries a DIFFERENT title
+  // keeps it — that one is information.
+  final String title = '${json['title'] ?? ''}'.trim();
+  if (title.toLowerCase() == '${document['title'] ?? ''}'.trim().toLowerCase()) {
+    json.remove('title');
+  }
+
+  final ChartSpec spec = ChartSpec.parse(json);
+  final int total = spec.categories.length;
+  if (maxPoints == null ||
+      total <= maxPoints ||
+      spec.kind == ChartKind.line ||
+      spec.unusable) {
+    return DocumentChart(spec: spec, total: total, shown: total);
+  }
+  // Cut AFTER the parse, because the parse is what applies `sort`: cutting the
+  // JSON would keep the first six written, not the six biggest.
+  return DocumentChart(
+    spec: spec.copyWith(
+      series: <ChartSeries>[
+        for (final ChartSeries s in spec.series)
+          ChartSeries(
+            points: s.points.length > maxPoints
+                ? s.points.sublist(0, maxPoints)
+                : s.points,
+            name: s.name,
+            color: s.color,
+            direction: s.direction,
+          ),
+      ],
+    ),
+    total: total,
+    shown: maxPoints,
+  );
+}
 
 /// One cell as [ChukTable] reads it. A bare URL becomes a markdown link
 /// labelled with its host, so the cell says "wahlergebnisse.sachsen-anhalt.de"
@@ -154,135 +299,6 @@ Future<void> openDocumentLink(BuildContext context, String href) async {
   }
 }
 
-/// The bars of a chart document: a label, its percentage and a track.
-///
-/// ONE implementation for the reader and for the thread, so the preview and
-/// the full screen show the same chart at two sizes.
-class DocumentBarList extends StatelessWidget {
-  const DocumentBarList({
-    super.key,
-    required this.rows,
-    this.showScale = true,
-    this.barHeight = 28,
-  });
-
-  /// Rows that already carry a numeric `value` — see [documentChartRows].
-  final List<Map> rows;
-
-  /// The `0 % · 50 % · 100 %` rule under the bars. The thread leaves it out:
-  /// six labelled bars say the scale themselves, and the rule is one more line
-  /// in a block that has to stay short.
-  final bool showScale;
-
-  final double barHeight;
-
-  /// A row's own colour, or the theme's. The value comes from a model, so
-  /// "blue", a truncated hex or nothing at all are ordinary inputs — none of
-  /// them may reach int.parse, which would throw while the view is building.
-  static Color barColor(BuildContext context, Object? raw) {
-    if (raw is String) {
-      final String hex = raw.trim().replaceFirst('#', '');
-      if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
-        return Color(int.parse('ff$hex', radix: 16));
-      }
-    }
-    return Theme.of(context).colorScheme.primary;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        for (final Map row in rows)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        '${row['label']}',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${(row['value'] as num).toStringAsFixed(1)} %',
-                      // titleMedium, not titleLarge: at a 1.3 text scale the
-                      // larger size pushed the label down to one ellipsised
-                      // word on a phone column.
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // FractionallySizedBox measures the bar against the track
-                // itself, so the fill stays right through a resize without a
-                // LayoutBuilder rebuilding the whole row.
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: .5,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: (row['value'] as num).clamp(0, 100) / 100,
-                      child: Container(
-                        height: barHeight,
-                        decoration: BoxDecoration(
-                          color: barColor(context, row['color']),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: .25,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (showScale)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 20),
-            child: DefaultTextStyle.merge(
-              style: theme.textTheme.bodySmall!.copyWith(
-                color: theme.m3.onSurfaceVariant,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[Text('0 %'), Text('50 %'), Text('100 %')],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 /// A document, drawn in the thread in the coworker's bubble.
 class InlineChatDocument extends StatefulWidget {
   const InlineChatDocument({
@@ -333,9 +349,8 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
     if (kind == 'table') {
       final int n = documentRows(widget.document).length;
       parts.add(n == 1 ? '1 row' : '$n rows');
-    } else if (kind == 'bar_chart') {
-      final int n = documentChartRows(widget.document).length;
-      parts.add(n == 1 ? '1 bar' : '$n bars');
+    } else if (documentIsChart(widget.document)) {
+      parts.add(documentChart(widget.document).countLabel);
     } else {
       parts.add('Markdown document');
     }
@@ -349,6 +364,7 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
       case 'table':
         return HugeIcons.sheet;
       case 'bar_chart':
+      case 'chart':
         return HugeIcons.sorting01;
       default:
         return HugeIcons.fileText;
@@ -419,14 +435,13 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
         );
         more = null;
       case 'bar_chart':
-        final List<Map> rows = documentChartRows(widget.document);
-        final bool cut = rows.length > kInlineDocumentRows;
-        body = DocumentBarList(
-          rows: cut ? rows.sublist(0, kInlineDocumentRows) : rows,
-          showScale: false,
-          barHeight: 22,
+      case 'chart':
+        final DocumentChart chart = documentChart(
+          widget.document,
+          maxPoints: kInlineDocumentRows,
         );
-        more = cut ? 'Open all ${rows.length} bars' : null;
+        body = ChukChart(spec: chart.spec, accentColor: scheme.primary);
+        more = chart.isCut ? 'Open all ${chart.countLabel}' : null;
       default:
         body = _CutAtHeight(
           maxHeight: kInlineDocumentProseHeight,

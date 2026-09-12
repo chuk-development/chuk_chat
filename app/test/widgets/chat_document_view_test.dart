@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:cowork/widgets/charts/chuk_chart.dart';
 import 'package:cowork/widgets/chuk_table.dart';
 
 void main() {
@@ -69,16 +70,10 @@ void main() {
     },
   );
   testWidgets(
-    'four colored bars use actual percentages and expose their source',
+    'a legacy chart document draws through ChukChart and keeps its source',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(760, 700));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      const colors = [
-        Color(0xff112233),
-        Color(0xffee2200),
-        Color(0xff33aa55),
-        Color(0xffaa22cc),
-      ];
       final chart = <String, dynamic>{
         'id': 'election',
         'title': 'Test election',
@@ -98,33 +93,43 @@ void main() {
           home: Scaffold(body: ChatDocumentView(document: chart)),
         ),
       );
-      for (final value in ['32.1 %', '24.5 %', '18.0 %', '8.3 %']) {
-        expect(find.text(value), findsOneWidget);
-      }
-      for (final color in colors) {
-        expect(
-          find.byWidgetPredicate(
-            (w) =>
-                w is Container &&
-                w.decoration is BoxDecoration &&
-                (w.decoration as BoxDecoration).color == color,
-          ),
-          findsOneWidget,
-        );
-      }
-      final firstBar = find.byWidgetPredicate(
-        (w) =>
-            w is Container &&
-            w.decoration is BoxDecoration &&
-            (w.decoration as BoxDecoration).color == colors.first,
+
+      // The rows a document was written with in 2026 map onto the chart
+      // contract: nothing in the store had to change to be drawn.
+      final ChartSpec spec = tester.widget<ChukChart>(
+        find.byType(ChukChart),
+      ).spec;
+      expect(spec.kind, ChartKind.bar);
+      expect(spec.unit, '%');
+      expect(spec.categories, ['Party A', 'Party B', 'Party C', 'Party D']);
+      expect(
+        spec.series.single.points.map((p) => p.value).toList(),
+        [32.1, 24.5, 18.0, 8.3],
       );
-      // The chart keeps a reading measure, so the bar is a share of 720
-      // rather than of the whole 760-pixel surface.
-      expect(tester.getSize(firstBar).width, closeTo(720 * .321, .01));
-      expect(find.text('Four strongest parties — test data'), findsOneWidget);
+      // The party colours survive the mapping — they are the only thing that
+      // tells two bars apart.
+      expect(
+        spec.series.single.points.map((p) => p.color).toList(),
+        const [
+          Color(0xff112233),
+          Color(0xffee2200),
+          Color(0xff33aa55),
+          Color(0xffaa22cc),
+        ],
+      );
+      // The caption becomes the chart's subtitle, so it is printed once.
+      expect(spec.subtitle, 'Four strongest parties — test data');
+      // The source keeps the block a reader can actually tap.
+      expect(spec.source, isNull);
       expect(find.byTooltip('Copy link'), findsOneWidget);
       expect(find.byTooltip('Open in browser'), findsOneWidget);
+      // The chart keeps the reading measure rather than the whole surface.
+      expect(
+        tester.getSize(find.byType(ChukChart)).width,
+        lessThanOrEqualTo(720.0),
+      );
       expect(tester.takeException(), isNull);
+
       await tester.binding.setSurfaceSize(const Size(320, 900));
       await tester.pumpWidget(
         MaterialApp(
