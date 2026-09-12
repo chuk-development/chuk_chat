@@ -1354,6 +1354,20 @@ void main() {
     await client.dispose();
   });
 
+  // Bead cowork-5eo6: without the key the executor resolves the PRIMARY
+  // environment, which with one container per coworker is almost never the box
+  // the browser is in — the view then reports no browser while one is running.
+  test('browser_start names the thread whose box to look in', () async {
+    final (client, host, _) = await paired();
+
+    await client.startBrowserView(sessionKey: 'agent-7');
+    await Future<void>.delayed(Duration.zero);
+
+    final start =
+        host.received.singleWhere((m) => m['type'] == 'browser_start');
+    expect(start['session_key'], 'agent-7');
+  });
+
   test('start/stop/sendBrowserData seal the browser control frames (§9.1)',
       () async {
     final (client, host, _) = await paired();
@@ -1365,6 +1379,10 @@ void main() {
 
     expect(host.received.any((m) => m['type'] == 'browser_start'), isTrue);
     expect(host.received.any((m) => m['type'] == 'browser_stop'), isTrue);
+    // No key given, no key sent: the executor keeps its old behaviour.
+    final bareStart =
+        host.received.singleWhere((m) => m['type'] == 'browser_start');
+    expect(bareStart.containsKey('session_key'), isFalse);
     final data = host.received.singleWhere((m) => m['type'] == 'browser_data');
     expect(base64.decode(data['data'] as String), <int>[9, 8, 7]);
 

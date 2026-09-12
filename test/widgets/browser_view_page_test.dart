@@ -14,7 +14,12 @@ class _CountingRelay extends FakeRelayController {
   int stops = 0;
 
   @override
-  Future<void> startBrowserView() async => starts++;
+  Future<void> startBrowserView({String? sessionKey}) async {
+    starts++;
+    lastSessionKey = sessionKey;
+  }
+
+  String? lastSessionKey;
 
   @override
   Future<void> stopBrowserView() async => stops++;
