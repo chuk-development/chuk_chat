@@ -54,7 +54,10 @@ def test_browser_view_payload_shape():
         "status": "started",
         "message": "",
         "vnc_available": False,
+        "reason": "",
     }
+    # The machine-readable half: the app reads this, not the English message.
+    assert browser_view_payload("error", reason="no_display")["reason"] == "no_display"
     assert browser_view_payload("error", message="nope")["message"] == "nope"
 
 
@@ -580,3 +583,294 @@ def test_stopping_the_executor_tears_down_a_live_view(tmp_path):
 
     assert fake.closed is True
     assert executor._vnc is None
+
+
+# -- an empty display is nudged awake (bead cowork-qp5i) --------------------
+#
+# `@playwright/mcp` launches Chromium on the FIRST browser tool call, so a
+# session where nobody browsed yet serves an empty root window: a black view.
+# The agent pokes the server awake at task start; the executor does the same
+# when the user opens the view before that first task.
+
+
+class _FakeBrowserConnection:
+    """The slice of MCPConnection the GUI opener touches."""
+
+    def __init__(self, name: str, tools: list[str] | None = None, *, alive: bool = True):
+        import types
+
+        from cowork_agent import MCPToolInfo
+
+        names = tools if tools is not None else ["browser_tabs", "browser_navigate"]
+        self.config = types.SimpleNamespace(name=name)
+        self.tools = [MCPToolInfo(name=t, description="", schema={}) for t in names]
+        self._alive = alive
+        self.calls: list[tuple[str, dict]] = []
+
+    def alive(self) -> bool:
+        return self._alive
+
+    def call(self, tool: str, arguments: dict | None = None) -> dict:
+        self.calls.append((tool, dict(arguments or {})))
+        return {"ok": True, "server": self.config.name, "tool": tool, "content": ""}
+
+
+def _browser_manager(container: str = "cid-abc123", **kwargs):
+    """A started manager holding one sandbox browser server for `container`."""
+    from cowork_agent import MCPManager, MCPServerConfig
+
+    config = MCPServerConfig(
+        name="playwright",
+        command="docker",
+        args=["exec", "-i", "-u", "cowork", container, "cowork-browser-mcp"],
+    )
+    manager = MCPManager([config])
+    connection = _FakeBrowserConnection("playwright", **kwargs)
+    manager.connections["playwright"] = connection  # type: ignore[assignment]
+    return manager, connection
+
+
+def _vnc_start_with(tmp_path, monkeypatch, windows: int, *, pages: int | None = None):
+    """An executor whose fake sandbox reports `windows` from `cowork-vnc-up`
+    and `pages` from the executor's own class-filtered window probe.
+
+    `pages=None` is a probe that cannot run (an image without xwininfo), which
+    is what makes the script's count the fallback it is meant to be.
+    """
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    runs: list[list[str]] = []
+
+    def fake_run(argv, **kwargs):
+        argv = list(argv)
+        runs.append(argv)
+        if "cowork-vnc-up" in argv:
+            return sp.CompletedProcess(
+                args=argv, returncode=0, stdout=f"WINDOWS={windows}\n".encode()
+            )
+        if any("xwininfo" in str(a) for a in argv):  # the executor's own probe
+            if pages is None:
+                return sp.CompletedProcess(args=argv, returncode=125, stdout="", stderr="")
+            return sp.CompletedProcess(args=argv, returncode=0, stdout=f"{pages}\n")
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", fake_run)
+    real_bridge = ex_mod._VncBridge
+    monkeypatch.setattr(ex_mod, "_VncBridge", lambda _argv, **kw: real_bridge(["cat"], **kw))
+    return executor, events, runs
+
+
+def _wait_for(predicate, timeout: float = 5.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _vnc_up_boxes(runs) -> list[str]:
+    """The container each `cowork-vnc-up` ran against, in order."""
+    return [
+        argv[argv.index("cowork-vnc-up") - 1] for argv in runs if "cowork-vnc-up" in argv
+    ]
+
+
+def test_an_empty_display_opens_the_session_browser(tmp_path, monkeypatch):
+    """No page on the display and no task run yet: the view opens one itself.
+
+    The browser server is asked to list its tabs — the call that launches
+    Chromium without throwing a page away — and the app is told the browser is
+    opening, with `reason: opening`, instead of being handed a chore.
+    """
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=0, pages=0)
+    manager, connection = _browser_manager()
+    # The app sends `browser_start` with no session_key; the manager is cached
+    # under the key of whatever task built it. The container id in the server's
+    # own argv is what ties the two together.
+    executor._mcp_managers["t1"] = manager
+    try:
+        executor._vnc_start("req-nudge", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["reason"] == "opening"
+        assert started["message"] == executor.BROWSER_OPENING_MESSAGE
+        assert "ask the agent" not in started["message"]
+        assert _wait_for(lambda: connection.calls), "the browser server was never poked"
+        assert connection.calls == [("browser_tabs", {"action": "list"})]
+        # The page is coming: the app is told the browser is open again.
+        assert _wait_for(lambda: any(e.get("status") == "opened" for e in events))
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_a_display_that_already_has_a_page_is_left_alone(tmp_path, monkeypatch):
+    """A page is on the display: nothing is opened, nothing is said."""
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=1, pages=1)
+    manager, connection = _browser_manager()
+    executor._mcp_managers["t1"] = manager
+    try:
+        executor._vnc_start("req-live", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["message"] == "" and started["reason"] == ""
+        time.sleep(0.2)  # a nudge would have landed long ago
+        assert connection.calls == [], "a live browser was poked again"
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_chromiums_helper_windows_do_not_count_as_a_page(tmp_path, monkeypatch):
+    """The script counts every mapped window, so Chromium's 1x1 helper and its
+    10x10 clipboard window read as a browser. The executor's own class-filtered
+    count is the ground truth, and it says the display is empty."""
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=2, pages=0)
+    manager, connection = _browser_manager()
+    executor._mcp_managers["t1"] = manager
+    try:
+        executor._vnc_start("req-helpers", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["reason"] == "opening"
+        assert _wait_for(lambda: connection.calls == [("browser_tabs", {"action": "list"})])
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_the_script_count_is_the_fallback_when_the_probe_cannot_run(
+    tmp_path, monkeypatch
+):
+    """An image without xwininfo is no worse off than before: the WINDOWS= line
+    still decides, and a display with something on it is shown without fuss."""
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=3, pages=None)
+    try:
+        executor._vnc_start("req-fallback", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["message"] == "" and started["reason"] == ""
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_without_a_browser_server_the_view_says_why(tmp_path, monkeypatch):
+    """Nothing in this process can open a page. The view still comes up, and
+    the message names the cause instead of telling the user to go and ask."""
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=0, pages=0)
+    try:
+        executor._vnc_start("req-bare", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["reason"] == "no_browser"
+        assert started["message"] == executor.BROWSER_CLOSED_MESSAGE
+        assert "ask the agent" not in started["message"]
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_the_view_follows_the_box_where_the_browser_runs(tmp_path, monkeypatch):
+    """One container per agent, and `browser_start` names none of them. The
+    view is served from the box whose browser server is connected — watching
+    only the executor's own box is how a user with browsers open was told no
+    browser was open."""
+    executor, events, runs = _vnc_start_with(tmp_path, monkeypatch, windows=1, pages=1)
+    manager, _connection = _browser_manager(container="cid-agent-two")
+    executor._mcp_managers["peer"] = manager
+    try:
+        executor._vnc_start("req-follow", {})
+
+        assert _vnc_up_boxes(runs)[0] == "cid-agent-two"
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["reason"] == ""
+        # ...and the byte pipe is bridged into that same box.
+        socat = [a for a in runs if "socat" in a]
+        assert not socat or "cid-agent-two" in socat[0]
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_a_box_with_no_display_is_skipped_for_one_that_has_a_browser(
+    tmp_path, monkeypatch
+):
+    """`cowork-vnc-up` exits 3 when a box has no browser display. That is not
+    an error any more: the next box is tried, and only if none answers does the
+    app get an error — with a reason on it."""
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    runs: list[list[str]] = []
+
+    def fake_run(argv, **_kw):
+        argv = list(argv)
+        runs.append(argv)
+        if "cowork-vnc-up" in argv:
+            box = argv[argv.index("cowork-vnc-up") - 1]
+            if box == "cid-abc123":  # this executor's own box: no Xvfb on it
+                return sp.CompletedProcess(args=argv, returncode=3, stdout=b"")
+            return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
+        if any("xwininfo" in str(a) for a in argv):
+            return sp.CompletedProcess(args=argv, returncode=0, stdout="1\n")
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", fake_run)
+    real_bridge = ex_mod._VncBridge
+    monkeypatch.setattr(ex_mod, "_VncBridge", lambda _argv, **kw: real_bridge(["cat"], **kw))
+    manager, _connection = _browser_manager(container="cid-agent-two")
+    executor._mcp_managers["peer"] = manager
+    try:
+        executor._vnc_start("req-skip", {})
+
+        assert _vnc_up_boxes(runs)[0] == "cid-agent-two"
+        assert any(e.get("status") == "started" for e in events), events
+    finally:
+        executor._vnc_teardown(notify=False)
+
+
+def test_no_box_at_all_is_an_error_that_names_the_cause(tmp_path, monkeypatch):
+    """Nothing is running to watch. The app gets `reason: no_display` so it
+    never has to read English, and the message does not send the user off to
+    the agent."""
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        ex_mod.subprocess,
+        "run",
+        lambda *_a, **_k: sp.CompletedProcess(args=[], returncode=3, stdout=b""),
+    )
+
+    executor._vnc_start("req-none", {})
+
+    error = next(e for e in events if e.get("status") == "error")
+    assert error["reason"] == "no_display"
+    assert "ask the agent" not in error["message"]
+
+
+def test_the_auto_open_switch_turns_the_nudge_off(tmp_path, monkeypatch):
+    """COWORK_BROWSER_AUTO_OPEN=0 is the documented way to keep the browser
+    lazy; the view then reports the empty display instead of filling it."""
+    executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=0, pages=0)
+    monkeypatch.setenv("COWORK_BROWSER_AUTO_OPEN", "0")
+    manager, connection = _browser_manager()
+    executor._mcp_managers["t1"] = manager
+    try:
+        executor._vnc_start("req-off", {})
+
+        started = next(e for e in events if e.get("status") == "started")
+        assert started["reason"] == "no_browser"
+        time.sleep(0.2)
+        assert connection.calls == []
+    finally:
+        executor._vnc_teardown(notify=False)
