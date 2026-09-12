@@ -133,7 +133,8 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
       await WorkspaceStorageService.deleteProject(widget.workspaceId);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, l.projectDeleteFailed(e.toString()));
+      if (mounted) {
+        AppNotifications.show(context, l.projectDeleteFailed(e.toString()));
       }
     }
   }
@@ -200,7 +201,8 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
           description: descCtrl.text.trim(),
         );
       } catch (e) {
-        if (mounted) {AppNotifications.show(context, l.projectSaveFailed(e.toString()));
+        if (mounted) {
+        AppNotifications.show(context, l.projectSaveFailed(e.toString()));
         }
       }
     }

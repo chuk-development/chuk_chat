@@ -594,7 +594,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _copyDebugChat() {
     final state = _chatUIMobileKey.currentState;
     final messages = state?.debugMessages;
-    if (messages == null || messages.isEmpty) {AppNotifications.show(context, 'No messages to copy');
+    if (messages == null || messages.isEmpty) {
+        AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(

@@ -44,10 +44,12 @@ class LinuxWebView extends StatelessWidget {
         Uri.file(file.path),
         mode: LaunchMode.externalApplication,
       );
-      if (!launched && context.mounted) {AppNotifications.show(context, 'Could not open the system browser.');
+      if (!launched && context.mounted) {
+        AppNotifications.show(context, 'Could not open the system browser.');
       }
     } catch (e) {
-      if (context.mounted) {AppNotifications.show(context, 'Open failed: $e');
+      if (context.mounted) {
+        AppNotifications.show(context, 'Open failed: $e');
       }
     }
   }

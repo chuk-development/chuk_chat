@@ -253,10 +253,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         _selectedImages.remove(image.path);
       });
 
-      if (mounted) {AppNotifications.show(context, l.imageDeleted);
+      if (mounted) {
+        AppNotifications.show(context, l.imageDeleted);
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, l.failedToDeleteImage(e.toString()));
+      if (mounted) {
+        AppNotifications.show(context, l.failedToDeleteImage(e.toString()));
       }
     }
   }
@@ -365,8 +367,10 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     });
 
     if (mounted) {
-      if (failedCount > 0) {AppNotifications.show(context, l.deletedImagesResult(deletedCount, failedCount));
-      } else {AppNotifications.show(context, l.deletedImagesSuccess(deletedCount));
+      if (failedCount > 0) {
+        AppNotifications.show(context, l.deletedImagesResult(deletedCount, failedCount));
+      } else {
+        AppNotifications.show(context, l.deletedImagesSuccess(deletedCount));
       }
     }
   }

@@ -221,11 +221,13 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
         customSystemPrompt: instructions.trim(),
       );
       if (!mounted) return false;
-      if (successMessage != null) {AppNotifications.show(context, successMessage);
+      if (successMessage != null) {
+        AppNotifications.show(context, successMessage);
       }
       return true;
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to save: $e');
       }
       return false;
     }
@@ -246,7 +248,8 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
         .where((chat) => !existing.contains(chat.id))
         .toList();
 
-    if (availableChats.isEmpty) {AppNotifications.show(context, 'No chats available to add');
+    if (availableChats.isEmpty) {
+        AppNotifications.show(context, 'No chats available to add');
       return;
     }
 

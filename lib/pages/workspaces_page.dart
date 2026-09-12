@@ -65,7 +65,8 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
       await WorkspaceStorageService.loadProjects();
       _filterProjects();
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, 'Failed to load projects: $e');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to load projects: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -113,10 +114,12 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
           description: result['description'],
           customSystemPrompt: result['systemPrompt'],
         );
-        if (mounted) {AppNotifications.show(context, 'Created "${workspace.name}"');
+        if (mounted) {
+        AppNotifications.show(context, 'Created "${workspace.name}"');
         }
       } catch (e) {
-        if (mounted) {AppNotifications.show(context, 'Failed to create workspace: $e');
+        if (mounted) {
+        AppNotifications.show(context, 'Failed to create workspace: $e');
         }
       }
     }
@@ -149,10 +152,12 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     if (confirmed == true && mounted) {
       try {
         await WorkspaceStorageService.deleteProject(workspace.id);
-        if (mounted) {AppNotifications.show(context, 'Workspace deleted');
+        if (mounted) {
+        AppNotifications.show(context, 'Workspace deleted');
         }
       } catch (e) {
-        if (mounted) {AppNotifications.show(context, 'Failed to delete workspace: $e');
+        if (mounted) {
+        AppNotifications.show(context, 'Failed to delete workspace: $e');
         }
       }
     }
@@ -162,7 +167,8 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await WorkspaceStorageService.archiveProject(workspace.id, true);
-      if (mounted) {AppNotifications.showOn(messenger, 'Archived "${workspace.name}"', actionLabel: 'Undo', onAction: () async {
+      if (mounted) {
+        AppNotifications.showOn(messenger, 'Archived "${workspace.name}"', actionLabel: 'Undo', onAction: () async {
                 try {
                   await WorkspaceStorageService.archiveProject(workspace.id, false);
                 } catch (e) {

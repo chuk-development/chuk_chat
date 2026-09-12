@@ -5,6 +5,8 @@
 // list is the catalogue, the registry search, and a field to paste any
 // other MCP address into.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -47,7 +49,9 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   @override
   void initState() {
     super.initState();
-    McpService.load();
+    // Ask every stored server whether it is still there, so the list is
+    // about the servers as they are and not about the tokens we kept.
+    unawaited(McpService.load().then((_) => McpService.verifyAllReachable()));
   }
 
   @override
@@ -88,7 +92,10 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       appBar: FloatingAppBar(
         title: const Text('Connectors'),
       ),
-      body: ValueListenableBuilder<List<McpConnection>>(
+      body: ValueListenableBuilder<Set<String>>(
+        valueListenable: McpService.unreachable,
+        builder: (context, unreachable, _) =>
+            ValueListenableBuilder<List<McpConnection>>(
         valueListenable: McpService.connections,
         builder: (context, connections, _) {
           final connectedIds = {for (final c in connections) c.id};
@@ -141,8 +148,12 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                         icon: connection.iconUrl,
                         assetPath: bundledIconAsset(connection.id),
                         name: connection.name,
-                        subtitle: subtitleFor(connection),
-                        trailing: '${connection.tools.length} tools',
+                        subtitle: unreachable.contains(connection.id)
+                            ? 'The server did not answer'
+                            : subtitleFor(connection),
+                        trailing: unreachable.contains(connection.id)
+                            ? 'Offline'
+                            : '${connection.tools.length} tools',
                         onTap: () => _open(connection.id, null),
                       ),
                   ],
@@ -234,6 +245,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             ],
           );
         },
+        ),
       ),
     );
   }
@@ -360,6 +372,43 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   bool _busy = false;
   McpConnectCanceler? _canceler;
 
+  /// What the connector is, kept across a disconnect.
+  ///
+  /// A connector opened from the connected list has no catalogue entry — it
+  /// is only known through its live connection. Reading the name and the URL
+  /// straight off that connection meant disconnecting erased the page: the
+  /// details went blank and the Connect button greyed out, because there was
+  /// no URL left to connect to. The reader had to go back and add the server
+  /// again. So the last known details are remembered here instead.
+  String? _name;
+  String? _url;
+  String? _description;
+  String? _iconUrl;
+
+  /// Null while the check is still running, then what it found.
+  bool? _reachable;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_checkReachable());
+  }
+
+  Future<void> _checkReachable() async {
+    if (McpService.connectionFor(widget.id) == null) return;
+    final alive = await McpService.verifyReachable(widget.id);
+    if (!mounted) return;
+    setState(() => _reachable = alive);
+  }
+
+  void _remember(McpConnection? connection) {
+    if (connection == null) return;
+    _name = connection.name;
+    _url = connection.url;
+    _description = connection.description;
+    _iconUrl = connection.iconUrl;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -368,10 +417,15 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       valueListenable: McpService.connections,
       builder: (context, _, _) {
         final connection = McpService.connectionFor(widget.id);
-        final name = connection?.name ?? widget.entry?.name ?? 'Connector';
-        final url = connection?.url ?? widget.entry?.url ?? '';
+        _remember(connection);
+        final name =
+            connection?.name ?? widget.entry?.name ?? _name ?? 'Connector';
+        final url = connection?.url ?? widget.entry?.url ?? _url ?? '';
         final description =
-            connection?.description ?? widget.entry?.description ?? '';
+            connection?.description ??
+            widget.entry?.description ??
+            _description ??
+            '';
 
         return Scaffold(
           // The list runs underneath the floating header.
@@ -384,7 +438,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
             children: [
               Center(
                 child: McpConnectorIcon(
-                  url: connection?.iconUrl ?? widget.entry?.iconUrl,
+                  url: connection?.iconUrl ?? widget.entry?.iconUrl ?? _iconUrl,
                   assetPath: bundledIconAsset(widget.id),
                   serverUrl: url,
                   name: name,
@@ -433,14 +487,53 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                         style: FilledButton.styleFrom(
                           shape: const StadiumBorder(),
                         ),
-                        onPressed: connection == null
-                            ? (url.isEmpty ? null : () => _connect(url, name))
-                            : _disconnect,
+                        onPressed: url.isEmpty
+                            ? null
+                            : (connection == null || _reachable == false
+                                  ? () => _connect(url, name)
+                                  : _disconnect),
                         child: Text(
-                          connection == null ? 'Connect' : 'Disconnect',
+                          connection == null
+                              ? 'Connect'
+                              : (_reachable == false
+                                    ? 'Reconnect'
+                                    : 'Disconnect'),
                         ),
                       ),
               ),
+              // A connection is a stored token and a stored URL, not a live
+              // socket, so a server that has gone away still reads as
+              // connected. Say so, and offer the one thing that helps.
+              if (connection != null && _reachable == false) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon(
+                      Icons.cloud_off_rounded,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'The server did not answer. The sign-in may have '
+                        'expired.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton(
+                    onPressed: _busy ? null : _disconnect,
+                    child: const Text('Remove this connector'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 28),
               Text(
                 'Details',
@@ -566,7 +659,8 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     // a deep link into another app, a dialler, a mail composer.
     final uri = Uri.tryParse(url);
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      if (mounted) {AppNotifications.show(context, 'Could not open legal information.');
+      if (mounted) {
+        AppNotifications.show(context, 'Could not open legal information.');
       }
       return;
     }
@@ -579,7 +673,8 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     } on PlatformException {
       opened = false;
     }
-    if (!opened && mounted) {AppNotifications.show(context, 'Could not open $url');
+    if (!opened && mounted) {
+        AppNotifications.show(context, 'Could not open $url');
     }
   }
 
@@ -604,8 +699,12 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
         credentials: values,
       );
       if (!mounted) return;
-      setState(() => _busy = false);
-      if (result.status != McpConnectStatus.connected) {AppNotifications.show(context, result.message ?? 'Could not connect.');
+      setState(() {
+        _busy = false;
+        _reachable = result.status == McpConnectStatus.connected ? true : null;
+      });
+      if (result.status != McpConnectStatus.connected) {
+        AppNotifications.show(context, result.message ?? 'Could not connect.');
       }
       return;
     }
@@ -628,10 +727,15 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     setState(() {
       _busy = false;
       _canceler = null;
+      _reachable = result.status == McpConnectStatus.connected ? true : null;
     });
-    if (result.status != McpConnectStatus.connected) {AppNotifications.show(context, result.status == McpConnectStatus.cancelled
-                ? 'Sign-in was cancelled.'
-                : result.message ?? 'Could not connect.');
+    if (result.status != McpConnectStatus.connected) {
+      AppNotifications.show(
+        context,
+        result.status == McpConnectStatus.cancelled
+            ? 'Sign-in was cancelled.'
+            : result.message ?? 'Could not connect.',
+      );
     }
   }
 
@@ -639,7 +743,13 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
     setState(() => _busy = true);
     await McpService.disconnect(widget.id);
     if (!mounted) return;
-    setState(() => _busy = false);
+    setState(() {
+      _busy = false;
+      // Nothing is connected, so there is nothing to call unreachable. The
+      // page keeps the name and the URL it remembered, so Connect is right
+      // there instead of sending the reader back to add the server again.
+      _reachable = null;
+    });
   }
 }
 

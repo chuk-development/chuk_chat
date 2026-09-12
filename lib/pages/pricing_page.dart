@@ -261,7 +261,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     }
   }
 
-  void _showError(String message) {AppNotifications.show(context, message, kind: AppNotificationKind.error, duration: Duration(seconds: 3));
+  void _showError(String message) {
+        AppNotifications.show(context, message, kind: AppNotificationKind.error, duration: Duration(seconds: 3));
   }
 
   void _openUsageDetails() {

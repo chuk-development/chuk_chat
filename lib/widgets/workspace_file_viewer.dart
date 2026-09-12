@@ -144,10 +144,12 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
       _textContent = newContent;
       if (mounted) setState(() => _isEditingContent = false);
 
-      if (mounted) {AppNotifications.show(context, 'File saved');
+      if (mounted) {
+        AppNotifications.show(context, 'File saved');
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to save: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -171,10 +173,12 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
       _markdownSummary = newMarkdown.isEmpty ? null : newMarkdown;
       if (mounted) setState(() => _isEditingMarkdown = false);
 
-      if (mounted) {AppNotifications.show(context, 'Markdown saved');
+      if (mounted) {
+        AppNotifications.show(context, 'Markdown saved');
       }
     } catch (e) {
-      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
+      if (mounted) {
+        AppNotifications.show(context, 'Failed to save: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

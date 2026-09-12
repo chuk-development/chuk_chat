@@ -91,7 +91,8 @@ class _PerModelSystemPromptEditorState
     setState(() => _saving = false);
     if (ok) {
       navigator.pop(true);
-    } else {AppNotifications.showOn(messenger, failureMessage);
+    } else {
+        AppNotifications.showOn(messenger, failureMessage);
     }
   }
 
@@ -107,7 +108,8 @@ class _PerModelSystemPromptEditorState
     setState(() => _saving = false);
     if (ok) {
       navigator.pop(true);
-    } else {AppNotifications.showOn(messenger, failureMessage);
+    } else {
+        AppNotifications.showOn(messenger, failureMessage);
     }
   }
 

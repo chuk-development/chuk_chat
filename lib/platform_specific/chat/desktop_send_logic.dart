@@ -1139,8 +1139,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     );
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendMessage({
+    int? continuationIndex,
+    List<Map<String, String>>? continuationHistoryMessages,
+    String? continuePriorText,
+    List<ContentBlock>? continuePriorContentBlocks,
+    String? modelIdOverride,
+    String? providerOverride,
+  }) async {
+    if (_activeSendOperationId != null) {
+      showSnackBar('Please wait');
+      return;
+    }
     final int sendOperationId = _beginSendOperation();
+    final bool isContinuation = continuationIndex != null;
+    final String modelIdForSend = modelIdOverride ?? selectedModelId;
 
     try {
       // SET GLOBAL LOCK IMMEDIATELY - before any async operations
@@ -1190,7 +1203,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       // Check if a model is selected
-      if (selectedModelId.isEmpty) {
+      if (modelIdForSend.isEmpty) {
         if (mounted) {
           AppNotifications.show(
             context,
@@ -1209,20 +1222,34 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Credit/free message checks are handled server-side (API returns 402)
 
-      final String originalUserInput = composerController.text.trim();
+      final String originalUserInput = isContinuation
+          ? ChatUiHelpers.continueGenerationPrompt
+          : composerController.text.trim();
 
       // Use MessageCompositionService to prepare the message
-      final List<Map<String, dynamic>> apiHistory =
-          await _buildApiHistoryWithPendingMessage(originalUserInput);
+      final List<Map<String, dynamic>> apiHistory = isContinuation
+          ? await ChatHistoryBuilder.build(
+              messages: continuationHistoryMessages!,
+              pendingUserText: originalUserInput,
+              includeRecentImages: widget.includeRecentImagesInHistory,
+              includeAllImages: widget.includeAllImagesInHistory,
+              includeReasoning: widget.includeReasoningInHistory,
+              includeToolResults: widget.includeToolResultsInHistory,
+            )
+          : await _buildApiHistoryWithPendingMessage(originalUserInput);
       final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
       final result = await MessageCompositionService.prepareMessage(
         userInput: originalUserInput,
-        attachedFiles: _fileHandler.attachedFiles,
-        selectedModelId: selectedModelId,
+        attachedFiles: isContinuation
+            ? const <AttachedFile>[]
+            : _fileHandler.attachedFiles,
+        selectedModelId: modelIdForSend,
         apiHistory: apiHistory,
         systemPrompt: resolvedSystemPrompt,
-        getProviderSlug: ensureProviderSlugForCurrentModel,
+        getProviderSlug: isContinuation
+            ? () async => providerOverride
+            : ensureProviderSlugForCurrentModel,
       );
 
       if (!result.isValid) {
@@ -1267,9 +1294,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           workspaceForChat != null && !workspaceForChat.memoryEnabled;
       final List<String>? imageDataUrls = result.images;
 
-      final bool hasAttachments = _fileHandler.attachedFiles.any(
-        (f) => f.markdownContent != null || f.encryptedImagePath != null,
-      );
+      final bool hasAttachments =
+          !isContinuation &&
+          _fileHandler.attachedFiles.any(
+            (f) => f.markdownContent != null || f.encryptedImagePath != null,
+          );
 
       final bool firstMessageInChat = _messages.isEmpty;
 
@@ -1368,14 +1397,36 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
       }
 
+      if (isContinuation && !NetworkStatusService.isOnline) {
+        ChatStorageService.isMessageOperationInProgress = false;
+        showSnackBar('You are offline. Please check your connection.');
+        return;
+      }
+      if (isContinuation &&
+          (continuationIndex < 0 || continuationIndex >= _messages.length)) {
+        ChatStorageService.isMessageOperationInProgress = false;
+        return;
+      }
+
       int placeholderIndex = -1;
       setState(() {
+        if (isContinuation) {
+          final message = Map<String, String>.from(_messages[continuationIndex])
+            ..remove('status')
+            ..remove('generationMs')
+            ..['startedAt'] = DateTime.now().toIso8601String();
+          _messages[continuationIndex] = message;
+          _isSending = true;
+          placeholderIndex = continuationIndex;
+          return;
+        }
+
         // Store message with images and attachments (if any)
         final userMessage = {
           'sender': 'user',
           'text': displayMessageText,
           'reasoning': '',
-          'modelId': selectedModelId,
+          'modelId': modelIdForSend,
           'provider': providerSlug,
         };
 
@@ -1434,7 +1485,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'sender': 'ai',
           'text': 'Thinking...',
           'reasoning': '',
-          'modelId': selectedModelId,
+          'modelId': modelIdForSend,
           'provider': providerSlug,
           'startedAt': DateTime.now().toIso8601String(),
         });
@@ -1460,10 +1511,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               ? jsonEncode(imageDataUrls)
               : null,
           maxTokens: maxResponseTokens,
-          reasoningEffort: clampedReasoningEffort(
-            selectedModelId,
-            providerSlug,
-          ),
+          reasoningEffort: clampedReasoningEffort(modelIdForSend, providerSlug),
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1539,7 +1587,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         accessToken: accessToken,
         discoveryContextKey: chatIdForStream,
         baseSystemPrompt: systemPrompt,
-        modelId: selectedModelId,
+        modelId: modelIdForSend,
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
         skipIdentity: skipIdentity,
@@ -1558,9 +1606,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Accumulates display text across all streaming passes so that AI text
       // from earlier passes is never lost when a new pass begins.
-      final accumulatedText2 = StringBuffer();
+      final String continuationText = (continuePriorText ?? '').trimRight();
+      final accumulatedText2 = StringBuffer(continuationText);
       // Ordered content blocks built across streaming passes.
-      final contentBlocks2 = <ContentBlock>[];
+      final priorContentBlockSeed = List<ContentBlock>.from(
+        continuePriorContentBlocks ?? const <ContentBlock>[],
+      );
+      if (priorContentBlockSeed.isEmpty && continuationText.isNotEmpty) {
+        priorContentBlockSeed.add(ContentBlock.text(continuationText));
+      }
+      final contentBlocks2 = List<ContentBlock>.from(priorContentBlockSeed);
+      final int priorContentBlockCount = contentBlocks2.length;
       int previousToolCallCount2 = 0;
 
       Future<void> startStreamPass({
@@ -1592,16 +1648,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final stream = WebSocketChatService.sendStreamingChat(
           accessToken: accessToken,
           message: message,
-          modelId: selectedModelId,
+          modelId: modelIdForSend,
           providerSlug: providerSlug,
           history: history.isEmpty ? null : history,
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
-          reasoningEffort: clampedReasoningEffort(
-            selectedModelId,
-            providerSlug,
-          ),
+          reasoningEffort: clampedReasoningEffort(modelIdForSend, providerSlug),
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1620,10 +1673,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // Structural working-round suppression (see site above): keep
               // mid-loop / tool-call content out of the answer body.
               final isWorkingRound =
-                  contentBlocks2.isNotEmpty || hasToolCallStartMarker(content);
-              final displayContent = isWorkingRound
+                  contentBlocks2.length > priorContentBlockCount ||
+                  hasToolCallStartMarker(content);
+              final streamedContent = isWorkingRound
                   ? ''
                   : stripToolCallBlocksForDisplay(content);
+              final displayContent = '$continuationText$streamedContent';
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
                 _messages[placeholderIndex]['text'] = displayContent;
@@ -1773,7 +1828,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       accessToken: accessToken,
                       discoveryContextKey: chatIdForStream,
                       baseSystemPrompt: systemPrompt,
-                      modelId: selectedModelId,
+                      modelId: modelIdForSend,
                       toolCallingEnabled: widget.toolCallingEnabled,
                       discoveryMode: widget.toolDiscoveryMode,
                       skipIdentity: skipIdentity,
@@ -1782,8 +1837,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     final retryPrompt = await _toolCallHandler
                         .buildInitialSystemPrompt(toolSession);
 
-                    contentBlocks2.clear();
+                    contentBlocks2
+                      ..clear()
+                      ..addAll(priorContentBlockSeed);
                     accumulatedText2.clear();
+                    accumulatedText2.write(continuationText);
                     previousToolCallCount2 = 0;
 
                     await Future<void>.delayed(
@@ -1999,7 +2057,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       : null,
                   maxTokens: maxResponseTokens,
                   reasoningEffort: clampedReasoningEffort(
-                    selectedModelId,
+                    modelIdForSend,
                     providerSlug,
                   ),
                 );
