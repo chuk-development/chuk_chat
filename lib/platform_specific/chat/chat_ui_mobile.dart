@@ -6,6 +6,7 @@ import 'package:cowork/ui/expressive/icon_map.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:cowork/ui/expressive/day_divider.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/constants.dart';
 import 'package:cowork/platform_config.dart';
 import 'package:cowork/models/chat_model.dart';
@@ -256,6 +257,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   );
 
   final FocusNode _textFieldFocusNode = FocusNode();
+
+  /// Rebuilds the composer when the field takes or loses focus, so the AI
+  /// disclaimer under it can go with the keyboard.
+  void _onTextFieldFocusChanged() {
+    if (mounted) setState(() {});
+  }
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
@@ -426,6 +433,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     super.initState();
     _initializeHandlers();
     _initializeListeners();
+    _textFieldFocusNode.addListener(_onTextFieldFocusChanged);
     ChatModelSelectionService.instance.addListener(_onChatModelChanged);
     ChatReactionService.instance.addListener(_onReactionsChanged);
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
@@ -1040,6 +1048,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _controller.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
+    _textFieldFocusNode.removeListener(_onTextFieldFocusChanged);
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -4208,14 +4217,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   theme: theme,
                                   iconFg: iconFg,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  AppLocalizations.of(context)!.aiDisclaimer,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.7),
-                                    fontSize: 11,
-                                  ),
+                                // The disclaimer is for the reader who is
+                                // looking at the thread, not for the one who is
+                                // typing: with the keyboard up it eats a line
+                                // of the little room that is left. It goes with
+                                // the keyboard and comes back with it.
+                                //
+                                // Focus, not viewInsets: the hosting Scaffold
+                                // strips viewInsets from this subtree (see the
+                                // Scaffold below), so the inset here is always
+                                // zero and cannot say whether the keyboard is
+                                // up.
+                                AnimatedSize(
+                                  duration: kExpressiveShort,
+                                  curve: kExpressiveDecelerate,
+                                  alignment: Alignment.topCenter,
+                                  child: _textFieldFocusNode.hasFocus
+                                      ? const SizedBox(
+                                          width: double.infinity,
+                                          height: 0,
+                                        )
+                                      : Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 8,
+                                          ),
+                                          child: Text(
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.aiDisclaimer,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: iconFg.withValues(
+                                                alpha: 0.7,
+                                              ),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
                                 ),
                               ],
                             ),
