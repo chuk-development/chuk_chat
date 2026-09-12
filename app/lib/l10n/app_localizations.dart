@@ -626,7 +626,6 @@ class AppLocalizations {
   String get queuedLabel => _get('queuedLabel');
   String queuedMessagesCount(String count) =>
       _get('queuedMessagesCount').replaceAll('{count}', count);
-  String get workingLabel => _get('workingLabel');
   String get editYourMessage => _get('editYourMessage');
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');
