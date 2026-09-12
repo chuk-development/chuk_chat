@@ -93,6 +93,40 @@ void main() {
     );
   });
 
+  testWidgets('a reference line high in the plot', (WidgetTester tester) async {
+    await shootChart(tester, kHighReference, 'reference_high_dark');
+  });
+
+  testWidgets('a reference line high in the plot, 360 dp at 1.3', (
+    WidgetTester tester,
+  ) async {
+    await shootChart(
+      tester,
+      kHighReference,
+      'reference_high_360_scale13',
+      width: 312,
+      textScale: 1.3,
+      brightness: Brightness.light,
+    );
+  });
+
+  testWidgets('a reference line below zero', (WidgetTester tester) async {
+    await shootChart(tester, kGainsAndLossesWithRule, 'gains_losses_rule_dark');
+  });
+
+  testWidgets('a reference line below zero, 360 dp at 1.3', (
+    WidgetTester tester,
+  ) async {
+    await shootChart(
+      tester,
+      kGainsAndLossesWithRule,
+      'gains_losses_rule_360_scale13',
+      width: 312,
+      textScale: 1.3,
+      brightness: Brightness.light,
+    );
+  });
+
   testWidgets('a malformed spec', (WidgetTester tester) async {
     await shootChart(tester, kMalformed, 'malformed_dark');
   });
