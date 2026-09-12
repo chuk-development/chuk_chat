@@ -70,6 +70,7 @@ import 'package:cowork/services/workspace_storage_service.dart';
 import 'package:cowork/services/workspace_message_service.dart';
 import 'package:cowork/services/artifact_context_service.dart';
 import 'package:cowork/l10n/app_localizations.dart';
+import 'package:cowork/ui/expressive/working_dots.dart';
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, workspace }
@@ -82,6 +83,65 @@ class _WorkspaceChoice {
 
   final String? workspaceId;
   final bool create;
+}
+
+/// The composer's outbox.
+///
+/// The user may fire as many messages as they want while the coworker works.
+/// Each one waits here, oldest first, and goes out in the next possible send
+/// cycle. Nothing is dropped and nothing is overwritten — the single slot this
+/// replaced lost the first of two messages (bead cowork-bj88).
+class PendingMessageQueue {
+  final List<String> _items = <String>[];
+
+  bool get isEmpty => _items.isEmpty;
+  bool get isNotEmpty => _items.isNotEmpty;
+  int get length => _items.length;
+
+  /// What waits, oldest first. A copy, so a caller cannot reorder the queue.
+  List<String> get items => List<String>.unmodifiable(_items);
+
+  /// The message that goes out next, or null when nothing waits.
+  String? get next => _items.isEmpty ? null : _items.first;
+
+  /// Appends a message. Blank text is not a message, so it is ignored.
+  void add(String text) {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    _items.add(trimmed);
+  }
+
+  /// Removes and returns the oldest message, or null when nothing waits.
+  String? takeNext() => _items.isEmpty ? null : _items.removeAt(0);
+
+  /// Drops the whole queue and returns what was dropped, oldest first.
+  List<String> clear() {
+    final List<String> dropped = List<String>.of(_items);
+    _items.clear();
+    return dropped;
+  }
+}
+
+/// What the composer's primary target does when it is tapped.
+///
+/// There is no `stop`. The coworker is never interrupted from here: a tap
+/// while a run is open queues the message, and that a run is open is said by
+/// the working dots, not by a red button (bead cowork-bj88).
+enum ComposerAction { send, sendAudio, voiceMode }
+
+/// The one place that decides what the composer's primary target does.
+///
+/// [isWorking] is taken and deliberately ignored: whether a run is open
+/// changes the notice above the composer, never this target.
+ComposerAction composerActionFor({
+  required bool isRecording,
+  required bool isWorking,
+  required bool hasText,
+  required bool voiceModeEnabled,
+}) {
+  if (isRecording) return ComposerAction.sendAudio;
+  if (!hasText && voiceModeEnabled) return ComposerAction.voiceMode;
+  return ComposerAction.send;
 }
 
 class ChukChatUIMobile extends StatefulWidget {
@@ -324,9 +384,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // Network and UI state
   bool _isOffline = false;
 
-  /// Queued message text — when the user sends while AI is still streaming,
-  /// the text is parked here and dispatched after the current response ends.
-  String? _pendingMessageText;
+  /// The composer's outbox: every message the user fired while the coworker
+  /// was still working, oldest first. Drained one per finished run.
+  final PendingMessageQueue _pendingMessages = PendingMessageQueue();
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
@@ -1566,9 +1626,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       });
 
       // If auto-send is enabled, send the message immediately.
-      // Do NOT set _isSendingMessage here — _sendMessage() guards on that flag
-      // at its top and would bail before doing any work. _sendMessage() sets
-      // the flag itself once it passes the guard.
+      // Do NOT set _isSendingMessage here — _sendMessage() reads that flag at
+      // its top and would queue the transcription behind the send already in
+      // flight instead of sending it. _sendMessage() sets the flag itself.
       // Route through _sendOrSubmitEdit so a transcription produced while
       // editing replaces the edited message (and truncates below) instead of
       // being appended as a brand-new message at the end.
@@ -2248,8 +2308,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
 
-      // Drain the message queue — if the user typed while AI was responding.
-      _drainPendingMessage();
+      // Drain the outbox — one message per finished run, in order.
+      _drainPendingMessages();
     } else if (!isActiveChat) {
       // User switched to a different chat - _messages belongs to the OTHER chat!
       // DO NOT check _messages.length - it's the wrong chat's message list.
@@ -2321,41 +2381,64 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
-  /// Cancel a queued follow-up message and restore its text to the composer so
-  /// the user can edit or discard it instead of losing it silently.
-  void _cancelPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    final bool restore = _controller.text.trim().isEmpty;
+  /// Park the composer's text in the outbox and clear the field, so the user
+  /// can keep firing messages while the coworker works.
+  void _queuePendingMessage() {
+    final String text = _controller.text.trim();
+    if (text.isEmpty) return;
+    void apply() => _pendingMessages.add(text);
     if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-        if (restore) {
-          _controller.text = pending;
-          _controller.selection = TextSelection.collapsed(
-            offset: pending.length,
-          );
-        }
-      });
+      setState(apply);
     } else {
-      _pendingMessageText = null;
+      apply();
+    }
+    _controller.clear();
+    if (kDebugMode) {
+      debugPrint(
+        '📋 [SendMessage] Queued message '
+        '(${text.length} chars, ${_pendingMessages.length} waiting)',
+      );
     }
   }
 
-  /// If a message was queued while the AI was streaming, inject it into the
-  /// text field and trigger a new send cycle.
-  void _drainPendingMessage() {
-    final pending = _pendingMessageText;
+  /// Drop everything that waits. When exactly one message waited, its text
+  /// goes back into an empty composer so the user can edit it instead of
+  /// losing it silently.
+  void _cancelPendingMessages() {
+    if (_pendingMessages.isEmpty) return;
+    final bool restore =
+        _pendingMessages.length == 1 && _controller.text.trim().isEmpty;
+    void apply() {
+      final List<String> dropped = _pendingMessages.clear();
+      if (restore) {
+        final String text = dropped.first;
+        _controller.text = text;
+        _controller.selection = TextSelection.collapsed(offset: text.length);
+      }
+    }
+
+    if (mounted) {
+      setState(apply);
+    } else {
+      apply();
+    }
+  }
+
+  /// Feed the oldest queued message into the text field and start a new send
+  /// cycle. One per finished run: the next finalize drains the one after it,
+  /// so a burst goes out in the order it was typed.
+  void _drainPendingMessages() {
+    final String? pending = _pendingMessages.takeNext();
     if (pending == null) return;
 
     if (kDebugMode) {
       debugPrint(
-        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+        '📋 [DrainQueue] Sending queued message (${pending.length} chars, '
+        '${_pendingMessages.length} still waiting)',
       );
     }
 
     setState(() {
-      _pendingMessageText = null;
       _controller.text = pending;
       _controller.selection = TextSelection.collapsed(offset: pending.length);
     });
@@ -2363,8 +2446,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _sendMessage() async {
-    // Prevent double-send on slow network (user tapping send repeatedly)
-    if (_isSendingMessage) return;
+    // A send is already in flight and its stream has not opened yet. The tap
+    // is not dropped: it queues like every other message fired while the
+    // coworker works, so a burst survives this window too.
+    if (_isSendingMessage) {
+      _queuePendingMessage();
+      return;
+    }
 
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations or early returns
     // This prevents didUpdateWidget from loading a different chat during send
@@ -2374,23 +2462,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     if (_isCurrentChatStreaming) {
-      // AI is still streaming — queue the message instead of cancelling.
-      final text = _controller.text.trim();
-      if (text.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _pendingMessageText = text;
-          });
-        } else {
-          _pendingMessageText = text;
-        }
-        _controller.clear();
-        if (kDebugMode) {
-          debugPrint(
-            '📋 [SendMessage] Queued pending message (${text.length} chars)',
-          );
-        }
-      }
+      // The coworker is still working — queue the message instead of
+      // interrupting it. Any number may pile up; they go out in order.
+      _queuePendingMessage();
       // Do NOT release the global lock — the original streaming operation
       // is still in progress and will release it upon completion.
       return;
@@ -2946,68 +3020,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     return resolvedPrompt;
-  }
-
-  void _updateCancelledMessage() {
-    // Clear flags since stream was cancelled
-    if (_isSendingMessage) {
-      _isSendingMessage = false;
-      if (kDebugMode) {
-        debugPrint('🚫 [CancelledMessage] Cleared _isSendingMessage flag');
-      }
-    }
-    // RELEASE GLOBAL LOCK when stream is cancelled
-    if (ChatStorageService.isMessageOperationInProgress) {
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint(
-          '🔓 [CancelledMessage] GLOBAL LOCK RELEASED (stream cancelled)',
-        );
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        if (_messages.isNotEmpty &&
-            (_messages.last['sender'] == 'ai' ||
-                _messages.last['sender'] == 'assistant')) {
-          final lastMessage = Map<String, String>.from(_messages.last);
-          final currentText = lastMessage['text'] ?? '';
-          if (currentText.isEmpty || currentText == 'Thinking...') {
-            lastMessage['text'] = '[Cancelled]';
-          } else if (!currentText.contains('[Response cancelled]')) {
-            // Idempotent, as on desktop: cancelling twice (or cancelling a
-            // resend of an already-cancelled turn) used to stack the marker.
-            lastMessage['text'] = '$currentText\n\n[Response cancelled]';
-          }
-          _messages[_messages.length - 1] = lastMessage;
-        }
-      });
-      _persistChat();
-    }
-  }
-
-  /// Cancel any ongoing operation (streaming or sending)
-  Future<void> _cancelCurrentOperation() async {
-    // Explicit cancel discards any queued follow-up message too.
-    _pendingMessageText = null;
-
-    if (_isCurrentChatStreaming) {
-      // Stream is active - cancel via handler
-      await _streamingHandler.cancelStream(_activeChatId);
-      _updateCancelledMessage();
-    } else if (_isSendingMessage) {
-      // Only sending flag is set (stream not yet started) - reset state
-      _streamingHandler.resetState();
-      _isSendingMessage = false;
-      if (ChatStorageService.isMessageOperationInProgress) {
-        ChatStorageService.isMessageOperationInProgress = false;
-      }
-      if (mounted) {
-        setState(() {});
-        _showSnackBar('Cancelled');
-      }
-    }
   }
 
   Future<void> _submitEditedMessage(
@@ -3655,7 +3667,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // tall boxed variant; leaving it there over-reserved the first frame.
         64.0 +
         (hasAttachments ? 80.0 : 0.0) +
-        (_pendingMessageText != null ? 28.0 : 0.0) +
+        (_pendingMessages.isNotEmpty ? 28.0 : 0.0) +
+        ((_isCurrentChatStreaming || _isSendingMessage) ? 28.0 : 0.0) +
         bottomPadding;
     // Distance from the bottom edge to the top of the composer, plus a small
     // gap so the last message never sits flush against the input box. The
@@ -4578,11 +4591,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
+    final bool isWorking = _isCurrentChatStreaming || _isSendingMessage;
     final bool hasTypedText = _controller.text.trim().isNotEmpty;
     final bool hasText = hasTypedText || hasAttachments;
-    final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
     final bool isRecording = _audioHandler.isMicActive;
+    // The primary target is the send target, always. Working is said by the
+    // dots above the field, never by turning this into a red stop.
+    final ComposerAction sendAction = composerActionFor(
+      isRecording: isRecording,
+      isWorking: isWorking,
+      hasText: hasText,
+      voiceModeEnabled: kFeatureVoiceMode,
+    );
 
     final Color borderColor = isRecording
         ? Colors.red.withValues(alpha: 0.4)
@@ -4622,15 +4642,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               onCancel: () =>
                   setState(() => _replyDrafts.remove(_replyChatKey)),
             ),
-          if (_pendingMessageText != null)
+          if (isWorking)
+            _buildComposerNotice(
+              theme: theme,
+              leading: WorkingDots(
+                color: theme.colorScheme.primary.withValues(alpha: 0.75),
+                label: '',
+              ),
+              label: AppLocalizations.of(context)!.workingLabel,
+            ),
+          if (_pendingMessages.isNotEmpty)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.schedule,
-              label:
-                  '${AppLocalizations.of(context)!.queuedLabel}: '
-                  '"${_pendingMessageText!}"',
+              label: _pendingMessages.length == 1
+                  ? '${AppLocalizations.of(context)!.queuedLabel}: '
+                        '"${_pendingMessages.next!}"'
+                  : AppLocalizations.of(
+                      context,
+                    )!.queuedMessagesCount('${_pendingMessages.length}'),
               actionLabel: AppLocalizations.of(context)!.cancel,
-              onAction: _cancelPendingMessage,
+              onAction: _cancelPendingMessages,
             ),
 
           // ── Row one: what you are saying ──
@@ -4762,7 +4794,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   semanticsId: 'mic_button',
                 ),
                 const SizedBox(width: _composerTargetGap),
-              ] else if (!hasTypedText && !showStopAction) ...[
+              ] else if (!hasTypedText) ...[
                 buildTinyIconButton(
                   icon: Icons.mic,
                   iconSize: 20,
@@ -4776,25 +4808,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 const SizedBox(width: _composerTargetGap),
               ],
               buildTinyActionButton(
-                icon: isRecording
-                    ? Icons.north_rounded
-                    : (showStopAction
-                          ? Icons.stop_rounded
-                          : (showVoiceModeAction
-                                ? Icons.graphic_eq_rounded
-                                : Icons.north_rounded)),
+                icon: sendAction == ComposerAction.voiceMode
+                    ? Icons.graphic_eq_rounded
+                    : Icons.north_rounded,
                 buttonSize: _composerTargetSize,
                 iconSize: 18,
-                onTap: isRecording
-                    ? _handleAudioSend
-                    : (showStopAction
-                          ? _cancelCurrentOperation
-                          : (showVoiceModeAction
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : _sendOrSubmitEdit)),
-                color: isRecording
-                    ? accent
-                    : (showStopAction ? Colors.red : accent),
+                onTap: switch (sendAction) {
+                  ComposerAction.sendAudio => _handleAudioSend,
+                  ComposerAction.voiceMode => () => _openComingSoonFeature(
+                    'Voice Mode',
+                  ),
+                  ComposerAction.send => _sendOrSubmitEdit,
+                },
+                color: accent,
                 isLoading: _audioHandler.isTranscribingAudio,
                 semanticsId: 'send_button',
               ),
@@ -4805,21 +4831,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
-  /// A one-line notice inside the composer: editing, or a queued message.
+  /// A one-line notice inside the composer: what is queued, or that the
+  /// coworker is working. [leading] replaces the icon where a live indicator
+  /// says it better; a notice without an action has no button.
   Widget _buildComposerNotice({
     required ThemeData theme,
-    required IconData icon,
     required String label,
-    required String actionLabel,
-    required VoidCallback onAction,
+    IconData? icon,
+    Widget? leading,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
+    assert(icon != null || leading != null, 'a notice needs a leading mark');
     final Color color = theme.colorScheme.primary.withValues(alpha: 0.75);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4, right: 6),
       child: Row(
         children: [
-          AppIcon(icon, size: 12, color: color),
+          leading ?? AppIcon(icon!, size: 12, color: color),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
@@ -4833,25 +4863,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onAction,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                actionLabel,
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onAction,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  actionLabel,
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
