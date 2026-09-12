@@ -2,8 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Session;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show
+        AuthApiException,
+        AuthException,
+        AuthRetryableFetchException,
+        Session;
+
+import 'package:cowork/services/network_status_service.dart';
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
@@ -197,6 +205,62 @@ class SessionStash {
   }
 }
 
+/// Why a recovery ended the way it did.
+///
+/// The distinction the login page hangs on: a refresh token GoTrue rejected is
+/// dead and the user has to sign in again, but a request that never reached
+/// GoTrue says nothing about the token. Treating the second as the first is
+/// how a start with no signal signed the user out for good — the stash was
+/// dropped along with the session, so the next start had nothing left to try
+/// (bead cowork-h1fr).
+enum RecoveryOutcome {
+  /// A live session is held again.
+  recovered,
+
+  /// GoTrue answered and refused the pair. Nothing is left to recover.
+  tokenRejected,
+
+  /// Nothing reached GoTrue: no signal, DNS, a timeout, a 5xx. The pair is
+  /// still worth keeping and the recovery is worth running again.
+  unreachable,
+}
+
+/// What a recovery came back with.
+@immutable
+class RecoveryResult {
+  const RecoveryResult(this.outcome, [this.session]);
+
+  final RecoveryOutcome outcome;
+
+  /// The recovered session; null unless [outcome] is
+  /// [RecoveryOutcome.recovered].
+  final AccountSession? session;
+
+  bool get isRecovered => session != null;
+
+  /// True while the pair may still be good: keep it, and try again.
+  bool get keepStash => outcome == RecoveryOutcome.unreachable;
+}
+
+/// True when [error] means the request never got an answer from GoTrue.
+///
+/// gotrue-dart raises [AuthRetryableFetchException] for a transport failure
+/// and for a 5xx; a timeout or a socket error can also arrive raw when the
+/// failure happens below that layer (the socket case comes through
+/// [NetworkStatusService.isNetworkError], which reads the message rather than
+/// importing `dart:io` into a file the web build also compiles). Everything
+/// else — an [AuthApiException] with a 4xx, above all — is GoTrue speaking,
+/// and it is final.
+bool isTransportFailure(Object? error) {
+  if (error == null) return false;
+  if (error is AuthRetryableFetchException) return true;
+  if (error is TimeoutException) return true;
+  if (error is http.ClientException) return true;
+  if (error is AuthApiException) return false;
+  if (error is AuthException) return false;
+  return NetworkStatusService.isNetworkError(error);
+}
+
 /// The relay side of a recovery, behind a small seam so the procedure is
 /// testable with no socket. [CoworkRelayRecoveryLink] is the real one.
 abstract interface class RecoveryLink {
@@ -314,8 +378,20 @@ class SessionRecovery {
   /// own refresh token is known dead and must never be sent to `/token`.
   bool _rotationSeen = false;
 
-  /// Set once the app's own refresh token went to `/token` — single-use.
+  /// Set once the app's own refresh token actually reached `/token` — the
+  /// token is single-use, so one answered call is all it gets. A call that
+  /// never got an answer does NOT set it: nothing was spent, and the next
+  /// attempt is free.
   bool _stashSpent = false;
+
+  /// Set when a call to `/token` never reached GoTrue. Then nothing has been
+  /// learned about the pair, and neither the session nor the stash may be
+  /// thrown away.
+  bool _transportFailed = false;
+
+  /// Set when GoTrue answered and refused a token. That is the one answer
+  /// that ends a recovery: the pair is dead and the login page is right.
+  bool _tokenRefused = false;
 
   Session? _live() {
     final read = _currentSession;
@@ -348,9 +424,18 @@ class SessionRecovery {
     _rotationSeen = true;
     try {
       final session = await _exchange(refreshToken);
-      if (session == null || session.accessToken.isEmpty) return null;
+      if (session == null || session.accessToken.isEmpty) {
+        // GoTrue answered; the host's pair is no good either.
+        _tokenRefused = true;
+        return null;
+      }
       return AccountSession.fromSupabase(session);
-    } catch (_) {
+    } catch (error) {
+      if (isTransportFailure(error)) {
+        _transportFailed = true;
+      } else {
+        _tokenRefused = true;
+      }
       return null;
     }
   }
@@ -360,10 +445,21 @@ class SessionRecovery {
   /// can terminate the whole family, host included).
   Future<Session?> _spendStash() async {
     if (_stashSpent || _rotationSeen) return null;
-    _stashSpent = true;
     try {
-      return await _exchange(stash.refreshToken);
-    } catch (_) {
+      final session = await _exchange(stash.refreshToken);
+      _stashSpent = true;
+      if (session == null || session.accessToken.isEmpty) _tokenRefused = true;
+      return session;
+    } catch (error) {
+      if (isTransportFailure(error)) {
+        // The call never got there: the token is untouched and the pair is
+        // still the newest one anybody has. Say so, and leave it spendable.
+        _transportFailed = true;
+        return null;
+      }
+      // GoTrue answered and refused it. Spent either way.
+      _stashSpent = true;
+      _tokenRefused = true;
       return null;
     }
   }
@@ -397,9 +493,14 @@ class SessionRecovery {
     return stash.toAccountSession();
   }
 
-  /// Returns the recovered session, or null when nothing is left to recover
-  /// (then the login page is the right answer). Always disposes the link.
-  Future<AccountSession?> run() async {
+  /// Runs the recovery and says how it ended: a live session, a pair GoTrue
+  /// refused, or a call that never arrived. Always disposes the link.
+  ///
+  /// Only [RecoveryOutcome.tokenRejected] means the login page. An
+  /// [RecoveryOutcome.unreachable] keeps the pair and is worth repeating —
+  /// signing the user out because the phone had no signal for a second is the
+  /// bug this distinction exists for (bead cowork-h1fr).
+  Future<RecoveryResult> run() async {
     final link = _link;
     try {
       Session? live;
@@ -422,8 +523,18 @@ class SessionRecovery {
         // pair we hold is the newest there is.
         live = await _spendStash();
       }
-      if (live == null || live.accessToken.isEmpty) return null;
-      return AccountSession.fromSupabase(live);
+      if (live != null && live.accessToken.isNotEmpty) {
+        return RecoveryResult(
+          RecoveryOutcome.recovered,
+          AccountSession.fromSupabase(live),
+        );
+      }
+      if (_transportFailed && !_tokenRefused) {
+        // Nothing ever reached GoTrue, so nothing is known about the pair and
+        // nothing may be thrown away.
+        return const RecoveryResult(RecoveryOutcome.unreachable);
+      }
+      return const RecoveryResult(RecoveryOutcome.tokenRejected);
     } finally {
       try {
         await link?.dispose();

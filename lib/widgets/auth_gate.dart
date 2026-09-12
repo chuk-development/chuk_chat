@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:cowork/pages/login_page.dart';
 import 'package:cowork/pages/messenger_shell.dart';
-import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/session_recovery.dart';
 import 'package:cowork/services/settings/theme_controller.dart';
@@ -33,6 +32,9 @@ class AuthGate extends StatefulWidget {
     this.pairingStore,
     this.buildShell,
     this.buildLogin,
+    this.retryDelay = const Duration(seconds: 5),
+    this.maxAttempts = 6,
+    this.sleep,
   });
 
   /// The app's theme controller, handed to the shell so its settings menu can
@@ -51,7 +53,21 @@ class AuthGate extends StatefulWidget {
 
   /// The recovery procedure; null runs [SessionRecovery] through the paired
   /// host. For tests.
-  final Future<AccountSession?> Function(SessionStash stash)? recover;
+  final Future<RecoveryResult> Function(SessionStash stash)? recover;
+
+  /// How long the gate waits before running a recovery again after a call
+  /// that never reached GoTrue. Short, because the user is looking at a shell
+  /// that cannot talk to anything until it succeeds. It doubles per attempt,
+  /// up to a minute.
+  final Duration retryDelay;
+
+  /// How many times one run tries before it gives the device a rest. Giving up
+  /// here does NOT sign the user out: the pair is kept, the shell stays, and
+  /// the next resume starts a fresh run.
+  final int maxAttempts;
+
+  /// Sleeps between those attempts; injectable so a test does not wait.
+  final Future<void> Function(Duration)? sleep;
 
   /// Where the stored pairing is read from for a recovery.
   final CoworkPairingStore? pairingStore;
@@ -65,7 +81,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   Session? _session;
 
   /// The last session we held: the pair a runtime recovery starts from.
@@ -107,6 +123,7 @@ class _AuthGateState extends State<AuthGate> {
     _session = _readCurrent();
     _lastSession = _session;
     _sub = _changes()?.listen(_onAuth, onError: (Object _) {});
+    WidgetsBinding.instance.addObserver(this);
     final stash = widget.stash ?? SessionStash.pending;
     if (_session == null && stash != null) {
       _startRecovery(stash);
@@ -115,8 +132,20 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     super.dispose();
+  }
+
+  /// Coming back to the app is the moment the signal is most likely to be
+  /// there again. A run that ran out of attempts while offline left the pair
+  /// on disk for exactly this (bead cowork-h1fr).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (_recovering || _session != null) return;
+    final stash = _recoveringFrom ?? widget.stash ?? SessionStash.pending;
+    if (stash != null) _startRecovery(stash);
   }
 
   void _onAuth(AuthState state) {
@@ -148,7 +177,7 @@ class _AuthGateState extends State<AuthGate> {
     setState(() => _session = session);
   }
 
-  Future<AccountSession?> _recoverThroughHost(SessionStash stash) async {
+  Future<RecoveryResult> _recoverThroughHost(SessionStash stash) async {
     final store = widget.pairingStore ?? CoworkPairingStore();
     CoworkStoredPairing? pairing;
     try {
@@ -168,28 +197,66 @@ class _AuthGateState extends State<AuthGate> {
       _recovering = true;
       _recoveringFrom = stash.userId.isEmpty ? null : stash;
     });
-    // The shell is mounted alongside this, so it must not race the recovery
-    // for the device's one relay socket. It waits on this handle instead; see
-    // [SessionRecovery.inFlight].
-    final work = (widget.recover ?? _recoverThroughHost)(stash);
-    SessionRecovery.inFlight = work.then<void>((_) {}, onError: (Object _) {});
-    try {
-      await work;
-    } catch (_) {
-      // Whatever happened, the session reader below has the last word.
-    } finally {
-      SessionRecovery.inFlight = null;
+    // A recovery that could not reach GoTrue is repeated rather than believed.
+    // The pair may be perfectly good and the phone merely out of signal, and
+    // the one thing that must not happen is dropping a live account because
+    // of it (bead cowork-h1fr).
+    RecoveryResult result = const RecoveryResult(RecoveryOutcome.unreachable);
+    Duration wait = widget.retryDelay;
+    const Duration maxWait = Duration(minutes: 1);
+    int attempts = 0;
+    while (mounted && attempts < widget.maxAttempts) {
+      attempts++;
+      // The shell is mounted alongside this, so it must not race the recovery
+      // for the device's one relay socket. It waits on this handle instead;
+      // see [SessionRecovery.inFlight].
+      final work = (widget.recover ?? _recoverThroughHost)(stash);
+      SessionRecovery.inFlight = work.then<void>(
+        (_) {},
+        onError: (Object _) {},
+      );
+      try {
+        result = await work;
+      } catch (_) {
+        // A throw says as little as an unreachable server does.
+        result = const RecoveryResult(RecoveryOutcome.unreachable);
+      } finally {
+        SessionRecovery.inFlight = null;
+      }
+      if (!result.keepStash) break;
+      // Nothing reached GoTrue. If gotrue still holds a session — the access
+      // token had life left — the user is signed in and there is nothing to
+      // wait for.
+      if (_readCurrent() != null) break;
+      if (!mounted) return;
+      if (attempts >= widget.maxAttempts) break;
+      await (widget.sleep ?? _sleep)(wait);
+      // Back off, but never past a minute: the shell above this cannot reach
+      // the network either, and the user is waiting for it.
+      wait = wait * 2 > maxWait ? maxWait : wait * 2;
     }
-    if (identical(SessionStash.pending, stash)) SessionStash.pending = null;
-    await SessionStash.clearPersisted();
+    if (!mounted) return;
+    // The stash is the last copy of the pair. It is dropped only once GoTrue
+    // has spoken: a live session, or a refusal.
+    if (!result.keepStash) {
+      if (identical(SessionStash.pending, stash)) SessionStash.pending = null;
+      await SessionStash.clearPersisted();
+    }
     if (!mounted) return;
     setState(() {
       _recovering = false;
-      _recoveringFrom = null;
+      _recoveringFrom = result.keepStash ? _recoveringFrom : null;
+      // A recovery that succeeded put the session into gotrue on the way, so
+      // the reader has it. A recovery that was only ever unreachable leaves
+      // [_recoveringFrom] standing, and the shell with it: the user keeps the
+      // account they are signed in to, and the next attempt runs at the next
+      // start or resume.
       _session = _readCurrent();
       _lastSession = _session ?? _lastSession;
     });
   }
+
+  static Future<void> _sleep(Duration d) => Future<void>.delayed(d);
 
   @override
   Widget build(BuildContext context) {
