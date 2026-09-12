@@ -1,11 +1,12 @@
 # lib/platform_specific/chat/handlers · Signatures
 
-## lib/platform_specific/chat/handlers/audio_recording_handler.dart  (504 Z.)
+## lib/platform_specific/chat/handlers/audio_recording_handler.dart  (517 Z.)
 
 - L16 `enum AudioRecordingChange`
   - L16 `started`
   - L16 `stopped`
   - L16 `failed`
+  - L16 `busy`
 - L28 `class AudioRecordingHandler`  — Handles microphone recording + transcription.
   - L29 `static const int _sampleRate = 16000`
   - L30 `static const int _channels = 1`
@@ -13,36 +14,37 @@
   - L33 `final List<double> _audioLevels = List<double>.filled( 32, 0.0, growable: true, )`
   - L40 `bool _isMicActive = false`
   - L41 `bool _isTranscribingAudio = false`
-  - L44 `VoidCallback? onLevelsChanged`  — Called whenever audio levels update, so the UI can rebuild.
-  - L47 `StreamSubscription<Uint8List>? _pcmStreamSub`
-  - L48 `final BytesBuilder _pcmBuffer = BytesBuilder(copy: false)`
-  - L51 `StreamingTranscriptionService? _streamingService`
-  - L52 `bool _isStreamingMode = false`
-  - L54 `bool get isMicActive`
-  - L55 `bool get isTranscribingAudio`
-  - L56 `List<double> get audioLevels`
-  - L59 `bool get isStreamingMode`  — Whether a WebSocket streaming session is active.
-  - L68 `Future<bool> _startRecording({String? accessToken})`  — Start microphone recording.
-  - L113 `Future<AudioRecordingChange> toggleRecording({ required String? accessToken, required VoidCallback handleLevelsChanged, })`  — Toggles recording while keeping recorder state transitions identical on
-  - L137 `Future<void> stopRecording({bool keepFile = false})`  — Stop microphone recording.
-  - L167 `Future<TranscriptionResult> _transcribeLastRecording({ required ChatApiService apiService, required String accessToken, })`  — Transcribe the last recorded audio.
-  - L187 `Future<TranscriptionResult?> stopAndTranscribe({ required ChatApiService apiService, required Future<String?> Function() getAccessToken, VoidCallback? onStateChanged, })`  — Stops the active recording, resolves authentication, and transcribes it.
-  - L220 `Future<void> dispose()`
-  - L231 `void _handlePcmChunk(Uint8List data)`
-  - L245 `Future<void> _tryConnectStreaming(String accessToken)`  — Connect the WebSocket in the background. On success, flush any PCM
-  - L289 `Future<TranscriptionResult> _transcribeStreaming()`
-  - L328 `Future<TranscriptionResult> _transcribeBufferedPcm({ required ChatApiService apiService, required String accessToken, })`
-  - L390 `static Uint8List _pcmToWav( Uint8List pcm, { required int sampleRate, required int channels, })`  — Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
-  - L428 `static void _writeAscii(ByteData buf, int offset, String value)`
-  - L435 `void _computeAmplitudeFromPcm(Uint8List data)`
-  - L452 `void _resetAudioLevels()`
-  - L458 `Future<bool> _ensureMicPermission()`
-- L491 `class TranscriptionResult`  — Result of audio transcription.
-  - L492 `final bool success`
-  - L493 `final String? text`
-  - L494 `final String? error`
-  - L495 `final bool requiresLogout`
-  - L497 `TranscriptionResult({ required this.success, this.text, this.error, this.requiresLogout = false, })`
+  - L42 `bool _isChangingRecordingState = false`
+  - L45 `VoidCallback? onLevelsChanged`  — Called whenever audio levels update, so the UI can rebuild.
+  - L48 `StreamSubscription<Uint8List>? _pcmStreamSub`
+  - L49 `final BytesBuilder _pcmBuffer = BytesBuilder(copy: false)`
+  - L52 `StreamingTranscriptionService? _streamingService`
+  - L53 `bool _isStreamingMode = false`
+  - L55 `bool get isMicActive`
+  - L56 `bool get isTranscribingAudio`
+  - L57 `List<double> get audioLevels`
+  - L60 `bool get isStreamingMode`  — Whether a WebSocket streaming session is active.
+  - L69 `Future<bool> _startRecording({String? accessToken})`  — Start microphone recording.
+  - L114 `Future<AudioRecordingChange> toggleRecording({ required String? accessToken, required VoidCallback handleLevelsChanged, })`  — Toggles recording while keeping recorder state transitions identical on
+  - L144 `Future<void> stopRecording({bool keepFile = false})`  — Stop microphone recording.
+  - L174 `Future<TranscriptionResult> _transcribeLastRecording({ required ChatApiService apiService, required String accessToken, })`  — Transcribe the last recorded audio.
+  - L194 `Future<TranscriptionResult?> stopAndTranscribe({ required ChatApiService apiService, required Future<String?> Function() getAccessToken, VoidCallback? onStateChanged, })`  — Stops the active recording, resolves authentication, and transcribes it.
+  - L233 `Future<void> dispose()`
+  - L244 `void _handlePcmChunk(Uint8List data)`
+  - L258 `Future<void> _tryConnectStreaming(String accessToken)`  — Connect the WebSocket in the background. On success, flush any PCM
+  - L302 `Future<TranscriptionResult> _transcribeStreaming()`
+  - L341 `Future<TranscriptionResult> _transcribeBufferedPcm({ required ChatApiService apiService, required String accessToken, })`
+  - L403 `static Uint8List _pcmToWav( Uint8List pcm, { required int sampleRate, required int channels, })`  — Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
+  - L441 `static void _writeAscii(ByteData buf, int offset, String value)`
+  - L448 `void _computeAmplitudeFromPcm(Uint8List data)`
+  - L465 `void _resetAudioLevels()`
+  - L471 `Future<bool> _ensureMicPermission()`
+- L504 `class TranscriptionResult`  — Result of audio transcription.
+  - L505 `final bool success`
+  - L506 `final String? text`
+  - L507 `final String? error`
+  - L508 `final bool requiresLogout`
+  - L510 `TranscriptionResult({ required this.success, this.text, this.error, this.requiresLogout = false, })`
 
 ## lib/platform_specific/chat/handlers/chat_persistence_handler.dart  (447 Z.)
 

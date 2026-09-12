@@ -2853,6 +2853,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     ChatStorageService.activeMessageChatId = chatId;
     ChatStorageService.selectedChatId ??= chatId;
 
+    final continuationKey = ChatUiHelpers.stableUiKey(
+      _messages[request.messageIndex],
+      _uuid,
+    );
     final originalStatus = _messages[request.messageIndex]['status'];
     var handedToStreamingHandler = false;
     setState(() {
@@ -2868,7 +2872,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       if (!mounted ||
           _activeChatId != chatId ||
           _streamingHandler.isStreaming ||
-          _streamingHandler.isSending) {
+          _streamingHandler.isSending ||
+          request.messageIndex != _messages.length - 1 ||
+          _messages[request.messageIndex]['sender'] != 'ai' ||
+          ChatUiHelpers.stableUiKey(_messages[request.messageIndex], _uuid) !=
+              continuationKey) {
         return;
       }
 

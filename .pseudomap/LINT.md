@@ -1,6 +1,6 @@
 # pseudomap · Regelbefunde · chuk_chat
 
-3497 Befunde aus 512 Dateien · Stand 2026-09-12
+3498 Befunde aus 512 Dateien · Stand 2026-09-12
 
 Rang 1 sind Fehler: Lecks, verschluckte Ausnahmen, Zustand nach await. Rang 2 ist Wartbarkeit, Rang 3 sind Flutter- und Stilregeln. Volle Liste je Regel: `pseudomap lint --rule <name>`.
 
@@ -146,9 +146,9 @@ avoid-empty-catch 100 · use-setstate-synchronously 32 · always-remove-listener
 - `lib/widgets/workspace_panel.dart:279` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `test/platform_specific/chat/chat_scroll_mixin_test.dart:170` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 
-## Rang 2 — Wartbarkeit (727)
+## Rang 2 — Wartbarkeit (728)
 
-avoid-long-functions 484 · avoid-high-cyclomatic-complexity 106 · avoid-nested-conditional-expressions 96 · avoid-collapsible-if 32 · avoid-long-parameter-list 9
+avoid-long-functions 484 · avoid-high-cyclomatic-complexity 107 · avoid-nested-conditional-expressions 96 · avoid-collapsible-if 32 · avoid-long-parameter-list 9
 
 - `lib/main.dart:222` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/chat/chat_ui_desktop.dart:1086` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
@@ -190,7 +190,7 @@ avoid-long-functions 484 · avoid-high-cyclomatic-complexity 106 · avoid-nested
 - `lib/pages/login_page.dart:213` **avoid-high-cyclomatic-complexity** — Komplexität 24 (Grenze 20)
 - `lib/pages/mcp_connectors_page.dart:413` **avoid-high-cyclomatic-complexity** — Komplexität 21 (Grenze 20)
 - `lib/platform_specific/chat/chat_ui_desktop.dart:804` **avoid-high-cyclomatic-complexity** — Komplexität 42 (Grenze 20)
-- … +687 weitere, siehe `pseudomap lint --rank 2`
+- … +688 weitere, siehe `pseudomap lint --rank 2`
 
 ## Rang 3 — Flutter und Stil (2633)
 

@@ -333,7 +333,7 @@
   - L1036 `static String detectImageMimeType(Uint8List bytes)`  — Detect image MIME type from byte header.
   - L1081 `static MessageRenderData buildMessageRenderData({ required Map<String, String> raw, required int index, required int messageCount, required bool isStreaming, required Map<String, List<String>?> imagesCache, required Map<String, List<DocumentAttachment>?> attachmentsCache, required Map<String, List<ToolCall>?> toolCallsCache, required Map<String, List<ContentBlock>?> contentBlocksCache, })`  — Build a [MessageRenderData] from a raw message map, using decode caches.
 
-## lib/platform_specific/chat/chat_ui_mobile.dart  (3653 Z.)
+## lib/platform_specific/chat/chat_ui_mobile.dart  (3661 Z.)
 
 - L66 `enum _AttachChoice`  — What the plus menu can start.
   - L66 `camera`
@@ -465,15 +465,15 @@
   - L2770 `ValueChanged<String>? _askUserCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the ask_user interactive buttons if [index] is
   - L2795 `ValueChanged<String>? _connectMcpCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the inline MCP Connect card if [index] is the last
   - L2827 `Future<void> _continueGenerationAt(int aiIndex)`  — Continue an interrupted assistant message — appends new tokens onto the
-  - L2932 `Future<void> _openFullscreenEditor()`
-  - L2950 `Future<void> _loadSystemPrompt()`
-  - L2964 `void _openComingSoonFeature(String featureName)`
-  - L2970 `Future<StoredChat?> persistChat({bool waitForCompletion = false})`
-  - L2982 `Widget build(BuildContext context)`
-  - L3018 `Widget _buildChatContent({ required BuildContext context, required double bottomPadding, required ThemeData theme, required Color iconFg, required double expandedInputWidth, required double effectiveHorizontalPadding, required bool isCompactModeForModelDropdown, })`
-  - L3295 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
-  - L3366 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
-  - L3602 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
+  - L2940 `Future<void> _openFullscreenEditor()`
+  - L2958 `Future<void> _loadSystemPrompt()`
+  - L2972 `void _openComingSoonFeature(String featureName)`
+  - L2978 `Future<StoredChat?> persistChat({bool waitForCompletion = false})`
+  - L2990 `Widget build(BuildContext context)`
+  - L3026 `Widget _buildChatContent({ required BuildContext context, required double bottomPadding, required ThemeData theme, required Color iconFg, required double expandedInputWidth, required double effectiveHorizontalPadding, required bool isCompactModeForModelDropdown, })`
+  - L3303 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
+  - L3374 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
+  - L3610 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
 
 ## lib/platform_specific/chat/desktop_send_logic.dart  (2490 Z.)
 

@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Slim
 
-381 Dateien · 1638 Typen/Funktionen · 8691 Member · 605/935 öffentliche Symbole mit Zweckzeile · Stand 2026-09-12
+381 Dateien · 1638 Typen/Funktionen · 8693 Member · 605/935 öffentliche Symbole mit Zweckzeile · Stand 2026-09-12
 
 Diese Datei ist `.pseudomap/MAP.slim.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -665,7 +665,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChatContinuationRequest`  — Immutable input for resuming the latest interrupted assistant message.
 - `class ChatUiHelpers`  — Static utility functions shared between the desktop and mobile chat UIs.
 
-### chat_ui_mobile.dart  (3653 Z.)
+### chat_ui_mobile.dart  (3661 Z.)
 
 - `enum _AttachChoice`  — What the plus menu can start.
 - `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
@@ -687,7 +687,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib/platform_specific/chat/handlers
 
-### audio_recording_handler.dart  (504 Z.)
+### audio_recording_handler.dart  (517 Z.)
 
 - `enum AudioRecordingChange`
 - `class AudioRecordingHandler`  — Handles microphone recording + transcription.
@@ -2657,7 +2657,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - 2 Dateien: lib/platform_specific/chat/chat_ui_desktop.dart → lib/platform_specific/chat/desktop_send_logic.dart
 
 **Größte Dateien (49 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 3653 Zeilen, 139 Symbole
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 3661 Zeilen, 139 Symbole
 - `lib/platform_specific/chat/chat_ui_desktop.dart` — 2644 Zeilen, 135 Symbole
 - `lib/platform_specific/chat/desktop_send_logic.dart` — 2490 Zeilen, 24 Symbole
 - `lib/widgets/artifact_panel.dart` — 2167 Zeilen, 159 Symbole
