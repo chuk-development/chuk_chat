@@ -47,29 +47,54 @@ class ConnectedGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    // The strip paints short and the targets reach past it: a switch over a
+    // list is a strip, not a bar, but a finger still gets its 48. What the
+    // segments take above and below the strip is transparent and lies inside
+    // the room [margin] leaves anyway.
+    const double overhang =
+        (PillGeometry.filterTapHeight - PillGeometry.filterHeight) / 2;
     return Padding(
       padding: margin,
-      // The segments split the width evenly, so neither label is cramped and
-      // the first and the last capsule end at the same distance from the pill.
-      child: Container(
-        padding: PillGeometry.filterShellPadding,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(PillGeometry.filterRadius),
-        ),
-        child: Row(
+      child: SizedBox(
+        height: PillGeometry.filterTapHeight,
+        child: Stack(
           children: <Widget>[
-            for (int i = 0; i < labels.length; i++) ...<Widget>[
-              if (i > 0) const SizedBox(width: PillGeometry.filterInset),
-              Expanded(
-                child: _Segment(
-                  label: labels[i],
-                  count: badges[i] ?? 0,
-                  selected: i == selected,
-                  onTap: () => onSelected(i),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: overhang,
+              bottom: overhang,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(PillGeometry.filterRadius),
                 ),
               ),
-            ],
+            ),
+            // The segments split the width evenly, so neither label is cramped
+            // and the first and the last capsule end at the same distance from
+            // the ends of the strip.
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: PillGeometry.filterInset,
+              ),
+              child: Row(
+                children: <Widget>[
+                  for (int i = 0; i < labels.length; i++) ...<Widget>[
+                    if (i > 0)
+                      const SizedBox(width: PillGeometry.filterInset),
+                    Expanded(
+                      child: _Segment(
+                        label: labels[i],
+                        count: badges[i] ?? 0,
+                        selected: i == selected,
+                        onTap: () => onSelected(i),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -103,6 +128,11 @@ class _Segment extends StatelessWidget {
         // The selection commits on pointer down: the switch is the one
         // control that must never lose its tap to the list it sits above.
         instant: true,
+        // The tap reaches into the hairline, so the capsule can paint short of
+        // a touch target while the finger still gets one.
+        hitPadding: const EdgeInsets.symmetric(
+          vertical: PillGeometry.filterTapSlop,
+        ),
         color: selected ? scheme.primary : Colors.transparent,
         // A stadium at rest and a stadium while held: the press springs, it
         // does not turn the capsule into a rounded box.
