@@ -455,6 +455,22 @@ class CoworkReplayLoader extends ChangeNotifier {
         if (worked != null && aiRow != null) {
           aiRow['generationMs'] = '${worked.inMilliseconds}';
         }
+        // A run that was stopped or that failed wrote nothing, so without this
+        // it comes back from the host as an empty gap in the thread — the
+        // reader cannot tell it from a run that is still thinking (bead
+        // cowork-gnr8). The SAME wording the live thread uses, and the same
+        // `interrupted` status, so the bubble offers to ask again.
+        final notice = coworkRunEndNotice(
+          coworkRunOutcomeFor(
+            reason: event.reason,
+            finalAnswer: event.finalAnswer,
+          ),
+        );
+        if (notice != null && draft.aiText.toString().trim().isEmpty) {
+          _openAiRow(draft);
+          draft.aiText.write(notice);
+          draft.aiRow!['status'] = 'interrupted';
+        }
         _closeAiRow(draft);
         if (event.whileAway) {
           _answerReady[draft.sessionKey] = true;
@@ -796,6 +812,52 @@ class CoworkReplayLoader extends ChangeNotifier {
           )
           .catchError((Object _) {}),
     );
+  }
+
+  /// Writes one quiet line into [session]'s transcript and repaints it.
+  ///
+  /// The live path's half of [coworkRunEndNotice]. A run that ended with
+  /// nothing — a stop the app only heard about through a terminal, a run the
+  /// host no longer has, a run that went silent — has no answer row of its
+  /// own, so the thread would simply stop animating and show nothing. The row
+  /// carries `status: interrupted`, which is what makes the bubble offer to
+  /// ask again.
+  ///
+  /// Idempotent per line: the same notice is never written twice in a row, so
+  /// a reconnect that reconciles the same dead run again adds nothing.
+  Future<void> appendNotice(String session, String notice) async {
+    if (session.isEmpty || notice.isEmpty) return;
+    final existing = await _cachedRows(session);
+    if (existing.isNotEmpty &&
+        (existing.last['text'] ?? '').trim() == notice.trim()) {
+      return;
+    }
+    final rows = <Map<String, String>>[
+      ...existing,
+      <String, String>{
+        'sender': 'ai',
+        'text': notice,
+        'reasoning': '',
+        'status': 'interrupted',
+        'sentAt': DateTime.now().toIso8601String(),
+      },
+    ];
+    final committed = rows
+        .map<Map<String, dynamic>>(Map<String, dynamic>.from)
+        .toList();
+    ThreadPreviewStore.instance.noteRows(session, committed);
+    unawaited(
+      ChatStorageService.saveChat(committed, chatId: session).then(
+        (_) {},
+        onError: (Object error) {
+          if (kDebugMode) {
+            debugPrint('[cowork-replay] notice write failed: $error');
+          }
+        },
+      ),
+    );
+    _revisions[session] = (_revisions[session] ?? 0) + 1;
+    notifyListeners();
   }
 
   Future<List<Map<String, String>>> _cachedRows(String session) async {
