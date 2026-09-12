@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+
 /// Scroll container for settings-style pages with a bounded set of rows.
 ///
 /// Drop-in replacement for `ListView(padding:, children:)`. It lays every child
@@ -53,12 +55,7 @@ class _SettingsListViewState extends State<SettingsListView> {
   EdgeInsetsGeometry _withHeaderInset(
     BuildContext context,
     EdgeInsetsGeometry? padding,
-  ) {
-    final double inset = MediaQuery.paddingOf(context).top;
-    final EdgeInsetsGeometry base = padding ?? EdgeInsets.zero;
-    if (inset <= 0) return base;
-    return base.add(EdgeInsets.only(top: inset));
-  }
+  ) => (padding ?? EdgeInsets.zero).add(floatingHeaderInset(context));
 
   @override
   Widget build(BuildContext context) {

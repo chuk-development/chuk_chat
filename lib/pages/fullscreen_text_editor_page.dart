@@ -132,6 +132,8 @@ class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage> {
         if (!didPop) _confirmDiscard();
       },
       child: Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: Text(widget.title),
           leading: IconButton(

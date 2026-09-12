@@ -22,6 +22,7 @@ void main() {
       {'sender': 'ai', 'text': 'second answer', 'messageId': 'answer-2'},
     ];
     final switchedTo = <int>[];
+    var continued = false;
     const data = MessageRenderData(
       sender: 'ai',
       displayText: 'first answer',
@@ -53,6 +54,7 @@ void main() {
             actions: const <MessageBubbleAction>[],
             userMessageActions: const <MessageBubbleAction>[],
             onSwitchVariant: switchedTo.add,
+            onContinueGeneration: () => continued = true,
           ),
         ),
       ),
@@ -71,7 +73,9 @@ void main() {
 
     bubble.onPrevVariant!();
     bubble.onNextVariant!();
+    bubble.onContinueGeneration!();
     expect(switchedTo, [0, 2]);
+    expect(continued, isTrue);
   });
 
   testWidgets('rebuilds only the active assistant row from live stream data', (

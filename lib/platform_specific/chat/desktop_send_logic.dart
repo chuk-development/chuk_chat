@@ -2146,6 +2146,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         'toolCalls',
         toolCallsJson,
       );
+      _streamingManager.setBackgroundMessages(chatId, backgroundMsgs);
       _persistChatWithIdAndMessages(chatId, backgroundMsgs);
     }
   }
@@ -2183,6 +2184,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           requestPayloadJson,
         ),
       );
+      _streamingManager.setBackgroundMessages(chatId, backgroundMsgs);
       _persistChatWithIdAndMessages(chatId, backgroundMsgs);
     }
   }

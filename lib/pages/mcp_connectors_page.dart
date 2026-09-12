@@ -83,6 +83,8 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: const Text('Connectors'),
       ),

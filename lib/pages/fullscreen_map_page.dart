@@ -132,6 +132,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         (_hasPlaces || _hasRouteEndpoints) && _locationAvailable;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(widget.title, style: const TextStyle(fontSize: 16)),
         leading: IconButton(

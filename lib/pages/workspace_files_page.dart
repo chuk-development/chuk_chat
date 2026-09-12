@@ -342,6 +342,8 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
     final ws = _workspace;
     if (ws == null) {
       return Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: Text(l.projectKnowledge),
         ),
@@ -351,11 +353,14 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
 
     return Scaffold(
       backgroundColor: cs.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.projectKnowledge),
       ),
       body: CustomScrollView(
         slivers: [
+          SliverPadding(padding: floatingHeaderInset(context)),
           if (_uploading)
             SliverToBoxAdapter(
               child: Padding(
@@ -714,6 +719,8 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.projectNewDocument),
         actions: [
@@ -729,7 +736,7 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16).add(floatingHeaderInset(context)),
         children: [
           TextField(
             controller: _titleCtrl,

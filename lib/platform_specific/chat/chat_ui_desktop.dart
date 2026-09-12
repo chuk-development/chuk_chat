@@ -1448,6 +1448,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     };
   }
 
+  /// Starts a follow-up turn with the interrupted answer in API history.
+  Future<void> _continueGenerationAt(int aiIndex) async {
+    if (aiIndex < 0 || aiIndex >= _messages.length) return;
+    if (_isStreaming || _isSending) {
+      showSnackBar('Please wait');
+      return;
+    }
+    final message = _messages[aiIndex];
+    if (message['sender'] != 'ai') return;
+    final priorText = (message['text'] ?? '').trim();
+    final priorContentBlocks = message['contentBlocks'];
+    if (priorText.isEmpty &&
+        (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+      showSnackBar('Nothing to continue from');
+      return;
+    }
+
+    composerController.text = ChatUiHelpers.continueGenerationPrompt;
+    composerController.selection = TextSelection.collapsed(
+      offset: composerController.text.length,
+    );
+    await _sendMessage();
+  }
+
   List<MessageBubbleAction> _buildMessageActionsForIndex(
     int index,
     MessageRenderData data,
@@ -1463,7 +1487,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       index: index,
       messageText: messageText,
       isUser: data.isUser,
-      isStreaming: data.isReasoningStreaming,
+      isStreaming: data.isStreamingMessage,
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
       onBranch: branchFromIndex,
@@ -1858,7 +1882,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       // that case and the button can get stuck.
                                       child: NotificationListener<ScrollMetricsNotification>(
                                         onNotification: (_) {
-                                          onScrollChanged();
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                                if (mounted) onScrollChanged();
+                                              });
                                           return false;
                                         },
                                         child: ListView.builder(
@@ -1929,6 +1956,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   ),
                                               onSwitchVariant: (variant) =>
                                                   switchVariantAt(i, variant),
+                                              onContinueGeneration:
+                                                  !data.isUser &&
+                                                      data.status ==
+                                                          ChatMessageStatus
+                                                              .interrupted &&
+                                                      !_isStreaming
+                                                  ? () =>
+                                                        _continueGenerationAt(i)
+                                                  : null,
                                             );
                                           },
                                         ),

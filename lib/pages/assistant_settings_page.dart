@@ -166,6 +166,8 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
 
     if (!AssistantPlatform.isSupported) {
       return Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: const Text('Assistent setzen'),
         ),

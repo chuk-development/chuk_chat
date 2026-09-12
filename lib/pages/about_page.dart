@@ -112,6 +112,8 @@ class _AboutPageState extends State<AboutPage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.about),
       ),
@@ -353,6 +355,8 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.licenses),
       ),
@@ -379,7 +383,12 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
           // One tile per package. The list is long enough that a builder
           // matters, so every package is its own group of one.
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              24,
+            ).add(floatingHeaderInset(context)),
             itemCount: packages.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -503,6 +512,8 @@ class _LicenseDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(package.name),
       ),

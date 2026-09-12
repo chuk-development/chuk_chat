@@ -120,16 +120,24 @@ class MessageRenderCache {
     required List<Map<String, String>> messages,
     required int index,
     required bool isStreaming,
-  }) => ChatUiHelpers.buildMessageRenderData(
-    raw: messages[index],
-    index: index,
-    messageCount: messages.length,
-    isStreaming: isStreaming,
-    imagesCache: _images,
-    attachmentsCache: _attachments,
-    toolCallsCache: _toolCalls,
-    contentBlocksCache: _contentBlocks,
-  );
+  }) {
+    ChatUiHelpers.trimCachesIfNeeded(<Map<dynamic, dynamic>>[
+      _images,
+      _attachments,
+      _toolCalls,
+      _contentBlocks,
+    ]);
+    return ChatUiHelpers.buildMessageRenderData(
+      raw: messages[index],
+      index: index,
+      messageCount: messages.length,
+      isStreaming: isStreaming,
+      imagesCache: _images,
+      attachmentsCache: _attachments,
+      toolCallsCache: _toolCalls,
+      contentBlocksCache: _contentBlocks,
+    );
+  }
 
   void clear() {
     _images.clear();
@@ -147,6 +155,10 @@ class ChatUiHelpers {
   /// `ListView` item keys. Never persisted (the raw-map -> [ChatMessage]
   /// conversion reads only known keys) and never sent to the API.
   static const String kUiKeyField = '_uiKey';
+
+  static const String continueGenerationPrompt =
+      'Continue your previous response. Do not repeat what you already '
+      'wrote. Pick up exactly where you left off.';
 
   /// Whether parsed message content contains a completed call to [toolName].
   static bool hasCompletedTool(MessageRenderData data, String toolName) {
