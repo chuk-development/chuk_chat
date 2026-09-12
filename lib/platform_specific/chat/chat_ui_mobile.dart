@@ -189,6 +189,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // the two hooks it needs via [variantActiveChatId] and [variantChatIsLive].
 
   final ScrollController _composerScrollController = ScrollController();
+
+  /// Keeps the newest message above the composer when the keyboard resizes
+  /// the chat. See [_initializeListeners].
+  late final _ChatMetricsObserver _viewInsetRepin = _ChatMetricsObserver(
+    pinToBottomDuringStream,
+  );
+
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = const Uuid();
@@ -689,21 +696,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  /// May the composer take the focus by itself — when this screen mounts, and
+  /// when it loads a chat?
+  ///
+  /// Not on a phone. The shell keeps this screen mounted BEHIND the coworker
+  /// list, because it owns the relay socket (`messenger_shell.dart`), so a
+  /// focus grab on mount opens the soft keyboard while the list is what the
+  /// reader is looking at. And a messenger does not open the keyboard just
+  /// because a thread was opened either: the keyboard belongs to the tap on
+  /// the composer. With a hardware keyboard (a desktop window that is narrow
+  /// enough for this layout) the focus costs nothing and stays.
+  bool get _mayAutoFocusComposer => true;
+
   void _initializeListeners() {
     // Scroll listener for scroll-to-bottom button
     scrollController.addListener(onScrollChanged);
+
+    // The soft keyboard does not pad this subtree, it SHRINKS it: the hosting
+    // Scaffold resizes the body (this one runs `resizeToAvoidBottomInset:
+    // false`). A top-anchored list keeps its offset when its viewport shrinks,
+    // so without this the newest message walks down behind the composer the
+    // moment the keyboard opens. The pin bails out by itself when the reader
+    // has scrolled up into the history.
+    WidgetsBinding.instance.addObserver(_viewInsetRepin);
 
     // Text field focus listener — collapse mic & model buttons while typing
 
     // Text controller listener
     _controller.addListener(_onControllerChanged);
 
-    // Request focus if sidebar closed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!widget.isSidebarExpanded) {
-        _textFieldFocusNode.requestFocus();
-      }
-    });
+    // Request focus if sidebar closed — never on a phone, see
+    // [_mayAutoFocusComposer].
+    if (_mayAutoFocusComposer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!widget.isSidebarExpanded) {
+          _textFieldFocusNode.requestFocus();
+        }
+      });
+    }
 
     // Model selection listener
     _modelSelectionListener = () {
@@ -922,6 +952,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     ChatReactionService.instance.removeListener(_onReactionsChanged);
     ChatModelSelectionService.instance.removeListener(_onChatModelChanged);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
@@ -1160,7 +1191,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Opening an existing chat should *start* at the bottom, not animate.
     scrollChatToBottom(force: true, animate: false);
     // Use captured sidebar state to prevent focus when sidebar was open
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayAutoFocusComposer &&
+        !sidebarWasExpanded &&
+        !widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
   }
@@ -1188,7 +1221,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         showScrollToBottom = false;
       });
       scrollChatToBottom(force: true, animate: false);
-      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+      if (_mayAutoFocusComposer &&
+          !sidebarWasExpanded &&
+          !widget.isSidebarExpanded) {
         _textFieldFocusNode.requestFocus();
       }
       return;
@@ -1269,7 +1304,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       showScrollToBottom = false;
     });
     scrollChatToBottom(force: true, animate: false);
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayAutoFocusComposer &&
+        !sidebarWasExpanded &&
+        !widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
   }
@@ -3724,14 +3761,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                           .editingMessageIndex ==
                                       i;
                                   final bool isUser = sender == 'user';
-                                  final bool startsNewGroup =
-                                      i == 0 ||
-                                      ((_messages[i - 1]['sender'] ?? 'ai') !=
-                                          sender);
-                                  final bool endsGroup =
-                                      i == _messages.length - 1 ||
-                                      ((_messages[i + 1]['sender'] ?? 'ai') !=
-                                          sender);
+                                  // The run this row belongs to. Sender,
+                                  // day break and pause all break a run, and
+                                  // the day divider below reads the same rule
+                                  // — otherwise a divider lands INSIDE a
+                                  // connected group (see chat_ui_helpers).
+                                  final bool startsNewGroup = messageStartsRun(
+                                    _messages,
+                                    i,
+                                  );
+                                  final bool endsGroup = messageEndsRun(
+                                    _messages,
+                                    i,
+                                  );
 
                                   // Decode payloads via per-JSON-string caches
                                   // so scrolling a static chat doesn't re-parse
@@ -3816,24 +3858,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   // between two days. A row with no timestamp
                                   // gets none — an undated message is no
                                   // evidence of a day.
-                                  final DateTime? rowDay = DateTime.tryParse(
-                                    raw['sentAt'] ?? raw['startedAt'] ?? '',
+                                  final DateTime? rowDay = messageRowTime(raw);
+                                  final bool opensDay = messageOpensDay(
+                                    i == 0 ? null : _messages[i - 1],
+                                    raw,
                                   );
-                                  final DateTime? previousDay = i == 0
-                                      ? null
-                                      : DateTime.tryParse(
-                                          _messages[i - 1]['sentAt'] ??
-                                              _messages[i - 1]['startedAt'] ??
-                                              '',
-                                        );
-                                  final bool opensDay =
-                                      rowDay != null &&
-                                      (previousDay == null ||
-                                          !sameCalendarDay(
-                                            previousDay.toLocal(),
-                                            rowDay.toLocal(),
-                                          ));
-                                  Widget withDay(Widget bubble) => opensDay
+                                  Widget withDay(Widget bubble) =>
+                                      opensDay && rowDay != null
                                       ? Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
@@ -4822,4 +4853,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
     );
   }
+}
+
+/// Calls back on every view-metrics change — the soft keyboard opening or
+/// closing, a rotation. Kept as its own observer instead of a mixin on the
+/// chat State so the State keeps the mixins it already has.
+class _ChatMetricsObserver with WidgetsBindingObserver {
+  _ChatMetricsObserver(this.onMetrics);
+
+  final VoidCallback onMetrics;
+
+  @override
+  void didChangeMetrics() => onMetrics();
 }
