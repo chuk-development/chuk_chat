@@ -10,6 +10,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:cowork/ui/expressive/icon_map.dart';
+
 /// Corner radius at the outer edges of a run.
 const double kMenuOuterRadius = 26;
 
@@ -89,4 +91,151 @@ class MenuTileGroup extends StatelessWidget {
       children: out,
     );
   }
+}
+
+/// One row of a menu: an icon, a label, an optional line under it and
+/// whatever belongs on the right.
+///
+/// The tile around it comes from [MenuTileGroup], so this only draws the
+/// content and the tap target. Every menu in the app uses it, which is why
+/// no screen needs its own `ListTile` with a hand-rolled shape any more.
+class MenuActionRow extends StatelessWidget {
+  const MenuActionRow({
+    super.key,
+    required this.label,
+    this.icon,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.tone,
+    this.selected = false,
+    this.enabled = true,
+  });
+
+  final String label;
+  final IconData? icon;
+
+  /// Replaces the icon — for an avatar or a badge.
+  final Widget? leading;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  /// Colour of the icon and the label. Defaults to the scheme's `onSurface`;
+  /// pass `scheme.error` for a destructive row.
+  final Color? tone;
+
+  /// Draws the check on the right, for a row that is a choice.
+  final bool selected;
+
+  /// A parked row: it still reads, it just does not answer.
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+    final Color fg = (tone ?? scheme.onSurface).withValues(
+      alpha: enabled ? 1 : 0.38,
+    );
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: <Widget>[
+            if (leading != null)
+              leading!
+            else if (icon != null)
+              AppIcon(icon!, size: 20, color: fg),
+            if (leading != null || icon != null) const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: text.bodyLarge?.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: text.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant.withValues(
+                          alpha: enabled ? 1 : 0.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (trailing != null) ...<Widget>[
+              const SizedBox(width: 12),
+              trailing!,
+            ] else if (selected) ...<Widget>[
+              const SizedBox(width: 12),
+              AppIcon(Icons.check, size: 18, color: scheme.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A menu as a bottom sheet: the house sheet chrome, then the same tiles a
+/// dropdown is made of. What a long press opens on a phone and what a click
+/// opens on a pointer are then the same menu in two places.
+Future<T?> showMenuSheet<T>(
+  BuildContext context, {
+  required List<List<Widget>> groups,
+  Widget? header,
+  Color? color,
+}) {
+  final ColorScheme scheme = Theme.of(context).colorScheme;
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: scheme.surfaceContainerLow,
+    showDragHandle: false,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+    ),
+    isScrollControlled: true,
+    builder: (BuildContext sheetContext) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: scheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (header != null) ...<Widget>[header, const SizedBox(height: 10)],
+            Flexible(
+              child: SingleChildScrollView(
+                child: MenuTileGroup(
+                  groups: groups,
+                  color: color ?? scheme.surfaceContainerHigh,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
