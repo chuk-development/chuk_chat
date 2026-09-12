@@ -18,22 +18,25 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 
-/// Gap between two cards inside one block. Deliberately tighter than the
-/// reference design's 4 px: the cards must still read as separate objects,
-/// but a block of three should scan as a single group at a glance.
-const double kSbCardGap = 2.5;
+/// Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
+/// cards stay separate objects, and the block still scans as one group.
+const double kSbCardGap = 3.0;
 
 /// Horizontal inset of every block from the sidebar edge.
 const double kSbBlockInset = 8.0;
 
-/// Corner radius of a sidebar card. Smaller than the settings pages' 26 px
-/// because the sidebar is roughly half as wide — the corner has to stay in
-/// proportion to the card, not to the screen.
+/// Corner radius of a lone card, and of the outward corners of a block.
+/// Smaller than the settings pages' 26 px because the sidebar is roughly half
+/// as wide — the corner stays in proportion to the card, not to the screen.
 const double kSbCardRadius = 20.0;
 
-/// Height of a navigation card. The reference design uses 72 px on a phone;
-/// ours is shorter because the same block has to fit a desktop sidebar too.
-const double kSbNavCardHeight = 62.0;
+/// The corners where two cards of one block meet. Same idea as
+/// `kExpressiveInnerRadius`: a run of cards reads as one block because the
+/// joints tighten, not because a frame is drawn around them.
+const double kSbCardJointRadius = 6.0;
+
+/// Height of a navigation card.
+const double kSbNavCardHeight = 46.0;
 
 class SidebarTokens {
   final Color iconFg;
@@ -86,7 +89,7 @@ class SbCard extends StatefulWidget {
     this.selected = false,
     this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     this.minHeight,
-    this.radius = kSbCardRadius,
+    this.radius,
   });
 
   final Widget child;
@@ -99,7 +102,9 @@ class SbCard extends StatefulWidget {
   final bool selected;
   final EdgeInsets padding;
   final double? minHeight;
-  final double radius;
+
+  /// Overrides the shape the enclosing [SbBlock] would give this card.
+  final double? radius;
 
   @override
   State<SbCard> createState() => _SbCardState();
@@ -134,7 +139,10 @@ class _SbCardState extends State<SbCard> {
             : BoxConstraints(minHeight: widget.minHeight!),
         decoration: BoxDecoration(
           color: fill,
-          borderRadius: BorderRadius.circular(widget.radius),
+          borderRadius: widget.radius != null
+              ? BorderRadius.circular(widget.radius!)
+              : SbCardShape.of(context) ??
+                  BorderRadius.circular(kSbCardRadius),
           // The border is always reserved, transparent when unselected, so
           // selecting a card only changes its colour and never its size.
           border: Border.all(
@@ -216,7 +224,12 @@ class SbBlock extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
       if (i > 0) rows.add(const SizedBox(height: kSbCardGap));
-      rows.add(children[i]);
+      rows.add(
+        SbCardShape(
+          radius: sbBlockRadiusFor(index: i, length: children.length),
+          child: children[i],
+        ),
+      );
     }
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
@@ -228,6 +241,48 @@ class SbBlock extends StatelessWidget {
   }
 }
 
+/// The corners of the card at [index] in a block of [length] cards: outward
+/// corners stay round, the joints between neighbours tighten.
+BorderRadius sbBlockRadiusFor({required int index, required int length}) {
+  if (length <= 1) return BorderRadius.circular(kSbCardRadius);
+  const outer = Radius.circular(kSbCardRadius);
+  const joint = Radius.circular(kSbCardJointRadius);
+  if (index == 0) {
+    return const BorderRadius.only(
+      topLeft: outer,
+      topRight: outer,
+      bottomLeft: joint,
+      bottomRight: joint,
+    );
+  }
+  if (index == length - 1) {
+    return const BorderRadius.only(
+      topLeft: joint,
+      topRight: joint,
+      bottomLeft: outer,
+      bottomRight: outer,
+    );
+  }
+  return const BorderRadius.all(joint);
+}
+
+/// Carries the shape a card should take from its block down to the card.
+///
+/// The card cannot work it out for itself — only the block knows whether this
+/// one is first, last, or in the middle.
+class SbCardShape extends InheritedWidget {
+  const SbCardShape({super.key, required this.radius, required super.child});
+
+  final BorderRadius radius;
+
+  static BorderRadius? of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<SbCardShape>()
+      ?.radius;
+
+  @override
+  bool updateShouldNotify(SbCardShape old) => radius != old.radius;
+}
+
 /// The rounded square an icon sits in, matching `ExpressiveIconTile` but
 /// sized for the narrower sidebar.
 class SbIconTile extends StatelessWidget {
@@ -235,7 +290,7 @@ class SbIconTile extends StatelessWidget {
     super.key,
     required this.icon,
     this.tone,
-    this.size = 38,
+    this.size = 30,
   });
 
   final IconData icon;
@@ -290,18 +345,18 @@ class SbNavCard extends StatelessWidget {
     return SbCard(
       onTap: onTap,
       minHeight: kSbNavCardHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       child: Row(
         children: [
           SbIconTile(icon: icon, tone: tone),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
                 color: theme.colorScheme.onSurface,
               ),
             ),
@@ -497,52 +552,68 @@ class SbGroupHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color fg = theme.m3.onSurfaceVariant;
+    // The header is the lid of its block: open, it is the top card and the
+    // chats join underneath it; shut, it is a closed card on its own. A bare
+    // floating label instead leaves a hole in the list where the group was.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(kSbBlockInset, 14, kSbBlockInset, 6),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        // The chevron says open or shut to the eye only; a screen reader
-        // would otherwise hear a label, a count and an unnamed icon.
+      padding: const EdgeInsets.fromLTRB(kSbBlockInset, 10, kSbBlockInset, 0),
+      child: SbCardShape(
+        radius: collapsed
+            ? BorderRadius.circular(kSbCardRadius)
+            : const BorderRadius.only(
+                topLeft: Radius.circular(kSbCardRadius),
+                topRight: Radius.circular(kSbCardRadius),
+                bottomLeft: Radius.circular(kSbCardJointRadius),
+                bottomRight: Radius.circular(kSbCardJointRadius),
+              ),
         child: Semantics(
           button: true,
           expanded: !collapsed,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
+          child: SbCard(
             onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: fg,
-                        fontWeight: FontWeight.w600,
+            minHeight: 38,
+            padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+            child: Row(
+              children: [
+                // Label and count share ONE flexible slot. With a Spacer
+                // beside a Flexible label both take a share of the free
+                // space, and the chevron then sits at a different x on every
+                // row — the longer the label, the further right it drifts.
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: fg,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (count != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '$count',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: fg.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (count != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '$count',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: fg.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  AnimatedRotation(
-                    turns: collapsed ? -0.25 : 0,
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
-                  ),
-                ],
-              ),
+                ),
+                AnimatedRotation(
+                  // Shut points down (there is more to open), open points up.
+                  turns: collapsed ? 0 : 0.5,
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(Icons.expand_more_rounded, size: 20, color: fg),
+                ),
+              ],
             ),
           ),
         ),
@@ -559,6 +630,7 @@ class SbSearchField extends StatefulWidget {
     required this.focusNode,
     required this.onClear,
     this.hintText,
+    this.transparent = false,
   });
 
   final TextEditingController controller;
@@ -567,6 +639,10 @@ class SbSearchField extends StatefulWidget {
 
   /// Null takes the localized default.
   final String? hintText;
+
+  /// Draws no fill of its own, for a field that sits where a card already
+  /// supplies the surface.
+  final bool transparent;
 
   @override
   State<SbSearchField> createState() => _SbSearchFieldState();
@@ -613,10 +689,15 @@ class _SbSearchFieldState extends State<SbSearchField> {
     final theme = Theme.of(context);
     final Color muted = theme.m3.onSurfaceVariant;
     return Container(
-      height: 44,
+      height: widget.transparent ? kSbNavCardHeight : 44,
       decoration: BoxDecoration(
-        color: theme.m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(999),
+        color: widget.transparent
+            ? Colors.transparent
+            : theme.m3.surfaceContainer,
+        borderRadius: widget.transparent
+            ? (SbCardShape.of(context) ??
+                BorderRadius.circular(kSbCardRadius))
+            : BorderRadius.circular(999),
       ),
       child: TextField(
         controller: widget.controller,
@@ -633,7 +714,15 @@ class _SbSearchFieldState extends State<SbSearchField> {
               const BoxConstraints(minWidth: 40, minHeight: 44),
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(vertical: 13),
+          // Every state, not just the resting one: `border` alone leaves the
+          // theme's focused outline in place, and the field then grows a
+          // coloured ring the cards around it do not have.
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
           // The clear button only exists while there is something to clear,
           // so an untouched field stays a clean pill.
           suffixIcon: !_hasText
@@ -659,18 +748,22 @@ class _SbSearchFieldState extends State<SbSearchField> {
 class SbBottomBar extends StatelessWidget {
   const SbBottomBar({
     super.key,
-    required this.search,
+    required this.leading,
     required this.onSettings,
-    required this.onNewChat,
+    this.onNewChat,
     this.settingsTooltip,
     this.newChatTooltip,
     this.padding =
         const EdgeInsets.fromLTRB(kSbBlockInset, 6, kSbBlockInset, 10),
   });
 
-  final Widget search;
+  /// Whatever the platform puts on the left of the bar — the account row on a
+  /// phone, the search field on the desktop.
+  final Widget leading;
   final VoidCallback onSettings;
-  final VoidCallback onNewChat;
+
+  /// Null leaves the new-chat button out, for a layout that has one elsewhere.
+  final VoidCallback? onNewChat;
 
   /// Null on either takes the localized default.
   final String? settingsTooltip;
@@ -684,7 +777,7 @@ class SbBottomBar extends StatelessWidget {
       padding: padding,
       child: Row(
         children: [
-          Expanded(child: search),
+          Expanded(child: leading),
           const SizedBox(width: 6),
           SbRoundAction(
             icon: Icons.settings_rounded,
@@ -693,16 +786,91 @@ class SbBottomBar extends StatelessWidget {
                 'Settings',
             onTap: onSettings,
           ),
-          const SizedBox(width: 6),
-          SbRoundAction(
-            icon: Icons.edit_square,
-            tooltip: newChatTooltip ??
-                AppLocalizations.of(context)?.newChat ??
-                'New chat',
-            onTap: onNewChat,
-            fill: theme.colorScheme.primary,
-          ),
+          if (onNewChat != null) ...[
+            const SizedBox(width: 6),
+            SbRoundAction(
+              icon: Icons.edit_square,
+              tooltip: newChatTooltip ??
+                  AppLocalizations.of(context)?.newChat ??
+                  'New chat',
+              onTap: onNewChat!,
+              fill: theme.colorScheme.primary,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// The bottom bar of the phone sidebar: who is signed in, what is left on the
+/// account, and the way into the settings — one quiet, translucent card.
+///
+/// It reads as chrome under the list rather than as one more row of it, which
+/// is why the fill is weaker than a card's and the settings glyph lives
+/// inside the same shape instead of beside it.
+class SbAccountLine extends StatelessWidget {
+  const SbAccountLine({
+    super.key,
+    required this.name,
+    this.balance,
+    this.onTap,
+    this.onSettings,
+    this.settingsTooltip,
+  });
+
+  final String name;
+
+  /// The remaining balance, drawn on the right.
+  final Widget? balance;
+  final VoidCallback? onTap;
+  final VoidCallback? onSettings;
+  final String? settingsTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.m3.surfaceContainer.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(kSbCardRadius),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              if (balance != null) ...[
+                const SizedBox(width: 10),
+                balance!,
+              ],
+              if (onSettings != null)
+                IconButton(
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.settings_rounded, size: 20),
+                  color: theme.m3.onSurfaceVariant,
+                  tooltip: settingsTooltip ??
+                      AppLocalizations.of(context)?.settings ??
+                      'Settings',
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  padding: EdgeInsets.zero,
+                  splashRadius: 22,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -748,7 +916,7 @@ class SbChatTile extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       onSecondaryTap: onSecondaryTap,
-      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
       child: _SbChatTileBody(
         title: title,
         dateLine: dateLine,

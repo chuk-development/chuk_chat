@@ -21,6 +21,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -81,11 +82,15 @@ class _SidebarMobileState extends State<SidebarMobile> {
   bool _isOfflineMode = false;
   final FocusNode _searchFocus = FocusNode();
 
+  /// True while the search row shows the field instead of the nav card.
+  bool _searchActive = false;
+
   @override
   void initState() {
     super.initState();
     // Chat loading handled by AppInitializationService and ChatSyncService
     _searchController.addListener(_onSearchChanged);
+    _searchFocus.addListener(_onSearchFocusChanged);
     _scrollController.addListener(_onScrollForAutoLoad);
     unawaited(_loadProfile());
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
@@ -141,8 +146,21 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   // The Search nav card doesn't open a second field — it hands the caret to
   // the one already sitting in the bottom bar.
+  /// Opens the search row and puts the caret in it. The row folds back into
+  /// the plain nav card once the field is empty and no longer focused, so an
+  /// abandoned search does not sit there forever.
   void _focusSearch() {
-    _searchFocus.requestFocus();
+    setState(() => _searchActive = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocus.requestFocus();
+    });
+  }
+
+  void _onSearchFocusChanged() {
+    if (_searchFocus.hasFocus) return;
+    if (_searchController.text.isNotEmpty) return;
+    if (!mounted) return;
+    setState(() => _searchActive = false);
   }
 
   void _toggleGroup(String label) {
@@ -551,6 +569,41 @@ class _SidebarMobileState extends State<SidebarMobile> {
         children: [
           SizedBox(height: viewPadding.top + 8.0),
 
+          // The top of the sidebar names the app, not the person using it,
+          // and carries the one action that starts something: a new chat.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(kSbBlockInset + 8, 2, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: BrandWordmark(color: theme.resolvedIconColor),
+                  ),
+                ),
+                if (widget.onCollapseTapped != null)
+                  SbRoundAction(
+                    icon: Icons.keyboard_double_arrow_left_rounded,
+                    tooltip: AppLocalizations.of(context)?.hideSidebar ??
+                        'Hide sidebar',
+                    diameter: 38,
+                    iconSize: 20,
+                    onTap: widget.onCollapseTapped!,
+                  ),
+                const SizedBox(width: 6),
+                SbRoundAction(
+                  icon: Icons.edit_square,
+                  tooltip:
+                      AppLocalizations.of(context)?.newChat ?? 'New chat',
+                  diameter: 38,
+                  iconSize: 18,
+                  fill: accentColor,
+                  onTap: widget.onNewChatTapped,
+                ),
+              ],
+            ),
+          ),
+
           Expanded(
             child: CustomScrollView(
               controller: _scrollController,
@@ -562,7 +615,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
           KeyedSubtree(
             key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
-            child: SbBottomBar(
+            child: Padding(
               // The home indicator sits below the bar, so the bar keeps its
               // own 10 px and adds whatever the device reserves.
               padding: EdgeInsets.fromLTRB(
@@ -571,13 +624,26 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 kSbBlockInset,
                 10 + viewPadding.bottom,
               ),
-              search: SbSearchField(
-                controller: _searchController,
-                focusNode: _searchFocus,
-                onClear: _clearSearchQuery,
+              // Account, balance and settings in one quiet card. Search lives
+              // at the top of the list, where it belongs; a second search
+              // field down here was only a duplicate of it.
+              child: SbAccountLine(
+                name: _displayNameFor(_profile),
+                onTap: widget.onSettingsTapped,
+                onSettings: widget.onSettingsTapped,
+                balance: BalanceBadge(
+                  textStyle: TextStyle(
+                    color: accentColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  placeholderStyle: TextStyle(
+                    color: theme.m3.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
               ),
-              onSettings: widget.onSettingsTapped,
-              onNewChat: widget.onNewChatTapped,
             ),
           ),
         ],
@@ -595,30 +661,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
         _filteredRecentChats.where((c) => !c.isStarred).toList();
 
     final List<Widget> slivers = <Widget>[
-      SliverToBoxAdapter(
-        child: SbBlock(
-          children: [
-            SbProfileCard(
-              name: _displayNameFor(_profile),
-              onTap: widget.onSettingsTapped,
-              onCollapse: widget.onCollapseTapped,
-              subtitle: BalanceBadge(
-                textStyle: TextStyle(
-                  color: accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-                placeholderStyle: TextStyle(
-                  color: theme.m3.onSurfaceVariant,
-                  fontSize: 13,
-                ),
-                padding: EdgeInsets.zero,
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SliverToBoxAdapter(child: SizedBox(height: 10)),
       SliverToBoxAdapter(child: SbBlock(children: _buildNavCards())),
       if (_isOfflineMode)
         SliverToBoxAdapter(
@@ -703,6 +745,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     // Null-safe like every other lookup here: a host that builds the sidebar
     // without the delegate should get English labels, not a crashed nav block.
     final AppLocalizations? l = AppLocalizations.of(context);
+
     return <Widget>[
       if (kFeatureWorkspaces)
         SbNavCard(
@@ -716,11 +759,26 @@ class _SidebarMobileState extends State<SidebarMobile> {
           label: l?.media ?? 'Media',
           onTap: widget.onMediaTapped,
         ),
-      SbNavCard(
-        icon: Icons.search_rounded,
-        label: l?.search ?? 'Search',
-        onTap: _focusSearch,
-      ),
+      // Search stays in its own row and becomes the field in place: same
+      // slot, same card, same corners. A second search box at the bottom of
+      // the panel was only a duplicate of this one.
+      if (_searchActive)
+        SbCard(
+          padding: EdgeInsets.zero,
+          minHeight: kSbNavCardHeight,
+          child: SbSearchField(
+            controller: _searchController,
+            focusNode: _searchFocus,
+            transparent: true,
+            onClear: _clearSearchQuery,
+          ),
+        )
+      else
+        SbNavCard(
+          icon: Icons.search_rounded,
+          label: l?.search ?? 'Search',
+          onTap: _focusSearch,
+        ),
     ];
   }
 
@@ -752,15 +810,23 @@ class _SidebarMobileState extends State<SidebarMobile> {
               // group carries none and the header below it sets the spacing.
               padding: EdgeInsets.fromLTRB(
                 kSbBlockInset,
-                0,
+                kSbCardGap,
                 kSbBlockInset,
-                i == chats.length - 1 ? 0 : kSbCardGap,
+                0,
               ),
-              child: _buildRecentItem(
-                chats[i],
-                onTap: () => _onChatTapped(chats[i]),
-                onDelete: () => _confirmAndDeleteChat(chats[i]),
-                accentColor: accent,
+              child: SbCardShape(
+                // The header above is the first card of this block, so the
+                // chats are 1..n and only the last one rounds outward.
+                radius: sbBlockRadiusFor(
+                  index: i + 1,
+                  length: chats.length + 1,
+                ),
+                child: _buildRecentItem(
+                  chats[i],
+                  onTap: () => _onChatTapped(chats[i]),
+                  onDelete: () => _confirmAndDeleteChat(chats[i]),
+                  accentColor: accent,
+                ),
               ),
             ),
             childCount: chats.length,

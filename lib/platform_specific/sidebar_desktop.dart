@@ -359,7 +359,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           KeyedSubtree(
             key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
             child: SbBottomBar(
-              search: SbSearchField(
+              leading: SbSearchField(
                 controller: _searchController,
                 focusNode: _searchFocus,
                 onClear: _clearSearchQuery,

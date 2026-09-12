@@ -333,8 +333,11 @@ void main() {
       await tester.pump();
 
       expect(find.byType(SbNavCard), findsNWidgets(3));
-      expect(find.byType(SbProfileCard), findsOneWidget);
-      expect(find.byType(SbSearchField), findsOneWidget);
+      // The account moved out of the list and into the bottom bar, and the
+      // search field only exists once the Search row is tapped — the bar
+      // below carries no second one.
+      expect(find.byType(SbAccountLine), findsOneWidget);
+      expect(find.byType(SbSearchField), findsNothing);
       expect(find.widgetWithText(SbGroupHeader, 'Pinned'), findsOneWidget);
       expect(find.widgetWithText(SbGroupHeader, 'Today'), findsOneWidget);
       expect(find.text('Alpha chat'), findsOneWidget);
