@@ -314,7 +314,18 @@ Emitted first in every replay response.
 ```json
 {"type": "run_state", ..., "browser_open": true | false, "vnc_available": true | false}
 {"type": "browser_view", "status": "opened" | "closed", "message": "", "vnc_available": true | false}
+{"type": "browser_view", "status": "started" | "error", "message": "...", "reason": "<code>", ...}
 ```
+
+`reason` (additive, cowork-qp5i) is the machine-readable half of `message`, so a
+client never matches English text. It is `""` when there is nothing to explain.
+On `started`: `opening` — the display is empty and the host is opening the
+browser right now, the picture grows into this same stream; `no_browser` — the
+display is empty and nothing can open a page. On `error`: `no_sandbox`,
+`no_display` (no box has a browser display), `vnc_start_failed`, `exec_failed`,
+`bridge_failed`. A `started` with `reason` `""` means a page is on the display.
+The host now opens the browser itself instead of asking the user to, so
+`no_browser` / `no_display` mean the opening was tried and could not happen.
 
 The host's word on whether the agent has a browser window right now. The
 agent's browser is the Playwright MCP server in its sandbox: a completed
