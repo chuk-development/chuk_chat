@@ -1444,6 +1444,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  /// One size for every target in the composer action row: the plus, the
+  /// mode pill, the microphone and send. The row reads as one family only if
+  /// they share a number — a 36 here and a 38 there is visible, and the
+  /// microphone turning into the stop target must not resize anything.
+  /// Change this one constant, never a single call site.
+  static const double _composerTargetSize = 38;
+
+  /// The gap between two targets of that row. One number, so the spacing is
+  /// even from the plus to send.
+  static const double _composerTargetGap = 6;
+
   /// Open a menu anchored to a composer button. It leaves the focus and
   /// so the keyboard alone.
   Future<T?> _showAnchoredComposerMenu<T>({
@@ -3655,7 +3666,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           showLabel: false,
           // The same height as the round buttons beside it in the composer
           // row; a pill that stands two pixels taller reads as a mistake.
-          height: 38,
+          height: _composerTargetSize,
         selectedModelId: selectedModelId,
         modelLabel: selectedModelName ??
             (selectedModelId.isEmpty ? null : selectedModelId),
@@ -3773,24 +3784,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
 
           // ── Row one: what you are saying ──
-          if (isRecording)
-            SizedBox(
-              height: 40,
-              child: Row(
-                children: [
-                  buildRecordingIndicator(),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: buildAudioVisualizer(
-                      audioLevels: _audioHandler.audioLevels,
-                      accentColor: Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            buildKeyboardListener(
+          //
+          // The waveform is drawn over the text field, not in place of it:
+          // the field keeps its slot in the layout, so the composer is
+          // exactly as tall while recording as it is at rest and the thread
+          // does not jump the moment the microphone opens.
+          ComposerInputRow(
+            isRecording: isRecording,
+            audioLevels: _audioHandler.audioLevels,
+            accentColor: Colors.red,
+            timeColor: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            child: buildKeyboardListener(
               focusNode: _rawKeyboardListenerFocusNode,
               controller: composerController,
               onSend: sendOrSubmitEdit,
@@ -3847,6 +3851,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
             ),
+          ),
 
           const SizedBox(height: 4),
 
@@ -3862,23 +3867,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   builder: (anchorContext) => buildTinyIconButton(
                     icon: Icons.add_rounded,
                     iconSize: 22,
-                    buttonSize: 38,
+                    buttonSize: _composerTargetSize,
                     // Round, so the tap ink is a circle and not a square
                     // patch behind a round icon.
-                    cornerRadius: 19,
+                    cornerRadius: _composerTargetSize / 2,
                     onTap: () => _handleAddAttachmentTap(anchorContext),
                     isActive: hasAttachments,
                     color: iconFg,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: _composerTargetGap),
               _buildModelControl(
                 isCompactMode: isCompactMode,
                 iconFg: iconFg,
               ),
               if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
@@ -3886,26 +3891,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
                   iconSize: 20,
-                  buttonSize: 36,
-                  cornerRadius: 18,
+                  buttonSize: _composerTargetSize,
+                  cornerRadius: _composerTargetSize / 2,
                   onTap: _handleMicTap,
                   isActive: true,
                   color: Colors.red,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
               ] else if (!hasTypedText && !showStopAction) ...[
                 buildTinyIconButton(
                   icon: Icons.mic,
                   iconSize: 20,
-                  buttonSize: 36,
-                  cornerRadius: 18,
+                  buttonSize: _composerTargetSize,
+                  cornerRadius: _composerTargetSize / 2,
                   onTap: _handleMicTap,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
               ] else if (_showFullscreenButton && !showStopAction) ...[
                 // Takes the microphone's slot: the microphone only shows with
                 // an empty field and this only with a long one, so the two
@@ -3914,14 +3919,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.open_in_full_rounded,
                   iconSize: 18,
-                  buttonSize: 36,
-                  cornerRadius: 18,
+                  buttonSize: _composerTargetSize,
+                  cornerRadius: _composerTargetSize / 2,
                   onTap: _openFullscreenEditor,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'fullscreen_composer_button',
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _composerTargetGap),
               ],
               buildTinyActionButton(
                 icon: isRecording
@@ -3931,8 +3936,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           : (showVoiceModeAction
                                 ? Icons.graphic_eq_rounded
                                 : Icons.north_rounded)),
-                buttonSize: 38,
-                iconSize: 17,
+                buttonSize: _composerTargetSize,
+                iconSize: 18,
                 onTap: isRecording
                     ? _handleAudioSend
                     : (showStopAction

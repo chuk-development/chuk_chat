@@ -20,14 +20,14 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
-/// The colour the sidebar panel is painted in.
+/// The colour the sidebar panel is painted in — the same step off the page
+/// that a floating card takes in the chat.
 ///
-/// Both the panel itself and the bars that float over it read it from here.
-/// They have to agree: a floating bar filled with a *different* colour than
-/// the panel is a visible rectangle, and its rounded edge is the stray line
-/// that keeps showing up in the corner of the eye.
-Color sbPanelBackground(BuildContext context) =>
-    Theme.of(context).cardColor.darken(0.02);
+/// Which is why the bars floating over *this* panel step the other way, down
+/// to the page background: a bar in the panel's own colour would be
+/// invisible, and one in any third colour would be a patch of the wrong
+/// shade with a stray line around its rounded edge.
+Color sbPanelBackground(BuildContext context) => floatingChromeBase(context);
 
 /// Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
 /// cards stay separate objects, and the block still scans as one group.
@@ -1239,7 +1239,7 @@ class SbFloatingBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingChromeSurface(
       radius: kSbCardRadius,
-      baseColor: sbPanelBackground(context),
+      baseColor: Theme.of(context).scaffoldBackgroundColor,
       child: Material(type: MaterialType.transparency, child: child),
     );
   }

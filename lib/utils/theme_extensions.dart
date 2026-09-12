@@ -6,21 +6,39 @@ extension ThemeDataIconColorX on ThemeData {
   /// The glyph colour for a button that is filled with the accent — the send
   /// button, the new-chat button, every round accent circle.
   ///
-  /// Every other icon in the app is the reader's own icon colour: a near
-  /// white, nudged towards the chosen accent. A flat black or white glyph
-  /// picked purely for contrast makes these buttons look pasted in from a
-  /// different app, so they take that same icon colour.
+  /// Every other icon in the app is the reader's own icon colour, so these
+  /// buttons take that colour too rather than flipping to a flat black or
+  /// white picked purely for contrast: a black glyph on the one accent-filled
+  /// control looks pasted in from another app.
   ///
-  /// The one guard is legibility, which is not a matter of taste: against a
-  /// very pale accent a near-white glyph disappears, and there the contrast
-  /// pick wins.
+  /// The icon colour is often a muted tone, though, and muted-on-accent can
+  /// be unreadable — the default tan sits at a contrast of 1.2 against the
+  /// default orange. So the glyph keeps that hue and is lightened towards
+  /// white until it reads: near-white with a trace of the accent in it, which
+  /// is what the rest of the app looks like anyway. Only an accent too pale
+  /// for any light glyph sends it the other way, towards black.
   Color accentButtonForeground(Color fill) {
-    final Color preferred = resolvedIconColor;
-    if (_contrastRatio(preferred, fill) >= 2.0) return preferred;
-    return ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
+    const double target = 2.0;
+    final Color tint = resolvedIconColor;
+    if (_contrastRatio(tint, fill) >= target) return tint;
+
+    final Color? lightened = _blendUntilReadable(tint, Colors.white, fill);
+    if (lightened != null) return lightened;
+
+    // Not even white reads on this fill, so the fill is pale. Same walk the
+    // other way.
+    return _blendUntilReadable(tint, Colors.black, fill) ?? Colors.black;
   }
+}
+
+/// Walks [from] towards [towards] in tenths and returns the first blend that
+/// reaches a contrast of 2.0 against [on]. Null when the far end never does.
+Color? _blendUntilReadable(Color from, Color towards, Color on) {
+  for (int step = 1; step <= 10; step++) {
+    final Color candidate = Color.lerp(from, towards, step / 10)!;
+    if (_contrastRatio(candidate, on) >= 2.0) return candidate;
+  }
+  return null;
 }
 
 /// WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white).
