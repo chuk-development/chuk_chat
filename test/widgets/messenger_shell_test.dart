@@ -446,7 +446,7 @@ void main() {
       expect((route as MaterialPageRoute).fullscreenDialog, isTrue);
 
       // A full-screen dialog closes with an X, not a back arrow.
-      await tester.tap(find.byType(CloseButton));
+      await tester.tap(find.byKey(const Key('browser_view_close')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(BrowserViewPage), findsNothing);

@@ -5,9 +5,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
 import 'package:cowork/utils/theme_extensions.dart';
@@ -237,6 +238,19 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Widget frame = _buildFrame();
     if (_fullscreen) {
+      // Full screen means the stream owns every pixel — it does NOT mean the
+      // system bars go away. On a phone the status bar still paints over the
+      // top of the window, so chrome pinned to `top: 0` lands half under the
+      // clock and the notification shade, cut off and only half tappable
+      // (Bead cowork-d4po). Start the row below that inset instead, and give
+      // the two targets the header height the rest of the app uses.
+      final double topInset = MediaQuery.paddingOf(context).top;
+      const double gap = 8;
+      final double controlTop = topInset + gap;
+      final double controlSize = MobileLayout.controlHeight;
+      // A chip that has to stay readable over a live web page: the scrim
+      // behind it, the inverse foreground on top.
+      final Color chip = cs.scrim.withValues(alpha: 0.55);
       return Scaffold(
         // The darkest ground the scheme has, not a hard black: the stream sits
         // on it and the scheme still owns the colour.
@@ -249,37 +263,43 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
               Positioned(
                 left: 0,
                 right: 0,
-                top: 0,
-                child: _StatusBanner(
-                  status: _status,
-                  message: _message,
-                  leadingInset: 48,
-                ),
+                // Under the row, not behind it: an error is the one message
+                // the reader must not lose to a button sitting on top of it.
+                top: controlTop + controlSize + gap,
+                child: _StatusBanner(status: _status, message: _message),
               ),
             Positioned(
-              top: 8,
-              left: 8,
-              child: Material(
-                color: cs.scrim.withValues(alpha: 0.45),
-                shape: const CircleBorder(),
-                child: CloseButton(color: cs.onInverseSurface),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Material(
-                color: cs.scrim.withValues(alpha: 0.45),
-                shape: const CircleBorder(),
-                child: IconButton(
-                  key: const Key('browser_view_exit_fullscreen'),
-                  icon: AppIcon(
-                    Icons.fullscreen_exit,
-                    color: cs.onInverseSurface,
+              top: controlTop,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: <Widget>[
+                  ExpressiveIconButton(
+                    key: const Key('browser_view_close'),
+                    hugeIcon: HugeIcons.cancel01,
+                    size: controlSize,
+                    color: chip,
+                    onColor: cs.onInverseSurface,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    semanticsId: 'browser_view_close',
+                    onTap: () => Navigator.of(context).maybePop(),
                   ),
-                  tooltip: 'Exit full screen',
-                  onPressed: _toggleFullscreen,
-                ),
+                  const Spacer(),
+                  ExpressiveIconButton(
+                    key: const Key('browser_view_exit_fullscreen'),
+                    // The set has no full-screen glyph, so this one stays
+                    // Material.
+                    icon: Icons.fullscreen_exit,
+                    size: controlSize,
+                    color: chip,
+                    onColor: cs.onInverseSurface,
+                    tooltip: 'Exit full screen',
+                    semanticsId: 'browser_view_exit_fullscreen',
+                    onTap: _toggleFullscreen,
+                  ),
+                ],
               ),
             ),
           ],
@@ -386,19 +406,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
 }
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({
-    required this.status,
-    required this.message,
-    this.leadingInset = 0,
-  });
+  const _StatusBanner({required this.status, required this.message});
 
   final String status;
   final String message;
-
-  /// Room for whatever floats over the banner's left edge — in fullscreen the
-  /// close button sits there and would otherwise cover the first words of an
-  /// error, which is the one message the reader must not lose.
-  final double leadingInset;
 
   @override
   Widget build(BuildContext context) {
@@ -420,7 +431,7 @@ class _StatusBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: color.withValues(alpha: 0.15),
-      padding: EdgeInsets.fromLTRB(12 + leadingInset, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       alignment: Alignment.centerLeft,
       child: Text(
         label,

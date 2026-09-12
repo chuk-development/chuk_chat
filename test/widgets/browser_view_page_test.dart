@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/ui/expressive/expressive_screen.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
@@ -90,6 +91,50 @@ void main() {
     },
   );
 
+  testWidgets('the full-screen controls start below the status-bar inset', (
+    tester,
+  ) async {
+    // A Pixel-class window with a real status bar and a gesture bar.
+    const double statusInset = 48;
+    const Size window = Size(412, 892);
+    tester.view.physicalSize = window;
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.padding = const FakeViewPadding(top: statusInset, bottom: 24);
+    addTearDown(tester.view.reset);
+
+    await pumpPage(tester);
+
+    for (final Key key in <Key>[
+      const Key('browser_view_close'),
+      const Key('browser_view_exit_fullscreen'),
+    ]) {
+      final Finder target = find.byKey(key);
+      expect(target, findsOneWidget, reason: '$key is on screen');
+      final Rect box = tester.getRect(target);
+      // Below the status bar, never under it.
+      expect(
+        box.top,
+        greaterThanOrEqualTo(statusInset),
+        reason: '$key starts below the status inset',
+      );
+      // And big enough to hit.
+      expect(box.height, greaterThanOrEqualTo(MobileLayout.minTouchTarget));
+      expect(box.width, greaterThanOrEqualTo(MobileLayout.minTouchTarget));
+      expect(box.left, greaterThanOrEqualTo(0));
+      expect(box.right, lessThanOrEqualTo(window.width));
+    }
+
+    // The error banner keeps clear of the row instead of sitting behind it.
+    controller.emit(
+      const CoworkRelayBrowserView(status: 'error', message: 'stream died'),
+    );
+    await tester.pump();
+    expect(
+      tester.getTopLeft(find.text('stream died')).dy,
+      greaterThanOrEqualTo(statusInset + MobileLayout.controlHeight),
+    );
+  });
+
   testWidgets(
     'open() pushes a full-screen dialog route; leaving stops the stream',
     (tester) async {
@@ -115,7 +160,7 @@ void main() {
       expect(controller.starts, 1);
 
       // A full-screen dialog closes with an X, not a back arrow.
-      await tester.tap(find.byType(CloseButton));
+      await tester.tap(find.byKey(const Key('browser_view_close')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(BrowserViewPage), findsNothing);
