@@ -6,7 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+// dynamic_color 2.x hands its DynamicColorBuilder callback a ColorScheme from
+// the `material_ui` package, not Flutter's material ColorScheme. We only read
+// primary/surface/onSurface downstream, so convert to a Flutter ColorScheme at
+// the callsite and keep the rest of the app on the framework type.
+import 'package:material_ui/material_ui.dart' as mui;
 
+import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -338,6 +344,29 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     _lifecycleService.handleLifecycleState(state);
   }
 
+  /// True when this Flutter engine was started by the Android assist
+  /// activity rather than the launcher.
+  ///
+  /// Each `FlutterActivity` gets its own engine and root isolate, so this is
+  /// per-activity even though both live in one process.
+  bool get _isAssistantLaunch =>
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName ==
+      assistantOverlayRouteName;
+
+  /// The app home: auth gate, onboarding gate, then the shell.
+  Widget _buildHome() => AuthGate(
+    loadingBuilder: (context) =>
+        const Scaffold(body: Center(child: CircularProgressIndicator())),
+    signedOutBuilder: (context) => const LoginPage(),
+    signedInBuilder: (context) {
+      final config = _buildShellConfig();
+      return _OnboardingFirstLaunchGate(
+        shellConfig: config,
+        child: RootWrapper(config: config),
+      );
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
     // DynamicColorBuilder exposes the platform's Material You palette (when
@@ -345,15 +374,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // so the app follows wallpaper/accent changes live when the user has
     // enabled dynamic colour.
     return DynamicColorBuilder(
-      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+      builder: (mui.ColorScheme? lightDynamic, mui.ColorScheme? darkDynamic) {
         return MaterialApp(
           navigatorKey: navigatorKey,
           navigatorObservers: [OnboardingTourController.navigatorObserver],
           title: 'Chuk Chat',
           debugShowCheckedModeBanner: false,
           theme: _themeService.buildTheme(
-            lightDynamic: lightDynamic,
-            darkDynamic: darkDynamic,
+            lightDynamic: _toFlutterScheme(lightDynamic, Brightness.light),
+            darkDynamic: _toFlutterScheme(darkDynamic, Brightness.dark),
           ),
           locale: Locale(_themeService.uiLocale),
           supportedLocales: AppLocalizations.supportedLocales,
@@ -376,21 +405,39 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
               child: child,
             );
           },
-          home: AuthGate(
-            loadingBuilder: (context) => const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
-            signedOutBuilder: (context) => const LoginPage(),
-            signedInBuilder: (context) {
-              final config = _buildShellConfig();
-              return _OnboardingFirstLaunchGate(
-                shellConfig: config,
-                child: RootWrapper(config: config),
-              );
-            },
-          ),
+          // The Android assist activity starts this engine on
+          // [assistantOverlayRouteName] and the surface has to be the ONLY
+          // route: `SystemNavigator.pop()` then finishes the activity and the
+          // app underneath comes back, instead of popping to a page below.
+          //
+          // Reading the engine's initial route and swapping `home` does that.
+          // Routing it through `onGenerateInitialRoutes` does NOT — `home:`
+          // and `onGenerateInitialRoutes:` are mutually exclusive, and moving
+          // the app home into the latter renders a permanently black app (a
+          // release build on a Pixel showed nothing but the system bars).
+          home: _isAssistantLaunch
+              ? const AssistantOverlayPage()
+              : _buildHome(),
         );
       },
+    );
+  }
+
+  /// Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
+  /// a Flutter [ColorScheme]. Only the roles the theme reads are relevant, but
+  /// we fill every required constructor field so the result is a valid scheme.
+  ColorScheme? _toFlutterScheme(mui.ColorScheme? scheme, Brightness brightness) {
+    if (scheme == null) return null;
+    return ColorScheme(
+      brightness: brightness,
+      primary: scheme.primary,
+      onPrimary: scheme.onPrimary,
+      secondary: scheme.secondary,
+      onSecondary: scheme.onSecondary,
+      error: scheme.error,
+      onError: scheme.onError,
+      surface: scheme.surface,
+      onSurface: scheme.onSurface,
     );
   }
 

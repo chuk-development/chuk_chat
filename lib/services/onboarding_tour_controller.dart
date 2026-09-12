@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:chuk_chat/assistant/assistant_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -33,7 +34,8 @@ enum _Step {
   pointerProviderPill, // 6  pointer on first provider pill (model selector)
   pointerSettingsPricing, // 7  pointer on Pricing tile (Continue, taps blocked)
   pointerSettingsAiIdentity, // 8  pointer on AI Identity tile (Continue, taps blocked)
-  finale, // 9
+  pointerSettingsAssistant, // 9  pointer on Assistant tile (Android only)
+  finale, // 10
 }
 
 /// Navigator observer the controller installs on the root navigator. It
@@ -203,7 +205,7 @@ class OnboardingTourController {
     // User explored AI Identity and came back → finale.
     if (name == _tourAiIdentityRoute) {
       if (_step == _Step.pointerSettingsAiIdentity) {
-        _goTo(_Step.finale);
+        _goTo(_stepAfterAiIdentity);
         return;
       }
     }
@@ -214,7 +216,8 @@ class OnboardingTourController {
           _step == _Step.pointerMenu ||
           _step == _Step.pointerSettingsModelSelection ||
           _step == _Step.pointerSettingsPricing ||
-          _step == _Step.pointerSettingsAiIdentity) {
+          _step == _Step.pointerSettingsAiIdentity ||
+          _step == _Step.pointerSettingsAssistant) {
         _goTo(_Step.finale);
         return;
       }
@@ -301,6 +304,9 @@ class OnboardingTourController {
         _goTo(_Step.pointerSettingsAiIdentity);
         break;
       case _Step.pointerSettingsAiIdentity:
+        _goTo(_stepAfterAiIdentity);
+        break;
+      case _Step.pointerSettingsAssistant:
         _goTo(_Step.finale);
         break;
       case _Step.finale:
@@ -354,6 +360,9 @@ class OnboardingTourController {
         _goTo(_Step.pointerSettingsAiIdentity);
         break;
       case _Step.pointerSettingsAiIdentity:
+        _goTo(_stepAfterAiIdentity);
+        break;
+      case _Step.pointerSettingsAssistant:
         _goTo(_Step.finale);
         break;
       case _Step.finale:
@@ -449,12 +458,14 @@ class OnboardingTourController {
         _step == _Step.pointerSettings ||
         _step == _Step.pointerSettingsModelSelection ||
         _step == _Step.pointerSettingsPricing ||
-        _step == _Step.pointerSettingsAiIdentity;
+        _step == _Step.pointerSettingsAiIdentity ||
+        _step == _Step.pointerSettingsAssistant;
     // Look-here steps: tapping the highlighted tile shouldn't navigate
     // away — absorb the tap and advance instead. The user can revisit
     // these screens normally after the tour.
     final absorbTargetTap = _step == _Step.pointerSettingsPricing ||
-        _step == _Step.pointerSettingsAiIdentity;
+        _step == _Step.pointerSettingsAiIdentity ||
+        _step == _Step.pointerSettingsAssistant;
     final canShowContinue = _step == _Step.pointerProviderPill;
     return _TourBannerOverlay(
       slot: slot,
@@ -467,6 +478,13 @@ class OnboardingTourController {
       onEndTour: _onEndTourPressed,
     );
   }
+
+  /// The assistant tile is Android-only, so on every other platform the tour
+  /// goes straight from the AI-behaviour step to the finale instead of
+  /// pointing at a tile that is not in the tree.
+  _Step get _stepAfterAiIdentity => AssistantPlatform.isSupported
+      ? _Step.pointerSettingsAssistant
+      : _Step.finale;
 
   String? _slotFor(_Step step) {
     switch (step) {
@@ -482,6 +500,8 @@ class OnboardingTourController {
         return TourSlots.settingsPricingTile;
       case _Step.pointerSettingsAiIdentity:
         return TourSlots.settingsAiIdentityTile;
+      case _Step.pointerSettingsAssistant:
+        return TourSlots.kSettingsAssistantTile;
       default:
         return null;
     }
@@ -501,6 +521,8 @@ class OnboardingTourController {
         return _BodyKind.pointerSettingsPricing;
       case _Step.pointerSettingsAiIdentity:
         return _BodyKind.pointerSettingsAiIdentity;
+      case _Step.pointerSettingsAssistant:
+        return _BodyKind.pointerSettingsAssistant;
       default:
         return _BodyKind.welcome;
     }
@@ -518,6 +540,7 @@ enum _BodyKind {
   pointerSettingsModelSelection,
   pointerSettingsPricing,
   pointerSettingsAiIdentity,
+  pointerSettingsAssistant,
 }
 
 // ── Overlay widgets ───────────────────────────────────────────────────────
@@ -1044,6 +1067,8 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
         return l.tourSettingsPricingTitle;
       case _BodyKind.pointerSettingsAiIdentity:
         return l.tourSettingsAiIdentityTitle;
+      case _BodyKind.pointerSettingsAssistant:
+        return l.tourAssistantTitle;
       case _BodyKind.welcome:
         return l.tourWelcomeTitle;
       case _BodyKind.finale:
@@ -1067,6 +1092,8 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
         return l.tourSettingsPricingBody;
       case _BodyKind.pointerSettingsAiIdentity:
         return l.tourSettingsAiIdentityBody;
+      case _BodyKind.pointerSettingsAssistant:
+        return l.tourAssistantBody;
       case _BodyKind.welcome:
         return l.tourWelcomeBody;
       case _BodyKind.finale:

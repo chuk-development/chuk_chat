@@ -815,6 +815,8 @@ class AppLocalizations {
   String get tourSettingsPricingBody => _get('tourSettingsPricingBody');
   String get tourSettingsAiIdentityTitle => _get('tourSettingsAiIdentityTitle');
   String get tourSettingsAiIdentityBody => _get('tourSettingsAiIdentityBody');
+  String get tourAssistantTitle => _get('tourAssistantTitle');
+  String get tourAssistantBody => _get('tourAssistantBody');
   String get tourDoneTitle => _get('tourDoneTitle');
   String get tourDoneBody => _get('tourDoneBody');
 

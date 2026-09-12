@@ -808,6 +808,10 @@ const Map<String, String> stringsDe = {
   'tourSettingsAiIdentityTitle': 'AI-Verhalten',
   'tourSettingsAiIdentityBody':
       'Hier konfigurierst du System-Prompt, Memory an/aus und Reasoning.',
+  'tourAssistantTitle': 'Assistent des Geräts',
+  'tourAssistantBody':
+      'Mach Chuk Chat zum Assistenten dieses Telefons: über jeder App '
+      'erreichbar, sieht den Bildschirm, startet Navigation.',
   'tourDoneTitle': 'Alles bereit',
   'tourDoneBody':
       'Du kannst diese Tour jederzeit in den Einstellungen erneut starten.',

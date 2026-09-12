@@ -25,13 +25,24 @@ const Map<String, String> _defaultHeaders = {
 /// them into a `<map>` tag costs a round trip and gets them wrong often
 /// enough to matter.
 class PlacesToolResult {
-  const PlacesToolResult({required this.text, this.mapTag});
+  const PlacesToolResult({
+    required this.text,
+    this.mapTag,
+    this.places = const <Map<String, dynamic>>[],
+  });
 
   /// Formatted result for the model.
   final String text;
 
   /// A ready `<map>…</map>` block, or null when no place had coordinates.
   final String? mapTag;
+
+  /// The raw Brave entries behind [text] and [mapTag], newest lookup first.
+  ///
+  /// Surfaces exist that render their own card instead of a `<map>` tag (the
+  /// assistant overlay draws a native list), and re-parsing the tag to get
+  /// the data back would be silly.
+  final List<Map<String, dynamic>> places;
 }
 
 /// Most places put on one card. Beyond this the map stops being a glance.
@@ -157,6 +168,7 @@ Future<PlacesToolResult> searchPlacesWithMap({
         places: places,
       ),
       mapTag: buildPlacesMapTag(places: places, title: query),
+      places: places,
     );
   } catch (error) {
     return PlacesToolResult(text: 'Error searching places: $error');
@@ -238,6 +250,7 @@ Future<PlacesToolResult> searchRestaurantsWithMap({
         places: places,
       ),
       mapTag: buildPlacesMapTag(places: places, title: label),
+      places: places,
     );
   } catch (error) {
     return PlacesToolResult(text: 'Error searching restaurants: $error');

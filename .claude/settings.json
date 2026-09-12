@@ -12,6 +12,25 @@
           }
         ],
         "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pseudomap hook session --slim"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pseudomap hook post-edit"
+          }
+        ],
+        "matcher": "Write|Edit|MultiEdit"
       }
     ]
   }

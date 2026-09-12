@@ -794,6 +794,10 @@ const Map<String, String> stringsEn = {
   'tourSettingsAiIdentityTitle': 'AI behavior',
   'tourSettingsAiIdentityBody':
       'Configure system prompt, memory on/off, and reasoning here.',
+  'tourAssistantTitle': 'Phone assistant',
+  'tourAssistantBody':
+      'Make Chuk Chat the assistant of this phone: reachable over any app, '
+      'sees the screen, starts navigation.',
   'tourDoneTitle': "You're all set",
   'tourDoneBody': 'You can replay this tour any time from Settings.',
   // ── Battery optimization prompt ──────────────────────────────
