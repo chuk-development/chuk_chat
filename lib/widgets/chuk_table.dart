@@ -118,6 +118,49 @@ ParsedTable? parseTable(List<String> lines) {
   return ParsedTable(header: header, rows: rows, alignments: alignments);
 }
 
+/// Under this much room a table that does not fit is stacked instead of
+/// scrolled. A phone message column is around 340-400 logical pixels.
+const double kChukTableStackBelowWidth = 560;
+
+/// Rough on-screen length of a cell: drop the inline markdown markers so
+/// `**bold**` / `` `code` `` don't inflate a column's weight.
+int chukVisibleLength(String raw) =>
+    raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
+
+/// Rough natural pixel width of [t] if every cell sat on one line.
+double chukTableNaturalWidth(ParsedTable t, {double fontSize = 13.5}) {
+  const double cellPadding = 26; // 12 + 12 from _cell, plus a little slack.
+  final double charWidth = fontSize * 0.58; // avg glyph advance.
+  double total = 0;
+  for (int c = 0; c < t.columnCount; c++) {
+    int maxLen = chukVisibleLength(c < t.header.length ? t.header[c] : '');
+    for (final List<String> row in t.rows) {
+      if (c < row.length) {
+        final int l = chukVisibleLength(row[c]);
+        if (l > maxLen) maxLen = l;
+      }
+    }
+    total += maxLen * charWidth + cellPadding;
+  }
+  return total;
+}
+
+/// Whether [t] would be drawn as one card per row in [maxWidth] of room.
+///
+/// A stacked card is a paragraph of its own; a grid row is one line. Anything
+/// that shows a PART of a table — the inline preview in a thread — has to know
+/// which of the two it is about to draw before it decides how many rows it can
+/// afford.
+bool chukTableStacks(
+  ParsedTable t, {
+  required double maxWidth,
+  double fontSize = 13.5,
+}) {
+  if (!maxWidth.isFinite || t.columnCount < 2) return false;
+  if (maxWidth >= kChukTableStackBelowWidth) return false;
+  return chukTableNaturalWidth(t, fontSize: fontSize) > maxWidth;
+}
+
 /// A rounded, scrollable, copyable rendering of a markdown table.
 class ChukTable extends StatefulWidget {
   const ChukTable({
@@ -360,14 +403,9 @@ class _ChukTableState extends State<ChukTable> {
     return widths;
   }
 
-  /// Rough on-screen length of a cell: drop the inline markdown markers so
-  /// `**bold**` / `` `code` `` don't inflate a column's weight.
-  int _visibleLen(String raw) =>
-      raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
+  int _visibleLen(String raw) => chukVisibleLength(raw);
 
-  /// Under this much room a table that does not fit is stacked instead of
-  /// scrolled. A phone message column is around 340-400 logical pixels.
-  static const double _stackBelowWidth = 560;
+  static const double _stackBelowWidth = kChukTableStackBelowWidth;
 
   /// One card per data row: the first column is the card's title, every other
   /// column becomes a labelled field under it. No horizontal scrolling, so
@@ -471,22 +509,8 @@ class _ChukTableState extends State<ChukTable> {
   /// Used only to decide between filling the width (flex columns) and
   /// horizontal scrolling (intrinsic columns) — a slight misestimate near the
   /// boundary is harmless since either layout reads fine there.
-  double _estimatedNaturalWidth(ParsedTable t) {
-    const double cellPadding = 26; // 12 + 12 from _cell, plus a little slack.
-    final double charWidth = widget.fontSize * 0.58; // avg glyph advance.
-    double total = 0;
-    for (int c = 0; c < t.columnCount; c++) {
-      int maxLen = _visibleLen(c < t.header.length ? t.header[c] : '');
-      for (final List<String> row in t.rows) {
-        if (c < row.length) {
-          final int l = _visibleLen(row[c]);
-          if (l > maxLen) maxLen = l;
-        }
-      }
-      total += maxLen * charWidth + cellPadding;
-    }
-    return total;
-  }
+  double _estimatedNaturalWidth(ParsedTable t) =>
+      chukTableNaturalWidth(t, fontSize: widget.fontSize);
 
   Widget _cell(
     String raw, {
