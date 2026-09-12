@@ -496,6 +496,8 @@ const Map<String, String> stringsPt = {
   'aiDisclaimer':
       'Você está conversando com uma IA — ela pode errar. Confira o importante.',
   'queuedLabel': 'Na fila',
+  'queuedMessagesCount': '{count} mensagens na fila',
+  'workingLabel': 'a trabalhar',
   'editYourMessage': 'Edite sua mensagem...',
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',
   'micAccessFailed': 'Falha no acesso ao microfone',
