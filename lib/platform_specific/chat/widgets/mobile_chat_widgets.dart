@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Build a tiny icon button widget
@@ -69,51 +70,45 @@ Widget buildTinyActionButton({
     icon != null || svgAssetPath != null,
     'Either icon or svgAssetPath must be provided.',
   );
-  final Color foregroundColor = color.computeLuminance() > 0.5
-      ? Colors.black
-      : Colors.white;
-
-  final result = Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: isLoading ? null : onTap,
-      borderRadius: BorderRadius.circular(buttonSize / 2),
-      child: Container(
-        width: buttonSize,
-        height: buttonSize,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color, color.withValues(alpha: 0.85)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: isLoading
-            ? Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
-                ),
-              )
-            : svgAssetPath != null
-            ? SvgPicture.asset(
-                svgAssetPath,
-                width: iconSize,
-                height: iconSize,
-                colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
-              )
+  // A Builder rather than a context parameter: every call site already sits
+  // under a Theme, and threading one through would touch all of them.
+  final result = Builder(
+    builder: (BuildContext context) {
+      final Color foregroundColor = Theme.of(
+        context,
+      ).accentButtonForeground(color);
+            return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isLoading ? null : onTap,
+            borderRadius: BorderRadius.circular(buttonSize / 2),
+            child: Container(
+              width: buttonSize,
+              height: buttonSize,
+              // Flat fill, no sheen and no coloured shadow. The button is the one
+              // accent-coloured thing down here; a glow around it only smears that
+              // colour into the composer behind it.
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: isLoading
+                  ? Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
+                      ),
+                    )
+                  : svgAssetPath != null
+                  ? SvgPicture.asset(
+                      svgAssetPath,
+                      width: iconSize,
+                      height: iconSize,
+                      colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
+                    )
             : AppIcon(icon!, size: iconSize, color: foregroundColor),
-      ),
-    ),
+          ),
+        ),
+      );
+    },
   );
   if (semanticsId != null) {
     return Semantics(identifier: semanticsId, child: result);

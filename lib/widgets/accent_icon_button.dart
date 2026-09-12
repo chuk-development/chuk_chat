@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// A round, accent-filled icon button — one shared widget so the "new chat"
 /// control looks identical wherever it appears (the mobile sidebar row and
 /// the floating top bar). Icon only, no label.
 ///
-/// [accent] defaults to the theme's primary colour; the icon colour is picked
-/// for contrast against it (black on a light accent, white on a dark one), so
-/// callers only pass a colour when they have their own accent token.
+/// [accent] defaults to the theme's primary colour; the glyph takes the
+/// app's own icon colour via [ThemeDataIconColorX.accentButtonForeground], so
+/// it matches every other icon on screen instead of flipping to flat black.
+/// Callers only pass a colour when they have their own accent token.
 class AccentIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -36,11 +38,9 @@ class AccentIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fill = accent ?? Theme.of(context).colorScheme.primary;
-    final Color on =
-        ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
-            ? Colors.white
-            : Colors.black;
+    final ThemeData theme = Theme.of(context);
+    final Color fill = accent ?? theme.colorScheme.primary;
+    final Color on = theme.accentButtonForeground(fill);
     final double pad = (diameter - iconSize) / 2;
 
     final Widget button = Material(

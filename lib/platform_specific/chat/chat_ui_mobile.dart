@@ -3839,23 +3839,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           right: 6,
                         ),
                         isDense: true,
-                        suffixIcon: _showFullscreenButton
-                            ? GestureDetector(
-                                onTap: _openFullscreenEditor,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 4),
-                                  child: AppIcon(
-                                    Icons.open_in_full_rounded,
-                                    size: 14,
-                                    color: iconFg.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                              )
-                            : null,
-                        suffixIconConstraints: const BoxConstraints(
-                          minWidth: 24,
-                          minHeight: 24,
-                        ),
                       ),
                       cursorColor: accent,
                       cursorWidth: 1.5,
@@ -3921,6 +3904,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'mic_button',
+                ),
+                const SizedBox(width: 4),
+              ] else if (_showFullscreenButton && !showStopAction) ...[
+                // Takes the microphone's slot: the microphone only shows with
+                // an empty field and this only with a long one, so the two
+                // never want the place at the same time. Out here instead of
+                // inside the field, the typed text keeps the full width.
+                buildTinyIconButton(
+                  icon: Icons.open_in_full_rounded,
+                  iconSize: 18,
+                  buttonSize: 36,
+                  cornerRadius: 18,
+                  onTap: _openFullscreenEditor,
+                  isActive: false,
+                  color: iconFg,
+                  semanticsId: 'fullscreen_composer_button',
                 ),
                 const SizedBox(width: 4),
               ],

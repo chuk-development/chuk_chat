@@ -20,6 +20,15 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
+/// The colour the sidebar panel is painted in.
+///
+/// Both the panel itself and the bars that float over it read it from here.
+/// They have to agree: a floating bar filled with a *different* colour than
+/// the panel is a visible rectangle, and its rounded edge is the stray line
+/// that keeps showing up in the corner of the eye.
+Color sbPanelBackground(BuildContext context) =>
+    Theme.of(context).cardColor.darken(0.02);
+
 /// Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
 /// cards stay separate objects, and the block still scans as one group.
 const double kSbCardGap = 3.0;
@@ -858,9 +867,8 @@ class SbAccountLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // A floating, outlined box — and nothing around it. The list runs
-    // straight past it on every side, so the card reads as an object above
-    // the panel rather than as a band closing it off.
+    // The list runs straight past it on every side, so the row reads as
+    // something held above the panel rather than as a band closing it off.
     return SbFloatingBar(
       child: InkWell(
         onTap: onTap,
@@ -1217,9 +1225,11 @@ class SbOfflineNotice extends StatelessWidget {
 /// A card that floats over the scrolling list — the app name at the top of
 /// the phone sidebar, the account row at the bottom.
 ///
-/// No outline: the shape and a part-transparent fill are what lift it off the
-/// panel. The fill really is see-through — the chats underneath show as a
-/// blur, which is what keeps the text on top readable at this alpha.
+/// No outline, no shadow, and the panel's own colour as the fill. Nothing is
+/// meant to be visible here except the text: the bar exists only so the
+/// chats scrolling underneath disappear behind it instead of running into
+/// the app name. Anything that draws an edge — a border, a shadow, a fill
+/// of a different colour — turns it back into a box.
 class SbFloatingBar extends StatelessWidget {
   const SbFloatingBar({super.key, required this.child});
 
@@ -1229,6 +1239,7 @@ class SbFloatingBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingChromeSurface(
       radius: kSbCardRadius,
+      baseColor: sbPanelBackground(context),
       child: Material(type: MaterialType.transparency, child: child),
     );
   }
