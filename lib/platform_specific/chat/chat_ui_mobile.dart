@@ -70,7 +70,6 @@ import 'package:cowork/services/workspace_storage_service.dart';
 import 'package:cowork/services/workspace_message_service.dart';
 import 'package:cowork/services/artifact_context_service.dart';
 import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, workspace }
@@ -4642,15 +4641,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               onCancel: () =>
                   setState(() => _replyDrafts.remove(_replyChatKey)),
             ),
-          if (isWorking)
-            _buildComposerNotice(
-              theme: theme,
-              leading: WorkingDots(
-                color: theme.colorScheme.primary.withValues(alpha: 0.75),
-                label: '',
-              ),
-              label: AppLocalizations.of(context)!.workingLabel,
-            ),
+          // No working indicator here. The thread already says it twice — the
+          // coworker's own typing line in the transcript and the header — and a
+          // third copy in the composer was noise, not news.
           if (_pendingMessages.isNotEmpty)
             _buildComposerNotice(
               theme: theme,
