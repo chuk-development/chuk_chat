@@ -63,7 +63,7 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 | type | fields | notes |
 |---|---|---|
 | `task` | `prompt`, `session_key`, `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. |
-| `stop` | `session_key` | Existing. |
+| `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`COWORK_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
 | `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
@@ -154,6 +154,47 @@ Who authenticates what:
 — and it is the field to drop, together with `access_token` and
 `oauth.refresh_token`, when hashing this list to decide whether an MCP manager has
 to be rebuilt. A rotated token is not a changed connector.
+
+### `mcp_probe` (NEW, app → executor)
+
+"Dial these connectors now and tell me what they hold."
+
+```json
+{"type": "mcp_probe", "session_key": "<key>"?, "mcp_servers": [ ...same entries as on `task`... ]}
+```
+
+Answered with one **terminal** `mcp_tools` frame (below), the way `skills_list`
+is answered. The dial runs on its own thread in the executor: a server that is
+down costs a full connect timeout and the frame loop must not wait for it.
+
+The app sends this when the connector list opens and right after a connector is
+signed in, so a server shows its tools immediately instead of after whatever
+task happens to run next. The sign-in itself stays on the device — an OAuth
+consent screen needs a person — and only the credentials travel.
+
+### `mcp_tools` (NEW, executor → app)
+
+What each forwarded connector answered with when the host dialled it. One frame
+per task, sent right after the session's MCP manager is up.
+
+```json
+{"type": "mcp_tools", "session_key": "<key>",
+ "servers": [
+   {"id": "<device connector id>"?, "name": "<connector name>", "url": "<endpoint>",
+    "connected": true, "tools": [{"name": "<tool>", "description": "<one line>"}],
+    "error": "<why it is not connected>"?}
+ ]}
+```
+
+Why it exists: this device never connects to an MCP server. It forwards the
+connectors on the `task` frame and the host dials them, so the tool list is not
+something the app can discover — and the connector list showed "0 tools" next to
+servers that were connected and working. A server that failed is reported with
+its `error` instead of being left out: "tried and refused" is the state worth
+showing.
+
+The app matches on `id` when the host echoes one, else on `name`, and only ever
+updates a connector it already has. A frame never creates one.
 
 ### `mcp_credentials` (NEW, executor → app)
 
@@ -271,8 +312,8 @@ Emitted first in every replay response.
 ### `run_state.browser_open` and `browser_view` `opened` / `closed` (additive, cowork-vzm)
 
 ```json
-{"type": "run_state", ..., "browser_open": true | false}
-{"type": "browser_view", "status": "opened" | "closed", "message": ""}
+{"type": "run_state", ..., "browser_open": true | false, "vnc_available": true | false}
+{"type": "browser_view", "status": "opened" | "closed", "message": "", "vnc_available": true | false}
 ```
 
 The host's word on whether the agent has a browser window right now. The
@@ -284,8 +325,14 @@ ground truth when the display is asked. `browser_open` rides in every
 `run_state`; `opened` / `closed` are pushed once per change, on the stream that
 learned it, and land BEFORE the `tool` frame that caused the flip. `started` /
 `stopped` / `error` keep their meaning (the VNC stream, not the browser). The
-app shows its "Agent's browser" button only while the browser is open; on an
-old host it derives the same from the `tool` frames itself.
+app shows its screen button only with an active connection and explicit
+`vnc_available: true`. This additive capability is false for the user's extension
+browser, local/no-Docker environments, missing containers, disabled sandbox
+browser MCP, and no open browser. Missing or malformed capability is false:
+old hosts and tool names alone cannot enable VNC. The authenticated VNC stream
+is started on demand after the click, not kept running just to enable the button;
+the display's actual window count is verified during that start. Reconnection
+clears stale availability until the host sends fresh state.
 
 ### `reasoning` (now emitted; live and replayed)
 

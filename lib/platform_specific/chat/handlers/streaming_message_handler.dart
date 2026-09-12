@@ -109,6 +109,11 @@ class StreamingMessageHandler {
   // stops the loop instead of firing one more streaming pass once the tool
   // resolves. Reset at the start of each sendMessage().
   bool _cancelRequested = false;
+
+  /// The chat whose stop this handler declared last. Only that one is taken
+  /// back when the page goes away — another thread's stop is not this page's
+  /// to withdraw.
+  String? _stopIntentChatId;
   bool _hasForegroundKeepAliveLock = false;
   Future<void>? _activeToolLoopFuture;
 
@@ -1195,6 +1200,14 @@ class StreamingMessageHandler {
       if (kDebugMode) {
         debugPrint('Cancelling stream for chat $chatId...');
       }
+      // The user asked for this one — the composer's stop target is the only
+      // caller that is not a teardown. It is declared provisionally, because
+      // the chat screen's `dispose()` calls this too and then disposes this
+      // handler in the same synchronous block; [dispose] withdraws it there.
+      // The transport sends the `stop` frame on this intent and on nothing
+      // else: a cancelled subscription is not a stop (bead cowork-gnr8).
+      WebSocketChatService.declareStopIntent(chatId);
+      _stopIntentChatId = chatId;
       _cancelRequested = true;
       await _streamingManager.cancelStream(chatId);
 
@@ -1542,6 +1555,12 @@ class StreamingMessageHandler {
   /// Dispose resources
   void dispose() {
     _isDisposed = true;
+    // The chat screen cancels its stream and disposes this handler in one
+    // synchronous block when the page goes away (a thread switch, a rebuild of
+    // the subtree, a route pop). That cancel is NOT the user pressing stop, so
+    // the intent declared a moment ago in [cancelStream] is taken back before
+    // the transport can act on it. The run stays alive on the host.
+    WebSocketChatService.withdrawStopIntent(_stopIntentChatId);
     // Best-effort: flush in-flight snapshot before tearing down so we don't
     // lose the tail of an actively streaming response.
     if (_isStreaming && !_streamFinalized) {

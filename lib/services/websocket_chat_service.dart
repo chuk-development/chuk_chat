@@ -56,6 +56,55 @@ import 'package:cowork/services/chat_model_selection_service.dart';
 /// it marks a Retry, so the host replaces the last turn instead of appending a
 /// second copy of the same question.
 class WebSocketChatService {
+  /// Sessions whose run the USER asked to stop, with the moment they asked.
+  ///
+  /// A stream subscription is cancelled for many reasons that have nothing to
+  /// do with the user: leaving the thread, the chat page being disposed by a
+  /// rebuild, the app going to the background, a hot restart, a reinstall, or
+  /// the streaming manager replacing one stream with the next. Inferring a
+  /// stop from any of those killed live runs on the executor — run
+  /// `d1d4ede1`, `reason: interrupted`, no answer, with nobody having pressed
+  /// anything (bead cowork-gnr8). The host's own design says the opposite:
+  /// "controller disconnected; runs keep going, results are held in the
+  /// store". So the `stop` frame goes out on THIS declared intent and on
+  /// nothing else.
+  static final Map<String, DateTime> _stopIntents = <String, DateTime>{};
+
+  /// How long a declared stop stays valid. Long enough for the cancel it
+  /// belongs to, short enough that it can never arm an unrelated later one.
+  static const Duration _stopIntentWindow = Duration(seconds: 5);
+
+  /// Declares that the user asked to stop [sessionKey]'s run. Called by the
+  /// composer's stop target (through the streaming handler) BEFORE the stream
+  /// is cancelled; [withdrawStopIntent] takes it back when the same cancel
+  /// turns out to be a page teardown.
+  static void declareStopIntent(String sessionKey) {
+    if (sessionKey.isEmpty) return;
+    _stopIntents[sessionKey] = DateTime.now();
+  }
+
+  /// Takes back a declared stop: this cancel was the page going away, not the
+  /// user. The run keeps going on the host and the thread picks it up again.
+  static void withdrawStopIntent([String? sessionKey]) {
+    if (sessionKey == null) {
+      _stopIntents.clear();
+      return;
+    }
+    _stopIntents.remove(sessionKey);
+  }
+
+  /// Consumes the declared intent for [sessionKey], if it is still fresh.
+  static bool _takeStopIntent(String sessionKey) {
+    final at = _stopIntents.remove(sessionKey);
+    if (at == null) return false;
+    return DateTime.now().difference(at) <= _stopIntentWindow;
+  }
+
+  /// True while the user's stop for [sessionKey] is still on record. Test seam.
+  @visibleForTesting
+  static bool hasStopIntent(String sessionKey) =>
+      _stopIntents.containsKey(sessionKey);
+
   /// Sends a streaming chat request and yields chunks as they arrive.
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
@@ -164,6 +213,9 @@ class WebSocketChatService {
 
       switch (event) {
         case CoworkRelayDelta(:final text):
+          // A token is proof the run is alive: it restarts the ceiling that
+          // would otherwise declare it lost.
+          ledger.touch(sessionKey);
           if (text.isNotEmpty) emit(ContentEvent(text));
 
         case CoworkRelayReasoning(:final text):
@@ -409,12 +461,22 @@ class WebSocketChatService {
     out.onCancel = () async {
       await sub?.cancel();
       sub = null;
-      // Dart fires onCancel after a normal close too, so only a cancel that
-      // arrives while the run is still open is a real Stop.
       if (terminated || stopRequested) return;
+      // One microtask before the decision, and no timer: a cancel that comes
+      // from a page teardown is followed, in the SAME synchronous block, by
+      // the streaming handler's dispose — which withdraws the intent. A
+      // microtask therefore always runs after that withdrawal, and deciding
+      // any earlier would send the stop the teardown never asked for.
+      await Future<void>.microtask(() {});
+      // Not the user: the run keeps going on the host, and the thread picks it
+      // up again from the ledger and the replay when the reader comes back.
+      if (!_takeStopIntent(sessionKey)) return;
       stopRequested = true;
       final controller = link.controller.value;
       if (controller == null) return;
+      // The thread stops animating even if the terminal this causes never
+      // reaches the app (the subscription above is already gone).
+      ledger.stopRequested(sessionKey);
       try {
         await controller.requestStop(sessionKey: sessionKey);
       } catch (error) {
