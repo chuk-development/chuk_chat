@@ -1,8 +1,28 @@
 # lib/platform_specific/chat/widgets · Signatures
 
-## lib/platform_specific/chat/widgets/desktop_chat_widgets.dart  (64 Z.)
+## lib/platform_specific/chat/widgets/chat_message_list_item.dart  (163 Z.)
 
-- L6 `Widget buildDesktopIconButton({ required IconData icon, required VoidCallback onTap, required bool isActive, required Color iconFg, required Color bg, String? debugLabel, })`  — Build icon button for desktop UI
+- L17 `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
+  - L18 `const ChatMessageListItem({ super.key, required this.messages, required this.index, required this.data, required this.uuid, required this.maxWidth, required this.activeChatId, required this.flyInKey, required this.showToolCalls, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, required this.isEditing, required this.actions, required this.userMessageActions, required this.onSwitchVariant, this.onAskUserAnswer, this.onConnectMcpServer, this.onContinueGeneration, })`
+  - L40 `final List<Map<String, String>> messages`
+  - L41 `final int index`
+  - L42 `final MessageRenderData data`
+  - L43 `final Uuid uuid`
+  - L44 `final double maxWidth`
+  - L45 `final String? activeChatId`
+  - L46 `final String? flyInKey`
+  - L47 `final bool showToolCalls`
+  - L48 `final bool showReasoningTokens`
+  - L49 `final bool showModelInfo`
+  - L50 `final bool showTps`
+  - L51 `final bool isEditing`
+  - L52 `final List<MessageBubbleAction> actions`
+  - L53 `final List<MessageBubbleAction> userMessageActions`
+  - L54 `final ValueChanged<int> onSwitchVariant`
+  - L55 `final ValueChanged<String>? onAskUserAnswer`
+  - L56 `final ValueChanged<String>? onConnectMcpServer`
+  - L57 `final VoidCallback? onContinueGeneration`
+  - L60 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/chat/widgets/fullscreen_composer.dart  (149 Z.)
 

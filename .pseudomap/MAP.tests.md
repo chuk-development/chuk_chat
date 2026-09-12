@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-129 Dateien · 224 Typen/Funktionen · 54 Member · Stand 2026-09-12
+131 Dateien · 225 Typen/Funktionen · 54 Member · Stand 2026-09-12
 
 Diese Datei ist `.pseudomap/MAP.tests.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -20,7 +20,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### fastlane_metadata_test.dart  (162 Z.)
 
-- const: `_metadataRoot` `_titleLimit` `_shortDescriptionLimit` `_fullDescriptionLimit` `_changelogLimit` `_minScreenshotSide` `_maxScreenshotSide` `_pngSignature`
+- const: _metadataRoot _titleLimit _shortDescriptionLimit _fullDescriptionLimit _changelogLimit _minScreenshotSide _maxScreenshotSide _pngSignature
 - `List<Directory> _locales()`
 - `({int width, int height}) _pngSize(File file)`  — Width and height out of a PNG's IHDR chunk, which always starts at byte 16.
 - `void main()`
@@ -50,14 +50,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### assistant_microphone_test.dart  (153 Z.)
 
-- const: `_frame`
+- const: _frame
 - `Uint8List _chunk({required double amplitude, Duration length = _frame})`  — One chunk of PCM16 at the given amplitude (0..1), as a 400 Hz tone so the
 - `void _feed( AssistantMicrophone mic, { required double amplitude, required Duration total, })`
 - `void main()`
 
 ### assistant_overlay_test.dart  (297 Z.)
 
-- const: `_accent` `_bg`
+- const: _accent _bg
 - `Widget _host(Widget child)`
 - `void main()`
 
@@ -92,7 +92,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### mcp_bundled_icons_test.dart  (121 Z.)
 
-- const: `_pngMagic`
+- const: _pngMagic
 - `void main()`
 
 ### mcp_catalogue_test.dart  (306 Z.)
@@ -110,7 +110,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### mcp_endpoints_live_test.dart  (151 Z.)
 
-- const: `_live`
+- const: _live
 - `class _Probe`  — What a live probe found out about one server.
   - open challenge
 - `Future<_Probe> _probe(String url, http.Client client)`
@@ -122,13 +122,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### mcp_legal_links_live_test.dart  (102 Z.)
 
-- const: `_live` `_userAgent`
+- const: _live _userAgent
 - `Future<int> _statusOf(String url)`
 - `void main()`
 
 ### mcp_oauth_test.dart  (341 Z.)
 
-- const: `_issuer`
+- const: _issuer
 - `http.Response _json(Object body)`
 - `MockClient _server({bool withRegistration = true})`
 - `void main()`
@@ -168,7 +168,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### skills_settings_page_test.dart  (205 Z.)
 
-- const: `_userSkill`
+- const: _userSkill
 - `Widget _host(Widget child)`
 - `void main()`
 
@@ -203,7 +203,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _HarnessState extends State<_Harness> with ChatScrollMixin<_Harness>`
   - streamOneMoreRow jumpToEnd rows
 
-### chat_ui_helpers_test.dart  (438 Z.)
+### chat_ui_helpers_test.dart  (701 Z.)
 
 - `void main()`
 
@@ -214,6 +214,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - variantActiveChatId activeChat
 - `Future<_HostState> _pump(WidgetTester tester)`
 - `List<Map<String, dynamic>> _seed()`
+- `void main()`
+
+## test/platform_specific/chat/widgets
+
+### chat_message_list_item_test.dart  (145 Z.)
+
 - `void main()`
 
 ## test/services
@@ -272,6 +278,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 - `void main()`
 
+### mcp_reachability_test.dart  (24 Z.)
+
+- `void main()`
+
 ### message_composition_service_test.dart  (69 Z.)
 
 - `void main()`
@@ -282,7 +292,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### oauth_loopback_server_test.dart  (118 Z.)
 
-- const: `_theme`
+- const: _theme
 - `OAuthLoopbackServer _server(int port)`  — Ports in the dynamic range, one per test, so a lingering socket from one
 - `typedef _Response = ({int status, String body})`  — Status code and body of one callback request.
 - `Future<_Response> _get(Uri uri)`
@@ -359,7 +369,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_prompt_builder_test.dart  (439 Z.)
 
-- const: `_skillToolDef` `_tools` `_testSkill`
+- const: _skillToolDef _tools _testSkill
 - `void main()`
 
 ### tool_result_cache_registry_test.dart  (124 Z.)
@@ -390,12 +400,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### builtin_skills_validity_test.dart  (132 Z.)
 
-- const: `_kMaxBodyTokens`
+- const: _kMaxBodyTokens
 - `void main()`
 
 ### skill_frontmatter_parser_test.dart  (367 Z.)
 
-- const: `_minimal`
+- const: _minimal
 - `String _md(String frontmatter, {String body = '# Body\n\nDo the thing.'})`  — Builds a SKILL.md with [frontmatter] verbatim between the --- fences.
 - `void main()`
 
@@ -435,7 +445,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### theme_presets_test.dart  (194 Z.)
 
-- const: `_preset`
+- const: _preset
 - `class _Recorder`  — Captures every setter call so a test can assert what a preset applied.
   - themeMode accent iconFg bg contrast uiFont dynamicCalls
 - `AppShellConfig _config( _Recorder r, { Brightness currentThemeMode = Brightness.dark, Color currentAccent = kDefaultAcce …)`
@@ -458,9 +468,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## test/utils
 
-### accent_button_foreground_test.dart  (69 Z.)
+### accent_button_foreground_test.dart  (33 Z.)
 
-- `double contrast(Color a, Color b)`
 - `void main()`
 
 ### api_rate_limiter_test.dart  (263 Z.)
@@ -540,14 +549,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### agent_activity_timeline_test.dart  (679 Z.)
 
-- const: `_t0`
+- const: _t0
 - `ToolCall _call( String name, { Map<String, dynamic> arguments = const {}, ToolCallStatus status = ToolCallStatus.complet …)`
 - `Future<void> _pumpTimeline( WidgetTester tester, { required List<ToolCall> calls, bool isRunning = false, DateTime? now …)`
 - `void main()`
 
 ### anchored_menu_test.dart  (181 Z.)
 
-- const: `_screen`
+- const: _screen
 - `Future<void> _pumpAnchor( WidgetTester tester, { required double keyboardInset, required Alignment anchorAt, int itemCou …)`
 - `void main()`
 
@@ -557,7 +566,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### chat_mode_selector_test.dart  (400 Z.)
 
-- const: `_fireworksLevels`
+- const: _fireworksLevels
 - `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, Val …)`
 - `void main()`
 
@@ -575,7 +584,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### excalidraw_svg_export_test.dart  (62 Z.)
 
-- const: `_sampleScene`
+- const: _sampleScene
 - `void main()`
 
 ### floating_app_bar_test.dart  (66 Z.)
@@ -584,7 +593,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### html_artifact_view_test.dart  (113 Z.)
 
-- const: `_sampleHtml`
+- const: _sampleHtml
 - `void main()`
 
 ### map_block_dedupe_test.dart  (72 Z.)

@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-383 Dateien · 1644 Typen/Funktionen · 8670 Member · 604/934 öffentliche Symbole mit Zweckzeile · Stand 2026-09-12
+381 Dateien · 1638 Typen/Funktionen · 8691 Member · 605/935 öffentliche Symbole mit Zweckzeile · Stand 2026-09-12
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -12,7 +12,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib
 
-### constants.dart  (547 Z.)
+### constants.dart  (553 Z.)
 
 - const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +25
 - `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
@@ -36,7 +36,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
   - `_maybeStart`
 
-### model_selector_page.dart  (2074 Z.)
+### model_selector_page.dart  (2076 Z.)
 
 - `class PricingDetails`
   - formatTokenPrice formatRequestPrice prompt completion request image webSearch internalReasoning
@@ -460,7 +460,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib/pages
 
-### about_page.dart  (560 Z.)
+### about_page.dart  (571 Z.)
 
 - `class AboutPage extends StatefulWidget`
   - `_openLicenses` `_formattedVersion`
@@ -480,7 +480,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - package
 - `String? _inferLicenseName(String text)`
 
-### account_settings_page.dart  (735 Z.)
+### account_settings_page.dart  (737 Z.)
 
 - `class AccountSettingsPage extends StatefulWidget`
 - `class _AccountSettingsPageState extends State<AccountSettingsPage>`
@@ -488,7 +488,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _FieldLabel extends StatelessWidget`
   - label helper
 
-### assistant_settings_page.dart  (407 Z.)
+### assistant_settings_page.dart  (410 Z.)
 
 - `class AssistantSettingsPage extends StatefulWidget`  — One job: make Chuk Chat the assistant of this phone.
 - `class _Grant`  — One freedom the assistant needs, and what it buys.
@@ -501,7 +501,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - number text
 - `class _AllSet extends StatelessWidget`
 
-### coming_soon_page.dart  (49 Z.)
+### coming_soon_page.dart  (51 Z.)
 
 - `class ComingSoonPage extends StatelessWidget`
   - title message
@@ -522,7 +522,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
   - title subtitle
 
-### desktop_settings_modal.dart  (790 Z.)
+### desktop_settings_modal.dart  (792 Z.)
 
 - `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId …)`  — Opens the desktop settings modal over the current chat UI.
 - `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
@@ -534,7 +534,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _DesktopSettingsModalState extends State<DesktopSettingsModal>`
   - `_onDevOptions` `_groups` `_findPage` `_onSelect` `_buildWide` `_buildCompact` `_buildNavRail` `_navItem` `_buildRailFooter` `_logout` `_replayOnboarding` `_exportChats` `_snack`
 
-### diagnostics_settings_page.dart  (336 Z.)
+### diagnostics_settings_page.dart  (338 Z.)
 
 - `class DeveloperOptionsPage extends StatefulWidget`
 - `class _DeveloperOptionsPageState extends State<DeveloperOptionsPage>`
@@ -552,7 +552,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ForgotPasswordPageState extends State<ForgotPasswordPage>`
   - `_handleSendResetCode` `_openRecoveryOtpVerification` `_buildFormView`
 
-### fullscreen_map_page.dart  (1137 Z.)
+### fullscreen_map_page.dart  (1139 Z.)
 
 - `class FullscreenMapPage extends StatefulWidget`
   - center zoom title places markers fitPoints routeFromLat routeFromLon routeToLat routeToLon routeFromLabel routeToLabel initialSelectedPlaceIndex
@@ -561,15 +561,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RouteGeometry`
   - points distanceMeters durationSeconds
 
-### fullscreen_text_editor_page.dart  (217 Z.)
-
-- `Future<String?> showFullscreenTextEditor( BuildContext context, { required String initialText, required String title, St …)`  — Opens [initialText] in a fullscreen editor.
-- `class FullscreenTextEditorPage extends StatefulWidget`
-  - initialText title hintText monospace
-- `class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage>`
-  - `_onChanged` `_confirmDiscard` `_isDirty`
-
-### github_connection_page.dart  (469 Z.)
+### github_connection_page.dart  (471 Z.)
 
 - `class GitHubConnectionPage extends StatefulWidget`
 - `class _GitHubConnectionPageState extends State<GitHubConnectionPage>`
@@ -581,7 +573,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _LoginPageState extends State<LoginPage>`
   - `_handleSubmit` `_openSignupOtpVerification` `_toggleMode` `_validatePassword`
 
-### mcp_connectors_page.dart  (887 Z.)
+### mcp_connectors_page.dart  (999 Z.)
 
 - `class McpConnectorsPage extends StatefulWidget`
 - `class _McpConnectorsPageState extends State<McpConnectorsPage>`
@@ -589,7 +581,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
   - id entry
 - `class _McpConnectorDetailPageState extends State<McpConnectorDetailPage>`
-  - `_legalNote` `_openLegal` `_cancelConnect` `_connect` `_disconnect`
+  - `_checkReachable` `_remember` `_legalNote` `_openLegal` `_cancelConnect` `_connect` `_disconnect`
 - `Future<Map<String, String>?> showMcpCredentialDialog( BuildContext context, List<McpCredentialField> fields, String name …)`  — Collect a reader's own credentials for an [McpAuth.apiKey] server. Returns
 - `class McpConnectorIcon extends StatefulWidget`  — A connector logo. The bundled brand logo first (shipped in the binary for
   - assetPath url serverUrl name size fallback
@@ -597,7 +589,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - `_loadFirstThatWorks` `_networkIcon` `_placeholder` `_candidates`
 - `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
 
-### media_manager_page.dart  (1141 Z.)
+### media_manager_page.dart  (1152 Z.)
 
 - `enum _MediaFilter`
   - images artifacts
@@ -617,9 +609,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _OtpVerificationPageState extends State<OtpVerificationPage>`
   - `_startCooldown` `_messageForError` `_handleVerify` `_handleResend`
 
-### pricing_page.dart  (673 Z.)
+### pricing_page.dart  (676 Z.)
 
-- const: `_supabase` `_apiBaseUrl`
+- const: _supabase _apiBaseUrl
 - `Future<void> _launchExternalUrl(String url)`
 - `Future<String> _getAccessToken()`
 - `Future<void> startCheckout()`
@@ -632,13 +624,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _PlanCard extends StatelessWidget`
   - title price features badgeLabel badgeTone highlighted child
 
-### recover_chats_page.dart  (389 Z.)
+### recover_chats_page.dart  (396 Z.)
 
 - `class RecoverChatsPage extends StatefulWidget`  — Page for recovering or deleting chats encrypted with old passwords.
 - `class _RecoverChatsPageState extends State<RecoverChatsPage>`
   - `_loadLockedInfo` `_recoverVersion` `_deleteVersion` `_showDeleteConfirmation` `_showTypeDeleteConfirmation` `_buildVersionCard`
 
-### sandbox_management_page.dart  (314 Z.)
+### sandbox_management_page.dart  (316 Z.)
 
 - `class SandboxManagementPage extends StatefulWidget`
 - `class _SandboxManagementPageState extends State<SandboxManagementPage>`
@@ -653,7 +645,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
   - `_handleSetPassword`
 
-### settings_page.dart  (1008 Z.)
+### settings_page.dart  (1015 Z.)
 
 - `class SettingsPage extends StatefulWidget`
   - config
@@ -696,7 +688,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SkillRow extends StatelessWidget`
   - skill onTap onDelete
 
-### system_prompt_page.dart  (813 Z.)
+### system_prompt_page.dart  (815 Z.)
 
 - `class SystemPromptPage extends StatefulWidget`
 - `class _SystemPromptPageState extends State<SystemPromptPage>`
@@ -727,7 +719,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _FontCard extends StatelessWidget`
   - title subtitle sample value options labelFor onChanged
 
-### tool_calling_settings_page.dart  (805 Z.)
+### tool_calling_settings_page.dart  (807 Z.)
 
 - `class ToolCallingSettingsPage extends StatefulWidget`
   - config
@@ -740,7 +732,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### usage_details_page.dart  (1337 Z.)
 
-- const: `_kMonthNames`
+- const: _kMonthNames
 - `class UsageDetailsPage extends StatefulWidget`
 - `class _UsageDetailsPageState extends State<UsageDetailsPage>`
   - `_loadUsageOverview` `_syncSelectedScope` `_appBar` `_hasCreditProgress` `_buildScopeSelector` `_buildSummaryCard` `_buildTokenActivitySection` `_buildHeatmapModeSelector` `_buildHeatmapLegend` `_heatmapCaption` `_buildBillingCard` `_buildModelSummaryCard` `_buildRequestCard` `_buildInlineWarning` `_buildScopeOptions` `_selectedScope` `_firstScopeByType` `_buildSlice` `_matchesScope` `_formatMonthYear` `_formatCount` `_formatDate` `_formatDateTime` `_twoDigits` `_formatEurSmart` decimals
@@ -763,7 +755,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `int _heatmapLevel(int value, int maxValue)`  — Quartile of [value] against [maxValue]: 0 (none) then 1–4 (light→dark).
 - `Color _heatmapCellColor(BuildContext context, int level)`  — Cell colour for a heat level, from theme tokens so both themes read well:
 
-### workspace_detail_page.dart  (1021 Z.)
+### workspace_detail_page.dart  (1031 Z.)
 
 - `class WorkspaceDetailPage extends StatelessWidget`
   - `_isMobileForm` workspaceId onStartNewChat
@@ -778,7 +770,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ChatSelectorDialogState extends State<_ChatSelectorDialog>`
   - `_filter`
 
-### workspace_files_page.dart  (770 Z.)
+### workspace_files_page.dart  (778 Z.)
 
 - `class WorkspaceFilesPage extends StatefulWidget`
   - workspaceId
@@ -795,14 +787,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _NewDocumentPage extends StatefulWidget`
 - `class _NewDocumentPageState extends State<_NewDocumentPage>`
 
-### workspace_instructions_page.dart  (223 Z.)
+### workspace_instructions_page.dart  (225 Z.)
 
 - `class WorkspaceInstructionsPage extends StatefulWidget`
   - workspaceId
 - `class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage>`
   - `_onChanged` `_save` `_confirmDiscard` `_hasChanges`
 
-### workspace_management_page.dart  (747 Z.)
+### workspace_management_page.dart  (755 Z.)
 
 - `class WorkspaceManagementPage extends StatefulWidget`  — Mobile-friendly workspace management page
   - workspaceId onStartNewChat
@@ -811,7 +803,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ChatSelectorSheet extends StatelessWidget`  — Bottom sheet for selecting a chat to add to workspace
   - chats
 
-### workspace_mobile_detail_page.dart  (565 Z.)
+### workspace_mobile_detail_page.dart  (567 Z.)
 
 - `class WorkspaceMobileDetailPage extends StatefulWidget`
   - workspaceId onStartNewChat
@@ -825,7 +817,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ChatRow extends StatelessWidget`
   - chat theme
 
-### workspaces_page.dart  (853 Z.)
+### workspaces_page.dart  (859 Z.)
 
 - `enum ProjectSortMode`  — Sort options for workspace list
   - recentlyUpdated name mostFiles mostChats
@@ -847,7 +839,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 - conditional export: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-### root_wrapper_desktop.dart  (780 Z.)
+### root_wrapper_desktop.dart  (781 Z.)
 
 - `class RootWrapperDesktop extends StatefulWidget`
   - config
@@ -859,7 +851,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class RootWrapper extends StatelessWidget`
   - `_isMobilePhone` config
 
-### root_wrapper_mobile.dart  (768 Z.)
+### root_wrapper_mobile.dart  (769 Z.)
 
 - `class RootWrapperMobile extends StatefulWidget`
   - config
@@ -913,29 +905,33 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `mixin ChatModelSelectionMixin<W extends StatefulWidget> on State<W>, ModelProviderResolutionMixin<W>`
   - presentModelScreen refreshSelectedModelName refreshCustomModelName refreshPickedModels applyPickedModels openModelScreen setChatMode setReasoningEffort clampedReasoningEffort applyModelSelection restoreChatMode applyModeConfig loadSavedModelPreference selectedModelId selectedProviderSlug chatMode reasoningEffort selectedModelName pickedModels customModelName
 
-### chat_scroll_mixin.dart  (215 Z.)
+### chat_scroll_mixin.dart  (289 Z.)
 
 - `mixin ChatScrollMixin<T extends StatefulWidget> on State<T>`  — Shared message-list scroll behaviour for the desktop and mobile chat UIs.
-  - onScrollChanged onComposerHeightChanged pinToBottomDuringStream showScrollButtonDistance hideScrollButtonDistance scrollController showScrollToBottom isStickyBottom composerHeight animate lastExtent
+  - pinMessageToTop clearTopPin onScrollChanged onComposerHeightChanged pinToBottomDuringStream showScrollButtonDistance hideScrollButtonDistance scrollController showScrollToBottom isStickyBottom pinnedTopKey hasTopPin pinnedExtraSpace composerHeight animate lastExtent
 
-### chat_ui_desktop.dart  (2824 Z.)
+### chat_ui_desktop.dart  (2644 Z.)
 
 - part 'desktop_send_logic.dart'
 - `class ChukChatUIDesktop extends StatefulWidget`
   - onToggleSidebar selectedChatId onChatIdChanged isSidebarExpanded isCompactMode showReasoningTokens showModelInfo showTps workspaceId onExitProject imageGenEnabled imageGenDefaultSize imageGenCustomWidth imageGenCustomHeight imageGenUseCustomSize includeRecentImagesInHistory includeAllImagesInHistory includeReasoningInHistory includeToolResultsInHistory toolCallingEnabled toolDiscoveryMode showToolCalls autoSendVoiceTranscription onOpenModelSettings
 - `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, Mode …)`
-  - deleteComposerAttachment onComposerAttachmentRemoved sendMessage `_buildComposerContextMenu` `_buildMessageContextMenu` `_loadChatById` `_applyLoadedChat` `_loadChatByIdAsync` `_populateMessagesFromStoredChat` `_messageToRawMap` newChat newChatWithWorkspace `_openComingSoonFeature` `_loadSystemPrompt` `_resolveWorkspaceForCurrentChat` `_resolveSystemPromptForSend` `_handleMicTap` `_handleAudioSend` `_askUserCallbackForIndex` `_connectMcpCallbackForIndex` `_buildMessageActionsForIndex` `_buildUserMessageActionsForIndex` `_wrapWithSmartPasteActions` `_buildAudioVisualizer` `_buildRecordingPill` `_persistChatWithId` `_persistChatWithIdAndMessages` `_buildMessageRenderData` `_clearMessageDecodeCaches` `_buildSearchBar` `_buildModelControlPill` presentModelScreen messages activeChatId composerAttachedFiles `_isSending` `_isStreaming` `_isLinuxDesktop` debugMessages debugSystemPrompt +15
+  - deleteComposerAttachment onComposerAttachmentRemoved sendMessage `_buildComposerContextMenu` `_buildMessageContextMenu` `_loadChatById` `_applyLoadedChat` `_loadChatByIdAsync` `_populateMessagesFromStoredChat` `_messageToRawMap` newChat newChatWithWorkspace `_openComingSoonFeature` `_loadSystemPrompt` `_resolveWorkspaceForCurrentChat` `_resolveSystemPromptForSend` `_stopAudioRecordingForNavigation` `_handleMicTap` `_handleAudioSend` `_askUserCallbackForIndex` `_connectMcpCallbackForIndex` `_continueGenerationAt` `_buildMessageActionsForIndex` `_buildUserMessageActionsForIndex` `_wrapWithSmartPasteActions` `_buildAudioVisualizer` `_buildRecordingPill` `_persistChatWithId` `_persistChatWithIdAndMessages` `_buildSearchBar` `_buildModelControlPill` presentModelScreen messages activeChatId composerAttachedFiles `_isSending` `_isStreaming` `_isLinuxDesktop` debugMessages debugSystemPrompt +15
 - `class _DesktopRecordingDot extends StatefulWidget`
 - `class _DesktopRecordingDotState extends State<_DesktopRecordingDot> with SingleTickerProviderStateMixin`
 
-### chat_ui_helpers.dart  (1047 Z.)
+### chat_ui_helpers.dart  (1219 Z.)
 
 - `class MessageRenderData`  — Data class holding pre-parsed render information for a single chat message.
   - isUser sender displayText reasoning isReasoningStreaming modelLabel modelProvider tps images imageMetas imageCostEur imageGeneratedAt attachments toolCalls contentBlocks isStreamingMessage turnStartedAt workedFor status queueId lastError variantIndex variantCount
+- `class MessageRenderCache`  — Owns decoded message payloads for one visible chat and builds render data.
+  - clear
+- `class ChatContinuationRequest`  — Immutable input for resuming the latest interrupted assistant message.
+  - messageIndex historyMessages priorText priorContentBlocksJson modelId provider
 - `class ChatUiHelpers`  — Static utility functions shared between the desktop and mobile chat UIs.
-  - stableUiKey formatModelInfo modelSupportsImageInput showSnackBar openComingSoonFeature loadProviderSlugForModel ensureProviderSlug loadSystemPrompt resolveSystemPromptForSend messageToRawMap variantSnapshotOf decodeVariants writeVariants switchVariant finalizeStaleToolCallsInRawMessage `_finalizeStaleToolCallsForRecovery` decodeImages decodeAttachments decodeToolCalls decodeContentBlocks extractArtifactIdsFromRawMessage trimCachesIfNeeded reconstructAttachedFilesForResend writeAttachmentsToMessage extractResendUserQuery `_looksLikeGeneratedAttachmentHeader` buildResendUserPrompt `_buildMarkdownFence` detectImageMimeType buildMessageRenderData kUiKeyField kVariantContentKeys kVariantArchiveOnlyKeys
+  - prepareContinuation hasCompletedTool encodeToolCalls replaceMessageField appendDebugRequest stableUiKey formatModelInfo modelSupportsImageInput showSnackBar openComingSoonFeature loadProviderSlugForModel ensureProviderSlug loadSystemPrompt resolveSystemPromptForSend messageToRawMap variantSnapshotOf decodeVariants writeVariants switchVariant finalizeStaleToolCallsInRawMessage `_finalizeStaleToolCallsForRecovery` decodeImages decodeAttachments decodeToolCalls decodeContentBlocks extractArtifactIdsFromRawMessage trimCachesIfNeeded reconstructAttachedFilesForResend writeAttachmentsToMessage extractResendUserQuery `_looksLikeGeneratedAttachmentHeader` buildResendUserPrompt `_buildMarkdownFence` detectImageMimeType buildMessageRenderData kUiKeyField continueGenerationPrompt kVariantContentKeys kVariantArchiveOnlyKeys
 
-### chat_ui_mobile.dart  (4013 Z.)
+### chat_ui_mobile.dart  (3653 Z.)
 
 - `enum _AttachChoice`  — What the plus menu can start.
   - camera photos files workspace
@@ -944,9 +940,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChukChatUIMobile extends StatefulWidget`
   - onToggleSidebar selectedChatId onChatIdChanged isSidebarExpanded showReasoningTokens showModelInfo showTps autoSendVoiceTranscription topInset imageGenEnabled imageGenDefaultSize imageGenCustomWidth imageGenCustomHeight imageGenUseCustomSize includeRecentImagesInHistory includeAllImagesInHistory includeReasoningInHistory includeToolResultsInHistory toolCallingEnabled toolDiscoveryMode showToolCalls
 - `class ChukChatUIMobileState extends State<ChukChatUIMobile> with ChatScrollMixin, ModelProviderResolutionMixin, ChatMode …)`  — Serialize a [ChatMessageStatus] into the wire-format string used inside
-  - deleteComposerAttachment onEditStarted `_initializeHandlers` `_persistStreamTick` `_markAssistantMessageInterrupted` `_handleAppResumed` `_handleAppPaused` `_showPaymentRequiredDialog` `_initializeListeners` `_onControllerChanged` `_loadInitialData` `_loadChatById` `_applyLoadedChat` `_loadChatByIdAsync` newChat `_handleMicTap` `_handleAudioSend` `_handleAddAttachmentTap` `_showAnchoredComposerMenu` `_buildWorkspaceChip` `_openWorkspaceMenu` `_openProjectManagement` startNewChatWithWorkspace `_startNewChatWithProject` `_handleFileUploadUpdate` `_clearMessageDecodeCaches` `_decodeImages` `_decodeAttachments` `_decodeToolCalls` `_decodeContentBlocks` `_updateToolCallsForMessage` `_handleToolImagesProcessed` `_updateContentBlocksForMessage` `_updateRequestPayloadForMessage` `_finalizeAiMessage` `_cancelPendingMessage` `_drainPendingMessage` sendMessage `_buildApiHistory` `_resolveSystemPromptForSend` +37
+  - deleteComposerAttachment onEditStarted `_initializeHandlers` `_persistStreamTick` `_markAssistantMessageInterrupted` `_handleAppResumed` `_handleAppPaused` `_showPaymentRequiredDialog` `_initializeListeners` `_onControllerChanged` `_loadInitialData` `_loadChatById` `_applyLoadedChat` `_loadChatByIdAsync` newChat `_handleMicTap` `_handleAudioSend` `_handleAddAttachmentTap` `_showAnchoredComposerMenu` `_buildWorkspaceChip` `_openWorkspaceMenu` `_openProjectManagement` startNewChatWithWorkspace `_startNewChatWithProject` `_handleFileUploadUpdate` `_updateToolCallsForMessage` `_handleToolImagesProcessed` `_updateContentBlocksForMessage` `_updateRequestPayloadForMessage` `_finalizeAiMessage` `_cancelPendingMessage` `_drainPendingMessage` sendMessage `_buildApiHistory` `_resolveSystemPromptForSend` `_updateCancelledMessage` `_cancelCurrentOperation` `_askUserCallbackForMessage` `_connectMcpCallbackForMessage` `_continueGenerationAt` +30
 
-### desktop_send_logic.dart  (2394 Z.)
+### desktop_send_logic.dart  (2490 Z.)
 
 - part of 'chat_ui_desktop.dart'
 - `extension DesktopSendLogic on ChukChatUIDesktopState`  — Extension on [ChukChatUIDesktopState] containing the large send/streaming
@@ -964,10 +960,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib/platform_specific/chat/handlers
 
-### audio_recording_handler.dart  (453 Z.)
+### audio_recording_handler.dart  (504 Z.)
 
+- `enum AudioRecordingChange`
+  - started stopped failed
 - `class AudioRecordingHandler`  — Handles microphone recording + transcription.
-  - setTranscribing startRecording transcribeLastRecording resetAudioLevels `_handlePcmChunk` `_tryConnectStreaming` `_transcribeStreaming` `_transcribeBufferedPcm` `_pcmToWav` `_writeAscii` `_computeAmplitudeFromPcm` `_resetAudioLevels` `_ensureMicPermission` isMicActive isTranscribingAudio audioLevels isStreamingMode onLevelsChanged keepFile
+  - `_startRecording` toggleRecording `_transcribeLastRecording` Function `_handlePcmChunk` `_tryConnectStreaming` `_transcribeStreaming` `_transcribeBufferedPcm` `_pcmToWav` `_writeAscii` `_computeAmplitudeFromPcm` `_resetAudioLevels` `_ensureMicPermission` isMicActive isTranscribingAudio audioLevels isStreamingMode onLevelsChanged keepFile
 - `class TranscriptionResult`  — Result of audio transcription.
   - success text error requiresLogout
 
@@ -1020,9 +1018,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib/platform_specific/chat/widgets
 
-### desktop_chat_widgets.dart  (64 Z.)
+### chat_message_list_item.dart  (163 Z.)
 
-- `Widget buildDesktopIconButton({ required IconData icon, required VoidCallback onTap, required bool isActive, required Co …)`  — Build icon button for desktop UI
+- `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
+  - messages index data uuid maxWidth activeChatId flyInKey showToolCalls showReasoningTokens showModelInfo showTps isEditing actions userMessageActions onSwitchVariant onAskUserAnswer onConnectMcpServer onContinueGeneration
 
 ### fullscreen_composer.dart  (149 Z.)
 
@@ -1189,7 +1188,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### chat_storage_sidebar.dart  (521 Z.)
 
-- const: `_kSidebarApplyChunkSize` `_kSidebarIsolateParseThresholdChars`
+- const: _kSidebarApplyChunkSize _kSidebarIsolateParseThresholdChars
 - `List<Map<String, Object?>> _parseSidebarTitleCache(String raw)`  — Parse cached sidebar title JSON into a typed list.
 - `class ChatStorageSidebar`  — Handles sidebar-specific chat loading and title caching.
   - loadSavedChatsForSidebar syncTitlesFromNetwork `_loadTitlesFromCache` `_syncTitlesFromNetwork` `_decryptTitlesBatch` `_loadSidebarFromCache`
@@ -1396,7 +1395,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### multiplex_connection.dart  (644 Z.)
 
-- const: `_uuid`
+- const: _uuid
 - `class MultiplexException implements Exception`  — Error surfaced by [MultiplexConnection.tool] (and the chat stream's
   - detail code
 - `String _newReqId()`  — Generate a fresh request id. ≤ 32 hex chars — comfortably under the
@@ -1405,7 +1404,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### multiplex_session.dart  (419 Z.)
 
-- const: `_idleCloseDelay` `_staleReconnectThreshold`
+- const: _idleCloseDelay _staleReconnectThreshold
 - `class MultiplexSession`
   - openForChat prewarm ensureCurrent closeForChat `_scheduleIdleClose` shutdown chatForChat `_tokenProvider` current currentChatId `_hasActiveStreams` timeout
 - `class _ActiveChatStream`  — Per-chatId book-keeping for the single in-flight chat stream
@@ -1531,7 +1530,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### per_model_system_prompt_service.dart  (558 Z.)
 
-- const: `_kModelPromptSeparator`
+- const: _kModelPromptSeparator
 - `enum ModelPromptMode`  — How a per-model system prompt combines with the base (global + workspace)
   - off replace append prepend
 - `ModelPromptMode _modeFromString(String? raw)`
@@ -1702,7 +1701,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_call_handler.dart  (1999 Z.)
 
-- const: `_readOnlyToolNames`
+- const: _readOnlyToolNames
 - `class ToolLoopSession`
   - latestUserMessage history accessToken enforcer toolCallingEnabled discoveryMode baseSystemPrompt discoveryContextKey modelId skipIdentity nativeToolCalling discoveredTools discoveredToolNames activeSkillNames toolCalls producedBlocks consecutiveSandboxInfraFailures emptyFinalRecoveryAttempts malformedToolProtocolRecoveryAttempts truncatedCompletionRecoveryAttempts deferredActionRecoveryAttempts nonFinalTurnRecoveryAttempts factCheckRecoveryAttempts factCheckCandidate factCheckCandidateReasoning
 - `class ToolLoopStep`
@@ -1735,7 +1734,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_executor.dart  (1551 Z.)
 
-- const: `_excalidrawSchemaText` `_technicalDrawingSchemaText` `_typstSchemaText` `_mermaidSchemaText` `_svgSchemaText`
+- const: _excalidrawSchemaText _technicalDrawingSchemaText _typstSchemaText _mermaidSchemaText _svgSchemaText
 - `class ToolExecutionResult`
   - output isError producedBlocks
 - `class ToolExecutor`  — Service to execute tools client-side.
@@ -1757,13 +1756,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_registry.dart  (2032 Z.)
 
-- const: `_serverBackedToolNames` toolCategoryMap discoveryCatalog builtinTools
+- const: _serverBackedToolNames toolCategoryMap discoveryCatalog builtinTools
 - `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
 - `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
 
 ### tool_result_cache_registry.dart  (139 Z.)
 
-- const: `_uuid` kCacheMissErrorCode
+- const: _uuid kCacheMissErrorCode
 - `class _RegistryEntry`
   - id expiresAt
 - `class ToolResultCacheRegistry`  — Process-wide registry mapping a previously-uploaded message string to the
@@ -1835,7 +1834,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### websocket_connector_io.dart  (53 Z.)
 
-- const: `_sharedPinnedClient`
+- const: _sharedPinnedClient
 - `Future<WebSocketChannel> connectWebSocket(Uri url)`  — Create a [WebSocketChannel] with certificate pinning on native platforms.
 
 ### websocket_connector_web.dart  (15 Z.)
@@ -1951,7 +1950,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpRedirectListener`
   - start close redirectUri callback
 
-### mcp_service.dart  (778 Z.)
+### mcp_service.dart  (830 Z.)
 
 - `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
   - connected cancelled failed
@@ -1963,7 +1962,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _McpSecrets`  — The secrets of one connection. Never written to shared preferences.
   - toJson fromJson withTokens authServer credentials tokens issuer authorizationEndpoint tokenEndpoint scope apiCredentials
 - `class McpService`
-  - load `_readConnectionsRaw` `_persist` `_readSecrets` `_writeSecrets` `_endpointWithCredentials` endpointWithCredentialsForTest `_authorize` `_launch` `_closeBrowser` disconnect `_forgetLocal` refreshTools connectionFor resolve call `_isAcceptableEndpoint` `_appSessionToken` `_clientFor` connectByUrl internalIsAcceptableUrl internalReadSecretsJson internalWriteSecretsJson internalUpsertConnection internalForgetLocal internalFetchTools connections launcher description
+  - load `_readConnectionsRaw` `_persist` `_readSecrets` `_writeSecrets` `_endpointWithCredentials` endpointWithCredentialsForTest `_authorize` `_launch` `_closeBrowser` disconnect `_forgetLocal` verifyReachable verifyAllReachable `_recordReachable` refreshTools connectionFor resolve call `_isAcceptableEndpoint` `_appSessionToken` `_clientFor` connectByUrl internalIsAcceptableUrl internalReadSecretsJson internalWriteSecretsJson internalUpsertConnection internalForgetLocal internalFetchTools connections launcher description unreachable
 
 ### mcp_sync_service.dart  (763 Z.)
 
@@ -1989,7 +1988,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### skill_frontmatter_parser.dart  (241 Z.)
 
-- const: `_kSpecFields` `_kNamePattern` `_kFrontmatterPattern`
+- const: _kSpecFields _kNamePattern _kFrontmatterPattern
 - `class SkillParseException implements Exception`  — Thrown when a SKILL.md violates the spec.
   - message field
 - `Skill parseSkillMarkdown( String source, { String? expectedName, SkillSource skillSource = SkillSource.builtin, })`  — Parses [source] (the full contents of a SKILL.md) into a [Skill].
@@ -2038,7 +2037,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### artifact_tools.dart  (204 Z.)
 
-- const: `_requestTimeout`
+- const: _requestTimeout
 - `String _formatSuccess(Map<String, dynamic> data)`  — Builds the human/model-readable success string from a service response.
 - `String _formatError(int statusCode, String body)`  — Maps a non-200 status code to a clear, actionable message.
 - `String? _baseUrlError(String baseUrl)`  — Validates the configured base URL before any credential is sent. The Bearer
@@ -2057,7 +2056,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### chat_search_tools.dart  (807 Z.)
 
-- const: `_defaultChatLimit` `_maxChatLimit` `_defaultMessageLimit` `_maxMessageLimit` `_snippetRadius` `_minLocalScanChats` `_maxLocalScanChats` `_localScanMultiplier` `_previewSnippetsTop` `_previewSnippetsRest` `_topCandidatesWithPreview` `_defaultRecentLimit` `_maxRecentLimit` `_recentSnippetChars` `_actionFindChats` `_actionSearchInChat` `_actionRecentMessages` `_validRoles`
+- const: _defaultChatLimit _maxChatLimit _defaultMessageLimit _maxMessageLimit _snippetRadius _minLocalScanChats _maxLocalScanChats _localScanMultiplier _previewSnippetsTop _previewSnippetsRest _topCandidatesWithPreview _defaultRecentLimit _maxRecentLimit _recentSnippetChars _actionFindChats _actionSearchInChat _actionRecentMessages _validRoles
 - `Future<String> executeSearchChats(Map<String, dynamic> args)`
 - `String? _resolveAction(dynamic rawAction, {required String chatId})`
 - `String? _normalizeRole(dynamic raw)`
@@ -2117,7 +2116,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### map_tools.dart  (660 Z.)
 
-- const: `_networkTimeout` `_nominatimBaseUrl` `_osrmBaseUrl` `_defaultHeaders` kMaxPlacesOnMap
+- const: _networkTimeout _nominatimBaseUrl _osrmBaseUrl _defaultHeaders kMaxPlacesOnMap
 - `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the map
   - text mapTag places
 - `String? buildPlacesMapTag({ required List<Map<String, dynamic>> places, required String title, int max = kMaxPlacesOnMap …)`  — Build the `<map>` block for [places], or null when none can be pinned.
@@ -2141,7 +2140,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### notes_tools.dart  (923 Z.)
 
-- const: `_notesPrefsKey` `_memoryPrefsKey` `_soulPrefsKey` `_userInfoPrefsKey` `_identityEnabledKey` `_identitySoulColumn` `_identityUserColumn` `_identityMemoryColumn` `_identityEnabledColumn` `_legacyPreferencesColumn` `_selectedModelColumn` `_fallbackSelectedModelId` `_identitySyncCacheTtl` `_cachedIdentityRow` `_cachedIdentityUserId` `_cachedIdentityFetchedAt` `_identityRowInFlight`
+- const: _notesPrefsKey _memoryPrefsKey _soulPrefsKey _userInfoPrefsKey _identityEnabledKey _identitySoulColumn _identityUserColumn _identityMemoryColumn _identityEnabledColumn _legacyPreferencesColumn _selectedModelColumn _fallbackSelectedModelId _identitySyncCacheTtl _cachedIdentityRow _cachedIdentityUserId _cachedIdentityFetchedAt _identityRowInFlight
 - `String? _safeCurrentUserId()`
 - `Session? _safeCurrentSession()`
 - `void _resetIdentityCacheForUser(String? userId)`
@@ -2193,7 +2192,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### platform_tools_native.dart  (766 Z.)
 
-- const: `_bashSandbox` `_gitHubOAuth` `_slackOAuth` `_googleOAuth` `_deviceServices` `_approvalConfig` connectableServices
+- const: _bashSandbox _gitHubOAuth _slackOAuth _googleOAuth _deviceServices _approvalConfig connectableServices
 - `Future<void> initPlatformServices()`  — Initialize platform services — loads saved tokens/configs.
 - `bool isPlatformServiceConnected(String service)`  — Check if a platform service is connected.
 - `Future<bool> connectPlatformService(String service)`  — Start the OAuth flow for a service. Returns true on success.
@@ -2234,7 +2233,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### sandbox_tools.dart  (575 Z.)
 
-- const: `_stdStreamCap` `_textFileCap` `_textInlineByteLimit` `_maxTimeoutSeconds` kSandboxBackedToolNames kSandboxUnavailableThisTurnMessage `_extensionMimeMap`
+- const: _stdStreamCap _textFileCap _textInlineByteLimit _maxTimeoutSeconds kSandboxBackedToolNames kSandboxUnavailableThisTurnMessage _extensionMimeMap
 - `String _capStream(String s)`
 - `bool _looksLikeText(Uint8List bytes)`
 - `({String dir, String name}) _splitPath(String path)`
@@ -2254,7 +2253,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### typst_tools.dart  (281 Z.)
 
-- const: `_deliveryNote` `_orphanFillPctThreshold`
+- const: _deliveryNote _orphanFillPctThreshold
 - `class TypstCompileResult`  — Result of a Typst compile: the rendered bytes plus optional layout
   - bytes layout
 - `Future<TypstCompileResult> compileTypstToPdf({ required String serverHttpUrl, required String? accessToken, required Str …)`  — Compile Typst source via the backend. Returns the rendered bytes and
@@ -2281,7 +2280,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### web_tools.dart  (715 Z.)
 
-- const: `_defaultSearchCount` `_maxSearchCount` `_defaultAutoCrawlCount` `_maxAutoCrawlCount` `_defaultAutoCrawlMaxChars` `_maxAutoCrawlMaxChars` `_maxExcerptCharsPerPage`
+- const: _defaultSearchCount _maxSearchCount _defaultAutoCrawlCount _maxAutoCrawlCount _defaultAutoCrawlMaxChars _maxAutoCrawlMaxChars _maxExcerptCharsPerPage
 - `Map<String, String> _buildJsonHeaders(Map<String, String> serverHeaders)`
 - `int _coerceInt( dynamic value, { required int fallback, required int min, required int max, })`
 - `bool _coerceBool(dynamic value, {required bool fallback})`
@@ -2319,7 +2318,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### artifact_tag_parser.dart  (141 Z.)
 
-- const: `_artifactBlockPattern` `_artifactStartPattern` `_attrPattern` `_leadingCodeFence` `_trailingCodeFence`
+- const: _artifactBlockPattern _artifactStartPattern _attrPattern _leadingCodeFence _trailingCodeFence
 - `class ParsedArtifactTag`  — A single `<artifact>` tag parsed out of assistant text.
   - id type title content language matchStart matchEnd
 - `List<ParsedArtifactTag> parseArtifactTags(String text)`  — Returns all complete `<artifact>` blocks found in [text]. Partial
@@ -2351,7 +2350,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### certificate_pinning_register_io.dart  (80 Z.)
 
-- const: `_trustedToolApiHosts`
+- const: _trustedToolApiHosts
 - `class _WindowsCertOverrides extends HttpOverrides`  — [HttpOverrides] that accepts certificates for known trusted public API
   - createHttpClient
 - `void registerCertificatePinning()`  — Register the native certificate pinning configurator.
@@ -2491,7 +2490,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### phone_linkify.dart  (95 Z.)
 
-- const: `_scanPattern` `_minDigits` `_maxDigits`
+- const: _scanPattern _minDigits _maxDigits
 - `String linkifyPhoneNumbers(String markdown)`  — Rewrites every bare phone number in [markdown] as `[display](tel:+…)`.
 - `String? telUriForDisplay(String display)`  — Normalises a written number to a `tel:` URI, or returns `null` when the
 
@@ -2521,21 +2520,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### shift_key_tracker_web.dart  (38 Z.)
 
-- const: `_shiftDown` `_initialized`
+- const: _shiftDown _initialized
 - `void initShiftKeyTracker()`
 
 ### stream_error_sanitizer.dart  (38 Z.)
 
 - `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-### theme_extensions.dart  (271 Z.)
+### theme_extensions.dart  (216 Z.)
 
-- const: `_kGlyphSaturationFloor`
 - `extension ThemeDataIconColorX on ThemeData`
   - accentButtonForeground resolvedIconColor
-- `double _saturationFloor(double base)`
-- `Color? _shadeUntilReadable(Color from, Color on, {required bool up})`  — Walks [from]'s lightness towards white (or towards black) in HSL and
-- `double _contrastRatio(Color a, Color b)`  — WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white).
 - `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
   - copyWith lerp surfaceContainerLow surfaceContainer surfaceContainerHigh surfaceContainerHighest primaryContainer onPrimaryContainer secondaryContainer onSecondaryContainer tertiaryContainer onTertiaryContainer outline outlineVariant onSurfaceVariant success onSuccess successContainer onSuccessContainer warning warningContainer onWarningContainer
 - `extension MaterialYouTokensX on ThemeData`
@@ -2548,7 +2543,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_detail_format.dart  (91 Z.)
 
-- const: `_markdownMarkers`
+- const: _markdownMarkers
 - `enum ToolBodyKind`  — How a tool-detail body should be shown.
   - text json markdown
 - `class ToolBody`  — A tool body together with how to show it.
@@ -2564,13 +2559,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### tool_history_formatter.dart  (100 Z.)
 
-- const: `_maxResultChars` `_maxTotalChars`
+- const: _maxResultChars _maxTotalChars
 - `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = …)`  — Builds the assistant `content` string for one stored message, optionally
 - `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
 ### tool_parser.dart  (774 Z.)
 
-- const: toolCallStart toolCallEnd `_xmlToolCallBlockPattern` `_xmlDirectToolTagBlockPattern` `_xmlToolCallStartPattern` `_kimiToolCallStartPattern` `_previousToolResultsBlockPattern` `_previousToolResultsStartPattern` `_foreignToolTagNames` `_foreignToolTagNamespace` `_notCanonicalToolCallTag` `_foreignToolProtocolBlockPattern` `_invokeToolCallPattern` `_invokeParameterPattern` `_foreignToolProtocolStartPattern` `_knownDirectXmlToolNames`
+- const: toolCallStart toolCallEnd _xmlToolCallBlockPattern _xmlDirectToolTagBlockPattern _xmlToolCallStartPattern _kimiToolCallStartPattern _previousToolResultsBlockPattern _previousToolResultsStartPattern _foreignToolTagNames _foreignToolTagNamespace _notCanonicalToolCallTag _foreignToolProtocolBlockPattern _invokeToolCallPattern _invokeParameterPattern _foreignToolProtocolStartPattern _knownDirectXmlToolNames
 - `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
 - `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
 - `Map<String, dynamic>? _extractEmbeddedToolJson(String raw)`
@@ -2615,7 +2610,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### anchored_menu.dart  (361 Z.)
 
-- const: `_kAnchorGap` `_kEdgeMargin` `_kMinRoomAbove` `_kMenuDuration`
+- const: _kAnchorGap _kEdgeMargin _kMinRoomAbove _kMenuDuration
 - `Future<T?> showAnchoredMenu<T>( BuildContext anchorContext, { required List<Widget> items, required Color color, require …)`  — Show [items] as a dropdown anchored to the widget of [anchorContext].
 - `class _AnchoredMenuRoute<T> extends PopupRoute<T>`
   - buildPage `_frame` buildTransitions transitionDuration barrierDismissible barrierColor barrierLabel anchor items color borderColor minWidth borderRadius preferAbove alignRight besideAnchor outlined usableTop usableBottom themes
@@ -2638,7 +2633,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `abstract final class AppNotifications`  — How a message reaches the screen.
   - kind duration
 
-### artifact_panel.dart  (2165 Z.)
+### artifact_panel.dart  (2167 Z.)
 
 - `class ArtifactPanel extends StatefulWidget`
   - artifact onClose onOpenSourceChat showHeader
@@ -2686,7 +2681,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### attachment_preview_bar.dart  (1008 Z.)
 
-- const: `_kMaxExtensionChars` `_kImageCardSize` `_kImageCardBorderWidth`
+- const: _kMaxExtensionChars _kImageCardSize _kImageCardBorderWidth
 - `typedef AttachmentRemoveCallback = void Function(String fileId)`
 - `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
 - `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
@@ -2726,7 +2721,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### chart_widget.dart  (720 Z.)
 
-- const: `_defaultColors`
+- const: _defaultColors
 - `Color _parseColor(String hex)`  — Parse a hex color string like "#FF5722" or "FF5722" into a Color.
 - `Color _colorAt(int index)`
 - `class ChartRenderer extends StatelessWidget`  — Top-level widget: parses a JSON map and picks the right chart builder.
@@ -2749,7 +2744,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### chuk_table.dart  (490 Z.)
 
-- const: `_delimiterCell`
+- const: _delimiterCell
 - `class ParsedTable`  — One parsed markdown table plus the metadata needed to render it.
   - columnCount header rows alignments
 - `List<String> _splitRow(String line)`  — Splits a single row of raw cell text on unescaped `|`, dropping the empty
@@ -2766,7 +2761,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### credit_display.dart  (871 Z.)
 
-- const: `_supabase` `_kCachedCredits` `_kCachedHasSubscription` `_kCachedFreeMessagesRemaining` `_kCachedFreeMessagesTotal` `_kCachedTotalCreditsAllocated` `_kCachedRemainingCredits` `_kCachedBillingPeriodStart` `_kCachedBillingPeriodEnd`
+- const: _supabase _kCachedCredits _kCachedHasSubscription _kCachedFreeMessagesRemaining _kCachedFreeMessagesTotal _kCachedTotalCreditsAllocated _kCachedRemainingCredits _kCachedBillingPeriodStart _kCachedBillingPeriodEnd
 - `class CreditBalances`
   - remainingRatio totalCredits usedCredits remainingCredits billingPeriodStart billingPeriodEnd
 - `mixin _CreditListenerMixin<T extends StatefulWidget> on State<T>`
@@ -2786,7 +2781,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### diff_widget.dart  (505 Z.)
 
-- const: `_kContextLines`
+- const: _kContextLines
 - `enum _LineType`
   - added removed context
 - `class _DiffLine`
@@ -2868,13 +2863,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ExpressiveTitle extends StatelessWidget`  — The big page title Expressive puts above a settings list.
   - title subtitle
 
-### floating_app_bar.dart  (172 Z.)
+### floating_app_bar.dart  (222 Z.)
 
-- const: kFloatingAppBarHeight kFloatingAppBarChip `_kTitleRadius`
+- const: kFloatingAppBarHeight kFloatingAppBarChip _kTitleRadius
+- `EdgeInsets floatingHeaderInset(BuildContext context)`  — The room a scroll view has to leave above its first item so the floating
 - `class FloatingHeaderButton extends StatelessWidget`  — A round floating chip for the header — the back arrow, and whatever a
   - icon onPressed tooltip color
 - `class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget`  — The header of a settings-style page: a floating back chip, a floating
-  - preferredSize title actions leading automaticallyImplyLeading bottom
+  - `_styledTitle` preferredSize title actions leading automaticallyImplyLeading bottom
 
 ### floating_chrome_surface.dart  (68 Z.)
 
@@ -2914,14 +2910,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ImageViewerState extends State<ImageViewer>`
   - `_handleKeyEvent` `_futureFor` `_loadImageBytes` `_imageKeyForIndex` `_handleOutsideImageTap` `_buildImageView` `_downloadCurrentImage` `_copyCurrentImage` `_showSaveSnackBar` `_resetZoom` `_hasMultipleImages` `_currentModel`
 
-### linux_webview.dart  (90 Z.)
+### linux_webview.dart  (92 Z.)
 
 - `class LinuxWebView extends StatelessWidget`
   - html `_openInBrowser` htmlContent captureKey
 
 ### map_block_renderer.dart  (993 Z.)
 
-- const: mapBlockRegex `_kLightTilesUrl` `_kDarkTilesUrl` `_kTileSubdomains`
+- const: mapBlockRegex _kLightTilesUrl _kDarkTilesUrl _kTileSubdomains
 - `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
 - `class MapContentSegment`  — A segment of message content — either plain text or a map block.
   - isMap content
@@ -2933,7 +2929,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool _isExplicitNumericZero(dynamic v)`
 - `List<Map<String, dynamic>> _filterValidCoordItems( List<dynamic>? items, )`
 - `List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items)`  — Drops repeated places / markers from one block. A multi-pass answer often
-- `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(List<dynamic>? items)`  — Test-only view of [`_filterValidCoordItems`] + [`_dedupeCoordItems`].
+- `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(List<dynamic>? items)`  — Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
 - `double _mapPreviewHeight(BuildContext context)`
 - `double _calculateZoom(List<double> lats, List<double> lons)`
 - `double _calculateRouteZoom( double fromLat, double fromLon, double toLat, double toLon, )`
@@ -2951,7 +2947,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### markdown_message.dart  (1762 Z.)
 
-- const: `_latexTag`
+- const: _latexTag
 - `class _MdSegment`  — One slice of a message: either plain markdown or a GFM table block.
   - text isTable table
 - `List<_MdSegment> _splitMarkdownTables(String text)`  — Splits raw markdown into alternating plain-markdown and table segments so
@@ -3006,7 +3002,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble.dart  (375 Z.)
 
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
-- const: `_kBlockGap` `_kArtifactGap` `_kCardStackGap` `_kInfoBarGap` `_kMobileBottomBarHeight` `_richBlockRegex` `_visualBlockStartRegex` `_diffBlockRegex` `_attachmentHeaderRe` `_kAiResponseFontFamilyDefault` `_cachedShowReasoningTokens` `_cachedShowModelInfo`
+- const: _kBlockGap _kArtifactGap _kCardStackGap _kInfoBarGap _kMobileBottomBarHeight _richBlockRegex _visualBlockStartRegex _diffBlockRegex _attachmentHeaderRe _kAiResponseFontFamilyDefault _cachedShowReasoningTokens _cachedShowModelInfo
 - `class MessageBubble extends StatefulWidget`
   - message isUser startsNewGroup endsGroup maxWidth actions reasoning isReasoningStreaming modelLabel modelProvider tps isEditing initialEditText onSubmitEdit onCancelEdit showReasoningTokens showModelInfo showTps toolCalls showToolCalls contentBlocks isStreamingMessage turnStartedAt workedFor images imageMetas attachments imageCostEur imageGeneratedAt onAskUserAnswer onConnectMcpServer userMessageActions useSharedSelectionArea status lastError onRetryPending onContinueGeneration variantIndex variantCount onPrevVariant +1
 - `class _MessageBubbleState extends State<MessageBubble>`
@@ -3020,7 +3016,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### model_selection_dropdown.dart  (1428 Z.)
 
-- const: `_menuHorizontalPadding` `_menuTrailingAllowance` `_menuExtraAllowance` `_buttonHorizontalPadding` `_buttonTrailingAllowance` kAutoCheapestProviderSlug
+- const: _menuHorizontalPadding _menuTrailingAllowance _menuExtraAllowance _buttonHorizontalPadding _buttonTrailingAllowance kAutoCheapestProviderSlug
 - `class ModelProviderSummary`
   - slug name promptPrice completionPrice
 - `class _WidthMetrics`
@@ -3036,14 +3032,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - onApiReachable `_handleSelectedModelNotifierChange` `_initializeModelSelection` `_hydrateFromCache` `_filterModels` `_parseDouble` `_applyModels` providerSlugFor providerLimitsFor supportsReasoningFor refreshModels `_fetchModels` `_handleApiUnavailable` `_buildApiUnavailableMessage` `_updateSelectedModelNameSync` `_updateSelectedModelName` `_calculateWidthMetrics` `_measureTextWidth` `_menuWidthFromTextWidth` `_buttonWidthFromTextWidth` `_effectiveButtonWidth` `_buildDropdownButtonContent` `_parseNullableInt` apiPollBaseUrl `_apiBaseUrl`
 - `String _stripLabPrefix(String name)`  — OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
 
-### morph_spinner.dart  (106 Z.)
-
-- `class MorphSpinner extends StatefulWidget`  — Material 3 Expressive "loading indicator" (the shape-morph spinner).
-  - size color period
-- `class _MorphSpinnerState extends State<MorphSpinner> with SingleTickerProviderStateMixin`
-- `class _MorphBlobPainter extends CustomPainter`  — Paints a rounded n-lobe "blob" (cosine-lobe polar curve). [t] is the
-  - paint shouldRepaint t color
-
 ### nice_snackbar.dart  (55 Z.)
 
 - `class NiceSnackBar`  — The old name for [AppNotifications], kept so the call sites that already
@@ -3054,7 +3042,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class PasswordStrengthMeter extends StatelessWidget`  — A widget that displays password strength with visual indicators.
   - `_buildStrengthBar` `_buildStrengthLabel` `_buildRequirementsList` `_buildRequirement` `_getStrengthVisuals` `_getStrengthLabel` password showRequirements
 
-### per_model_system_prompt_sheet.dart  (288 Z.)
+### per_model_system_prompt_sheet.dart  (290 Z.)
 
 - `Future<bool?> showPerModelSystemPromptSheet({ required BuildContext context, required String modelId, required String mo …)`  — Bottom sheet for editing a per-model system prompt and merge mode.
 - `class _PerModelSystemPromptEditor extends StatefulWidget`
@@ -3073,7 +3061,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### sandbox_artifact_block.dart  (528 Z.)
 
-- const: `_kInlineTextCharCap`
+- const: _kInlineTextCharCap
 - `class SandboxArtifactBlock extends StatefulWidget`
   - payload
 - `class _SandboxArtifactBlockState extends State<SandboxArtifactBlock>`
@@ -3107,10 +3095,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SettingsInfoCard extends StatelessWidget`  — Short explanatory note under a settings group.
   - `_defaultIcon` text tone icon
 
-### settings_list_view.dart  (95 Z.)
+### settings_list_view.dart  (101 Z.)
 
 - `class SettingsListView extends StatefulWidget`  — Scroll container for settings-style pages with a bounded set of rows.
-  - children padding controller physics scrollbarMargin crossAxisAlignment
+  - children padding controller physics scrollbarMargin headerInset crossAxisAlignment
 - `class _SettingsListViewState extends State<SettingsListView>`
   - `_withHeaderInset` `_controller`
 
@@ -3167,7 +3155,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class WeatherBlockWidget extends StatelessWidget`  — Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
   - `_buildCurrent` `_stat` `_buildHourly` `_buildDaily` `_buildDailyRow` `_asMap` `_asList` `_asNum` `_asStr` `_asInt` `_fmtNum` `_normalizeTempUnit` `_shortTime` `_dayLabel` `_iconForCode` `_gradientForCode` data
 
-### workspace_file_viewer.dart  (662 Z.)
+### workspace_file_viewer.dart  (666 Z.)
 
 - `class WorkspaceFileViewer extends StatefulWidget`  — Dialog to view and edit workspace files and their markdown summaries
   - show file workspaceId
@@ -3192,7 +3180,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### agent_activity_model.dart  (454 Z.)
 
-- const: `_subjectKeys` `_maxDetailChars` `_maxThinkingChars` maxSourcesPerStep
+- const: _subjectKeys _maxDetailChars _maxThinkingChars maxSourcesPerStep
 - `enum AgentActivityKind`  — What a timeline line represents. Drives the icon and the wording.
   - search page thinking other
 - `class AgentActivitySource`  — A page a step pulled in, shown as a chip under that step.
@@ -3228,7 +3216,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### huge_icon.dart  (208 Z.)
 
-- const: `_opticalInset`
+- const: _opticalInset
 - `@immutable class HugeIconData`  — One icon of the set. The name is the file stem, so `HugeIcons.message01`
   - asset name
 - `abstract final class HugeIcons`
@@ -3238,7 +3226,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### icon_map.dart  (262 Z.)
 
-- const: `_map`
+- const: _map
 - `HugeIconData? hugeIconFor(IconData icon)`  — The app's icon for [icon], or null when the set has nothing for it.
 - `class AppIcon extends StatelessWidget`  — An icon that prefers the app's set and falls back to Material.
   - icon size color semanticLabel
@@ -3267,7 +3255,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `extension _MessageBubbleChrome on _MessageBubbleState`
   - `_buildBottomBar` `_buildVariantPager` `_collectAllToolCalls` `_allSources` `_buildSourcesBar` `_buildFavicon` `_showSourcesSheet` `_buildUserActionButtons` `_buildActionButtons` `_buildActionBar` `_buildStatusIndicator`
 
-### images.dart  (644 Z.)
+### images.dart  (646 Z.)
 
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleImages on _MessageBubbleState`
@@ -3389,7 +3377,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## lib/widgets/workspace
 
-### workspace_actions_mixin.dart  (274 Z.)
+### workspace_actions_mixin.dart  (277 Z.)
 
 - `mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T>`  — Shared workspace actions for a [State] that manages a single workspace.
   - listenToWorkspaceChanges cancelWorkspaceChangesSubscription Function viewWorkspaceFile saveWorkspaceInstructions removeChatFromWorkspace workspaceId isUploadingFile uploadFileName uploadStatus uploadProgress
@@ -3449,12 +3437,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## Befunde
 
-**Waisen (3)** — von keiner Datei importiert. Nicht wiederbeleben, ohne vorher zu prüfen, ob sie noch gebraucht werden.
-- `lib/pages/fullscreen_text_editor_page.dart` — 217 Zeilen, von keiner Datei benutzt
-- `lib/platform_specific/chat/widgets/desktop_chat_widgets.dart` — 64 Zeilen, von keiner Datei benutzt
-- `lib/widgets/morph_spinner.dart` — 106 Zeilen, von keiner Datei benutzt
-
 **Importzyklen (8)**
+
 - 2 Dateien: lib/constants.dart → lib/utils/chat_font_resolver.dart
 - 2 Dateien: lib/services/mcp/mcp_catalogue.dart → lib/services/mcp/mcp_connection.dart
 - 2 Dateien: lib/services/mcp/mcp_service.dart → lib/services/mcp/mcp_sync_service.dart
@@ -3464,21 +3448,21 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - 8 Dateien: lib/widgets/message_bubble.dart → lib/widgets/message_bubble/cards.dart → lib/widgets/message_bubble/chrome.dart → lib/widgets/message_bubble/images.dart → lib/widgets/message_bubble/layout.dart → lib/widgets/message_bubble/models.dart → lib/widgets/message_bubble/rich_blocks.dart → lib/widgets/message_bubble/tools.dart
 - 2 Dateien: lib/platform_specific/chat/chat_ui_desktop.dart → lib/platform_specific/chat/desktop_send_logic.dart
 
-**Größte Dateien (48 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4013 Zeilen, 149 Symbole
-- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2824 Zeilen, 138 Symbole
-- `lib/platform_specific/chat/desktop_send_logic.dart` — 2394 Zeilen, 24 Symbole
-- `lib/widgets/artifact_panel.dart` — 2165 Zeilen, 159 Symbole
-- `lib/model_selector_page.dart` — 2074 Zeilen, 172 Symbole
+**Größte Dateien (49 über der Schwelle)**
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 3653 Zeilen, 139 Symbole
+- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2644 Zeilen, 135 Symbole
+- `lib/platform_specific/chat/desktop_send_logic.dart` — 2490 Zeilen, 24 Symbole
+- `lib/widgets/artifact_panel.dart` — 2167 Zeilen, 159 Symbole
+- `lib/model_selector_page.dart` — 2076 Zeilen, 172 Symbole
 
 ## Mehrfach vergebene Namen
 
-144 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+142 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
-- `Function` — lib/pages/mcp_connectors_page.dart:867 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/services/workspace_file_upload.dart:36 · lib/tool_handlers/find_tools_handler.dart:21 +2
-- `_formatDate` — lib/pages/media_manager_page.dart:478 · lib/pages/usage_details_page.dart:917 · lib/pages/workspace_mobile_detail_page.dart:524 · lib/services/workspace_message_service.dart:256 +1
-- `_load` — lib/pages/diagnostics_settings_page.dart:39 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 · lib/widgets/artifact_panel.dart:1598 +1
-- `_open` — lib/pages/assistant_settings_page.dart:152 · lib/pages/mcp_connectors_page.dart:288 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/message_bubble/cards.dart:447 +1
+- `Function` — lib/pages/mcp_connectors_page.dart:979 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/services/workspace_file_upload.dart:36 · lib/tool_handlers/find_tools_handler.dart:21 +2
+- `_formatDate` — lib/pages/media_manager_page.dart:482 · lib/pages/usage_details_page.dart:917 · lib/pages/workspace_mobile_detail_page.dart:526 · lib/services/workspace_message_service.dart:256 +1
+- `_load` — lib/pages/diagnostics_settings_page.dart:39 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 · lib/widgets/artifact_panel.dart:1600 +1
+- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:302 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/message_bubble/cards.dart:447 +1
 - `_apiBaseUrl` — lib/platform_specific/chat/chat_api_service.dart:19 · lib/services/file_conversion_service.dart:22 · lib/services/streaming_chat_service.dart:12 · lib/widgets/model_selection_dropdown.dart:381
 - `_coerceInt` — lib/services/tool_executor.dart:1367 · lib/tool_handlers/chat_search_tools.dart:720 · lib/tool_handlers/map_tools.dart:632 · lib/tool_handlers/web_tools.dart:24
 - `_save` — lib/pages/skills_settings_page.dart:284 · lib/pages/workspace_instructions_page.dart:57 · lib/widgets/per_model_system_prompt_sheet.dart:77 · lib/widgets/sandbox_artifact_block.dart:122
@@ -3486,11 +3470,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `_accessToken` — lib/assistant/assistant_session.dart:383 · lib/pages/github_connection_page.dart:54 · lib/pages/sandbox_management_page.dart:43
 - `_emit` — lib/services/offline_queue_service_native.dart:223 · lib/services/offline_queue_service_web.dart:151 · lib/services/offline_retry_manager.dart:194
 - `_formatDuration` — lib/assistant/assistant_tools.dart:809 · lib/services/device_services.dart:518 · lib/utils/api_rate_limiter.dart:207
-- `_isLinuxDesktop` — lib/main.dart:179 · lib/platform_specific/chat/chat_ui_desktop.dart:297 · lib/services/app_initialization_service.dart:32
+- `_isLinuxDesktop` — lib/main.dart:179 · lib/platform_specific/chat/chat_ui_desktop.dart:294 · lib/services/app_initialization_service.dart:32
 - `_loadProject` — lib/pages/workspace_detail_page.dart:118 · lib/pages/workspace_management_page.dart:67 · lib/widgets/workspace_panel.dart:80
 - `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/sandbox_management_page.dart:68 · lib/widgets/message_bubble/cards.dart:382
 - `_table` — lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 · lib/services/theme_settings_service.dart:83
-- `_toDouble` — lib/assistant/assistant_tools.dart:109 · lib/pages/fullscreen_map_page.dart:1113 · lib/widgets/map_block_renderer.dart:102
+- `_toDouble` — lib/assistant/assistant_tools.dart:109 · lib/pages/fullscreen_map_page.dart:1115 · lib/widgets/map_block_renderer.dart:102
 - `ApiConfigService` — lib/services/api_config_service_io.dart:8 · lib/services/api_config_service_stub.dart:7
 - `DiagnosticsLogService` — lib/services/diagnostics_log_service_io.dart:15 · lib/services/diagnostics_log_service_stub.dart:4
 - `HtmlArtifactView` — lib/widgets/html_artifact_view_io.dart:37 · lib/widgets/html_artifact_view_web.dart:29
@@ -3500,4 +3484,4 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `OfflineQueueService` — lib/services/offline_queue_service_native.dart:17 · lib/services/offline_queue_service_web.dart:15
 - `RootWrapper` — lib/platform_specific/root_wrapper_io.dart:30 · lib/platform_specific/root_wrapper_stub.dart:8
 - `StreamingForegroundService` — lib/services/streaming_foreground_service_io.dart:9 · lib/services/streaming_foreground_service_stub.dart:6
-- … +119 weitere
+- … +117 weitere

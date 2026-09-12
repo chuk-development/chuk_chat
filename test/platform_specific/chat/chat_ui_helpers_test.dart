@@ -568,6 +568,90 @@ void main() {
       );
     });
 
+    test('prepares a continuation with immutable history and fallbacks', () {
+      final messages = <Map<String, String>>[
+        {'sender': 'user', 'text': 'question'},
+        {
+          'sender': 'ai',
+          'text': 'partial answer  ',
+          'contentBlocks': '[{"type":"text","text":"partial answer"}]',
+          'modelId': 'original-model',
+          'provider': 'original-provider',
+        },
+      ];
+
+      final request = ChatUiHelpers.prepareContinuation(
+        messages: messages,
+        messageIndex: 1,
+        fallbackModelId: 'fallback-model',
+        fallbackProvider: 'fallback-provider',
+      );
+
+      expect(request, isNotNull);
+      expect(request!.priorText, 'partial answer');
+      expect(request.modelId, 'original-model');
+      expect(request.provider, 'original-provider');
+      expect(request.historyMessages, messages);
+      expect(identical(request.historyMessages.last, messages.last), isFalse);
+      messages.last['text'] = 'mutated later';
+      expect(request.historyMessages.last['text'], 'partial answer  ');
+
+      final fallbackRequest = ChatUiHelpers.prepareContinuation(
+        messages: const <Map<String, String>>[
+          {
+            'sender': 'ai',
+            'text': '',
+            'contentBlocks': '[{"type":"text","text":"partial"}]',
+            'modelId': '  ',
+            'provider': '  ',
+          },
+        ],
+        messageIndex: 0,
+        fallbackModelId: 'fallback-model',
+        fallbackProvider: 'fallback-provider',
+      );
+      expect(fallbackRequest, isNotNull);
+      expect(fallbackRequest!.modelId, 'fallback-model');
+      expect(fallbackRequest.provider, 'fallback-provider');
+    });
+
+    test('only continues the latest non-empty assistant row', () {
+      final messages = <Map<String, String>>[
+        {'sender': 'ai', 'text': 'older partial'},
+        {'sender': 'user', 'text': 'later question'},
+      ];
+
+      expect(
+        ChatUiHelpers.prepareContinuation(
+          messages: messages,
+          messageIndex: 0,
+          fallbackModelId: 'model',
+          fallbackProvider: null,
+        ),
+        isNull,
+      );
+      expect(
+        ChatUiHelpers.prepareContinuation(
+          messages: messages,
+          messageIndex: 1,
+          fallbackModelId: 'model',
+          fallbackProvider: null,
+        ),
+        isNull,
+      );
+      expect(
+        ChatUiHelpers.prepareContinuation(
+          messages: const <Map<String, String>>[
+            {'sender': 'ai', 'text': '', 'contentBlocks': '  '},
+          ],
+          messageIndex: 0,
+          fallbackModelId: 'model',
+          fallbackProvider: null,
+        ),
+        isNull,
+      );
+    });
+
     test('replaceMessageField copies the row and rejects invalid indices', () {
       final original = <String, String>{'sender': 'ai', 'text': 'answer'};
       final messages = <Map<String, String>>[original];

@@ -452,41 +452,37 @@
 
 - L15 `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-## lib/utils/theme_extensions.dart  (271 Z.)
+## lib/utils/theme_extensions.dart  (216 Z.)
 
 - L3 `extension ThemeDataIconColorX on ThemeData`
   - L4 `Color get resolvedIconColor`
   - L20 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
-- L38 `_kGlyphSaturationFloor = 0.35`  — The least saturation a lightened glyph keeps, so the tint survives.
-- L40 `double _saturationFloor(double base)`
-- L52 `Color? _shadeUntilReadable(Color from, Color on, {required bool up})`  — Walks [from]'s lightness towards white (or towards black) in HSL and
-- L70 `double _contrastRatio(Color a, Color b)`  — WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white).
-- L80 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
-  - L82 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
-  - L105 `final Color surfaceContainerLow`
-  - L106 `final Color surfaceContainer`
-  - L107 `final Color surfaceContainerHigh`
-  - L108 `final Color surfaceContainerHighest`
-  - L109 `final Color primaryContainer`
-  - L110 `final Color onPrimaryContainer`
-  - L111 `final Color secondaryContainer`
-  - L112 `final Color onSecondaryContainer`
-  - L113 `final Color tertiaryContainer`
-  - L114 `final Color onTertiaryContainer`
-  - L115 `final Color outline`
-  - L116 `final Color outlineVariant`
-  - L117 `final Color onSurfaceVariant`
-  - L118 `final Color success`
-  - L119 `final Color onSuccess`
-  - L120 `final Color successContainer`
-  - L121 `final Color onSuccessContainer`
-  - L122 `final Color warning`
-  - L123 `final Color warningContainer`
-  - L124 `final Color onWarningContainer`
-  - L127 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
-  - L175 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
-- L223 `extension MaterialYouTokensX on ThemeData`
-  - L226 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
+- L25 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
+  - L27 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
+  - L50 `final Color surfaceContainerLow`
+  - L51 `final Color surfaceContainer`
+  - L52 `final Color surfaceContainerHigh`
+  - L53 `final Color surfaceContainerHighest`
+  - L54 `final Color primaryContainer`
+  - L55 `final Color onPrimaryContainer`
+  - L56 `final Color secondaryContainer`
+  - L57 `final Color onSecondaryContainer`
+  - L58 `final Color tertiaryContainer`
+  - L59 `final Color onTertiaryContainer`
+  - L60 `final Color outline`
+  - L61 `final Color outlineVariant`
+  - L62 `final Color onSurfaceVariant`
+  - L63 `final Color success`
+  - L64 `final Color onSuccess`
+  - L65 `final Color successContainer`
+  - L66 `final Color onSuccessContainer`
+  - L67 `final Color warning`
+  - L68 `final Color warningContainer`
+  - L69 `final Color onWarningContainer`
+  - L72 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
+  - L120 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
+- L168 `extension MaterialYouTokensX on ThemeData`
+  - L171 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
 
 ## lib/utils/token_estimator.dart  (58 Z.)
 

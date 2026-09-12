@@ -1,9 +1,8 @@
 # test/utils · Signatures
 
-## test/utils/accent_button_foreground_test.dart  (69 Z.)
+## test/utils/accent_button_foreground_test.dart  (33 Z.)
 
-- L6 `double contrast(Color a, Color b)`
-- L14 `void main()`
+- L6 `void main()`
 
 ## test/utils/api_rate_limiter_test.dart  (263 Z.)
 

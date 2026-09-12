@@ -1,6 +1,6 @@
 # lib · Signatures
 
-## lib/constants.dart  (547 Z.)
+## lib/constants.dart  (553 Z.)
 
 - L8 `kDefaultBgColor = Color(0xFF111318)`
 - L9 `kDefaultAccentColor = Color(0xFFA8C7FA)`
@@ -48,13 +48,13 @@
 - L129 `kBorderRadiusRow = BorderRadius.circular(kRadiusRow)`
 - L130 `kBorderRadiusPill = BorderRadius.circular(kRadiusPill)`
 - L133 `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightness, double contrast = kDefaultContrast, String? uiFont, })`
-- L532 `Color _shiftHue(Color c, double degrees)`
-- L539 `kCompactModeBreakpoint = 600.0`
-- L540 `kTabletBreakpoint = 800.0`
-- L543 `kFixedLeftPadding = 8.0`
-- L544 `kTopInitialSpacing = 16.0`
-- L545 `kMenuButtonHeight = 48.0`
-- L546 `kButtonVisualHeight = 40.0`
+- L538 `Color _shiftHue(Color c, double degrees)`
+- L545 `kCompactModeBreakpoint = 600.0`
+- L546 `kTabletBreakpoint = 800.0`
+- L549 `kFixedLeftPadding = 8.0`
+- L550 `kTopInitialSpacing = 16.0`
+- L551 `kMenuButtonHeight = 48.0`
+- L552 `kButtonVisualHeight = 40.0`
 
 ## lib/env_loader.dart  (158 Z.)
 
@@ -115,180 +115,180 @@
   - L553 `Future<void> _maybeStart()`
   - L571 `Widget build(BuildContext context)`
 
-## lib/model_selector_page.dart  (2074 Z.)
+## lib/model_selector_page.dart  (2076 Z.)
 
-- L34 `class PricingDetails`
-  - L35 `final double prompt`
-  - L36 `final double completion`
-  - L37 `final double request`
-  - L38 `final double? image`
-  - L39 `final double? webSearch`
-  - L40 `final double? internalReasoning`
-  - L42 `PricingDetails({ required this.prompt, required this.completion, required this.request, this.image, this.webSearch, this.internalReasoning, })`
-  - L51 `factory PricingDetails.fromJson(Map<String, dynamic> json)`
-  - L62 `String formatTokenPrice(double pricePerToken)`
-  - L70 `String formatRequestPrice(double price)`
-- L76 `class ModelProviderInfo`
-  - L77 `final String slug`
-  - L78 `final String name`
-  - L79 `final PricingDetails pricing`
-  - L80 `final int? contextLength`
-  - L81 `final int? maxCompletionTokens`
-  - L82 `final bool? isModerated`
-  - L83 `final String? iconUrl`
-  - L85 `ModelProviderInfo({ required this.slug, required this.name, required this.pricing, this.contextLength, this.maxCompletionTokens, this.isModerated, this.iconUrl, })`
-  - L95 `factory ModelProviderInfo.fromJson(Map<String, dynamic> json)`
-- L108 `class CustomModelInfo`
-  - L109 `final String id`
-  - L110 `final String name`
-  - L111 `final String? description`
-  - L112 `final List<ModelProviderInfo> providers`
-  - L113 `final String? iconUrl`
-  - L115 `CustomModelInfo({ required this.id, required this.name, this.description, required this.providers, this.iconUrl, })`
-  - L123 `factory CustomModelInfo.fromJson(Map<String, dynamic> json)`
-- L142 `enum _ModelListFilter`  — Which slice of the catalogue the model list shows.
-  - L144 `all`
-  - L147 `active`
-  - L150 `inactive`
-- L153 `class ModelSelectorPage extends StatefulWidget`
-  - L154 `const ModelSelectorPage({super.key})`
-  - L157 `State<ModelSelectorPage> createState()`
-- L160 `class _ModelSelectorPageState extends State<ModelSelectorPage> with ApiAvailabilityPolling<ModelSelectorPage>`
-  - L163 `String get apiPollBaseUrl`
-  - L166 `Future<void> onApiReachable()`
-  - L173 `final String _baseUrl = ApiConfigService.apiBaseUrl`
-  - L174 `List<CustomModelInfo> _models = []`
-  - L175 `Map<String, ModelProviderInfo?> _selectedProviders = {}`
-  - L178 `final Map<String, ModelProviderInfo> _autoSelected = {}`
-  - L179 `Map<String, ModelPromptConfig> _modelPromptConfigs = {}`
-  - L180 `bool _isLoading = true`
-  - L181 `String? _error`
-  - L182 `Map<String, String> _lastSavedPreferences = {}`
-  - L183 `StreamSubscription<void>? _refreshSubscription`
-  - L184 `final TextEditingController _searchController = TextEditingController()`
-  - L185 `String _searchQuery = ''`
-  - L189 `_ModelListFilter _listFilter = _ModelListFilter.all`
-  - L193 `ModeConfig? _fastConfig`
-  - L194 `ModeConfig? _thinkingConfig`
-  - L198 `void initState()`
-  - L215 `Future<void> _loadModeConfigs()`
-  - L234 `bool _isFlashModelId(String id)`
-  - L239 `Future<ModeConfig?> _healFastToFlash()`  — Pick a flash model for Fast — prefer the default GLM 5.3 Flash, else the
-  - L268 `String _modelNameFor(String modelId)`  — Human name for a model id, from the loaded catalogue, falling back to a
-  - L277 `Future<void> _pickModelForMode(ChatMode mode, String modelId)`  — Assign [modelId] to [mode]. The provider is the one the reader already
-  - L303 `CustomModelInfo? _modelById(String? modelId)`  — The catalogue entry for [modelId], or null when it is unknown / unset.
-  - L313 `Future<void> _setProviderForMode(ChatMode mode, String providerSlug)`  — Pin [mode] to a new provider, keeping its model. The service re-clamps the
-  - L328 `List<CustomModelInfo> get _enabledModels`  — Models the reader can assign to a mode: those they have enabled (pinned a
-  - L340 `List<String> _reasoningLevelsForMode(ChatMode mode)`  — Reasoning levels the mode's current model supports — straight from the
-  - L349 `Future<void> _setReasoningForMode(ChatMode mode, String level)`
-  - L364 `List<CustomModelInfo> get _filteredModels`
-  - L380 `List<CustomModelInfo> get _displayModels`  — The list actually rendered: the search-filtered set, then the Active /
-  - L401 `Future<void> _initializeModelSelections()`
-  - L454 `Future<void> _fetchModels()`
-  - L569 `Future<void> _handleApiUnavailable(String debugDetails)`
-  - L587 `String _buildApiUnavailableMessage({required bool hasConnectivity})`
-  - L607 `void _showSnackBar(String message)`
-  - L612 `Future<void> _onEditModelPrompt( CustomModelInfo model, )`
-  - L639 `Future<void> _onProviderSelect( String modelId, ModelProviderInfo? provider, )`
-  - L659 `Future<void> _onAutoSelect(CustomModelInfo model)`
-  - L674 `ModelProviderInfo? _cheapestProvider(CustomModelInfo model)`
-  - L683 `String _formatContextLength(int? tokens)`
-  - L693 `Widget _buildIconWidget( String? imageUrl, IconData fallbackIcon, { double size = 24, })`
-  - L741 `Widget build(BuildContext context)`
-  - L923 `void dispose()`
-- L935 `class ModelSelectionRow extends StatefulWidget`
-  - L936 `final CustomModelInfo model`
-  - L937 `final ModelProviderInfo? selectedProvider`
-  - L938 `final ModelPromptConfig? promptConfig`
-  - L939 `final bool isAutoSelected`
-  - L940 `final bool isFirstRow`
-  - L941 `final Function(ModelProviderInfo?) onProviderChanged`
-  - L942 `final VoidCallback? onAutoSelected`
-  - L943 `final VoidCallback? onEditPrompt`
-  - L944 `final String Function(int?) formatContextLength`
-  - L945 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
-  - L947 `const ModelSelectionRow({ super.key, required this.model, required this.selectedProvider, this.promptConfig, this.isAutoSelected = false, this.isFirstRow = false, required this.onProviderChanged, this.onAutoSelected, this.onEditPrompt, required this.formatContextLength, required this.buildIconWidget, })`
-  - L962 `State<ModelSelectionRow> createState()`
-- L965 `class _ModelSelectionRowState extends State<ModelSelectionRow>`
-  - L967 `static const int _collapsedMaxLines = 1`  — Lines shown while the description is collapsed.
-  - L968 `bool _descriptionExpanded = false`
-  - L971 `Widget build(BuildContext context)`
-  - L1047 `Widget? _buildDescriptionBlock(ThemeData theme, dynamic m3)`
-  - L1130 `Widget? _buildStatsBlock()`
-- L1168 `class _NameRow extends StatelessWidget`
-  - L1169 `final CustomModelInfo model`
-  - L1170 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
-  - L1171 `final ModelPromptConfig? promptConfig`
-  - L1172 `final VoidCallback? onEditPrompt`
-  - L1173 `final Widget trailing`
-  - L1175 `const _NameRow({ required this.model, required this.buildIconWidget, required this.trailing, this.promptConfig, this.onEditPrompt, })`
-  - L1184 `Widget build(BuildContext context)`
-- L1242 `class _ProviderPill extends StatelessWidget`
-  - L1243 `final CustomModelInfo model`
-  - L1244 `final ModelProviderInfo? selectedProvider`
-  - L1245 `final bool isAutoSelected`
-  - L1246 `final Function(ModelProviderInfo?) onProviderChanged`
-  - L1247 `final VoidCallback? onAutoSelected`
-  - L1248 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
-  - L1251 `final double? maxWidth`  — Overrides the derived cap on the closed face's width.
-  - L1253 `static const String _kDisabledValue = '__disabled__'`
-  - L1255 `const _ProviderPill({ this.maxWidth, required this.model, required this.selectedProvider, this.isAutoSelected = false, required this.onProviderChanged, this.onAutoSelected, required this.buildIconWidget, })`
-  - L1266 `Widget build(BuildContext context)`
-  - L1365 `Widget _buildCollapsedFace(BuildContext context)`  — Compact face shown when the pill is closed — only the current selection
-  - L1406 `ModelProviderInfo? _cheapestProvider()`
-  - L1415 `Widget _buildDisabledDisplay(BuildContext context)`
-  - L1433 `Widget _buildAutoDisplay( BuildContext context, { required ModelProviderInfo? cheapest, required bool isSelected, required bool isMenuItem, })`
-  - L1495 `Widget _buildProviderDisplay( BuildContext context, ModelProviderInfo provider, { required bool isSelected, required bool showPrice, })`
-  - L1542 `String _formatInOutPrice(ModelProviderInfo provider)`
-- L1550 `class _AuthRequiredException implements Exception`
-  - L1551 `const _AuthRequiredException()`
-- L1556 `class _SearchField extends StatelessWidget`
-  - L1557 `final TextEditingController controller`
-  - L1558 `final String hintText`
-  - L1559 `final bool hasQuery`
-  - L1561 `const _SearchField({ required this.controller, required this.hintText, required this.hasQuery, })`
-  - L1568 `Widget build(BuildContext context)`
-- L1609 `class _ModeRowData`  — One mode's data for the picker panel.
-  - L1610 `final IconData icon`
-  - L1611 `final String title`
-  - L1612 `final String modelId`
-  - L1613 `final String? modelName`
-  - L1614 `final String reasoningEffort`
-  - L1615 `final List<String> reasoningLevels`
-  - L1618 `final String providerSlug`  — The provider slug the mode's model is currently pinned to.
-  - L1621 `final List<ModelProviderInfo> providers`  — The providers the mode's currently-selected model offers.
-  - L1623 `final ValueChanged<String> onPickModel`
-  - L1624 `final ValueChanged<String> onPickReasoning`
-  - L1625 `final ValueChanged<String> onPickProvider`
-  - L1627 `const _ModeRowData({ required this.icon, required this.title, required this.modelId, required this.modelName, required this.reasoningEffort, required this.reasoningLevels, required this.providerSlug, required this.providers, required this.onPickModel, required this.onPickReasoning, required this.onPickProvider, })`
-- L1646 `class _ModePickerPanel extends StatelessWidget`  — The panel at the top of the model screen that assigns a model, a provider
-  - L1647 `final List<CustomModelInfo> models`
-  - L1648 `final _ModeRowData fast`
-  - L1649 `final _ModeRowData thinking`
-  - L1650 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
-  - L1654 `static const double _sideBySideMinWidth = 460`  — Below this available width the two cards stack instead of sitting side
-  - L1656 `const _ModePickerPanel({ required this.models, required this.fast, required this.thinking, required this.buildIconWidget, })`
-  - L1664 `Widget build(BuildContext context)`
-  - L1699 `Widget _modeCard(BuildContext context, _ModeRowData data)`
-  - L1752 `Widget _labelledRow(BuildContext context, String label, Widget control)`  — A settings-style row inside a mode card: a quiet label on the left, its
-  - L1785 `Widget _staticValue(BuildContext context, String text)`  — A read-only value on the right of a labelled row, for a model that offers
-  - L1799 `Widget _providerMenu(BuildContext context, _ModeRowData data)`
-  - L1829 `Widget _modelMenu(BuildContext context, _ModeRowData data)`
-  - L1854 `Widget _reasoningMenu(BuildContext context, _ModeRowData data)`
-  - L1872 `PopupMenuItem<String> _menuRow( BuildContext context, { required String value, required String label, required bool selected, Widget? leading, })`
-  - L1906 `Widget _menuPill<T>( BuildContext context, { required String label, required PopupMenuItemBuilder<T> itemBuilder, required ValueChanged<T> onSelected, bool subtle = false, })`
-- L1967 `class _ListFilterBar extends StatelessWidget`  — A three-way pill toggle above the model list: All / Active / Inactive.
-  - L1968 `final _ModelListFilter value`
-  - L1969 `final ValueChanged<_ModelListFilter> onChanged`
-  - L1971 `const _ListFilterBar({required this.value, required this.onChanged})`
-  - L1973 `static String _labelFor(_ModelListFilter f)`
-  - L1985 `Widget build(BuildContext context)`
-  - L2003 `Widget _segment(BuildContext context, _ModelListFilter f)`
-- L2035 `class _StatChip extends StatelessWidget`
-  - L2036 `final String label`
-  - L2037 `final String value`
-  - L2038 `const _StatChip({required this.label, required this.value})`
-  - L2041 `Widget build(BuildContext context)`
+- L36 `class PricingDetails`
+  - L37 `final double prompt`
+  - L38 `final double completion`
+  - L39 `final double request`
+  - L40 `final double? image`
+  - L41 `final double? webSearch`
+  - L42 `final double? internalReasoning`
+  - L44 `PricingDetails({ required this.prompt, required this.completion, required this.request, this.image, this.webSearch, this.internalReasoning, })`
+  - L53 `factory PricingDetails.fromJson(Map<String, dynamic> json)`
+  - L64 `String formatTokenPrice(double pricePerToken)`
+  - L72 `String formatRequestPrice(double price)`
+- L78 `class ModelProviderInfo`
+  - L79 `final String slug`
+  - L80 `final String name`
+  - L81 `final PricingDetails pricing`
+  - L82 `final int? contextLength`
+  - L83 `final int? maxCompletionTokens`
+  - L84 `final bool? isModerated`
+  - L85 `final String? iconUrl`
+  - L87 `ModelProviderInfo({ required this.slug, required this.name, required this.pricing, this.contextLength, this.maxCompletionTokens, this.isModerated, this.iconUrl, })`
+  - L97 `factory ModelProviderInfo.fromJson(Map<String, dynamic> json)`
+- L110 `class CustomModelInfo`
+  - L111 `final String id`
+  - L112 `final String name`
+  - L113 `final String? description`
+  - L114 `final List<ModelProviderInfo> providers`
+  - L115 `final String? iconUrl`
+  - L117 `CustomModelInfo({ required this.id, required this.name, this.description, required this.providers, this.iconUrl, })`
+  - L125 `factory CustomModelInfo.fromJson(Map<String, dynamic> json)`
+- L144 `enum _ModelListFilter`  — Which slice of the catalogue the model list shows.
+  - L146 `all`
+  - L149 `active`
+  - L152 `inactive`
+- L155 `class ModelSelectorPage extends StatefulWidget`
+  - L156 `const ModelSelectorPage({super.key})`
+  - L159 `State<ModelSelectorPage> createState()`
+- L162 `class _ModelSelectorPageState extends State<ModelSelectorPage> with ApiAvailabilityPolling<ModelSelectorPage>`
+  - L165 `String get apiPollBaseUrl`
+  - L168 `Future<void> onApiReachable()`
+  - L175 `final String _baseUrl = ApiConfigService.apiBaseUrl`
+  - L176 `List<CustomModelInfo> _models = []`
+  - L177 `Map<String, ModelProviderInfo?> _selectedProviders = {}`
+  - L180 `final Map<String, ModelProviderInfo> _autoSelected = {}`
+  - L181 `Map<String, ModelPromptConfig> _modelPromptConfigs = {}`
+  - L182 `bool _isLoading = true`
+  - L183 `String? _error`
+  - L184 `Map<String, String> _lastSavedPreferences = {}`
+  - L185 `StreamSubscription<void>? _refreshSubscription`
+  - L186 `final TextEditingController _searchController = TextEditingController()`
+  - L187 `String _searchQuery = ''`
+  - L191 `_ModelListFilter _listFilter = _ModelListFilter.all`
+  - L195 `ModeConfig? _fastConfig`
+  - L196 `ModeConfig? _thinkingConfig`
+  - L200 `void initState()`
+  - L217 `Future<void> _loadModeConfigs()`
+  - L236 `bool _isFlashModelId(String id)`
+  - L241 `Future<ModeConfig?> _healFastToFlash()`  — Pick a flash model for Fast — prefer the default GLM 5.3 Flash, else the
+  - L270 `String _modelNameFor(String modelId)`  — Human name for a model id, from the loaded catalogue, falling back to a
+  - L279 `Future<void> _pickModelForMode(ChatMode mode, String modelId)`  — Assign [modelId] to [mode]. The provider is the one the reader already
+  - L305 `CustomModelInfo? _modelById(String? modelId)`  — The catalogue entry for [modelId], or null when it is unknown / unset.
+  - L315 `Future<void> _setProviderForMode(ChatMode mode, String providerSlug)`  — Pin [mode] to a new provider, keeping its model. The service re-clamps the
+  - L330 `List<CustomModelInfo> get _enabledModels`  — Models the reader can assign to a mode: those they have enabled (pinned a
+  - L342 `List<String> _reasoningLevelsForMode(ChatMode mode)`  — Reasoning levels the mode's current model supports — straight from the
+  - L351 `Future<void> _setReasoningForMode(ChatMode mode, String level)`
+  - L366 `List<CustomModelInfo> get _filteredModels`
+  - L382 `List<CustomModelInfo> get _displayModels`  — The list actually rendered: the search-filtered set, then the Active /
+  - L403 `Future<void> _initializeModelSelections()`
+  - L456 `Future<void> _fetchModels()`
+  - L571 `Future<void> _handleApiUnavailable(String debugDetails)`
+  - L589 `String _buildApiUnavailableMessage({required bool hasConnectivity})`
+  - L609 `void _showSnackBar(String message)`
+  - L614 `Future<void> _onEditModelPrompt( CustomModelInfo model, )`
+  - L641 `Future<void> _onProviderSelect( String modelId, ModelProviderInfo? provider, )`
+  - L661 `Future<void> _onAutoSelect(CustomModelInfo model)`
+  - L676 `ModelProviderInfo? _cheapestProvider(CustomModelInfo model)`
+  - L685 `String _formatContextLength(int? tokens)`
+  - L695 `Widget _buildIconWidget( String? imageUrl, IconData fallbackIcon, { double size = 24, })`
+  - L743 `Widget build(BuildContext context)`
+  - L925 `void dispose()`
+- L937 `class ModelSelectionRow extends StatefulWidget`
+  - L938 `final CustomModelInfo model`
+  - L939 `final ModelProviderInfo? selectedProvider`
+  - L940 `final ModelPromptConfig? promptConfig`
+  - L941 `final bool isAutoSelected`
+  - L942 `final bool isFirstRow`
+  - L943 `final Function(ModelProviderInfo?) onProviderChanged`
+  - L944 `final VoidCallback? onAutoSelected`
+  - L945 `final VoidCallback? onEditPrompt`
+  - L946 `final String Function(int?) formatContextLength`
+  - L947 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
+  - L949 `const ModelSelectionRow({ super.key, required this.model, required this.selectedProvider, this.promptConfig, this.isAutoSelected = false, this.isFirstRow = false, required this.onProviderChanged, this.onAutoSelected, this.onEditPrompt, required this.formatContextLength, required this.buildIconWidget, })`
+  - L964 `State<ModelSelectionRow> createState()`
+- L967 `class _ModelSelectionRowState extends State<ModelSelectionRow>`
+  - L969 `static const int _collapsedMaxLines = 1`  — Lines shown while the description is collapsed.
+  - L970 `bool _descriptionExpanded = false`
+  - L973 `Widget build(BuildContext context)`
+  - L1049 `Widget? _buildDescriptionBlock(ThemeData theme, dynamic m3)`
+  - L1132 `Widget? _buildStatsBlock()`
+- L1170 `class _NameRow extends StatelessWidget`
+  - L1171 `final CustomModelInfo model`
+  - L1172 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
+  - L1173 `final ModelPromptConfig? promptConfig`
+  - L1174 `final VoidCallback? onEditPrompt`
+  - L1175 `final Widget trailing`
+  - L1177 `const _NameRow({ required this.model, required this.buildIconWidget, required this.trailing, this.promptConfig, this.onEditPrompt, })`
+  - L1186 `Widget build(BuildContext context)`
+- L1244 `class _ProviderPill extends StatelessWidget`
+  - L1245 `final CustomModelInfo model`
+  - L1246 `final ModelProviderInfo? selectedProvider`
+  - L1247 `final bool isAutoSelected`
+  - L1248 `final Function(ModelProviderInfo?) onProviderChanged`
+  - L1249 `final VoidCallback? onAutoSelected`
+  - L1250 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
+  - L1253 `final double? maxWidth`  — Overrides the derived cap on the closed face's width.
+  - L1255 `static const String _kDisabledValue = '__disabled__'`
+  - L1257 `const _ProviderPill({ this.maxWidth, required this.model, required this.selectedProvider, this.isAutoSelected = false, required this.onProviderChanged, this.onAutoSelected, required this.buildIconWidget, })`
+  - L1268 `Widget build(BuildContext context)`
+  - L1367 `Widget _buildCollapsedFace(BuildContext context)`  — Compact face shown when the pill is closed — only the current selection
+  - L1408 `ModelProviderInfo? _cheapestProvider()`
+  - L1417 `Widget _buildDisabledDisplay(BuildContext context)`
+  - L1435 `Widget _buildAutoDisplay( BuildContext context, { required ModelProviderInfo? cheapest, required bool isSelected, required bool isMenuItem, })`
+  - L1497 `Widget _buildProviderDisplay( BuildContext context, ModelProviderInfo provider, { required bool isSelected, required bool showPrice, })`
+  - L1544 `String _formatInOutPrice(ModelProviderInfo provider)`
+- L1552 `class _AuthRequiredException implements Exception`
+  - L1553 `const _AuthRequiredException()`
+- L1558 `class _SearchField extends StatelessWidget`
+  - L1559 `final TextEditingController controller`
+  - L1560 `final String hintText`
+  - L1561 `final bool hasQuery`
+  - L1563 `const _SearchField({ required this.controller, required this.hintText, required this.hasQuery, })`
+  - L1570 `Widget build(BuildContext context)`
+- L1611 `class _ModeRowData`  — One mode's data for the picker panel.
+  - L1612 `final IconData icon`
+  - L1613 `final String title`
+  - L1614 `final String modelId`
+  - L1615 `final String? modelName`
+  - L1616 `final String reasoningEffort`
+  - L1617 `final List<String> reasoningLevels`
+  - L1620 `final String providerSlug`  — The provider slug the mode's model is currently pinned to.
+  - L1623 `final List<ModelProviderInfo> providers`  — The providers the mode's currently-selected model offers.
+  - L1625 `final ValueChanged<String> onPickModel`
+  - L1626 `final ValueChanged<String> onPickReasoning`
+  - L1627 `final ValueChanged<String> onPickProvider`
+  - L1629 `const _ModeRowData({ required this.icon, required this.title, required this.modelId, required this.modelName, required this.reasoningEffort, required this.reasoningLevels, required this.providerSlug, required this.providers, required this.onPickModel, required this.onPickReasoning, required this.onPickProvider, })`
+- L1648 `class _ModePickerPanel extends StatelessWidget`  — The panel at the top of the model screen that assigns a model, a provider
+  - L1649 `final List<CustomModelInfo> models`
+  - L1650 `final _ModeRowData fast`
+  - L1651 `final _ModeRowData thinking`
+  - L1652 `final Widget Function(String?, IconData, {double size}) buildIconWidget`
+  - L1656 `static const double _sideBySideMinWidth = 460`  — Below this available width the two cards stack instead of sitting side
+  - L1658 `const _ModePickerPanel({ required this.models, required this.fast, required this.thinking, required this.buildIconWidget, })`
+  - L1666 `Widget build(BuildContext context)`
+  - L1701 `Widget _modeCard(BuildContext context, _ModeRowData data)`
+  - L1754 `Widget _labelledRow(BuildContext context, String label, Widget control)`  — A settings-style row inside a mode card: a quiet label on the left, its
+  - L1787 `Widget _staticValue(BuildContext context, String text)`  — A read-only value on the right of a labelled row, for a model that offers
+  - L1801 `Widget _providerMenu(BuildContext context, _ModeRowData data)`
+  - L1831 `Widget _modelMenu(BuildContext context, _ModeRowData data)`
+  - L1856 `Widget _reasoningMenu(BuildContext context, _ModeRowData data)`
+  - L1874 `PopupMenuItem<String> _menuRow( BuildContext context, { required String value, required String label, required bool selected, Widget? leading, })`
+  - L1908 `Widget _menuPill<T>( BuildContext context, { required String label, required PopupMenuItemBuilder<T> itemBuilder, required ValueChanged<T> onSelected, bool subtle = false, })`
+- L1969 `class _ListFilterBar extends StatelessWidget`  — A three-way pill toggle above the model list: All / Active / Inactive.
+  - L1970 `final _ModelListFilter value`
+  - L1971 `final ValueChanged<_ModelListFilter> onChanged`
+  - L1973 `const _ListFilterBar({required this.value, required this.onChanged})`
+  - L1975 `static String _labelFor(_ModelListFilter f)`
+  - L1987 `Widget build(BuildContext context)`
+  - L2005 `Widget _segment(BuildContext context, _ModelListFilter f)`
+- L2037 `class _StatChip extends StatelessWidget`
+  - L2038 `final String label`
+  - L2039 `final String value`
+  - L2040 `const _StatChip({required this.label, required this.value})`
+  - L2043 `Widget build(BuildContext context)`
 
 ## lib/platform_config.dart  (107 Z.)
 

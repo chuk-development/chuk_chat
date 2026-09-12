@@ -1429,7 +1429,7 @@
   - L70 `Timer? _pingTimer`
   - L78 `DateTime? _lastInboundAt`  — Wall-clock time of the last frame received from the server (including
   - L83 `Future<void>? _ready`  — Single shared handshake future. While non-null any [ensureReady]
-  - L87 `final Map<String, StreamController<ChatStreamEvent>> _chatControllers = <String, StreamController<ChatStreamEvent>>{}`  — Per-`req_id` state. Chat streams push into [`_chatControllers`] until
+  - L87 `final Map<String, StreamController<ChatStreamEvent>> _chatControllers = <String, StreamController<ChatStreamEvent>>{}`  — Per-`req_id` state. Chat streams push into [_chatControllers] until
   - L89 `final Map<String, Completer<Map<String, dynamic>>> _toolCompleters = <String, Completer<Map<String, dynamic>>>{}`
   - L92 `bool _disposed = false`
   - L96 `Future<void> ensureReady()`  — Establish (or reuse) the connection and perform the auth handshake.
@@ -1465,8 +1465,8 @@
   - L69 `static Future<void> openForChat(String chatId)`  — Open (or reuse) the multiplex connection for `chatId`. Idempotent —
   - L123 `static Future<void> prewarm()`  — Pre-open the multiplex socket before the first send so the TLS + auth
   - L191 `static Future<MultiplexConnection?> ensureCurrent()`  — Return the live connection, opening one on demand if none exists.
-  - L200 `static void closeForChat(String chatId)`  — Schedule the connection to close after [`_idleCloseDelay`]. If
-  - L212 `static void _scheduleIdleClose()`  — Arm the idle-close timer. Tears the socket down after [`_idleCloseDelay`]
+  - L200 `static void closeForChat(String chatId)`  — Schedule the connection to close after [_idleCloseDelay]. If
+  - L212 `static void _scheduleIdleClose()`  — Arm the idle-close timer. Tears the socket down after [_idleCloseDelay]
   - L228 `static bool get _hasActiveStreams`
   - L231 `static Future<void> shutdown()`  — Tear down the connection immediately. Used on logout.
   - L268 `static Stream<ChatStreamEvent> chatForChat({ required String? chatId, required Map<String, dynamic> payload, })`  — Start a chat stream that is tracked by [chatId]. If another chat
@@ -1905,7 +1905,7 @@
   - L139 `static const String _selectedModelColumn = 'selected_model_id'`
   - L143 `static Map<String, ModelPromptConfig>? _decryptedCache`
   - L144 `static Future<Map<String, ModelPromptConfig>>? _loadInFlight`
-  - L154 `static String? _cacheOwnerUserId`  — The user [`_decryptedCache`] belongs to.
+  - L154 `static String? _cacheOwnerUserId`  — The user [_decryptedCache] belongs to.
   - L156 `static void _syncCacheToCurrentUser(String? userId)`
   - L163 `static Future<void> _dropLegacyLocalCache(SharedPreferences prefs)`
   - L174 `static Future<Map<String, ModelPromptConfig>> loadAll()`  — Best-effort load of all per-model configs, decrypted.
@@ -2263,8 +2263,8 @@
   - L21 `static const _notificationUpdateInterval = Duration(milliseconds: 500)`
   - L29 `static const _uiUpdateInterval = Duration(milliseconds: 33)`  — Coalesce UI updates to roughly one per frame. Each onUpdate triggers a
   - L34 `static const _idleTimeout = Duration(seconds: 60)`  — Idle timeout: if no event arrives for this duration, the stream
-  - L39 `void armIdleTimer({ required String chatId, required ActiveStream stream, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Start the idle timer — if no events arrive within [`_idleTimeout`],
-  - L69 `Timer _startIdleTimer({ required String chatId, required ActiveStream stream, required String emptyMessage, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — The idle watchdog: nothing arrived for [`_idleTimeout`], so the connection
+  - L39 `void armIdleTimer({ required String chatId, required ActiveStream stream, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Start the idle timer — if no events arrive within [_idleTimeout],
+  - L69 `Timer _startIdleTimer({ required String chatId, required ActiveStream stream, required String emptyMessage, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — The idle watchdog: nothing arrived for [_idleTimeout], so the connection
   - L98 `void onEventBookkeeping({ required String chatId, required ActiveStream stream, required ChatStreamEvent event, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`
   - L143 `void deliverUpdate( ActiveStream stream, Function(String content, String reasoning) onUpdate, )`  — Schedule a coalesced UI flush: at most one onUpdate per
   - L160 `void beforeCompletion(ActiveStream stream)`
@@ -2730,7 +2730,7 @@
 - L1435 `_technicalDrawingSchemaText = ''' # Technical drawing schema (content field for artifact_manager, type="technical_drawin`
 - L1478 `_typstSchemaText = ''' # Typst schema (source is the content for typst_compile, NOT artifact_manager) Use the dedicated`
 - L1509 `_mermaidSchemaText = ''' # Mermaid schema (content for artifact_manager, type="mermaid") Standard Mermaid diagram source`
-- L1533 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example: ````
+- L1533 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example:````
 
 ## lib/services/tool_image_result_service.dart  (446 Z.)
 

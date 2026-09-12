@@ -1,6 +1,6 @@
 # lib/widgets/workspace · Signatures
 
-## lib/widgets/workspace/workspace_actions_mixin.dart  (274 Z.)
+## lib/widgets/workspace/workspace_actions_mixin.dart  (277 Z.)
 
 - L30 `mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T>`  — Shared workspace actions for a [State] that manages a single workspace.
   - L32 `String get workspaceId`  — Id of the workspace this state operates on.
@@ -16,8 +16,8 @@
   - L161 `Future<void> deleteWorkspaceFile( WorkspaceFile file, { String? title, String? body, String? cancelLabel, String? deleteLabel, String Function(String error)? failedMessage, })`  — Asks for confirmation and deletes [file] from the workspace.
   - L201 `void viewWorkspaceFile(BuildContext viewerContext, WorkspaceFile file)`  — Opens the file viewer after the current frame, using [viewerContext].
   - L214 `Future<bool> saveWorkspaceInstructions( String instructions, { String? successMessage, })`  — Saves the workspace's custom system prompt. Returns `true` when the save
-  - L240 `Future<void> addChatToWorkspace({ required Iterable<String> existingChatIds, required Future<StoredChat?> Function(List<StoredChat> available) pickChat, })`  — Lets the user pick one of the chats that are not in the workspace yet and
-  - L265 `Future<void> removeChatFromWorkspace(String chatId)`  — Removes [chatId] from the workspace.
+  - L242 `Future<void> addChatToWorkspace({ required Iterable<String> existingChatIds, required Future<StoredChat?> Function(List<StoredChat> available) pickChat, })`  — Lets the user pick one of the chats that are not in the workspace yet and
+  - L268 `Future<void> removeChatFromWorkspace(String chatId)`  — Removes [chatId] from the workspace.
 
 ## lib/widgets/workspace/workspace_common_widgets.dart  (348 Z.)
 

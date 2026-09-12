@@ -239,7 +239,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
-  Timer? _audioVisualizerTimer;
 
   // Workspace state
   String? _selectedWorkspaceId;
@@ -776,7 +775,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // in-flight snapshot to disk.
     _streamingHandler.dispose();
     persistenceHandler.dispose();
-    _audioVisualizerTimer?.cancel();
     _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
       _networkStatusListener,
@@ -1242,37 +1240,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // --- AUDIO HANDLERS ---
 
   Future<void> _handleMicTap() async {
-    if (_audioHandler.isMicActive) {
-      await _audioHandler.stopRecording();
-      _audioHandler.onLevelsChanged = null;
-      _audioVisualizerTimer?.cancel();
-      _audioVisualizerTimer = null;
-      if (!mounted) return;
-      setState(() {
-        _audioHandler.resetAudioLevels();
-      });
-    } else {
-      // Use the existing session token — no need to refresh first.
-      final accessToken = SupabaseService.auth.currentSession?.accessToken;
+    final change = await _audioHandler.toggleRecording(
+      accessToken: SupabaseService.auth.currentSession?.accessToken,
+      handleLevelsChanged: () {
+        if (mounted && _audioHandler.isMicActive) setState(() {});
+      },
+    );
+    if (!mounted) return;
+    setState(() {});
 
-      final bool started = await _audioHandler.startRecording(
-        accessToken: accessToken,
-      );
-      if (!mounted) return;
-      if (started) {
-        setState(() {
-          _audioHandler.resetAudioLevels();
-        });
-        // Drive visualizer updates from recorder/PCM callbacks directly.
-        // This avoids unnecessary full-screen rebuilds while attachments upload.
-        _audioHandler.onLevelsChanged = () {
-          if (mounted && _audioHandler.isMicActive) {
-            setState(() {});
-          }
-        };
-      } else {
-        showSnackBar('Mic access failed');
-      }
+    if (change == AudioRecordingChange.failed) {
+      showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
     }
   }
 
@@ -1282,37 +1260,30 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
     final l = AppLocalizations.of(context)!;
 
-    await _audioHandler.stopRecording(keepFile: true);
-    _audioHandler.onLevelsChanged = null;
-    _audioVisualizerTimer?.cancel();
-    _audioVisualizerTimer = null;
-    if (!mounted) return;
-    setState(() {
-      _audioHandler.resetAudioLevels();
-    });
-
-    final session = await _streamingHandler.getSessionSafely();
-    if (session == null) return;
-
-    // Mark transcribing immediately so the send button shows loading spinner
-    // before the async transcription call sets it internally.
-    _audioHandler.setTranscribing(true);
-    if (mounted) setState(() {});
-
-    final result = await _audioHandler.transcribeLastRecording(
+    bool sessionLookupFailed = false;
+    final result = await _audioHandler.stopAndTranscribe(
       apiService: _chatApiService,
-      accessToken: session.accessToken,
+      getAccessToken: () async {
+        final session = await _streamingHandler.getSessionSafely();
+        sessionLookupFailed = session == null;
+        return session?.accessToken;
+      },
+      onStateChanged: () {
+        if (mounted) setState(() {});
+      },
     );
 
-    if (!mounted) return;
+    if (!mounted || result == null) return;
 
     if (result.requiresLogout) {
       await SupabaseService.signOut();
+      if (!mounted) return;
     }
 
     if (!result.success) {
-      showSnackBar(result.error ?? l.transcriptionFailed);
-      setState(() {}); // Trigger UI update to hide loading icon
+      if (!sessionLookupFailed) {
+        showSnackBar(result.error ?? l.transcriptionFailed);
+      }
       return;
     }
 
@@ -2613,6 +2584,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       showSnackBar('Please wait');
       return;
     }
+    final String? chatIdAtStart = _activeChatId;
 
     setState(() {
       _messages[index]['text'] = newText;
@@ -2669,6 +2641,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       });
     }
 
+    final editedMessagesSnapshot = _messages
+        .map(Map<String, String>.from)
+        .toList(growable: false);
+
     // Roll back per-message version history first so prior snapshots
     // survive when an AI message only updated an existing artifact.
     if (discardedMessageIds.isNotEmpty) {
@@ -2684,6 +2660,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       // ends up in the system prompt as a "still active" item. Idempotent
       // for ids the rollback above already deleted.
       await ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete);
+    }
+
+    // Artifact rollback can outlive this State or a chat switch. Never append
+    // the replacement assistant row to whichever conversation is visible now.
+    if (!mounted || _activeChatId != chatIdAtStart) {
+      if (chatIdAtStart != null) {
+        await persistenceHandler.persistChat(
+          messages: editedMessagesSnapshot,
+          chatId: chatIdAtStart,
+          waitForCompletion: true,
+          isOffline: _isOffline,
+          silent: true,
+        );
+      }
+      return;
     }
 
     // Resend with new text
@@ -2834,17 +2825,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Triggered by the "Continue generation" affordance the bubble renders on
   /// any AI message whose persisted status is [ChatMessageStatus.interrupted].
   Future<void> _continueGenerationAt(int aiIndex) async {
-    if (aiIndex < 0 || aiIndex >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
       showSnackBar('Please wait');
       return;
     }
-    if (_messages[aiIndex]['sender'] != 'ai') return;
-
-    final String priorText = (_messages[aiIndex]['text'] ?? '').trim();
-    final String? priorContentBlocks = _messages[aiIndex]['contentBlocks'];
-    if (priorText.isEmpty &&
-        (priorContentBlocks == null || priorContentBlocks.isEmpty)) {
+    final request = ChatUiHelpers.prepareContinuation(
+      messages: _messages,
+      messageIndex: aiIndex,
+      fallbackModelId: selectedModelId,
+      fallbackProvider: selectedProviderSlug,
+    );
+    if (request == null) {
       showSnackBar('Nothing to continue from');
       return;
     }
@@ -2853,68 +2844,85 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // during this async flow — same protection as resend.
     _activeChatId ??= _uuid.v4();
     final String chatId = _activeChatId!;
+    final runtime = ChatRuntimeRegistry.instance.get(chatId);
+    if (runtime.isSending.value || _streamingHandler.isChatStreaming(chatId)) {
+      showSnackBar('Please wait');
+      return;
+    }
+    runtime.isSending.value = true;
     ChatStorageService.activeMessageChatId = chatId;
     ChatStorageService.selectedChatId ??= chatId;
 
-    // Build the API history so the model sees the full prior turn AND its
-    // own partial reply. We include messages up to and including the
-    // interrupted assistant message — the streaming handler treats this
-    // list as "everything that came before the new user turn" and our
-    // synthetic [continuePrompt] is appended as the new user message.
-    // Anything after [aiIndex] is dropped (sandbox artifacts, etc. would
-    // confuse the model and aren't relevant to the continuation).
-    final List<Map<String, String>> historyMessages = _messages
-        .sublist(0, aiIndex + 1)
-        .map((m) => Map<String, String>.from(m))
-        .toList();
-
+    final originalStatus = _messages[request.messageIndex]['status'];
+    var handedToStreamingHandler = false;
     setState(() {
       // Flip the status off immediately so the Continue button doesn't
       // double-trigger while the new stream is running.
-      final m = Map<String, String>.from(_messages[aiIndex]);
+      final m = Map<String, String>.from(_messages[request.messageIndex]);
       m.remove('status');
-      _messages[aiIndex] = m;
+      _messages[request.messageIndex] = m;
     });
 
-    final String modelIdToUse =
-        _messages[aiIndex]['modelId']?.trim().isNotEmpty == true
-        ? _messages[aiIndex]['modelId']!
-        : selectedModelId;
-    final String? providerToUse =
-        _messages[aiIndex]['provider']?.trim().isNotEmpty == true
-        ? _messages[aiIndex]['provider']
-        : selectedProviderSlug;
+    try {
+      final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+      if (!mounted ||
+          _activeChatId != chatId ||
+          _streamingHandler.isStreaming ||
+          _streamingHandler.isSending) {
+        return;
+      }
 
-    final resolvedSystemPrompt = await _resolveSystemPromptForSend();
-
-    await _streamingHandler.sendMessage(
-      userInput: ChatUiHelpers.continueGenerationPrompt,
-      attachedFiles: const <AttachedFile>[],
-      selectedModelId: modelIdToUse,
-      selectedProviderSlug: providerToUse,
-      messages: historyMessages,
-      systemPrompt: resolvedSystemPrompt,
-      activeChatId: chatId,
-      // Stream into the EXISTING assistant message instead of creating a
-      // new one — the prior text is seeded into the accumulator below.
-      placeholderIndex: aiIndex,
-      getProviderSlug: () async => providerToUse,
-      isOffline: _isOffline,
-      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
-      includeAllImagesInHistory: widget.includeAllImagesInHistory,
-      includeReasoningInHistory: widget.includeReasoningInHistory,
-      includeToolResultsInHistory: widget.includeToolResultsInHistory,
-      toolCallingEnabled: widget.toolCallingEnabled,
-      toolDiscoveryMode: widget.toolDiscoveryMode,
-      reasoningEffort: clampedReasoningEffort(modelIdToUse, providerToUse),
-      continuePriorText: priorText,
-      continuePriorContentBlocksJson: priorContentBlocks,
-    );
+      handedToStreamingHandler = true;
+      await _streamingHandler.sendMessage(
+        userInput: ChatUiHelpers.continueGenerationPrompt,
+        attachedFiles: const <AttachedFile>[],
+        selectedModelId: request.modelId,
+        selectedProviderSlug: request.provider,
+        messages: request.historyMessages,
+        systemPrompt: resolvedSystemPrompt,
+        activeChatId: chatId,
+        // Stream into the EXISTING assistant message instead of creating a
+        // new one — the prior text is seeded into the accumulator below.
+        placeholderIndex: request.messageIndex,
+        getProviderSlug: () async => request.provider,
+        isOffline: _isOffline,
+        includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+        includeAllImagesInHistory: widget.includeAllImagesInHistory,
+        includeReasoningInHistory: widget.includeReasoningInHistory,
+        includeToolResultsInHistory: widget.includeToolResultsInHistory,
+        toolCallingEnabled: widget.toolCallingEnabled,
+        toolDiscoveryMode: widget.toolDiscoveryMode,
+        reasoningEffort: clampedReasoningEffort(
+          request.modelId,
+          request.provider,
+        ),
+        continuePriorText: request.priorText,
+        continuePriorContentBlocksJson: request.priorContentBlocksJson,
+      );
+    } finally {
+      runtime.isSending.value = false;
+      if (!handedToStreamingHandler &&
+          mounted &&
+          _activeChatId == chatId &&
+          request.messageIndex < _messages.length) {
+        setState(() {
+          final message = Map<String, String>.from(
+            _messages[request.messageIndex],
+          );
+          if (originalStatus == null) {
+            message.remove('status');
+          } else {
+            message['status'] = originalStatus;
+          }
+          _messages[request.messageIndex] = message;
+        });
+      }
+    }
 
     if (kDebugMode) {
       debugPrint(
-        '🔁 [Continue] resumed AI message $aiIndex '
-        '(priorText chars=${priorText.length})',
+        '🔁 [Continue] resumed AI message ${request.messageIndex} '
+        '(priorText chars=${request.priorText.length})',
       );
     }
   }
@@ -2926,6 +2934,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       context,
       initialText: composerController.text,
     );
+    if (!mounted) return;
     if (result != null) {
       setState(() {
         composerController.text = result;
@@ -3161,9 +3170,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                         switchVariantAt(i, variant),
                                     onContinueGeneration:
                                         !data.isUser &&
+                                            i == _messages.length - 1 &&
                                             data.status ==
                                                 ChatMessageStatus.interrupted &&
-                                            !_isCurrentChatStreaming
+                                            !_isCurrentChatStreaming &&
+                                            !_isSendingMessage
                                         ? () => _continueGenerationAt(i)
                                         : null,
                                   );

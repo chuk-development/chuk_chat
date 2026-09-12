@@ -148,7 +148,6 @@ Complete map of all Dart files in the codebase.
 ### Chat Widgets (`lib/platform_specific/chat/widgets/`)
 | File | Purpose |
 |------|---------|
-| `desktop_chat_widgets.dart` | Desktop-specific chat UI widgets |
 | `mobile_chat_widgets.dart` | Mobile-specific chat UI widgets |
 
 ### Handlers (`lib/platform_specific/chat/handlers/`)

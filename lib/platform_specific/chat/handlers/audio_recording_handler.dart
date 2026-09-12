@@ -13,6 +13,8 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
 
+enum AudioRecordingChange { started, stopped, failed }
+
 /// Handles microphone recording + transcription.
 ///
 /// Recording starts **instantly** on mic press: the recorder is opened as a
@@ -56,11 +58,6 @@ class AudioRecordingHandler {
   /// Whether a WebSocket streaming session is active.
   bool get isStreamingMode => _isStreamingMode;
 
-  /// Allow UI to set transcribing state for immediate feedback.
-  void setTranscribing(bool value) {
-    _isTranscribingAudio = value;
-  }
-
   /// Start microphone recording.
   ///
   /// Recording begins **instantly** — PCM chunks are captured from the
@@ -68,7 +65,7 @@ class AudioRecordingHandler {
   /// connection is opened in the background; once ready the buffered audio
   /// is flushed and live chunks are forwarded. The caller does not wait for
   /// the WebSocket — recording never blocks on network.
-  Future<bool> startRecording({String? accessToken}) async {
+  Future<bool> _startRecording({String? accessToken}) async {
     try {
       if (!await _ensureMicPermission()) return false;
 
@@ -111,12 +108,34 @@ class AudioRecordingHandler {
     }
   }
 
+  /// Toggles recording while keeping recorder state transitions identical on
+  /// desktop and mobile.
+  Future<AudioRecordingChange> toggleRecording({
+    required String? accessToken,
+    required VoidCallback handleLevelsChanged,
+  }) async {
+    if (_isMicActive) {
+      await stopRecording();
+      _resetAudioLevels();
+      return AudioRecordingChange.stopped;
+    }
+
+    onLevelsChanged = null;
+    final started = await _startRecording(accessToken: accessToken);
+    if (!started) return AudioRecordingChange.failed;
+
+    _resetAudioLevels();
+    onLevelsChanged = handleLevelsChanged;
+    return AudioRecordingChange.started;
+  }
+
   /// Stop microphone recording.
   ///
   /// If [keepFile] is `true`, the captured audio is retained so the next
-  /// [transcribeLastRecording] call can use it. Otherwise everything is
+  /// [stopAndTranscribe] call can use it. Otherwise everything is
   /// discarded.
   Future<void> stopRecording({bool keepFile = false}) async {
+    onLevelsChanged = null;
     await _pcmStreamSub?.cancel();
     _pcmStreamSub = null;
 
@@ -145,7 +164,7 @@ class AudioRecordingHandler {
   /// If the WebSocket was upgraded mid-recording, the server already has
   /// the audio — this only waits for the Whisper result. Otherwise the
   /// buffered PCM is wrapped as WAV and uploaded via HTTP.
-  Future<TranscriptionResult> transcribeLastRecording({
+  Future<TranscriptionResult> _transcribeLastRecording({
     required ChatApiService apiService,
     required String accessToken,
   }) async {
@@ -160,8 +179,42 @@ class AudioRecordingHandler {
     );
   }
 
-  void resetAudioLevels() {
+  /// Stops the active recording, resolves authentication, and transcribes it.
+  ///
+  /// Desktop and mobile supply their own session lookup but share the state
+  /// transitions here. A null result means no recording was eligible or the
+  /// session lookup failed before transcription started.
+  Future<TranscriptionResult?> stopAndTranscribe({
+    required ChatApiService apiService,
+    required Future<String?> Function() getAccessToken,
+    VoidCallback? onStateChanged,
+  }) async {
+    if (!_isMicActive || _isTranscribingAudio) return null;
+
+    await stopRecording(keepFile: true);
     _resetAudioLevels();
+    onStateChanged?.call();
+
+    final accessToken = await getAccessToken();
+    if (accessToken == null || accessToken.isEmpty) {
+      _pcmBuffer.clear();
+      final streamingService = _streamingService;
+      _streamingService = null;
+      _isStreamingMode = false;
+      _isTranscribingAudio = false;
+      await streamingService?.abort();
+      onStateChanged?.call();
+      return TranscriptionResult(success: false, error: 'Session expired');
+    }
+
+    _isTranscribingAudio = true;
+    onStateChanged?.call();
+    final result = await _transcribeLastRecording(
+      apiService: apiService,
+      accessToken: accessToken,
+    );
+    onStateChanged?.call();
+    return result;
   }
 
   Future<void> dispose() async {
@@ -238,10 +291,7 @@ class AudioRecordingHandler {
     if (service == null) {
       _isTranscribingAudio = false;
       _isStreamingMode = false;
-      return TranscriptionResult(
-        success: false,
-        error: 'No streaming session',
-      );
+      return TranscriptionResult(success: false, error: 'No streaming session');
     }
 
     try {
@@ -409,7 +459,8 @@ class AudioRecordingHandler {
     if (kIsWeb) return true; // Browser handles permission via record package.
 
     // permission_handler only supports Android, iOS, macOS, Windows.
-    final bool supportsPermissionHandler = !kIsWeb &&
+    final bool supportsPermissionHandler =
+        !kIsWeb &&
         (Platform.isAndroid ||
             Platform.isIOS ||
             Platform.isMacOS ||

@@ -200,7 +200,13 @@ ThemeData buildAppTheme({
   final ColorScheme colorScheme = ColorScheme(
     brightness: brightness,
     primary: accent,
-    onPrimary: isDark ? const Color(0xFF062E6F) : const Color(0xFFFFFFFF),
+    // What sits on an accent fill: a filled button's label, its glyph, a
+    // badge. The same rule as the round accent buttons in the composer and
+    // the sidebar — the reader's own icon colour, so nothing on an accent
+    // fill is a colour that appears nowhere else in the app. The old value
+    // was a hardcoded navy, which on the default orange read as text from a
+    // different program.
+    onPrimary: iconFg,
     primaryContainer: primaryContainer,
     onPrimaryContainer: onPrimaryContainer,
     secondary: iconFg,

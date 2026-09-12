@@ -779,9 +779,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ChatStorageService.isLoadingChat = false;
 
     // Stop any active recording when switching chats.
-    if (_audioHandler.isMicActive) {
-      unawaited(_audioHandler.stopRecording());
-    }
+    _stopAudioRecordingForNavigation();
 
     setState(() {
       _messages
@@ -986,9 +984,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ChatStorageService.isLoadingChat = false;
 
     // Stop any active recording when switching chats
-    if (_audioHandler.isMicActive) {
-      unawaited(_audioHandler.stopRecording());
-    }
+    _stopAudioRecordingForNavigation();
     setState(() {
       _isLoadingChat = false;
       _isSending = _isStreaming; // Reset sending state based on current chat
@@ -1106,9 +1102,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     // Stop any active recording when starting new chat
-    if (_audioHandler.isMicActive) {
-      unawaited(_audioHandler.stopRecording());
-    }
+    _stopAudioRecordingForNavigation();
     // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
@@ -1285,47 +1279,34 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // State for drag and drop
   bool _isDraggingFiles = false;
 
-  Future<void> _handleMicTap() async {
-    if (_audioHandler.isMicActive) {
-      await _audioHandler.stopRecording();
-      _audioHandler.onLevelsChanged = null;
-      _audioVisualizerTimer?.cancel();
-      _audioVisualizerTimer = null;
-      if (!mounted) return;
-      setState(() {
-        _audioHandler.resetAudioLevels();
-      });
-    } else {
-      // Use the existing session token — no need to refresh first.
-      final accessToken = SupabaseService.auth.currentSession?.accessToken;
+  void _stopAudioRecordingForNavigation() {
+    if (!_audioHandler.isMicActive) return;
+    _audioVisualizerTimer?.cancel();
+    _audioVisualizerTimer = null;
+    unawaited(_audioHandler.stopRecording());
+  }
 
-      final bool started = await _audioHandler.startRecording(
-        accessToken: accessToken,
-      );
-      if (!mounted) return;
-      if (started) {
-        setState(() {
-          _audioHandler.resetAudioLevels();
-        });
-        // Drive visualiser from amplitude callback.
-        _audioHandler.onLevelsChanged = () {
-          if (mounted && _audioHandler.isMicActive) {
-            setState(() {});
-          }
-        };
-        // Periodic timer as backup — on some Linux audio backends,
-        // onAmplitudeChanged may not emit reliably.
-        _audioVisualizerTimer = Timer.periodic(
-          const Duration(milliseconds: 30),
-          (_) {
-            if (mounted && _audioHandler.isMicActive) {
-              setState(() {});
-            }
-          },
-        );
-      } else {
-        showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
-      }
+  Future<void> _handleMicTap() async {
+    _audioVisualizerTimer?.cancel();
+    _audioVisualizerTimer = null;
+    final change = await _audioHandler.toggleRecording(
+      accessToken: SupabaseService.auth.currentSession?.accessToken,
+      handleLevelsChanged: () {
+        if (mounted && _audioHandler.isMicActive) setState(() {});
+      },
+    );
+    if (!mounted) return;
+    setState(() {});
+
+    if (change == AudioRecordingChange.started) {
+      // Some Linux audio backends do not emit amplitude changes reliably.
+      _audioVisualizerTimer = Timer.periodic(const Duration(milliseconds: 30), (
+        _,
+      ) {
+        if (mounted && _audioHandler.isMicActive) setState(() {});
+      });
+    } else if (change == AudioRecordingChange.failed) {
+      showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
     }
     if (kDebugMode) {
       debugPrint('Mic button toggled: ${_audioHandler.isMicActive}');
@@ -1335,36 +1316,38 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<void> _handleAudioSend() async {
     if (!_audioHandler.isMicActive || _audioHandler.isTranscribingAudio) return;
 
-    await _audioHandler.stopRecording(keepFile: true);
-    _audioHandler.onLevelsChanged = null;
     _audioVisualizerTimer?.cancel();
     _audioVisualizerTimer = null;
-    if (!mounted) return;
-    setState(() {
-      _audioHandler.resetAudioLevels();
-    });
-
-    final session = SupabaseService.auth.currentSession;
-    if (session == null) {
-      showSnackBar(AppLocalizations.of(context)!.sessionExpired);
-      return;
-    }
-
-    _audioHandler.setTranscribing(true);
-    if (mounted) setState(() {});
-
-    final result = await _audioHandler.transcribeLastRecording(
+    bool sessionLookupFailed = false;
+    final result = await _audioHandler.stopAndTranscribe(
       apiService: _chatApiService,
-      accessToken: session.accessToken,
+      getAccessToken: () async {
+        final session = SupabaseService.auth.currentSession;
+        if (session != null) return session.accessToken;
+        sessionLookupFailed = true;
+        if (mounted) {
+          showSnackBar(AppLocalizations.of(context)!.sessionExpired);
+        }
+        return null;
+      },
+      onStateChanged: () {
+        if (mounted) setState(() {});
+      },
     );
 
-    if (!mounted) return;
+    if (!mounted || result == null) return;
+
+    if (result.requiresLogout) {
+      await SupabaseService.signOut();
+      if (!mounted) return;
+    }
 
     if (!result.success) {
-      showSnackBar(
-        result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
-      );
-      setState(() {});
+      if (!sessionLookupFailed) {
+        showSnackBar(
+          result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
+        );
+      }
       return;
     }
 
@@ -1451,48 +1434,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Continues an interrupted assistant row without adding a synthetic user
   /// bubble. The partial answer stays in history and seeds the new stream.
   Future<void> _continueGenerationAt(int aiIndex) async {
-    if (aiIndex < 0 || aiIndex >= _messages.length) return;
-    if (aiIndex != _messages.length - 1) return;
     if (_isStreaming || _isSending) {
       showSnackBar('Please wait');
       return;
     }
-    final message = _messages[aiIndex];
-    if (message['sender'] != 'ai') return;
-
-    final priorText = (message['text'] ?? '').trim();
-    final priorContentBlocksJson = message['contentBlocks'];
-    if (priorText.isEmpty &&
-        (priorContentBlocksJson == null || priorContentBlocksJson.isEmpty)) {
+    final request = ChatUiHelpers.prepareContinuation(
+      messages: _messages,
+      messageIndex: aiIndex,
+      fallbackModelId: selectedModelId,
+      fallbackProvider: selectedProviderSlug,
+    );
+    if (request == null) {
       showSnackBar('Nothing to continue from');
       return;
     }
 
-    final historyMessages = _messages
-        .sublist(0, aiIndex + 1)
-        .map((entry) => Map<String, String>.from(entry))
-        .toList();
-
-    final priorContentBlocks = priorContentBlocksJson == null
+    final priorContentBlocks = request.priorContentBlocksJson == null
         ? null
         : ChatUiHelpers.decodeContentBlocks(
-            priorContentBlocksJson,
+            request.priorContentBlocksJson!,
             <String, List<ContentBlock>?>{},
           );
-    final modelId = message['modelId']?.trim().isNotEmpty == true
-        ? message['modelId']!
-        : selectedModelId;
-    final provider = message['provider']?.trim().isNotEmpty == true
-        ? message['provider']
-        : selectedProviderSlug;
 
     await _sendMessage(
-      continuationIndex: aiIndex,
-      continuationHistoryMessages: historyMessages,
-      continuePriorText: priorText,
+      continuationIndex: request.messageIndex,
+      continuationHistoryMessages: request.historyMessages,
+      continuePriorText: request.priorText,
       continuePriorContentBlocks: priorContentBlocks,
-      modelIdOverride: modelId,
-      providerOverride: provider,
+      modelIdOverride: request.modelId,
+      providerOverride: request.provider,
     );
   }
 

@@ -4,7 +4,7 @@
 
 - conditional export: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-## lib/platform_specific/root_wrapper_desktop.dart  (780 Z.)
+## lib/platform_specific/root_wrapper_desktop.dart  (781 Z.)
 
 - L33 `class RootWrapperDesktop extends StatefulWidget`
   - L34 `final AppShellConfig config`
@@ -36,11 +36,11 @@
   - L251 `void _handleChatSelected(String? chatId)`
   - L319 `void _toggleSidebar()`
   - L329 `void _copyDebugChat()`
-  - L346 `List<Widget> _buildMiniRail(Color iconFg, AppLocalizations l)`
-  - L410 `void _onTrayNewChat()`
-  - L415 `void _handleNewChatFromSidebar()`
-  - L436 `Future<void> _handleChatDeleted(String deletedChatId)`
-  - L453 `Widget build(BuildContext context)`
+  - L347 `List<Widget> _buildMiniRail(Color iconFg, AppLocalizations l)`
+  - L411 `void _onTrayNewChat()`
+  - L416 `void _handleNewChatFromSidebar()`
+  - L437 `Future<void> _handleChatDeleted(String deletedChatId)`
+  - L454 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_io.dart  (76 Z.)
 
@@ -50,7 +50,7 @@
   - L36 `Widget build(BuildContext context)`
   - L57 `bool _isMobilePhone(BuildContext context)`
 
-## lib/platform_specific/root_wrapper_mobile.dart  (768 Z.)
+## lib/platform_specific/root_wrapper_mobile.dart  (769 Z.)
 
 - L37 `class RootWrapperMobile extends StatefulWidget`
   - L38 `final AppShellConfig config`
@@ -86,7 +86,7 @@
   - L561 `void _newChatFromSidebar()`
   - L570 `void _openArtifactSheet()`
   - L594 `void _copyDebugChat()`
-  - L608 `Widget build(BuildContext context)`
+  - L609 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_stub.dart  (19 Z.)
 

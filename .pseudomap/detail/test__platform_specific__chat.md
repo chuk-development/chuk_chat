@@ -16,9 +16,9 @@
   - L174 `void jumpToEnd()`
   - L179 `Widget build(BuildContext context)`
 
-## test/platform_specific/chat/chat_ui_helpers_test.dart  (438 Z.)
+## test/platform_specific/chat/chat_ui_helpers_test.dart  (701 Z.)
 
-- L13 `void main()`
+- L14 `void main()`
 
 ## test/platform_specific/chat/regen_variant_seed_test.dart  (187 Z.)
 

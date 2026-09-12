@@ -54,6 +54,10 @@
 
 - L6 `void main()`
 
+## test/services/mcp_reachability_test.dart  (24 Z.)
+
+- L5 `void main()`
+
 ## test/services/message_composition_service_test.dart  (69 Z.)
 
 - L4 `void main()`

@@ -147,6 +147,28 @@ class MessageRenderCache {
   }
 }
 
+/// Immutable input for resuming the latest interrupted assistant message.
+///
+/// Both chat surfaces use this object so continuation history, model/provider
+/// fallback, and partial-answer preservation cannot drift between platforms.
+class ChatContinuationRequest {
+  const ChatContinuationRequest({
+    required this.messageIndex,
+    required this.historyMessages,
+    required this.priorText,
+    required this.priorContentBlocksJson,
+    required this.modelId,
+    required this.provider,
+  });
+
+  final int messageIndex;
+  final List<Map<String, String>> historyMessages;
+  final String priorText;
+  final String? priorContentBlocksJson;
+  final String modelId;
+  final String? provider;
+}
+
 /// Static utility functions shared between the desktop and mobile chat UIs.
 class ChatUiHelpers {
   const ChatUiHelpers._();
@@ -159,6 +181,49 @@ class ChatUiHelpers {
   static const String continueGenerationPrompt =
       'Continue your previous response. Do not repeat what you already '
       'wrote. Pick up exactly where you left off.';
+
+  /// Builds the common continuation input for the latest assistant row.
+  ///
+  /// Older rows are rejected because later turns may depend on their partial
+  /// answer; resuming one in place would make the visible transcript diverge
+  /// from the history that produced those later turns.
+  static ChatContinuationRequest? prepareContinuation({
+    required List<Map<String, String>> messages,
+    required int messageIndex,
+    required String fallbackModelId,
+    required String? fallbackProvider,
+  }) {
+    if (messageIndex < 0 ||
+        messageIndex != messages.length - 1 ||
+        messages[messageIndex]['sender'] != 'ai') {
+      return null;
+    }
+
+    final message = messages[messageIndex];
+    final priorText = (message['text'] ?? '').trim();
+    final priorContentBlocksJson = message['contentBlocks'];
+    if (priorText.isEmpty &&
+        (priorContentBlocksJson == null ||
+            priorContentBlocksJson.trim().isEmpty)) {
+      return null;
+    }
+
+    return ChatContinuationRequest(
+      messageIndex: messageIndex,
+      historyMessages: messages
+          .sublist(0, messageIndex + 1)
+          .map(Map<String, String>.from)
+          .toList(growable: false),
+      priorText: priorText,
+      priorContentBlocksJson: priorContentBlocksJson,
+      modelId: message['modelId']?.trim().isNotEmpty == true
+          ? message['modelId']!
+          : fallbackModelId,
+      provider: message['provider']?.trim().isNotEmpty == true
+          ? message['provider']
+          : fallbackProvider,
+    );
+  }
 
   /// Whether parsed message content contains a completed call to [toolName].
   static bool hasCompletedTool(MessageRenderData data, String toolName) {

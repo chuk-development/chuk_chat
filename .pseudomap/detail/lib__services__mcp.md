@@ -217,7 +217,7 @@
   - L18 `Future<Uri> get callback`
   - L20 `Future<void> close()`
 
-## lib/services/mcp/mcp_service.dart  (778 Z.)
+## lib/services/mcp/mcp_service.dart  (830 Z.)
 
 - L28 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
   - L28 `connected`
@@ -269,20 +269,24 @@
   - L498 `static Future<void> _closeBrowser()`
   - L510 `static Future<void> disconnect(String id)`  — Forget a server: its tokens, its tools and its entry — here and on the
   - L527 `static Future<void> _forgetLocal(String id)`  — Forget a server on this device only: entry, tools and stored token. Used
-  - L541 `static Future<McpConnection?> refreshTools(String id)`  — Ask a connected server for its tools again.
-  - L564 `static McpConnection? connectionFor(String id)`
-  - L572 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — Which connection and which remote tool a model-facing tool name means.
-  - L584 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Run a tool on the server it belongs to.
-  - L627 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine.
-  - L644 `static Future<String?> _appSessionToken()`  — The app's own session token, refreshed when it is about to lapse.
-  - L655 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client carrying a valid token, refreshing it first when it is stale.
-  - L701 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the reader typed in by hand.
-  - L730 `static bool internalIsAcceptableUrl(String url)`  — True when [url] is one this device will send a token to — https, or a
-  - L736 `static Future<Map<String, dynamic>?> internalReadSecretsJson(String id)`  — The connection's secrets as a plain map, or null when it has none.
-  - L742 `static Future<void> internalWriteSecretsJson( String id, Map<String, dynamic> json, )`  — Write a connection's secrets from a plain map (from a synced blob).
-  - L749 `static Future<void> internalUpsertConnection(McpConnection connection)`  — Add or replace [connection] in the live list and persist. Registers its
-  - L759 `static Future<void> internalForgetLocal(String id)`  — Forget a connection on this device without touching the remote row —
-  - L764 `static Future<List<McpTool>?> internalFetchTools( McpConnection connection, )`  — List a connection's tools live, building a client from its stored token
+  - L551 `static final ValueNotifier<Set<String>> unreachable = ValueNotifier<Set<String>>(<String>{})`  — Ask a connected server for its tools again.
+  - L559 `static Future<bool> verifyReachable(String id)`  — Ask the server whether it is still there.
+  - L581 `static Future<void> verifyAllReachable()`  — Check every connection. Used when the connectors page opens, so the
+  - L587 `static void _recordReachable(String id, bool alive)`
+  - L593 `static Future<McpConnection?> refreshTools(String id)`
+  - L616 `static McpConnection? connectionFor(String id)`
+  - L624 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — Which connection and which remote tool a model-facing tool name means.
+  - L636 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Run a tool on the server it belongs to.
+  - L679 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine.
+  - L696 `static Future<String?> _appSessionToken()`  — The app's own session token, refreshed when it is about to lapse.
+  - L707 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client carrying a valid token, refreshing it first when it is stale.
+  - L753 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the reader typed in by hand.
+  - L782 `static bool internalIsAcceptableUrl(String url)`  — True when [url] is one this device will send a token to — https, or a
+  - L788 `static Future<Map<String, dynamic>?> internalReadSecretsJson(String id)`  — The connection's secrets as a plain map, or null when it has none.
+  - L794 `static Future<void> internalWriteSecretsJson( String id, Map<String, dynamic> json, )`  — Write a connection's secrets from a plain map (from a synced blob).
+  - L801 `static Future<void> internalUpsertConnection(McpConnection connection)`  — Add or replace [connection] in the live list and persist. Registers its
+  - L811 `static Future<void> internalForgetLocal(String id)`  — Forget a connection on this device without touching the remote row —
+  - L816 `static Future<List<McpTool>?> internalFetchTools( McpConnection connection, )`  — List a connection's tools live, building a client from its stored token
 
 ## lib/services/mcp/mcp_sync_service.dart  (763 Z.)
 

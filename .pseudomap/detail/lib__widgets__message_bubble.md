@@ -69,10 +69,10 @@
   - L223 `void _showSourcesSheet(List<AgentActivitySource> sources)`  — The expandable list behind the pill: a modal sheet of every source,
   - L311 `Widget _buildUserActionButtons(Color iconFgColor)`
   - L318 `Widget _buildActionButtons(Color iconFgColor, bool alignRight)`
-  - L330 `Widget _buildActionBar({ required List<MessageBubbleAction> actions, required Color iconFgColor, required bool alignRight, required bool dimDisabledIcon, })`  — Shared pill of icon action buttons behind [`_buildUserActionButtons`]
+  - L330 `Widget _buildActionBar({ required List<MessageBubbleAction> actions, required Color iconFgColor, required bool alignRight, required bool dimDisabledIcon, })`  — Shared pill of icon action buttons behind [_buildUserActionButtons]
   - L390 `Widget _buildStatusIndicator(BuildContext context)`
 
-## lib/widgets/message_bubble/images.dart  (644 Z.)
+## lib/widgets/message_bubble/images.dart  (646 Z.)
 
 - part of '../message_bubble.dart'
 - L12 `extension _MessageBubbleImages on _MessageBubbleState`
@@ -85,7 +85,7 @@
   - L462 `void _openImagePreview({ required String imageSource, required List<String> images, required int index, // _modelFor indexes widget.imageMetas, which is aligned with // widget.images. When [images] is a different list (e.g. an <image> // block's single web URL), those indices don't correspond, so callers // pass false to avoid mislabelling the preview with unrelated metadata. bool resolveModels = true, })`
   - L492 `Future<void> _showImageContextMenu(Offset globalPosition, String path)`  — Context menu shown on right-click / long-press of a stored chat image.
   - L528 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
-  - L579 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
+  - L581 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
 
 ## lib/widgets/message_bubble/layout.dart  (785 Z.)
 

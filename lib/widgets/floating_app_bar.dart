@@ -30,13 +30,29 @@ const double _kTitleRadius = 18;
 /// The room a scroll view has to leave above its first item so the floating
 /// header does not cover it.
 ///
-/// It reads the Scaffold's own figure: a Scaffold that extends its body
-/// behind the app bar reports the bar's height as the body's top padding, and
-/// one that does not reports zero. So this is the right number on both, and
-/// it belongs *inside* the scroll view — padding put outside would stop the
+/// It belongs *inside* the scroll view: padding put outside would stop the
 /// content at the header instead of letting it pass behind.
-EdgeInsets floatingHeaderInset(BuildContext context) =>
-    EdgeInsets.only(top: MediaQuery.paddingOf(context).top);
+///
+/// The number has to be right from two different places in the tree, and it
+/// is read differently in each.
+///
+/// A Scaffold that extends its body behind the app bar works the figure out
+/// itself and puts it in the body's `padding.top`. But only for widgets
+/// built *below* the body: a page that hands its own build context to a list
+/// three methods away is above it, and sees the bare status bar. Meanwhile
+/// the Scaffold also takes the status bar back out of `viewPadding` for the
+/// body, so a figure computed from that is short by exactly the status bar
+/// down there. Each source is therefore right in one place and wrong in the
+/// other — and the wrong one is always the smaller. So take whichever is
+/// larger, and both places land on the same number.
+EdgeInsets floatingHeaderInset(BuildContext context) {
+  final MediaQueryData mq = MediaQuery.of(context);
+  final double fromScaffold = mq.padding.top;
+  final double computed = kFloatingAppBarHeight + mq.viewPadding.top;
+  return EdgeInsets.only(
+    top: fromScaffold > computed ? fromScaffold : computed,
+  );
+}
 
 /// A round floating chip for the header — the back arrow, and whatever a
 /// page puts on the right.
