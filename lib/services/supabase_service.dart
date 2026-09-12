@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:cowork/services/auth_trace.dart';
 import 'package:cowork/services/network_status_service.dart';
 import 'package:cowork/services/session_refresh_scheduler.dart';
 import 'package:cowork/supabase_config.dart';
@@ -151,7 +152,13 @@ class SupabaseService {
     }
   }
 
+  /// Signs the user out. Every caller is a deliberate sign-out — the app has
+  /// no other reason to call it — so it is traced: a sign-out the user did not
+  /// ask for has to be attributable to the line that made it.
   static Future<void> signOut() async {
+    AuthTrace.note('app-signout', detail: <String, Object?>{
+      'by': StackTrace.current.toString().split('\n').skip(1).take(2).join(' | '),
+    });
     try {
       await auth.signOut();
     } on AuthException catch (error) {

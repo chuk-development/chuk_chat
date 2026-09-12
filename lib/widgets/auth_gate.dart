@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:cowork/pages/login_page.dart';
 import 'package:cowork/pages/messenger_shell.dart';
+import 'package:cowork/services/auth_trace.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/session_recovery.dart';
 import 'package:cowork/services/settings/theme_controller.dart';
@@ -152,6 +153,14 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     final session = state.session;
     if (session != null) _lastSession = session;
 
+    if (state.event == AuthChangeEvent.signedOut) {
+      AuthTrace.note('signed-out', detail: <String, Object?>{
+        'reason': state.signOutReason?.name ?? 'unknown',
+        'recovering': _recovering,
+        'had_last_pair': (_lastSession?.refreshToken ?? '').isNotEmpty,
+      });
+    }
+
     if (state.event == AuthChangeEvent.signedOut &&
         state.signOutReason == SignOutReason.sessionExpired &&
         !_recovering) {
@@ -223,6 +232,10 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       } finally {
         SessionRecovery.inFlight = null;
       }
+      AuthTrace.note('recovery-attempt', detail: <String, Object?>{
+        'n': attempts,
+        'outcome': result.outcome.name,
+      });
       if (!result.keepStash) break;
       // Nothing reached GoTrue. If gotrue still holds a session — the access
       // token had life left — the user is signed in and there is nothing to
@@ -236,6 +249,11 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       wait = wait * 2 > maxWait ? maxWait : wait * 2;
     }
     if (!mounted) return;
+    AuthTrace.note('recovery-done', detail: <String, Object?>{
+      'outcome': result.outcome.name,
+      'attempts': attempts,
+      'session': _readCurrent() != null,
+    });
     // The stash is the last copy of the pair. It is dropped only once GoTrue
     // has spoken: a live session, or a refusal.
     if (!result.keepStash) {
