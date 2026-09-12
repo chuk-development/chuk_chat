@@ -130,7 +130,7 @@ void main() {
     expect(find.text('Proposes UI directions'), findsNothing);
   });
 
-  testWidgets('rows are a real touch target and start under the bar and filters',
+  testWidgets('rows are a real touch target and start under the header row',
       (tester) async {
     await pumpPhone(
       tester,
@@ -142,11 +142,16 @@ void main() {
     );
     final Rect first = tester.getRect(findId('mobile-agent-row-chief'));
     expect(first.height, greaterThanOrEqualTo(MobileLayout.minTouchTarget));
-    // Title bar (58) plus the connected All / Unread group: the first row can
-    // only start below both, and never under the status bar.
+    // The header row (58) carries the search target, the All / Unread switch
+    // and the "+": the first row can only start below it, and never under the
+    // status bar.
     expect(first.top, greaterThan(kPhonePadding.top + 58));
-    expect(find.text('Agents'), findsOneWidget);
+    // No page headline any more — the switch in the middle of the row says
+    // what the list is showing.
+    expect(find.text('Agents'), findsNothing);
     expect(find.text('All'), findsOneWidget);
+    // The segment carries its unread count, so the label is "Unread $n".
+    expect(find.textContaining('Unread'), findsOneWidget);
   });
 
   testWidgets('tap opens the first thread; a coworker without threads is inert',
