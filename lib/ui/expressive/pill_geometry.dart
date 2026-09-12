@@ -29,14 +29,18 @@ abstract final class PillGeometry {
 
   /// The background that shows around the segments: above, below, at both ends
   /// and between two neighbours.
-  static const double inset = 8;
+  static const double inset = 4;
 
   /// The height of one segment, and so the height of the filled capsule.
-  static const double segmentHeight = 44;
+  /// The capsule carries the pill: the ring around it is a hairline of
+  /// background, not a margin, so the fill reads as the control and not as a
+  /// sticker inside it.
+  static const double segmentHeight = 52;
 
   /// How far a segment's tap area reaches into the ring, above and below.
-  /// Transparent: it takes presses, it paints nothing.
-  static const double tapSlop = 4;
+  /// Transparent: it takes presses, it paints nothing. Zero while the capsule
+  /// itself is over the touch minimum.
+  static const double tapSlop = 0;
 
   /// What a finger hits: the capsule plus the ring it reaches into. At or
   /// above the smallest touch target the layout suite accepts.
