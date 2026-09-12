@@ -4,11 +4,11 @@
 /// The shape is the one the reference messenger uses for its chat list, and the
 /// content is CoWork's own roster ([AgentRosterSource]):
 ///
-///  * a title bar — the page headline on the left, a search target and the
-///    accent "+"; the search fades the headline through into a rounded field
-///    that carries its own glyph and its own clear target;
-///  * the connected filter group, All / Unread, with the unread count on the
-///    second segment ([AgentReadMarks] answers what is unread);
+///  * one header row — the search target on the left, the connected filter
+///    group All / Unread in the middle with the unread count on its second
+///    segment ([AgentReadMarks] answers what is unread), the accent "+" on the
+///    right; the search fades that whole row through into a rounded field that
+///    carries its own glyph and its own clear target;
 ///  * one row per coworker: its blob face with the presence dot, the name, the
 ///    role tag, the time of the last activity, one line of preview, and an
 ///    unread dot. The row springs and morphs on press, and the list cascades in.
@@ -70,7 +70,6 @@ class MobileAgentList extends StatefulWidget {
     this.now,
     this.readMarks,
     this.profiles,
-    this.title = 'Agents',
     this.onOpenFrom,
     this.hiddenAgentId,
   });
@@ -108,11 +107,6 @@ class MobileAgentList extends StatefulWidget {
   /// Injectable stores for tests; default to the app-wide ones.
   final AgentReadMarks? readMarks;
   final AgentProfileStore? profiles;
-
-  /// The headline. The roster is the Chats tab, but the same list picks a
-  /// coworker for the Artefacts and Files tabs, and a list headed "Coworkers"
-  /// there would not say what tapping a row does.
-  final String title;
 
   /// Where the tapped row is, and a copy of it — everything the chat-open
   /// container transform needs to grow out of that row
@@ -281,7 +275,6 @@ class _MobileAgentListState extends State<MobileAgentList> {
 
   Widget _buildList(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final TextTheme text = Theme.of(context).textTheme;
     final List<CoworkAgent> agents = _visible();
     // Threads this device already holds but has not previewed yet (a restart,
     // a fresh install that synced). Reads once per thread, then never again.
@@ -300,25 +293,13 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // The two faces of the same row. They do not swap hard: one fades through
     // the other, so opening the search reads as the row changing its mind and
     // not as a screen replacing another.
+    // The home bar, left to right: the search target, the All/Unread switch,
+    // the accent "+". The page headline is gone — the switch says what the
+    // list under it is showing, and a headline that repeated the app's own
+    // name said nothing the roster did not already say.
     final Widget titleRow = Row(
       key: const ValueKey<bool>(false),
       children: <Widget>[
-        Expanded(
-          child: Text(
-            widget.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            // The headline of the page, and it should read like one: a step
-            // above the screen titles, because this is where the app opens.
-            style: text.headlineMedium?.copyWith(
-              fontSize: 34,
-              height: 1.05,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.1,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
         ExpressiveIconButton(
           hugeIcon: HugeIcons.search01,
           onTap: _openSearch,
@@ -327,8 +308,24 @@ class _MobileAgentListState extends State<MobileAgentList> {
           tooltip: 'Search coworkers',
           semanticsId: 'mobile_home_search',
         ),
-        if (widget.onAddAgent != null) ...<Widget>[
-          const SizedBox(width: 8),
+        const SizedBox(width: 10),
+        // The switch takes the middle and the whole width left between the
+        // two targets, so it is the thing the eye lands on first.
+        Expanded(
+          child: ConnectedGroup(
+            labels: _filters,
+            selected: _filter,
+            badges: <int, int>{1: unread},
+            margin: EdgeInsets.zero,
+            onSelected: (int i) => setState(() {
+              _reverse = i < _filter;
+              _filter = i;
+              _animate = true;
+            }),
+          ),
+        ),
+        const SizedBox(width: 10),
+        if (widget.onAddAgent != null)
           ExpressiveIconButton(
             hugeIcon: HugeIcons.plusSign,
             onTap: widget.onAddAgent,
@@ -338,7 +335,6 @@ class _MobileAgentListState extends State<MobileAgentList> {
             tooltip: 'Add a coworker',
             semanticsId: 'mobile_home_add',
           ),
-        ],
       ],
     );
 
@@ -388,23 +384,10 @@ class _MobileAgentListState extends State<MobileAgentList> {
       ),
     );
 
-    final Widget filters = Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 10),
-      child: ConnectedGroup(
-        labels: _filters,
-        selected: _filter,
-        badges: <int, int>{1: unread},
-        onSelected: (int i) => setState(() {
-          _reverse = i < _filter;
-          _filter = i;
-          _animate = true;
-        }),
-      ),
-    );
-
-    // Status bar + header row + the filter group: what the list has to clear
-    // before its first row is readable.
-    final double headerSpace = MediaQuery.paddingOf(context).top + 58 + 4 + 72;
+    // Status bar + the header row: what the list has to clear before its
+    // first row is readable. The switch rides inside that row now, so there is
+    // no second row to make room for.
+    final double headerSpace = MediaQuery.paddingOf(context).top + 58 + 12;
 
     return Stack(
       children: <Widget>[
@@ -503,10 +486,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           right: 0,
           child: TopVeil(
             fadeBelow: 14,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[header, filters],
-            ),
+            child: header,
           ),
         ),
       ],
