@@ -2,6 +2,34 @@ import 'package:flutter/material.dart';
 
 extension ThemeDataIconColorX on ThemeData {
   Color get resolvedIconColor => iconTheme.color ?? colorScheme.onSurface;
+
+  /// The glyph colour for a button that is filled with the accent — the send
+  /// button, the new-chat button, every round accent circle.
+  ///
+  /// Every other icon in the app is the reader's own icon colour: a near
+  /// white, nudged towards the chosen accent. A flat black or white glyph
+  /// picked purely for contrast makes these buttons look pasted in from a
+  /// different app, so they take that same icon colour.
+  ///
+  /// The one guard is legibility, which is not a matter of taste: against a
+  /// very pale accent a near-white glyph disappears, and there the contrast
+  /// pick wins.
+  Color accentButtonForeground(Color fill) {
+    final Color preferred = resolvedIconColor;
+    if (_contrastRatio(preferred, fill) >= 2.0) return preferred;
+    return ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+  }
+}
+
+/// WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white).
+double _contrastRatio(Color a, Color b) {
+  final double la = a.computeLuminance();
+  final double lb = b.computeLuminance();
+  final double hi = la > lb ? la : lb;
+  final double lo = la > lb ? lb : la;
+  return (hi + 0.05) / (lo + 0.05);
 }
 
 /// Material You extension tokens that aren't exposed on the default

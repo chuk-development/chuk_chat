@@ -19,7 +19,6 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
-import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
@@ -556,7 +555,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color accentColor = theme.colorScheme.primary;
-    final Color sidebarBg = theme.cardColor.darken(0.02);
+    final Color sidebarBg = sbPanelBackground(context);
 
     // Use the real device safe-area inset instead of a magic 40.0 — a fixed
     // value puts the first block under the dynamic island / camera notch on
