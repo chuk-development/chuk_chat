@@ -595,6 +595,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           ),
           Expanded(
             child: SettingsListView(
+              // A modal, not a page: there is no floating header above it.
+              headerInset: false,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               children: navChildren,
             ),

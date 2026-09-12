@@ -26,6 +26,7 @@ class SettingsListView extends StatefulWidget {
     this.physics,
     this.scrollbarMargin = 8,
     this.crossAxisAlignment = CrossAxisAlignment.stretch,
+    this.headerInset = true,
   });
 
   final List<Widget> children;
@@ -35,6 +36,12 @@ class SettingsListView extends StatefulWidget {
 
   /// Inset of the scrollbar track from both ends, in logical pixels.
   final double scrollbarMargin;
+
+  /// Leave room at the top for the page's floating header.
+  ///
+  /// True for a page, false inside a dialog or a sheet, which has no header
+  /// of its own and would open on a band of empty space.
+  final bool headerInset;
   final CrossAxisAlignment crossAxisAlignment;
 
   @override
@@ -55,7 +62,9 @@ class _SettingsListViewState extends State<SettingsListView> {
   EdgeInsetsGeometry _withHeaderInset(
     BuildContext context,
     EdgeInsetsGeometry? padding,
-  ) => (padding ?? EdgeInsets.zero).add(floatingHeaderInset(context));
+  ) => widget.headerInset
+      ? (padding ?? EdgeInsets.zero).add(floatingHeaderInset(context))
+      : (padding ?? EdgeInsets.zero);
 
   @override
   Widget build(BuildContext context) {
