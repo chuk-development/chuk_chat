@@ -114,6 +114,7 @@ presentation, zip, database, image, video, book.
 | Navigation pill / filter pill | `PillGeometry` — outer 30, segment capsule 22, inset 8, segment height 44, whole pill 60. Both controls read those numbers from `lib/ui/expressive/pill_geometry.dart`; the outer radius is half the outer height, so the curves are concentric and the end segments follow the shell. A segment takes 4 of the ring above and below as tap slop, so what a finger hits is 52 even though the capsule paints 44. A pill segment SELECTS ON POINTER DOWN (`MorphTap(instant: true)`) — a recognised tap is lost to the list the pill sits over — so a press springs and fills at once and never draws an outline for a selection that has not happened. |
 | Card, sheet, attachment row, panel | 14–18 |
 | File message row | 18, full lane width |
+| Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — one filled tile per row, outer corners 26, the corners where two rows meet 6, a 3 gap between them and 10 where a divider used to sit. No frame, no outline, no divider line; the anchored dropdown and the message menu share this one surface. |
 | Dialog | `kRadiusDialog` |
 | Chat bubble | the bubble radius helper, never a hand-rolled radius: outer 22, inner 7 (`ui/expressive/bubble_shape.dart`) |
 | Coworker face | the expressive silhouette family (`ui/expressive/shapes.dart`) |

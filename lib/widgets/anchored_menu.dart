@@ -14,6 +14,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
+import 'package:cowork/widgets/menu_tile_group.dart';
+
 /// Gap between the anchor and the menu.
 const double _kAnchorGap = 6;
 
@@ -24,6 +26,9 @@ const double _kEdgeMargin = 8;
 /// two-row scroller squeezed against the top edge.
 const double _kMinRoomAbove = 120;
 
+/// The menu surface itself lives in [MenuTileGroup] — one look for every
+/// dropdown and every action sheet.
+
 const Duration _kMenuDuration = Duration(milliseconds: 140);
 
 /// Show [items] as a dropdown anchored to the widget of [anchorContext].
@@ -33,9 +38,10 @@ Future<T?> showAnchoredMenu<T>(
   BuildContext anchorContext, {
   required List<PopupMenuEntry<T>> items,
   required Color color,
-  required Color borderColor,
+  // Kept so the call sites read the same; the menu no longer draws a frame.
+  Color? borderColor,
   double minWidth = 200,
-  double borderRadius = 18,
+  double borderRadius = kMenuOuterRadius,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
   // right opens leftwards). true → align the menu's right edge to the anchor
@@ -77,7 +83,6 @@ Future<T?> showAnchoredMenu<T>(
       anchor: anchor,
       items: items,
       color: color,
-      borderColor: borderColor,
       minWidth: minWidth,
       borderRadius: borderRadius,
       preferAbove: preferAbove,
@@ -99,7 +104,6 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.anchor,
     required this.items,
     required this.color,
-    required this.borderColor,
     required this.minWidth,
     required this.borderRadius,
     required this.preferAbove,
@@ -117,7 +121,6 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final Rect anchor;
   final List<PopupMenuEntry<T>> items;
   final Color color;
-  final Color borderColor;
   final double minWidth;
   final double borderRadius;
   final bool preferAbove;
@@ -151,38 +154,45 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           alignRight: alignRight,
           besideAnchor: besideAnchor,
         ),
-        child: Material(
-          color: color,
-          // Without a clip the ink of a tapped row is a plain rectangle
-          // and its corners stick out of the rounded menu.
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            side: BorderSide(color: borderColor, width: 2),
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: minWidth),
-            child: IntrinsicWidth(
-              child: Semantics(
-                role: SemanticsRole.menu,
-                scopesRoute: true,
-                namesRoute: true,
-                explicitChildNodes: true,
-                child: ScrollConfiguration(
-                  // No scrollbar over the menu — it looked messy on desktop.
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListBody(children: items),
-                  ),
-                ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: IntrinsicWidth(
+            child: Semantics(
+              role: SemanticsRole.menu,
+              scopesRoute: true,
+              namesRoute: true,
+              explicitChildNodes: true,
+              child: ScrollConfiguration(
+                // No scrollbar over the menu — it looked messy on desktop.
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: SingleChildScrollView(child: _tiles()),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// The rows as a settings group. A [PopupMenuDivider] ends the run and
+  /// starts the next one instead of drawing a line.
+  Widget _tiles() {
+    final List<List<PopupMenuEntry<T>>> groups = <List<PopupMenuEntry<T>>>[
+      <PopupMenuEntry<T>>[],
+    ];
+    for (final PopupMenuEntry<T> item in items) {
+      if (item is PopupMenuDivider) {
+        groups.add(<PopupMenuEntry<T>>[]);
+      } else {
+        groups.last.add(item);
+      }
+    }
+    return MenuTileGroup(
+      groups: groups,
+      color: color,
+      outerRadius: borderRadius,
     );
   }
 

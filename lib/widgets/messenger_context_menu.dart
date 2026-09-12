@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 
 /// A focused message above a separate action sheet, like a messenger's
 /// long-press menu. The transcript remains in place beneath a soft scrim.
@@ -106,7 +107,7 @@ Future<String?> showMessengerContextMenu({
                   Material(
                     key: const ValueKey('context_reactions'),
                     color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(kMenuOuterRadius),
                     clipBehavior: Clip.antiAlias,
                     child: SizedBox(
                       width: math.min(320, media.size.width - 32),
@@ -186,36 +187,17 @@ Future<String?> showMessengerContextMenu({
                 const SizedBox(height: 10),
                 SizedBox(
                   width: math.min(248, media.size.width - 32),
-                  child: Material(
+                  // The same surface as every dropdown: separate tiles, big
+                  // corners at the ends of the run, small ones in between.
+                  child: MenuTileGroup.single(
                     key: const ValueKey('context_message_actions'),
                     color: scheme.surfaceContainerHigh,
-                    surfaceTintColor: Colors.transparent,
-                    elevation: 8,
-                    shadowColor: Colors.black26,
-                    borderRadius: BorderRadius.circular(22),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (canEdit)
-                          action('edit', 'Edit', Icons.edit_outlined),
-                        if (canEdit && canReply)
-                          Divider(
-                            height: 1,
-                            thickness: 0.5,
-                            color: scheme.outlineVariant,
-                          ),
-                        if (canReply)
-                          action('reply', 'Reply', Icons.reply_rounded),
-                        if (canReply || canEdit)
-                          Divider(
-                            height: 1,
-                            thickness: 0.5,
-                            color: scheme.outlineVariant,
-                          ),
-                        action('copy', 'Copy', Icons.copy_outlined),
-                      ],
-                    ),
+                    children: [
+                      if (canEdit) action('edit', 'Edit', Icons.edit_outlined),
+                      if (canReply)
+                        action('reply', 'Reply', Icons.reply_rounded),
+                      action('copy', 'Copy', Icons.copy_outlined),
+                    ],
                   ),
                 ),
               ],
