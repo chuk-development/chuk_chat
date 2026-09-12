@@ -1298,7 +1298,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted) return;
     setState(() {});
 
-    if (change == AudioRecordingChange.started) {
+    if (change == AudioRecordingChange.started && _isLinuxDesktop) {
       // Some Linux audio backends do not emit amplitude changes reliably.
       _audioVisualizerTimer = Timer.periodic(const Duration(milliseconds: 30), (
         _,

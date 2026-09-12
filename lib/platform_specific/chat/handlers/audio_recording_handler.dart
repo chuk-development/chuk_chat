@@ -13,7 +13,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
 
-enum AudioRecordingChange { started, stopped, failed }
+enum AudioRecordingChange { started, stopped, failed, busy }
 
 /// Handles microphone recording + transcription.
 ///
@@ -39,6 +39,7 @@ class AudioRecordingHandler {
   // Shared state.
   bool _isMicActive = false;
   bool _isTranscribingAudio = false;
+  bool _isChangingRecordingState = false;
 
   /// Called whenever audio levels update, so the UI can rebuild.
   VoidCallback? onLevelsChanged;
@@ -114,19 +115,25 @@ class AudioRecordingHandler {
     required String? accessToken,
     required VoidCallback handleLevelsChanged,
   }) async {
-    if (_isMicActive) {
-      await stopRecording();
+    if (_isChangingRecordingState) return AudioRecordingChange.busy;
+    _isChangingRecordingState = true;
+    try {
+      if (_isMicActive) {
+        await stopRecording();
+        _resetAudioLevels();
+        return AudioRecordingChange.stopped;
+      }
+
+      onLevelsChanged = null;
+      final started = await _startRecording(accessToken: accessToken);
+      if (!started) return AudioRecordingChange.failed;
+
       _resetAudioLevels();
-      return AudioRecordingChange.stopped;
+      onLevelsChanged = handleLevelsChanged;
+      return AudioRecordingChange.started;
+    } finally {
+      _isChangingRecordingState = false;
     }
-
-    onLevelsChanged = null;
-    final started = await _startRecording(accessToken: accessToken);
-    if (!started) return AudioRecordingChange.failed;
-
-    _resetAudioLevels();
-    onLevelsChanged = handleLevelsChanged;
-    return AudioRecordingChange.started;
   }
 
   /// Stop microphone recording.
@@ -189,32 +196,38 @@ class AudioRecordingHandler {
     required Future<String?> Function() getAccessToken,
     VoidCallback? onStateChanged,
   }) async {
-    if (!_isMicActive || _isTranscribingAudio) return null;
-
-    await stopRecording(keepFile: true);
-    _resetAudioLevels();
-    onStateChanged?.call();
-
-    final accessToken = await getAccessToken();
-    if (accessToken == null || accessToken.isEmpty) {
-      _pcmBuffer.clear();
-      final streamingService = _streamingService;
-      _streamingService = null;
-      _isStreamingMode = false;
-      _isTranscribingAudio = false;
-      await streamingService?.abort();
-      onStateChanged?.call();
-      return TranscriptionResult(success: false, error: 'Session expired');
+    if (_isChangingRecordingState || !_isMicActive || _isTranscribingAudio) {
+      return null;
     }
+    _isChangingRecordingState = true;
+    try {
+      await stopRecording(keepFile: true);
+      _resetAudioLevels();
+      onStateChanged?.call();
 
-    _isTranscribingAudio = true;
-    onStateChanged?.call();
-    final result = await _transcribeLastRecording(
-      apiService: apiService,
-      accessToken: accessToken,
-    );
-    onStateChanged?.call();
-    return result;
+      final accessToken = await getAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        _pcmBuffer.clear();
+        final streamingService = _streamingService;
+        _streamingService = null;
+        _isStreamingMode = false;
+        _isTranscribingAudio = false;
+        await streamingService?.abort();
+        onStateChanged?.call();
+        return TranscriptionResult(success: false, error: 'Session expired');
+      }
+
+      _isTranscribingAudio = true;
+      onStateChanged?.call();
+      final result = await _transcribeLastRecording(
+        apiService: apiService,
+        accessToken: accessToken,
+      );
+      onStateChanged?.call();
+      return result;
+    } finally {
+      _isChangingRecordingState = false;
+    }
   }
 
   Future<void> dispose() async {
