@@ -15,6 +15,9 @@ class NotificationService {
   static GlobalKey<NavigatorState>? _navigatorKey;
   static bool _isInitialized = false;
 
+  /// Whether the notification service has been initialized.
+  static bool get isInitialized => _isInitialized;
+
   /// Brand accent used to tint the notification icon and title on Android.
   static const Color _brandColor = Color(0xFF285DA9);
 

@@ -1,0 +1,140 @@
+# lib/widgets/icons · Signatures
+
+## lib/widgets/icons/huge_icon.dart  (208 Z.)
+
+- L17 `@immutable class HugeIconData`  — One icon of the set. The name is the file stem, so `HugeIcons.message01`
+  - L19 `const HugeIconData(this.name)`
+  - L21 `final String name`
+  - L23 `String get asset`
+- L33 `_opticalInset = 0.86`  — The icons this app uses. Adding one means generating its SVG into the asset
+- L35 `abstract final class HugeIcons`
+  - L39 `static const HugeIconData add01 = HugeIconData('add01')`
+  - L40 `static const HugeIconData aiBrain01 = HugeIconData('ai-brain01')`
+  - L41 `static const HugeIconData album01 = HugeIconData('album01')`
+  - L42 `static const HugeIconData album02 = HugeIconData('album02')`
+  - L43 `static const HugeIconData alertCircle = HugeIconData('alert-circle')`
+  - L44 `static const HugeIconData alert01 = HugeIconData('alert01')`
+  - L45 `static const HugeIconData alert02 = HugeIconData('alert02')`
+  - L46 `static const HugeIconData arrowDown01 = HugeIconData('arrow-down01')`
+  - L47 `static const HugeIconData arrowLeft01 = HugeIconData('arrow-left01')`
+  - L48 `static const HugeIconData arrowLeft02 = HugeIconData('arrow-left02')`
+  - L49 `static const HugeIconData arrowRight01 = HugeIconData('arrow-right01')`
+  - L50 `static const HugeIconData arrowUpRight01 = HugeIconData('arrow-up-right01')`
+  - L51 `static const HugeIconData arrowUp01 = HugeIconData('arrow-up01')`
+  - L52 `static const HugeIconData attachment01 = HugeIconData('attachment01')`
+  - L53 `static const HugeIconData blockchain01 = HugeIconData('blockchain01')`
+  - L54 `static const HugeIconData bookOpen01 = HugeIconData('book-open01')`
+  - L55 `static const HugeIconData bookmark01 = HugeIconData('bookmark01')`
+  - L56 `static const HugeIconData braces = HugeIconData('braces')`
+  - L57 `static const HugeIconData bug01 = HugeIconData('bug01')`
+  - L58 `static const HugeIconData calendar01 = HugeIconData('calendar01')`
+  - L59 `static const HugeIconData call02 = HugeIconData('call02')`
+  - L60 `static const HugeIconData cancel01 = HugeIconData('cancel01')`
+  - L61 `static const HugeIconData cancel02 = HugeIconData('cancel02')`
+  - L62 `static const HugeIconData chatting01 = HugeIconData('chatting01')`
+  - L63 `static const HugeIconData check = HugeIconData('check')`
+  - L64 `static const HugeIconData checkmarkCircle01 = HugeIconData( 'checkmark-circle01', )`
+  - L67 `static const HugeIconData checkmarkCircle02 = HugeIconData( 'checkmark-circle02', )`
+  - L70 `static const HugeIconData circle = HugeIconData('circle')`
+  - L71 `static const HugeIconData clock01 = HugeIconData('clock01')`
+  - L72 `static const HugeIconData comment01 = HugeIconData('comment01')`
+  - L73 `static const HugeIconData computer = HugeIconData('computer')`
+  - L74 `static const HugeIconData copy01 = HugeIconData('copy01')`
+  - L75 `static const HugeIconData database01 = HugeIconData('database01')`
+  - L76 `static const HugeIconData delete02 = HugeIconData('delete02')`
+  - L77 `static const HugeIconData dollar01 = HugeIconData('dollar01')`
+  - L78 `static const HugeIconData download01 = HugeIconData('download01')`
+  - L79 `static const HugeIconData download04 = HugeIconData('download04')`
+  - L80 `static const HugeIconData edit02 = HugeIconData('edit02')`
+  - L81 `static const HugeIconData fileCode = HugeIconData('file-code')`
+  - L82 `static const HugeIconData fileEdit = HugeIconData('file-edit')`
+  - L83 `static const HugeIconData fileScript = HugeIconData('file-script')`
+  - L84 `static const HugeIconData fileSpreadsheet = HugeIconData('file-spreadsheet')`
+  - L85 `static const HugeIconData fileText = HugeIconData('file-text')`
+  - L86 `static const HugeIconData file01 = HugeIconData('file01')`
+  - L87 `static const HugeIconData file02 = HugeIconData('file02')`
+  - L88 `static const HugeIconData filter = HugeIconData('filter')`
+  - L89 `static const HugeIconData flash = HugeIconData('flash')`
+  - L90 `static const HugeIconData folder01 = HugeIconData('folder01')`
+  - L91 `static const HugeIconData folder03 = HugeIconData('folder03')`
+  - L92 `static const HugeIconData globe02 = HugeIconData('globe02')`
+  - L93 `static const HugeIconData gridView = HugeIconData('grid-view')`
+  - L94 `static const HugeIconData home01 = HugeIconData('home01')`
+  - L95 `static const HugeIconData imageNotFound01 = HugeIconData('image-not-found01')`
+  - L96 `static const HugeIconData image01 = HugeIconData('image01')`
+  - L97 `static const HugeIconData info = HugeIconData('info')`
+  - L98 `static const HugeIconData informationCircle = HugeIconData( 'information-circle', )`
+  - L101 `static const HugeIconData key01 = HugeIconData('key01')`
+  - L102 `static const HugeIconData laptop = HugeIconData('laptop')`
+  - L103 `static const HugeIconData layers01 = HugeIconData('layers01')`
+  - L104 `static const HugeIconData linkSquare02 = HugeIconData('link-square02')`
+  - L105 `static const HugeIconData link01 = HugeIconData('link01')`
+  - L106 `static const HugeIconData listView = HugeIconData('list-view')`
+  - L107 `static const HugeIconData loading03 = HugeIconData('loading03')`
+  - L108 `static const HugeIconData location01 = HugeIconData('location01')`
+  - L109 `static const HugeIconData logout01 = HugeIconData('logout01')`
+  - L110 `static const HugeIconData mapPin = HugeIconData('map-pin')`
+  - L111 `static const HugeIconData menu01 = HugeIconData('menu01')`
+  - L112 `static const HugeIconData message01 = HugeIconData('message01')`
+  - L113 `static const HugeIconData mic01 = HugeIconData('mic01')`
+  - L114 `static const HugeIconData mic02 = HugeIconData('mic02')`
+  - L115 `static const HugeIconData moon02 = HugeIconData('moon02')`
+  - L116 `static const HugeIconData moreHorizontal = HugeIconData('more-horizontal')`
+  - L117 `static const HugeIconData note01 = HugeIconData('note01')`
+  - L118 `static const HugeIconData notification01 = HugeIconData('notification01')`
+  - L119 `static const HugeIconData paintBoard = HugeIconData('paint-board')`
+  - L120 `static const HugeIconData pdf01 = HugeIconData('pdf01')`
+  - L121 `static const HugeIconData pen01 = HugeIconData('pen01')`
+  - L122 `static const HugeIconData playCircle = HugeIconData('play-circle')`
+  - L123 `static const HugeIconData plus = HugeIconData('plus')`
+  - L124 `static const HugeIconData plusSign = HugeIconData('plus-sign')`
+  - L125 `static const HugeIconData presentation01 = HugeIconData('presentation01')`
+  - L126 `static const HugeIconData puzzle = HugeIconData('puzzle')`
+  - L127 `static const HugeIconData refresh = HugeIconData('refresh')`
+  - L128 `static const HugeIconData remove01 = HugeIconData('remove01')`
+  - L129 `static const HugeIconData robot01 = HugeIconData('robot01')`
+  - L130 `static const HugeIconData search01 = HugeIconData('search01')`
+  - L131 `static const HugeIconData sendHorizontal = HugeIconData('send-horizontal')`
+  - L132 `static const HugeIconData sent = HugeIconData('sent')`
+  - L133 `static const HugeIconData settings01 = HugeIconData('settings01')`
+  - L134 `static const HugeIconData settings02 = HugeIconData('settings02')`
+  - L135 `static const HugeIconData share01 = HugeIconData('share01')`
+  - L136 `static const HugeIconData share08 = HugeIconData('share08')`
+  - L137 `static const HugeIconData sheet = HugeIconData('sheet')`
+  - L138 `static const HugeIconData sorting01 = HugeIconData('sorting01')`
+  - L139 `static const HugeIconData sourceCode = HugeIconData('source-code')`
+  - L140 `static const HugeIconData sparkles = HugeIconData('sparkles')`
+  - L141 `static const HugeIconData star = HugeIconData('star')`
+  - L142 `static const HugeIconData stop = HugeIconData('stop')`
+  - L143 `static const HugeIconData stopCircle = HugeIconData('stop-circle')`
+  - L144 `static const HugeIconData sun01 = HugeIconData('sun01')`
+  - L145 `static const HugeIconData terminal = HugeIconData('terminal')`
+  - L146 `static const HugeIconData text = HugeIconData('text')`
+  - L147 `static const HugeIconData tick02 = HugeIconData('tick02')`
+  - L148 `static const HugeIconData timer01 = HugeIconData('timer01')`
+  - L149 `static const HugeIconData user = HugeIconData('user')`
+  - L150 `static const HugeIconData userGroup = HugeIconData('user-group')`
+  - L151 `static const HugeIconData user02 = HugeIconData('user02')`
+  - L152 `static const HugeIconData video01 = HugeIconData('video01')`
+  - L153 `static const HugeIconData view = HugeIconData('view')`
+  - L154 `static const HugeIconData viewOff = HugeIconData('view-off')`
+  - L155 `static const HugeIconData wrench01 = HugeIconData('wrench01')`
+  - L156 `static const HugeIconData zip01 = HugeIconData('zip01')`
+- L160 `class HugeIcon extends StatelessWidget`  — An icon of the set, drawn like a Material [Icon].
+  - L161 `const HugeIcon(this.icon, {super.key, this.size, this.color})`
+  - L163 `final HugeIconData icon`
+  - L164 `final double? size`
+  - L165 `final Color? color`
+  - L168 `Widget build(BuildContext context)`
+
+## lib/widgets/icons/icon_map.dart  (262 Z.)
+
+- L23 `HugeIconData? hugeIconFor(IconData icon)`  — The app's icon for [icon], or null when the set has nothing for it.
+- L27 `_map = <int, HugeIconData>{ // -- navigation and chrome Icons.close.codePoint: HugeIcons.cancel01, Icons.close_rounded.c`  — Keyed by code point: `Icons.close` and `Icons.close_rounded` are different
+- L229 `class AppIcon extends StatelessWidget`  — An icon that prefers the app's set and falls back to Material.
+  - L230 `const AppIcon( this.icon, { super.key, this.size, this.color, this.semanticLabel, })`
+  - L239 `final IconData? icon`  — Nullable like [Icon]'s, so this is a drop-in at every call site.
+  - L240 `final double? size`
+  - L241 `final Color? color`
+  - L242 `final String? semanticLabel`
+  - L245 `Widget build(BuildContext context)`

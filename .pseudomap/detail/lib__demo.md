@@ -1,0 +1,189 @@
+# lib/demo · Signatures
+
+## lib/demo/app_palette.dart  (63 Z.)
+
+- L3 `class AppPalette`
+  - L4 `final bool isDark`
+  - L5 `final Color bg`
+  - L6 `final Color surfaceLow`
+  - L7 `final Color surface`
+  - L8 `final Color surfaceHigh`
+  - L9 `final Color fg`
+  - L10 `final Color muted`
+  - L11 `final Color hairline`
+  - L12 `final Color accent`
+  - L13 `final Color accentSubtle`
+  - L14 `final Color accentText`
+  - L16 `const AppPalette._({ required this.isDark, required this.bg, required this.surfaceLow, required this.surface, required this.surfaceHigh, required this.fg, required this.muted, required this.hairline, required this.accent, required this.accentSubtle, required this.accentText, })`
+  - L30 `static AppPalette of(BuildContext context)`
+  - L35 `static const dark = AppPalette._( isDark: true, bg: Color(0xFF111318), surfaceLow: Color(0xFF181B22), surface: Color(0xFF1E222B), surfaceHigh: Color(0xFF252A35), fg: Color(0xFFE2E2E9), muted: Color(0xFF9AA0AB), hairline: Color(0xFF2A2E38), accent: Color(0xFFA8C7FA), accentSubtle: Color(0x33A8C7FA), accentText: Color(0xFFA8C7FA), )`
+  - L49 `static const light = AppPalette._( isDark: false, bg: Color(0xFFF6F7FB), surfaceLow: Color(0xFFFFFFFF), surface: Color(0xFFFFFFFF), surfaceHigh: Color(0xFFEFF1F6), fg: Color(0xFF1A1C22), muted: Color(0xFF5F6571), hairline: Color(0xFFE2E5EC), accent: Color(0xFF285DA9), accentSubtle: Color(0x33285DA9), accentText: Color(0xFF285DA9), )`
+
+## lib/demo/demo_data.dart  (182 Z.)
+
+- L3 `class DemoChat`
+  - L4 `final String id`
+  - L5 `final String title`
+  - L6 `final String preview`
+  - L7 `final DateTime time`
+  - L8 `final int unread`
+  - L9 `final String? emoji`
+  - L10 `final Color accent`
+  - L11 `final bool pinned`
+  - L13 `const DemoChat({ required this.id, required this.title, required this.preview, required this.time, this.unread = 0, this.emoji, this.accent = const Color(0xFF7C3AED), this.pinned = false, })`
+- L25 `class DemoProject`
+  - L26 `final String id`
+  - L27 `final String name`
+  - L28 `final Color color`
+  - L29 `final int chatCount`
+  - L30 `const DemoProject(this.id, this.name, this.color, this.chatCount)`
+- L33 `class DemoData`
+  - L34 `static List<DemoChat> chats()`
+  - L142 `static List<DemoProject> projects()`
+  - L148 `static String relativeTime(DateTime t)`
+  - L157 `static String groupOf(DateTime t)`
+- L166 `class SidebarCallbacks`
+  - L167 `final ValueChanged<String> onChatTap`
+  - L168 `final VoidCallback onNewChat`
+  - L169 `final VoidCallback onSettings`
+  - L170 `final VoidCallback onMedia`
+  - L171 `final VoidCallback onWorkspaces`
+  - L172 `final ValueChanged<String> onSearch`
+  - L173 `const SidebarCallbacks({ required this.onChatTap, required this.onNewChat, required this.onSettings, required this.onMedia, required this.onWorkspaces, required this.onSearch, })`
+
+## lib/demo/shared_widgets.dart  (645 Z.)
+
+- L10 `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + name. Trailing widget on the right.
+  - L11 `final Widget? trailing`
+  - L12 `final EdgeInsets padding`
+  - L13 `final String label`
+  - L14 `final bool showLogo`
+  - L15 `const SbBrand({ super.key, this.trailing, this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12), this.label = 'chuk', this.showLogo = true, })`
+  - L24 `Widget build(BuildContext context)`
+- L62 `class SbNewChatPill extends StatelessWidget`  — Accent pill "New chat" button — used in top-right or as full-width.
+  - L63 `final VoidCallback onTap`
+  - L64 `final String label`
+  - L65 `final IconData icon`
+  - L66 `final bool wide`
+  - L67 `final String? hint`
+  - L68 `const SbNewChatPill({ super.key, required this.onTap, this.label = 'New', this.icon = Icons.edit_outlined, this.wide = false, this.hint, })`
+  - L78 `Widget build(BuildContext context)`
+- L129 `class SbSearch extends StatelessWidget`  — Generic search field with bordered surface.
+  - L130 `final ValueChanged<String> onChanged`
+  - L131 `final String hint`
+  - L132 `final EdgeInsets padding`
+  - L133 `final double radius`
+  - L134 `final bool bordered`
+  - L135 `const SbSearch({ super.key, required this.onChanged, this.hint = 'Search old chats...', this.padding = const EdgeInsets.fromLTRB(12, 0, 12, 8), this.radius = 10, this.bordered = true, })`
+  - L145 `Widget build(BuildContext context)`
+- L175 `class SbSectionLabel extends StatelessWidget`  — Uppercase section header (PINNED, RECENT, etc.).
+  - L176 `final String label`
+  - L177 `final int? count`
+  - L178 `final EdgeInsets padding`
+  - L179 `final Color? color`
+  - L180 `const SbSectionLabel({ super.key, required this.label, this.count, this.padding = const EdgeInsets.fromLTRB(18, 12, 18, 4), this.color, })`
+  - L189 `Widget build(BuildContext context)`
+- L217 `class SbChatRow extends StatelessWidget`  — Full-width flat chat row with selection tint, pin icon, unread dot, time.
+  - L218 `final DemoChat chat`
+  - L219 `final bool selected`
+  - L220 `final VoidCallback onTap`
+  - L221 `final EdgeInsets padding`
+  - L222 `final double radius`
+  - L223 `final bool showPin`
+  - L224 `const SbChatRow({ super.key, required this.chat, required this.selected, required this.onTap, this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 9), this.radius = 0, this.showPin = true, })`
+  - L235 `Widget build(BuildContext context)`
+- L280 `class SbPinnedRow extends StatelessWidget`  — Compact pinned row variant (smaller padding/font, used inside Pinned bento).
+  - L281 `final DemoChat chat`
+  - L282 `final bool selected`
+  - L283 `final VoidCallback onTap`
+  - L284 `const SbPinnedRow({ super.key, required this.chat, required this.selected, required this.onTap, })`
+  - L292 `Widget build(BuildContext context)`
+- L326 `class SbFooter extends StatelessWidget`  — Account footer (avatar + name + email + settings icon).
+  - L327 `final VoidCallback onSettings`
+  - L328 `final bool showName`
+  - L329 `const SbFooter({ super.key, required this.onSettings, this.showName = true, })`
+  - L336 `Widget build(BuildContext context)`
+- L388 `class SbNavItem extends StatelessWidget`  — Sidebar nav row (icon + label, vertically stacked). Like original top stack.
+  - L389 `final IconData icon`
+  - L390 `final String label`
+  - L391 `final VoidCallback onTap`
+  - L392 `final bool primary`
+  - L393 `final String? hint`
+  - L394 `const SbNavItem({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.hint, })`
+  - L404 `Widget build(BuildContext context)`
+- L453 `class SbBento extends StatelessWidget`  — Generic rounded surface "bento" card.
+  - L454 `final Widget child`
+  - L455 `final EdgeInsets padding`
+  - L456 `final EdgeInsets margin`
+  - L457 `final Color? color`
+  - L458 `final Color? borderColor`
+  - L459 `final double radius`
+  - L460 `const SbBento({ super.key, required this.child, this.padding = const EdgeInsets.fromLTRB(12, 10, 12, 10), this.margin = EdgeInsets.zero, this.color, this.borderColor, this.radius = 14, })`
+  - L471 `Widget build(BuildContext context)`
+- L487 `class SbPinnedBento extends StatelessWidget`  — Accent-tinted pinned bento card with header + rows.
+  - L488 `final List<DemoChat> pinned`
+  - L489 `final String? selectedId`
+  - L490 `final ValueChanged<String> onTap`
+  - L491 `final EdgeInsets margin`
+  - L492 `const SbPinnedBento({ super.key, required this.pinned, required this.selectedId, required this.onTap, this.margin = const EdgeInsets.symmetric(horizontal: 10), })`
+  - L501 `Widget build(BuildContext context)`
+- L550 `class SbQuickTile extends StatelessWidget`  — Bento quick tile (icon + title + subtitle).
+  - L551 `final IconData icon`
+  - L552 `final String title`
+  - L553 `final String? subtitle`
+  - L554 `final VoidCallback onTap`
+  - L555 `final bool primary`
+  - L556 `const SbQuickTile({ super.key, required this.icon, required this.title, required this.onTap, this.subtitle, this.primary = false, })`
+  - L566 `Widget build(BuildContext context)`
+- L625 `class SbHairline extends StatelessWidget`  — Hairline divider matching app palette.
+  - L626 `const SbHairline({super.key})`
+  - L628 `Widget build(BuildContext context)`
+- L635 `class ChatSplit`  — Splits chats into pinned + rest. Convenience for variants.
+  - L636 `final List<DemoChat> pinned`
+  - L637 `final List<DemoChat> rest`
+  - L638 `const ChatSplit(this.pinned, this.rest)`
+  - L640 `factory ChatSplit.from(List<DemoChat> chats)`
+
+## lib/demo/sidebar_demo_main.dart  (589 Z.)
+
+- L15 `kSidebarWidth = 320`
+- L17 `void main()`
+- L21 `class SidebarDemoApp extends StatefulWidget`
+  - L22 `const SidebarDemoApp({super.key})`
+  - L24 `State<SidebarDemoApp> createState()`
+- L27 `class _SidebarDemoAppState extends State<SidebarDemoApp>`
+  - L28 `ThemeMode _themeMode = ThemeMode.dark`
+  - L31 `Widget build(BuildContext context)`
+- L59 `enum FrameMode`
+  - L59 `desktop`
+  - L59 `mobile`
+- L61 `class DemoHome extends StatefulWidget`
+  - L62 `final ThemeMode themeMode`
+  - L63 `final VoidCallback onToggleTheme`
+  - L64 `const DemoHome({ super.key, required this.themeMode, required this.onToggleTheme, })`
+  - L70 `State<DemoHome> createState()`
+- L73 `class _DemoHomeState extends State<DemoHome>`
+  - L74 `int _variant = 5`
+  - L75 `FrameMode _mode = FrameMode.desktop`
+  - L76 `String? _selected = '1'`
+  - L77 `String _query = ''`
+  - L79 `static const _variantNames = [ 'A · Classic+', 'B · Bento header', 'C · Single bento', 'D · Full bento', 'E · Pinned bento', 'F · Final mix', ]`
+  - L88 `static const _variantDescriptions = [ 'Classic ListTile look refined. Hairline section headers. Closest to current sidebar — just cleaner.', 'Top: bento cards for identity + New chat + Media + Search. Bottom: classic list with section headers.', 'Everything wrapped in one rounded surface card. Minimal hairline rows inside. Clean unified container.', 'Full bento: every section (identity, actions, search, pinned, recents) is its own rounded card.', 'Flat identity + big accent New chat button. Pinned chats in a small accent-tinted bento card. Flat minimal list of recents.', 'FINAL: original top-left stack (New chat / Workspaces / Media stacked vertically) + accent Pinned bento + flat classic recents. Mobile keeps New chat top-right.', ]`
+  - L97 `List<DemoChat> get _chats`
+  - L108 `SidebarCallbacks _cb()`
+  - L117 `void _toast(String msg)`
+  - L121 `Widget _sidebar()`
+  - L149 `Widget build(BuildContext context)`
+  - L171 `Widget _toolbar(AppPalette p)`
+  - L232 `Widget _tabChip( String label, bool selected, VoidCallback onTap, AppPalette p)`
+  - L257 `Widget _segmented(AppPalette p)`
+  - L308 `Widget _stage(AppPalette p)`
+  - L312 `Widget _desktopFrame(AppPalette p)`
+  - L346 `Widget _mobileFrame(AppPalette p)`
+  - L388 `Widget _windowChrome(AppPalette p)`
+  - L409 `Widget _dot(Color c)`
+  - L414 `Widget _mockChatArea(AppPalette p)`
+  - L475 `Widget _msgUser(String text, AppPalette p)`
+  - L495 `Widget _msgAssistant(String text, AppPalette p)`
+  - L517 `Widget _composer(AppPalette p)`
+  - L551 `Widget _description(AppPalette p)`

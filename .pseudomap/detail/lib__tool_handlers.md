@@ -1,0 +1,361 @@
+# lib/tool_handlers · Signatures
+
+## lib/tool_handlers/artifact_tools.dart  (204 Z.)
+
+- L18 `_requestTimeout = Duration(seconds: 45)`
+- L21 `String _formatSuccess(Map<String, dynamic> data)`  — Builds the human/model-readable success string from a service response.
+- L51 `String _formatError(int statusCode, String body)`  — Maps a non-200 status code to a clear, actionable message.
+- L80 `String? _baseUrlError(String baseUrl)`  — Validates the configured base URL before any credential is sent. The Bearer
+- L93 `Map<String, dynamic> _buildBody(Map<String, dynamic> args, String html)`
+- L103 `Future<String> executeCreateArtifact({ required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Publish a new self-contained HTML page. Returns a public shareable URL.
+- L152 `Future<String> executeUpdateArtifact({ required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Replace the HTML of a previously created artifact. Returns its public URL.
+
+## lib/tool_handlers/calculate_handler.dart  (317 Z.)
+
+- L12 `String executeCalculate(Map<String, dynamic> args)`  — Calculator tool with full expression parsing.
+- L74 `String _evalExpression(String raw)`  — Evaluate a math expression using a simple recursive descent parser.
+- L136 `class _ExprParser`  — Simple recursive descent parser for math expressions.
+  - L137 `final String input`
+  - L138 `int pos = 0`
+  - L140 `_ExprParser(String raw) : input = raw.replaceAll(' ', '')`
+  - L142 `double parseExpression()`
+  - L156 `double parseTerm()`
+  - L172 `double parsePower()`
+  - L181 `double parseUnary()`
+  - L187 `double parsePrimary()`
+  - L220 `double parseNumber()`
+  - L249 `bool _match(String char)`
+  - L257 `bool _matchWord(String word)`
+  - L271 `double _evalFunction(String name, double arg)`
+- L300 `String _formatNum(num value)`  — Format a number: strip trailing .0 for integers.
+- L313 `num _toNum(dynamic v)`  — Safely convert dynamic to num.
+
+## lib/tool_handlers/chat_search_tools.dart  (807 Z.)
+
+- L15 `_defaultChatLimit = 10`
+- L16 `_maxChatLimit = 50`
+- L17 `_defaultMessageLimit = 8`
+- L18 `_maxMessageLimit = 50`
+- L19 `_snippetRadius = 180`
+- L20 `_minLocalScanChats = 60`
+- L21 `_maxLocalScanChats = 250`
+- L22 `_localScanMultiplier = 6`
+- L25 `_previewSnippetsTop = 5`
+- L26 `_previewSnippetsRest = 1`
+- L27 `_topCandidatesWithPreview = 3`
+- L29 `_defaultRecentLimit = 10`
+- L30 `_maxRecentLimit = 50`
+- L31 `_recentSnippetChars = 500`
+- L33 `_actionFindChats = 'find_chats'`
+- L34 `_actionSearchInChat = 'search_in_chat'`
+- L35 `_actionRecentMessages = 'recent_messages'`
+- L36 `_validRoles = {'user', 'assistant', 'ai', 'all'}`
+- L38 `Future<String> executeSearchChats(Map<String, dynamic> args)`
+- L101 `String? _resolveAction(dynamic rawAction, {required String chatId})`
+- L116 `String? _normalizeRole(dynamic raw)`
+- L128 `Future<String> _findChats({required String query, required int limit})`
+- L188 `_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower)`
+- L226 `_ChatCandidate? _candidateFromCacheRow( Map<String, dynamic> row, String queryLower, )`
+- L273 `Future<String> _searchInChat({ required String query, required String chatId, required int messageLimit, })`
+- L323 `Future<String> _recentMessages({ required String chatId, required int limit, required String role, })`
+- L379 `String _renderMessageText(ChatMessage message)`
+- L399 `Future<_LoadedChatContent?> _loadChatContent(String chatId)`
+- L430 `_ParsedPayload? _parsePayload(String? payload)`
+- L462 `Map<String, dynamic> _coerceStringMap(Map raw)`
+- L474 `DateTime _rowTimestamp(Map<String, dynamic> row)`
+- L486 `DateTime? _parseDate(dynamic value)`
+- L497 `_MessageMatchSummary _summarizeMatches( List<ChatMessage> messages, String queryLower, )`
+- L523 `_MessageMatch? _buildMessageMatch({ required ChatMessage message, required String queryLower, required int index, })`
+- L545 `List<_SearchField> _messageFields(ChatMessage message)`
+- L569 `String _rowTitle( Map<String, dynamic> row, List<ChatMessage>? messages, { String? customName, })`
+- L587 `String _chatTitle(StoredChat chat, [List<ChatMessage>? messages])`
+- L596 `String _titleFromMessages(List<ChatMessage>? messages)`
+- L611 `String _extractSnippet(String text, String queryLower)`
+- L628 `void _upsertCandidate( Map<String, _ChatCandidate> candidatesById, _ChatCandidate candidate, )`
+- L638 `int _compareCandidates(_ChatCandidate a, _ChatCandidate b)`
+- L657 `String _formatChatCandidates({ required String query, required int totalSearched, required List<_ChatCandidate> candidates, })`
+- L697 `String _formatChatDetails({ required String query, required String chatId, required String title, required int messageCount, required int totalMatches, required List<_MessageMatch> shownMatches, })`
+- L720 `int _coerceInt(dynamic value, {required int fallback})`
+- L734 `class _LoadedChatContent`
+  - L735 `const _LoadedChatContent({required this.title, required this.messages})`
+  - L737 `final String title`
+  - L738 `final List<ChatMessage> messages`
+- L741 `class _ParsedPayload`
+  - L742 `const _ParsedPayload({required this.messages, this.customName})`
+  - L744 `final List<ChatMessage> messages`
+  - L745 `final String? customName`
+- L748 `class _SearchField`
+  - L749 `const _SearchField({required this.label, required this.text})`
+  - L751 `final String label`
+  - L752 `final String text`
+- L755 `class _MessageMatchSummary`
+  - L756 `const _MessageMatchSummary({required this.matchCount, required this.snippets})`
+  - L758 `final int matchCount`
+  - L759 `final List<String> snippets`
+- L762 `class _ChatCandidate`
+  - L763 `const _ChatCandidate({ required this.chatId, required this.title, required this.idMatch, required this.titleMatch, required this.matchCount, required this.previewSnippets, required this.messageCount, required this.updatedAt, })`
+  - L774 `final String chatId`
+  - L775 `final String title`
+  - L776 `final bool idMatch`
+  - L777 `final bool titleMatch`
+  - L778 `final int matchCount`
+  - L779 `final List<String> previewSnippets`
+  - L780 `final int messageCount`
+  - L781 `final DateTime updatedAt`
+- L784 `class _MessageMatch`
+  - L785 `const _MessageMatch({ required this.index, required this.role, required this.snippet, })`
+  - L791 `final int index`
+  - L792 `final String role`
+  - L793 `final String snippet`
+- L796 `class _RecentMessageEntry`
+  - L797 `const _RecentMessageEntry({ required this.index, required this.role, required this.text, })`
+  - L803 `final int index`
+  - L804 `final String role`
+  - L805 `final String text`
+
+## lib/tool_handlers/find_tools_handler.dart  (343 Z.)
+
+- L6 `companions = <String, List<String>>{ 'web_search': ['web_crawl'], 'web_crawl': ['web_search'], 'generate_image': ['web_s`  — Companion tools that are always bundled together.
+- L21 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
+- L53 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
+- L316 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
+
+## lib/tool_handlers/image_tools.dart  (253 Z.)
+
+- L11 `Future<String> _generateImageRequest({ required String? serverHttpUrl, required String? accessToken, required String endpoint, required Map<String, String> fields, required String muxTool, required String modelName, })`  — Shared helper: send a multipart POST to an image generation endpoint
+- L99 `imageModelDisplayNames = { 'turbo': 'Z-Image Turbo', 'hunyuan': 'Hunyuan Image 3', 'flux': 'FLUX 2 Klein 9B', 'ideogram'`  — Human-readable display names per generator key. Adding a model = one entry
+- L109 `Future<String> executeGenerateImage({ required String? serverHttpUrl, required String? accessToken, required Map<String, dynamic> args, })`  — Single image generation/editing tool. `args['model']` selects the
+- L178 `Future<String> executeFetchImage( Map<String, dynamic> args, { http.Client? client, })`
+- L229 `String executeViewChatImagesUnsupported()`
+- L233 `String _detectMimeType({required String contentType, required String url})`
+
+## lib/tool_handlers/map_tools.dart  (660 Z.)
+
+- L12 `_networkTimeout = Duration(seconds: 20)`  — These endpoints are called straight from the device, so a stalled
+- L14 `_nominatimBaseUrl = 'https://nominatim.openstreetmap.org'`
+- L15 `_osrmBaseUrl = 'https://router.workspace-osrm.org'`
+- L16 `_defaultHeaders = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`
+- L28 `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the map
+  - L29 `const PlacesToolResult({ required this.text, this.mapTag, this.places = const <Map<String, dynamic>>[], })`
+  - L36 `final String text`  — Formatted result for the model.
+  - L39 `final String? mapTag`  — A ready `<map>…</map>` block, or null when no place had coordinates.
+  - L46 `final List<Map<String, dynamic>> places`  — The raw Brave entries behind [text] and [mapTag], newest lookup first.
+- L50 `kMaxPlacesOnMap = 6`  — Most places put on one card. Beyond this the map stops being a glance.
+- L56 `String? buildPlacesMapTag({ required List<Map<String, dynamic>> places, required String title, int max = kMaxPlacesOnMap, })`  — Build the `<map>` block for [places], or null when none can be pinned.
+- L101 `double? _asDouble(Object? value)`
+- L109 `Future<String> executeSearchPlaces({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via server-side Brave Local proxy.
+- L126 `Future<PlacesToolResult> searchPlacesWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via the server-side Brave Local proxy, and build the map
+- L184 `Future<String> executeSearchRestaurants({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Text-only form, kept for callers that do not render a map card.
+- L201 `Future<PlacesToolResult> searchRestaurantsWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search restaurants via the server-side Brave Local proxy, and build the
+- L266 `Future<String> executeGeocode( Map<String, dynamic> args, { http.Client? client, })`  — Forward / reverse geocoding via Nominatim (kept; no server proxy).
+- L326 `Future<String> executeGetRoute( Map<String, dynamic> args, { http.Client? client, })`
+- L417 `Future<List<Map<String, dynamic>>> _fetchBravePlaces({ required String baseUrl, required Map<String, String> serverHeaders, required http.Client client, required String query, required int count, String country = 'DE', String searchLang = 'de', })`
+- L468 `String _formatBravePlaces({ required String heading, required List<Map<String, dynamic>> places, })`
+- L513 `Future<List<Map<String, dynamic>>> _searchNominatim({ required http.Client client, required String query, required int limit, double? latitude, double? longitude, int? radiusMeters, })`
+- L572 `String _extractCountry(Map<String, dynamic> args)`
+- L578 `String _extractLang(Map<String, dynamic> args)`
+- L585 `String _buildInstruction({ required Map<String, dynamic> maneuver, required String roadName, })`
+- L615 `String _formatDistance(double meters)`
+- L622 `double? _coerceDouble(dynamic value)`
+- L632 `int _coerceInt(dynamic value, {required int fallback})`
+- L649 `String _asString(dynamic value)`  — Coerce a JSON-decoded value to a String. Server tools normally hand back
+
+## lib/tool_handlers/notes_tools.dart  (923 Z.)
+
+- L14 `_notesPrefsKey = 'tool_notes'`
+- L15 `_memoryPrefsKey = 'identity_memory'`
+- L16 `_soulPrefsKey = 'identity_soul'`
+- L17 `_userInfoPrefsKey = 'identity_user'`
+- L18 `_identityEnabledKey = 'identity_enabled'`
+- L20 `_identitySoulColumn = 'identity_soul'`
+- L21 `_identityUserColumn = 'identity_user'`
+- L22 `_identityMemoryColumn = 'identity_memory'`
+- L23 `_identityEnabledColumn = 'identity_enabled'`
+- L24 `_legacyPreferencesColumn = 'preferences'`
+- L25 `_selectedModelColumn = 'selected_model_id'`
+- L26 `_fallbackSelectedModelId = 'moonshotai/kimi-k2.5'`
+- L28 `_identitySyncCacheTtl = Duration(minutes: 1)`
+- L30 `_cachedIdentityRow`
+- L31 `_cachedIdentityUserId`
+- L32 `_cachedIdentityFetchedAt`
+- L33 `_identityRowInFlight`
+- L35 `String? _safeCurrentUserId()`
+- L43 `Session? _safeCurrentSession()`
+- L51 `void _resetIdentityCacheForUser(String? userId)`
+- L59 `void _invalidateIdentityCache()`
+- L65 `Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase({ bool forceRefresh = false, })`
+- L140 `void _mergeIdentityCache(String userId, Map<String, dynamic> updates)`
+- L147 `String _identitySyncedMarkerKey(String localKey)`
+- L150 `Future<bool> _upsertIdentityFields(Map<String, dynamic> fields)`
+- L189 `Future<String?> _resolveSelectedModelIdForUpsert(String userId)`
+- L217 `Future<bool> _upsertIdentityFieldsLegacy( String userId, Map<String, dynamic> fields, )`
+- L282 `Future<String?> _decryptIdentityValue( dynamic encryptedValue, { required String column, })`
+- L309 `Future<String> _loadIdentityText({ required String localKey, required String remoteColumn, String? localOverride, })`
+- L382 `bool _isMissingIdentityColumnsError(PostgrestException error)`
+- L398 `bool _isMissingLegacyPreferencesError(PostgrestException error)`
+- L411 `Map<String, dynamic> _extractLegacyPreferencesMap(dynamic rawPreferences)`
+- L437 `bool? _coerceIdentityEnabled(dynamic raw)`
+- L455 `Future<Map<String, dynamic>?> _loadIdentityRowFromLegacyPreferences( String userId, )`
+- L499 `Future<void> _saveIdentityText({ required String localKey, required String remoteColumn, required String text, })`
+- L527 `Future<String> _loadLocalMemoryText(SharedPreferences prefs)`
+- L561 `Future<bool> isIdentityEnabled()`  — Whether the identity system (Soul / User / Memory) is active.
+- L583 `Future<void> setIdentityEnabled(bool value)`  — Persist the identity system toggle.
+- L594 `Future<void> syncIdentityFromSupabase({bool forceRefresh = false})`  — Sync identity data (Soul/User/Memory/toggle) from Supabase into
+- L613 `Future<String> executeNotes(Map<String, dynamic> args)`
+- L651 `String _buildDiffResult( String type, String title, String before, String after, )`  — Builds a <diff> visual block showing what changed.
+- L667 `List<ArtifactEdit>? _parseEdits(dynamic rawEdits)`  — Parse `edits` arg into a list of [ArtifactEdit].
+- L679 `Future<String> loadSoulText()`  — Load Soul text. Public for system prompt injection.
+- L687 `Future<void> saveSoulText(String text)`  — Save Soul text. Called from settings UI.
+- L698 `Future<String> loadUserInfoText()`  — Load User info text. Public for system prompt injection.
+- L706 `Future<void> saveUserInfoText(String text)`  — Save User info text. Called from settings UI or AI tool.
+- L715 `Future<String> _updateUserInfo(Map<String, dynamic> args)`  — AI action: update the user info text.
+- L726 `Future<String> _patchUserInfo(Map<String, dynamic> args)`  — AI action: apply targeted edits to the user info text.
+- L741 `Future<String> loadMemoryText()`  — Load Memory text, with one-time migration from legacy key-value store.
+- L752 `Future<void> saveMemoryText(String text)`  — Save Memory text. Called from settings UI.
+- L761 `Future<String> _updateMemory(Map<String, dynamic> args)`  — AI action: update the memory text.
+- L772 `Future<String> _patchMemory(Map<String, dynamic> args)`  — AI action: apply targeted edits to the memory text.
+- L786 `Future<String> _updateSoul(Map<String, dynamic> args)`  — AI action: update the soul (personality) text.
+- L798 `Future<String> _patchSoul(Map<String, dynamic> args)`  — AI action: apply targeted edits to the soul text.
+- L812 `Future<Map<String, String>> loadAllNotes()`  — Load all saved notes. Public so the system prompt builder can inject them.
+- L831 `Future<void> _persistNotes(Map<String, String> notes)`
+- L836 `Future<String> _saveNote(Map<String, dynamic> args)`
+- L858 `Future<String> _getNote(Map<String, dynamic> args)`
+- L884 `Future<String> _listNotes()`
+- L902 `Future<String> _deleteNote(Map<String, dynamic> args)`
+- L918 `Future<String> _clearNotes()`
+
+## lib/tool_handlers/platform_tools.dart  (7 Z.)
+
+- conditional export: 'platform_tools_stub.dart' if (dart.library.io) 'platform_tools_native.dart'
+
+## lib/tool_handlers/platform_tools_native.dart  (766 Z.)
+
+- L12 `_bashSandbox = BashSandbox()`  — Singleton service instances for native platforms.
+- L13 `_gitHubOAuth = GitHubOAuth()`
+- L14 `_slackOAuth = SlackOAuth()`
+- L15 `_googleOAuth = GoogleOAuth()`
+- L16 `_deviceServices = DeviceServices()`
+- L17 `_approvalConfig = ApprovalConfig()`
+- L20 `Future<void> initPlatformServices()`  — Initialize platform services — loads saved tokens/configs.
+- L31 `bool isPlatformServiceConnected(String service)`  — Check if a platform service is connected.
+- L49 `connectableServices = { 'github', 'slack', 'google', }`  — Categories that support OAuth connect/disconnect.
+- L56 `Future<bool> connectPlatformService(String service)`  — Start the OAuth flow for a service. Returns true on success.
+- L73 `Future<void> disconnectPlatformService(String service)`  — Disconnect a service by clearing its stored tokens.
+- L91 `Future<void> setBashSandboxFolder(String path)`  — Folder the local bash tool is confined to, null while unset.
+- L95 `Future<void> clearBashSandboxFolder()`  — Forget the sandbox folder; bash commands are refused until a new one is set.
+- L97 `Future<String> executeBash(Map<String, dynamic> args)`
+- L118 `Future<String> executeGitHub(Map<String, dynamic> args)`
+- L260 `Future<String> executeSlack(Map<String, dynamic> args)`
+- L355 `Future<String> executeGoogleCalendar(Map<String, dynamic> args)`
+- L461 `Future<String> executeGmail(Map<String, dynamic> args)`
+- L541 `Future<String> executeDevice(Map<String, dynamic> args)`
+- L737 `Future<String> executeCalendar(Map<String, dynamic> args)`
+- L741 `Future<String> executeReminder(Map<String, dynamic> args)`
+- L763 `Future<String> executeDraftEmail(Map<String, dynamic> args)`
+
+## lib/tool_handlers/platform_tools_stub.dart  (58 Z.)
+
+- L8 `Future<void> setBashSandboxFolder(String path)`  — The local bash sandbox is desktop-only; on web there is no folder.
+- L10 `Future<void> clearBashSandboxFolder()`
+- L12 `Future<String> executeBash(Map<String, dynamic> args)`
+- L16 `Future<String> executeGitHub(Map<String, dynamic> args)`
+- L20 `Future<String> executeSlack(Map<String, dynamic> args)`
+- L24 `Future<String> executeGoogleCalendar(Map<String, dynamic> args)`
+- L28 `Future<String> executeGmail(Map<String, dynamic> args)`
+- L32 `Future<String> executeDevice(Map<String, dynamic> args)`
+- L36 `Future<String> executeCalendar(Map<String, dynamic> args)`
+- L40 `Future<String> executeReminder(Map<String, dynamic> args)`
+- L45 `Future<void> initPlatformServices()`  — Initialize platform services (no-op on web).
+- L48 `bool isPlatformServiceConnected(String service)`  — Check if a platform service is connected (always false on web).
+- L51 `connectableServices = <String>{}`  — Categories that support OAuth connect/disconnect (empty on web).
+- L54 `Future<bool> connectPlatformService(String service)`  — Start the OAuth flow for a service (not available on web).
+- L57 `Future<void> disconnectPlatformService(String service)`  — Disconnect a service (no-op on web).
+
+## lib/tool_handlers/qr_tools.dart  (61 Z.)
+
+- L9 `Future<String> executeGenerateQr(Map<String, dynamic> args)`  — Generate a QR code locally using pretty_qr_code — no network call, fully
+
+## lib/tool_handlers/sandbox_tools.dart  (575 Z.)
+
+- L15 `_stdStreamCap = 8000`
+- L16 `_textFileCap = 16000`
+- L17 `_textInlineByteLimit = 64 * 1024`
+- L18 `_maxTimeoutSeconds = 300`
+- L20 `String _capStream(String s)`
+- L27 `bool _looksLikeText(Uint8List bytes)`
+- L40 `({String dir, String name}) _splitPath(String path)`
+- L51 `bool _isUnderSandbox(String path)`
+- L65 `String _formatError(SandboxServiceException e)`
+- L83 `kSandboxBackedToolNames = { 'code_run', 'bash', 'sandbox_list', 'sandbox_read', 'sandbox_write', 'sandbox_reset', 'send_`  — Tools whose calls are served by (or reach for) the remote sandbox service.
+- L94 `bool isSandboxBackedTool(String name)`  — True when [name] is a sandbox-backed tool (see [kSandboxBackedToolNames]).
+- L99 `kSandboxUnavailableThisTurnMessage = 'Error: The code sandbox is unavailable this turn (infrastructure error, ' 'not a p`  — Terminal, non-retryable result the tool loop returns for a sandbox tool
+- L110 `bool isSandboxInfraError(String result)`  — True when a tool result string signals a sandbox INFRASTRUCTURE failure —
+- L126 `Future<String> executeCodeRun({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+- L200 `Future<String> executeSandboxListFiles({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+- L243 `Future<String> executeSandboxReadFile({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+- L300 `Future<String> executeSandboxWriteFile({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+- L367 `Future<String> executeSandboxReset({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+- L409 `_extensionMimeMap = { // Images 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp`  — Extension-based mime sniffing for filenames whose upstream content-type
+- L467 `String _extOf(String filename)`
+- L473 `String _inferMimeFromFilename(String filename)`
+- L479 `String _lastSegment(String path)`
+- L488 `Future<ToolExecutionResult> executeSandboxSendFileToUser({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
+
+## lib/tool_handlers/typst_tools.dart  (281 Z.)
+
+- L14 `class TypstCompileResult`  — Result of a Typst compile: the rendered bytes plus optional layout
+  - L15 `const TypstCompileResult({required this.bytes, this.layout})`
+  - L16 `final Uint8List bytes`
+  - L17 `final TypstLayoutSnapshot? layout`
+- L24 `Future<TypstCompileResult> compileTypstToPdf({ required String serverHttpUrl, required String? accessToken, required String source, String format = 'pdf', })`  — Compile Typst source via the backend. Returns the rendered bytes and
+- L64 `class _TypstCompileError implements Exception`
+  - L65 `_TypstCompileError(this.message)`
+  - L66 `final String message`
+  - L69 `String toString()`
+- L75 `Future<String> executeTypstCompile({ required String? serverHttpUrl, required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`  — Tool handler: validate the Typst source by compiling it, then create a
+- L207 `_deliveryNote = ' The PDF is now shown to the user as a downloadable artifact card — it is ' 'delivered. Do NOT call sen`  — Appended to every successful compile result. The compiled PDF is shown to
+- L215 `class TypstLayoutSnapshot`  — Snapshot of a compiled Typst PDF's layout (page count + last-page
+  - L216 `const TypstLayoutSnapshot({ required this.pageCount, required this.lastPageFillPct, })`
+  - L220 `final int pageCount`
+  - L221 `final double lastPageFillPct`
+- L227 `_orphanFillPctThreshold = 15.0`  — Below this fill % on the last page we tell the AI the page is an
+- L233 `TypstLayoutSnapshot? _layoutFromHeaders(Map<String, String> headers)`  — Parses layout headers the server attaches to every PDF compile:
+- L246 `String _layoutGuidance(TypstLayoutSnapshot? layout)`  — Builds the layout suffix appended to the tool result string. Always
+- L271 `String _compileErrorGuidance(String compilerError)`  — Wraps a Typst compile error so the AI sees both the compiler output
+
+## lib/tool_handlers/weather_tools.dart  (359 Z.)
+
+- L14 `Future<String> executeWeather({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Weather via server-side Brave Rich Callback proxy.
+- L111 `String _buildQuery({ required String location, double? latitude, double? longitude, required String action, int? days, int? hours, })`
+- L138 `String _formatWeather({ required String locationLabel, required String action, required String vertical, required Map<String, dynamic> payload, })`
+- L222 `void _writeCurrent(StringBuffer buf, Map<String, dynamic> src)`
+- L275 `void _writeDay(StringBuffer buf, Map<String, dynamic> day)`
+- L297 `void _writeHour(StringBuffer buf, Map<String, dynamic> hour)`
+- L318 `Map<String, dynamic>? _pickMap(Map<String, dynamic> src, List<String> keys)`
+- L328 `List? _pickList(Map<String, dynamic> src, List<String> keys)`
+- L341 `String? _pickString(Map<String, dynamic> src, List<String> keys)`
+
+## lib/tool_handlers/web_tools.dart  (715 Z.)
+
+- L12 `_defaultSearchCount = 8`
+- L13 `_maxSearchCount = 10`
+- L14 `_defaultAutoCrawlCount = 4`
+- L15 `_maxAutoCrawlCount = 6`
+- L16 `_defaultAutoCrawlMaxChars = 3500`
+- L17 `_maxAutoCrawlMaxChars = 8000`
+- L18 `_maxExcerptCharsPerPage = 2200`
+- L20 `Map<String, String> _buildJsonHeaders(Map<String, String> serverHeaders)`
+- L24 `int _coerceInt( dynamic value, { required int fallback, required int min, required int max, })`
+- L43 `bool _coerceBool(dynamic value, {required bool fallback})`
+- L66 `String _truncate(String input, int maxChars)`
+- L71 `class _CrawlContext`
+  - L72 `const _CrawlContext({ required this.url, required this.content, required this.truncated, this.error, })`
+  - L79 `final String url`
+  - L80 `final String content`
+  - L81 `final bool truncated`
+  - L82 `final String? error`
+- L85 `Future<_CrawlContext> _crawlForContext({ required String baseUrl, required Map<String, String> serverHeaders, required String url, required int maxChars, })`
+- L183 `Future<String> executeWebSearch({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Web search via server-side Brave Search proxy.
+- L400 `Future<String> executeImageSearch({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Image search via server-side Brave Image Search proxy.
+- L517 `Future<String> executeNewsSearch({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — News search via server-side Brave News Search proxy.
+- L645 `Future<String> executeWebCrawl({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Crawl a webpage via server-side crawler and return markdown content.

@@ -1,0 +1,1388 @@
+# lib/pages · Signatures
+
+## lib/pages/about_page.dart  (560 Z.)
+
+- L21 `class AboutPage extends StatefulWidget`
+  - L22 `const AboutPage({super.key})`
+  - L25 `State<AboutPage> createState()`
+  - L27 `static void _openLicenses( BuildContext context, PackageInfo? info, String? version, )`
+  - L43 `static String _formattedVersion(String version, String buildNumber)`
+- L53 `class _AboutPageState extends State<AboutPage>`
+  - L54 `static final Future<PackageInfo> _packageInfoFuture = PackageInfo.fromPlatform()`
+  - L57 `int _remainingDeveloperTaps = 3`
+  - L58 `DateTime? _lastDeveloperTapAt`
+  - L60 `Future<void> _handleVersionTap()`
+  - L107 `Widget build(BuildContext context)`
+- L303 `class _ThemedLicensePage extends StatefulWidget`
+  - L304 `const _ThemedLicensePage({ required this.applicationName, this.applicationVersion, this.applicationLegalese, })`
+  - L310 `final String applicationName`
+  - L311 `final String? applicationVersion`
+  - L312 `final String? applicationLegalese`
+  - L315 `State<_ThemedLicensePage> createState()`
+- L318 `class _ThemedLicensePageState extends State<_ThemedLicensePage>`
+  - L319 `late final Future<List<_LicensePackage>> _licensesFuture = _loadLicenses()`
+  - L321 `Future<List<_LicensePackage>> _loadLicenses()`
+  - L347 `Widget build(BuildContext context)`
+- L408 `class _LicenseTile extends StatelessWidget`
+  - L409 `const _LicenseTile({required this.package})`
+  - L411 `final _LicensePackage package`
+  - L414 `Widget build(BuildContext context)`
+- L436 `class _LicenseHeader extends StatelessWidget`
+  - L437 `const _LicenseHeader({ required this.applicationName, this.applicationVersion, this.applicationLegalese, })`
+  - L443 `final String applicationName`
+  - L444 `final String? applicationVersion`
+  - L445 `final String? applicationLegalese`
+  - L448 `Widget build(BuildContext context)`
+- L486 `class _LicensePackage`
+  - L487 `const _LicensePackage(this.name, this.license)`
+  - L489 `final String name`
+  - L490 `final String license`
+- L493 `class _LicenseDetailPage extends StatelessWidget`
+  - L494 `const _LicenseDetailPage({required this.package})`
+  - L496 `final _LicensePackage package`
+  - L499 `Widget build(BuildContext context)`
+- L525 `String? _inferLicenseName(String text)`
+
+## lib/pages/account_settings_page.dart  (735 Z.)
+
+- L26 `class AccountSettingsPage extends StatefulWidget`
+  - L27 `const AccountSettingsPage({super.key})`
+  - L30 `State<AccountSettingsPage> createState()`
+- L33 `class _AccountSettingsPageState extends State<AccountSettingsPage>`
+  - L34 `final ProfileService _profileService = const ProfileService()`
+  - L35 `final TextEditingController _displayNameCtrl = TextEditingController()`
+  - L36 `final TextEditingController _emailCtrl = TextEditingController()`
+  - L37 `final TextEditingController _currentPasswordCtrl = TextEditingController()`
+  - L38 `final TextEditingController _newPasswordCtrl = TextEditingController()`
+  - L39 `final TextEditingController _confirmPasswordCtrl = TextEditingController()`
+  - L41 `bool _isSaving = false`
+  - L42 `bool _isLoading = true`
+  - L43 `bool _isDeletingAccount = false`
+  - L44 `bool _isChangingPassword = false`
+  - L45 `bool _obscureCurrentPassword = true`
+  - L46 `bool _obscureNewPassword = true`
+  - L47 `bool _obscureConfirmPassword = true`
+  - L48 `ProfileRecord? _profile`
+  - L49 `String? _errorMessage`
+  - L50 `String? _passwordChangeError`
+  - L51 `String? _passwordChangeNotice`
+  - L54 `void initState()`
+  - L60 `void dispose()`
+  - L69 `Future<void> _loadProfile()`
+  - L99 `Future<void> _saveAccountSettings()`
+  - L162 `Widget _buildRecoverChatsSection([AppLocalizations? localizations])`
+  - L205 `Future<void> _changePassword()`
+  - L254 `Future<void> _deleteAccount()`
+  - L442 `Widget build(BuildContext context)`
+- L697 `class _FieldLabel extends StatelessWidget`
+  - L698 `const _FieldLabel(this.label, {this.helper})`
+  - L700 `final String label`
+  - L701 `final String? helper`
+  - L704 `Widget build(BuildContext context)`
+
+## lib/pages/assistant_settings_page.dart  (407 Z.)
+
+- L24 `class AssistantSettingsPage extends StatefulWidget`  — One job: make Chuk Chat the assistant of this phone.
+  - L25 `const AssistantSettingsPage({super.key})`
+  - L28 `State<AssistantSettingsPage> createState()`
+- L32 `class _Grant`  — One freedom the assistant needs, and what it buys.
+  - L33 `const _Grant({ required this.key, required this.icon, required this.title, required this.buys, required this.open, this.required = false, })`
+  - L42 `final String key`
+  - L43 `final IconData icon`
+  - L44 `final String title`
+  - L48 `final String buys`  — What stops working without it. Shown instead of a description of the
+  - L49 `final Future<void> Function() open`
+  - L52 `final bool required`  — Without this one there is no assistant at all.
+- L55 `class _AssistantSettingsPageState extends State<AssistantSettingsPage> with WidgetsBindingObserver`
+  - L57 `Map<String, bool> _statuses = const <String, bool>{}`
+  - L58 `bool _loading = true`
+  - L60 `late final List<_Grant> _grants = <_Grant>[ _Grant( key: 'assistant', icon: Icons.assistant_outlined, title: 'Assistenten-Rolle', buys: 'Die Geste öffnet Chuk Chat statt einer anderen App.', required: true, open: _claimAssistantRole, ), _Grant( key: 'accessibility', icon: Icons.accessibility_new_outlined, title: 'Bildschirm lesen', buys: '„Was steht hier", Bildschirmfotos, Tippen in anderen Apps.', open: AssistantBridge.openAccessibilitySettings, ), _Grant( key: 'notificationAccess', icon: Icons.notifications_active_outlined, title: 'Benachrichtigungen', buys: '„Was habe ich verpasst" und Steuerung der Wiedergabe.', open: AssistantBridge.openNotificationAccessSettings, ), _Grant( key: 'contacts', icon: Icons.contacts_outlined, title: 'Kontakte', buys: '„Ruf X an" und SMS-Entwürfe.', open: () async { await AssistantBridge.requestContactsPermission(); }, ), _Grant( key: 'location', icon: Icons.location_on_outlined, title: 'Standort', buys: 'Orte in der Nähe und Navigation.', open: () async { await AssistantBridge.requestLocationPermission(); }, ), ]`
+  - L104 `void initState()`
+  - L111 `void dispose()`
+  - L117 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L123 `Future<void> _refresh()`
+  - L139 `Future<void> _claimAssistantRole()`
+  - L152 `Future<void> _open(_Grant grant)`
+  - L161 `bool _granted(_Grant grant)`
+  - L164 `Widget build(BuildContext context)`
+- L260 `class _HowTo extends StatelessWidget`
+  - L261 `const _HowTo({required this.isDefault})`
+  - L263 `final bool isDefault`
+  - L266 `Widget build(BuildContext context)`
+- L333 `class _Step extends StatelessWidget`
+  - L334 `const _Step({required this.number, required this.text})`
+  - L336 `final int number`
+  - L337 `final String text`
+  - L340 `Widget build(BuildContext context)`
+- L381 `class _AllSet extends StatelessWidget`
+  - L382 `const _AllSet()`
+  - L385 `Widget build(BuildContext context)`
+
+## lib/pages/coming_soon_page.dart  (49 Z.)
+
+- L7 `class ComingSoonPage extends StatelessWidget`
+  - L8 `final String title`
+  - L9 `final String? message`
+  - L11 `const ComingSoonPage({super.key, required this.title, this.message})`
+  - L14 `Widget build(BuildContext context)`
+
+## lib/pages/connector_detail_page.dart  (245 Z.)
+
+- L16 `class ConnectorDetailPage extends StatefulWidget`  — Full-screen detail page for a single tool, showing enable/disable,
+  - L17 `const ConnectorDetailPage({ super.key, required this.tool, required this.toolExecutor, required this.displayName, required this.icon, })`
+  - L25 `final ClientTool tool`
+  - L26 `final ToolExecutor toolExecutor`
+  - L27 `final String displayName`
+  - L28 `final IconData icon`
+  - L31 `State<ConnectorDetailPage> createState()`
+- L34 `class _ConnectorDetailPageState extends State<ConnectorDetailPage>`
+  - L35 `late TextEditingController _promptController`
+  - L36 `bool _isSaving = false`
+  - L39 `void initState()`
+  - L47 `void dispose()`
+  - L52 `bool get _isEnabled`
+  - L55 `bool get _isAlwaysOn`  — Web search / crawl cannot be turned off — the switch is locked on.
+  - L57 `bool get _hasCustomPrompt`
+  - L60 `String get _currentDescription`
+  - L63 `bool get _promptChanged`
+  - L67 `Widget build(BuildContext context)`
+  - L222 `Widget _buildParameterRow(String name, String description)`
+
+## lib/pages/customization_page.dart  (748 Z.)
+
+- L21 `class CustomizationPage extends StatefulWidget`
+  - L22 `final AppShellConfig config`
+  - L24 `const CustomizationPage({super.key, required this.config})`
+  - L27 `State<CustomizationPage> createState()`
+- L30 `class _CustomizationPageState extends State<CustomizationPage>`
+  - L31 `late bool _selectedAutoSendVoiceTranscription`
+  - L32 `late bool _selectedShowReasoningTokens`
+  - L33 `late bool _selectedShowModelInfo`
+  - L34 `late bool _selectedShowTps`
+  - L35 `late double _selectedChatFontSize`
+  - L36 `late String _selectedChatFontFamily`
+  - L37 `late double _selectedUiScale`
+  - L39 `late bool _selectedIncludeRecentImagesInHistory`
+  - L40 `late bool _selectedIncludeAllImagesInHistory`
+  - L41 `late bool _selectedIncludeReasoningInHistory`
+  - L42 `late bool _selectedIncludeToolResultsInHistory`
+  - L44 `late String _selectedLocale`
+  - L46 `bool _autoGenerateTitles = false`
+  - L47 `bool _isLoadingTitleSetting = true`
+  - L48 `bool _hasCustomPrompt = false`
+  - L49 `final TextEditingController _promptController = TextEditingController()`
+  - L50 `bool _isPromptExpanded = false`
+  - L53 `void initState()`
+  - L89 `Future<void> _loadAutoTitleSetting()`
+  - L140 `Future<void> _refreshAutoTitleSettingFromSupabase()`
+  - L189 `Future<void> _saveSystemPrompt()`
+  - L200 `Future<void> _resetSystemPrompt()`
+  - L213 `void dispose()`
+  - L219 `Widget build(BuildContext context)`
+  - L634 `String _fontFamilyLabel(String id, AppLocalizations l)`
+  - L650 `List<Widget> _systemPromptEditor(AppLocalizations l)`  — The prompt editor is two tiles of the same group: the row that opens it,
+- L716 `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
+  - L717 `const _CardLabel({required this.title, this.subtitle})`
+  - L719 `final String title`
+  - L720 `final String? subtitle`
+  - L723 `Widget build(BuildContext context)`
+
+## lib/pages/desktop_settings_modal.dart  (790 Z.)
+
+- L56 `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId, })`  — Opens the desktop settings modal over the current chat UI.
+- L88 `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
+  - L89 `const _SettingsDest({ required this.id, required this.icon, required this.label, this.keywords = '', this.builder, this.onAction, this.tone, })`
+  - L99 `final String id`
+  - L100 `final IconData icon`
+  - L101 `final String label`
+  - L106 `final String keywords`  — Extra search terms covering the rows INSIDE this page, so the settings
+  - L109 `final WidgetBuilder? builder`  — Page to show in the right pane. Null for action-only destinations.
+  - L112 `final Future<void> Function(BuildContext modalContext)? onAction`  — Runs on tap instead of showing a page. Receives the modal context.
+  - L115 `final Color? tone`  — Optional accent tone for the icon (e.g. destructive/dev).
+  - L117 `bool get isPage`
+- L120 `class _SettingsGroup`
+  - L121 `const _SettingsGroup(this.title, this.items)`
+  - L122 `final String title`
+  - L123 `final List<_SettingsDest> items`
+- L126 `class DesktopSettingsModal extends StatefulWidget`
+  - L127 `const DesktopSettingsModal({ super.key, required this.config, this.initialSectionId, })`
+  - L133 `final AppShellConfig config`
+  - L136 `final String? initialSectionId`  — Section to open on first show (e.g. `'model'`). Null starts on Account.
+  - L139 `State<DesktopSettingsModal> createState()`
+- L142 `class _DesktopSettingsModalState extends State<DesktopSettingsModal>`
+  - L143 `late String _selectedId = widget.initialSectionId ?? 'account'`
+  - L144 `String _query = ''`
+  - L145 `final TextEditingController _searchController = TextEditingController()`
+  - L146 `bool _developerOptions = false`
+  - L150 `bool _compact = false`  — Whether the modal is in single-column (small window) layout. Computed in
+  - L153 `late String? _compactPageId = widget.initialSectionId`  — In compact layout, the page currently drilled into (null = the nav list).
+  - L156 `void initState()`
+  - L163 `void dispose()`
+  - L169 `void _onDevOptions()`
+  - L176 `List<_SettingsGroup> _groups(AppLocalizations l)`
+  - L304 `_SettingsDest? _findPage(List<_SettingsGroup> groups, String id)`
+  - L313 `void _onSelect(_SettingsDest dest)`
+  - L328 `Widget build(BuildContext context)`
+  - L382 `Widget _buildWide( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, _SettingsDest? selectedPage, )`
+  - L431 `Widget _buildCompact( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, )`
+  - L494 `Widget _buildNavRail( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, { required bool compact, })`
+  - L609 `Widget _navItem(BuildContext context, _SettingsDest dest)`
+  - L657 `Widget _buildRailFooter(BuildContext context, AppLocalizations l)`
+  - L696 `Future<void> _logout()`
+  - L711 `Future<void> _replayOnboarding(BuildContext modalContext)`
+  - L723 `Future<void> _exportChats(BuildContext modalContext)`
+  - L788 `SnackBar _snack(String text)`  — The pill this page shows its messages in — the app's one notification
+
+## lib/pages/diagnostics_settings_page.dart  (336 Z.)
+
+- L18 `class DeveloperOptionsPage extends StatefulWidget`
+  - L19 `const DeveloperOptionsPage({super.key})`
+  - L22 `State<DeveloperOptionsPage> createState()`
+- L25 `class _DeveloperOptionsPageState extends State<DeveloperOptionsPage>`
+  - L26 `bool _loading = true`
+  - L27 `bool _developerOptionsEnabled = false`
+  - L28 `bool _enabled = false`
+  - L29 `bool _busy = false`
+  - L30 `String _logPreview = ''`
+  - L31 `String? _logPath`
+  - L34 `void initState()`
+  - L39 `Future<void> _load()`
+  - L54 `Future<void> _setDeveloperOptionsEnabled(bool value)`
+  - L76 `Future<void> _setEnabled(bool value)`
+  - L89 `Future<void> _refreshLogs()`
+  - L101 `Future<void> _copyRecentLogs()`
+  - L109 `Future<void> _copyFocusedModelMenuDebug()`
+  - L133 `Future<void> _shareLogFile()`
+  - L160 `Future<void> _clearLogs()`
+  - L184 `Widget build(BuildContext context)`
+
+## lib/pages/download_settings_page.dart  (136 Z.)
+
+- L14 `class DownloadSettingsPage extends StatefulWidget`
+  - L15 `const DownloadSettingsPage({super.key})`
+  - L18 `State<DownloadSettingsPage> createState()`
+- L21 `class _DownloadSettingsPageState extends State<DownloadSettingsPage>`
+  - L22 `bool _busy = false`
+  - L25 `void initState()`
+  - L33 `void dispose()`
+  - L40 `void _onPrefChanged()`
+  - L45 `Future<void> _pickFolder()`
+  - L61 `Future<void> _clearFolder()`
+  - L66 `Widget build(BuildContext context)`
+
+## lib/pages/forgot_password_page.dart  (208 Z.)
+
+- L20 `class ForgotPasswordPage extends StatefulWidget`  — Page for requesting a password reset code, then verifying it and setting
+  - L21 `const ForgotPasswordPage({super.key})`
+  - L24 `State<ForgotPasswordPage> createState()`
+- L27 `class _ForgotPasswordPageState extends State<ForgotPasswordPage>`
+  - L28 `final _formKey = GlobalKey<FormState>()`
+  - L29 `final _emailCtrl = TextEditingController()`
+  - L30 `final AuthService _authService = const AuthService()`
+  - L31 `bool _isSubmitting = false`
+  - L32 `String? _errorMessage`
+  - L35 `void dispose()`
+  - L40 `Future<void> _handleSendResetCode()`
+  - L70 `Future<void> _openRecoveryOtpVerification(String email)`  — Pushes the OTP code-entry page. On a valid code the user holds a
+  - L104 `Widget build(BuildContext context)`
+  - L130 `Widget _buildFormView(ThemeData theme, Color iconFg)`
+
+## lib/pages/fullscreen_map_page.dart  (1137 Z.)
+
+- L18 `class FullscreenMapPage extends StatefulWidget`
+  - L19 `final LatLng center`
+  - L20 `final double zoom`
+  - L21 `final String title`
+  - L22 `final List<Map<String, dynamic>>? places`
+  - L23 `final List<Map<String, dynamic>>? markers`
+  - L24 `final List<LatLng>? fitPoints`
+  - L25 `final double? routeFromLat`
+  - L26 `final double? routeFromLon`
+  - L27 `final double? routeToLat`
+  - L28 `final double? routeToLon`
+  - L29 `final String? routeFromLabel`
+  - L30 `final String? routeToLabel`
+  - L31 `final int? initialSelectedPlaceIndex`
+  - L33 `const FullscreenMapPage({ super.key, required this.center, required this.zoom, required this.title, this.places, this.markers, this.fitPoints, this.routeFromLat, this.routeFromLon, this.routeToLat, this.routeToLon, this.routeFromLabel, this.routeToLabel, this.initialSelectedPlaceIndex, })`
+  - L51 `State<FullscreenMapPage> createState()`
+- L54 `class _FullscreenMapPageState extends State<FullscreenMapPage>`
+  - L55 `static const String _kOsrmBaseUrl = 'https://router.workspace-osrm.org'`
+  - L56 `static const Map<String, String> _kApiHeaders = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`
+  - L61 `final fm.MapController _fallbackMapController = fm.MapController()`
+  - L62 `int? _selectedPlaceIndex`
+  - L63 `int? _selectedMarkerIndex`
+  - L64 `LatLng? _currentLocation`
+  - L65 `List<LatLng>? _activeRoutePoints`
+  - L66 `double? _routeDistanceKm`
+  - L67 `double? _routeDurationMin`
+  - L68 `bool _loadingLocation = false`
+  - L69 `bool _loadingRoute = false`
+  - L70 `bool _initialCameraApplied = false`
+  - L71 `bool _initialSelectionApplied = false`
+  - L72 `bool _locationAvailable = false`
+  - L74 `bool get _hasPlaces`
+  - L75 `bool get _hasMarkers`
+  - L76 `bool get _hasRouteEndpoints`
+  - L82 `LatLng? get _routeStart`
+  - L86 `LatLng? get _routeEnd`
+  - L91 `void initState()`
+  - L109 `void dispose()`
+  - L114 `Future<void> _refreshLocationAvailability()`
+  - L130 `Widget build(BuildContext context)`
+  - L188 `Widget _buildMapWidget()`
+  - L351 `fm.MapOptions _buildFallbackMapOptions()`
+  - L399 `Future<void> _applyInitialCamera()`
+  - L421 `Future<void> _applyInitialSelection()`
+  - L430 `Future<void> _fitToPoints(List<LatLng> points)`
+  - L442 `Future<void> _focusMarker(int index)`
+  - L458 `Future<void> _selectPlace(int index)`
+  - L492 `Future<void> _loadRouteForEndpoints()`
+  - L499 `Future<void> _loadRoute({ required LatLng from, required LatLng to, int? expectedPlaceIndex, })`
+  - L536 `Future<_RouteGeometry> _fetchRouteGeometry({ required LatLng from, required LatLng to, })`
+  - L589 `Future<void> _animateTo(LatLng target, {double? zoom})`
+  - L598 `Future<void> _centerOnCurrentLocation()`
+  - L604 `({LatLng point, String? label}) _resolveExternalTarget()`
+  - L631 `Future<void> _openCurrentViewInExternalMaps()`
+  - L640 `Future<void> _launchExternalMaps({ required double lat, required double lon, String? label, })`
+  - L666 `Future<LatLng?> _ensureCurrentLocation()`
+  - L736 `Widget _buildStatusChip( BuildContext context, { required IconData icon, required String text, })`
+  - L772 `Widget _buildPlacePopup( BuildContext context, Map<String, dynamic> place, int number, )`
+  - L1060 `Widget _buildPopupAction({ required IconData icon, required String label, required Color color, required VoidCallback onTap, })`
+  - L1095 `Widget _buildStarRating(double rating, {double size = 15})`
+  - L1113 `static double _toDouble(dynamic value)`
+- L1126 `class _RouteGeometry`
+  - L1127 `final List<LatLng> points`
+  - L1128 `final double? distanceMeters`
+  - L1129 `final double? durationSeconds`
+  - L1131 `const _RouteGeometry({ required this.points, this.distanceMeters, this.durationSeconds, })`
+
+## lib/pages/fullscreen_text_editor_page.dart  (217 Z.)
+
+- L24 `Future<String?> showFullscreenTextEditor( BuildContext context, { required String initialText, required String title, String hintText = '', bool monospace = false, })`  — Opens [initialText] in a fullscreen editor.
+- L44 `class FullscreenTextEditorPage extends StatefulWidget`
+  - L45 `const FullscreenTextEditorPage({ super.key, required this.initialText, required this.title, this.hintText = '', this.monospace = false, })`
+  - L53 `final String initialText`
+  - L54 `final String title`
+  - L55 `final String hintText`
+  - L56 `final bool monospace`
+  - L59 `State<FullscreenTextEditorPage> createState()`
+- L63 `class _FullscreenTextEditorPageState extends State<FullscreenTextEditorPage>`
+  - L64 `late final TextEditingController _controller`
+  - L65 `late final FocusNode _focusNode`
+  - L68 `void initState()`
+  - L81 `void dispose()`
+  - L88 `void _onChanged()`
+  - L94 `bool get _isDirty`
+  - L96 `Future<void> _confirmDiscard()`
+  - L124 `Widget build(BuildContext context)`
+
+## lib/pages/github_connection_page.dart  (469 Z.)
+
+- L24 `class GitHubConnectionPage extends StatefulWidget`
+  - L25 `const GitHubConnectionPage({super.key})`
+  - L28 `State<GitHubConnectionPage> createState()`
+- L31 `class _GitHubConnectionPageState extends State<GitHubConnectionPage>`
+  - L32 `bool _loading = true`
+  - L33 `String? _error`
+  - L34 `GitHubConnectionStatus _status = GitHubConnectionStatus.disconnected`
+  - L37 `GitHubConnectInit? _flow`
+  - L38 `GitHubConnectPollState? _pollState`
+  - L39 `Future<void>? _pollFuture`
+  - L42 `void initState()`
+  - L48 `void dispose()`
+  - L54 `Future<String?> _accessToken()`
+  - L59 `Future<void> _refreshStatus()`
+  - L90 `Future<void> _startConnect()`
+  - L128 `Future<void> _runPoll(String token, GitHubConnectInit init)`
+  - L156 `Future<void> _disconnect()`
+  - L203 `Widget build(BuildContext context)`
+  - L239 `Widget _intro(ColorScheme scheme)`
+  - L272 `Widget _disconnectedCard(ColorScheme scheme)`
+  - L297 `Widget _connectedCard(ColorScheme scheme)`
+  - L345 `Widget _deviceCodeCard(ColorScheme scheme, GitHubConnectInit flow)`
+  - L461 `Widget _errorBanner(String msg)`
+
+## lib/pages/login_page.dart  (569 Z.)
+
+- L18 `class LoginPage extends StatefulWidget`
+  - L19 `const LoginPage({super.key})`
+  - L22 `State<LoginPage> createState()`
+- L25 `class _LoginPageState extends State<LoginPage>`
+  - L26 `final _formKey = GlobalKey<FormState>()`
+  - L27 `final _emailCtrl = TextEditingController()`
+  - L28 `final _passwordCtrl = TextEditingController()`
+  - L29 `final _confirmPasswordCtrl = TextEditingController()`
+  - L30 `final _displayNameCtrl = TextEditingController()`
+  - L32 `final AuthService _authService = const AuthService()`
+  - L34 `bool _isSubmitting = false`
+  - L35 `bool _isSignInMode = true`
+  - L36 `bool _obscurePassword = true`
+  - L37 `bool _obscureConfirmPassword = true`
+  - L38 `bool _agreedToTerms = false`
+  - L39 `bool _confirmedAge = false`
+  - L40 `String? _errorMessage`
+  - L41 `String _currentPassword = ''`
+  - L44 `void initState()`
+  - L55 `void dispose()`
+  - L63 `Future<void> _handleSubmit()`
+  - L152 `Future<void> _openSignupOtpVerification({ required String email, required String password, })`  — Pushes the OTP code-entry page after a successful sign-up. On a valid
+  - L185 `void _toggleMode()`
+  - L196 `String? _validatePassword(String? value)`
+  - L213 `Widget build(BuildContext context)`
+
+## lib/pages/mcp_connectors_page.dart  (887 Z.)
+
+- L26 `class McpConnectorsPage extends StatefulWidget`
+  - L27 `const McpConnectorsPage({super.key})`
+  - L30 `State<McpConnectorsPage> createState()`
+- L33 `class _McpConnectorsPageState extends State<McpConnectorsPage>`
+  - L34 `final TextEditingController _search = TextEditingController()`
+  - L35 `List<McpCatalogueEntry> _registryHits = const []`
+  - L36 `bool _searchingRegistry = false`
+  - L41 `String? _searchedQuery`  — The query the shown hits belong to. Without it an empty result and a
+  - L45 `String? _inFlightQuery`  — The query of the search still in flight. An older answer arriving late
+  - L48 `void initState()`
+  - L54 `void dispose()`
+  - L59 `String get _query`
+  - L63 `Future<void> _searchRegistry()`  — The registry is only asked once the catalogue runs dry, so typing
+  - L82 `Widget build(BuildContext context)`
+  - L239 `Widget _searchField(ThemeData theme)`
+  - L264 `Widget _row({ required String url, required String name, required String trailing, required VoidCallback onTap, String? icon, String? assetPath, String? subtitle, })`
+  - L288 `Future<void> _open(String id, McpCatalogueEntry? entry)`
+  - L296 `Future<void> _addByUrl()`
+  - L336 `void _report(McpConnectResult result)`
+- L347 `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
+  - L348 `const McpConnectorDetailPage({super.key, required this.id, this.entry})`
+  - L350 `final String id`
+  - L351 `final McpCatalogueEntry? entry`
+  - L354 `State<McpConnectorDetailPage> createState()`
+- L357 `class _McpConnectorDetailPageState extends State<McpConnectorDetailPage>`
+  - L358 `bool _busy = false`
+  - L359 `McpConnectCanceler? _canceler`
+  - L362 `Widget build(BuildContext context)`
+  - L510 `Widget _legalNote(ThemeData theme, String url)`  — Who the reader is about to hand their data to, and where their terms
+  - L561 `Future<void> _openLegal(String url)`
+  - L584 `void _cancelConnect()`
+  - L586 `Future<void> _connect(String url, String name)`
+  - L636 `Future<void> _disconnect()`
+- L648 `Future<Map<String, String>?> showMcpCredentialDialog( BuildContext context, List<McpCredentialField> fields, String name, )`  — Collect a reader's own credentials for an [McpAuth.apiKey] server. Returns
+- L727 `class McpConnectorIcon extends StatefulWidget`  — A connector logo. The bundled brand logo first (shipped in the binary for
+  - L728 `const McpConnectorIcon({ super.key, this.url, this.assetPath, this.serverUrl, this.name, this.size = 32, this.fallback, })`
+  - L741 `final String? assetPath`  — A logo bundled in the binary (`assets/mcp_icons/<id>.png`), if this
+  - L744 `final String? url`  — An icon the server published, if any.
+  - L747 `final String? serverUrl`  — The server address, which the favicon services are asked about.
+  - L750 `final String? name`  — Used for the initial when no logo loads.
+  - L752 `final double size`
+  - L753 `final IconData? fallback`
+  - L756 `State<McpConnectorIcon> createState()`
+- L759 `class _McpConnectorIconState extends State<McpConnectorIcon>`
+  - L760 `Future<Uint8List?>? _bytes`
+  - L762 `List<String> get _candidates`
+  - L769 `void initState()`
+  - L775 `void didUpdateWidget(McpConnectorIcon old)`
+  - L784 `Future<Uint8List?> _loadFirstThatWorks()`  — Walks the sources in order until one answers. Each answer is cached,
+  - L793 `Widget build(BuildContext context)`
+  - L817 `Widget _networkIcon(ThemeData theme)`  — The favicon-cache path: walk the network sources, then the placeholder.
+  - L838 `Widget _placeholder(ThemeData theme)`
+- L867 `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
+
+## lib/pages/media_manager_page.dart  (1141 Z.)
+
+- L18 `enum _MediaFilter`
+  - L18 `images`
+  - L18 `artifacts`
+- L20 `class MediaManagerPage extends StatefulWidget`
+  - L21 `final bool embedded`
+  - L23 `const MediaManagerPage({super.key, this.embedded = false})`
+  - L26 `State<MediaManagerPage> createState()`
+- L29 `class _MediaManagerPageState extends State<MediaManagerPage>`
+  - L30 `List<StoredImage> _images = []`
+  - L31 `bool _isLoading = true`
+  - L32 `String? _error`
+  - L33 `final Set<String> _selectedImages = {}`
+  - L34 `bool _isSelectionMode = false`
+  - L38 `List<ArtifactDocument> _artifacts = const <ArtifactDocument>[]`
+  - L39 `bool _isLoadingArtifacts = true`
+  - L40 `_MediaFilter _filter = _MediaFilter.images`
+  - L46 `final Map<String, Uint8List> _thumbnailCache = {}`
+  - L47 `final Map<String, Future<Uint8List?>> _thumbnailFutures = {}`
+  - L50 `void initState()`
+  - L56 `Future<void> _loadArtifacts()`
+  - L75 `Future<void> _loadImages()`
+  - L107 `Future<Uint8List?> _loadThumbnail(String path)`
+  - L121 `Future<Uint8List?> _downloadThumbnail(String path)`
+  - L136 `Future<void> _deleteImage(StoredImage image)`
+  - L264 `Future<void> _deleteSelectedImages()`
+  - L374 `void _toggleSelection(String path)`
+  - L387 `void _enterSelectionMode(String path)`
+  - L394 `void _exitSelectionMode()`
+  - L401 `Future<void> _downloadImage(StoredImage image)`
+  - L427 `Future<void> _downloadSelectedImages()`
+  - L471 `String _formatFileSize(int? bytes)`
+  - L478 `String _formatDate(DateTime? date)`
+  - L484 `Widget build(BuildContext context)`
+  - L584 `Widget _buildBody(bool isMobile, Color iconFg, AppLocalizations l)`
+  - L651 `Widget _buildImagesEmpty(Color iconFg, AppLocalizations l)`
+  - L679 `Widget _buildArtifactsView(Color iconFg)`
+  - L725 `void _showArtifactPreview(ArtifactDocument artifact)`
+  - L737 `Widget _buildDesktopGrid(Color iconFg)`
+  - L751 `Widget _buildMobileList(Color iconFg)`
+  - L766 `Widget _buildImageCard( StoredImage image, Color iconFg, { bool compact = false, })`
+  - L953 `void _showImagePreview(StoredImage image)`
+- L974 `class _MediaFilterChip extends StatelessWidget`
+  - L975 `final String label`
+  - L976 `final int count`
+  - L977 `final bool selected`
+  - L978 `final VoidCallback onTap`
+  - L980 `const _MediaFilterChip({ required this.label, required this.count, required this.selected, required this.onTap, })`
+  - L988 `Widget build(BuildContext context)`
+- L1033 `class _ArtifactTile extends StatelessWidget`
+  - L1034 `final ArtifactDocument artifact`
+  - L1035 `final VoidCallback onTap`
+  - L1037 `const _ArtifactTile({required this.artifact, required this.onTap})`
+  - L1040 `Widget build(BuildContext context)`
+  - L1121 `static String _relative(DateTime updatedAt)`
+  - L1130 `static IconData _iconForType(ArtifactType type)`
+
+## lib/pages/otp_verification_page.dart  (291 Z.)
+
+- L26 `class OtpVerificationPage extends StatefulWidget`  — Reusable page for entering a 6-digit email verification code.
+  - L27 `const OtpVerificationPage({ super.key, required this.email, required this.body, required this.onSubmit, required this.onResend, })`
+  - L36 `final String email`  — The email address the code was sent to (shown in the body text).
+  - L39 `final String body`  — Already-localized explanatory text (typically includes [email]).
+  - L43 `final Future<void> Function(String code) onSubmit`  — Verifies [code] and performs any post-verify work (encryption init,
+  - L46 `final Future<void> Function() onResend`  — Requests a fresh code be emailed. Throwing surfaces an error message.
+  - L49 `State<OtpVerificationPage> createState()`
+- L52 `class _OtpVerificationPageState extends State<OtpVerificationPage>`
+  - L53 `static const int _resendCooldownSeconds = 60`
+  - L55 `final _formKey = GlobalKey<FormState>()`
+  - L56 `final _codeCtrl = TextEditingController()`
+  - L58 `bool _isSubmitting = false`
+  - L59 `bool _isResending = false`
+  - L60 `String? _errorMessage`
+  - L61 `int _resendSecondsLeft = _resendCooldownSeconds`
+  - L62 `Timer? _cooldownTimer`
+  - L65 `void initState()`
+  - L72 `void dispose()`
+  - L78 `void _startCooldown()`
+  - L97 `String _messageForError(Object error, String fallback)`
+  - L112 `Future<void> _handleVerify()`
+  - L136 `Future<void> _handleResend()`
+  - L162 `Widget build(BuildContext context)`
+
+## lib/pages/pricing_page.dart  (673 Z.)
+
+- L24 `_supabase = Supabase.instance.client`
+- L27 `_apiBaseUrl = ApiConfigService.apiBaseUrl`
+- L29 `Future<void> _launchExternalUrl(String url)`
+- L44 `Future<String> _getAccessToken()`
+- L53 `Future<void> startCheckout()`
+- L81 `Future<void> openBillingPortal()`
+- L110 `Future<void> syncSubscription()`
+- L128 `Future<Map<String, dynamic>> getUserStatus()`  — Always a live read — used before opening Stripe checkout, where a stale
+- L136 `class PricingPage extends StatefulWidget`
+  - L137 `const PricingPage({super.key})`
+  - L140 `State<PricingPage> createState()`
+- L143 `class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver`
+  - L144 `Map<String, dynamic>? _userStatus`
+  - L145 `bool _isLoading = true`
+  - L146 `bool _isProcessing = false`
+  - L147 `bool _agreedToTerms = false`
+  - L150 `void initState()`
+  - L157 `void dispose()`
+  - L163 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L174 `Future<void> _loadUserStatus({bool force = false})`  — Cache-first. A returning subscriber sees their plan immediately; the
+  - L203 `Future<void> _handleSubscribe()`
+  - L245 `Future<void> _handleManageBilling()`
+  - L264 `void _showError(String message)`
+  - L267 `void _openUsageDetails()`
+  - L275 `Widget build(BuildContext context)`
+- L564 `class _PlanCard extends StatelessWidget`
+  - L565 `final String title`
+  - L566 `final String price`
+  - L567 `final List<String> features`
+  - L568 `final String? badgeLabel`
+  - L571 `final Color? badgeTone`  — Background of the badge. Null keeps the neutral pill.
+  - L572 `final bool highlighted`
+  - L573 `final Widget? child`
+  - L575 `const _PlanCard({ required this.title, required this.price, required this.features, required this.highlighted, this.badgeLabel, this.badgeTone, this.child, })`
+  - L586 `Widget build(BuildContext context)`
+
+## lib/pages/recover_chats_page.dart  (389 Z.)
+
+- L11 `class RecoverChatsPage extends StatefulWidget`  — Page for recovering or deleting chats encrypted with old passwords.
+  - L12 `const RecoverChatsPage({super.key})`
+  - L15 `State<RecoverChatsPage> createState()`
+- L18 `class _RecoverChatsPageState extends State<RecoverChatsPage>`
+  - L19 `Map<int, int> _lockedInfo = {}`
+  - L20 `final Map<int, TextEditingController> _passwordControllers = {}`
+  - L21 `final Map<int, bool> _obscurePasswords = {}`
+  - L22 `final Map<int, bool> _isRecovering = {}`
+  - L23 `final Map<int, String?> _messages = {}`
+  - L24 `String? _progressMessage`
+  - L27 `void initState()`
+  - L32 `void _loadLockedInfo()`
+  - L50 `void dispose()`
+  - L57 `Future<void> _recoverVersion(int version)`
+  - L107 `Future<void> _deleteVersion(int version)`
+  - L152 `Future<bool?> _showDeleteConfirmation(int count)`
+  - L174 `Future<bool?> _showTypeDeleteConfirmation(int count)`
+  - L218 `Widget build(BuildContext context)`
+  - L262 `Widget _buildVersionCard( int version, int count, ThemeData theme, Color iconFg, )`
+
+## lib/pages/sandbox_management_page.dart  (314 Z.)
+
+- L18 `class SandboxManagementPage extends StatefulWidget`
+  - L19 `const SandboxManagementPage({super.key})`
+  - L22 `State<SandboxManagementPage> createState()`
+- L25 `class _SandboxManagementPageState extends State<SandboxManagementPage>`
+  - L26 `bool _loading = true`
+  - L27 `String? _error`
+  - L28 `List<SandboxInfo> _sandboxes = const []`
+  - L29 `final Set<String> _destroying = <String>{}`
+  - L34 `GitHubConnectionStatus _github = GitHubConnectionStatus.disconnected`
+  - L37 `void initState()`
+  - L43 `Future<String?> _accessToken()`
+  - L47 `Future<void> _loadGitHubStatus()`
+  - L68 `Future<void> _refresh()`
+  - L99 `Future<void> _openGitHub()`
+  - L110 `Future<void> _destroy(SandboxInfo info)`
+  - L159 `String _shortId(String id)`
+  - L163 `String _formatTime(DateTime dt)`
+  - L173 `Widget build(BuildContext context)`
+- L269 `class _SandboxRow extends StatelessWidget`
+  - L270 `const _SandboxRow({ required this.info, required this.isDestroying, required this.onDestroy, required this.shortId, required this.formatTime, })`
+  - L278 `final SandboxInfo info`
+  - L279 `final bool isDestroying`
+  - L280 `final VoidCallback onDestroy`
+  - L281 `final String shortId`
+  - L282 `final String Function(DateTime) formatTime`
+  - L285 `Widget build(BuildContext context)`
+
+## lib/pages/set_new_password_page.dart  (269 Z.)
+
+- L19 `class SetNewPasswordPage extends StatefulWidget`  — Page shown after a user clicks a password reset link.
+  - L20 `const SetNewPasswordPage({super.key, this.onComplete})`
+  - L24 `final VoidCallback? onComplete`  — Called after the password has been successfully changed and encryption
+  - L27 `State<SetNewPasswordPage> createState()`
+- L30 `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
+  - L31 `final _formKey = GlobalKey<FormState>()`
+  - L32 `final _passwordCtrl = TextEditingController()`
+  - L33 `final _confirmCtrl = TextEditingController()`
+  - L35 `bool _isSubmitting = false`
+  - L36 `bool _obscurePassword = true`
+  - L37 `bool _obscureConfirm = true`
+  - L38 `String _currentPassword = ''`
+  - L39 `String? _errorMessage`
+  - L42 `void initState()`
+  - L50 `void dispose()`
+  - L56 `Future<void> _handleSetPassword()`
+  - L130 `Widget build(BuildContext context)`
+
+## lib/pages/settings_page.dart  (1008 Z.)
+
+- L49 `class SettingsPage extends StatefulWidget`
+  - L50 `final AppShellConfig config`
+  - L52 `const SettingsPage({super.key, required this.config})`
+  - L55 `State<SettingsPage> createState()`
+- L58 `class _SettingsPageState extends State<SettingsPage>`
+  - L59 `bool _developerOptionsEnabled = false`
+  - L62 `void initState()`
+  - L76 `void dispose()`
+  - L81 `void _onDeveloperOptions()`
+  - L88 `Future<void> _refreshDeveloperOptions()`
+  - L121 `Widget build(BuildContext context)`
+  - L433 `Future<void> _replayOnboarding(BuildContext context)`
+  - L448 `Future<void> _exportChats(BuildContext context)`
+  - L495 `Future<String?> _saveExportToLinux(Uint8List data, String fileName)`
+  - L516 `Future<Directory?> _linuxInitialDirectory()`
+- L540 `class _PlanInfo`
+  - L541 `final String heroLabel`
+  - L543 `const _PlanInfo({required this.heroLabel})`
+- L546 `class _AccountRow extends StatefulWidget`
+  - L547 `final Future<void> Function() onTap`
+  - L549 `const _AccountRow({required this.onTap})`
+  - L552 `State<_AccountRow> createState()`
+- L555 `class _AccountRowState extends State<_AccountRow>`
+  - L556 `late Future<_PlanInfo> _planFuture`
+  - L557 `ProfileRecord? _profile`
+  - L560 `void initState()`
+  - L566 `Future<void> _loadProfile()`
+  - L580 `Future<_PlanInfo> _loadPlan()`
+  - L588 `static _PlanInfo _planInfoFrom(Map<String, dynamic>? status)`
+  - L599 `({String displayName, String email}) _identity()`
+  - L627 `Widget build(BuildContext context)`
+- L717 `class _PlanBadge extends StatelessWidget`
+  - L718 `final String label`
+  - L720 `const _PlanBadge({required this.label})`
+  - L723 `Widget build(BuildContext context)`
+- L746 `class _SettingsRow extends StatelessWidget`
+  - L747 `final IconData icon`
+  - L748 `final String title`
+  - L749 `final String? subtitle`
+  - L750 `final Widget? trailing`
+  - L751 `final VoidCallback onTap`
+  - L753 `const _SettingsRow({ required this.icon, required this.title, required this.onTap, this.subtitle, this.trailing, })`
+  - L762 `Widget build(BuildContext context)`
+- L771 `class _DevTile extends StatelessWidget`
+  - L772 `final String title`
+  - L773 `final String subtitle`
+  - L774 `final VoidCallback onTap`
+  - L776 `const _DevTile({ required this.title, required this.subtitle, required this.onTap, })`
+  - L783 `Widget build(BuildContext context)`
+- L847 `enum BadgeTone`
+  - L847 `neutral`
+  - L847 `primary`
+  - L847 `success`
+  - L847 `warning`
+  - L847 `error`
+- L849 `class _Badge extends StatelessWidget`
+  - L850 `final String label`
+  - L851 `final BadgeTone tone`
+  - L853 `const _Badge(this.label, {required this.tone})`
+  - L856 `Widget build(BuildContext context)`
+- L902 `class _MiniChip extends StatelessWidget`
+  - L903 `final String label`
+  - L904 `final bool connected`
+  - L907 `const _MiniChip(this.label, {this.connected = false})`
+  - L910 `Widget build(BuildContext context)`
+- L944 `class DottedBorderBox extends StatelessWidget`  — Paints a dashed rounded-rectangle border around [child].
+  - L945 `final Widget child`
+  - L946 `final Color color`
+  - L947 `final double radius`
+  - L949 `const DottedBorderBox({ super.key, required this.child, required this.color, this.radius = 12, })`
+  - L957 `Widget build(BuildContext context)`
+- L965 `class _DashedRectPainter extends CustomPainter`
+  - L966 `final Color color`
+  - L967 `final double radius`
+  - L968 `final double dashWidth`
+  - L969 `final double dashSpace`
+  - L971 `_DashedRectPainter({required this.color, required this.radius}) : dashWidth = 5, dashSpace = 4`
+  - L976 `void paint(Canvas canvas, Size size)`
+  - L1002 `bool shouldRepaint(covariant _DashedRectPainter oldDelegate)`
+
+## lib/pages/skills_settings_page.dart  (475 Z.)
+
+- L25 `class SkillsSettingsPage extends StatefulWidget`  — Lists built-in skills and lets the user author their own.
+  - L26 `const SkillsSettingsPage({super.key})`
+  - L29 `State<SkillsSettingsPage> createState()`
+- L32 `class _SkillsSettingsPageState extends State<SkillsSettingsPage>`
+  - L33 `List<Skill> _userSkills = const []`
+  - L34 `bool _loading = true`
+  - L35 `String? _error`
+  - L38 `void initState()`
+  - L50 `Future<void> _reload({bool forceRefresh = false})`
+  - L74 `Future<void> _openEditor({Skill? skill})`
+  - L82 `Future<void> _confirmDelete(Skill skill)`
+  - L112 `Widget build(BuildContext context)`
+- L174 `class SkillEditorPage extends StatefulWidget`  — Edits one skill's SKILL.md source.
+  - L175 `const SkillEditorPage({super.key, this.skill})`
+  - L178 `final Skill? skill`  — Null to create a new skill.
+  - L181 `State<SkillEditorPage> createState()`
+- L184 `class _SkillEditorPageState extends State<SkillEditorPage>`
+  - L185 `late final TextEditingController _controller`
+  - L186 `String? _error`
+  - L187 `String? _errorField`
+  - L188 `bool _saving = false`
+  - L190 `static const String _template = ''' --- name: my-skill description: Does the thing. Use when the user asks for the thing, or mentions a trigger word. --- # My skill Write the instructions here. They are injected into the system prompt only after the model loads this skill, so they can be as detailed as they need to be — but keep the description above short: that one is charged to every message. '''`
+  - L205 `void initState()`
+  - L216 `String _sourceOf(Skill skill)`  — Reconstructs SKILL.md source from a parsed skill.
+  - L248 `static const Set<String> _yamlKeywords = { 'true', 'false', 'yes', 'no', 'on', 'off', 'null', '~', }`  — YAML scalars that a bare string would be read back as something else.
+  - L265 `static String _yamlScalar(String value)`  — Quotes a scalar when YAML would otherwise mis-read it.
+  - L282 `static String _quote(String value)`  — A JSON string literal is a valid YAML double-quoted scalar (YAML 1.2 is a
+  - L284 `Future<void> _save()`
+  - L319 `void dispose()`
+  - L325 `Widget build(BuildContext context)`
+- L379 `class _SkillsEmptyState extends StatelessWidget`  — Shown when the user has authored no skills of their own. A quiet centred
+  - L380 `const _SkillsEmptyState({required this.onCreate})`
+  - L382 `final VoidCallback onCreate`
+  - L385 `Widget build(BuildContext context)`
+- L443 `class _SkillRow extends StatelessWidget`
+  - L444 `const _SkillRow({required this.skill, this.onTap, this.onDelete})`
+  - L446 `final Skill skill`
+  - L447 `final VoidCallback? onTap`
+  - L448 `final VoidCallback? onDelete`
+  - L451 `Widget build(BuildContext context)`
+
+## lib/pages/system_prompt_page.dart  (813 Z.)
+
+- L26 `class SystemPromptPage extends StatefulWidget`
+  - L27 `const SystemPromptPage({super.key})`
+  - L30 `State<SystemPromptPage> createState()`
+- L33 `class _SystemPromptPageState extends State<SystemPromptPage>`
+  - L34 `final TextEditingController _systemPromptCtrl = TextEditingController()`
+  - L35 `final TextEditingController _soulCtrl = TextEditingController()`
+  - L36 `final TextEditingController _userInfoCtrl = TextEditingController()`
+  - L37 `final TextEditingController _memoryCtrl = TextEditingController()`
+  - L39 `bool _isSaving = false`
+  - L40 `bool _isLoading = true`
+  - L41 `String? _errorMessage`
+  - L44 `bool _identityEnabled = true`
+  - L47 `String? _originalPrompt`
+  - L48 `String _originalSoul = ''`
+  - L49 `String _originalUserInfo = ''`
+  - L50 `String _originalMemory = ''`
+  - L51 `bool _originalIdentityEnabled = true`
+  - L53 `bool get _isDesktopPlatform`
+  - L63 `String _selectedTextOrAll(TextEditingValue value)`
+  - L71 `Widget _buildDesktopTextContextMenu( BuildContext context, EditableTextState editableTextState, )`
+  - L106 `void initState()`
+  - L116 `void dispose()`
+  - L128 `void _onTextChanged()`
+  - L134 `Future<void> _loadAll()`
+  - L225 `Future<void> _backgroundSyncIdentity()`
+  - L277 `Future<void> _saveAll()`
+  - L330 `bool get _hasPromptChanges`
+  - L333 `bool get _hasSoulChanges`
+  - L335 `bool get _hasUserInfoChanges`
+  - L338 `bool get _hasMemoryChanges`
+  - L340 `bool get _hasIdentityToggleChanged`
+  - L343 `bool get _hasAnyChanges`
+  - L352 `static const String _importPrompt = "I'm moving to another service and need to export my data. " 'List every memory you have stored about me, as well as any context ' "you've learned about me from past conversations. Output everything " 'in a single code block so I can easily copy it. Format each entry ' 'as: [date saved, if available] - memory content.\n\n' 'Make sure to cover all of the following — preserve my words verbatim ' 'where possible:\n' '- Instructions I\'ve given you about how to respond (tone, format, ' "style, 'always do X', 'never do Y').\n" '- Personal details: name, location, job, family, interests.\n' '- Projects, goals, and recurring topics.\n' '- Tools, languages, and frameworks I use.\n' '- Preferences and corrections I\'ve made to your behavior.\n' '- Any other stored context not covered above.\n\n' 'Do not summarize, group, or omit any entries. After the code block, ' 'confirm whether that is the complete set or if any remain.'`
+  - L370 `Future<void> _importMemory()`
+  - L514 `void _showSnackBar(String text)`
+  - L527 `Widget build(BuildContext context)`
+- L748 `class _MaterialTextField extends StatelessWidget`
+  - L749 `final TextEditingController controller`
+  - L750 `final String hintText`
+  - L751 `final int minLines`
+  - L752 `final int maxLines`
+  - L756 `final String? fontFamily`  — The font family the field renders in. The whole page passes the user's
+  - L757 `final EditableTextContextMenuBuilder? contextMenuBuilder`
+  - L759 `const _MaterialTextField({ required this.controller, required this.hintText, this.minLines = 6, this.maxLines = 18, this.fontFamily, this.contextMenuBuilder, })`
+  - L769 `Widget build(BuildContext context)`
+
+## lib/pages/theme_page.dart  (1134 Z.)
+
+- L21 `class ThemePage extends StatefulWidget`
+  - L22 `final AppShellConfig config`
+  - L24 `const ThemePage({super.key, required this.config})`
+  - L27 `State<ThemePage> createState()`
+- L30 `class _ThemePageState extends State<ThemePage>`
+  - L31 `late Brightness _selectedThemeMode`
+  - L32 `late Color _selectedAccentColor`
+  - L33 `late Color _selectedIconFgColor`
+  - L34 `late Color _selectedBgColor`
+  - L35 `late bool _selectedDynamicColor`
+  - L36 `late double _selectedContrast`
+  - L37 `late String _selectedUiFont`
+  - L38 `late String _selectedChatFont`
+  - L40 `final TextEditingController _accentHexController = TextEditingController()`
+  - L41 `final TextEditingController _iconFgHexController = TextEditingController()`
+  - L42 `final TextEditingController _bgHexController = TextEditingController()`
+  - L47 `final List<Color> _accentColorOptions = const [ kDefaultAccentColor, Color(0xFF8AB4F8), // soft blue Color(0xFF7C4DFF), // deep purple A Color(0xFFB388FF), // soft violet Color(0xFFEA80FC), // pink violet Color(0xFFFF80AB), // pink Color(0xFFFF5252), // red Color(0xFFFF7043), // deep orange Color(0xFFFFB300), // amber Color(0xFFFFD54F), // yellow Color(0xFFAEEA00), // lime Color(0xFF00E676), // green Color(0xFF26A69A), // teal Color(0xFF26C6DA), // cyan Color(0xFF8D6E63), // brown Color(0xFFBDBDBD), // light grey Color(0xFF424242), // dark grey Color(0xFF000000), // black Color(0xFFFFFFFF), // white ]`
+  - L71 `final List<Color> _iconFgColorOptions = const [ kDefaultIconFgColor, Color(0xFFFFFFFF), // white Color(0xFF000000), // black Color(0xFFE0E0E0), // light grey Color(0xFF9E9E9E), // mid grey Color(0xFF424242), // dark grey Color(0xFFCFD8DC), // blue grey 100 Color(0xFF90A4AE), // blue grey 300 Color(0xFFFFE082), // amber 200 Color(0xFFFFAB91), // orange 200 Color(0xFFF48FB1), // pink 200 Color(0xFFCE93D8), // purple 200 Color(0xFF9FA8DA), // indigo 200 Color(0xFF80DEEA), // cyan 200 Color(0xFFA5D6A7), // green 200 Color(0xFFC5E1A5), // light green 200 Color(0xFFEEEBE3), // warm beige ]`
+  - L91 `final List<Color> _bgColorOptions = [ kDefaultBgColor, kDefaultBgColor.lighten(0.8), const Color(0xFF000000), // pure black const Color(0xFFFFFFFF), // pure white const Color(0xFF111318), // near-black const Color(0xFF1B1B1F), // charcoal const Color(0xFF202124), // graphite const Color(0xFF263238), // blue grey 900 const Color(0xFF1A237E), // indigo 900 const Color(0xFF311B92), // deep purple 900 const Color(0xFF004D40), // teal 900 const Color(0xFF3E2723), // brown 900 const Color(0xFFF5F5F5), // off-white const Color(0xFFFAFAFA), // grey 50 const Color(0xFFEEEBE3), // warm beige const Color(0xFFE3F2FD), // blue 50 const Color(0xFFFFF3E0), // orange 50 ]`
+  - L112 `void initState()`
+  - L135 `void dispose()`
+  - L142 `void _applyThemeChanges()`
+  - L149 `void _updateThemeMode(bool useDarkMode)`
+  - L169 `void _updateDynamicColorEnabled(bool enabled)`
+  - L179 `void _selectPresetVariant(ThemePreset preset, Brightness brightness)`  — Applies a pack's variant for [brightness] to both local state and the
+  - L196 `void _applyPreset(ThemePreset preset)`
+  - L201 `ThemePreset? get _matchedPreset`  — The pack whose variant for the current brightness matches every selected
+  - L218 `void _updateContrast(double value, {bool commit = false})`
+  - L227 `void _updateUiFont(String id)`
+  - L234 `void _updateChatFont(String id)`
+  - L241 `String _fontLabel(String id, AppLocalizations l)`
+  - L256 `Widget build(BuildContext context)`
+  - L496 `Widget _dynamicColorNote(AppLocalizations l)`
+- L505 `class _ColorCard extends StatelessWidget`
+  - L506 `final String description`
+  - L507 `final String hexLabel`
+  - L508 `final Color currentColor`
+  - L509 `final List<Color> options`
+  - L510 `final TextEditingController hexController`
+  - L511 `final int gridColumns`
+  - L512 `final ValueChanged<Color> onColorSelected`
+  - L513 `final ValueChanged<String> onHexChanged`
+  - L515 `const _ColorCard({ required this.description, required this.hexLabel, required this.currentColor, required this.options, required this.hexController, required this.gridColumns, required this.onColorSelected, required this.onHexChanged, })`
+  - L527 `Widget build(BuildContext context)`
+- L641 `class _ColorPickerDialog extends StatefulWidget`
+  - L642 `final Color initial`
+  - L643 `const _ColorPickerDialog({required this.initial})`
+  - L646 `State<_ColorPickerDialog> createState()`
+- L649 `class _ColorPickerDialogState extends State<_ColorPickerDialog>`
+  - L650 `late HSVColor _hsv`
+  - L651 `late TextEditingController _hexController`
+  - L654 `void initState()`
+  - L661 `void dispose()`
+  - L666 `void _setHsv(HSVColor v)`
+  - L673 `void _onHexSubmit(String hex)`
+  - L684 `Widget build(BuildContext context)`
+- L792 `class _GradientSlider extends StatelessWidget`
+  - L793 `final List<Color> colors`
+  - L794 `final double value`
+  - L795 `final ValueChanged<double> onChanged`
+  - L797 `const _GradientSlider({ required this.colors, required this.value, required this.onChanged, })`
+  - L804 `Widget build(BuildContext context)`
+- L869 `class _Swatch extends StatelessWidget`
+  - L870 `final Color color`
+  - L871 `final bool selected`
+  - L872 `final double size`
+  - L873 `final VoidCallback onTap`
+  - L875 `const _Swatch({ required this.color, required this.selected, required this.size, required this.onTap, })`
+  - L883 `Widget build(BuildContext context)`
+- L920 `class _PresetPicker extends StatelessWidget`
+  - L921 `final List<ThemePreset> presets`
+  - L922 `final ThemePreset? selected`
+  - L923 `final Brightness brightness`
+  - L924 `final ValueChanged<ThemePreset> onSelected`
+  - L925 `final String title`
+  - L926 `final String subtitle`
+  - L927 `final String customLabel`
+  - L929 `const _PresetPicker({ required this.presets, required this.selected, required this.brightness, required this.onSelected, required this.title, required this.subtitle, required this.customLabel, })`
+  - L940 `Widget build(BuildContext context)`
+- L1009 `class _PresetDots extends StatelessWidget`
+  - L1010 `final ThemePreset preset`
+  - L1011 `final Brightness brightness`
+  - L1012 `const _PresetDots({required this.preset, required this.brightness})`
+  - L1015 `Widget build(BuildContext context)`
+- L1041 `class _FontCard extends StatelessWidget`
+  - L1042 `final String title`
+  - L1043 `final String subtitle`
+  - L1044 `final String sample`
+  - L1045 `final String value`
+  - L1046 `final List<String> options`
+  - L1047 `final String Function(String) labelFor`
+  - L1048 `final ValueChanged<String> onChanged`
+  - L1050 `const _FontCard({ required this.title, required this.subtitle, required this.sample, required this.value, required this.options, required this.labelFor, required this.onChanged, })`
+  - L1061 `Widget build(BuildContext context)`
+
+## lib/pages/tool_calling_settings_page.dart  (805 Z.)
+
+- L23 `class ToolCallingSettingsPage extends StatefulWidget`
+  - L24 `const ToolCallingSettingsPage({super.key, required this.config})`
+  - L26 `final AppShellConfig config`
+  - L29 `State<ToolCallingSettingsPage> createState()`
+- L33 `class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage>`
+  - L34 `static const Map<String, IconData> _toolIcons = { 'web_search': Icons.search, 'web_crawl': Icons.language, 'generate_image': Icons.image_outlined, 'fetch_image': Icons.download_outlined, 'view_chat_images': Icons.visibility_outlined, 'weather': Icons.cloud_outlined, 'search_places': Icons.place_outlined, 'search_restaurants': Icons.restaurant, 'geocode': Icons.pin_drop_outlined, 'get_route': Icons.alt_route, 'calculate': Icons.calculate, 'get_time': Icons.access_time, 'random_number': Icons.casino_outlined, 'flip_coin': Icons.currency_exchange, 'roll_dice': Icons.casino, 'countdown': Icons.timer_outlined, 'password_generator': Icons.key_outlined, 'uuid_generator': Icons.fingerprint, 'notes': Icons.note_outlined, 'generate_qr': Icons.qr_code_2, }`
+  - L57 `static Map<String, String> _toolDisplayNames(AppLocalizations l)`
+  - L80 `late bool _toolCallingEnabled`
+  - L81 `late bool _toolDiscoveryMode`
+  - L82 `late bool _showToolCalls`
+  - L83 `late final ToolExecutor _toolExecutor`
+  - L84 `bool _isLoadingToolPreferences = true`
+  - L87 `void initState()`
+  - L107 `void dispose()`
+  - L114 `void _onDevOptionsChanged()`
+  - L119 `Future<void> _loadToolPreferences()`
+  - L157 `int _categoryOrder(ToolCategory category)`
+  - L182 `String _categoryLabel(ToolCategory category)`
+  - L208 `IconData _categoryIcon(ToolCategory category)`
+  - L233 `String _categoryDescription(ToolCategory category)`
+  - L261 `String? _categoryServiceName(ToolCategory category)`  — Map a ToolCategory to the service name used by platform_tools.
+  - L274 `bool _isCategoryConnectable(ToolCategory category)`
+  - L279 `bool _isCategoryConnected(ToolCategory category)`
+  - L287 `Future<void> _connectService(ToolCategory category)`
+  - L307 `Future<void> _disconnectService(ToolCategory category)`
+  - L341 `String _displayName(String toolName)`
+  - L358 `String _trimDescription(String text, {int maxChars = 110})`
+  - L371 `static const Set<ToolCategory> _devOnlyCategories = { ToolCategory.github, }`
+  - L375 `bool _isCategoryDevOnly(ToolCategory category)`
+  - L382 `static const Set<String> _hiddenTools = { 'find_tools', 'ask_user', 'request_mcp_server', 'skill', 'create_artifact', 'update_artifact', 'update_project', 'typst_compile', 'search_chats', }`
+  - L396 `static const Set<String> _sandboxTools = { 'code_run', 'sandbox_list', 'sandbox_read', 'sandbox_write', 'sandbox_reset', 'send_file_to_user', }`
+  - L407 `static const Set<String> _artifactTools = { 'artifact_manager', 'artifact_schema', }`
+  - L412 `bool _anyRegistered(Set<String> names)`
+  - L415 `List<ClientTool> _visibleTools()`
+  - L461 `List<Widget> _buildToolSections()`
+  - L538 `void _appendCollapsedInfraRows(List<Widget> widgets, AppLocalizations l)`  — Artifacts and the sandbox are each one capability to the user, not a pile
+  - L587 `Future<void> _openToolDetail(ClientTool tool)`
+  - L602 `Future<void> _resetAllToolPreferences()`
+  - L635 `Widget build(BuildContext context)`
+- L730 `class _ToolRow extends StatelessWidget`  — One tool: the switch turns it off, the tile itself opens its detail.
+  - L731 `const _ToolRow({ required this.icon, required this.iconEnabled, required this.title, required this.subtitle, required this.value, required this.onChanged, this.onTap, this.alwaysOn = false, })`
+  - L742 `final IconData icon`
+  - L743 `final bool iconEnabled`
+  - L744 `final String title`
+  - L745 `final String subtitle`
+  - L746 `final bool value`
+  - L747 `final ValueChanged<bool> onChanged`
+  - L748 `final VoidCallback? onTap`
+  - L749 `final bool alwaysOn`
+  - L752 `Widget build(BuildContext context)`
+- L783 `class _CategoryLabel extends StatelessWidget`  — A light category label under the single "Tools" section header. Smaller and
+  - L784 `const _CategoryLabel(this.label)`
+  - L786 `final String label`
+  - L789 `Widget build(BuildContext context)`
+
+## lib/pages/usage_details_page.dart  (1337 Z.)
+
+- L11 `_kMonthNames = <String>[ 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', ]`
+- L26 `class UsageDetailsPage extends StatefulWidget`
+  - L27 `const UsageDetailsPage({super.key})`
+  - L30 `State<UsageDetailsPage> createState()`
+- L33 `class _UsageDetailsPageState extends State<UsageDetailsPage>`
+  - L34 `static const String _kScopeAllTime = 'all-time'`
+  - L35 `static const String _kScopeBillingPeriod = 'billing-period'`
+  - L37 `UsageOverview? _overview`
+  - L38 `TokenActivityStats? _activityStats`
+  - L39 `HeatmapMode _heatmapMode = HeatmapMode.daily`
+  - L40 `bool _isLoading = true`
+  - L41 `String? _errorMessage`
+  - L42 `DateTime? _lastUpdatedAt`
+  - L43 `String _selectedScopeKey = _kScopeAllTime`
+  - L46 `void initState()`
+  - L51 `Future<void> _loadUsageOverview()`
+  - L88 `void _syncSelectedScope(UsageOverview overview)`
+  - L119 `Widget build(BuildContext context)`
+  - L267 `PreferredSizeWidget _appBar(BuildContext context)`
+  - L278 `bool _hasCreditProgress(UsageOverview overview)`
+  - L286 `Widget _buildScopeSelector( BuildContext context, List<_UsageScopeOption> scopeOptions, )`
+  - L316 `Widget _buildSummaryCard(BuildContext context, _UsageSlice usageSlice)`
+  - L362 `Widget _buildTokenActivitySection( BuildContext context, TokenActivityStats stats, )`
+  - L436 `Widget _buildHeatmapModeSelector(BuildContext context)`
+  - L461 `Widget _buildHeatmapLegend(BuildContext context)`
+  - L490 `String _heatmapCaption()`
+  - L502 `Widget _buildBillingCard( BuildContext context, UsageOverview overview, _UsageScopeOption selectedScope, )`
+  - L552 `Widget _buildModelSummaryCard(BuildContext context, _UsageSlice usageSlice)`
+  - L629 `Widget _buildRequestCard(BuildContext context, UsageLogEntry entry)`
+  - L715 `Widget _buildInlineWarning(BuildContext context, String message)`
+  - L744 `List<_UsageScopeOption> _buildScopeOptions(UsageOverview overview)`
+  - L798 `_UsageScopeOption _selectedScope(List<_UsageScopeOption> options)`
+  - L807 `_UsageScopeOption? _firstScopeByType( List<_UsageScopeOption> options, _UsageScopeType type, )`
+  - L819 `_UsageSlice _buildSlice( _UsageScopeOption option, List<UsageLogEntry> allEntries, )`
+  - L886 `bool _matchesScope(_UsageScopeOption option, UsageLogEntry entry)`
+  - L907 `String _formatMonthYear(DateTime dateTime)`
+  - L912 `String _formatCount(int value)`
+  - L917 `String _formatDate(DateTime? dateTime)`
+  - L925 `String _formatDateTime(DateTime? dateTime)`
+  - L934 `static String _twoDigits(int value)`
+  - L940 `String _formatEurSmart(double value)`  — Two decimals reads as money; four only when the amount would round to
+  - L947 `String _formatEur(double value, {int decimals = 2})`
+  - L951 `String _formatUsd(double value, {int decimals = 4})`
+- L956 `enum _UsageScopeType`
+  - L956 `allTime`
+  - L956 `billingPeriod`
+  - L956 `calendarMonth`
+- L958 `class _UsageScopeOption`
+  - L959 `const _UsageScopeOption({ required this.key, required this.label, required this.type, this.start, this.end, })`
+  - L967 `final String key`
+  - L968 `final String label`
+  - L969 `final _UsageScopeType type`
+  - L970 `final DateTime? start`
+  - L971 `final DateTime? end`
+- L974 `class _UsageSlice`
+  - L975 `const _UsageSlice({ required this.entries, required this.requests, required this.textTokens, required this.mediaRequests, required this.totalCreditsEur, required this.totalCostUsd, required this.models, this.cacheReadTokens = 0, })`
+  - L986 `final List<UsageLogEntry> entries`
+  - L987 `final int requests`
+  - L988 `final int textTokens`
+  - L989 `final int mediaRequests`
+  - L990 `final double totalCreditsEur`
+  - L991 `final double totalCostUsd`
+  - L992 `final int cacheReadTokens`
+  - L993 `final List<_ModelSliceSummary> models`
+- L996 `class _ModelSliceSummary`
+  - L997 `const _ModelSliceSummary({ required this.modelId, required this.primaryProvider, required this.requestCount, required this.textTokens, required this.mediaRequests, required this.totalCreditsEur, required this.totalCostUsd, })`
+  - L1007 `final String modelId`
+  - L1008 `final String primaryProvider`
+  - L1009 `final int requestCount`
+  - L1010 `final int textTokens`
+  - L1011 `final int mediaRequests`
+  - L1012 `final double totalCreditsEur`
+  - L1013 `final double totalCostUsd`
+- L1016 `class _MutableModelSliceSummary`
+  - L1017 `_MutableModelSliceSummary({required this.modelId})`
+  - L1019 `final String modelId`
+  - L1020 `final Map<String, int> providerHits = <String, int>{}`
+  - L1022 `int requestCount = 0`
+  - L1023 `int textTokens = 0`
+  - L1024 `int mediaRequests = 0`
+  - L1025 `double totalCreditsEur = 0`
+  - L1026 `double totalCostUsd = 0`
+  - L1028 `_ModelSliceSummary freeze()`
+- L1054 `class _StatGrid extends StatelessWidget`  — Label/value pairs on baseline-aligned rows. Replaces the boxed metric
+  - L1055 `final List<(String, String)> rows`
+  - L1056 `const _StatGrid({required this.rows})`
+  - L1059 `Widget build(BuildContext context)`
+- L1099 `class _StreakTile extends StatelessWidget`  — One of the two streak read-outs: a big number over a quiet label.
+  - L1100 `const _StreakTile({ required this.label, required this.value, required this.icon, })`
+  - L1106 `final String label`
+  - L1107 `final int value`
+  - L1108 `final IconData icon`
+  - L1111 `Widget build(BuildContext context)`
+- L1172 `class _TokenActivityHeatmap extends StatelessWidget`  — A GitHub-contribution-style grid: one column per ISO week (oldest at the
+  - L1173 `const _TokenActivityHeatmap({ required this.series, required this.values, required this.mode, })`
+  - L1179 `final List<DailyTokenPoint> series`
+  - L1180 `final List<int> values`
+  - L1181 `final HeatmapMode mode`
+  - L1183 `static const double _cell = 12`
+  - L1184 `static const double _gap = 3`
+  - L1187 `Widget build(BuildContext context)`
+  - L1239 `Widget _cell3( BuildContext context, DailyTokenPoint point, int value, int maxValue, )`
+  - L1262 `List<Widget> _buildWeekdayLabels(ThemeData theme, MaterialYouTokens m3)`
+  - L1283 `String _tooltipFor(DailyTokenPoint point, int value)`
+  - L1297 `String _formatDay(DateTime day)`
+  - L1301 `String _formatTokens(int value)`
+- L1308 `int _heatmapLevel(int value, int maxValue)`  — Quartile of [value] against [maxValue]: 0 (none) then 1–4 (light→dark).
+- L1321 `Color _heatmapCellColor(BuildContext context, int level)`  — Cell colour for a heat level, from theme tokens so both themes read well:
+
+## lib/pages/workspace_detail_page.dart  (1021 Z.)
+
+- L21 `class WorkspaceDetailPage extends StatelessWidget`
+  - L22 `final String workspaceId`
+  - L23 `final Function(String? workspaceId)? onStartNewChat`
+  - L25 `const WorkspaceDetailPage({ super.key, required this.workspaceId, this.onStartNewChat, })`
+  - L31 `bool get _isMobileForm`
+  - L44 `Widget build(BuildContext context)`
+- L58 `class _WorkspaceDetailDesktop extends StatefulWidget`
+  - L59 `final String workspaceId`
+  - L60 `final Function(String? workspaceId)? onStartNewChat`
+  - L62 `const _WorkspaceDetailDesktop({ required this.workspaceId, this.onStartNewChat, })`
+  - L68 `State<_WorkspaceDetailDesktop> createState()`
+- L71 `class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop> with SingleTickerProviderStateMixin, WorkspaceActionsMixin<_WorkspaceDetailDesktop>`
+  - L75 `late TabController _tabController`
+  - L76 `Workspace? _project`
+  - L77 `List<StoredChat> _projectChats = []`
+  - L78 `bool _isLoading = true`
+  - L81 `final _nameController = TextEditingController()`
+  - L82 `final _descriptionController = TextEditingController()`
+  - L83 `final _systemPromptController = TextEditingController()`
+  - L84 `bool _hasSettingsChanges = false`
+  - L87 `String? _selectedModelId`
+  - L90 `String get workspaceId`
+  - L93 `void initState()`
+  - L101 `Future<void> _loadModelId()`
+  - L109 `void dispose()`
+  - L118 `Future<void> _loadProject()`
+  - L136 `Future<void> _saveSettings()`
+  - L159 `Future<void> _addChat()`
+  - L170 `Future<bool> _confirmContextBudget(int estimatedNewTokens)`  — Confirms an upload that would blow the model's file token budget.
+  - L206 `Widget build(BuildContext context)`
+  - L329 `Widget _buildFilesTab()`
+  - L510 `static String _formatTokenCount(int tokens)`
+  - L516 `Color _contextChipColor(double ratio)`
+  - L524 `Widget _buildChatsTab()`
+  - L537 `Widget _buildSettingsTab()`
+- L816 `class _ContextUsageBar extends StatelessWidget`
+  - L817 `final double ratio`
+  - L818 `final int totalTokens`
+  - L819 `final int contextWindow`
+  - L820 `final Color displayColor`
+  - L821 `final bool isOverBudget`
+  - L823 `const _ContextUsageBar({ required this.ratio, required this.totalTokens, required this.contextWindow, required this.displayColor, required this.isOverBudget, })`
+  - L832 `Widget build(BuildContext context)`
+- L922 `class _ChatSelectorDialog extends StatefulWidget`
+  - L923 `final List<StoredChat> chats`
+  - L925 `const _ChatSelectorDialog({required this.chats})`
+  - L928 `State<_ChatSelectorDialog> createState()`
+- L931 `class _ChatSelectorDialogState extends State<_ChatSelectorDialog>`
+  - L932 `final _searchController = TextEditingController()`
+  - L933 `late List<StoredChat> _filtered`
+  - L936 `void initState()`
+  - L943 `void dispose()`
+  - L948 `void _filter()`
+  - L963 `Widget build(BuildContext context)`
+
+## lib/pages/workspace_files_page.dart  (770 Z.)
+
+- L34 `class WorkspaceFilesPage extends StatefulWidget`
+  - L35 `final String workspaceId`
+  - L37 `const WorkspaceFilesPage({super.key, required this.workspaceId})`
+  - L40 `State<WorkspaceFilesPage> createState()`
+- L43 `class _WorkspaceFilesPageState extends State<WorkspaceFilesPage> with WorkspaceActionsMixin<WorkspaceFilesPage>`
+  - L45 `Workspace? _workspace`
+  - L46 `String? _modelId`
+  - L48 `bool _uploading = false`
+  - L49 `String? _uploadName`
+  - L50 `double _uploadProgress = 0.0`
+  - L51 `String _uploadStatus = ''`
+  - L54 `String get workspaceId`
+  - L57 `void initState()`
+  - L65 `void dispose()`
+  - L70 `void _load()`
+  - L75 `Future<void> _loadModel()`
+  - L82 `Future<void> _uploadBytes( String fileName, Uint8List bytes, String extension, { String? filePath, })`
+  - L157 `Future<void> _pickFromDevice()`
+  - L178 `Future<void> _takePhoto()`
+  - L195 `Future<void> _pickImage()`
+  - L213 `Future<void> _createDocument()`
+  - L230 `String _timestampedName(String prefix, String ext)`
+  - L240 `Future<void> _showAddSheet()`
+  - L321 `Future<void> _deleteFile(WorkspaceFile file)`
+  - L336 `Widget build(BuildContext context)`
+- L432 `class _SheetTile extends StatelessWidget`
+  - L433 `final IconData icon`
+  - L434 `final String label`
+  - L435 `final VoidCallback onTap`
+  - L437 `const _SheetTile({ required this.icon, required this.label, required this.onTap, })`
+  - L444 `Widget build(BuildContext context)`
+- L491 `class _FileTile extends StatelessWidget`
+  - L492 `final WorkspaceFile file`
+  - L493 `final String workspaceId`
+  - L494 `final Color color`
+  - L495 `final VoidCallback onDelete`
+  - L497 `const _FileTile({ required this.file, required this.workspaceId, required this.color, required this.onDelete, })`
+  - L505 `Widget build(BuildContext context)`
+- L606 `class _UploadProgress extends StatelessWidget`
+  - L607 `final String fileName`
+  - L608 `final String status`
+  - L609 `final double progress`
+  - L610 `final Color color`
+  - L612 `const _UploadProgress({ required this.fileName, required this.status, required this.progress, required this.color, })`
+  - L620 `Widget build(BuildContext context)`
+- L681 `class _DocumentDraft`
+  - L682 `final String title`
+  - L683 `final String content`
+  - L684 `const _DocumentDraft(this.title, this.content)`
+- L687 `class _NewDocumentPage extends StatefulWidget`
+  - L688 `const _NewDocumentPage()`
+  - L691 `State<_NewDocumentPage> createState()`
+- L694 `class _NewDocumentPageState extends State<_NewDocumentPage>`
+  - L695 `final _titleCtrl = TextEditingController()`
+  - L696 `final _contentCtrl = TextEditingController()`
+  - L699 `void dispose()`
+  - L706 `Widget build(BuildContext context)`
+
+## lib/pages/workspace_instructions_page.dart  (223 Z.)
+
+- L20 `class WorkspaceInstructionsPage extends StatefulWidget`
+  - L21 `final String workspaceId`
+  - L23 `const WorkspaceInstructionsPage({super.key, required this.workspaceId})`
+  - L26 `State<WorkspaceInstructionsPage> createState()`
+- L30 `class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage>`
+  - L31 `final TextEditingController _controller = TextEditingController()`
+  - L32 `Workspace? _workspace`
+  - L33 `String _original = ''`
+  - L34 `bool _saving = false`
+  - L37 `void initState()`
+  - L47 `void dispose()`
+  - L53 `void _onChanged()`
+  - L55 `bool get _hasChanges`
+  - L57 `Future<void> _save()`
+  - L77 `Future<bool> _confirmDiscard()`
+  - L101 `Widget build(BuildContext context)`
+
+## lib/pages/workspace_management_page.dart  (747 Z.)
+
+- L21 `class WorkspaceManagementPage extends StatefulWidget`  — Mobile-friendly workspace management page
+  - L22 `final String workspaceId`
+  - L23 `final Function(String? workspaceId)? onStartNewChat`
+  - L25 `const WorkspaceManagementPage({ super.key, required this.workspaceId, this.onStartNewChat, })`
+  - L32 `State<WorkspaceManagementPage> createState()`
+- L35 `class _WorkspaceManagementPageState extends State<WorkspaceManagementPage> with SingleTickerProviderStateMixin, WorkspaceActionsMixin<WorkspaceManagementPage>`
+  - L39 `late TabController _tabController`
+  - L40 `Workspace? _project`
+  - L41 `List<StoredChat> _projectChats = []`
+  - L42 `bool _isLoading = true`
+  - L45 `bool _isEditingInstructions = false`
+  - L46 `final TextEditingController _instructionsController = TextEditingController()`
+  - L49 `String get workspaceId`
+  - L52 `void initState()`
+  - L60 `void dispose()`
+  - L67 `Future<void> _loadProject()`
+  - L83 `Future<void> _saveInstructions()`
+  - L92 `Future<void> _addChat()`
+  - L106 `void _startNewChatWithProject()`
+  - L117 `Widget build(BuildContext context)`
+  - L242 `Widget _buildFilesTab()`
+  - L329 `Widget _buildFileCard(WorkspaceFile file, Color displayColor, bool isDark)`
+  - L354 `Widget _buildChatsTab()`
+  - L363 `Widget _buildSettingsTab()`
+  - L593 `Future<void> _showEditProjectDialog()`
+  - L650 `Future<void> _showDeleteProjectDialog()`
+- L684 `class _ChatSelectorSheet extends StatelessWidget`  — Bottom sheet for selecting a chat to add to workspace
+  - L685 `final List<StoredChat> chats`
+  - L687 `const _ChatSelectorSheet({required this.chats})`
+  - L690 `Widget build(BuildContext context)`
+
+## lib/pages/workspace_mobile_detail_page.dart  (565 Z.)
+
+- L32 `class WorkspaceMobileDetailPage extends StatefulWidget`
+  - L33 `final String workspaceId`
+  - L34 `final Function(String? workspaceId)? onStartNewChat`
+  - L36 `const WorkspaceMobileDetailPage({ super.key, required this.workspaceId, this.onStartNewChat, })`
+  - L43 `State<WorkspaceMobileDetailPage> createState()`
+- L47 `class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage>`
+  - L48 `Workspace? _workspace`
+  - L49 `List<StoredChat> _chats = const []`
+  - L50 `StreamSubscription<void>? _sub`
+  - L51 `bool _loading = true`
+  - L54 `void initState()`
+  - L63 `void dispose()`
+  - L68 `Future<void> _load()`
+  - L94 `void _openFiles()`
+  - L102 `void _openInstructions()`
+  - L111 `Future<void> _confirmDelete()`
+  - L141 `Future<void> _editNameDescription()`
+  - L214 `Widget build(BuildContext context)`
+- L416 `class _PrivacyChip extends StatelessWidget`
+  - L417 `final bool isPublic`
+  - L418 `final ThemeData theme`
+  - L420 `const _PrivacyChip({required this.isPublic, required this.theme})`
+  - L423 `Widget build(BuildContext context)`
+- L456 `class _InfoCard extends StatelessWidget`
+  - L457 `final String title`
+  - L458 `final String? bodyText`
+  - L459 `final bool bodyIsPlaceholder`
+  - L460 `final Widget? footer`
+  - L461 `final VoidCallback onTap`
+  - L463 `const _InfoCard({ required this.title, this.bodyText, this.bodyIsPlaceholder = false, this.footer, required this.onTap, })`
+  - L472 `Widget build(BuildContext context)`
+- L524 `String _formatDate(DateTime date, BuildContext context)`
+- L530 `class _ChatRow extends StatelessWidget`
+  - L531 `final StoredChat chat`
+  - L532 `final ThemeData theme`
+  - L534 `const _ChatRow({required this.chat, required this.theme})`
+  - L537 `Widget build(BuildContext context)`
+
+## lib/pages/workspaces_page.dart  (853 Z.)
+
+- L16 `enum ProjectSortMode`  — Sort options for workspace list
+  - L16 `recentlyUpdated`
+  - L16 `name`
+  - L16 `mostFiles`
+  - L16 `mostChats`
+- L18 `class WorkspacesPage extends StatefulWidget`
+  - L19 `final void Function(String workspaceId)? onOpenWorkspace`
+  - L20 `final bool embedded`
+  - L22 `const WorkspacesPage({super.key, this.onOpenWorkspace, this.embedded = false})`
+  - L25 `State<WorkspacesPage> createState()`
+- L28 `class _WorkspacesPageState extends State<WorkspacesPage>`
+  - L29 `final TextEditingController _searchController = TextEditingController()`
+  - L30 `String _searchQuery = ''`
+  - L31 `List<Workspace> _filteredProjects = []`
+  - L32 `StreamSubscription<void>? _projectUpdatesSub`
+  - L33 `bool _isLoading = true`
+  - L34 `ProjectSortMode _sortMode = ProjectSortMode.recentlyUpdated`
+  - L37 `void initState()`
+  - L48 `void dispose()`
+  - L55 `void _onSearchChanged()`
+  - L62 `Future<void> _loadProjects()`
+  - L75 `void _filterProjects()`
+  - L103 `Future<void> _createProject()`
+  - L125 `Future<void> _deleteProject(Workspace workspace)`
+  - L161 `Future<void> _archiveProject(Workspace workspace)`
+  - L189 `Widget build(BuildContext context)`
+  - L298 `Widget _buildEmptyState(Color iconFg)`
+  - L392 `Widget _buildDesktopGrid()`
+  - L394 `Widget _buildMobileList()`
+  - L396 `Widget _buildFlatList({required double horizontalPadding})`
+  - L411 `void _openProjectDetail(Workspace workspace)`
+- L428 `class _SortButton extends StatelessWidget`
+  - L429 `final ProjectSortMode sortMode`
+  - L430 `final ValueChanged<ProjectSortMode> onChanged`
+  - L432 `const _SortButton({required this.sortMode, required this.onChanged})`
+  - L435 `Widget build(BuildContext context)`
+  - L460 `PopupMenuItem<ProjectSortMode> _sortItem( ProjectSortMode mode, String label, IconData icon, )`
+- L488 `class _ProjectRow extends StatelessWidget`
+  - L489 `final Workspace workspace`
+  - L490 `final VoidCallback onTap`
+  - L491 `final VoidCallback onDelete`
+  - L492 `final VoidCallback onArchive`
+  - L494 `const _ProjectRow({ required this.workspace, required this.onTap, required this.onDelete, required this.onArchive, })`
+  - L501 `Future<void> _showRowMenu(BuildContext context, Offset globalPos)`
+  - L539 `String _editedLabel(BuildContext context)`
+  - L547 `Widget build(BuildContext context)`
+- L591 `class _CreateProjectDialog extends StatefulWidget`
+  - L592 `const _CreateProjectDialog()`
+  - L595 `State<_CreateProjectDialog> createState()`
+- L598 `class _CreateProjectDialogState extends State<_CreateProjectDialog>`
+  - L599 `final _nameController = TextEditingController()`
+  - L600 `final _descriptionController = TextEditingController()`
+  - L601 `final _systemPromptController = TextEditingController()`
+  - L602 `bool _showAdvanced = false`
+  - L603 `final _formKey = GlobalKey<FormState>()`
+  - L606 `void dispose()`
+  - L613 `void _submit()`
+  - L628 `Widget build(BuildContext context)`

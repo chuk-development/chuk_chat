@@ -1,0 +1,379 @@
+# lib/assistant · Signatures
+
+## lib/assistant/assistant_bridge.dart  (327 Z.)
+
+- L13 `class AssistantBridge`  — Untyped wrappers around the native assistant channel.
+  - L14 `AssistantBridge._()`
+  - L16 `static const MethodChannel _channel = MethodChannel('chuk/assistant')`
+  - L20 `static Future<void> startVoiceService()`  — Starts the microphone foreground service so Android keeps the recording
+  - L24 `static Future<void> stopVoiceService()`
+  - L28 `static Future<void> openAccessibilitySettings()`
+  - L32 `static Future<void> openNotificationAccessSettings()`
+  - L36 `static Future<void> openOverlaySettings()`
+  - L40 `static Future<void> openAssistantSettings()`
+  - L44 `static Future<void> openAppDetailsSettings()`
+  - L48 `static Future<bool> requestAssistantRole()`
+  - L53 `static Future<bool> isAccessibilityEnabled()`
+  - L58 `static Future<Map<String, bool>> getPermissionStatuses()`
+  - L64 `static Future<bool> requestContactsPermission()`
+  - L71 `static Future<bool> requestLocationPermission()`
+  - L78 `static Future<Map<String, dynamic>> getCurrentContext()`
+  - L83 `static Future<Map<String, dynamic>> collectScrollableContext({ required String query, int maxScrolls = 4, bool restoreScroll = true, })`
+  - L99 `static Future<List<Map<String, dynamic>>> getRecentNotifications()`
+  - L109 `static Future<Map<String, dynamic>> findContact(String name)`
+  - L116 `static Future<bool> openDialerForContact(String name)`
+  - L123 `static Future<bool> callContactDirect(String phone)`
+  - L130 `static Future<Map<String, dynamic>> openApp(String name)`
+  - L142 `static Future<Map<String, dynamic>> openMaps({ required String query, double? latitude, double? longitude, bool navigate = false, })`  — Shows a place in the maps app of the device, or starts navigation to it.
+  - L157 `static Future<List<Map<String, String>>> listInstalledApps()`
+  - L167 `static Future<bool> composeSmsForContact({ required String name, required String message, })`
+  - L178 `static Future<bool> setTimer({ required int seconds, String message = '', })`
+  - L191 `static Future<bool> isClockAppInstalled()`  — True if the companion clock app (com.example.uhr_app) is installed, so clock commands can be
+  - L201 `static Future<Map<String, dynamic>> clockCommand({ required String command, int? seconds, int? deltaSeconds, int? timerId, String? label, })`  — Sends a command to the companion clock app via an explicit broadcast.
+  - L218 `static Future<bool> setAlarm({ required int hour, required int minutes, String message = '', })`
+  - L231 `static Future<bool> dismissTimer()`
+  - L236 `static Future<bool> dismissAlarm()`
+  - L241 `static Future<bool> showTimers()`
+  - L246 `static Future<bool> showAlarms()`
+  - L251 `static Future<Map<String, dynamic>> getLastKnownLocation()`
+  - L256 `static Future<String?> captureScreenshotBase64()`
+  - L260 `static Future<bool> clickByText(String text)`
+  - L267 `static Future<bool> performGlobalAction(String action)`
+  - L275 `static Future<bool> cancelTimerNotifications()`  — Hard-cancel timer notifications (last resort if dismiss doesn't fire an action).
+  - L281 `static Future<bool> mediaCommand(String command)`  — Media transport command: play, pause, toggle, next, previous, stop.
+  - L290 `static Future<Map<String, dynamic>> getNowPlaying({String? packageName})`  — Returns metadata of the currently-playing media session.
+  - L298 `static Future<bool> volumeAdjust(String direction, {bool showUi = true})`  — direction: up, down, mute, unmute, toggle_mute.
+  - L306 `static Future<bool> volumeSet(int percent, {bool showUi = true})`
+  - L314 `static Future<Map<String, dynamic>> volumeGet()`
+  - L320 `static Future<Map<String, dynamic>> spotifySearch(String query)`  — Opens Spotify (or web fallback) on a search results page for [query].
+
+## lib/assistant/assistant_cards.dart  (382 Z.)
+
+- L10 `class AssistantCardView extends StatelessWidget`  — Renders one [AssistantCard]. Every colour comes from the running theme, so
+  - L11 `const AssistantCardView({super.key, required this.card})`
+  - L13 `final AssistantCard card`
+  - L16 `Widget build(BuildContext context)`
+- L24 `class _CardHeader extends StatelessWidget`
+  - L25 `const _CardHeader({required this.icon, required this.title, this.trailing})`
+  - L27 `final IconData icon`
+  - L28 `final String title`
+  - L29 `final String? trailing`
+  - L32 `Widget build(BuildContext context)`
+- L67 `class _PlacesCardView extends StatelessWidget`
+  - L68 `const _PlacesCardView({required this.card})`
+  - L70 `final AssistantPlacesCard card`
+  - L73 `static const int _maxRows = 5`  — More than this and the surface stops being a glance.
+  - L76 `Widget build(BuildContext context)`
+- L97 `class _PlaceRow extends StatelessWidget`
+  - L98 `const _PlaceRow({required this.place})`
+  - L100 `final AssistantPlace place`
+  - L102 `Future<void> _navigate()`
+  - L117 `Widget build(BuildContext context)`
+- L195 `class _RatingChip extends StatelessWidget`
+  - L196 `const _RatingChip({required this.rating, this.reviewCount})`
+  - L198 `final double rating`
+  - L199 `final int? reviewCount`
+  - L202 `Widget build(BuildContext context)`
+- L239 `class _LinksCardView extends StatelessWidget`
+  - L240 `const _LinksCardView({required this.card})`
+  - L242 `final AssistantLinksCard card`
+  - L244 `static const int _maxRows = 4`
+  - L247 `Widget build(BuildContext context)`
+  - L298 `static String _host(String url)`
+- L305 `class _ActionCardView extends StatelessWidget`
+  - L306 `const _ActionCardView({required this.card})`
+  - L308 `final AssistantActionCard card`
+  - L311 `Widget build(BuildContext context)`
+- L357 `class _FactsCardView extends StatelessWidget`
+  - L358 `const _FactsCardView({required this.card})`
+  - L360 `final AssistantFactsCard card`
+  - L363 `Widget build(BuildContext context)`
+
+## lib/assistant/assistant_config.dart  (84 Z.)
+
+- L8 `kAssistantModelId = 'z-ai/glm-5.3-flash'`  — The model the assistant surface runs on. Hard-wired on purpose: the overlay
+- L11 `kAssistantProviderSlug = 'fireworks/serverless'`  — Provider pin that goes with [kAssistantModelId].
+- L28 `kAssistantReasoningEffort = 'low'`  — Reasoning level for the assistant turn.
+- L31 `kAssistantMaxToolRounds = 6`  — Upper bound on tool rounds in one turn, so a confused model cannot loop.
+- L34 `kAssistantMaxTokens = 700`  — Answer budget. Spoken answers are short by design.
+- L40 `abstract final class AssistantPlatform`  — Where the assistant surface can run at all.
+  - L41 `static bool get isSupported`
+- L53 `@immutable class AssistantSettings`  — User-owned assistant preferences. Everything model-related is a constant
+  - L55 `const AssistantSettings({this.language = defaultLanguage})`
+  - L59 `static const String defaultLanguage = 'de'`  — ISO-639-1 code sent to the transcription endpoint and used to localize
+  - L61 `final String language`
+  - L63 `AssistantSettings copyWith({String? language})`
+- L68 `abstract final class AssistantSettingsStore`  — Persistence for [AssistantSettings].
+  - L69 `static const String _keyLanguage = 'assistant_language'`
+  - L71 `static Future<AssistantSettings> load()`
+  - L79 `static Future<void> save(AssistantSettings settings)`
+
+## lib/assistant/assistant_microphone.dart  (284 Z.)
+
+- L19 `class AssistantMicrophone`  — Continuous microphone capture with energy-based endpointing.
+  - L20 `AssistantMicrophone({required this.onUtterance, this.onLevel})`
+  - L23 `final void Function(Uint8List wav) onUtterance`  — One complete utterance as a 16 kHz mono WAV file.
+  - L26 `final void Function(double level)? onLevel`  — Smoothed input level, 0..1, for the waveform.
+  - L28 `static const int sampleRate = 16000`
+  - L29 `static const int channels = 1`
+  - L30 `static const int _bytesPerSample = 2`
+  - L33 `static const Duration _preRoll = Duration(milliseconds: 320)`  — Audio kept before speech is confirmed, so the onset is not cut off.
+  - L36 `static const Duration _silenceHold = Duration(milliseconds: 750)`  — Silence after speech that closes the utterance.
+  - L39 `static const Duration _minUtterance = Duration(milliseconds: 350)`  — Speech shorter than this is a cough, a door, or a clipped word.
+  - L42 `static const Duration _maxUtterance = Duration(seconds: 30)`  — Hard cap so a noisy room cannot record forever.
+  - L46 `static const double _absoluteFloor = 0.012`  — Absolute floor. Below this nothing counts as speech, however quiet the
+  - L49 `static const double _floorMultiplier = 3.2`  — Speech must exceed the tracked noise floor by this factor.
+  - L54 `AudioRecorder? _recorder`  — Created on first use, not in the constructor: building one touches a
+  - L55 `StreamSubscription<Uint8List>? _subscription`
+  - L57 `final BytesBuilder _utterance = BytesBuilder(copy: false)`
+  - L58 `final List<Uint8List> _preRollChunks = <Uint8List>[]`
+  - L59 `int _preRollBytes = 0`
+  - L61 `double _noiseFloor = _absoluteFloor`
+  - L62 `double _level = 0`
+  - L63 `bool _inSpeech = false`
+  - L64 `Duration _speechLength = Duration.zero`
+  - L65 `Duration _silenceLength = Duration.zero`
+  - L66 `bool _paused = false`
+  - L67 `bool _running = false`
+  - L69 `bool get isRunning`
+  - L70 `bool get isPaused`
+  - L71 `double get level`
+  - L73 `AudioRecorder get _activeRecorder`
+  - L76 `Future<bool> hasPermission()`  — True when the OS granted the microphone. Asks if it has not been asked.
+  - L78 `Future<bool> start()`
+  - L104 `void pause()`  — Stops feeding the endpointer without tearing the recorder down. Used
+  - L111 `void resume()`
+  - L117 `Future<void> dispose()`
+  - L136 `void debugFeed(Uint8List chunk)`  — Feeds one PCM chunk through the endpointer without a real recorder.
+  - L138 `void _onChunk(Uint8List chunk)`
+  - L182 `void _finishUtterance()`
+  - L190 `void _resetUtterance()`
+  - L199 `void _pushPreRoll(Uint8List chunk)`
+  - L210 `void _trackNoiseFloor(double rms)`  — Slow exponential tracking of the room. Rises slowly and falls quickly, so
+  - L216 `void _setLevel(double value)`
+  - L223 `static Duration _durationOf(int bytes)`
+  - L228 `static int _bytesOf(Duration duration)`
+  - L233 `static double _rms(Uint8List chunk)`
+- L248 `Uint8List pcmToWav( Uint8List pcm, { required int sampleRate, required int channels, })`  — Wraps raw 16-bit little-endian PCM in a 44-byte RIFF header.
+- L279 `void _writeAscii(ByteData buffer, int offset, String value)`
+
+## lib/assistant/assistant_overlay.dart  (674 Z.)
+
+- L19 `Route<void> buildAssistantOverlayRoute()`  — Transparent, instant route for the assistant surface.
+- L28 `assistantOverlayRouteName = '/assistant-overlay'`  — The initial route the native assist activity starts Flutter on.
+- L30 `class AssistantOverlayPage extends StatefulWidget`
+  - L31 `const AssistantOverlayPage({super.key})`
+  - L34 `State<AssistantOverlayPage> createState()`
+- L37 `class _AssistantOverlayPageState extends State<AssistantOverlayPage>`
+  - L38 `AssistantSession? _session`
+  - L39 `bool _contextOpen = false`
+  - L40 `bool _closing = false`
+  - L43 `void initState()`
+  - L48 `Future<void> _startSession()`
+  - L58 `Future<void> _close()`
+  - L73 `void dispose()`
+  - L79 `Widget build(BuildContext context)`
+- L130 `@immutable class AssistantToolBadge`  — One tool call, as the surface shows it.
+  - L132 `const AssistantToolBadge({ required this.label, this.done = false, this.failed = false, })`
+  - L138 `final String label`
+  - L139 `final bool done`
+  - L140 `final bool failed`
+- L148 `class AssistantOverlayView extends StatelessWidget`  — Presentation separated from transport so the layout can be checked offline.
+  - L149 `const AssistantOverlayView({ super.key, required this.onMic, required this.onClose, required this.onContext, required this.onScreen, this.status = 'Bereit', this.transcript = '', this.caption = '', this.errorText = '', this.busy = false, this.listening = false, this.muted = false, this.level = 0, this.contextOpen = false, this.tools = const <AssistantToolBadge>[], this.card, })`
+  - L168 `final VoidCallback onMic, onClose, onContext, onScreen`
+  - L169 `final String status, transcript, caption, errorText`
+  - L170 `final bool busy, listening, muted, contextOpen`
+  - L171 `final double level`
+  - L172 `final List<AssistantToolBadge> tools`
+  - L175 `final AssistantCard? card`  — The visual result of the turn, drawn above the answer.
+  - L177 `bool get _hasError`
+  - L182 `bool get _showPanel`  — While the surface only listens there is nothing worth saying, so the
+  - L189 `Widget build(BuildContext context)`
+- L391 `class AssistantToolRow extends StatelessWidget`  — One line per tool call, so the user sees what the assistant really does.
+  - L392 `const AssistantToolRow({super.key, required this.tool})`
+  - L394 `final AssistantToolBadge tool`
+  - L397 `Widget build(BuildContext context)`
+- L439 `class AssistantSurface extends StatelessWidget`  — One floating, blurred panel. The surface colour is the user's, only the
+  - L440 `const AssistantSurface({ super.key, required this.child, this.padding = const EdgeInsets.all(18), })`
+  - L446 `final Widget child`
+  - L447 `final EdgeInsets padding`
+  - L450 `Widget build(BuildContext context)`
+- L474 `class AssistantAction extends StatelessWidget`  — Label and icon as one centred group with a 48 dp minimum target.
+  - L475 `const AssistantAction({ super.key, required this.label, required this.icon, required this.onPressed, this.primary = false, this.iconOnly = false, })`
+  - L484 `final String label`
+  - L485 `final IconData icon`
+  - L486 `final VoidCallback? onPressed`
+  - L487 `final bool primary, iconOnly`
+  - L490 `Widget build(BuildContext context)`
+- L542 `class AssistantWaveform extends StatefulWidget`  — Microphone level as a symmetric bar field.
+  - L543 `const AssistantWaveform({ super.key, required this.level, required this.active, required this.busy, })`
+  - L550 `final double level`
+  - L551 `final bool active, busy`
+  - L554 `State<AssistantWaveform> createState()`
+- L557 `class _AssistantWaveformState extends State<AssistantWaveform> with SingleTickerProviderStateMixin`
+  - L559 `late final AnimationController _animation = AnimationController( vsync: this, duration: const Duration(milliseconds: 1800), )`
+  - L564 `void _sync()`
+  - L574 `void didChangeDependencies()`
+  - L580 `void didUpdateWidget(covariant AssistantWaveform oldWidget)`
+  - L586 `void dispose()`
+  - L592 `Widget build(BuildContext context)`
+- L620 `class _WavePainter extends CustomPainter`
+  - L621 `_WavePainter({ required this.phase, required this.level, required this.active, required this.busy, required this.activeColor, required this.idleColor, })`
+  - L630 `final double phase, level`
+  - L631 `final bool active, busy`
+  - L632 `final Color activeColor, idleColor`
+  - L635 `void paint(Canvas canvas, Size size)`
+  - L666 `bool shouldRepaint(covariant _WavePainter old)`
+
+## lib/assistant/assistant_result.dart  (141 Z.)
+
+- L10 `sealed class AssistantCard`  — A visual result the assistant surface renders next to (or instead of) the
+  - L11 `const AssistantCard()`
+- L15 `@immutable class AssistantPlace`  — One place from the Brave Local proxy.
+  - L17 `const AssistantPlace({ required this.name, this.address = '', this.rating, this.reviewCount, this.openingHours = '', this.priceRange = '', this.cuisine = '', this.description = '', this.phone = '', this.latitude, this.longitude, })`
+  - L31 `factory AssistantPlace.fromBrave(Map<String, dynamic> raw)`
+  - L55 `final String name`
+  - L56 `final String address`
+  - L57 `final double? rating`
+  - L58 `final int? reviewCount`
+  - L59 `final String openingHours`
+  - L60 `final String priceRange`
+  - L61 `final String cuisine`
+  - L62 `final String description`
+  - L63 `final String phone`
+  - L64 `final double? latitude`
+  - L65 `final double? longitude`
+  - L67 `bool get hasCoordinates`
+- L72 `class AssistantPlacesCard extends AssistantCard`  — A list of places — restaurants, shops, anything from a local lookup.
+  - L73 `const AssistantPlacesCard({required this.title, required this.places})`
+  - L75 `final String title`
+  - L76 `final List<AssistantPlace> places`
+- L80 `@immutable class AssistantLink`  — One web result.
+  - L82 `const AssistantLink({ required this.title, required this.url, this.snippet = '', })`
+  - L88 `final String title`
+  - L89 `final String url`
+  - L90 `final String snippet`
+- L94 `class AssistantLinksCard extends AssistantCard`  — Ranked web results from the Brave Search proxy.
+  - L95 `const AssistantLinksCard({required this.title, required this.links})`
+  - L97 `final String title`
+  - L98 `final List<AssistantLink> links`
+- L103 `class AssistantActionCard extends AssistantCard`  — A device action that happened: a timer was set, maps opened, an app
+  - L104 `const AssistantActionCard({ required this.icon, required this.label, this.detail = '', })`
+  - L110 `final IconData icon`
+  - L111 `final String label`
+  - L112 `final String detail`
+- L117 `class AssistantFactsCard extends AssistantCard`  — Anything with a heading and a block of prepared text — weather, a summary,
+  - L118 `const AssistantFactsCard({ required this.icon, required this.title, required this.body, })`
+  - L124 `final IconData icon`
+  - L125 `final String title`
+  - L126 `final String body`
+- L131 `@immutable class AssistantToolOutcome`  — What one tool call produced: the JSON the model reads back, and the card
+  - L133 `const AssistantToolOutcome(this.modelResult, {this.card})`
+  - L136 `final Object? modelResult`  — JSON-encodable value returned to the model as the `role: "tool"` content.
+  - L139 `final AssistantCard? card`  — Optional visual result. Null for tools with nothing worth drawing.
+
+## lib/assistant/assistant_session.dart  (510 Z.)
+
+- L19 `enum AssistantPhase`  — Where one assistant turn currently stands.
+  - L20 `starting`
+  - L21 `listening`
+  - L22 `transcribing`
+  - L23 `thinking`
+  - L24 `acting`
+  - L25 `paused`
+  - L26 `error`
+- L39 `class AssistantSession extends ChangeNotifier`  — The whole assistant turn: endpointed microphone, transcription through the
+  - L40 `AssistantSession({ChatApiService? apiService, AssistantMicrophone? microphone}) : _api = apiService ?? ChatApiService(), _injectedMicrophone = microphone`
+  - L44 `final ChatApiService _api`
+  - L45 `final AssistantMicrophone? _injectedMicrophone`
+  - L46 `final List<Map<String, dynamic>> _history = <Map<String, dynamic>>[]`
+  - L48 `AssistantMicrophone? _microphone`
+  - L49 `AssistantSettings _settings = const AssistantSettings()`
+  - L51 `AssistantPhase _phase = AssistantPhase.starting`
+  - L52 `String _userText = ''`
+  - L53 `String _answer = ''`
+  - L54 `String _error = ''`
+  - L55 `double _level = 0`
+  - L56 `bool _muted = false`
+  - L57 `bool _turnInFlight = false`
+  - L58 `bool _disposed = false`
+  - L59 `List<AssistantToolRun> _tools = <AssistantToolRun>[]`
+  - L60 `AssistantCard? _card`
+  - L62 `AssistantPhase get phase`
+  - L63 `AssistantSettings get settings`
+  - L66 `String get userText`  — The transcribed user utterance of the current turn.
+  - L69 `String get answer`  — The assistant answer text.
+  - L72 `String get error`  — Non-empty when the session cannot continue.
+  - L75 `double get level`  — Microphone level, 0 to 1, for the waveform.
+  - L77 `bool get muted`
+  - L78 `bool get listening`
+  - L81 `List<AssistantToolRun> get tools`  — Tool calls of the current turn, oldest first.
+  - L84 `AssistantCard? get card`  — The visual result of the current turn, if a tool produced one.
+  - L86 `bool get busy`
+  - L91 `String get statusLabel`
+  - L101 `Future<void> start()`
+  - L155 `Future<void> toggleMute()`  — Pause or resume the microphone. In the error state this retries.
+  - L174 `Future<void> attachScreenContext()`  — Push the visible screen text into the conversation, so the next question
+  - L191 `Future<void> _onUtterance(Uint8List wav)`
+  - L207 `Future<void> _runTurn(Uint8List wav)`
+  - L302 `Future<_AssistantPass> _chatPass({ required String message, required String token, })`  — One request to the model. Returns the assembled content and any native
+  - L342 `Future<String> _describeScreenshot( String question, String base64Jpeg, String token, )`  — One-shot vision call for `look_at_screen`. GLM 5.3 Flash is multimodal,
+  - L368 `void _trimHistory()`
+  - L383 `Future<String?> _accessToken()`
+  - L399 `Future<String?> _awaitAccessToken()`  — Waits briefly for the session to exist.
+  - L410 `String _systemPrompt()`
+  - L441 `static Map<String, dynamic> _decodeArguments(String raw)`
+  - L460 `static String _humanError(Object error)`
+  - L467 `void _set(AssistantPhase phase)`
+  - L473 `void _fail(String message)`
+  - L479 `void _notify()`
+  - L485 `void dispose()`
+- L498 `@immutable class _AssistantPass`
+  - L500 `const _AssistantPass({ required this.content, required this.toolCalls, this.error, })`
+  - L506 `final String content`
+  - L507 `final List<NativeToolCall> toolCalls`
+  - L508 `final String? error`
+
+## lib/assistant/assistant_tools.dart  (874 Z.)
+
+- L15 `class AssistantToolRuntime`  — Everything a tool handler may use besides its own arguments.
+  - L16 `const AssistantToolRuntime({ required this.serverUrl, required this.serverHeaders, required this.describeScreenshot, required this.language, this.httpClient, })`
+  - L25 `final String serverUrl`  — Base URL of the API proxy, e.g. `https://api.chuk.chat`.
+  - L28 `final Map<String, String> serverHeaders`  — Authorization headers for that proxy (the Supabase JWT).
+  - L33 `final Future<String> Function(String question, String base64Jpeg) describeScreenshot`  — Sends a JPEG screenshot plus a question to the vision model and returns
+  - L37 `final String language`  — ISO-639-1 language of the conversation, used for search localization.
+  - L39 `final http.Client? httpClient`
+  - L41 `String get country`
+- L51 `typedef AssistantToolHandler = Future<AssistantToolOutcome> Function( Map<String, dynamic> args, AssistantToolRuntime ru`
+- L58 `class AssistantTool`  — One function the model may call, in the OpenAI tool schema.
+  - L59 `const AssistantTool({ required this.name, required this.description, required this.parameters, required this.handler, required this.label, })`
+  - L67 `final String name`
+  - L68 `final String description`
+  - L71 `final Map<String, dynamic> parameters`  — JSON Schema object for `function.parameters`.
+  - L72 `final AssistantToolHandler handler`
+  - L75 `final String Function(Map<String, dynamic> args) label`  — Short label the overlay shows while the tool runs.
+  - L77 `Map<String, dynamic> toOpenAiFunction()`
+- L87 `Map<String, dynamic> _object( Map<String, dynamic> properties, { List<String> required = const <String>[], })`
+- L92 `Map<String, dynamic> _string(String description, {List<String>? values})`
+- L98 `Map<String, dynamic> _integer(String description)`
+- L103 `Map<String, dynamic> _number(String description)`
+- L109 `double? _toDouble(Object? value)`  — Models send numbers as a number or as a string, so accept both.
+- L115 `int _toInt(Object? value)`
+- L121 `String _text(Map<String, dynamic> args, String key)`
+- L124 `String _clip(String text, int max)`
+- L127 `AssistantToolOutcome _plain(Object? value)`
+- L136 `assistantTools = <AssistantTool>[ // --- Screen context ------------------------------------------------------ Assistant`  — The complete assistant tool set: what the phone can do, plus the handful of
+- L702 `Future<AssistantToolOutcome> _webSearch( Map<String, dynamic> args, AssistantToolRuntime runtime, )`
+- L764 `Future<AssistantToolOutcome> _places( Map<String, dynamic> args, AssistantToolRuntime runtime, { required bool restaurants, })`
+- L809 `String _formatDuration(int seconds)`
+- L820 `assistantToolsByName = { for (final tool in assistantTools) tool.name: tool, }`
+- L824 `assistantToolSchemas = assistantTools .map((tool) => tool.toOpenAiFunction()) .toList(growable: false)`
+- L830 `class AssistantToolRun`  — Result of one tool call: the JSON string the model reads back, plus the
+  - L831 `AssistantToolRun({required this.name, required this.label})`
+  - L833 `final String name`
+  - L834 `final String label`
+  - L835 `bool done = false`
+  - L836 `bool failed = false`
+  - L837 `String content = ''`
+  - L838 `AssistantCard? card`
+- L843 `Future<void> runAssistantTool({ required AssistantToolRun run, required Map<String, dynamic> args, required AssistantToolRuntime runtime, })`  — Runs one tool call and always produces a JSON string — the `tool` message
