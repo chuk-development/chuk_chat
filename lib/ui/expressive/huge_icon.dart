@@ -25,6 +25,13 @@ class HugeIconData {
 
 /// The icons this app uses. Adding one means generating its SVG into the asset
 /// directory; a name with no file is a missing asset, not a silent blank.
+/// How much of its box an icon's drawing takes.
+///
+/// A Material glyph carries about a tenth of its box as padding; these SVGs
+/// draw to the edge of a 24 px viewBox. Without the inset every icon reads
+/// heavier than the ones it replaced and crowds its container.
+const double _opticalInset = 0.86;
+
 abstract final class HugeIcons {
   // Generated names for every asset in assets/icons/hugeicons.
   // Add an icon by naming it in tool/generate_hugeicons.py and running it.
@@ -71,7 +78,11 @@ abstract final class HugeIcons {
   static const HugeIconData download01 = HugeIconData('download01');
   static const HugeIconData download04 = HugeIconData('download04');
   static const HugeIconData edit02 = HugeIconData('edit02');
+  static const HugeIconData fileCode = HugeIconData('file-code');
   static const HugeIconData fileEdit = HugeIconData('file-edit');
+  static const HugeIconData fileScript = HugeIconData('file-script');
+  static const HugeIconData fileSpreadsheet = HugeIconData('file-spreadsheet');
+  static const HugeIconData fileText = HugeIconData('file-text');
   static const HugeIconData file01 = HugeIconData('file01');
   static const HugeIconData file02 = HugeIconData('file02');
   static const HugeIconData filter = HugeIconData('filter');
@@ -144,14 +155,6 @@ abstract final class HugeIcons {
   static const HugeIconData wrench01 = HugeIconData('wrench01');
   static const HugeIconData zip01 = HugeIconData('zip01');
 }
-
-/// How much of its box an icon draws in.
-///
-/// A Material glyph leaves about a tenth of its box empty, so an icon set that
-/// draws to the edge of the viewBox reads too big at the same nominal size.
-/// This factor gives the drawing the same optical weight as the glyph it
-/// replaced.
-const double _opticalInset = 0.86;
 
 /// An icon of the set, drawn like a Material [Icon].
 class HugeIcon extends StatelessWidget {
