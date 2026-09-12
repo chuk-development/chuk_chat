@@ -103,6 +103,41 @@ class MessageRenderData {
   bool get isUser => sender == 'user';
 }
 
+/// Owns decoded message payloads for one visible chat and builds render data.
+///
+/// A surface keeps one instance and clears it whenever it replaces the active
+/// message list. Cache keys are the raw JSON payloads, so an updated field
+/// naturally gets a new decoded entry during streaming.
+class MessageRenderCache {
+  final Map<String, List<String>?> _images = <String, List<String>?>{};
+  final Map<String, List<DocumentAttachment>?> _attachments =
+      <String, List<DocumentAttachment>?>{};
+  final Map<String, List<ToolCall>?> _toolCalls = <String, List<ToolCall>?>{};
+  final Map<String, List<ContentBlock>?> _contentBlocks =
+      <String, List<ContentBlock>?>{};
+
+  MessageRenderData build({
+    required List<Map<String, String>> messages,
+    required int index,
+    required bool isStreaming,
+  }) => ChatUiHelpers.buildMessageRenderData(
+    raw: messages[index],
+    index: index,
+    messageCount: messages.length,
+    isStreaming: isStreaming,
+    imagesCache: _images,
+    attachmentsCache: _attachments,
+    toolCallsCache: _toolCalls,
+    contentBlocksCache: _contentBlocks,
+  );
+
+  void clear() {
+    _images.clear();
+    _attachments.clear();
+    _toolCalls.clear();
+    _contentBlocks.clear();
+  }
+}
 
 /// Static utility functions shared between the desktop and mobile chat UIs.
 class ChatUiHelpers {
@@ -112,6 +147,62 @@ class ChatUiHelpers {
   /// `ListView` item keys. Never persisted (the raw-map -> [ChatMessage]
   /// conversion reads only known keys) and never sent to the API.
   static const String kUiKeyField = '_uiKey';
+
+  /// Whether parsed message content contains a completed call to [toolName].
+  static bool hasCompletedTool(MessageRenderData data, String toolName) {
+    bool matches(List<ToolCall>? calls) =>
+        calls?.any(
+          (call) =>
+              call.name == toolName && call.status == ToolCallStatus.completed,
+        ) ??
+        false;
+
+    if (matches(data.toolCalls)) return true;
+    return data.contentBlocks?.any(
+          (block) =>
+              block.type == ContentBlockType.toolCalls &&
+              matches(block.toolCalls),
+        ) ??
+        false;
+  }
+
+  /// Encodes tool calls in the canonical format stored on message maps.
+  static String encodeToolCalls(List<ToolCall> toolCalls) =>
+      jsonEncode(toolCalls.map((call) => call.toJson()).toList());
+
+  /// Replaces one field without mutating the existing message map in place.
+  ///
+  /// Both chat surfaces rely on a fresh map identity so their list builders
+  /// and persistence snapshots observe streaming metadata updates.
+  static bool replaceMessageField<T>(
+    List<Map<String, T>> messages,
+    int index,
+    String field,
+    T value,
+  ) {
+    if (index < 0 || index >= messages.length) return false;
+    messages[index] = Map<String, T>.from(messages[index])..[field] = value;
+    return true;
+  }
+
+  /// Appends one request payload to the stored debug-request history.
+  /// Invalid JSON is retained as a `raw` field instead of being discarded.
+  static String appendDebugRequest(String? existing, String requestPayload) {
+    final payloads = <dynamic>[];
+    if (existing != null && existing.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existing);
+        if (decoded is List) payloads.addAll(decoded);
+      } catch (_) {}
+    }
+
+    try {
+      payloads.add(jsonDecode(requestPayload));
+    } catch (_) {
+      payloads.add({'raw': requestPayload});
+    }
+    return jsonEncode(payloads);
+  }
 
   /// Returns a stable per-message key for `ListView` identity, assigning one
   /// lazily (idempotent) if absent.
@@ -183,14 +274,16 @@ class ChatUiHelpers {
       return dropdownSlug;
     }
 
-    final String? prefsSlug =
-        await UserPreferencesService.loadSelectedProvider(modelId);
+    final String? prefsSlug = await UserPreferencesService.loadSelectedProvider(
+      modelId,
+    );
     if (prefsSlug != null && prefsSlug.isNotEmpty) return prefsSlug;
 
     // Third fallback: use the static in-memory providers list — survives
     // network glitches.
-    final providers =
-        ModelSelectionDropdown.availableProvidersForModel(modelId);
+    final providers = ModelSelectionDropdown.availableProvidersForModel(
+      modelId,
+    );
     return providers.isNotEmpty ? providers.first.slug : null;
   }
 
@@ -766,7 +859,9 @@ class ChatUiHelpers {
 
     final documents = attachedFiles
         .where((f) => !f.isImage && f.markdownContent != null)
-        .map((f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent})
+        .map(
+          (f) => {'fileName': f.fileName, 'markdownContent': f.markdownContent},
+        )
         .toList();
     if (documents.isNotEmpty) {
       message['attachments'] = jsonEncode(documents);

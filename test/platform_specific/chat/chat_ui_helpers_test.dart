@@ -9,6 +9,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart' show DocumentAttachment;
 
 void main() {
   group('ChatUiHelpers.finalizeStaleToolCallsInRawMessage', () {
@@ -91,23 +92,27 @@ void main() {
       encryptedImagePath: path,
     );
 
-    test('round-trips an image set through reconstructAttachedFilesForResend',
-        () {
-      final message = <String, String>{'sender': 'user', 'text': 'hi'};
-      final files = [image('u/a.enc'), image('u/b.enc')];
+    test(
+      'round-trips an image set through reconstructAttachedFilesForResend',
+      () {
+        final message = <String, String>{'sender': 'user', 'text': 'hi'};
+        final files = [image('u/a.enc'), image('u/b.enc')];
 
-      ChatUiHelpers.writeAttachmentsToMessage(message, files);
+        ChatUiHelpers.writeAttachmentsToMessage(message, files);
 
-      // images field holds the encrypted storage paths for the bubble.
-      expect(jsonDecode(message['images']!), ['u/a.enc', 'u/b.enc']);
+        // images field holds the encrypted storage paths for the bubble.
+        expect(jsonDecode(message['images']!), ['u/a.enc', 'u/b.enc']);
 
-      final restored =
-          ChatUiHelpers.reconstructAttachedFilesForResend(message, uuid);
-      expect(restored.map((f) => f.encryptedImagePath), [
-        'u/a.enc',
-        'u/b.enc',
-      ]);
-    });
+        final restored = ChatUiHelpers.reconstructAttachedFilesForResend(
+          message,
+          uuid,
+        );
+        expect(restored.map((f) => f.encryptedImagePath), [
+          'u/a.enc',
+          'u/b.enc',
+        ]);
+      },
+    );
 
     test('removing an image during edit drops it from every stored field', () {
       final message = <String, String>{'sender': 'user', 'text': 'hi'};
@@ -121,8 +126,10 @@ void main() {
       ChatUiHelpers.writeAttachmentsToMessage(message, [kept]);
 
       expect(jsonDecode(message['images']!), ['u/keep.enc']);
-      final restored =
-          ChatUiHelpers.reconstructAttachedFilesForResend(message, uuid);
+      final restored = ChatUiHelpers.reconstructAttachedFilesForResend(
+        message,
+        uuid,
+      );
       expect(restored.length, 1);
       expect(restored.single.encryptedImagePath, 'u/keep.enc');
     });
@@ -259,28 +266,35 @@ void main() {
       'generationMs': '1200',
     };
 
-    test('variantSnapshotOf captures content + archive keys, skips empties',
-        () {
-      final msg = aiMessage()
-        ..['images'] = '' // empty → skipped
-        ..['tps'] = '42' // per-answer metric → captured
-        ..['debugRequests'] = '[]'; // not a variant key → skipped
-      final snap = ChatUiHelpers.variantSnapshotOf(msg);
+    test(
+      'variantSnapshotOf captures content + archive keys, skips empties',
+      () {
+        final msg = aiMessage()
+          ..['images'] =
+              '' // empty → skipped
+          ..['tps'] =
+              '42' // per-answer metric → captured
+          ..['debugRequests'] = '[]'; // not a variant key → skipped
+        final snap = ChatUiHelpers.variantSnapshotOf(msg);
 
-      expect(snap['text'], 'first answer');
-      expect(snap['reasoning'], 'thinking one');
-      expect(snap['contentBlocks'], '[{"type":"text","text":"first answer"}]');
-      expect(snap['modelId'], 'gpt-4');
-      expect(snap['provider'], 'openai');
-      expect(snap['generationMs'], '1200');
-      expect(snap['tps'], '42');
-      // Archive-only keys captured for round-trip completeness.
-      expect(snap['messageId'], 'mid-1');
-      expect(snap['startedAt'], '2024-01-01T00:00:00.000Z');
-      // Empty + non-variant keys excluded.
-      expect(snap.containsKey('images'), isFalse);
-      expect(snap.containsKey('debugRequests'), isFalse);
-    });
+        expect(snap['text'], 'first answer');
+        expect(snap['reasoning'], 'thinking one');
+        expect(
+          snap['contentBlocks'],
+          '[{"type":"text","text":"first answer"}]',
+        );
+        expect(snap['modelId'], 'gpt-4');
+        expect(snap['provider'], 'openai');
+        expect(snap['generationMs'], '1200');
+        expect(snap['tps'], '42');
+        // Archive-only keys captured for round-trip completeness.
+        expect(snap['messageId'], 'mid-1');
+        expect(snap['startedAt'], '2024-01-01T00:00:00.000Z');
+        // Empty + non-variant keys excluded.
+        expect(snap.containsKey('images'), isFalse);
+        expect(snap.containsKey('debugRequests'), isFalse);
+      },
+    );
 
     test('writeVariants appends current as the active (last) variant', () {
       final oldSnap = ChatUiHelpers.variantSnapshotOf(aiMessage());
@@ -304,35 +318,37 @@ void main() {
       expect(message['activeVariant'], '1');
     });
 
-    test('writeVariants stays at seed+1 when called twice (desktop re-fold)',
-        () {
-      // The desktop path folds twice per turn: once in _finalizeAiMessage,
-      // again after content blocks land. The archive must not grow, and the
-      // second call must capture the now-present content blocks.
-      final oldSnap = ChatUiHelpers.variantSnapshotOf(aiMessage());
-      final message = aiMessage()..['text'] = 'second answer';
+    test(
+      'writeVariants stays at seed+1 when called twice (desktop re-fold)',
+      () {
+        // The desktop path folds twice per turn: once in _finalizeAiMessage,
+        // again after content blocks land. The archive must not grow, and the
+        // second call must capture the now-present content blocks.
+        final oldSnap = ChatUiHelpers.variantSnapshotOf(aiMessage());
+        final message = aiMessage()..['text'] = 'second answer';
 
-      ChatUiHelpers.writeVariants(
-        message: message,
-        seed: <Map<String, dynamic>>[oldSnap],
-        current: ChatUiHelpers.variantSnapshotOf(message),
-      );
-      // Content blocks land after the first fold on the desktop success path.
-      message['contentBlocks'] = '[{"type":"text","text":"second answer"}]';
-      ChatUiHelpers.writeVariants(
-        message: message,
-        seed: <Map<String, dynamic>>[oldSnap],
-        current: ChatUiHelpers.variantSnapshotOf(message),
-      );
+        ChatUiHelpers.writeVariants(
+          message: message,
+          seed: <Map<String, dynamic>>[oldSnap],
+          current: ChatUiHelpers.variantSnapshotOf(message),
+        );
+        // Content blocks land after the first fold on the desktop success path.
+        message['contentBlocks'] = '[{"type":"text","text":"second answer"}]';
+        ChatUiHelpers.writeVariants(
+          message: message,
+          seed: <Map<String, dynamic>>[oldSnap],
+          current: ChatUiHelpers.variantSnapshotOf(message),
+        );
 
-      final decoded = ChatUiHelpers.decodeVariants(message['variants']);
-      expect(decoded.length, 2);
-      expect(
-        decoded[1]['contentBlocks'],
-        '[{"type":"text","text":"second answer"}]',
-      );
-      expect(message['activeVariant'], '1');
-    });
+        final decoded = ChatUiHelpers.decodeVariants(message['variants']);
+        expect(decoded.length, 2);
+        expect(
+          decoded[1]['contentBlocks'],
+          '[{"type":"text","text":"second answer"}]',
+        );
+        expect(message['activeVariant'], '1');
+      },
+    );
 
     test('variant snapshot captures tps and switch restores it', () {
       final message = aiMessage()..['tps'] = '55.5';
@@ -410,8 +426,7 @@ void main() {
     });
 
     test('messageToRawMap round-trips variants + activeVariant', () {
-      const variantsJson =
-          '[{"text":"one"},{"text":"two"}]';
+      const variantsJson = '[{"text":"one"},{"text":"two"}]';
       final map = ChatUiHelpers.messageToRawMap(
         ChatMessage(
           role: 'assistant',
@@ -432,6 +447,170 @@ void main() {
       });
       expect(restored.variants, variantsJson);
       expect(restored.activeVariant, 1);
+    });
+  });
+
+  group('ChatUiHelpers shared message updates', () {
+    test(
+      'buildMessageRenderData parses the complete shared render contract',
+      () {
+        final toolCall = ToolCall(
+          id: 'call-1',
+          name: 'weather',
+          status: ToolCallStatus.completed,
+          result: 'sunny',
+        );
+        final raw = <String, String>{
+          'sender': 'ai',
+          'text': 'answer  ',
+          'reasoning': 'because',
+          'modelId': 'model-1',
+          'provider': 'provider-1',
+          'tps': '42.5',
+          'images': jsonEncode(['encrypted/image']),
+          'toolCalls': ChatUiHelpers.encodeToolCalls([toolCall]),
+          'contentBlocks': jsonEncode([
+            ContentBlock.toolCalls([toolCall]).toJson(),
+          ]),
+          'startedAt': '2026-09-12T10:00:00.000Z',
+          'generationMs': '1750',
+          'status': 'interrupted',
+          'queueId': 'queue-1',
+          'lastError': 'network',
+          'variants': jsonEncode([
+            {'text': 'old'},
+            {'text': 'answer'},
+          ]),
+          'activeVariant': '99',
+        };
+        final imagesCache = <String, List<String>?>{};
+        final attachmentsCache = <String, List<DocumentAttachment>?>{};
+        final toolCallsCache = <String, List<ToolCall>?>{};
+        final contentBlocksCache = <String, List<ContentBlock>?>{};
+
+        final data = ChatUiHelpers.buildMessageRenderData(
+          raw: raw,
+          index: 1,
+          messageCount: 2,
+          isStreaming: true,
+          imagesCache: imagesCache,
+          attachmentsCache: attachmentsCache,
+          toolCallsCache: toolCallsCache,
+          contentBlocksCache: contentBlocksCache,
+        );
+
+        expect(data.displayText, 'answer');
+        expect(data.reasoning, 'because');
+        expect(data.isStreamingMessage, isTrue);
+        expect(data.isReasoningStreaming, isTrue);
+        expect(data.tps, 42.5);
+        expect(data.images, ['encrypted/image']);
+        expect(data.toolCalls?.single.name, 'weather');
+        expect(data.contentBlocks?.single.toolCalls?.single.result, 'sunny');
+        expect(data.turnStartedAt, DateTime.utc(2026, 9, 12, 10));
+        expect(data.workedFor, const Duration(milliseconds: 1750));
+        expect(data.status, ChatMessageStatus.interrupted);
+        expect(data.queueId, 'queue-1');
+        expect(data.lastError, 'network');
+        expect(data.variantCount, 2);
+        expect(data.variantIndex, 1);
+        expect(imagesCache, contains(raw['images']));
+        expect(toolCallsCache, contains(raw['toolCalls']));
+        expect(contentBlocksCache, contains(raw['contentBlocks']));
+      },
+    );
+
+    test('finds completed tools in top-level calls and content blocks', () {
+      MessageRenderData data({
+        List<ToolCall>? toolCalls,
+        List<ContentBlock>? contentBlocks,
+      }) => MessageRenderData(
+        sender: 'ai',
+        displayText: '',
+        reasoning: '',
+        isReasoningStreaming: false,
+        toolCalls: toolCalls,
+        contentBlocks: contentBlocks,
+      );
+
+      final completed = ToolCall(
+        id: 'done',
+        name: 'ask_user',
+        status: ToolCallStatus.completed,
+      );
+      final running = ToolCall(
+        id: 'running',
+        name: 'ask_user',
+        status: ToolCallStatus.running,
+      );
+
+      expect(
+        ChatUiHelpers.hasCompletedTool(
+          data(toolCalls: [completed]),
+          'ask_user',
+        ),
+        isTrue,
+      );
+      expect(
+        ChatUiHelpers.hasCompletedTool(
+          data(
+            contentBlocks: [
+              ContentBlock.toolCalls([completed]),
+            ],
+          ),
+          'ask_user',
+        ),
+        isTrue,
+      );
+      expect(
+        ChatUiHelpers.hasCompletedTool(data(toolCalls: [running]), 'ask_user'),
+        isFalse,
+      );
+    });
+
+    test('replaceMessageField copies the row and rejects invalid indices', () {
+      final original = <String, String>{'sender': 'ai', 'text': 'answer'};
+      final messages = <Map<String, String>>[original];
+
+      expect(
+        ChatUiHelpers.replaceMessageField(messages, 0, 'toolCalls', '[]'),
+        isTrue,
+      );
+      expect(messages.single['toolCalls'], '[]');
+      expect(identical(messages.single, original), isFalse);
+      expect(
+        ChatUiHelpers.replaceMessageField(messages, 1, 'toolCalls', '[]'),
+        isFalse,
+      );
+    });
+
+    test('appendDebugRequest preserves history and malformed payloads', () {
+      final first = ChatUiHelpers.appendDebugRequest(null, '{"step":1}');
+      final second = ChatUiHelpers.appendDebugRequest(first, 'not-json');
+
+      expect(jsonDecode(second), [
+        {'step': 1},
+        {'raw': 'not-json'},
+      ]);
+    });
+
+    test('encodeToolCalls round-trips the stored representation', () {
+      final encoded = ChatUiHelpers.encodeToolCalls([
+        ToolCall(
+          id: 'call-1',
+          name: 'weather',
+          status: ToolCallStatus.completed,
+          result: 'sunny',
+        ),
+      ]);
+      final decoded = jsonDecode(encoded) as List<dynamic>;
+      final restored = ToolCall.fromJson(
+        Map<String, dynamic>.from(decoded.single as Map),
+      );
+
+      expect(restored.id, 'call-1');
+      expect(restored.status, ToolCallStatus.completed);
+      expect(restored.result, 'sunny');
     });
   });
 }

@@ -86,8 +86,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // to discard so the fresh answer can be appended as a new variant. Must
       // run BEFORE the tail is removed below. Not a regenerate (a real prompt
       // edit is a new question) → clear any stale seed so nothing folds.
-      final List<Map<String, dynamic>>? regenVariantSeed =
-          isRegenerate ? captureRegenSeed(index) : null;
+      final List<Map<String, dynamic>>? regenVariantSeed = isRegenerate
+          ? captureRegenSeed(index)
+          : null;
 
       // For resend flows on older messages, reset the chat branch from this
       // point by clearing everything below the resent message. Before removing
@@ -294,7 +295,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           await SupabaseService.refreshSession() ??
           SupabaseService.auth.currentSession;
       if (session == null) {
-        if (mounted) {AppNotifications.show(context, 'Session expired. Please sign in again.', duration: Duration(seconds: 2));
+        if (mounted) {
+          AppNotifications.show(
+            context,
+            'Session expired. Please sign in again.',
+            duration: Duration(seconds: 2),
+          );
         }
         if (mounted) {
           setState(() {
@@ -459,8 +465,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // completion. A plain round with no tool calls streams live.
               final isWorkingRound =
                   contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
-              final displayContent =
-                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+              final displayContent = isWorkingRound
+                  ? ''
+                  : stripToolCallBlocksForDisplay(content);
               final prefix = accumulatedText.toString();
               final fullDisplay = prefix.isEmpty
                   ? displayContent
@@ -783,11 +790,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                _persistBackgroundAssistant(
-                  chatIdForStream,
-                  placeholderIndex,
-                  {'text': paymentMessage, 'reasoning': ''},
-                );
+                _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                  'text': paymentMessage,
+                  'reasoning': '',
+                });
               }
               _showPaymentRequiredDialog();
               return;
@@ -802,11 +808,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
               _persistChatWithId(chatIdForStream);
             } else {
-              _persistBackgroundAssistant(
-                chatIdForStream,
-                placeholderIndex,
-                {'text': 'Error: $errorMessage', 'reasoning': ''},
-              );
+              _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                'text': 'Error: $errorMessage',
+                'reasoning': '',
+              });
             }
           },
         );
@@ -1119,9 +1124,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: kBorderRadiusPill,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
             ),
             onPressed: () {
               Navigator.pop(dialogContext);
@@ -1172,7 +1175,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       if (_fileHandler.attachedFiles.any((f) => f.isUploading)) {
-        if (mounted) {AppNotifications.show(context, 'Please wait for file uploads to finish.', duration: Duration(seconds: 2));
+        if (mounted) {
+          AppNotifications.show(
+            context,
+            'Please wait for file uploads to finish.',
+            duration: Duration(seconds: 2),
+          );
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -1183,7 +1191,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Check if a model is selected
       if (selectedModelId.isEmpty) {
-        if (mounted) {AppNotifications.show(context, 'Please select a model first.', duration: Duration(seconds: 3));
+        if (mounted) {
+          AppNotifications.show(
+            context,
+            'Please select a model first.',
+            duration: Duration(seconds: 3),
+          );
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -1213,7 +1226,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       );
 
       if (!result.isValid) {
-        if (mounted) {AppNotifications.show(context, result.errorMessage ?? 'Invalid message', duration: Duration(seconds: 2));
+        if (mounted) {
+          AppNotifications.show(
+            context,
+            result.errorMessage ?? 'Invalid message',
+            duration: Duration(seconds: 2),
+          );
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -1442,7 +1460,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               ? jsonEncode(imageDataUrls)
               : null,
           maxTokens: maxResponseTokens,
-          reasoningEffort: clampedReasoningEffort(selectedModelId, providerSlug),
+          reasoningEffort: clampedReasoningEffort(
+            selectedModelId,
+            providerSlug,
+          ),
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1577,7 +1598,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
-          reasoningEffort: clampedReasoningEffort(selectedModelId, providerSlug),
+          reasoningEffort: clampedReasoningEffort(
+            selectedModelId,
+            providerSlug,
+          ),
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1597,8 +1621,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // mid-loop / tool-call content out of the answer body.
               final isWorkingRound =
                   contentBlocks2.isNotEmpty || hasToolCallStartMarker(content);
-              final displayContent =
-                  isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+              final displayContent = isWorkingRound
+                  ? ''
+                  : stripToolCallBlocksForDisplay(content);
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
                 _messages[placeholderIndex]['text'] = displayContent;
@@ -1942,11 +1967,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
-                _persistBackgroundAssistant(
-                  chatIdForStream,
-                  placeholderIndex,
-                  {'text': paymentMessage, 'reasoning': ''},
-                );
+                _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                  'text': paymentMessage,
+                  'reasoning': '',
+                });
               }
               _showPaymentRequiredDialog();
               return;
@@ -2007,15 +2031,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 });
               }
               _finalizeAiMessage(placeholderIndex, errorText);
-              if (mounted) {AppNotifications.show(context, errorMessage, duration: Duration(seconds: 2));
+              if (mounted) {
+                AppNotifications.show(
+                  context,
+                  errorMessage,
+                  duration: Duration(seconds: 2),
+                );
               }
               _persistChatWithId(chatIdForStream);
             } else {
-              _persistBackgroundAssistant(
-                chatIdForStream,
-                placeholderIndex,
-                {'text': errorText},
-              );
+              _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
+                'text': errorText,
+              });
             }
           },
         );
@@ -2058,7 +2085,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         if (mounted) {
           setState(() {
             _isSending = false;
-          });AppNotifications.show(context, 'Failed to start streaming: $error', duration: Duration(seconds: 2));
+          });
+          AppNotifications.show(
+            context,
+            'Failed to start streaming: $error',
+            duration: Duration(seconds: 2),
+          );
         }
         _persistChatWithId(chatIdForStream);
       }
@@ -2090,16 +2122,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     List<ToolCall> toolCalls,
     String chatId,
   ) {
-    final String toolCallsJson = jsonEncode(
-      toolCalls.map((call) => call.toJson()).toList(),
-    );
+    final String toolCallsJson = ChatUiHelpers.encodeToolCalls(toolCalls);
 
     final bool isActiveChat = _activeChatId == chatId;
     if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
       setState(() {
-        final message = Map<String, String>.from(_messages[index]);
-        message['toolCalls'] = toolCallsJson;
-        _messages[index] = message;
+        ChatUiHelpers.replaceMessageField(
+          _messages,
+          index,
+          'toolCalls',
+          toolCallsJson,
+        );
       });
       _persistChatWithId(chatId);
       return;
@@ -2107,7 +2140,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
     final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
     if (backgroundMsgs != null && index >= 0 && index < backgroundMsgs.length) {
-      backgroundMsgs[index]['toolCalls'] = toolCallsJson;
+      ChatUiHelpers.replaceMessageField(
+        backgroundMsgs,
+        index,
+        'toolCalls',
+        toolCallsJson,
+      );
       _persistChatWithIdAndMessages(chatId, backgroundMsgs);
     }
   }
@@ -2119,41 +2157,32 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   ) {
     final bool isActiveChat = _activeChatId == chatId;
 
-    void appendPayload(Map<String, String> message) {
-      final passPayloads = <dynamic>[];
-      final existing = message['debugRequests'];
-      if (existing != null && existing.trim().isNotEmpty) {
-        try {
-          final decoded = jsonDecode(existing);
-          if (decoded is List) {
-            passPayloads.addAll(decoded);
-          }
-        } catch (_) {}
-      }
-
-      try {
-        passPayloads.add(jsonDecode(requestPayloadJson));
-      } catch (_) {
-        passPayloads.add({'raw': requestPayloadJson});
-      }
-
-      message['debugRequests'] = jsonEncode(passPayloads);
-    }
-
     if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
       setState(() {
-        final message = Map<String, String>.from(_messages[index]);
-        appendPayload(message);
-        _messages[index] = message;
+        ChatUiHelpers.replaceMessageField(
+          _messages,
+          index,
+          'debugRequests',
+          ChatUiHelpers.appendDebugRequest(
+            _messages[index]['debugRequests'],
+            requestPayloadJson,
+          ),
+        );
       });
       return;
     }
 
     final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
     if (backgroundMsgs != null && index >= 0 && index < backgroundMsgs.length) {
-      final message = Map<String, String>.from(backgroundMsgs[index]);
-      appendPayload(message);
-      backgroundMsgs[index] = message;
+      ChatUiHelpers.replaceMessageField(
+        backgroundMsgs,
+        index,
+        'debugRequests',
+        ChatUiHelpers.appendDebugRequest(
+          backgroundMsgs[index]['debugRequests'],
+          requestPayloadJson,
+        ),
+      );
       _persistChatWithIdAndMessages(chatId, backgroundMsgs);
     }
   }
@@ -2239,8 +2268,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     // bubble renders from the persisted message text, not a stale live value.
     final String? finalizingChatId = _activeChatId;
     if (finalizingChatId != null) {
-      ChatRuntimeRegistry.instance.lookup(finalizingChatId)?.streamingLive
-          .value = null;
+      ChatRuntimeRegistry.instance
+              .lookup(finalizingChatId)
+              ?.streamingLive
+              .value =
+          null;
     }
     if (index < 0 || index >= _messages.length) {
       if (mounted) {
@@ -2303,7 +2335,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
     if (composerController.text.trim().isEmpty) {
       composerController.text = pending;
-      composerController.selection = TextSelection.collapsed(offset: pending.length);
+      composerController.selection = TextSelection.collapsed(
+        offset: pending.length,
+      );
     }
     composerFocusNode.requestFocus();
   }
@@ -2328,7 +2362,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     // Put the text back into the controller so _sendMessage picks it up
     // via its normal `composerController.text.trim()` path.
     composerController.text = pending;
-    composerController.selection = TextSelection.collapsed(offset: pending.length);
+    composerController.selection = TextSelection.collapsed(
+      offset: pending.length,
+    );
     unawaited(_sendMessage());
   }
 

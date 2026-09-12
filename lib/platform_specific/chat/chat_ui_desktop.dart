@@ -1,6 +1,7 @@
 // lib/platform_specific/chat/chat_ui_desktop.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:flutter/services.dart';
@@ -15,10 +16,8 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
-import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
-import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -31,10 +30,8 @@ import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
-import 'package:chuk_chat/widgets/message_bubble.dart'
-    show MessageBubble, MessageBubbleAction, DocumentAttachment;
+import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubbleAction;
 import 'package:chuk_chat/widgets/measure_size.dart';
-import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
@@ -75,6 +72,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'desktop_send_logic.dart';
@@ -155,8 +153,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
         RegenVariantSeedMixin<ChukChatUIDesktop>
-    implements
-        ChatDebugSnapshot {
+    implements ChatDebugSnapshot {
   // RENAMED STATE
   @override
   final TextEditingController composerController = TextEditingController();
@@ -297,14 +294,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  final Map<String, List<String>?> _decodedImagesCache =
-      <String, List<String>?>{};
-  final Map<String, List<DocumentAttachment>?> _decodedAttachmentsCache =
-      <String, List<DocumentAttachment>?>{};
-  final Map<String, List<ToolCall>?> _decodedToolCallsCache =
-      <String, List<ToolCall>?>{};
-  final Map<String, List<ContentBlock>?> _decodedContentBlocksCache =
-      <String, List<ContentBlock>?>{};
+  final MessageRenderCache _messageRenderCache = MessageRenderCache();
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -357,11 +347,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _activeChatId = chatId;
           });
           widget.onChatIdChanged(chatId);
-          unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-            }
-          }));
+          unawaited(
+            MultiplexSession.openForChat(chatId).catchError((e) {
+              if (kDebugMode) {
+                debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+              }
+            }),
+          );
         }
       };
     composerFocusNode = FocusNode(
@@ -465,7 +457,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         .listen((_) {
           // Reload provider slug when settings are changed —
           // skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(loadProviderSlugForModel(selectedModelId, forceFromPrefs: true));
+          unawaited(
+            loadProviderSlugForModel(selectedModelId, forceFromPrefs: true),
+          );
         });
   }
 
@@ -658,14 +652,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // through the normal path.
     restoreVariantSeedForChat(chatId);
     if (chatId != null) {
-      unawaited(MultiplexSession.openForChat(chatId).catchError((e) {
-        if (kDebugMode) {
-          debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-        }
-      }));
+      unawaited(
+        MultiplexSession.openForChat(chatId).catchError((e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+          }
+        }),
+      );
     }
 
-    _clearMessageDecodeCaches();
+    _messageRenderCache.clear();
 
     // Synchronous fast path: if the requested chat is already fully cached,
     // populate inline without entering async / showing the spinner. This
@@ -1064,7 +1060,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the active mode. Debug only.
-  bool get debugReasoningEnabled => reasoningEffort != ChatModeService.reasoningOff;
+  bool get debugReasoningEnabled =>
+      reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
@@ -1414,28 +1411,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return null;
     }
 
-    // Check if any tool call is ask_user + completed.
-    bool hasAskUser = false;
-    if (data.contentBlocks != null) {
-      for (final block in data.contentBlocks!) {
-        if (block.type == ContentBlockType.toolCalls &&
-            block.toolCalls != null) {
-          hasAskUser = block.toolCalls!.any(
-            (tc) =>
-                tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
-          );
-          if (hasAskUser) break;
-        }
-      }
-    }
-    if (!hasAskUser && data.toolCalls != null) {
-      hasAskUser = data.toolCalls!.any(
-        (tc) => tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
-      );
-    }
-    if (!hasAskUser) {
-      return null;
-    }
+    if (!ChatUiHelpers.hasCompletedTool(data, 'ask_user')) return null;
 
     return (String answer) {
       composerController.text = answer;
@@ -1459,28 +1435,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return null;
     }
 
-    bool hasRequest = false;
-    if (data.contentBlocks != null) {
-      for (final block in data.contentBlocks!) {
-        if (block.type == ContentBlockType.toolCalls &&
-            block.toolCalls != null) {
-          hasRequest = block.toolCalls!.any(
-            (tc) =>
-                tc.name == 'request_mcp_server' &&
-                tc.status == ToolCallStatus.completed,
-          );
-          if (hasRequest) break;
-        }
-      }
-    }
-    if (!hasRequest && data.toolCalls != null) {
-      hasRequest = data.toolCalls!.any(
-        (tc) =>
-            tc.name == 'request_mcp_server' &&
-            tc.status == ToolCallStatus.completed,
-      );
-    }
-    if (!hasRequest) {
+    if (!ChatUiHelpers.hasCompletedTool(data, 'request_mcp_server')) {
       return null;
     }
 
@@ -1599,7 +1554,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.red.withValues(alpha: opacity),
-                      Colors.redAccent.shade200.withValues(alpha: opacity * 0.7),
+                      Colors.redAccent.shade200.withValues(
+                        alpha: opacity * 0.7,
+                      ),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(3),
@@ -1631,10 +1588,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           const _DesktopRecordingDot(),
           const SizedBox(width: 10),
           Expanded(
-            child: _buildAudioVisualizer(
-              accent: Colors.red,
-              iconFg: iconFg,
-            ),
+            child: _buildAudioVisualizer(accent: Colors.red, iconFg: iconFg),
           ),
         ],
       ),
@@ -1678,26 +1632,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         silent: true,
       ),
     );
-  }
-
-  MessageRenderData _buildMessageRenderData(int index) {
-    return ChatUiHelpers.buildMessageRenderData(
-      raw: _messages[index],
-      index: index,
-      messageCount: _messages.length,
-      isStreaming: _isStreaming,
-      imagesCache: _decodedImagesCache,
-      attachmentsCache: _decodedAttachmentsCache,
-      toolCallsCache: _decodedToolCallsCache,
-      contentBlocksCache: _decodedContentBlocksCache,
-    );
-  }
-
-  void _clearMessageDecodeCaches() {
-    _decodedImagesCache.clear();
-    _decodedAttachmentsCache.clear();
-    _decodedToolCallsCache.clear();
-    _decodedContentBlocksCache.clear();
   }
 
   @override
@@ -1888,269 +1822,121 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 context,
                               ).copyWith(scrollbars: false),
                               child: Align(
-                              alignment: Alignment.center,
-                              child: Container(
-                                constraints: BoxConstraints(
-                                  maxWidth: expandedInputWidth,
-                                ),
-                                child: SelectionCopyArea(
-                                  focusNode: _messageSelectionFocusNode,
-                                  contextMenuBuilder: _buildMessageContextMenu,
-                                  // Listener (not GestureDetector) so this does
-                                  // not enter the gesture arena. A competing tap
-                                  // recognizer here would beat SelectionArea's
-                                  // double-tap recognizer and break
-                                  // double-click-to-select-word.
-                                  child: Listener(
-                                    behavior: HitTestBehavior.translucent,
-                                    onPointerDown: (_) {
-                                      // Move the focus to the selection region
-                                      // itself, so Flutter's own Ctrl+C path
-                                      // targets the messages instead of the
-                                      // composer. Plain `unfocus()` left the
-                                      // focus nowhere, which is exactly what
-                                      // broke copying. SelectionCopyArea copies
-                                      // even without focus — this is the second
-                                      // layer, not the only one.
-                                      _messageSelectionFocusNode.requestFocus();
-                                    },
-                                    // Re-evaluate the scroll-to-bottom button
-                                    // when layout metrics change without a
-                                    // user scroll (e.g. maxScrollExtent shrinks
-                                    // after a streaming message finalises).
-                                    // Plain scroll listener doesn't fire in
-                                    // that case and the button can get stuck.
-                                    child: NotificationListener<
-                                      ScrollMetricsNotification
-                                    >(
-                                      onNotification: (_) {
-                                        onScrollChanged();
-                                        return false;
+                                alignment: Alignment.center,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: expandedInputWidth,
+                                  ),
+                                  child: SelectionCopyArea(
+                                    focusNode: _messageSelectionFocusNode,
+                                    contextMenuBuilder:
+                                        _buildMessageContextMenu,
+                                    // Listener (not GestureDetector) so this does
+                                    // not enter the gesture arena. A competing tap
+                                    // recognizer here would beat SelectionArea's
+                                    // double-tap recognizer and break
+                                    // double-click-to-select-word.
+                                    child: Listener(
+                                      behavior: HitTestBehavior.translucent,
+                                      onPointerDown: (_) {
+                                        // Move the focus to the selection region
+                                        // itself, so Flutter's own Ctrl+C path
+                                        // targets the messages instead of the
+                                        // composer. Plain `unfocus()` left the
+                                        // focus nowhere, which is exactly what
+                                        // broke copying. SelectionCopyArea copies
+                                        // even without focus — this is the second
+                                        // layer, not the only one.
+                                        _messageSelectionFocusNode
+                                            .requestFocus();
                                       },
-                                      child: ListView.builder(
-                                        controller: scrollController,
-                                      padding: EdgeInsets.only(
-                                        left: effectiveHorizontalPadding,
-                                        right: effectiveHorizontalPadding,
-                                        top: 10,
-                                        bottom: messageListBottomPadding,
+                                      // Re-evaluate the scroll-to-bottom button
+                                      // when layout metrics change without a
+                                      // user scroll (e.g. maxScrollExtent shrinks
+                                      // after a streaming message finalises).
+                                      // Plain scroll listener doesn't fire in
+                                      // that case and the button can get stuck.
+                                      child: NotificationListener<ScrollMetricsNotification>(
+                                        onNotification: (_) {
+                                          onScrollChanged();
+                                          return false;
+                                        },
+                                        child: ListView.builder(
+                                          controller: scrollController,
+                                          padding: EdgeInsets.only(
+                                            left: effectiveHorizontalPadding,
+                                            right: effectiveHorizontalPadding,
+                                            top: 10,
+                                            bottom: messageListBottomPadding,
+                                          ),
+                                          itemCount: _messages.length,
+                                          addAutomaticKeepAlives:
+                                              true, // Keep message widgets alive
+                                          // Each item already wraps its own
+                                          // RepaintBoundary below, so the builder's
+                                          // automatic one would just be a redundant
+                                          // layer on every row.
+                                          addRepaintBoundaries: false,
+                                          scrollCacheExtent:
+                                              ScrollCacheExtent.pixels(
+                                                _isLinuxDesktop ? 360.0 : 600.0,
+                                              ), // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
+                                          itemBuilder: (_, int i) {
+                                            final data = _messageRenderCache
+                                                .build(
+                                                  messages: _messages,
+                                                  index: i,
+                                                  isStreaming: _isStreaming,
+                                                );
+                                            return ChatMessageListItem(
+                                              messages: _messages,
+                                              index: i,
+                                              data: data,
+                                              uuid: _uuid,
+                                              maxWidth: expandedInputWidth,
+                                              activeChatId: _activeChatId,
+                                              flyInKey: _flyInKey,
+                                              showToolCalls:
+                                                  widget.showToolCalls,
+                                              showReasoningTokens:
+                                                  widget.showReasoningTokens,
+                                              showModelInfo:
+                                                  widget.showModelInfo,
+                                              showTps: widget.showTps,
+                                              isEditing:
+                                                  messageActionsHandler
+                                                      .editingMessageIndex ==
+                                                  i,
+                                              actions:
+                                                  _buildMessageActionsForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              userMessageActions:
+                                                  _buildUserMessageActionsForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              onAskUserAnswer:
+                                                  _askUserCallbackForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              onConnectMcpServer:
+                                                  _connectMcpCallbackForIndex(
+                                                    i,
+                                                    data,
+                                                  ),
+                                              onSwitchVariant: (variant) =>
+                                                  switchVariantAt(i, variant),
+                                            );
+                                          },
+                                        ),
                                       ),
-                                      itemCount: _messages.length,
-                                      addAutomaticKeepAlives:
-                                          true, // Keep message widgets alive
-                                      // Each item already wraps its own
-                                      // RepaintBoundary below, so the builder's
-                                      // automatic one would just be a redundant
-                                      // layer on every row.
-                                      addRepaintBoundaries: false,
-                                      cacheExtent: _isLinuxDesktop
-                                          ? 360.0
-                                          : 600.0, // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
-                                      itemBuilder: (_, int i) {
-                                        final MessageRenderData data =
-                                            _buildMessageRenderData(i);
-                                        final String? reasoningText =
-                                            data.reasoning.trim().isEmpty
-                                            ? null
-                                            : data.reasoning;
-                                        final bool previousIsUser = i == 0
-                                            ? data.isUser
-                                            : (_messages[i - 1]['sender'] ??
-                                                      'ai') ==
-                                                  'user';
-                                        final bool nextIsUser =
-                                            i == _messages.length - 1
-                                            ? data.isUser
-                                            : (_messages[i + 1]['sender'] ??
-                                                      'ai') ==
-                                                  'user';
-                                        final bool startsNewGroup =
-                                            i == 0 ||
-                                            previousIsUser != data.isUser;
-                                        final bool endsGroup =
-                                            i == _messages.length - 1 ||
-                                            nextIsUser != data.isUser;
-                                        final bool isBeingEdited =
-                                            messageActionsHandler
-                                                .editingMessageIndex ==
-                                            i;
-                                        // Build the bubble from a (text,
-                                        // reasoning) pair so the streaming
-                                        // bubble can be fed live values from the
-                                        // runtime notifier without a
-                                        // screen-wide rebuild. Every other prop
-                                        // is stable for the stream's duration.
-                                        MessageBubble buildBubble(
-                                          String msgText,
-                                          String? msgReasoning,
-                                        ) => MessageBubble(
-                                          key: ValueKey(
-                                            ChatUiHelpers.stableUiKey(
-                                              _messages[i],
-                                              _uuid,
-                                            ),
-                                          ),
-                                          message: msgText,
-                                          reasoning: msgReasoning,
-                                          isUser: data.isUser,
-                                          startsNewGroup: startsNewGroup,
-                                          endsGroup: endsGroup,
-                                          maxWidth: data.isUser
-                                              ? expandedInputWidth *
-                                                    0.8 // User messages: 80%
-                                              : expandedInputWidth, // AI messages: 100%
-                                          isReasoningStreaming:
-                                              data.isReasoningStreaming,
-                                          modelLabel: data.modelLabel,
-                                          modelProvider: data.modelProvider,
-                                          tps: data.tps,
-                                          toolCalls: data.toolCalls,
-                                          showToolCalls: widget.showToolCalls,
-                                          contentBlocks: data.contentBlocks,
-                                          isStreamingMessage:
-                                              data.isStreamingMessage,
-                                          turnStartedAt: data.turnStartedAt,
-                                          workedFor: data.workedFor,
-                                          images: data.images,
-                                          imageMetas: data.imageMetas,
-                                          imageCostEur: data.imageCostEur,
-                                          imageGeneratedAt: data.imageGeneratedAt,
-                                          attachments: data.attachments,
-                                          actions: _buildMessageActionsForIndex(
-                                            i,
-                                            data,
-                                          ),
-                                          userMessageActions:
-                                              _buildUserMessageActionsForIndex(
-                                                i,
-                                                data,
-                                              ),
-                                          isEditing: isBeingEdited,
-                                          showReasoningTokens:
-                                              widget.showReasoningTokens,
-                                          showModelInfo: widget.showModelInfo,
-                                          showTps: widget.showTps,
-                                          onAskUserAnswer:
-                                              _askUserCallbackForIndex(i, data),
-                                          onConnectMcpServer:
-                                              _connectMcpCallbackForIndex(
-                                                i,
-                                                data,
-                                              ),
-                                          useSharedSelectionArea: true,
-                                          variantIndex: data.variantIndex,
-                                          variantCount: data.variantCount,
-                                          onPrevVariant: data.variantCount > 1
-                                              ? () => switchVariantAt(
-                                                    i,
-                                                    data.variantIndex - 1,
-                                                  )
-                                              : null,
-                                          onNextVariant: data.variantCount > 1
-                                              ? () => switchVariantAt(
-                                                    i,
-                                                    data.variantIndex + 1,
-                                                  )
-                                              : null,
-                                          status: data.status,
-                                          lastError: data.lastError,
-                                          onRetryPending: data.isUser &&
-                                                  (data.status ==
-                                                          ChatMessageStatus
-                                                              .pending ||
-                                                      data.status ==
-                                                          ChatMessageStatus
-                                                              .failed)
-                                              ? () => OfflineRetryManager
-                                                  .instance
-                                                  .retryNow()
-                                              : null,
-                                        );
-
-                                        // The streaming bubble rebuilds itself
-                                        // per token via the runtime's
-                                        // streamingLive notifier — the rest of
-                                        // the screen stays put.
-                                        final ChatRuntime? runtime =
-                                            _activeChatId == null
-                                            ? null
-                                            : ChatRuntimeRegistry.instance
-                                                  .lookup(_activeChatId!);
-                                        // Wrap the last AI bubble for the whole
-                                        // turn (isSending), not just while a
-                                        // stream is mid-flight: isStreaming
-                                        // briefly flips false between tool-loop
-                                        // passes and we must keep the live
-                                        // wrapper across that gap.
-                                        final bool wrapForStream =
-                                            runtime != null &&
-                                            !data.isUser &&
-                                            i == _messages.length - 1 &&
-                                            (data.isStreamingMessage ||
-                                                runtime.isSending.value);
-                                        if (wrapForStream) {
-                                          return RepaintBoundary(
-                                            child:
-                                                ValueListenableBuilder<
-                                                  StreamingLive?
-                                                >(
-                                                  valueListenable:
-                                                      runtime.streamingLive,
-                                                  builder: (context, live, _) {
-                                                    final bool match =
-                                                        live != null &&
-                                                        live.index == i;
-                                                    final String msgText = match
-                                                        ? live.text.trimRight()
-                                                        : data.displayText;
-                                                    final String reasoningRaw =
-                                                        match
-                                                        ? live.reasoning
-                                                        : data.reasoning;
-                                                    final String? msgReasoning =
-                                                        reasoningRaw
-                                                            .trim()
-                                                            .isEmpty
-                                                        ? null
-                                                        : reasoningRaw;
-                                                    return buildBubble(
-                                                      msgText,
-                                                      msgReasoning,
-                                                    );
-                                                  },
-                                                ),
-                                          );
-                                        }
-                                        final String uiKey =
-                                            ChatUiHelpers.stableUiKey(
-                                          _messages[i],
-                                          _uuid,
-                                        );
-                                        if (data.isUser &&
-                                            uiKey == _flyInKey) {
-                                          return RepaintBoundary(
-                                            child: MessageFlyIn(
-                                              key: ValueKey('flyin_$uiKey'),
-                                              child: buildBubble(
-                                                data.displayText,
-                                                reasoningText,
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                        return RepaintBoundary(
-                                          child: buildBubble(
-                                            data.displayText,
-                                            reasoningText,
-                                          ),
-                                        );
-                                      },
-                                    ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
                             ),
                           ),
                         ),
@@ -2371,50 +2157,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           TourSlots.chatInput,
                         ),
                         child: TextField(
-                        controller: composerController,
-                        focusNode: composerFocusNode,
-                        contextMenuBuilder: _buildComposerContextMenu,
-                        autofocus: true,
-                        showCursor: true,
-                        minLines: 1,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.done,
-                        scrollController: _composerScrollController,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: TextStyle(
-                          color: iconFg,
-                          fontWeight: FontWeight.w600,
-                          height: 1.4,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: messageActionsHandler.isEditing
-                              ? AppLocalizations.of(context)!.editYourMessage
-                              : hasAttachments
-                              ? AppLocalizations.of(context)!.addMessageOrDocs
-                              : AppLocalizations.of(context)!.askMeAnything,
-                          hintStyle: TextStyle(
-                            color: iconFg.withValues(alpha: 0.8),
+                          controller: composerController,
+                          focusNode: composerFocusNode,
+                          contextMenuBuilder: _buildComposerContextMenu,
+                          autofocus: true,
+                          showCursor: true,
+                          minLines: 1,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.done,
+                          scrollController: _composerScrollController,
+                          textAlignVertical: TextAlignVertical.top,
+                          style: TextStyle(
+                            color: iconFg,
                             fontWeight: FontWeight.w600,
+                            height: 1.4,
                           ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          filled: false,
-                          fillColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 0,
+                          decoration: InputDecoration(
+                            hintText: messageActionsHandler.isEditing
+                                ? AppLocalizations.of(context)!.editYourMessage
+                                : hasAttachments
+                                ? AppLocalizations.of(context)!.addMessageOrDocs
+                                : AppLocalizations.of(context)!.askMeAnything,
+                            hintStyle: TextStyle(
+                              color: iconFg.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            filled: false,
+                            fillColor: Colors.transparent,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 0,
+                            ),
+                            isDense: true,
                           ),
-                          isDense: true,
+                          cursorColor: accent,
+                          cursorWidth: 2,
+                          cursorRadius: const Radius.circular(1),
                         ),
-                        cursorColor: accent,
-                        cursorWidth: 2,
-                        cursorRadius: const Radius.circular(1),
-                      ),
                       ),
                     ),
                   ),
@@ -2642,33 +2428,34 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
         child: ChatModeSelector(
           mode: chatMode,
-        // Match the round composer icon buttons (mic, voice, attach) beside
-        // it — the default 40 made the pill stand taller than the row.
-        height: 36,
-        // Always upwards here: the composer sits at the bottom of a tall
-        // window, and a menu dropping down covers the box it belongs to.
-        menuAbove: true,
-        selectedModelId: selectedModelId,
-        modelLabel: selectedModelName ??
-            (selectedModelId.isEmpty ? null : selectedModelId),
-        customModelLabel: customModelName,
-        pickedModels: pickedModels,
-        reasoningEffort: ChatModeService.sanitizeReasoningForModel(
-          reasoningEffort,
-          modelId: selectedModelId,
-          providerSlug: selectedProviderSlug ?? '',
-        ),
-        // The picker options come straight from the server's per-model
-        // `supported_efforts` (derived list only as a cold-start fallback),
-        // so a level the model does not support can never be offered.
-        reasoningLevels: ChatModeService.reasoningLevelsForModel(
-          modelId: selectedModelId,
-          // Before the provider resolves, use the mode's own default provider
-          // so the derived fallback never briefly offers a wrong ladder.
-          providerSlug: (selectedProviderSlug?.isNotEmpty ?? false)
-              ? selectedProviderSlug!
-              : ChatModeService.defaultConfig(chatMode).providerSlug,
-        ),
+          // Match the round composer icon buttons (mic, voice, attach) beside
+          // it — the default 40 made the pill stand taller than the row.
+          height: 36,
+          // Always upwards here: the composer sits at the bottom of a tall
+          // window, and a menu dropping down covers the box it belongs to.
+          menuAbove: true,
+          selectedModelId: selectedModelId,
+          modelLabel:
+              selectedModelName ??
+              (selectedModelId.isEmpty ? null : selectedModelId),
+          customModelLabel: customModelName,
+          pickedModels: pickedModels,
+          reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+            reasoningEffort,
+            modelId: selectedModelId,
+            providerSlug: selectedProviderSlug ?? '',
+          ),
+          // The picker options come straight from the server's per-model
+          // `supported_efforts` (derived list only as a cold-start fallback),
+          // so a level the model does not support can never be offered.
+          reasoningLevels: ChatModeService.reasoningLevelsForModel(
+            modelId: selectedModelId,
+            // Before the provider resolves, use the mode's own default provider
+            // so the derived fallback never briefly offers a wrong ladder.
+            providerSlug: (selectedProviderSlug?.isNotEmpty ?? false)
+                ? selectedProviderSlug!
+                : ChatModeService.defaultConfig(chatMode).providerSlug,
+          ),
           onReasoningEffortChanged: setReasoningEffort,
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,

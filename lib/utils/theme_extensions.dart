@@ -6,73 +6,18 @@ extension ThemeDataIconColorX on ThemeData {
   /// The glyph colour for a button that is filled with the accent — the send
   /// button, the new-chat button, every round accent circle.
   ///
-  /// Every other icon in the app is the reader's own icon colour: a white
-  /// that carries a little of the chosen accent in it. A flat black or white
-  /// glyph picked purely for contrast makes these buttons look pasted in
-  /// from a different app, so they take that colour too.
+  /// It is the reader's own icon colour, unchanged. Not a black or white
+  /// picked for contrast, and not a lightened version either: the icons in
+  /// the sidebar and in settings carry a little of the chosen accent, and
+  /// these buttons have to be *the same colour*, not a near relative. A
+  /// lightened one is still visibly whiter than the rest and reads as a
+  /// different thing.
   ///
-  /// The icon colour is often a muted tone, though, and muted-on-accent can
-  /// be unreadable — the shipped defaults are a tan at a contrast of 1.2
-  /// against the orange. So the glyph is lightened until it reads. It is
-  /// lightened in HSL, keeping hue and saturation: mixing towards white
-  /// washes the accent out of it, and the accent in it is the whole point.
-  /// Only a fill too pale for any light glyph sends it the other way.
-  Color accentButtonForeground(Color fill) {
-    const double target = 2.0;
-    final Color tint = resolvedIconColor;
-    if (_contrastRatio(tint, fill) >= target) return tint;
-
-    final Color? lightened = _shadeUntilReadable(tint, fill, up: true);
-    if (lightened != null) return lightened;
-    return _shadeUntilReadable(tint, fill, up: false) ?? Colors.black;
-  }
-}
-
-/// The least saturation a lightened glyph keeps, so the tint survives.
-///
-/// Saturation loses its effect as lightness approaches white: the default
-/// tan is only 14% saturated, and raised to a readable lightness that lands
-/// on a colour indistinguishable from plain white. Holding it here keeps the
-/// glyph a *tinted* white, which is what the rest of the app's icons are.
-/// A genuinely neutral icon colour is left neutral — see [_saturationFloor].
-const double _kGlyphSaturationFloor = 0.35;
-
-double _saturationFloor(double base) =>
-    // Below this the reader picked grey, not a tint, and inventing a hue for
-    // them would pull a colour out of nowhere.
-    base <= 0.02 ? base : (base < _kGlyphSaturationFloor
-        ? _kGlyphSaturationFloor
-        : base);
-
-/// Walks [from]'s lightness towards white (or towards black) in HSL and
-/// returns the first shade that reaches a contrast of 2.0 against [on]. The
-/// hue never changes and the saturation only ever rises, so the result is
-/// the same colour brighter — not a step towards grey. Null when the far end
-/// never reads.
-Color? _shadeUntilReadable(Color from, Color on, {required bool up}) {
-  final HSLColor base = HSLColor.fromColor(from);
-  final HSLColor tinted = base.withSaturation(
-    _saturationFloor(base.saturation),
-  );
-  for (int step = 1; step <= 20; step++) {
-    final double lightness = up
-        ? base.lightness + (1 - base.lightness) * (step / 20)
-        : base.lightness * (1 - step / 20);
-    final Color candidate = tinted
-        .withLightness(lightness.clamp(0.0, 1.0))
-        .toColor();
-    if (_contrastRatio(candidate, on) >= 2.0) return candidate;
-  }
-  return null;
-}
-
-/// WCAG contrast ratio, 1.0 (identical) to 21.0 (black on white).
-double _contrastRatio(Color a, Color b) {
-  final double la = a.computeLuminance();
-  final double lb = b.computeLuminance();
-  final double hi = la > lb ? la : lb;
-  final double lo = la > lb ? lb : la;
-  return (hi + 0.05) / (lo + 0.05);
+  /// This is a deliberate trade against contrast. The shipped defaults put a
+  /// muted tan on a mid orange, which is a contrast of about 1.2 — legible
+  /// at glyph weight against a flat fill, but nothing more. Keep this as the
+  /// one place that decides, so the trade can be revisited in one edit.
+  Color accentButtonForeground(Color fill) => resolvedIconColor;
 }
 
 /// Material You extension tokens that aren't exposed on the default
